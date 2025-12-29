@@ -1,0 +1,24 @@
+{
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {"image": "example.png"}
+    },
+    "2": {
+        "class_type": "AILab_QwenVL_GGUF",
+        "inputs": {
+            "image": ["1", 0],
+            "model_name": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+            "device": "auto",
+            "preset_prompt": "🖼️ Detailed Description",
+            "custom_prompt": "",
+            "max_tokens": 512,
+            "keep_model_loaded": true
+        }
+    },
+    "3": {
+        "class_type": "ShowText|pysssss",
+        "inputs": {
+            "text": ["2", 0]
+        }
+    }
+}

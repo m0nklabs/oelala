@@ -1,0 +1,34 @@
+{
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {"image": "example.png"}
+    },
+    "2": {
+        "class_type": "JC_GGUF_adv",
+        "inputs": {
+            "image": ["1", 0],
+            "model_name": "JoyCaption Beta One (Q6_K)",
+            "device": "GPU",
+            "caption_type": "Stable Diffusion Prompt",
+            "caption_length": "long",
+            "max_tokens": 512,
+            "temperature": 0.6,
+            "top_p": 0.9,
+            "seed": -1,
+            "custom_prompt": "",
+            "memory_mode": "Keep in Memory"
+        }
+    },
+    "3": {
+        "class_type": "ShowText|pysssss",
+        "inputs": {
+            "text": ["2", 0]
+        }
+    },
+    "4": {
+        "class_type": "ShowText|pysssss",
+        "inputs": {
+            "text": ["2", 1]
+        }
+    }
+}

@@ -338,6 +338,284 @@
                     "description": "Output video framerate"
                 }
             }
+        },
+        "joycaption_i2t": {
+            "name": "JoyCaption Image to Text",
+            "file": "ImageToText/joycaption_i2t_api.json",
+            "category": "ImageToText",
+            "description": "Generate descriptive captions from images using JoyCaption Beta One GGUF model.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Image to caption"
+                },
+                "caption_type": {
+                    "node_id": "2",
+                    "input_key": "caption_type",
+                    "type": "select",
+                    "default": "Descriptive",
+                    "options": ["Descriptive", "Stable Diffusion Prompt", "BoooruTags", "Art Critic", "Tags"],
+                    "label": "Caption Type",
+                    "description": "Style of caption to generate"
+                },
+                "caption_length": {
+                    "node_id": "2",
+                    "input_key": "caption_length",
+                    "type": "select",
+                    "default": "long",
+                    "options": ["short", "medium", "long", "very long"],
+                    "label": "Caption Length",
+                    "description": "Length of the generated caption"
+                }
+            }
+        },
+        "joycaption_i2t_advanced": {
+            "name": "JoyCaption Advanced (SD Prompt)",
+            "file": "ImageToText/joycaption_i2t_advanced_api.json",
+            "category": "ImageToText",
+            "description": "Advanced JoyCaption with temperature/sampling controls. Outputs both SD prompt and full caption.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Image to caption"
+                },
+                "caption_type": {
+                    "node_id": "2",
+                    "input_key": "caption_type",
+                    "type": "select",
+                    "default": "Stable Diffusion Prompt",
+                    "options": ["Descriptive", "Stable Diffusion Prompt", "BoooruTags", "Art Critic", "Tags"],
+                    "label": "Caption Type",
+                    "description": "Style of caption to generate"
+                },
+                "caption_length": {
+                    "node_id": "2",
+                    "input_key": "caption_length",
+                    "type": "select",
+                    "default": "long",
+                    "options": ["short", "medium", "long", "very long"],
+                    "label": "Caption Length",
+                    "description": "Length of the generated caption"
+                },
+                "max_tokens": {
+                    "node_id": "2",
+                    "input_key": "max_tokens",
+                    "type": "integer",
+                    "default": 512,
+                    "min": 64,
+                    "max": 2048,
+                    "step": 64,
+                    "label": "Max Tokens",
+                    "description": "Maximum number of tokens to generate"
+                },
+                "temperature": {
+                    "node_id": "2",
+                    "input_key": "temperature",
+                    "type": "float",
+                    "default": 0.6,
+                    "min": 0.1,
+                    "max": 2.0,
+                    "step": 0.1,
+                    "label": "Temperature",
+                    "description": "Sampling temperature (lower = more focused)"
+                },
+                "top_p": {
+                    "node_id": "2",
+                    "input_key": "top_p",
+                    "type": "float",
+                    "default": 0.9,
+                    "min": 0.1,
+                    "max": 1.0,
+                    "step": 0.05,
+                    "label": "Top P",
+                    "description": "Nucleus sampling threshold"
+                },
+                "seed": {
+                    "node_id": "2",
+                    "input_key": "seed",
+                    "type": "integer",
+                    "default": -1,
+                    "min": -1,
+                    "max": 2147483647,
+                    "label": "Seed",
+                    "description": "-1 for random seed"
+                }
+            }
+        },
+        "qwenvl_i2t": {
+            "name": "QwenVL Image to Text",
+            "file": "ImageToText/qwenvl_i2t_api.json",
+            "category": "ImageToText",
+            "description": "Image captioning using Qwen2.5-VL GGUF model. Fast and accurate.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Image to analyze"
+                },
+                "model_name": {
+                    "node_id": "2",
+                    "input_key": "model_name",
+                    "type": "select",
+                    "default": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+                    "options": [
+                        "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+                        "Qwen2.5-VL-3B-Instruct-Q6_K.gguf",
+                        "Qwen2.5-VL-3B-Instruct-BF16.gguf",
+                        "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"
+                    ],
+                    "label": "Model",
+                    "description": "QwenVL model variant"
+                },
+                "preset_prompt": {
+                    "node_id": "2",
+                    "input_key": "preset_prompt",
+                    "type": "select",
+                    "default": "🖼️ Detailed Description",
+                    "options": [
+                        "🖼️ Detailed Description",
+                        "📝 Short Caption",
+                        "🏷️ Tags Only",
+                        "🎨 Art Style Analysis",
+                        "Custom"
+                    ],
+                    "label": "Prompt Preset",
+                    "description": "Type of analysis to perform"
+                },
+                "custom_prompt": {
+                    "node_id": "2",
+                    "input_key": "custom_prompt",
+                    "type": "string",
+                    "default": "",
+                    "label": "Custom Prompt",
+                    "description": "Custom instruction (when preset is 'Custom')"
+                },
+                "max_tokens": {
+                    "node_id": "2",
+                    "input_key": "max_tokens",
+                    "type": "integer",
+                    "default": 512,
+                    "min": 64,
+                    "max": 4096,
+                    "step": 64,
+                    "label": "Max Tokens",
+                    "description": "Maximum response length"
+                }
+            }
+        },
+        "qwenvl_i2t_advanced": {
+            "name": "QwenVL Advanced (Full Control)",
+            "file": "ImageToText/qwenvl_i2t_advanced_api.json",
+            "category": "ImageToText",
+            "description": "Advanced QwenVL with full sampling parameter control. Higher quality BF16 model.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Image to analyze"
+                },
+                "model_name": {
+                    "node_id": "2",
+                    "input_key": "model_name",
+                    "type": "select",
+                    "default": "Qwen2.5-VL-3B-Instruct-BF16.gguf",
+                    "options": [
+                        "Qwen2.5-VL-3B-Instruct-BF16.gguf",
+                        "Qwen2.5-VL-3B-Instruct-Q6_K.gguf",
+                        "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+                        "Qwen2.5-VL-7B-Instruct-BF16.gguf"
+                    ],
+                    "label": "Model",
+                    "description": "QwenVL model variant (BF16 = highest quality)"
+                },
+                "preset_prompt": {
+                    "node_id": "2",
+                    "input_key": "preset_prompt",
+                    "type": "select",
+                    "default": "🖼️ Detailed Description",
+                    "options": [
+                        "🖼️ Detailed Description",
+                        "📝 Short Caption",
+                        "🏷️ Tags Only",
+                        "🎨 Art Style Analysis",
+                        "Custom"
+                    ],
+                    "label": "Prompt Preset",
+                    "description": "Type of analysis to perform"
+                },
+                "custom_prompt": {
+                    "node_id": "2",
+                    "input_key": "custom_prompt",
+                    "type": "string",
+                    "default": "",
+                    "label": "Custom Prompt",
+                    "description": "Custom instruction (when preset is 'Custom')"
+                },
+                "max_tokens": {
+                    "node_id": "2",
+                    "input_key": "max_tokens",
+                    "type": "integer",
+                    "default": 512,
+                    "min": 64,
+                    "max": 8192,
+                    "step": 64,
+                    "label": "Max Tokens",
+                    "description": "Maximum response length"
+                },
+                "temperature": {
+                    "node_id": "2",
+                    "input_key": "temperature",
+                    "type": "float",
+                    "default": 0.6,
+                    "min": 0.1,
+                    "max": 2.0,
+                    "step": 0.1,
+                    "label": "Temperature",
+                    "description": "Sampling temperature"
+                },
+                "top_p": {
+                    "node_id": "2",
+                    "input_key": "top_p",
+                    "type": "float",
+                    "default": 0.9,
+                    "min": 0.1,
+                    "max": 1.0,
+                    "step": 0.05,
+                    "label": "Top P",
+                    "description": "Nucleus sampling threshold"
+                },
+                "repetition_penalty": {
+                    "node_id": "2",
+                    "input_key": "repetition_penalty",
+                    "type": "float",
+                    "default": 1.2,
+                    "min": 1.0,
+                    "max": 2.0,
+                    "step": 0.1,
+                    "label": "Repetition Penalty",
+                    "description": "Penalty for repeated tokens"
+                },
+                "seed": {
+                    "node_id": "2",
+                    "input_key": "seed",
+                    "type": "integer",
+                    "default": -1,
+                    "min": -1,
+                    "max": 2147483647,
+                    "label": "Seed",
+                    "description": "-1 for random seed"
+                }
+            }
         }
     }
 }

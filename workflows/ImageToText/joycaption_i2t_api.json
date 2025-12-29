@@ -1,0 +1,23 @@
+{
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {"image": "example.png"}
+    },
+    "2": {
+        "class_type": "JC_GGUF",
+        "inputs": {
+            "image": ["1", 0],
+            "model_name": "JoyCaption Beta One (Q6_K)",
+            "device": "GPU",
+            "caption_type": "Descriptive",
+            "caption_length": "long",
+            "memory_mode": "Keep in Memory"
+        }
+    },
+    "3": {
+        "class_type": "ShowText|pysssss",
+        "inputs": {
+            "text": ["2", 0]
+        }
+    }
+}
