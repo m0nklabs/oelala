@@ -616,6 +616,92 @@
                     "description": "-1 for random seed"
                 }
             }
+        },
+        "toriigate_i2t": {
+            "name": "ToriiGate v0.4 7B (NSFW Captioner)",
+            "file": "ImageToText/toriigate_i2t_api.json",
+            "category": "ImageToText",
+            "description": "ToriiGate v0.4-7B by Minthy - Qwen2-VL finetune specialized for detailed NSFW image captioning and description. Best for adult content analysis.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Image to analyze"
+                },
+                "user_prompt": {
+                    "node_id": "2",
+                    "input_key": "user_prompt",
+                    "type": "string",
+                    "default": "Describe this image in detail, focusing on visual elements, style, composition, and any notable features.",
+                    "label": "Prompt",
+                    "description": "Instruction for image analysis"
+                },
+                "system_prompt": {
+                    "node_id": "2",
+                    "input_key": "system_prompt",
+                    "type": "string",
+                    "default": "You are a helpful assistant that provides detailed and accurate image descriptions.",
+                    "label": "System Prompt",
+                    "description": "System instruction for behavior"
+                },
+                "max_new_tokens": {
+                    "node_id": "2",
+                    "input_key": "max_new_tokens",
+                    "type": "integer",
+                    "default": 512,
+                    "min": 64,
+                    "max": 4096,
+                    "step": 64,
+                    "label": "Max Tokens",
+                    "description": "Maximum response length"
+                },
+                "temperature": {
+                    "node_id": "2",
+                    "input_key": "temperature",
+                    "type": "float",
+                    "default": 0.7,
+                    "min": 0.1,
+                    "max": 2.0,
+                    "step": 0.1,
+                    "label": "Temperature",
+                    "description": "Sampling temperature (higher = more creative)"
+                },
+                "top_p": {
+                    "node_id": "2",
+                    "input_key": "top_p",
+                    "type": "float",
+                    "default": 0.9,
+                    "min": 0.1,
+                    "max": 1.0,
+                    "step": 0.05,
+                    "label": "Top P",
+                    "description": "Nucleus sampling threshold"
+                },
+                "top_k": {
+                    "node_id": "2",
+                    "input_key": "top_k",
+                    "type": "integer",
+                    "default": 40,
+                    "min": 0,
+                    "max": 100,
+                    "step": 1,
+                    "label": "Top K",
+                    "description": "Top-K sampling (0 = disabled)"
+                },
+                "repetition_penalty": {
+                    "node_id": "2",
+                    "input_key": "repetition_penalty",
+                    "type": "float",
+                    "default": 1.1,
+                    "min": 1.0,
+                    "max": 2.0,
+                    "step": 0.05,
+                    "label": "Repetition Penalty",
+                    "description": "Penalty for repeated tokens"
+                }
+            }
         }
     }
 }
