@@ -1,0 +1,18 @@
+[Unit]
+Description=Oelala AI Video Generator Web Interface
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=flip
+WorkingDirectory=/home/flip/oelala
+ExecStart=/home/flip/oelala/scripts/start_web.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PATH=/home/flip/venvs/gpu/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

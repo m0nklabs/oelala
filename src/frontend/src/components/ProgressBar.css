@@ -1,0 +1,48 @@
+/* Progress Bar */
+.progress-container {
+  width: 100%;
+  height: 4px;
+  background-color: #262626;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 16px;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--accent-color);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.progress-indeterminate {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.progress-indeterminate::before {
+  content: "";
+  position: absolute;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+  animation: progressSlide 1s linear infinite;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+}
+
+@keyframes progressSlide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}

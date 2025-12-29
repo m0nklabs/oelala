@@ -1,0 +1,46 @@
+{
+  "source": "Chat attachments (2025-12-27)",
+  "purpose": "UI reference for new dashboard UX",
+  "screenshots": [
+    {
+      "file": "raw/01-text-to-image.png",
+      "title": "Text to Image",
+      "url": "https://grokimagine.ai/text-to-image"
+    },
+    {
+      "file": "raw/02-text-to-video.png",
+      "title": "Text to Video",
+      "url": "https://grokimagine.ai/text-to-video"
+    },
+    {
+      "file": "raw/03-image-to-video.png",
+      "title": "Image to Video",
+      "url": "https://grokimagine.ai/image-to-video"
+    },
+    {
+      "file": "raw/04-video-to-video.png",
+      "title": "Video to Video",
+      "url": "https://grokimagine.ai/video-to-video"
+    },
+    {
+      "file": "raw/05-image-to-image.png",
+      "title": "Image to Image",
+      "url": "https://grokimagine.ai/image-to-image"
+    },
+    {
+      "file": "raw/06-reframe.png",
+      "title": "Reframe",
+      "url": "https://grokimagine.ai/reframe"
+    },
+    {
+      "file": "raw/07-face-swap.png",
+      "title": "Face Swap",
+      "url": "https://grokimagine.ai/image-face-swap"
+    },
+    {
+      "file": "raw/08-upscaler.png",
+      "title": "Upscaler",
+      "url": "https://grokimagine.ai/upscaler"
+    }
+  ]
+}

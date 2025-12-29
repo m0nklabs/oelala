@@ -94,3 +94,12 @@ ComfyUI/alembic_db/
 # Keep placeholder files
 !ComfyUI/models/**/put_*_here
 !ComfyUI/models/**/put_*
+
+# ======================
+# EXTERNAL GIT REPOS (cloned separately)
+# ======================
+external/
+Wan2.2/
+ComfyUI/
+ComfyUI_ExtraModels/
+node_modules/

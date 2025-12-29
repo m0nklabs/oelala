@@ -1,0 +1,593 @@
+
+# ComfyUI Error Report
+## Error Details
+- **Node ID:** 35
+- **Node Type:** KSamplerAdvanced
+- **Exception Type:** ValueError
+- **Exception Message:** too many values to unpack (expected 4)
+
+## Stack Trace
+```
+  File "/home/flip/oelala/ComfyUI/execution.py", line 516, in execute
+    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/execution.py", line 330, in get_output_data
+    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/execution.py", line 304, in _async_map_node_over_list
+    await process_inputs(input_dict, i)
+
+  File "/home/flip/oelala/ComfyUI/execution.py", line 292, in process_inputs
+    result = f(**inputs)
+             ^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 1572, in sample
+    return common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 1505, in common_ksampler
+    samples = comfy.sample.sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/sample.py", line 60, in sample
+    samples = sampler.sample(noise, positive, negative, cfg=cfg, latent_image=latent_image, start_step=start_step, last_step=last_step, force_full_denoise=force_full_denoise, denoise_mask=noise_mask, sigmas=sigmas, callback=callback, disable_pbar=disable_pbar, seed=seed)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1178, in sample
+    return sample(self.model, noise, positive, negative, cfg, self.device, sampler, sigmas, self.model_options, latent_image=latent_image, denoise_mask=denoise_mask, callback=callback, disable_pbar=disable_pbar, seed=seed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1068, in sample
+    return cfg_guider.sample(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1050, in sample
+    output = executor.execute(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed, latent_shapes=latent_shapes)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/patcher_extension.py", line 112, in execute
+    return self.original(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 984, in outer_sample
+    self.inner_model, self.conds, self.loaded_models = comfy.sampler_helpers.prepare_sampling(self.model_patcher, noise.shape, self.conds, self.model_options)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/sampler_helpers.py", line 130, in prepare_sampling
+    return executor.execute(model, noise_shape, conds, model_options=model_options, force_full_load=force_full_load)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/patcher_extension.py", line 112, in execute
+    return self.original(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/comfy/sampler_helpers.py", line 138, in _prepare_sampling
+    comfy.model_management.load_models_gpu([model] + models, memory_required=memory_required + inference_memory, minimum_memory_required=minimum_memory_required + inference_memory, force_full_load=force_full_load)
+
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 197, in patched_load_models_gpu
+    loaded_model.model_load(lowvram_model_memory, force_patch_weights=force_patch_weights)
+
+  File "/home/flip/oelala/ComfyUI/comfy/model_management.py", line 509, in model_load
+    self.model_use_more_vram(use_more_vram, force_patch_weights=force_patch_weights)
+
+  File "/home/flip/oelala/ComfyUI/comfy/model_management.py", line 539, in model_use_more_vram
+    return self.model.partially_load(self.device, extra_memory, force_patch_weights=force_patch_weights)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 239, in new_partially_load
+    device_assignments = analyze_safetensor_loading(self, allocations, is_clip=is_clip_model)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 426, in analyze_safetensor_loading
+    total_memory = sum(module_size for module_size, _, _, _ in raw_block_list)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 426, in <genexpr>
+    total_memory = sum(module_size for module_size, _, _, _ in raw_block_list)
+                                       ^^^^^^^^^^^^^^^^^^^^
+
+```
+## System Information
+- **ComfyUI Version:** 0.6.0
+- **Arguments:** main.py --listen 0.0.0.0 --port 8188
+- **OS:** linux
+- **Python Version:** 3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]
+- **Embedded Python:** false
+- **PyTorch Version:** 2.9.1+cu128
+## Devices
+
+- **Name:** cuda:0 NVIDIA GeForce RTX 5060 Ti : cudaMallocAsync
+  - **Type:** cuda
+  - **VRAM Total:** 16617897984
+  - **VRAM Free:** 16279007232
+  - **Torch VRAM Total:** 134217728
+  - **Torch VRAM Free:** 123596800
+
+## Logs
+```
+2025-12-28T11:30:52.501500 - Set vram state to: NORMAL_VRAM
+2025-12-28T11:30:52.501835 - Device: cuda:0 NVIDIA GeForce RTX 5060 Ti : cudaMallocAsync
+2025-12-28T11:30:52.502021 - Using async weight offloading with 2 streams
+2025-12-28T11:30:52.502250 - Enabled pinned memory 111835.0
+2025-12-28T11:30:52.504984 - working around nvidia conv3d memory bug.
+2025-12-28T11:30:53.922011 - Using pytorch attention
+2025-12-28T11:30:56.105503 - Python version: 3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]
+2025-12-28T11:30:56.105633 - ComfyUI version: 0.6.0
+2025-12-28T11:30:56.111493 - ComfyUI frontend version: 1.35.9
+2025-12-28T11:30:56.112320 - [Prompt Server] web root: /home/flip/venvs/torch-sm120/lib/python3.12/site-packages/comfyui_frontend_package/static
+2025-12-28T11:30:56.747589 - Total VRAM 15848 MB, total RAM 117722 MB
+2025-12-28T11:30:56.747699 - pytorch version: 2.9.1+cu128
+2025-12-28T11:30:56.748006 - Set vram state to: NORMAL_VRAM
+2025-12-28T11:30:56.748150 - Device: cuda:0 NVIDIA GeForce RTX 5060 Ti : cudaMallocAsync
+2025-12-28T11:30:56.748299 - Using async weight offloading with 2 streams
+2025-12-28T11:30:56.748509 - Enabled pinned memory 111835.0
+2025-12-28T11:30:57.550093 - [MultiGPU Core Patching] Patching mm.soft_empty_cache for Comprehensive Memory Management (VRAM + CPU + Store Pruning)
+2025-12-28T11:30:57.550887 - [MultiGPU Core Patching] Patching mm.get_torch_device, mm.text_encoder_device, mm.unet_offload_device
+2025-12-28T11:30:57.551357 - [MultiGPU DEBUG] Initial current_device: cuda:0
+2025-12-28T11:30:57.551413 - [MultiGPU DEBUG] Initial current_text_encoder_device: cuda:0
+2025-12-28T11:30:57.551455 - [MultiGPU DEBUG] Initial current_unet_offload_device: cpu
+2025-12-28T11:30:57.555104 - [MultiGPU] Initiating custom_node Registration. . .
+2025-12-28T11:30:57.555196 - -----------------------------------------------
+2025-12-28T11:30:57.555252 - custom_node                   Found     Nodes
+2025-12-28T11:30:57.555294 - -----------------------------------------------
+2025-12-28T11:30:57.556191 - ComfyUI-LTXVideo                  N         0
+2025-12-28T11:30:57.556274 - ComfyUI-Florence2                 N         0
+2025-12-28T11:30:57.556326 - ComfyUI_bitsandbytes_NF4          N         0
+2025-12-28T11:30:57.556370 - x-flux-comfyui                    N         0
+2025-12-28T11:30:57.556410 - ComfyUI-MMAudio                   N         0
+2025-12-28T11:30:57.556476 - ComfyUI-GGUF                      Y        18
+2025-12-28T11:30:57.556515 - PuLID_ComfyUI                     N         0
+2025-12-28T11:30:57.556551 - ComfyUI-WanVideoWrapper           Y        20
+2025-12-28T11:30:57.556585 - -----------------------------------------------
+2025-12-28T11:30:57.556637 - [MultiGPU] Registration complete. Final mappings: CheckpointLoaderAdvancedMultiGPU, CheckpointLoaderAdvancedDisTorch2MultiGPU, UNetLoaderLP, UNETLoaderMultiGPU, VAELoaderMultiGPU, CLIPLoaderMultiGPU, DualCLIPLoaderMultiGPU, TripleCLIPLoaderMultiGPU, QuadrupleCLIPLoaderMultiGPU, CLIPVisionLoaderMultiGPU, CheckpointLoaderSimpleMultiGPU, ControlNetLoaderMultiGPU, DiffusersLoaderMultiGPU, DiffControlNetLoaderMultiGPU, UNETLoaderDisTorch2MultiGPU, VAELoaderDisTorch2MultiGPU, CLIPLoaderDisTorch2MultiGPU, DualCLIPLoaderDisTorch2MultiGPU, TripleCLIPLoaderDisTorch2MultiGPU, QuadrupleCLIPLoaderDisTorch2MultiGPU, CLIPVisionLoaderDisTorch2MultiGPU, CheckpointLoaderSimpleDisTorch2MultiGPU, ControlNetLoaderDisTorch2MultiGPU, DiffusersLoaderDisTorch2MultiGPU, DiffControlNetLoaderDisTorch2MultiGPU, UnetLoaderGGUFDisTorchMultiGPU, UnetLoaderGGUFAdvancedDisTorchMultiGPU, CLIPLoaderGGUFDisTorchMultiGPU, DualCLIPLoaderGGUFDisTorchMultiGPU, TripleCLIPLoaderGGUFDisTorchMultiGPU, QuadrupleCLIPLoaderGGUFDisTorchMultiGPU, UnetLoaderGGUFDisTorch2MultiGPU, UnetLoaderGGUFAdvancedDisTorch2MultiGPU, CLIPLoaderGGUFDisTorch2MultiGPU, DualCLIPLoaderGGUFDisTorch2MultiGPU, TripleCLIPLoaderGGUFDisTorch2MultiGPU, QuadrupleCLIPLoaderGGUFDisTorch2MultiGPU, UnetLoaderGGUFMultiGPU, UnetLoaderGGUFAdvancedMultiGPU, CLIPLoaderGGUFMultiGPU, DualCLIPLoaderGGUFMultiGPU, TripleCLIPLoaderGGUFMultiGPU, QuadrupleCLIPLoaderGGUFMultiGPU, LoadWanVideoT5TextEncoderMultiGPU, WanVideoTextEncodeMultiGPU, WanVideoTextEncodeCachedMultiGPU, WanVideoTextEncodeSingleMultiGPU, WanVideoVAELoaderMultiGPU, WanVideoTinyVAELoaderMultiGPU, WanVideoBlockSwapMultiGPU, WanVideoImageToVideoEncodeMultiGPU, WanVideoDecodeMultiGPU, WanVideoModelLoaderMultiGPU, WanVideoSamplerMultiGPU, WanVideoVACEEncodeMultiGPU, WanVideoEncodeMultiGPU, LoadWanVideoClipTextEncoderMultiGPU, WanVideoClipVisionEncodeMultiGPU, WanVideoControlnetLoaderMultiGPU, FantasyTalkingModelLoaderMultiGPU, Wav2VecModelLoaderMultiGPU, WanVideoUni3C_ControlnetLoaderMultiGPU, DownloadAndLoadWav2VecModelMultiGPU
+2025-12-28T11:30:58.161578 - Warning: Could not load sageattention: No module named 'sageattention'
+2025-12-28T11:30:58.161700 - sageattention package is not installed, sageattention will not be available
+2025-12-28T11:30:59.261057 - WanVideoWrapper WARNING: FantasyPortrait nodes not available: No module named 'onnx'
+2025-12-28T11:30:59.275417 - ComfyUI-GGUF: Allowing full torch compile
+2025-12-28T11:30:59.277519 - 
+Import times for custom nodes:
+2025-12-28T11:30:59.277610 -    0.0 seconds: /home/flip/oelala/ComfyUI/custom_nodes/websocket_image_save.py
+2025-12-28T11:30:59.277657 -    0.0 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-GGUF
+2025-12-28T11:30:59.277695 -    0.0 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU
+2025-12-28T11:30:59.277746 -    0.4 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite
+2025-12-28T11:30:59.277783 -    1.3 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-WanVideoWrapper
+2025-12-28T11:30:59.277815 - 
+2025-12-28T11:30:59.881423 - Context impl SQLiteImpl.
+2025-12-28T11:30:59.881552 - Will assume non-transactional DDL.
+2025-12-28T11:30:59.882700 - No target revision found.
+2025-12-28T11:30:59.920128 - Starting server
+
+2025-12-28T11:30:59.920471 - To see the GUI go to: http://0.0.0.0:8188
+2025-12-28T11:35:39.895109 - got prompt
+2025-12-28T11:35:39.927095 - [MultiGPU Core Patching] Successfully patched ModelPatcher.partially_load
+2025-12-28T11:35:39.967087 - Using pytorch attention in VAE
+2025-12-28T11:35:39.972101 - Using pytorch attention in VAE
+2025-12-28T11:35:40.700532 - VAE load device: cuda:0, offload device: cpu, dtype: torch.bfloat16
+2025-12-28T11:35:40.711760 - [MultiGPU DisTorch V2] Full allocation string: 
+2025-12-28T11:35:40.733598 - Found quantization metadata version 1
+2025-12-28T11:35:40.734355 - [MultiGPU Core Patching] text_encoder_device_patched returning device: cuda:0 (current_text_encoder_device=cuda:0)
+2025-12-28T11:35:40.736250 - Using MixedPrecisionOps for text encoder
+2025-12-28T11:35:41.940760 - CLIP/text encoder model load device: cuda:0, offload device: cpu, current: cpu, dtype: torch.float16
+2025-12-28T11:35:41.944109 - !!! Exception during processing !!! Error while deserializing header: incomplete metadata, file not fully covered
+2025-12-28T11:35:41.947585 - Traceback (most recent call last):
+  File "/home/flip/oelala/ComfyUI/execution.py", line 516, in execute
+    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 330, in get_output_data
+    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 304, in _async_map_node_over_list
+    await process_inputs(input_dict, i)
+  File "/home/flip/oelala/ComfyUI/execution.py", line 292, in process_inputs
+    result = f(**inputs)
+             ^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/wrappers.py", line 111, in override
+    out = fn(*args, **clean_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 938, in load_unet
+    model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sd.py", line 1540, in load_diffusion_model
+    sd, metadata = comfy.utils.load_torch_file(unet_path, return_metadata=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/utils.py", line 80, in load_torch_file
+    raise e
+  File "/home/flip/oelala/ComfyUI/comfy/utils.py", line 64, in load_torch_file
+    with safetensors.safe_open(ckpt, framework="pt", device=device.type) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+safetensors_rust.SafetensorError: Error while deserializing header: incomplete metadata, file not fully covered
+
+2025-12-28T11:35:41.949315 - Prompt executed in 2.04 seconds
+2025-12-28T11:43:13.854483 - got prompt
+2025-12-28T11:43:14.006419 - Found quantization metadata version 1
+2025-12-28T11:43:14.006656 - Detected mixed precision quantization
+2025-12-28T11:43:14.007832 - Using mixed precision operations
+2025-12-28T11:43:14.092619 - model weight dtype torch.float16, manual cast: torch.float16
+2025-12-28T11:43:14.094593 - model_type FLOW
+2025-12-28T11:43:14.224505 - unet unexpected: ['scaled_fp8']
+2025-12-28T11:43:14.226841 - [MultiGPU DisTorch V2] Full allocation string: #cuda:0;9.0;cuda:1
+2025-12-28T11:43:14.230303 - !!! Exception during processing !!! Error while deserializing header: incomplete metadata, file not fully covered
+2025-12-28T11:43:14.231774 - Traceback (most recent call last):
+  File "/home/flip/oelala/ComfyUI/execution.py", line 516, in execute
+    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 330, in get_output_data
+    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 304, in _async_map_node_over_list
+    await process_inputs(input_dict, i)
+  File "/home/flip/oelala/ComfyUI/execution.py", line 292, in process_inputs
+    result = f(**inputs)
+             ^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 678, in load_lora
+    lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/utils.py", line 80, in load_torch_file
+    raise e
+  File "/home/flip/oelala/ComfyUI/comfy/utils.py", line 64, in load_torch_file
+    with safetensors.safe_open(ckpt, framework="pt", device=device.type) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+safetensors_rust.SafetensorError: Error while deserializing header: incomplete metadata, file not fully covered
+
+2025-12-28T11:43:14.233684 - Prompt executed in 0.37 seconds
+2025-12-28T11:44:14.168480 - got prompt
+2025-12-28T11:44:14.170819 - invalid prompt: {'type': 'invalid_prompt', 'message': 'Cannot execute because a node is missing the class_type property.', 'details': "Node ID '#68'", 'extra_info': {}}
+2025-12-28T11:47:21.914669 - got prompt
+2025-12-28T11:47:21.916748 - Failed to validate prompt for output 10:
+2025-12-28T11:47:21.916951 - * (prompt):
+2025-12-28T11:47:21.917104 -   - Required input is missing: filename_prefix
+2025-12-28T11:47:21.917247 - * VAELoaderDisTorch2MultiGPU 55:
+2025-12-28T11:47:21.917382 -   - Required input is missing: vae_name
+2025-12-28T11:47:21.917544 - * CLIPLoaderMultiGPU 51:
+2025-12-28T11:47:21.917677 -   - Required input is missing: clip_name
+2025-12-28T11:47:21.917799 -   - Required input is missing: type
+2025-12-28T11:47:21.917949 - * UNETLoaderDisTorch2MultiGPU 50:
+2025-12-28T11:47:21.918095 -   - Required input is missing: weight_dtype
+2025-12-28T11:47:21.918219 -   - Required input is missing: unet_name
+2025-12-28T11:47:21.918345 - * LoraLoader 29:
+2025-12-28T11:47:21.918476 -   - Required input is missing: lora_name
+2025-12-28T11:47:21.918601 -   - Required input is missing: strength_clip
+2025-12-28T11:47:21.918719 -   - Required input is missing: strength_model
+2025-12-28T11:47:21.918842 - * CLIPTextEncode 4:
+2025-12-28T11:47:21.918982 -   - Required input is missing: text
+2025-12-28T11:47:21.919113 - * CLIPTextEncode 3:
+2025-12-28T11:47:21.919232 -   - Required input is missing: text
+2025-12-28T11:47:21.919349 - * EmptyHunyuanLatentVideo 5:
+2025-12-28T11:47:21.919479 -   - Required input is missing: height
+2025-12-28T11:47:21.919607 -   - Required input is missing: length
+2025-12-28T11:47:21.919721 -   - Required input is missing: batch_size
+2025-12-28T11:47:21.919834 -   - Required input is missing: width
+2025-12-28T11:47:21.919975 - * KSamplerAdvanced 35:
+2025-12-28T11:47:21.920100 -   - Required input is missing: steps
+2025-12-28T11:47:21.920216 -   - Required input is missing: return_with_leftover_noise
+2025-12-28T11:47:21.920329 -   - Required input is missing: noise_seed
+2025-12-28T11:47:21.920440 -   - Required input is missing: scheduler
+2025-12-28T11:47:21.920563 -   - Required input is missing: sampler_name
+2025-12-28T11:47:21.920674 -   - Required input is missing: start_at_step
+2025-12-28T11:47:21.920793 -   - Required input is missing: add_noise
+2025-12-28T11:47:21.920906 -   - Required input is missing: end_at_step
+2025-12-28T11:47:21.921044 -   - Required input is missing: cfg
+2025-12-28T11:47:21.921167 - * UNETLoaderDisTorch2MultiGPU 52:
+2025-12-28T11:47:21.921283 -   - Required input is missing: weight_dtype
+2025-12-28T11:47:21.921398 -   - Required input is missing: unet_name
+2025-12-28T11:47:21.921530 - * LoraLoaderModelOnly 44:
+2025-12-28T11:47:21.921649 -   - Required input is missing: lora_name
+2025-12-28T11:47:21.921765 -   - Required input is missing: strength_model
+2025-12-28T11:47:21.921884 - * KSamplerAdvanced 36:
+2025-12-28T11:47:21.922025 -   - Required input is missing: steps
+2025-12-28T11:47:21.922146 -   - Required input is missing: return_with_leftover_noise
+2025-12-28T11:47:21.922262 -   - Required input is missing: noise_seed
+2025-12-28T11:47:21.922375 -   - Required input is missing: scheduler
+2025-12-28T11:47:21.922504 -   - Required input is missing: sampler_name
+2025-12-28T11:47:21.922621 -   - Required input is missing: start_at_step
+2025-12-28T11:47:21.922733 -   - Required input is missing: add_noise
+2025-12-28T11:47:21.922846 -   - Required input is missing: end_at_step
+2025-12-28T11:47:21.922978 -   - Required input is missing: cfg
+2025-12-28T11:47:21.923105 - * SaveImage 10:
+2025-12-28T11:47:21.923221 -   - Required input is missing: filename_prefix
+2025-12-28T11:47:21.923364 - Output will be ignored
+2025-12-28T11:47:21.923537 - invalid prompt: {'type': 'prompt_outputs_failed_validation', 'message': 'Prompt outputs failed validation', 'details': 'Required input is missing: filename_prefix', 'extra_info': {}}
+2025-12-28T11:47:32.554812 - got prompt
+2025-12-28T11:47:32.556926 - Failed to validate prompt for output 10:
+2025-12-28T11:47:32.557226 - * (prompt):
+2025-12-28T11:47:32.557425 -   - Required input is missing: filename_prefix
+2025-12-28T11:47:32.557633 - * VAELoaderDisTorch2MultiGPU 55:
+2025-12-28T11:47:32.557801 -   - Required input is missing: vae_name
+2025-12-28T11:47:32.558041 - * CLIPLoaderMultiGPU 51:
+2025-12-28T11:47:32.558259 -   - Required input is missing: clip_name
+2025-12-28T11:47:32.558424 -   - Required input is missing: type
+2025-12-28T11:47:32.558605 - * UNETLoaderDisTorch2MultiGPU 50:
+2025-12-28T11:47:32.558762 -   - Required input is missing: weight_dtype
+2025-12-28T11:47:32.558909 -   - Required input is missing: unet_name
+2025-12-28T11:47:32.559092 - * LoraLoader 29:
+2025-12-28T11:47:32.559250 -   - Required input is missing: lora_name
+2025-12-28T11:47:32.559397 -   - Required input is missing: strength_clip
+2025-12-28T11:47:32.559565 -   - Required input is missing: strength_model
+2025-12-28T11:47:32.559728 - * CLIPTextEncode 4:
+2025-12-28T11:47:32.559879 -   - Required input is missing: text
+2025-12-28T11:47:32.560061 - * CLIPTextEncode 3:
+2025-12-28T11:47:32.560218 -   - Required input is missing: text
+2025-12-28T11:47:32.560372 - * EmptyHunyuanLatentVideo 5:
+2025-12-28T11:47:32.560545 -   - Required input is missing: height
+2025-12-28T11:47:32.560699 -   - Required input is missing: length
+2025-12-28T11:47:32.560849 -   - Required input is missing: batch_size
+2025-12-28T11:47:32.561025 -   - Required input is missing: width
+2025-12-28T11:47:32.561184 - * KSamplerAdvanced 35:
+2025-12-28T11:47:32.561333 -   - Required input is missing: steps
+2025-12-28T11:47:32.561500 -   - Required input is missing: return_with_leftover_noise
+2025-12-28T11:47:32.561653 -   - Required input is missing: noise_seed
+2025-12-28T11:47:32.561801 -   - Required input is missing: scheduler
+2025-12-28T11:47:32.562000 -   - Required input is missing: sampler_name
+2025-12-28T11:47:32.562212 -   - Required input is missing: start_at_step
+2025-12-28T11:47:32.562371 -   - Required input is missing: add_noise
+2025-12-28T11:47:32.562543 -   - Required input is missing: end_at_step
+2025-12-28T11:47:32.562703 -   - Required input is missing: cfg
+2025-12-28T11:47:32.562859 - * UNETLoaderDisTorch2MultiGPU 52:
+2025-12-28T11:47:32.563048 -   - Required input is missing: weight_dtype
+2025-12-28T11:47:32.563203 -   - Required input is missing: unet_name
+2025-12-28T11:47:32.563355 - * LoraLoaderModelOnly 44:
+2025-12-28T11:47:32.563529 -   - Required input is missing: lora_name
+2025-12-28T11:47:32.563683 -   - Required input is missing: strength_model
+2025-12-28T11:47:32.563839 - * KSamplerAdvanced 36:
+2025-12-28T11:47:32.564017 -   - Required input is missing: steps
+2025-12-28T11:47:32.564171 -   - Required input is missing: return_with_leftover_noise
+2025-12-28T11:47:32.564321 -   - Required input is missing: noise_seed
+2025-12-28T11:47:32.564491 -   - Required input is missing: scheduler
+2025-12-28T11:47:32.564642 -   - Required input is missing: sampler_name
+2025-12-28T11:47:32.564801 -   - Required input is missing: start_at_step
+2025-12-28T11:47:32.564976 -   - Required input is missing: add_noise
+2025-12-28T11:47:32.565135 -   - Required input is missing: end_at_step
+2025-12-28T11:47:32.565285 -   - Required input is missing: cfg
+2025-12-28T11:47:32.565441 - * SaveImage 10:
+2025-12-28T11:47:32.565610 -   - Required input is missing: filename_prefix
+2025-12-28T11:47:32.565764 - Output will be ignored
+2025-12-28T11:47:32.565985 - invalid prompt: {'type': 'prompt_outputs_failed_validation', 'message': 'Prompt outputs failed validation', 'details': 'Required input is missing: filename_prefix', 'extra_info': {}}
+2025-12-28T11:47:47.871588 - got prompt
+2025-12-28T11:47:47.873721 - Failed to validate prompt for output 10:
+2025-12-28T11:47:47.874011 - * (prompt):
+2025-12-28T11:47:47.874214 -   - Required input is missing: filename_prefix
+2025-12-28T11:47:47.874394 - * VAELoaderDisTorch2MultiGPU 55:
+2025-12-28T11:47:47.874579 -   - Required input is missing: vae_name
+2025-12-28T11:47:47.874741 - * CLIPLoaderMultiGPU 51:
+2025-12-28T11:47:47.874880 -   - Required input is missing: clip_name
+2025-12-28T11:47:47.875072 -   - Required input is missing: type
+2025-12-28T11:47:47.875232 - * UNETLoaderDisTorch2MultiGPU 50:
+2025-12-28T11:47:47.875384 -   - Required input is missing: weight_dtype
+2025-12-28T11:47:47.875550 -   - Required input is missing: unet_name
+2025-12-28T11:47:47.875714 - * LoraLoader 29:
+2025-12-28T11:47:47.875873 -   - Required input is missing: lora_name
+2025-12-28T11:47:47.876059 -   - Required input is missing: strength_clip
+2025-12-28T11:47:47.876220 -   - Required input is missing: strength_model
+2025-12-28T11:47:47.876376 - * CLIPTextEncode 4:
+2025-12-28T11:47:47.876558 -   - Required input is missing: text
+2025-12-28T11:47:47.876719 - * CLIPTextEncode 3:
+2025-12-28T11:47:47.876874 -   - Required input is missing: text
+2025-12-28T11:47:47.877060 - * EmptyHunyuanLatentVideo 5:
+2025-12-28T11:47:47.877221 -   - Required input is missing: height
+2025-12-28T11:47:47.877386 -   - Required input is missing: length
+2025-12-28T11:47:47.877554 -   - Required input is missing: batch_size
+2025-12-28T11:47:47.877711 -   - Required input is missing: width
+2025-12-28T11:47:47.877869 - * KSamplerAdvanced 35:
+2025-12-28T11:47:47.878056 -   - Required input is missing: steps
+2025-12-28T11:47:47.878217 -   - Required input is missing: return_with_leftover_noise
+2025-12-28T11:47:47.878369 -   - Required input is missing: noise_seed
+2025-12-28T11:47:47.878544 -   - Required input is missing: scheduler
+2025-12-28T11:47:47.878696 -   - Required input is missing: sampler_name
+2025-12-28T11:47:47.878844 -   - Required input is missing: start_at_step
+2025-12-28T11:47:47.879023 -   - Required input is missing: add_noise
+2025-12-28T11:47:47.879186 -   - Required input is missing: end_at_step
+2025-12-28T11:47:47.879340 -   - Required input is missing: cfg
+2025-12-28T11:47:47.879519 - * UNETLoaderDisTorch2MultiGPU 52:
+2025-12-28T11:47:47.879674 -   - Required input is missing: weight_dtype
+2025-12-28T11:47:47.879825 -   - Required input is missing: unet_name
+2025-12-28T11:47:47.880006 - * LoraLoaderModelOnly 44:
+2025-12-28T11:47:47.880165 -   - Required input is missing: lora_name
+2025-12-28T11:47:47.880314 -   - Required input is missing: strength_model
+2025-12-28T11:47:47.880505 - * KSamplerAdvanced 36:
+2025-12-28T11:47:47.880661 -   - Required input is missing: steps
+2025-12-28T11:47:47.880814 -   - Required input is missing: return_with_leftover_noise
+2025-12-28T11:47:47.880997 -   - Required input is missing: noise_seed
+2025-12-28T11:47:47.881155 -   - Required input is missing: scheduler
+2025-12-28T11:47:47.881339 -   - Required input is missing: sampler_name
+2025-12-28T11:47:47.881505 -   - Required input is missing: start_at_step
+2025-12-28T11:47:47.881653 -   - Required input is missing: add_noise
+2025-12-28T11:47:47.881795 -   - Required input is missing: end_at_step
+2025-12-28T11:47:47.881968 -   - Required input is missing: cfg
+2025-12-28T11:47:47.882135 - * SaveImage 10:
+2025-12-28T11:47:47.882291 -   - Required input is missing: filename_prefix
+2025-12-28T11:47:47.882433 - Output will be ignored
+2025-12-28T11:47:47.882638 - invalid prompt: {'type': 'prompt_outputs_failed_validation', 'message': 'Prompt outputs failed validation', 'details': 'Required input is missing: filename_prefix', 'extra_info': {}}
+2025-12-28T11:48:16.684241 - got prompt
+2025-12-28T11:48:16.686327 - invalid prompt: {'type': 'invalid_prompt', 'message': 'Cannot execute because a node is missing the class_type property.', 'details': "Node ID '#68'", 'extra_info': {}}
+2025-12-28T11:48:22.391373 - got prompt
+2025-12-28T11:48:22.967208 - [MultiGPU DisTorch V2] ModelPatcher missing 'model_patches_models' attribute, using 'model_patches_to' fallback.
+2025-12-28T11:48:22.967505 - Requested to load WanTEModel
+2025-12-28T11:48:31.908647 - loaded completely; 14491.80 MB usable, 6419.49 MB loaded, full load: True
+2025-12-28T11:48:33.163027 - [MultiGPU DisTorch V2] ModelPatcher missing 'model_patches_models' attribute, using 'model_patches_to' fallback.
+2025-12-28T11:48:33.799717 - [MultiGPU DisTorch V2] ModelPatcher missing 'model_patches_models' attribute, using 'model_patches_to' fallback.
+2025-12-28T11:48:33.799975 - Requested to load WAN21
+2025-12-28T11:48:38.695369 - ===============================================
+2025-12-28T11:48:38.695581 -     DisTorch2 Model Virtual VRAM Analysis
+2025-12-28T11:48:38.695670 - ===============================================
+2025-12-28T11:48:38.695762 - Object   Role   Original(GB) Total(GB)  Virt(GB)
+2025-12-28T11:48:38.695852 - -----------------------------------------------
+2025-12-28T11:48:38.696299 - cuda:0   recip      15.48GB   24.48GB   +9.00GB
+2025-12-28T11:48:38.696661 - cuda:1   donor      11.63GB    2.63GB   -9.00GB
+2025-12-28T11:48:38.696864 - -----------------------------------------------
+2025-12-28T11:48:38.700926 - model    model      13.31GB    4.31GB   -9.00GB
+2025-12-28T11:48:38.701080 - ==================================================
+2025-12-28T11:48:38.701195 - [MultiGPU DisTorch V2] Final Allocation String:
+cuda:0,0.2785;cuda:1,0.7738;cpu,0.0
+2025-12-28T11:48:38.702108 - ==================================================
+2025-12-28T11:48:38.702362 -     DisTorch2 Model Device Allocations
+2025-12-28T11:48:38.702537 - ==================================================
+2025-12-28T11:48:38.702725 - Device    VRAM GB    Dev %   Model GB    Dist %
+2025-12-28T11:48:38.702814 - --------------------------------------------------
+2025-12-28T11:48:38.702906 - cuda:0      15.48    27.9%       4.31     32.4%
+2025-12-28T11:48:38.703100 - cuda:1      11.63    77.4%       9.00     67.6%
+2025-12-28T11:48:38.703229 - cpu        114.96     0.0%       0.00      0.0%
+2025-12-28T11:48:38.703301 - --------------------------------------------------
+2025-12-28T11:48:38.785340 - !!! Exception during processing !!! too many values to unpack (expected 4)
+2025-12-28T11:48:38.789840 - Traceback (most recent call last):
+  File "/home/flip/oelala/ComfyUI/execution.py", line 516, in execute
+    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 330, in get_output_data
+    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 304, in _async_map_node_over_list
+    await process_inputs(input_dict, i)
+  File "/home/flip/oelala/ComfyUI/execution.py", line 292, in process_inputs
+    result = f(**inputs)
+             ^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 1572, in sample
+    return common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 1505, in common_ksampler
+    samples = comfy.sample.sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sample.py", line 60, in sample
+    samples = sampler.sample(noise, positive, negative, cfg=cfg, latent_image=latent_image, start_step=start_step, last_step=last_step, force_full_denoise=force_full_denoise, denoise_mask=noise_mask, sigmas=sigmas, callback=callback, disable_pbar=disable_pbar, seed=seed)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1178, in sample
+    return sample(self.model, noise, positive, negative, cfg, self.device, sampler, sigmas, self.model_options, latent_image=latent_image, denoise_mask=denoise_mask, callback=callback, disable_pbar=disable_pbar, seed=seed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1068, in sample
+    return cfg_guider.sample(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1050, in sample
+    output = executor.execute(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed, latent_shapes=latent_shapes)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/patcher_extension.py", line 112, in execute
+    return self.original(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 984, in outer_sample
+    self.inner_model, self.conds, self.loaded_models = comfy.sampler_helpers.prepare_sampling(self.model_patcher, noise.shape, self.conds, self.model_options)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sampler_helpers.py", line 130, in prepare_sampling
+    return executor.execute(model, noise_shape, conds, model_options=model_options, force_full_load=force_full_load)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/patcher_extension.py", line 112, in execute
+    return self.original(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sampler_helpers.py", line 138, in _prepare_sampling
+    comfy.model_management.load_models_gpu([model] + models, memory_required=memory_required + inference_memory, minimum_memory_required=minimum_memory_required + inference_memory, force_full_load=force_full_load)
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 197, in patched_load_models_gpu
+    loaded_model.model_load(lowvram_model_memory, force_patch_weights=force_patch_weights)
+  File "/home/flip/oelala/ComfyUI/comfy/model_management.py", line 509, in model_load
+    self.model_use_more_vram(use_more_vram, force_patch_weights=force_patch_weights)
+  File "/home/flip/oelala/ComfyUI/comfy/model_management.py", line 539, in model_use_more_vram
+    return self.model.partially_load(self.device, extra_memory, force_patch_weights=force_patch_weights)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 239, in new_partially_load
+    device_assignments = analyze_safetensor_loading(self, allocations, is_clip=is_clip_model)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 426, in analyze_safetensor_loading
+    total_memory = sum(module_size for module_size, _, _, _ in raw_block_list)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 426, in <genexpr>
+    total_memory = sum(module_size for module_size, _, _, _ in raw_block_list)
+                                       ^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 4)
+
+2025-12-28T11:48:38.792640 - Prompt executed in 16.40 seconds
+2025-12-28T11:52:09.153926 - got prompt
+2025-12-28T11:52:09.211457 - [MultiGPU DisTorch V2] ModelPatcher missing 'model_patches_models' attribute, using 'model_patches_to' fallback.
+2025-12-28T11:52:09.212446 - Requested to load WAN21
+2025-12-28T11:52:09.221373 - ===============================================
+2025-12-28T11:52:09.221680 -     DisTorch2 Model Virtual VRAM Analysis
+2025-12-28T11:52:09.222265 - ===============================================
+2025-12-28T11:52:09.222597 - Object   Role   Original(GB) Total(GB)  Virt(GB)
+2025-12-28T11:52:09.223113 - -----------------------------------------------
+2025-12-28T11:52:09.223985 - cuda:0   recip      15.48GB   24.48GB   +9.00GB
+2025-12-28T11:52:09.224801 - cuda:1   donor      11.63GB    2.63GB   -9.00GB
+2025-12-28T11:52:09.225259 - -----------------------------------------------
+2025-12-28T11:52:09.231562 - model    model      13.31GB    4.31GB   -9.00GB
+2025-12-28T11:52:09.231872 - ==================================================
+2025-12-28T11:52:09.232148 - [MultiGPU DisTorch V2] Final Allocation String:
+cuda:0,0.2785;cuda:1,0.7738;cpu,0.0
+2025-12-28T11:52:09.233519 - ==================================================
+2025-12-28T11:52:09.233796 -     DisTorch2 Model Device Allocations
+2025-12-28T11:52:09.234281 - ==================================================
+2025-12-28T11:52:09.234666 - Device    VRAM GB    Dev %   Model GB    Dist %
+2025-12-28T11:52:09.234982 - --------------------------------------------------
+2025-12-28T11:52:09.235297 - cuda:0      15.48    27.9%       4.31     32.4%
+2025-12-28T11:52:09.235657 - cuda:1      11.63    77.4%       9.00     67.6%
+2025-12-28T11:52:09.236041 - cpu        114.96     0.0%       0.00      0.0%
+2025-12-28T11:52:09.236555 - --------------------------------------------------
+2025-12-28T11:52:09.347951 - !!! Exception during processing !!! too many values to unpack (expected 4)
+2025-12-28T11:52:09.351103 - Traceback (most recent call last):
+  File "/home/flip/oelala/ComfyUI/execution.py", line 516, in execute
+    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 330, in get_output_data
+    return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/execution.py", line 304, in _async_map_node_over_list
+    await process_inputs(input_dict, i)
+  File "/home/flip/oelala/ComfyUI/execution.py", line 292, in process_inputs
+    result = f(**inputs)
+             ^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 1572, in sample
+    return common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/nodes.py", line 1505, in common_ksampler
+    samples = comfy.sample.sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sample.py", line 60, in sample
+    samples = sampler.sample(noise, positive, negative, cfg=cfg, latent_image=latent_image, start_step=start_step, last_step=last_step, force_full_denoise=force_full_denoise, denoise_mask=noise_mask, sigmas=sigmas, callback=callback, disable_pbar=disable_pbar, seed=seed)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1178, in sample
+    return sample(self.model, noise, positive, negative, cfg, self.device, sampler, sigmas, self.model_options, latent_image=latent_image, denoise_mask=denoise_mask, callback=callback, disable_pbar=disable_pbar, seed=seed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1068, in sample
+    return cfg_guider.sample(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 1050, in sample
+    output = executor.execute(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed, latent_shapes=latent_shapes)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/patcher_extension.py", line 112, in execute
+    return self.original(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/samplers.py", line 984, in outer_sample
+    self.inner_model, self.conds, self.loaded_models = comfy.sampler_helpers.prepare_sampling(self.model_patcher, noise.shape, self.conds, self.model_options)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sampler_helpers.py", line 130, in prepare_sampling
+    return executor.execute(model, noise_shape, conds, model_options=model_options, force_full_load=force_full_load)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/patcher_extension.py", line 112, in execute
+    return self.original(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/comfy/sampler_helpers.py", line 138, in _prepare_sampling
+    comfy.model_management.load_models_gpu([model] + models, memory_required=memory_required + inference_memory, minimum_memory_required=minimum_memory_required + inference_memory, force_full_load=force_full_load)
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 197, in patched_load_models_gpu
+    loaded_model.model_load(lowvram_model_memory, force_patch_weights=force_patch_weights)
+  File "/home/flip/oelala/ComfyUI/comfy/model_management.py", line 509, in model_load
+    self.model_use_more_vram(use_more_vram, force_patch_weights=force_patch_weights)
+  File "/home/flip/oelala/ComfyUI/comfy/model_management.py", line 539, in model_use_more_vram
+    return self.model.partially_load(self.device, extra_memory, force_patch_weights=force_patch_weights)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 239, in new_partially_load
+    device_assignments = analyze_safetensor_loading(self, allocations, is_clip=is_clip_model)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 426, in analyze_safetensor_loading
+    total_memory = sum(module_size for module_size, _, _, _ in raw_block_list)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py", line 426, in <genexpr>
+    total_memory = sum(module_size for module_size, _, _, _ in raw_block_list)
+                                       ^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 4)
+
+2025-12-28T11:52:09.354484 - Prompt executed in 0.20 seconds
+
+```
+## Attached Workflow
+Please make sure that workflow does not contain any sensitive information such as API keys or passwords.
+```
+{"id":"25dfce61-3571-4c9a-a7f8-6a83951d66aa","revision":0,"last_node_id":55,"last_link_id":102,"nodes":[{"id":4,"type":"CLIPTextEncode","pos":[3650,100],"size":[450,150],"flags":{"collapsed":false},"order":8,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":89},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[59,64]}],"title":"Negative Prompt","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.43"},"widgets_values":[""],"color":"#2a363b","bgcolor":"#3f5159"},{"id":36,"type":"KSamplerAdvanced","pos":[4150,-100],"size":[252.38333129882812,546],"flags":{},"order":11,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":91},{"localized_name":"positive","name":"positive","type":"CONDITIONING","link":63},{"localized_name":"negative","name":"negative","type":"CONDITIONING","link":64},{"localized_name":"latent_image","name":"latent_image","type":"LATENT","link":61},{"localized_name":"add_noise","name":"add_noise","type":"COMBO","widget":{"name":"add_noise"},"link":null},{"localized_name":"noise_seed","name":"noise_seed","type":"INT","widget":{"name":"noise_seed"},"link":null},{"localized_name":"steps","name":"steps","type":"INT","widget":{"name":"steps"},"link":null},{"localized_name":"cfg","name":"cfg","type":"FLOAT","widget":{"name":"cfg"},"link":null},{"localized_name":"sampler_name","name":"sampler_name","type":"COMBO","widget":{"name":"sampler_name"},"link":null},{"localized_name":"scheduler","name":"scheduler","type":"COMBO","widget":{"name":"scheduler"},"link":null},{"localized_name":"start_at_step","name":"start_at_step","type":"INT","widget":{"name":"start_at_step"},"link":null},{"localized_name":"end_at_step","name":"end_at_step","type":"INT","widget":{"name":"end_at_step"},"link":null},{"localized_name":"return_with_leftover_noise","name":"return_with_leftover_noise","type":"COMBO","widget":{"name":"return_with_leftover_noise"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","links":[65]}],"properties":{"Node name for S&R":"KSamplerAdvanced","cnr_id":"comfy-core","ver":"0.3.46"},"widgets_values":["enable",374299147037295,"randomize",8,1,"euler","simple",4,8,"disable"],"color":"#223","bgcolor":"#335"},{"id":35,"type":"KSamplerAdvanced","pos":[4152.58056640625,-684.031005859375],"size":[252.38333129882812,546],"flags":{},"order":10,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":88},{"localized_name":"positive","name":"positive","type":"CONDITIONING","link":58},{"localized_name":"negative","name":"negative","type":"CONDITIONING","link":59},{"localized_name":"latent_image","name":"latent_image","type":"LATENT","link":60},{"localized_name":"add_noise","name":"add_noise","type":"COMBO","widget":{"name":"add_noise"},"link":null},{"localized_name":"noise_seed","name":"noise_seed","type":"INT","widget":{"name":"noise_seed"},"link":null},{"localized_name":"steps","name":"steps","type":"INT","widget":{"name":"steps"},"link":null},{"localized_name":"cfg","name":"cfg","type":"FLOAT","widget":{"name":"cfg"},"link":null},{"localized_name":"sampler_name","name":"sampler_name","type":"COMBO","widget":{"name":"sampler_name"},"link":null},{"localized_name":"scheduler","name":"scheduler","type":"COMBO","widget":{"name":"scheduler"},"link":null},{"localized_name":"start_at_step","name":"start_at_step","type":"INT","widget":{"name":"start_at_step"},"link":null},{"localized_name":"end_at_step","name":"end_at_step","type":"INT","widget":{"name":"end_at_step"},"link":null},{"localized_name":"return_with_leftover_noise","name":"return_with_leftover_noise","type":"COMBO","widget":{"name":"return_with_leftover_noise"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","links":[61]}],"properties":{"Node name for S&R":"KSamplerAdvanced","cnr_id":"comfy-core","ver":"0.3.46"},"widgets_values":["enable",481633129133276,"randomize",8,1,"euler","simple",0,4,"disable"],"color":"#223","bgcolor":"#335"},{"id":9,"type":"VAEDecode","pos":[4450.001953125,-696.47216796875],"size":[140,46],"flags":{},"order":12,"mode":0,"inputs":[{"localized_name":"samples","name":"samples","type":"LATENT","link":65},{"localized_name":"vae","name":"vae","type":"VAE","link":102}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","links":[8]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.43"},"widgets_values":[],"color":"#323","bgcolor":"#535"},{"id":10,"type":"SaveImage","pos":[4611.58251953125,-668.0137939453125],"size":[912.117431640625,1108.58544921875],"flags":{},"order":13,"mode":0,"inputs":[{"localized_name":"images","name":"images","type":"IMAGE","link":8},{"localized_name":"filename_prefix","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null}],"outputs":[],"properties":{"Node name for S&R":"SaveImage","cnr_id":"comfy-core","ver":"0.3.43"},"widgets_values":["MultiGPU"],"color":"#233","bgcolor":"#355"},{"id":51,"type":"CLIPLoaderMultiGPU","pos":[3174.543701171875,-421.68939208984375],"size":[410.7702941894531,110.15969848632812],"flags":{},"order":0,"mode":0,"inputs":[{"localized_name":"clip_name","name":"clip_name","type":"COMBO","widget":{"name":"clip_name"},"link":null},{"localized_name":"type","name":"type","type":"COMBO","widget":{"name":"type"},"link":null},{"localized_name":"device","name":"device","shape":7,"type":"COMBO","widget":{"name":"device"},"link":null}],"outputs":[{"localized_name":"CLIP","name":"CLIP","type":"CLIP","links":[100]}],"properties":{"Node name for S&R":"CLIPLoaderMultiGPU","cnr_id":"comfyui-multigpu","ver":"161174266c29e5860e5b565315fba99d2bc5f1e0"},"widgets_values":["umt5_xxl_fp8_e4m3fn_scaled.safetensors","wan","cuda:0"],"color":"#008181","bgcolor":"rgba(24,24,27,.9)"},{"id":55,"type":"VAELoaderDisTorch2MultiGPU","pos":[3213.78515625,29.56181526184082],"size":[297.41796875,178],"flags":{},"order":1,"mode":0,"inputs":[{"localized_name":"vae_name","name":"vae_name","type":"COMBO","widget":{"name":"vae_name"},"link":null},{"localized_name":"compute_device","name":"compute_device","shape":7,"type":"COMBO","widget":{"name":"compute_device"},"link":null},{"localized_name":"virtual_vram_gb","name":"virtual_vram_gb","shape":7,"type":"FLOAT","widget":{"name":"virtual_vram_gb"},"link":null},{"localized_name":"donor_device","name":"donor_device","shape":7,"type":"COMBO","widget":{"name":"donor_device"},"link":null},{"localized_name":"expert_mode_allocations","name":"expert_mode_allocations","shape":7,"type":"STRING","widget":{"name":"expert_mode_allocations"},"link":null},{"localized_name":"eject_models","name":"eject_models","shape":7,"type":"BOOLEAN","widget":{"name":"eject_models"},"link":null}],"outputs":[{"localized_name":"VAE","name":"VAE","type":"VAE","links":[102]}],"properties":{"Node name for S&R":"VAELoaderDisTorch2MultiGPU","cnr_id":"comfyui-multigpu","ver":"161174266c29e5860e5b565315fba99d2bc5f1e0"},"widgets_values":["wan_2.1_vae.safetensors","cuda:0",0,"cuda:1","",true],"color":"#008181","bgcolor":"rgba(24,24,27,.9)"},{"id":44,"type":"LoraLoaderModelOnly","pos":[3645.671630859375,-436.70050048828125],"size":[474.6925354003906,91.07210540771484],"flags":{},"order":7,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":101},{"localized_name":"lora_name","name":"lora_name","type":"COMBO","widget":{"name":"lora_name"},"link":null},{"localized_name":"strength_model","name":"strength_model","type":"FLOAT","widget":{"name":"strength_model"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[91]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.3.46"},"widgets_values":["Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors",1],"color":"#232","bgcolor":"#353"},{"id":29,"type":"LoraLoader","pos":[3637.26611328125,-691.7128295898438],"size":[482.47406005859375,126],"flags":{},"order":6,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":99},{"localized_name":"clip","name":"clip","type":"CLIP","link":100},{"localized_name":"lora_name","name":"lora_name","type":"COMBO","widget":{"name":"lora_name"},"link":null},{"localized_name":"strength_model","name":"strength_model","type":"FLOAT","widget":{"name":"strength_model"},"link":null},{"localized_name":"strength_clip","name":"strength_clip","type":"FLOAT","widget":{"name":"strength_clip"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[88]},{"localized_name":"CLIP","name":"CLIP","type":"CLIP","links":[89,90]}],"properties":{"Node name for S&R":"LoraLoader","cnr_id":"comfy-core","ver":"0.3.43"},"widgets_values":["Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors",1,1],"color":"#232","bgcolor":"#353"},{"id":50,"type":"UNETLoaderDisTorch2MultiGPU","pos":[3169.217041015625,-698.2782592773438],"size":[440.8240051269531,202],"flags":{},"order":2,"mode":0,"inputs":[{"localized_name":"unet_name","name":"unet_name","type":"COMBO","widget":{"name":"unet_name"},"link":null},{"localized_name":"weight_dtype","name":"weight_dtype","type":"COMBO","widget":{"name":"weight_dtype"},"link":null},{"localized_name":"compute_device","name":"compute_device","shape":7,"type":"COMBO","widget":{"name":"compute_device"},"link":null},{"localized_name":"virtual_vram_gb","name":"virtual_vram_gb","shape":7,"type":"FLOAT","widget":{"name":"virtual_vram_gb"},"link":null},{"localized_name":"donor_device","name":"donor_device","shape":7,"type":"COMBO","widget":{"name":"donor_device"},"link":null},{"localized_name":"expert_mode_allocations","name":"expert_mode_allocations","shape":7,"type":"STRING","widget":{"name":"expert_mode_allocations"},"link":null},{"localized_name":"eject_models","name":"eject_models","shape":7,"type":"BOOLEAN","widget":{"name":"eject_models"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[99]}],"properties":{"Node name for S&R":"UNETLoaderDisTorch2MultiGPU","cnr_id":"comfyui-multigpu","ver":"161174266c29e5860e5b565315fba99d2bc5f1e0"},"widgets_values":["wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors","default","cuda:0",9,"cuda:1","",true],"color":"#008181","bgcolor":"rgba(24,24,27,.9)"},{"id":53,"type":"MarkdownNote","pos":[2355.81494140625,-698.0171508789062],"size":[777.6646728515625,937.3121337890625],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[],"title":"ComfyUI-MultiGPU Note - wan2_2 Double UNet DisTorch2","properties":{},"widgets_values":["A DisTorch2 Wan 2.2 workflow where we eschew our other `gpu`, offloading both UNets by placing blocks on the `cpu`. In this case we are using the DisTorch2 node to statically allocate approximately 70% of the UNet model (13.3G) to the `cpu`, along with a proportional amount of the LoRAs patched to the model. With `eject_models` being `True`, all other models on the `compute` card (`cuda:0`) will be unloaded, regardless of size, ensuring a clean compute card prior to inference.\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n```\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI-MultiGPU/\n```\n## Model links\n\n**Diffusion model**\n- [wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors)\n- [wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors)\n\n**CLIP**\n- [umt5_xxl_fp8_e4m3fn_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 clip/\n│   │   └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│   ├── 📂 unet/\n│   │   ├── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │   ├── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├───📂 loras/\n│   ├─────📂 Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/\n│   │        ├────── high_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │        └────── low_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├── 📂 vae/\n│   │   └── qwen_image_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n🖥️ system \n├── 🟢 cuda:0\n│       └── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟩🟩🟩]\n│       └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟩🟩🟩]\n│       └── high_noise_model.safetensors [🟩🟩🟩]\n│       └── low_noise_model.safetensors [🟩🟩🟩]\n│       └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│       └── wan_2.1_vae.safetensors\n├── 🟣 cuda:1\n│       └── EMPTY\n├── ⚙️ cpu\n       └── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── high_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── low_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n```"],"color":"#008181","bgcolor":"rgba(24,24,27,.9)"},{"id":52,"type":"UNETLoaderDisTorch2MultiGPU","pos":[3194.302490234375,-254.25840759277344],"size":[401.1171569824219,202],"flags":{},"order":4,"mode":0,"inputs":[{"localized_name":"unet_name","name":"unet_name","type":"COMBO","widget":{"name":"unet_name"},"link":null},{"localized_name":"weight_dtype","name":"weight_dtype","type":"COMBO","widget":{"name":"weight_dtype"},"link":null},{"localized_name":"compute_device","name":"compute_device","shape":7,"type":"COMBO","widget":{"name":"compute_device"},"link":null},{"localized_name":"virtual_vram_gb","name":"virtual_vram_gb","shape":7,"type":"FLOAT","widget":{"name":"virtual_vram_gb"},"link":null},{"localized_name":"donor_device","name":"donor_device","shape":7,"type":"COMBO","widget":{"name":"donor_device"},"link":null},{"localized_name":"expert_mode_allocations","name":"expert_mode_allocations","shape":7,"type":"STRING","widget":{"name":"expert_mode_allocations"},"link":null},{"localized_name":"eject_models","name":"eject_models","shape":7,"type":"BOOLEAN","widget":{"name":"eject_models"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[101]}],"properties":{"Node name for S&R":"UNETLoaderDisTorch2MultiGPU","cnr_id":"comfyui-multigpu","ver":"161174266c29e5860e5b565315fba99d2bc5f1e0"},"widgets_values":["wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors","default","cuda:0",9,"cuda:1","",true],"color":"#008181","bgcolor":"rgba(24,24,27,.9)"},{"id":5,"type":"EmptyHunyuanLatentVideo","pos":[3650,300],"size":[450,150],"flags":{},"order":5,"mode":0,"inputs":[{"localized_name":"width","name":"width","type":"INT","widget":{"name":"width"},"link":null},{"localized_name":"height","name":"height","type":"INT","widget":{"name":"height"},"link":null},{"localized_name":"length","name":"length","type":"INT","widget":{"name":"length"},"link":null},{"localized_name":"batch_size","name":"batch_size","type":"INT","widget":{"name":"batch_size"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","links":[60]}],"properties":{"Node name for S&R":"EmptyHunyuanLatentVideo","cnr_id":"comfy-core","ver":"0.3.43"},"widgets_values":[1536,1536,1,1],"color":"#323","bgcolor":"#535"},{"id":3,"type":"CLIPTextEncode","pos":[3650,-300],"size":[450,350],"flags":{},"order":9,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":90},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[58,63]}],"title":"Positive Prompt","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.43"},"widgets_values":["A towering technological monolith in a cyberpunk cityscape at night, with \"WAN 2.2\" and \"T2I\" emblazoned across its surface in massive neon blue-green mixed with purple letters that illuminate the surrounding buildings, with a smaller \"lightx2v\" underneath, bursting with color. The text occupies the central third of the frame, crafted from glowing plasma tubes and crackling energy. Rain-slicked streets below reflect the brilliant signage, while holographic advertisements and flying vehicles populate the background. Moody atmospheric lighting, heavy contrast, photorealistic textures, cinematic color grading. "],"color":"#2a363b","bgcolor":"#3f5159"}],"links":[[8,9,0,10,0,"IMAGE"],[58,3,0,35,1,"CONDITIONING"],[59,4,0,35,2,"CONDITIONING"],[60,5,0,35,3,"LATENT"],[61,35,0,36,3,"LATENT"],[63,3,0,36,1,"CONDITIONING"],[64,4,0,36,2,"CONDITIONING"],[65,36,0,9,0,"LATENT"],[88,29,0,35,0,"MODEL"],[89,29,1,4,0,"CLIP"],[90,29,1,3,0,"CLIP"],[91,44,0,36,0,"MODEL"],[99,50,0,29,0,"MODEL"],[100,51,0,29,1,"CLIP"],[101,52,0,44,0,"MODEL"],[102,55,0,9,1,"VAE"]],"groups":[],"config":{},"extra":{"ds":{"scale":0.641061835173946,"offset":[-2192.490736659068,1081.0525365299138]},"frontendVersion":"1.27.10","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true,"workflowRendererVersion":"LG"},"version":0.4}
+```
+
+## Additional Context
+(Please add any additional context or steps to reproduce the error here)
