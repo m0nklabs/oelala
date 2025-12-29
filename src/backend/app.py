@@ -67,6 +67,16 @@ except ImportError as e:
     print(f"❌ Failed to import CivitaiClient: {e}")
     CivitaiClient = None
 
+# Workflow Loader for JSON-based configurable workflows
+try:
+    from src.backend.workflow_loader import get_registry, reload_registry, WorkflowRegistry
+    print("✅ WorkflowLoader imported successfully")
+except ImportError as e:
+    print(f"❌ Failed to import WorkflowLoader: {e}")
+    get_registry = None
+    reload_registry = None
+    WorkflowRegistry = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -299,6 +309,175 @@ async def health_check():
         "upload_dir": str(UPLOAD_DIR),
         "output_dir": str(OUTPUT_DIR)
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Workflow API Endpoints - JSON-based configurable ComfyUI workflows
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/workflows")
+async def list_workflows(category: str = None):
+    """List available workflows with their configurable parameters.
+    
+    Returns workflow definitions that can be used by frontend to build
+    dynamic forms for workflow configuration.
+    """
+    if not get_registry:
+        raise HTTPException(status_code=503, detail="Workflow loader not available")
+    
+    try:
+        registry = get_registry()
+        workflows = registry.list_workflows(category=category)
+        categories = registry.get_categories()
+        
+        return {
+            "workflows": workflows,
+            "categories": categories,
+            "count": len(workflows)
+        }
+    except Exception as e:
+        logger.error(f"Error listing workflows: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/workflows/{workflow_id}")
+async def get_workflow(workflow_id: str):
+    """Get details of a specific workflow including parameters."""
+    if not get_registry:
+        raise HTTPException(status_code=503, detail="Workflow loader not available")
+    
+    try:
+        registry = get_registry()
+        config = registry.get(workflow_id)
+        
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
+        
+        info = config.to_dict()
+        info["id"] = workflow_id
+        return info
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting workflow {workflow_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/workflows/{workflow_id}/run")
+async def run_workflow(
+    workflow_id: str,
+    image: UploadFile = File(None),
+    params: str = Form("{}")
+):
+    """Execute a workflow with custom parameters.
+    
+    Args:
+        workflow_id: The workflow to run (e.g., "wan22_i2v_q5")
+        image: Optional input image file
+        params: JSON string of workflow parameters (prompt, steps, cfg, etc.)
+    
+    Returns:
+        Job ID for tracking progress and retrieving results
+    """
+    if not get_registry:
+        raise HTTPException(status_code=503, detail="Workflow loader not available")
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    
+    try:
+        registry = get_registry()
+        config = registry.get(workflow_id)
+        
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
+        
+        # Parse parameters
+        try:
+            workflow_params = json.loads(params)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid params JSON: {e}")
+        
+        # Save uploaded image if provided
+        if image:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            input_filename = f"input_{timestamp}_{image.filename}"
+            input_path = UPLOAD_DIR / input_filename
+            
+            with open(input_path, "wb") as f:
+                content = await image.read()
+                f.write(content)
+            
+            # Add image to parameters
+            workflow_params["image"] = input_filename
+            logger.info(f"Saved input image: {input_path}")
+        
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+        
+        # Initialize progress tracking
+        progress_store[job_id] = {
+            "job_id": job_id,
+            "progress": 5,
+            "status": "running",
+            "workflow_id": workflow_id,
+            "message": "Building workflow...",
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        # Build workflow with parameters
+        workflow = config.build(**workflow_params)
+        
+        # Get ComfyUI client and queue the workflow
+        client = get_comfyui_client()
+        
+        # Update progress
+        progress_store[job_id]["progress"] = 10
+        progress_store[job_id]["message"] = "Queuing workflow to ComfyUI..."
+        
+        # Queue to ComfyUI (this runs async in the client)
+        result = client.queue_workflow(workflow)
+        
+        # Store the ComfyUI prompt ID for tracking
+        prompt_id = result.get("prompt_id")
+        progress_store[job_id]["comfyui_prompt_id"] = prompt_id
+        progress_store[job_id]["progress"] = 15
+        progress_store[job_id]["message"] = "Workflow queued, processing..."
+        
+        # Start progress ticker for UI feedback
+        start_progress_ticker(job_id, step=3, interval=2.0, ceiling=90)
+        
+        return {
+            "job_id": job_id,
+            "workflow_id": workflow_id,
+            "prompt_id": prompt_id,
+            "status": "queued",
+            "message": "Workflow queued successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error running workflow {workflow_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/workflows/reload")
+async def reload_workflows():
+    """Reload workflow registry from disk (for development)."""
+    if not reload_registry:
+        raise HTTPException(status_code=503, detail="Workflow loader not available")
+    
+    try:
+        registry = reload_registry()
+        workflows = registry.list_workflows()
+        return {
+            "success": True,
+            "message": "Workflows reloaded",
+            "count": len(workflows)
+        }
+    except Exception as e:
+        logger.error(f"Error reloading workflows: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/files/{filename}")
 async def get_file(filename: str):

@@ -1,0 +1,125 @@
+{
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {"image": "example_480.png"}
+    },
+    "2": {
+        "class_type": "LoadWanVideoT5TextEncoderMultiGPU",
+        "inputs": {
+            "model_name": "umt5-xxl-enc-bf16.safetensors",
+            "precision": "bf16",
+            "device": "cuda:0"
+        }
+    },
+    "3": {
+        "class_type": "WanVideoTextEncodeMultiGPU",
+        "inputs": {
+            "positive_prompt": "smooth motion, cinematic",
+            "negative_prompt": "blurry, distorted, low quality, static",
+            "force_offload": true,
+            "t5": ["2", 0]
+        }
+    },
+    "4": {
+        "class_type": "WanVideoVAELoaderMultiGPU",
+        "inputs": {
+            "model_name": "Wan2.1_VAE.safetensors",
+            "device": "cuda:0",
+            "dtype": "bf16"
+        }
+    },
+    "5": {
+        "class_type": "CLIPVisionLoader",
+        "inputs": {"clip_name": "clip-vit-large.safetensors"}
+    },
+    "6": {
+        "class_type": "WanVideoClipVisionEncode",
+        "inputs": {
+            "strength_1": 1.0,
+            "strength_2": 0.0,
+            "crop": "center",
+            "force_offload": true,
+            "combine_embeds": "average",
+            "clip_vision": ["5", 0],
+            "image_1": ["1", 0]
+        }
+    },
+    "7": {
+        "class_type": "WanVideoBlockSwapMultiGPU",
+        "inputs": {
+            "blocks_to_swap": 40,
+            "offload_img_emb": true,
+            "offload_txt_emb": true,
+            "swap_device": "cpu"
+        }
+    },
+    "8": {
+        "class_type": "WanVideoModelLoaderMultiGPU",
+        "inputs": {
+            "model": "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
+            "base_precision": "bf16",
+            "quantization": "disabled",
+            "load_device": "offload_device",
+            "compute_device": "cuda:0",
+            "attention_mode": "sageattn",
+            "block_swap_args": ["7", 0]
+        }
+    },
+    "9": {
+        "class_type": "WanVideoImageToVideoEncodeMultiGPU",
+        "inputs": {
+            "width": 480,
+            "height": 480,
+            "num_frames": 41,
+            "noise_aug_strength": 0.0,
+            "start_latent_strength": 1.0,
+            "end_latent_strength": 1.0,
+            "force_offload": true,
+            "vae": ["4", 0],
+            "clip_embeds": ["6", 0],
+            "start_image": ["1", 0],
+            "load_device": ["8", 1]
+        }
+    },
+    "10": {
+        "class_type": "WanVideoSamplerMultiGPU",
+        "inputs": {
+            "steps": 8,
+            "cfg": 4.5,
+            "seed": 42,
+            "shift": true,
+            "scheduler": "dpm++",
+            "riflex_freq_index": 0,
+            "force_offload": true,
+            "model": ["8", 0],
+            "compute_device": ["8", 1],
+            "image_embeds": ["9", 0],
+            "text_embeds": ["3", 0]
+        }
+    },
+    "11": {
+        "class_type": "WanVideoDecodeMultiGPU",
+        "inputs": {
+            "enable_vae_tiling": true,
+            "tile_x": 272,
+            "tile_y": 272,
+            "tile_stride_x": 192,
+            "tile_stride_y": 192,
+            "vae": ["4", 0],
+            "samples": ["10", 0],
+            "load_device": ["8", 1]
+        }
+    },
+    "12": {
+        "class_type": "VHS_VideoCombine",
+        "inputs": {
+            "frame_rate": 16,
+            "loop_count": 0,
+            "filename_prefix": "oelala_q6",
+            "format": "video/h264-mp4",
+            "pingpong": false,
+            "save_output": true,
+            "images": ["11", 0]
+        }
+    }
+}

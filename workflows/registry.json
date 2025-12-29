@@ -1,0 +1,343 @@
+{
+    "$schema": "./registry.schema.json",
+    "version": "1.0.0",
+    "description": "Oelala ComfyUI Workflow Registry - configurable workflows for frontend UI",
+    "workflows": {
+        "wan22_enhanced_q4km": {
+            "name": "WAN 2.2 Enhanced NSFW FastMove Q4KM",
+            "file": "ImageToVideo/wan22_enhanced_q4km_api.json",
+            "category": "ImageToVideo",
+            "description": "Lightning-fast I2V with NSFW FastMove LoRAs baked in. 4 steps, cfg=1. Best for quick iterations.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Source image for video generation"
+                },
+                "prompt": {
+                    "node_id": "3",
+                    "input_key": "positive_prompt",
+                    "type": "string",
+                    "default": "motion, smooth camera movement",
+                    "label": "Prompt",
+                    "description": "Describe the motion/animation you want"
+                },
+                "negative_prompt": {
+                    "node_id": "3",
+                    "input_key": "negative_prompt",
+                    "type": "string",
+                    "default": "",
+                    "label": "Negative Prompt",
+                    "description": "What to avoid in the generation"
+                },
+                "steps": {
+                    "node_id": "10",
+                    "input_key": "steps",
+                    "type": "integer",
+                    "default": 4,
+                    "min": 2,
+                    "max": 12,
+                    "step": 1,
+                    "label": "Steps",
+                    "description": "Sampling steps (Lightning: 2-4 optimal)"
+                },
+                "cfg": {
+                    "node_id": "10",
+                    "input_key": "cfg",
+                    "type": "float",
+                    "default": 1.0,
+                    "min": 1.0,
+                    "max": 3.0,
+                    "step": 0.1,
+                    "label": "CFG Scale",
+                    "description": "Classifier-free guidance (Lightning: 1.0)"
+                },
+                "seed": {
+                    "node_id": "10",
+                    "input_key": "seed",
+                    "type": "integer",
+                    "default": -1,
+                    "min": -1,
+                    "max": 2147483647,
+                    "label": "Seed",
+                    "description": "-1 for random seed"
+                },
+                "width": {
+                    "node_id": "9",
+                    "input_key": "width",
+                    "type": "integer",
+                    "default": 480,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Width",
+                    "description": "Output video width"
+                },
+                "height": {
+                    "node_id": "9",
+                    "input_key": "height",
+                    "type": "integer",
+                    "default": 480,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Height",
+                    "description": "Output video height"
+                },
+                "num_frames": {
+                    "node_id": "9",
+                    "input_key": "num_frames",
+                    "type": "integer",
+                    "default": 41,
+                    "min": 17,
+                    "max": 81,
+                    "step": 8,
+                    "label": "Frames",
+                    "description": "Number of frames (17=1s, 41=2.5s, 81=5s @ 16fps)"
+                },
+                "frame_rate": {
+                    "node_id": "12",
+                    "input_key": "frame_rate",
+                    "type": "integer",
+                    "default": 16,
+                    "min": 8,
+                    "max": 30,
+                    "label": "FPS",
+                    "description": "Output video framerate"
+                }
+            }
+        },
+        "wan22_i2v_q6": {
+            "name": "WAN 2.2 I2V Q6 High Quality",
+            "file": "ImageToVideo/wan22_i2v_q6_api.json",
+            "category": "ImageToVideo",
+            "description": "High quality I2V with Q6 quantization (~12GB GGUF). More steps, better detail.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Source image for video generation"
+                },
+                "prompt": {
+                    "node_id": "3",
+                    "input_key": "positive_prompt",
+                    "type": "string",
+                    "default": "smooth motion, cinematic",
+                    "label": "Prompt",
+                    "description": "Describe the motion/animation you want"
+                },
+                "negative_prompt": {
+                    "node_id": "3",
+                    "input_key": "negative_prompt",
+                    "type": "string",
+                    "default": "blurry, distorted, low quality, static",
+                    "label": "Negative Prompt",
+                    "description": "What to avoid in the generation"
+                },
+                "steps": {
+                    "node_id": "10",
+                    "input_key": "steps",
+                    "type": "integer",
+                    "default": 8,
+                    "min": 4,
+                    "max": 30,
+                    "step": 1,
+                    "label": "Steps",
+                    "description": "Sampling steps (Q6: 6-12 optimal)"
+                },
+                "cfg": {
+                    "node_id": "10",
+                    "input_key": "cfg",
+                    "type": "float",
+                    "default": 4.5,
+                    "min": 1.0,
+                    "max": 10.0,
+                    "step": 0.5,
+                    "label": "CFG Scale",
+                    "description": "Classifier-free guidance scale"
+                },
+                "seed": {
+                    "node_id": "10",
+                    "input_key": "seed",
+                    "type": "integer",
+                    "default": -1,
+                    "min": -1,
+                    "max": 2147483647,
+                    "label": "Seed",
+                    "description": "-1 for random seed"
+                },
+                "scheduler": {
+                    "node_id": "10",
+                    "input_key": "scheduler",
+                    "type": "select",
+                    "default": "dpm++",
+                    "options": ["euler", "euler_ancestral", "dpm++", "unipc", "ddim"],
+                    "label": "Scheduler",
+                    "description": "Sampling scheduler"
+                },
+                "width": {
+                    "node_id": "9",
+                    "input_key": "width",
+                    "type": "integer",
+                    "default": 480,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Width",
+                    "description": "Output video width"
+                },
+                "height": {
+                    "node_id": "9",
+                    "input_key": "height",
+                    "type": "integer",
+                    "default": 480,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Height",
+                    "description": "Output video height"
+                },
+                "num_frames": {
+                    "node_id": "9",
+                    "input_key": "num_frames",
+                    "type": "integer",
+                    "default": 41,
+                    "min": 17,
+                    "max": 81,
+                    "step": 8,
+                    "label": "Frames",
+                    "description": "Number of frames"
+                },
+                "frame_rate": {
+                    "node_id": "12",
+                    "input_key": "frame_rate",
+                    "type": "integer",
+                    "default": 16,
+                    "min": 8,
+                    "max": 30,
+                    "label": "FPS",
+                    "description": "Output video framerate"
+                }
+            }
+        },
+        "wan22_i2v_q5": {
+            "name": "WAN 2.2 I2V Q5 Balanced",
+            "file": "ImageToVideo/wan22_i2v_q5_api.json",
+            "category": "ImageToVideo",
+            "description": "Balanced I2V with Q5 quantization (~10GB GGUF). Good quality/speed trade-off.",
+            "parameters": {
+                "image": {
+                    "node_id": "1",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Source image for video generation"
+                },
+                "prompt": {
+                    "node_id": "3",
+                    "input_key": "positive_prompt",
+                    "type": "string",
+                    "default": "smooth motion",
+                    "label": "Prompt",
+                    "description": "Describe the motion/animation you want"
+                },
+                "negative_prompt": {
+                    "node_id": "3",
+                    "input_key": "negative_prompt",
+                    "type": "string",
+                    "default": "",
+                    "label": "Negative Prompt",
+                    "description": "What to avoid in the generation"
+                },
+                "steps": {
+                    "node_id": "10",
+                    "input_key": "steps",
+                    "type": "integer",
+                    "default": 6,
+                    "min": 4,
+                    "max": 30,
+                    "step": 1,
+                    "label": "Steps",
+                    "description": "Sampling steps (Q5: 5-8 optimal)"
+                },
+                "cfg": {
+                    "node_id": "10",
+                    "input_key": "cfg",
+                    "type": "float",
+                    "default": 5.0,
+                    "min": 1.0,
+                    "max": 10.0,
+                    "step": 0.5,
+                    "label": "CFG Scale",
+                    "description": "Classifier-free guidance scale"
+                },
+                "seed": {
+                    "node_id": "10",
+                    "input_key": "seed",
+                    "type": "integer",
+                    "default": -1,
+                    "min": -1,
+                    "max": 2147483647,
+                    "label": "Seed",
+                    "description": "-1 for random seed"
+                },
+                "scheduler": {
+                    "node_id": "10",
+                    "input_key": "scheduler",
+                    "type": "select",
+                    "default": "unipc",
+                    "options": ["euler", "euler_ancestral", "dpm++", "unipc", "ddim"],
+                    "label": "Scheduler",
+                    "description": "Sampling scheduler"
+                },
+                "width": {
+                    "node_id": "9",
+                    "input_key": "width",
+                    "type": "integer",
+                    "default": 480,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Width",
+                    "description": "Output video width"
+                },
+                "height": {
+                    "node_id": "9",
+                    "input_key": "height",
+                    "type": "integer",
+                    "default": 480,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Height",
+                    "description": "Output video height"
+                },
+                "num_frames": {
+                    "node_id": "9",
+                    "input_key": "num_frames",
+                    "type": "integer",
+                    "default": 41,
+                    "min": 17,
+                    "max": 81,
+                    "step": 8,
+                    "label": "Frames",
+                    "description": "Number of frames"
+                },
+                "frame_rate": {
+                    "node_id": "12",
+                    "input_key": "frame_rate",
+                    "type": "integer",
+                    "default": 16,
+                    "min": 8,
+                    "max": 30,
+                    "label": "FPS",
+                    "description": "Output video framerate"
+                }
+            }
+        }
+    }
+}

@@ -1050,6 +1050,28 @@ class ComfyUIClient:
         except Exception as e:
             logger.error(f"Queue error: {e}")
             return None
+
+    def queue_workflow(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+        """Queue workflow for execution, return dict with prompt_id and status.
+        
+        This is a wrapper around queue_prompt that returns a dict suitable
+        for the API response.
+        """
+        prompt_id = self.queue_prompt(workflow)
+        
+        if prompt_id:
+            return {
+                "success": True,
+                "prompt_id": prompt_id,
+                "status": "queued"
+            }
+        else:
+            return {
+                "success": False,
+                "prompt_id": None,
+                "status": "failed",
+                "error": "Failed to queue workflow to ComfyUI"
+            }
     
     def _convert_to_api_format(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
         """Convert node-based workflow to API format"""
