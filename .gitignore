@@ -1,0 +1,96 @@
+# ============================================
+# OELALA - ComfyUI NSFW Setup
+# .gitignore - Exclude large files and outputs
+# ============================================
+
+# ======================
+# MODEL FILES (220GB+)
+# ======================
+# All model files - too large for git
+ComfyUI/models/**/*.safetensors
+ComfyUI/models/**/*.gguf
+ComfyUI/models/**/*.ckpt
+ComfyUI/models/**/*.pt
+ComfyUI/models/**/*.pth
+ComfyUI/models/**/*.bin
+
+# SmolLM2 HuggingFace model (3.2GB)
+ComfyUI/models/smol/SmolLM2-1.7B-Instruct/
+
+# CLIP vision large models
+ComfyUI/models/clip_vision/clip-vit-large-patch14-336/
+
+# Text encoder split files
+ComfyUI/models/text_encoders/split_files/
+
+# LoRA folders (4.5GB+)
+ComfyUI/models/loras/Wan2.2-*/
+
+# Model caches
+ComfyUI/models/**/.cache/
+
+# ======================
+# OUTPUT DIRECTORIES
+# ======================
+ComfyUI/output/
+ComfyUI/temp/
+ComfyUI/input/
+generated/
+uploads/
+logs/
+wan_experiments/
+
+# ======================
+# PYTHON CACHE
+# ======================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.egg
+
+# ======================
+# IDE / EDITOR
+# ======================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ======================
+# VIRTUAL ENVIRONMENTS
+# ======================
+venv/
+.venv/
+env/
+.env
+
+# ======================
+# LOGS
+# ======================
+*.log
+wget-log*
+
+# ======================
+# SYSTEM FILES
+# ======================
+.DS_Store
+Thumbs.db
+*.pid
+
+# ======================
+# COMFYUI SPECIFIC
+# ======================
+# User data (except workflows)
+ComfyUI/user/default/comfy.settings.json
+
+# Database files
+ComfyUI/alembic_db/
+
+# Keep placeholder files
+!ComfyUI/models/**/put_*_here
+!ComfyUI/models/**/put_*

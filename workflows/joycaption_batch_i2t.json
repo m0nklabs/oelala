@@ -1,0 +1,204 @@
+{
+  "id": "joycaption-batch-i2t-001",
+  "revision": 0,
+  "last_node_id": 12,
+  "last_link_id": 15,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "ImageBatchPath",
+      "pos": [50, 200],
+      "size": [280, 200],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": [1, 10]
+        },
+        {
+          "name": "IMAGE_PATH",
+          "shape": 6,
+          "type": "STRING",
+          "links": [11]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageBatchPath"
+      },
+      "widgets_values": [
+        "/home/flip/oelala/ComfyUI/input",
+        0,
+        1,
+        "sequential"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "JC_GGUF_adv",
+      "pos": [400, 200],
+      "size": [320, 350],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "name": "extra_options",
+          "shape": 7,
+          "type": "JOYCAPTION_EXTRA_OPTIONS",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "PROMPT",
+          "type": "STRING",
+          "links": [2]
+        },
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [3]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "JC_GGUF_adv"
+      },
+      "widgets_values": [
+        "JoyCaption Beta One (Q6_K)",
+        "GPU",
+        "Stable Diffusion Prompt",
+        "long",
+        512,
+        0.6,
+        0.9,
+        0,
+        "",
+        "Global Cache"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "ShowText|pysssss",
+      "pos": [760, 200],
+      "size": [400, 200],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 2,
+          "widget": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [4]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ShowText|pysssss"
+      },
+      "widgets_values": ["Generated Caption", ""]
+    },
+    {
+      "id": 4,
+      "type": "PreviewImage",
+      "pos": [760, 450],
+      "size": [400, 350],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 10
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 5,
+      "type": "CaptionSaver",
+      "pos": [1200, 200],
+      "size": [320, 220],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "string",
+          "type": "STRING",
+          "link": 4
+        },
+        {
+          "name": "image_path",
+          "type": "STRING",
+          "link": 11
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "CaptionSaver"
+      },
+      "widgets_values": ["", "", true]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 2, 0, 3, 0, "STRING"],
+    [3, 2, 1, 3, 0, "STRING"],
+    [4, 3, 0, 5, 0, "STRING"],
+    [10, 1, 0, 4, 0, "IMAGE"],
+    [11, 1, 1, 5, 1, "STRING"]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "📂 JoyCaption Batch I2T - Auto Caption Dataset",
+      "bounding": [30, 100, 1520, 750],
+      "color": "#27ae60",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.85,
+      "offset": [0, 0]
+    },
+    "info": {
+      "name": "JoyCaption Batch I2T",
+      "description": "Batch image captioning for dataset preparation - saves .txt files alongside images",
+      "author": "Caramba AI",
+      "version": "1.0.0"
+    }
+  },
+  "version": 0.4
+}

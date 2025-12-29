@@ -1,0 +1,186 @@
+{
+  "id": "joycaption-i2t-nsfw-001",
+  "revision": 0,
+  "last_node_id": 10,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [50, 200],
+      "size": [315, 314],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1, 6]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": ["example.png", "image"]
+    },
+    {
+      "id": 2,
+      "type": "JC_GGUF",
+      "pos": [400, 200],
+      "size": [320, 200],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "name": "extra_options",
+          "shape": 7,
+          "type": "JOYCAPTION_EXTRA_OPTIONS",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [2, 3]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "JC_GGUF"
+      },
+      "widgets_values": [
+        "JoyCaption Beta One (Q6_K)",
+        "GPU",
+        "Descriptive",
+        "long",
+        "Keep in Memory"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "ShowText|pysssss",
+      "pos": [760, 200],
+      "size": [400, 200],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 2,
+          "widget": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [4]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ShowText|pysssss"
+      },
+      "widgets_values": ["", ""]
+    },
+    {
+      "id": 4,
+      "type": "PreviewImage",
+      "pos": [760, 450],
+      "size": [400, 350],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 5,
+      "type": "CaptionSaver",
+      "pos": [1200, 200],
+      "size": [300, 200],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "string",
+          "type": "STRING",
+          "link": 4
+        },
+        {
+          "name": "image_path",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "CaptionSaver"
+      },
+      "widgets_values": ["", "", true]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 2, 0, 3, 0, "STRING"],
+    [3, 2, 0, 5, 0, "STRING"],
+    [4, 3, 0, 5, 0, "STRING"],
+    [6, 1, 0, 4, 0, "IMAGE"]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "🖼️ JoyCaption I2T - NSFW Uncensored",
+      "bounding": [30, 100, 1500, 750],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [0, 0]
+    },
+    "info": {
+      "name": "JoyCaption I2T NSFW",
+      "description": "Image-to-Text captioning using JoyCaption GGUF Q6_K - Uncensored for NSFW content",
+      "author": "Caramba AI",
+      "version": "1.0.0"
+    }
+  },
+  "version": 0.4
+}
