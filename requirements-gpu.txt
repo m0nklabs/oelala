@@ -1,0 +1,42 @@
+# ============================================
+# OELALA - Tested GPU Requirements
+# ============================================
+# These are the exact versions tested and working
+# with NVIDIA RTX 5090 / SM 1.20 / CUDA 12.8
+#
+# For other GPUs, you may use newer versions
+# but these are guaranteed to work together.
+# ============================================
+
+# PyTorch 2.9.1 with CUDA 12.8 (SM 1.20 support)
+# Install separately with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+# Or for CUDA 12.4: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+torch==2.9.1
+torchvision==0.24.1
+torchaudio==2.9.1
+torchsde==0.2.6
+
+# Triton for GPU acceleration
+triton==3.5.1
+
+# Transformers & ML core
+transformers==4.57.3
+accelerate==1.12.0
+safetensors==0.7.0
+sentencepiece==0.2.1
+
+# GGUF / LLM support
+gguf==0.17.1
+llama-cpp-python==0.3.16
+
+# Video processing
+imageio==2.37.2
+imageio-ffmpeg==0.6.0
+opencv-python==4.11.0.86
+opencv-python-headless==4.12.0.88
+
+# Dynamic prompts
+dynamicprompts==0.31.0
+
+# Audio (for TTS nodes)
+pyogg==0.6.14a1

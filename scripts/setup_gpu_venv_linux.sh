@@ -123,12 +123,20 @@ pip install --upgrade pip wheel setuptools
 # Step 5: Install PyTorch with CUDA
 # ============================================
 echo
-echo "[5/8] Installing PyTorch with CUDA 12.4 support..."
+echo "[5/8] Installing PyTorch with CUDA support..."
 echo "      This may take 5-10 minutes..."
 echo
 
-# PyTorch 2.5+ with CUDA 12.4
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# PyTorch 2.9.1 with CUDA 12.8 (for RTX 50 series / SM 1.20)
+# Falls back to CUDA 12.4 for older GPUs
+echo "      Trying CUDA 12.8 first (RTX 50 series)..."
+if ! pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu128 2>/dev/null; then
+    echo "      CUDA 12.8 not available, trying CUDA 12.4..."
+    if ! pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu124 2>/dev/null; then
+        echo "      Pinned version failed, trying latest stable..."
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+    fi
+fi
 
 # Verify CUDA is available
 echo
@@ -158,17 +166,19 @@ cd ..
 echo
 echo "[7/8] Installing custom node dependencies..."
 
-# Core dependencies for GGUF/LLM nodes
-pip install gguf sentencepiece transformers accelerate safetensors
-
-# For video processing
-pip install imageio imageio-ffmpeg opencv-python
-
-# For audio (JoyCaption TTS)
-pip install pyogg==0.6.14a1
-
-# For dynamic prompts
-pip install dynamicprompts
+# Install from pinned requirements (tested versions)
+echo "      Installing from requirements-gpu.txt (tested versions)..."
+if [ -f "requirements-gpu.txt" ]; then
+    pip install -r requirements-gpu.txt --ignore-installed torch torchvision torchaudio
+else
+    # Fallback to manual install with pinned versions
+    pip install transformers==4.57.3 accelerate==1.12.0 safetensors==0.7.0
+    pip install gguf==0.17.1 sentencepiece==0.2.1
+    pip install imageio==2.37.2 imageio-ffmpeg==0.6.0 opencv-python==4.11.0.86
+    pip install dynamicprompts==0.31.0
+    pip install pyogg==0.6.14a1
+    pip install triton==3.5.1
+fi
 
 # Install all custom node requirements
 echo "      Installing requirements from custom nodes..."
@@ -193,7 +203,12 @@ echo
 export CMAKE_ARGS="-DGGML_CUDA=on"
 export FORCE_CMAKE=1
 
-pip install llama-cpp-python --force-reinstall --no-cache-dir
+# Try pinned version first
+echo "      Installing llama-cpp-python==0.3.16 with CUDA..."
+if ! pip install llama-cpp-python==0.3.16 --force-reinstall --no-cache-dir 2>/dev/null; then
+    echo "      Pinned version failed, trying latest..."
+    pip install llama-cpp-python --force-reinstall --no-cache-dir
+fi
 
 # ============================================
 # Create start script

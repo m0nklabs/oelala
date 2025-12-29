@@ -158,17 +158,25 @@ REM ============================================
 REM Step 5: Install PyTorch with CUDA
 REM ============================================
 echo.
-echo [5/8] Installing PyTorch with CUDA 12.4 support...
+echo [5/8] Installing PyTorch with CUDA support...
 echo      This may take 5-10 minutes...
 echo.
 
-REM PyTorch 2.5+ with CUDA 12.4
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+REM PyTorch 2.9.1 with CUDA 12.8 (for RTX 50 series / SM 1.20)
+REM Falls back to CUDA 12.4 for older GPUs
+echo      Trying CUDA 12.8 first (RTX 50 series)...
+pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu128
 
 if %errorlevel% neq 0 (
     echo.
-    echo WARNING: CUDA 12.4 install failed, trying CUDA 12.1...
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    echo      CUDA 12.8 not available, trying CUDA 12.4...
+    pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu124
+)
+
+if %errorlevel% neq 0 (
+    echo.
+    echo      Pinned version failed, trying latest stable...
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 )
 
 REM Verify CUDA is available
@@ -195,17 +203,19 @@ REM ============================================
 echo.
 echo [7/8] Installing custom node dependencies...
 
-REM Core dependencies for GGUF/LLM nodes
-pip install gguf sentencepiece transformers accelerate safetensors
-
-REM For video processing
-pip install imageio imageio-ffmpeg opencv-python
-
-REM For audio (JoyCaption TTS)
-pip install pyogg==0.6.14a1
-
-REM For dynamic prompts
-pip install dynamicprompts
+REM Install from pinned requirements (tested versions)
+echo      Installing from requirements-gpu.txt (tested versions)...
+if exist "..\requirements-gpu.txt" (
+    pip install -r ..\requirements-gpu.txt
+) else (
+    REM Fallback to manual install with pinned versions
+    pip install transformers==4.57.3 accelerate==1.12.0 safetensors==0.7.0
+    pip install gguf==0.17.1 sentencepiece==0.2.1
+    pip install imageio==2.37.2 imageio-ffmpeg==0.6.0 opencv-python==4.11.0.86
+    pip install dynamicprompts==0.31.0
+    pip install pyogg==0.6.14a1
+    pip install triton==3.5.1
+)
 
 REM Install all custom node requirements
 echo      Installing requirements from custom nodes...
@@ -230,12 +240,19 @@ REM Set CMAKE args for CUDA
 set CMAKE_ARGS=-DGGML_CUDA=on
 set FORCE_CMAKE=1
 
-REM Try pre-built wheel first (faster)
-pip install llama-cpp-python --prefer-binary 2>nul
+REM Try pinned version first
+echo      Installing llama-cpp-python==0.3.16 with CUDA...
+pip install llama-cpp-python==0.3.16 --prefer-binary 2>nul
 
-REM If that fails, build from source
+REM If that fails, try building from source
 if %errorlevel% neq 0 (
     echo      Pre-built wheel not available, building from source...
+    pip install llama-cpp-python==0.3.16 --force-reinstall --no-cache-dir
+)
+
+REM Final fallback to latest
+if %errorlevel% neq 0 (
+    echo      Pinned version failed, trying latest...
     pip install llama-cpp-python --force-reinstall --no-cache-dir
 )
 
