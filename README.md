@@ -10,7 +10,7 @@ A curated ComfyUI configuration for NSFW image and video generation, featuring:
 ## 🚀 Quick Start (Windows)
 
 ```batch
-git clone https://github.com/m0nk111/oelala.git
+git clone https://github.com/m0nklabs/oelala.git
 cd oelala
 scripts\install_windows.bat
 ```
