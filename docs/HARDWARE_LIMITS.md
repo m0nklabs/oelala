@@ -1,155 +1,150 @@
-# Hardware Limits Testing - RTX 5060 Ti (16GB) + RTX 3060 (12GB)
+# Hardware Limits - WAN 2.2 I2V on RTX 5060 Ti (16GB) + RTX 3060 (12GB)
 
-## Current Working Configuration
+## Tested Configuration (December 2025)
 
-| Parameter | Value | Status |
-|-----------|-------|--------|
-| Model | Q5_K_S (10GB) | ✅ Works |
-| Resolution | 480×480 | ✅ Works |
-| Frames | 41 | ✅ Works |
-| Steps | 6 | ✅ Works |
-| CFG | 5.0 | ✅ Works |
-| Attention | SageAttention | ✅ Works |
-| Offload | CPU (DisTorch2) | ✅ Works |
+### Hardware
+- **GPU0**: NVIDIA RTX 3060 12GB (cuda:0)
+- **GPU1**: NVIDIA RTX 5060 Ti 16GB (cuda:1)
+- **Total VRAM**: 28GB
+- **RAM**: 115GB (CPU offload optional)
 
-## Test Matrix
+### Model
+- **WAN 2.2 I2V 14B GGUF Q6_K** (~34GB uncompressed)
+- **ComfyUI-MultiGPU DisTorch2** for distribution
+- **SageAttention** enabled
 
-### Resolution Tests (41 frames, 6 steps)
-| Resolution | Aspect | Pixels | Status | VRAM Peak | Time |
-|------------|--------|--------|--------|-----------|------|
-| 256×256 | 1:1 | 65K | ⏳ Pending | | |
-| 320×320 | 1:1 | 102K | ⏳ Pending | | |
-| 480×480 | 1:1 | 230K | ✅ Works | ~14GB | ~30s |
-| 512×512 | 1:1 | 262K | ⏳ Pending | | |
-| 576×576 | 1:1 | 331K | ⏳ Pending | | |
-| 640×640 | 1:1 | 410K | ⏳ Pending | | |
-| 720×720 | 1:1 | 518K | ⏳ Pending | | |
-| 480×720 | 2:3 | 346K | ⏳ Pending | | |
-| 720×480 | 3:2 | 346K | ⏳ Pending | | |
-| 480×848 | 9:16 | 407K | ⏳ Pending | | |
-| 848×480 | 16:9 | 407K | ⏳ Pending | | |
+## Allocation Modes
 
-### Frame Count Tests (480×480, 6 steps)
-| Frames | Duration @16fps | Status | VRAM Peak | Time |
-|--------|-----------------|--------|-----------|------|
-| 17 | 1.1s | ⏳ Pending | | |
-| 25 | 1.6s | ⏳ Pending | | |
-| 33 | 2.1s | ⏳ Pending | | |
-| 41 | 2.6s | ✅ Works | ~14GB | ~30s |
-| 49 | 3.1s | ⏳ Pending | | |
-| 57 | 3.6s | ⏳ Pending | | |
-| 65 | 4.1s | ⏳ Pending | | |
-| 81 | 5.1s | ⏳ Pending | | |
-| 97 | 6.1s | ⏳ Pending | | |
-| 121 | 7.6s | ⏳ Pending | | |
-
-### Step Count Tests (480×480, 41 frames)
-| Steps | Quality Trade-off | Status | Time |
-|-------|-------------------|--------|------|
-| 4 | Fast, lower quality | ⏳ Pending | |
-| 6 | Balanced | ✅ Works | ~30s |
-| 8 | Better quality | ⏳ Pending | |
-| 10 | High quality | ⏳ Pending | |
-| 12 | Maximum quality | ⏳ Pending | |
-| 20 | Overkill? | ⏳ Pending | |
-
-### Model Quantization Tests (480×480, 41 frames, 6 steps)
-| Model | Size | Status | Quality | Speed |
-|-------|------|--------|---------|-------|
-| Q4_K_M | 9GB | ✅ Works | Baseline | Fast |
-| Q5_K_S | 10GB | ✅ Works | Better | ~Same |
-| Q6_K | 12GB | ❌ OOM | N/A | N/A |
-| Q8_0 | 15GB | ❌ Too large | N/A | N/A |
-
-## VRAM Usage Breakdown (Estimated)
-
+### GPU-Only Mode (Recommended)
 ```
-Component                    VRAM Usage
-─────────────────────────────────────────
-T5 Text Encoder (bf16)       ~4 GB
-CLIP Vision                  ~1 GB
-VAE                          ~1 GB
-GGUF Model (Q5_K_S)          ~6 GB (with CPU offload)
-Latents/Activations          ~4 GB (varies with resolution)
-─────────────────────────────────────────
-Total                        ~16 GB (at limit)
+cuda:0,12gb;cuda:1,16gb
+```
+- No CPU fallback
+- Lower RAM usage (~24GB vs ~53GB)
+- Full GPU utilization
+- Slightly less VRAM overhead
+
+### CPU Fallback Mode
+```
+cuda:0,12gb;cuda:1,16gb;cpu,*
+```
+- T5 encoder offloaded to CPU
+- Higher resolution/frames possible
+- Slower due to CPU<->GPU transfers
+
+## Verified Working Configurations
+
+### Portrait (9:16)
+| Resolution | Frames | Video Length | Time | Peak VRAM | Mode |
+|------------|--------|--------------|------|-----------|------|
+| 576×1024 | 81 | 5.1s @16fps | 6.5 min | 21.4GB | CPU offload |
+| 576×1024 | 81 | 5.1s @16fps | ~6 min | 17.4GB | GPU-only ✅ |
+| 720×1280 | 81 | 5.1s @16fps | 11.3 min | ~20GB | CPU offload |
+
+### Landscape (16:9)
+| Resolution | Frames | Video Length | Time | Peak VRAM | Mode |
+|------------|--------|--------------|------|-----------|------|
+| 720×400 | 101 | 6.3s @16fps | 4.1 min | ~20GB | CPU offload |
+| 1024×576 | 101 | 6.3s @16fps | 8.5 min | ~20GB | CPU offload |
+| 1280×720 | 101 | 6.3s @16fps | ~10 min | ~21GB | CPU offload |
+
+### Maximum Frames (720×400)
+| Frames | Video Length | Time | Status |
+|--------|--------------|------|--------|
+| 101 | 6.3s | 4.1 min | ✅ Works |
+| 241 | 15.1s | 23.7 min | ✅ Works |
+| 289 | 18.1s | ~28 min | Testing |
+
+## VRAM Usage Breakdown
+
+### GPU-Only Mode (~17.4GB total)
+```
+Component                    GPU0 (3060)   GPU1 (5060Ti)
+──────────────────────────────────────────────────────────
+WAN Model Layers (43%)       6.6 GB        -
+WAN Model Layers (57%)       -             10.8 GB
+T5 Text Encoder              Shared        Shared
+VAE Decoder                  -             Dynamic
+Latents/Activations          -             Dynamic
+──────────────────────────────────────────────────────────
+Total                        ~6.6 GB       ~10.8 GB
+```
+
+### CPU Offload Mode (~20GB GPU + ~30GB RAM)
+```
+Component                    GPU           CPU/RAM
+──────────────────────────────────────────────────────────
+WAN Model (83%)              ~20 GB        -
+WAN Model (17%)              -             ~5.7 GB
+T5 Text Encoder              -             ~8 GB
+VAE Decoder                  Dynamic       -
+──────────────────────────────────────────────────────────
 ```
 
 ## Recommended Presets for Frontend
 
-### Fast Preset
+### Quick Preview
 ```json
 {
-  "resolution": {"width": 480, "height": 480},
-  "frames": 25,
-  "steps": 4,
-  "estimated_time": "15-20s",
-  "quality": "draft"
-}
-```
-
-### Balanced Preset
-```json
-{
-  "resolution": {"width": 480, "height": 480},
-  "frames": 41,
+  "resolution": {"width": 576, "height": 1024},
+  "frames": 49,
   "steps": 6,
-  "estimated_time": "25-35s",
-  "quality": "good"
+  "estimated_time": "3-4 min",
+  "quality": "preview",
+  "mode": "gpu_only"
 }
 ```
 
-### Quality Preset
+### Standard Portrait
 ```json
 {
-  "resolution": {"width": 480, "height": 480},
-  "frames": 41,
-  "steps": 10,
-  "estimated_time": "45-60s",
-  "quality": "high"
-}
-```
-
-### Long Video Preset
-```json
-{
-  "resolution": {"width": 320, "height": 320},
+  "resolution": {"width": 576, "height": 1024},
   "frames": 81,
   "steps": 6,
-  "estimated_time": "60-90s",
-  "quality": "medium"
+  "estimated_time": "6-7 min",
+  "quality": "good",
+  "mode": "gpu_only"
 }
 ```
 
-## Testing Script (TBD)
-
-```bash
-#!/bin/bash
-# hardware_test.sh - Automated hardware limit testing
-
-RESOLUTIONS=("256x256" "480x480" "512x512" "640x640" "720x720")
-FRAME_COUNTS=(17 25 41 57 81)
-STEP_COUNTS=(4 6 8 10 12)
-
-for res in "${RESOLUTIONS[@]}"; do
-  for frames in "${FRAME_COUNTS[@]}"; do
-    echo "Testing: ${res} @ ${frames} frames..."
-    # Submit workflow via API
-    # Measure VRAM usage
-    # Record time
-    # Check for OOM
-  done
-done
+### HD Portrait
+```json
+{
+  "resolution": {"width": 720, "height": 1280},
+  "frames": 81,
+  "steps": 6,
+  "estimated_time": "11-13 min",
+  "quality": "high",
+  "mode": "cpu_offload"
+}
 ```
 
-## Notes
+### Long Video (Low Res)
+```json
+{
+  "resolution": {"width": 720, "height": 400},
+  "frames": 241,
+  "steps": 6,
+  "estimated_time": "20-25 min",
+  "quality": "good",
+  "video_length": "15s"
+}
+```
 
-- **CPU Offload**: DisTorch2 offloads ~8-10GB to RAM, essential for Q5_K_S
-- **SageAttention**: Reduces memory usage and speeds up attention
-- **Multi-GPU**: RTX 3060 can assist but has limited VRAM
-- **Batch Processing**: Not tested yet, likely needs lower settings
+## Known Limits
 
----
+### OOM Boundaries (approximate)
+- **GPU-only**: ~720×1280 @ 81 frames is near limit
+- **CPU offload**: ~1280×720 @ 101 frames works, higher may OOM
+- **Frame limit**: 241+ frames at 720×400 works, higher untested
 
-**Last Updated**: December 28, 2025
-**Next**: Run systematic tests to fill in the matrix
+### Tips
+1. Use GPU-only mode for faster iteration
+2. Switch to CPU offload for maximum resolution/frames
+3. Portrait (9:16) uses same VRAM as landscape (16:9) at same pixel count
+4. SageAttention reduces VRAM ~15-20%
+
+## Changelog
+- 2025-12-31: Added GPU-only mode support via DisTorch2 fix
+- 2025-12-31: Tested 241 frames (15s video) successfully
+- 2025-12-31: Tested 720×1280 HD portrait

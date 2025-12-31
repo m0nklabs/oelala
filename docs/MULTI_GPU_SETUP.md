@@ -1,102 +1,147 @@
-# Multi-GPU Setup Guide for Wan 2.2
+# Multi-GPU Setup Guide for WAN 2.2 with ComfyUI
 
-This guide explains how to leverage multiple GPUs (e.g., RTX 5060 Ti + RTX 3060) to run large models like Wan 2.2 14B by distributing the model weights across available VRAM.
+This guide explains how to run WAN 2.2 14B across multiple GPUs using ComfyUI-MultiGPU DisTorch2.
 
-## Concept: Model Sharding
-Instead of loading the entire model onto one GPU (which requires offloading to CPU if VRAM is insufficient), we can split the model layers across multiple GPUs. This is handled automatically by the `accelerate` library using `device_map`.
+## Hardware Requirements
+- 2+ NVIDIA GPUs with combined 24GB+ VRAM
+- Example: RTX 5060 Ti (16GB) + RTX 3060 (12GB) = 28GB total
 
-**Goal:** Combine VRAM (16GB + 12GB = 28GB total) to keep more of the model on GPU, reducing inference time.
+## Installation
 
-## Prerequisites
-Ensure `accelerate` is installed:
+### 1. Install ComfyUI-MultiGPU
 ```bash
-pip install accelerate
+cd /path/to/ComfyUI/custom_nodes
+git clone https://github.com/pollockjj/ComfyUI-MultiGPU.git
 ```
 
-## Implementation Strategy
+### 2. Apply Local Fixes (Required for ComfyUI 0.6.0+)
 
-### 1. Load the Transformer with `device_map`
-The Transformer is the largest component (~28GB in FP16, ~14GB in INT8). We load it first and let `accelerate` distribute it.
+Two fixes are needed for proper multi-GPU operation:
+
+#### Fix 1: Tuple Parsing in `distorch_2.py`
+The `_load_list()` function returns 5-element tuples in ComfyUI 0.6.0+. Update three locations:
 
 ```python
-from diffusers import WanTransformer3DModel
-import torch
+# Line ~520: In _assign_blocks_by_memory()
+name, size, target_device, _ = entry[0], entry[2], entry[3], entry[4]
 
-transformer = WanTransformer3DModel.from_pretrained(
-    "Wan-AI/Wan2.2-I2V-A14B-Diffusers",
-    subfolder="transformer",
-    torch_dtype=torch.bfloat16,
-    device_map="balanced",  # Or "auto"
-    max_memory={0: "15GB", 1: "11GB"} # Reserve buffer for OS/Display
-)
+# Line ~545: In _assign_blocks_greedy()  
+name, size, target_device, _ = entry[0], entry[2], entry[3], entry[4]
+
+# Line ~565: In _assign_blocks_even()
+name, size, target_device, _ = entry[0], entry[2], entry[3], entry[4]
 ```
 
-### 2. Load the Pipeline
-Pass the sharded transformer to the pipeline. The pipeline will handle the other smaller components (Text Encoder, VAE).
+#### Fix 2: GPU-Only Mode (No CPU Fallback)
+By default, DisTorch2 falls back to CPU for remaining model bytes. To force GPU-only:
+
+In `distorch_2.py`, find the wildcard handling (~line 622):
 
 ```python
-from diffusers import WanImageToVideoPipeline
+# Change from:
+wildcard_device = "cpu"  # Default wildcard device
 
-pipe = WanImageToVideoPipeline.from_pretrained(
-    "Wan-AI/Wan2.2-I2V-A14B-Diffusers",
-    transformer=transformer,
-    torch_dtype=torch.bfloat16,
-)
-# Do NOT use enable_model_cpu_offload() if everything fits in VRAM!
-# If it still doesn't fit, you can combine sharding with offloading.
+# To:
+wildcard_device = None  # No default - must be explicit
+has_wildcard = False
 ```
 
-## Example Script (`test_wan_multigpu.py`)
+And update the remaining bytes handling (~line 656):
 
 ```python
-import os
-import torch
-from diffusers import WanImageToVideoPipeline, WanTransformer3DModel
-from diffusers.utils import export_to_video
-from PIL import Image
+if remaining_model_bytes > 0:
+    if has_wildcard and wildcard_device:
+        # Original wildcard behavior
+        final_byte_allocations[wildcard_device] += remaining_model_bytes
+    else:
+        # GPU-ONLY MODE: Distribute to existing GPUs
+        gpu_devices = [d for d in final_byte_allocations.keys() if 'cuda' in d]
+        if gpu_devices:
+            total_gpu_alloc = sum(final_byte_allocations[d] for d in gpu_devices)
+            for dev in gpu_devices:
+                proportion = final_byte_allocations[dev] / total_gpu_alloc
+                final_byte_allocations[dev] += int(remaining_model_bytes * proportion)
+```
 
-# Allow seeing both GPUs
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1" 
+## Allocation Strings
 
-def run_multigpu():
-    # 1. Load Sharded Transformer
-    print("📦 Loading Transformer across GPUs...")
-    transformer = WanTransformer3DModel.from_pretrained(
-        "Wan-AI/Wan2.2-I2V-A14B-Diffusers",
-        subfolder="transformer",
-        torch_dtype=torch.bfloat16,
-        device_map="balanced",
-        max_memory={0: "15GB", 1: "11GB"}
-    )
+### GPU-Only Mode (Recommended)
+```
+cuda:0,12gb;cuda:1,16gb
+```
+- All model on GPUs
+- No CPU RAM usage for model weights
+- Lower latency
 
-    # 2. Load Pipeline
-    print("🔗 Loading Pipeline...")
-    pipe = WanImageToVideoPipeline.from_pretrained(
-        "Wan-AI/Wan2.2-I2V-A14B-Diffusers",
-        transformer=transformer,
-        torch_dtype=torch.bfloat16
-    )
-    
-    # Move other components to primary GPU or CPU as needed
-    # pipe.enable_model_cpu_offload() # Optional: use only if OOM occurs
+### CPU Fallback Mode
+```
+cuda:0,12gb;cuda:1,16gb;cpu,*
+```
+- Overflow goes to CPU RAM
+- Enables higher resolution/frames
+- Higher latency due to CPU<->GPU transfers
 
-    # 3. Run Inference
-    print("🚀 Generating Video...")
-    image = Image.open("test_t2i_output.png")
-    output = pipe(
-        prompt="Your prompt",
-        image=image,
-        num_frames=81,
-        num_inference_steps=20
-    ).frames[0]
-    
-    export_to_video(output, "multigpu_output.mp4")
+## Workflow Configuration
 
-if __name__ == "__main__":
-    run_multigpu()
+In your ComfyUI workflow, set these nodes:
+
+### UnetLoaderGGUFAdvancedDisTorch2MultiGPU
+```
+expert_mode_allocations: cuda:0,12gb;cuda:1,16gb
+```
+
+### VAELoaderDisTorch2MultiGPU
+```
+expert_mode_allocations: cuda:0,12gb;cuda:1,16gb
+```
+
+### CLIPLoaderDisTorch2MultiGPU
+```
+expert_mode_allocations: cuda:0,12gb;cuda:1,16gb
+```
+
+## Verifying GPU Distribution
+
+Check ComfyUI logs for:
+```
+[MultiGPU DisTorch V2] GPU-ONLY MODE: Distributed remaining X MB across 2 GPUs (no CPU fallback).
+```
+
+Or with CPU fallback:
+```
+[MultiGPU DisTorch V2] Assigning remaining X MB of model to wildcard device 'cpu'.
+```
+
+### Expected Distribution (WAN 2.2 14B Q6_K)
+```
+Device    VRAM GB    Model GB    Dist %
+cuda:0      12.0       14.4       43%
+cuda:1      16.0       19.2       57%
 ```
 
 ## Troubleshooting
-- **OOM on GPU 0**: Reduce `max_memory` for GPU 0 to leave space for activations.
-- **Slow Performance**: Ensure PCI-E bandwidth is sufficient (x8/x16 lanes). If one card is x1 or x4, data transfer might be the bottleneck.
+
+### OOM Errors
+1. Reduce resolution or frames
+2. Switch to CPU fallback mode
+3. Use smaller GGUF quantization (Q5_K_S instead of Q6_K)
+
+### Model Not Distributed
+- Check `expert_mode_allocations` is set on ALL loader nodes
+- Verify ComfyUI restarted after fixing distorch_2.py
+
+### High RAM Usage Despite GPU-Only
+- T5 text encoder may still use CPU
+- This is expected; focus is on model layers
+
+## Performance Comparison
+
+| Mode | VRAM Used | RAM Used | Speed |
+|------|-----------|----------|-------|
+| GPU-Only | ~17GB | ~24GB | Fast |
+| CPU Fallback | ~20GB | ~53GB | Slower |
+
+## References
+- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)
+- [WAN 2.2 Model](https://huggingface.co/Wan-AI)
+- [GitHub Issue #160](https://github.com/pollockjj/ComfyUI-MultiGPU/issues/160) - Tuple parsing fix

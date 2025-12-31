@@ -1,3 +1,21 @@
+2025-12-31
+Agent: Claude Sonnet 4.5
+AgentTag: CLAU
+ModelTag: GPUFIX
+Details:
+- Fixed ComfyUI-MultiGPU DisTorch2 tuple parsing for ComfyUI 0.6.0+ compatibility
+- Added GPU-only mode to DisTorch2 (no automatic CPU fallback)
+- Tested WAN 2.2 I2V with dual-GPU setup (RTX 5060 Ti + RTX 3060)
+- Verified 576x1024 portrait @ 81 frames in GPU-only mode
+- Verified 720x1280 HD portrait @ 81 frames with CPU offload
+- Verified 241 frames (~15s video) at 720x400
+- Updated hardware limits and multi-GPU setup documentation
+FilesChanged:
+- ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py (tuple parsing + GPU-only mode)
+- ComfyUI/comfy/model_patcher.py (RMS_norm hasattr fix)
+- docs/HARDWARE_LIMITS.md
+- docs/MULTI_GPU_SETUP.md
+
 2025-12-27
 Agent: GitHub Copilot
 AgentTag: GCOP
