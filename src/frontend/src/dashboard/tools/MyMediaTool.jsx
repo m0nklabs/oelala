@@ -210,19 +210,72 @@ export default function MyMediaTool({ filter = 'all' }) {
         }
         .masonry-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-          gap: 12px;
-          padding: 16px;
+          gap: 16px;
+          padding: 20px;
         }
-        @media (min-width: 1200px) {
+        
+        /* 1280x1024 (SXGA) - 4 kolommen, grotere items */
+        @media (min-width: 1200px) and (max-width: 1400px) {
+          .masonry-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+          .media-item {
+            height: 280px;
+          }
+        }
+        
+        /* 1920x1080 (Full HD) - 5 kolommen */
+        @media (min-width: 1400px) and (max-width: 2000px) {
           .masonry-grid {
             grid-template-columns: repeat(5, 1fr);
           }
+          .media-item {
+            height: 300px;
+          }
         }
+        
+        /* 2560x1440 (QHD/1440p) - 6 kolommen, grotere items */
+        @media (min-width: 2000px) {
+          .masonry-grid {
+            grid-template-columns: repeat(6, 1fr);
+            gap: 20px;
+            padding: 24px;
+          }
+          .media-item {
+            height: 360px;
+          }
+        }
+        
+        /* 4K and above - 8 kolommen */
+        @media (min-width: 3000px) {
+          .masonry-grid {
+            grid-template-columns: repeat(8, 1fr);
+            gap: 24px;
+          }
+          .media-item {
+            height: 400px;
+          }
+        }
+        
+        /* Smaller screens fallback */
+        @media (max-width: 1199px) {
+          .masonry-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+          }
+          .media-item {
+            height: 240px;
+          }
+        }
+        
         @media (max-width: 800px) {
           .masonry-grid {
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 8px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 12px;
+          }
+          .media-item {
+            height: 200px;
           }
         }
       `}</style>
@@ -322,10 +375,6 @@ export default function MyMediaTool({ filter = 'all' }) {
               key={idx}
               className="media-item"
               onClick={() => setSelectedIndex(idx)}
-              style={{
-                aspectRatio: '3/4',
-                height: '320px'
-              }}
             >
               {item.type === 'video' ? (
                 <video
