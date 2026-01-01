@@ -230,11 +230,14 @@ app.add_middleware(
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")
 OUTPUT_DIR = Path("/home/flip/oelala/generated")
 FRONTEND_DIR = Path("/home/flip/oelala/src/frontend")
+COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Mount static files for frontend
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+# Mount ComfyUI output for direct serving
+app.mount("/comfyui-output", StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)), name="comfyui_output")
 
 # Global generator instance
 generator = None
@@ -1244,6 +1247,148 @@ async def generate_wan22_q6_comfyui(
         logger.error(f"❌ ComfyUI Q6 generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Wan2.2 Q6 generation failed: {str(e)}")
 
+
+@app.post("/generate-wan22-distorch2")
+async def generate_wan22_distorch2(
+    file: UploadFile = File(...),
+    prompt: str = Form("Motion, smooth camera movement, cinematic"),
+    negative_prompt: str = Form("low quality, blurry, out of focus, unstable camera, artifacts, distortion"),
+    num_frames: int = Form(41, description="Number of frames (41=2.5s, 81=5s, 97=6s @ 16fps)"),
+    output_filename: str = Form("", description="Custom output filename"),
+    resolution: str = Form("480p", description="Video resolution: 480p, 720p, 1080p"),
+    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
+    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
+    steps: int = Form(6, description="Sampling steps (6 recommended for speed)"),
+    cfg: float = Form(1.0, description="CFG scale (1.0 for Lightning LoRA)"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    lora_strength: float = Form(1.5, description="LoRA strength (1.0-2.0)"),
+    enable_nsfw_lora: bool = Form(True, description="Enable NSFW LoRA"),
+    enable_dreamlay_lora: bool = Form(True, description="Enable DR34ML4Y style LoRA"),
+    enable_lightx2v_lora: bool = Form(True, description="Enable LightX2V speed LoRA"),
+    enable_cumshot_lora: bool = Form(True, description="Enable cumshot LoRA"),
+):
+    """
+    Generate Wan2.2 DisTorch2 dual-noise video via ComfyUI.
+    
+    BEST QUALITY - Uses dual high_noise + low_noise Q6_K models with 2-stage sampling.
+    
+    Features:
+    - DisTorch2 multi-GPU: cuda:0 (12GB) + cuda:1 (16GB) + CPU offload
+    - High noise model for first 50% of steps, low noise for remaining 50%
+    - Power Lora Loader with configurable LoRAs
+    - SageAttention for memory efficiency
+    
+    Tested benchmark: 464x688 @ 97 frames (6.1s) = 4.2 minutes
+    """
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+
+    comfyui = get_comfyui_client()
+
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
+        )
+
+    # Validate file type
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    # Generate unique filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"distorch2_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+
+    # Save uploaded file
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"📤 Saved input image: {input_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+    # Generate output filename
+    if not output_filename:
+        output_filename = f"wan22_distorch2_{timestamp}.mp4"
+    elif not output_filename.endswith(".mp4"):
+        output_filename += ".mp4"
+
+    output_prefix = f"oelala_distorch2_{timestamp}"
+
+    try:
+        logger.info("🎬 Starting Wan2.2 DisTorch2 Dual-Noise generation")
+        logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
+        logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
+        logger.info(f"   🔧 DisTorch2: steps={steps}, CFG={cfg}, lora_strength={lora_strength}")
+        logger.info(f"   🎨 LoRAs: NSFW={enable_nsfw_lora}, DR34ML4Y={enable_dreamlay_lora}, LightX2V={enable_lightx2v_lora}, Cumshot={enable_cumshot_lora}")
+        logger.info(f"   📝 Prompt: {prompt[:100]}...")
+
+        # Generate video via DisTorch2 dual-noise workflow
+        result_path = comfyui.generate_distorch2_video(
+            image_path=str(input_path),
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            output_dir=str(OUTPUT_DIR),
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            output_prefix=output_prefix,
+            lora_strength=lora_strength,
+            enable_nsfw_lora=enable_nsfw_lora,
+            enable_dreamlay_lora=enable_dreamlay_lora,
+            enable_lightx2v_lora=enable_lightx2v_lora,
+            enable_cumshot_lora=enable_cumshot_lora,
+        )
+
+        if result_path and Path(result_path).exists():
+            final_output = OUTPUT_DIR / output_filename
+            if str(result_path) != str(final_output):
+                shutil.copy(result_path, final_output)
+                result_path = str(final_output)
+
+            return {
+                "success": True,
+                "message": "Wan2.2 DisTorch2 Dual-Noise video generated",
+                "input_image": input_filename,
+                "output_video": output_filename,
+                "video_url": f"/files/{output_filename}",
+                "video_path": result_path,
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "num_frames": num_frames,
+                "fps": fps,
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+                "lora_strength": lora_strength,
+                "loras": {
+                    "nsfw": enable_nsfw_lora,
+                    "dreamlay": enable_dreamlay_lora,
+                    "lightx2v": enable_lightx2v_lora,
+                    "cumshot": enable_cumshot_lora,
+                },
+                "timestamp": timestamp,
+                "backend": "comfyui",
+                "model": "wan2.2_i2v_14B_Q6_K_dual_noise",
+            }
+        else:
+            raise HTTPException(status_code=500, detail="ComfyUI DisTorch2 generation returned no output")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ ComfyUI DisTorch2 generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Wan2.2 DisTorch2 generation failed: {str(e)}")
+
+
 @app.get("/comfyui-status")
 async def comfyui_status():
     """Check ComfyUI availability and GPU status"""
@@ -1598,6 +1743,54 @@ async def list_videos():
         })
 
     return {"videos": videos, "count": len(videos)}
+
+
+@app.get("/list-comfyui-media")
+async def list_comfyui_media(type: str = "all"):
+    """
+    List all media files from ComfyUI output directory.
+    
+    Args:
+        type: Filter by type - "all", "video", "image"
+    """
+    media = []
+    
+    # Define patterns based on type
+    if type == "video":
+        patterns = ["*.mp4", "*.webm", "*.mov"]
+    elif type == "image":
+        patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"]
+    else:
+        patterns = ["*.mp4", "*.webm", "*.mov", "*.png", "*.jpg", "*.jpeg", "*.webp"]
+    
+    for pattern in patterns:
+        for file_path in COMFYUI_OUTPUT_DIR.glob(pattern):
+            # Skip directories and hidden files
+            if file_path.is_dir() or file_path.name.startswith('.') or file_path.name.startswith('_'):
+                continue
+            
+            stat = file_path.stat()
+            ext = file_path.suffix.lower()
+            file_type = "video" if ext in [".mp4", ".webm", ".mov"] else "image"
+            
+            media.append({
+                "filename": file_path.name,
+                "type": file_type,
+                "size": stat.st_size,
+                "mtime": stat.st_mtime,
+                "created": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "url": f"/comfyui-output/{file_path.name}"
+            })
+    
+    # Sort by modification time, newest first
+    media.sort(key=lambda x: x["mtime"], reverse=True)
+    
+    return {
+        "media": media,
+        "count": len(media),
+        "videos": len([m for m in media if m["type"] == "video"]),
+        "images": len([m for m in media if m["type"] == "image"])
+    }
 
 @app.post("/train-lora")
 async def train_lora_model(

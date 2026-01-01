@@ -3,7 +3,7 @@ import { NAV_GROUPS } from './nav'
 import { 
   Type, Image as ImageIcon, Video, Film, 
   Maximize2, RefreshCw, User, ChevronLeft, ChevronRight,
-  Layers, Wand2, Workflow, Clapperboard
+  Layers, Wand2, Workflow, Clapperboard, FolderOpen, Play, ImagePlus
 } from 'lucide-react'
 
 const ICONS = {
@@ -18,6 +18,9 @@ const ICONS = {
   'face-swap': User,
   'upscaler': Wand2,
   'lora-training': RefreshCw,
+  'my-media-all': FolderOpen,
+  'my-media-videos': Play,
+  'my-media-images': ImagePlus,
 }
 
 export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggleCollapsed }) {

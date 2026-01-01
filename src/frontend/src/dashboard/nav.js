@@ -10,6 +10,9 @@ export const TOOL_IDS = {
   FACE_SWAP: 'face-swap',
   UPSCALER: 'upscaler',
   LORA_TRAINING: 'lora-training',
+  MY_MEDIA_ALL: 'my-media-all',
+  MY_MEDIA_VIDEOS: 'my-media-videos',
+  MY_MEDIA_IMAGES: 'my-media-images',
 }
 
 export const NAV_GROUPS = [
@@ -40,6 +43,15 @@ export const NAV_GROUPS = [
     items: [
       { id: TOOL_IDS.PIPELINE, label: 'Pipeline', status: 'new' },
       { id: TOOL_IDS.LORA_TRAINING, label: 'LoRA Training', status: 'ready' },
+    ],
+  },
+  {
+    id: 'my-media',
+    title: 'My Media',
+    items: [
+      { id: TOOL_IDS.MY_MEDIA_ALL, label: 'All', status: 'ready' },
+      { id: TOOL_IDS.MY_MEDIA_VIDEOS, label: 'Videos', status: 'ready' },
+      { id: TOOL_IDS.MY_MEDIA_IMAGES, label: 'Images', status: 'ready' },
     ],
   },
 ]

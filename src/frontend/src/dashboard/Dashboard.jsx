@@ -11,6 +11,7 @@ import TextToImageToVideoTool from './tools/TextToImageToVideoTool'
 import PipelineTool from './tools/PipelineTool'
 import LoRATrainingTool from './tools/LoRATrainingTool'
 import ComingSoonTool from './tools/ComingSoonTool'
+import MyMediaTool from './tools/MyMediaTool'
 import LogViewer from '../components/LogViewer'
 import { sendClientLog } from '../logging'
 
@@ -65,6 +66,12 @@ export default function Dashboard() {
         return 'Face Swap'
       case TOOL_IDS.UPSCALER:
         return 'Upscaler'
+      case TOOL_IDS.MY_MEDIA_ALL:
+        return 'My Media - All'
+      case TOOL_IDS.MY_MEDIA_VIDEOS:
+        return 'My Media - Videos'
+      case TOOL_IDS.MY_MEDIA_IMAGES:
+        return 'My Media - Images'
       default:
         return 'Tool'
     }
@@ -84,6 +91,13 @@ export default function Dashboard() {
         return <PipelineTool />
       case TOOL_IDS.LORA_TRAINING:
         return <LoRATrainingTool onOutput={setOutput} />
+
+      case TOOL_IDS.MY_MEDIA_ALL:
+        return <MyMediaTool filter="all" />
+      case TOOL_IDS.MY_MEDIA_VIDEOS:
+        return <MyMediaTool filter="video" />
+      case TOOL_IDS.MY_MEDIA_IMAGES:
+        return <MyMediaTool filter="image" />
 
       case TOOL_IDS.TEXT_TO_IMAGE:
         return <TextToImageTool onOutput={setOutput} />
@@ -118,20 +132,29 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="workspace">
-          <section className="controls-panel">
-            <div className="panel-header" style={{ marginBottom: '16px' }}>
-              <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>
-            </div>
-            <div className="panel-body">{renderControls()}</div>
-          </section>
+        {/* Full-width layout for My Media tools */}
+        {(activeToolId === TOOL_IDS.MY_MEDIA_ALL || 
+          activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS || 
+          activeToolId === TOOL_IDS.MY_MEDIA_IMAGES) ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {renderControls()}
+          </div>
+        ) : (
+          <div className="workspace">
+            <section className="controls-panel">
+              <div className="panel-header" style={{ marginBottom: '16px' }}>
+                <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>
+              </div>
+              <div className="panel-body">{renderControls()}</div>
+            </section>
 
-          <OutputPanel
-            output={output}
-            refreshToken={historyRefreshToken}
-            onSelectHistoryVideo={setOutput}
-          />
-        </div>
+            <OutputPanel
+              output={output}
+              refreshToken={historyRefreshToken}
+              onSelectHistoryVideo={setOutput}
+            />
+          </div>
+        )}
       </main>
       <LogViewer />
     </div>

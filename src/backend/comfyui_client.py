@@ -1535,6 +1535,373 @@ class ComfyUIClient:
         # 6. Get output video
         return self.get_output_video(history, output_dir)
 
+    def build_distorch2_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, out of focus, unstable camera, artifacts, distortion",
+        width: int = 480,
+        height: int = 480,
+        num_frames: int = 41,
+        fps: int = 16,
+        steps: int = 6,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "wan22_distorch2",
+        lora_strength: float = 1.5,
+        enable_nsfw_lora: bool = True,
+        enable_dreamlay_lora: bool = True,
+        enable_lightx2v_lora: bool = True,
+        enable_cumshot_lora: bool = True,
+    ) -> Dict:
+        """
+        Build DisTorch2 dual-noise workflow with Power Lora Loader.
+        Uses high_noise model for first half of steps, low_noise for second half.
+        """
+        import copy
+        workflow = copy.deepcopy(WAN22_I2V_DISTORCH2_API_WORKFLOW)
+        
+        # Set seed
+        if seed == -1:
+            seed = random.randint(0, 2**32 - 1)
+        
+        # Calculate split step (half of total steps)
+        split_step = steps // 2
+        
+        # Update prompts
+        workflow["7"]["inputs"]["text"] = prompt
+        workflow["8"]["inputs"]["text"] = negative_prompt
+        
+        # Update dimensions and frames
+        workflow["16"]["inputs"]["width"] = width
+        workflow["16"]["inputs"]["height"] = height
+        workflow["16"]["inputs"]["length"] = num_frames
+        
+        # Update samplers
+        workflow["10"]["inputs"]["noise_seed"] = seed
+        workflow["10"]["inputs"]["steps"] = steps
+        workflow["10"]["inputs"]["cfg"] = cfg
+        workflow["10"]["inputs"]["end_at_step"] = split_step
+        
+        workflow["11"]["inputs"]["noise_seed"] = seed + 1
+        workflow["11"]["inputs"]["steps"] = steps
+        workflow["11"]["inputs"]["cfg"] = cfg
+        workflow["11"]["inputs"]["start_at_step"] = split_step
+        
+        # Update output settings
+        workflow["13"]["inputs"]["frame_rate"] = fps
+        workflow["13"]["inputs"]["filename_prefix"] = output_prefix
+        
+        # Update image
+        workflow["18"]["inputs"]["image"] = image_name
+        
+        # Configure LoRAs for high-noise model (node 19)
+        workflow["19"]["inputs"]["lora_1"]["on"] = enable_dreamlay_lora
+        workflow["19"]["inputs"]["lora_1"]["strength"] = lora_strength
+        workflow["19"]["inputs"]["lora_2"]["on"] = enable_nsfw_lora
+        workflow["19"]["inputs"]["lora_2"]["strength"] = lora_strength
+        workflow["19"]["inputs"]["lora_3"]["on"] = enable_lightx2v_lora
+        workflow["19"]["inputs"]["lora_3"]["strength"] = lora_strength
+        workflow["19"]["inputs"]["lora_4"]["on"] = enable_cumshot_lora
+        workflow["19"]["inputs"]["lora_4"]["strength"] = lora_strength
+        
+        # Configure LoRAs for low-noise model (node 20)
+        workflow["20"]["inputs"]["lora_1"]["on"] = enable_dreamlay_lora
+        workflow["20"]["inputs"]["lora_1"]["strength"] = lora_strength
+        workflow["20"]["inputs"]["lora_2"]["on"] = enable_nsfw_lora
+        workflow["20"]["inputs"]["lora_2"]["strength"] = lora_strength
+        workflow["20"]["inputs"]["lora_3"]["on"] = enable_lightx2v_lora
+        workflow["20"]["inputs"]["lora_3"]["strength"] = lora_strength
+        workflow["20"]["inputs"]["lora_4"]["on"] = enable_cumshot_lora
+        workflow["20"]["inputs"]["lora_4"]["strength"] = lora_strength
+        
+        logger.info(f"🔧 DisTorch2 workflow built: {width}x{height}, {num_frames}f, steps={steps} (split@{split_step}), cfg={cfg}")
+        return workflow
+
+    def generate_distorch2_video(
+        self,
+        image_path: str,
+        prompt: str,
+        output_dir: str,
+        negative_prompt: str = "low quality, blurry, out of focus, unstable camera, artifacts, distortion",
+        resolution: str = "480p",
+        aspect_ratio: str = "1:1",
+        num_frames: int = 41,
+        fps: int = 16,
+        steps: int = 6,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_distorch2",
+        lora_strength: float = 1.5,
+        enable_nsfw_lora: bool = True,
+        enable_dreamlay_lora: bool = True,
+        enable_lightx2v_lora: bool = True,
+        enable_cumshot_lora: bool = True,
+        progress_callback=None,
+    ) -> Optional[str]:
+        """
+        Full pipeline for WAN 2.2 DisTorch2 dual-noise models.
+        High-quality Q6_K GGUF with dual-GPU distribution.
+        
+        Uses:
+        - high_noise model for first half of sampling steps
+        - low_noise model for second half
+        - Power Lora Loader with configurable LoRAs
+        - DisTorch2 multi-GPU distribution (cuda:0,12gb;cuda:1,16gb;cpu,*)
+        """
+        if not self.is_available():
+            logger.error("❌ ComfyUI not available")
+            return None
+
+        # 1. Upload image
+        logger.info(f"📤 Uploading image: {image_path}")
+        image_name = self.upload_image(image_path)
+        if not image_name:
+            return None
+
+        # 2. Calculate dimensions
+        width, height = self.get_resolution_dimensions(resolution, aspect_ratio)
+        logger.info(f"📐 Resolution: {width}x{height} ({resolution}, {aspect_ratio})")
+
+        # 3. Build DisTorch2 workflow
+        logger.info(f"🔧 Building DisTorch2 workflow: {num_frames}f @ {fps}fps, {steps} steps, cfg={cfg}, lora={lora_strength}")
+        workflow = self.build_distorch2_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            output_prefix=output_prefix,
+            lora_strength=lora_strength,
+            enable_nsfw_lora=enable_nsfw_lora,
+            enable_dreamlay_lora=enable_dreamlay_lora,
+            enable_lightx2v_lora=enable_lightx2v_lora,
+            enable_cumshot_lora=enable_cumshot_lora,
+        )
+
+        # 4. Queue workflow
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            return None
+
+        # 5. Wait for completion
+        logger.info("⏳ Executing DisTorch2 workflow...")
+        history = self.wait_for_completion(prompt_id, progress_callback=progress_callback)
+        if not history:
+            return None
+
+        # 6. Get output video
+        return self.get_output_video(history, output_dir)
+
+
+# WAN 2.2 I2V DisTorch2 Dual-Noise Workflow (Q6_K 14B models)
+# Uses separate high_noise and low_noise models with 2-stage KSampler
+WAN22_I2V_DISTORCH2_API_WORKFLOW = {
+    "1": {
+        "inputs": {
+            "unet_name": "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+            "dequant_dtype": "default",
+            "patch_dtype": "default",
+            "patch_on_device": False,
+            "compute_device": "cuda:0",
+            "virtual_vram_gb": 16,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "eject_models": True
+        },
+        "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU"
+    },
+    "2": {
+        "inputs": {
+            "unet_name": "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
+            "dequant_dtype": "default",
+            "patch_dtype": "default",
+            "patch_on_device": False,
+            "compute_device": "cuda:0",
+            "virtual_vram_gb": 16,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "eject_models": True
+        },
+        "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU"
+    },
+    "3": {
+        "inputs": {
+            "vae_name": "wan_2.1_vae.safetensors",
+            "compute_device": "cuda:0",
+            "virtual_vram_gb": 4,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "eject_models": True
+        },
+        "class_type": "VAELoaderDisTorch2MultiGPU"
+    },
+    "4": {
+        "inputs": {
+            "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+            "type": "wan",
+            "device": "cuda:0",
+            "virtual_vram_gb": 4,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "eject_models": True
+        },
+        "class_type": "CLIPLoaderDisTorch2MultiGPU"
+    },
+    "5": {
+        "inputs": {
+            "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+            "allow_compile": False,
+            "model": ["14", 0]
+        },
+        "class_type": "PathchSageAttentionKJ"
+    },
+    "6": {
+        "inputs": {
+            "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+            "allow_compile": False,
+            "model": ["15", 0]
+        },
+        "class_type": "PathchSageAttentionKJ"
+    },
+    "7": {
+        "inputs": {
+            "text": "",
+            "clip": ["19", 1]
+        },
+        "class_type": "CLIPTextEncode"
+    },
+    "8": {
+        "inputs": {
+            "text": "low quality, blurry, out of focus, unstable camera, artifacts, distortion",
+            "clip": ["19", 1]
+        },
+        "class_type": "CLIPTextEncode"
+    },
+    "10": {
+        "inputs": {
+            "add_noise": "enable",
+            "noise_seed": 0,
+            "steps": 6,
+            "cfg": 1,
+            "sampler_name": "uni_pc",
+            "scheduler": "normal",
+            "start_at_step": 0,
+            "end_at_step": 3,
+            "return_with_leftover_noise": "enable",
+            "model": ["19", 0],
+            "positive": ["16", 0],
+            "negative": ["16", 1],
+            "latent_image": ["16", 2]
+        },
+        "class_type": "KSamplerAdvanced"
+    },
+    "11": {
+        "inputs": {
+            "add_noise": "disable",
+            "noise_seed": 0,
+            "steps": 6,
+            "cfg": 1,
+            "sampler_name": "uni_pc",
+            "scheduler": "normal",
+            "start_at_step": 3,
+            "end_at_step": 10000,
+            "return_with_leftover_noise": "disable",
+            "model": ["20", 0],
+            "positive": ["16", 0],
+            "negative": ["16", 1],
+            "latent_image": ["10", 0]
+        },
+        "class_type": "KSamplerAdvanced"
+    },
+    "12": {
+        "inputs": {
+            "samples": ["11", 0],
+            "vae": ["3", 0]
+        },
+        "class_type": "VAEDecode"
+    },
+    "13": {
+        "inputs": {
+            "frame_rate": 16,
+            "loop_count": 0,
+            "filename_prefix": "wan22_distorch2",
+            "format": "video/h264-mp4",
+            "pix_fmt": "yuv420p",
+            "crf": 19,
+            "save_metadata": True,
+            "trim_to_audio": False,
+            "pingpong": False,
+            "save_output": True,
+            "images": ["12", 0]
+        },
+        "class_type": "VHS_VideoCombine"
+    },
+    "14": {
+        "inputs": {
+            "shift": 8,
+            "model": ["1", 0]
+        },
+        "class_type": "ModelSamplingSD3"
+    },
+    "15": {
+        "inputs": {
+            "shift": 8,
+            "model": ["2", 0]
+        },
+        "class_type": "ModelSamplingSD3"
+    },
+    "16": {
+        "inputs": {
+            "width": 480,
+            "height": 480,
+            "length": 41,
+            "batch_size": 1,
+            "positive": ["7", 0],
+            "negative": ["8", 0],
+            "vae": ["3", 0],
+            "start_image": ["18", 0]
+        },
+        "class_type": "WanImageToVideo"
+    },
+    "18": {
+        "inputs": {
+            "image": "example.png"
+        },
+        "class_type": "LoadImage"
+    },
+    "19": {
+        "inputs": {
+            "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+            "lora_1": {"on": True, "lora": "wan 2.2/DR34ML4Y_I2V_14B_HIGH.safetensors", "strength": 1.5},
+            "lora_2": {"on": True, "lora": "wan 2.2/NSFW-22-H-e8.safetensors", "strength": 1.5},
+            "lora_3": {"on": True, "lora": "wan/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors", "strength": 1.5},
+            "lora_4": {"on": True, "lora": "masturbation_cumshot_v1.1_e310.safetensors", "strength": 1.5},
+            "➕ Add Lora": "",
+            "model": ["5", 0],
+            "clip": ["4", 0]
+        },
+        "class_type": "Power Lora Loader (rgthree)"
+    },
+    "20": {
+        "inputs": {
+            "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+            "lora_1": {"on": True, "lora": "wan 2.2/DR34ML4Y_I2V_14B_LOW.safetensors", "strength": 1.5},
+            "lora_2": {"on": True, "lora": "wan 2.2/NSFW-22-L-e8.safetensors", "strength": 1.5},
+            "lora_3": {"on": True, "lora": "wan/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors", "strength": 1.5},
+            "lora_4": {"on": True, "lora": "masturbation_cumshot_v1.1_e310.safetensors", "strength": 1.5},
+            "➕ Add Lora": "",
+            "model": ["6", 0]
+        },
+        "class_type": "Power Lora Loader (rgthree)"
+    }
+}
+
 
 # Singleton instance
 _comfyui_client: Optional[ComfyUIClient] = None

@@ -133,18 +133,49 @@ VAE Decoder                  Dynamic       -
 
 ## Known Limits
 
-### OOM Boundaries (approximate)
-- **GPU-only**: ~720×1280 @ 81 frames is near limit
-- **CPU offload**: ~1280×720 @ 101 frames works, higher may OOM
-- **Frame limit**: 241+ frames at 720×400 works, higher untested
+### OOM Boundaries (GPU-Only Mode)
+- **1080×1920** (Full HD Portrait): ❌ OOM - needs 9.49GB for latents alone
+- **720×1280** (720p Portrait @ 241f): ❌ OOM - needs ~11GB working memory
+- **720×1280** (720p Portrait @ 81f): ✅ Works but slow (45 min) - DisTorch2 uses single GPU
+- **720×400** @ 241 frames: ✅ SUCCESS - 22.5GB peak VRAM, 10.4 min
+
+### OOM Boundaries (CPU Offload Mode)
+- **1280×720** @ 101 frames: ✅ Works
+- Higher resolutions/frames: May OOM
+
+### Key Finding: GPU-Only Mode Distribution Issue
+When using pure GPU-only allocation (`cuda:0,12gb;cuda:1,16gb` without `cpu,*`), 
+DisTorch2 v2.5.9 tends to place 100% of model weights on cuda:0 instead of 
+distributing between both GPUs. This causes:
+- Slower generation (using only RTX 3060 instead of both GPUs)
+- Higher single-GPU VRAM pressure
+- Better dual-GPU distribution occurs with CPU fallback mode
 
 ### Tips
-1. Use GPU-only mode for faster iteration
-2. Switch to CPU offload for maximum resolution/frames
-3. Portrait (9:16) uses same VRAM as landscape (16:9) at same pixel count
-4. SageAttention reduces VRAM ~15-20%
+1. **For max speed**: Use CPU offload mode (`cuda:0,12gb;cuda:1,16gb;cpu,*`) - better distribution
+2. **For lower RAM usage**: GPU-only mode works but may be slower
+3. **Best combo**: 720×400 @ 241 frames (15s video) in ~10 min with proper dual-GPU
+4. Portrait (9:16) uses same VRAM as landscape (16:9) at same pixel count
+5. SageAttention reduces VRAM ~15-20%
+
+## Tested Results Summary (2025-01-01)
+
+### GPU-Only Mode Tests
+| Resolution | Frames | Time | Status | Notes |
+|------------|--------|------|--------|-------|
+| 720×400 | 241 | 10.4 min | ✅ | Peak 22.5GB, proper dual-GPU |
+| 720×1280 | 81 | 45 min | ✅ | Slow - single GPU used |
+| 720×1280 | 241 | - | ❌ OOM | Needs ~11GB latent memory |
+| 1080×1920 | 241 | - | ❌ OOM | Needs 9.49GB latents |
+
+### Pixel Budget
+- **Max working pixels × frames**: ~288,000 × 241 = 69M pixel-frames
+- **720p @ 15s**: 921,600 × 241 = 222M pixel-frames → OOM
+- **Formula**: Keep (pixels × frames) under ~100M for GPU-only safety margin
 
 ## Changelog
+- 2026-01-01: Tested 1080p and 720p HD - both OOM in GPU-only mode
+- 2026-01-01: Discovered DisTorch2 single-GPU distribution issue
 - 2025-12-31: Added GPU-only mode support via DisTorch2 fix
-- 2025-12-31: Tested 241 frames (15s video) successfully
+- 2025-12-31: Tested 241 frames (15s video) successfully at 720×400
 - 2025-12-31: Tested 720×1280 HD portrait

@@ -1,3 +1,26 @@
+2026-01-01
+Agent: Claude Opus 4.5
+AgentTag: CLAU
+ModelTag: MYMEDIA
+Details:
+- Added "My Media" feature - Grok Imagine-style media browser for ComfyUI output
+- New sidebar category with All/Videos/Images filter options
+- Auto-playing video grid with hover overlays and download buttons
+- Lightbox viewer with keyboard navigation (arrow keys, escape)
+- Full-width gallery layout without parameter panel
+- Backend endpoint /list-comfyui-media with type filtering
+- Static mount /comfyui-output for direct media access
+- DisTorch2 mode integration in Image to Video tool
+FilesChanged:
+- src/frontend/src/dashboard/tools/MyMediaTool.jsx (NEW)
+- src/frontend/src/dashboard/useComfyUIMedia.js (NEW)
+- src/frontend/src/dashboard/nav.js
+- src/frontend/src/dashboard/Sidebar.jsx
+- src/frontend/src/dashboard/Dashboard.jsx
+- src/frontend/src/dashboard/tools/ImageToVideoTool.jsx
+- src/backend/app.py
+- src/backend/comfyui_client.py
+
 2025-12-31
 Agent: Claude Sonnet 4.5
 AgentTag: CLAU

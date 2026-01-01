@@ -1,8 +1,16 @@
-import React, { useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Play, RefreshCw, Grid, List } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
+
+// Spin animation for refresh button
+const spinKeyframes = `
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`
 
 const FPS_OPTIONS = [8, 12, 16, 24]
 
@@ -10,6 +18,7 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 const MODEL_MODES = [
   { value: 'light', label: '⚡ Light (Fast)', desc: 'Quick preview, lower quality' },
   { value: 'wan2.2', label: '🎬 Wan2.2 14B (Q5)', desc: 'High quality via ComfyUI' },
+  { value: 'distorch2', label: '🚀 DisTorch2 Dual-Noise (Q6)', desc: 'Best quality, dual GPU + LoRAs' },
 ]
 
 // Resolution presets with dimensions
@@ -42,8 +51,50 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
   const [seed, setSeed] = useState(-1)
   const [showAdvanced, setShowAdvanced] = useState(false)
   
+  // DisTorch2 LoRA settings
+  const [loraStrength, setLoraStrength] = useState(1.5)
+  const [enableNsfwLora, setEnableNsfwLora] = useState(true)
+  const [enableDreamlayLora, setEnableDreamlayLora] = useState(true)
+  const [enableLightx2vLora, setEnableLightx2vLora] = useState(true)
+  const [enableCumshotLora, setEnableCumshotLora] = useState(true)
+  const [negativePrompt, setNegativePrompt] = useState('low quality, blurry, out of focus, unstable camera, artifacts, distortion')
+  
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // My Media state
+  const [showMyMedia, setShowMyMedia] = useState(false)
+  const [mediaFilter, setMediaFilter] = useState('video')  // 'all', 'video', 'image'
+  const [mediaList, setMediaList] = useState([])
+  const [mediaLoading, setMediaLoading] = useState(false)
+  const [mediaError, setMediaError] = useState('')
+  const [mediaStats, setMediaStats] = useState({ videos: 0, images: 0 })
+  const [mediaViewMode, setMediaViewMode] = useState('grid')  // 'grid' or 'list'
+  const [previewMedia, setPreviewMedia] = useState(null)
+
+  // Fetch ComfyUI media
+  const fetchMedia = useCallback(async () => {
+    setMediaLoading(true)
+    setMediaError('')
+    try {
+      const res = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${mediaFilter}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.detail || `Failed to load media`)
+      setMediaList(data?.media || [])
+      setMediaStats({ videos: data?.videos || 0, images: data?.images || 0 })
+    } catch (e) {
+      setMediaError(e.message)
+    } finally {
+      setMediaLoading(false)
+    }
+  }, [mediaFilter])
+
+  // Load media when My Media is opened or filter changes
+  useEffect(() => {
+    if (showMyMedia) {
+      fetchMedia()
+    }
+  }, [showMyMedia, mediaFilter, fetchMedia])
 
   const canSubmit = useMemo(() => !!file && !busy, [file, busy])
 
@@ -83,6 +134,18 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
     let endpoint
     if (usePose) {
       endpoint = `${BACKEND_BASE}/generate-pose`
+    } else if (modelMode === 'distorch2') {
+      // Use DisTorch2 dual-noise endpoint (best quality)
+      endpoint = `${BACKEND_BASE}/generate-wan22-distorch2`
+      formData.append('steps', String(steps))
+      formData.append('cfg', String(cfg))
+      formData.append('seed', String(seed))
+      formData.append('negative_prompt', negativePrompt)
+      formData.append('lora_strength', String(loraStrength))
+      formData.append('enable_nsfw_lora', String(enableNsfwLora))
+      formData.append('enable_dreamlay_lora', String(enableDreamlayLora))
+      formData.append('enable_lightx2v_lora', String(enableLightx2vLora))
+      formData.append('enable_cumshot_lora', String(enableCumshotLora))
     } else if (modelMode === 'wan2.2') {
       // Use ComfyUI endpoint for Wan2.2
       endpoint = `${BACKEND_BASE}/generate-wan22-comfyui`
@@ -131,6 +194,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
 
   return (
     <div className="tool-container">
+      {/* Inject spin animation */}
+      <style>{spinKeyframes}</style>
+      
       {/* Mode Selection */}
       <div className="grok-card">
         <div className="grok-card-header">
@@ -152,11 +218,18 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
               value={modelMode}
               onChange={(e) => {
                 setModelMode(e.target.value)
-                // Adjust defaults for Wan2.2
+                // Adjust defaults for different modes
                 if (e.target.value === 'wan2.2') {
                   setResolution('480p')
                   setAspectRatio('1:1')
                   setNumFrames(41)
+                  setCfg(5.0)
+                } else if (e.target.value === 'distorch2') {
+                  setResolution('480p')
+                  setAspectRatio('1:1')
+                  setNumFrames(41)
+                  setCfg(1.0)  // Lightning LoRA works best with cfg=1
+                  setSteps(6)
                 }
               }}
               style={{
@@ -190,7 +263,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
             />
           </div>
           <div className="info-badge" style={{ marginTop: '8px' }}>
-            {modelMode === 'wan2.2' ? (
+            {modelMode === 'distorch2' ? (
+              <>
+                <span style={{ fontWeight: 600 }}>🚀 DisTorch2 Dual-Noise Q6</span> • <span style={{ color: '#86efac' }}>Best Quality</span>
+                <div style={{ marginTop: '4px', opacity: 0.8 }}>
+                  Dual GPU (RTX 3060 + 5060 Ti) + Power LoRAs + 2-stage sampling
+                </div>
+              </>
+            ) : modelMode === 'wan2.2' ? (
               <>
                 <span style={{ fontWeight: 600 }}>🎬 Wan2.2 14B Q5</span> • <span style={{ color: '#93c5fd' }}>ComfyUI Backend</span>
                 <div style={{ marginTop: '4px', opacity: 0.8 }}>
@@ -347,13 +427,13 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
             <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{(numFrames / fps).toFixed(1)}s ({numFrames}f)</span>
           </div>
           {/* Different ranges for different modes */}
-          {modelMode === 'wan2.2' ? (
+          {(modelMode === 'wan2.2' || modelMode === 'distorch2') ? (
             <>
               <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
                 <input
                   type="range"
                   min="21"
-                  max="81"
+                  max="101"
                   step="4"
                   value={numFrames}
                   onChange={(e) => setNumFrames(parseInt(e.target.value, 10))}
@@ -369,7 +449,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
                   borderRadius: '2px' 
                 }}>
                   <div style={{ 
-                    width: `${((numFrames - 21) / (81 - 21)) * 100}%`, 
+                    width: `${((numFrames - 21) / (101 - 21)) * 100}%`, 
                     height: '100%', 
                     backgroundColor: 'var(--text-primary)', 
                     borderRadius: '2px' 
@@ -378,7 +458,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
                 <div style={{ 
                   position: 'absolute', 
                   top: '2px', 
-                  left: `calc(${((numFrames - 21) / (81 - 21)) * 100}% - 10px)`, 
+                  left: `calc(${((numFrames - 21) / (101 - 21)) * 100}% - 10px)`, 
                   width: '20px', 
                   height: '20px', 
                   backgroundColor: 'white', 
@@ -389,7 +469,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 <span>{(21 / fps).toFixed(1)}s</span>
                 <span>41f (rec)</span>
-                <span>{(81 / fps).toFixed(1)}s</span>
+                <span>97f (6s)</span>
+                <span>{(101 / fps).toFixed(1)}s</span>
               </div>
             </>
           ) : (
@@ -463,7 +544,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
         </div>
 
         {/* Model Version - only for non-Wan2.2 modes */}
-        {modelMode !== 'wan2.2' && (
+        {modelMode !== 'wan2.2' && modelMode !== 'distorch2' && (
           <div className="form-group">
             <label className="grok-section-label">Model Version</label>
             <div className="grok-toggle-group">
@@ -482,6 +563,189 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
               V2 features improved video quality, motion, and optional audio generation
+            </div>
+          </div>
+        )}
+
+        {/* Advanced Settings for DisTorch2 */}
+        {modelMode === 'distorch2' && showAdvanced && (
+          <div style={{ 
+            backgroundColor: 'var(--bg-tertiary)', 
+            padding: '16px', 
+            borderRadius: '8px',
+            marginTop: '8px'
+          }}>
+            <div style={{ 
+              fontSize: '0.9rem', 
+              fontWeight: 600, 
+              marginBottom: '12px',
+              color: 'var(--text-primary)'
+            }}>
+              🚀 DisTorch2 Advanced Settings
+            </div>
+            
+            {/* Steps */}
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label className="grok-section-label">Sampling Steps</label>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
+              </div>
+              <input
+                type="range"
+                min="4"
+                max="12"
+                step="1"
+                value={steps}
+                onChange={(e) => setSteps(parseInt(e.target.value, 10))}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                <span>4 (fast)</span>
+                <span>6 (rec)</span>
+                <span>12</span>
+              </div>
+            </div>
+            
+            {/* CFG */}
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label className="grok-section-label">CFG Guidance</label>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min="1.0"
+                max="6.0"
+                step="0.5"
+                value={cfg}
+                onChange={(e) => setCfg(parseFloat(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                <span>1.0 (rec)</span>
+                <span>3.0</span>
+                <span>6.0</span>
+              </div>
+            </div>
+            
+            {/* LoRA Strength */}
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label className="grok-section-label">LoRA Strength</label>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{loraStrength.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="2.5"
+                step="0.1"
+                value={loraStrength}
+                onChange={(e) => setLoraStrength(parseFloat(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                <span>0.5</span>
+                <span>1.5 (rec)</span>
+                <span>2.5</span>
+              </div>
+            </div>
+            
+            {/* LoRA Toggles */}
+            <div style={{ 
+              fontSize: '0.85rem', 
+              fontWeight: 500, 
+              marginBottom: '8px',
+              color: 'var(--text-secondary)'
+            }}>
+              🎨 LoRA Selection
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={enableDreamlayLora}
+                  onChange={(e) => setEnableDreamlayLora(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '0.8rem' }}>DR34ML4Y Style</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={enableNsfwLora}
+                  onChange={(e) => setEnableNsfwLora(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '0.8rem' }}>NSFW</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={enableLightx2vLora}
+                  onChange={(e) => setEnableLightx2vLora(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '0.8rem' }}>LightX2V Speed</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={enableCumshotLora}
+                  onChange={(e) => setEnableCumshotLora(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '0.8rem' }}>Cumshot</span>
+              </label>
+            </div>
+            
+            {/* Negative Prompt */}
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <label className="grok-section-label">Negative Prompt</label>
+              <textarea
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                placeholder="What to avoid..."
+                rows={2}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+            
+            {/* Seed */}
+            <div className="form-group">
+              <label className="grok-section-label">Seed</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="number"
+                  value={seed}
+                  onChange={(e) => setSeed(parseInt(e.target.value, 10))}
+                  placeholder="-1 for random"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9rem'
+                  }}
+                />
+                <button
+                  className="btn ghost sm"
+                  onClick={() => setSeed(-1)}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  Random
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -576,6 +840,324 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory }) {
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                 -1 = random seed each generation
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* My Media Section - Browse ComfyUI Output */}
+        <div style={{ marginTop: '16px' }}>
+          <button
+            onClick={() => setShowMyMedia(!showMyMedia)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              color: 'var(--text-primary)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>📁</span>
+              <span style={{ fontWeight: 600 }}>My Media</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                ({mediaStats.videos} videos, {mediaStats.images} images)
+              </span>
+            </div>
+            <ChevronDown 
+              size={16} 
+              style={{ 
+                transform: showMyMedia ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s'
+              }} 
+            />
+          </button>
+
+          {showMyMedia && (
+            <div style={{ 
+              marginTop: '8px',
+              backgroundColor: 'var(--bg-tertiary)', 
+              padding: '16px', 
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              {/* Filter tabs and controls */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '12px',
+                flexWrap: 'wrap',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[
+                    { key: 'video', label: 'Videos', count: mediaStats.videos },
+                    { key: 'image', label: 'Images', count: mediaStats.images },
+                    { key: 'all', label: 'All', count: mediaStats.videos + mediaStats.images }
+                  ].map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setMediaFilter(tab.key)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.8rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        backgroundColor: mediaFilter === tab.key ? 'var(--primary-color)' : 'var(--bg-secondary)',
+                        color: mediaFilter === tab.key ? '#000' : 'var(--text-secondary)',
+                        fontWeight: mediaFilter === tab.key ? 600 : 400
+                      }}
+                    >
+                      {tab.label} ({tab.count})
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    onClick={() => setMediaViewMode(mediaViewMode === 'grid' ? 'list' : 'grid')}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      cursor: 'pointer',
+                      color: 'var(--text-secondary)'
+                    }}
+                    title={mediaViewMode === 'grid' ? 'Switch to list' : 'Switch to grid'}
+                  >
+                    {mediaViewMode === 'grid' ? <List size={14} /> : <Grid size={14} />}
+                  </button>
+                  <button
+                    onClick={fetchMedia}
+                    disabled={mediaLoading}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      cursor: mediaLoading ? 'wait' : 'pointer',
+                      color: 'var(--text-secondary)'
+                    }}
+                    title="Refresh"
+                  >
+                    <RefreshCw size={14} style={{ animation: mediaLoading ? 'spin 1s linear infinite' : 'none' }} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Error message */}
+              {mediaError && (
+                <div style={{ 
+                  padding: '8px 12px', 
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                  borderRadius: '6px', 
+                  color: '#ef4444',
+                  fontSize: '0.8rem',
+                  marginBottom: '12px'
+                }}>
+                  {mediaError}
+                </div>
+              )}
+
+              {/* Loading state */}
+              {mediaLoading && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '20px', 
+                  color: 'var(--text-muted)' 
+                }}>
+                  Loading media...
+                </div>
+              )}
+
+              {/* Media Grid/List */}
+              {!mediaLoading && mediaList.length === 0 && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '20px', 
+                  color: 'var(--text-muted)',
+                  fontSize: '0.9rem'
+                }}>
+                  No {mediaFilter === 'all' ? 'media' : mediaFilter + 's'} found
+                </div>
+              )}
+
+              {!mediaLoading && mediaList.length > 0 && (
+                <div style={{ 
+                  display: mediaViewMode === 'grid' ? 'grid' : 'flex',
+                  gridTemplateColumns: mediaViewMode === 'grid' ? 'repeat(auto-fill, minmax(120px, 1fr))' : undefined,
+                  flexDirection: mediaViewMode === 'list' ? 'column' : undefined,
+                  gap: '8px',
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  padding: '4px'
+                }}>
+                  {mediaList.slice(0, 50).map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (item.type === 'video') {
+                          setPreviewMedia(item)
+                        } else {
+                          // Use image as source
+                          const img = new Image()
+                          img.onload = () => {
+                            setSourceImage(`${import.meta.env.VITE_API_URL || 'http://192.168.1.2:7998'}${item.url}`)
+                          }
+                          img.src = `${import.meta.env.VITE_API_URL || 'http://192.168.1.2:7998'}${item.url}`
+                        }
+                      }}
+                      style={{
+                        position: 'relative',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'var(--bg-secondary)',
+                        aspectRatio: mediaViewMode === 'grid' ? '1' : undefined,
+                        display: mediaViewMode === 'list' ? 'flex' : 'block',
+                        alignItems: mediaViewMode === 'list' ? 'center' : undefined,
+                        gap: mediaViewMode === 'list' ? '12px' : undefined,
+                        padding: mediaViewMode === 'list' ? '8px' : undefined
+                      }}
+                    >
+                      {item.type === 'video' ? (
+                        <>
+                          <div style={{
+                            width: mediaViewMode === 'grid' ? '100%' : '80px',
+                            height: mediaViewMode === 'grid' ? '100%' : '60px',
+                            backgroundColor: '#1a1a1a',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            borderRadius: mediaViewMode === 'list' ? '4px' : undefined
+                          }}>
+                            <Play size={24} style={{ color: 'var(--text-muted)' }} />
+                          </div>
+                          {mediaViewMode === 'grid' && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              padding: '4px 6px',
+                              backgroundColor: 'rgba(0,0,0,0.8)',
+                              fontSize: '0.65rem',
+                              color: 'var(--text-muted)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {item.filename}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <img
+                          src={`${import.meta.env.VITE_API_URL || 'http://192.168.1.2:7998'}${item.url}`}
+                          alt={item.filename}
+                          style={{
+                            width: mediaViewMode === 'grid' ? '100%' : '80px',
+                            height: mediaViewMode === 'grid' ? '100%' : '60px',
+                            objectFit: 'cover',
+                            flexShrink: 0,
+                            borderRadius: mediaViewMode === 'list' ? '4px' : undefined
+                          }}
+                        />
+                      )}
+                      {mediaViewMode === 'list' && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ 
+                            fontSize: '0.85rem', 
+                            color: 'var(--text-primary)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {item.filename}
+                          </div>
+                          <div style={{ 
+                            fontSize: '0.75rem', 
+                            color: 'var(--text-muted)' 
+                          }}>
+                            {item.type === 'video' ? '🎬' : '🖼️'} • {(item.size / 1024 / 1024).toFixed(1)} MB
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Show more indicator */}
+              {mediaList.length > 50 && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  marginTop: '8px', 
+                  fontSize: '0.8rem', 
+                  color: 'var(--text-muted)' 
+                }}>
+                  Showing 50 of {mediaList.length} items
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Video Preview Modal */}
+        {previewMedia && (
+          <div
+            onClick={() => setPreviewMedia(null)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.9)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              cursor: 'pointer'
+            }}
+          >
+            <div onClick={e => e.stopPropagation()} style={{ maxWidth: '90%', maxHeight: '90%' }}>
+              <video
+                src={`${import.meta.env.VITE_API_URL || 'http://192.168.1.2:7998'}${previewMedia.url}`}
+                controls
+                autoPlay
+                style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '8px' }}
+              />
+              <div style={{ 
+                textAlign: 'center', 
+                marginTop: '12px', 
+                color: 'var(--text-muted)',
+                fontSize: '0.9rem'
+              }}>
+                {previewMedia.filename}
+                <button
+                  onClick={() => setPreviewMedia(null)}
+                  style={{
+                    marginLeft: '16px',
+                    padding: '6px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
