@@ -1,3 +1,23 @@
+2026-01-02
+Agent: Claude Opus 4.5
+AgentTag: CLAU
+ModelTag: LORA
+Details:
+- Switched to DisTorch2 dual-pass workflow (WAN2.2-I2V-DisTorch2-NEW.json)
+- Added LoRA support with Power Lora Loader nodes for high/low noise models
+- Added AspectRatioResolution_Warper for automatic width/height calculation
+- New /loras endpoint listing all LoRAs (categorized: high_noise, low_noise, general)
+- Frontend LoRA selector panel with strength slider in Advanced Settings
+- Created systemd service for frontend (oelala-frontend.service)
+- Updated docs/ARCHITECTURE.md with complete service configuration
+- Fixed cfg default to 1.0 (DisTorch2 optimal)
+FilesChanged:
+- src/backend/comfyui_client.py (DisTorch2 workflow, LoRA nodes, AspectRatio)
+- src/backend/app.py (/loras endpoint, LoRA params on generation)
+- src/frontend/src/dashboard/tools/ImageToVideoTool.jsx (LoRA UI)
+- docs/ARCHITECTURE.md (service docs, port inventory, workflow nodes)
+- ~/.config/systemd/user/oelala-frontend.service (NEW)
+
 2026-01-01
 Agent: Claude Opus 4.5
 AgentTag: CLAU

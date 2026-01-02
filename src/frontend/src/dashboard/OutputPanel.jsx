@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { BACKEND_BASE } from '../config'
 import { useVideoHistory } from './useVideoHistory'
-import { Download, ExternalLink, History, Film, X } from 'lucide-react'
+import { Download, ExternalLink, History, Film, X, RefreshCw, Check, Image as ImageIcon } from 'lucide-react'
 
-export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo }) {
+export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo, onClose }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const { videos, loading, error } = useVideoHistory(refreshToken)
 
@@ -96,7 +96,7 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
 
   return (
     <section className="output-panel">
-      <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
+      <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', gap: '8px' }}>
         <button 
           className="icon-btn" 
           onClick={() => setHistoryOpen(!historyOpen)}
@@ -104,6 +104,15 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
         >
           <History size={20} />
         </button>
+        {onClose && (
+          <button 
+            className="icon-btn" 
+            onClick={onClose}
+            title="Close & show My Media"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       {content}

@@ -1,217 +1,275 @@
-# Oelala Architecture - ComfyUI as Processing Middleware
+# Oelala Architecture Documentation
 
-## Overview
+## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         OELALA PLATFORM                                  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐  │
-│  │   FRONTEND  │────▶│     BACKEND      │────▶│      ComfyUI        │  │
-│  │  (React/TS) │     │    (FastAPI)     │     │   (Middleware)      │  │
-│  │  Port 5173  │◀────│    Port 7999     │◀────│    Port 8188        │  │
-│  └─────────────┘     └──────────────────┘     └─────────────────────┘  │
-│         │                    │                         │                │
-│         ▼                    ▼                         ▼                │
-│  User Interface      Workflow Config          Processing Pipeline      │
-│  - Upload images     - Store workflows        - Load models (GGUF)     │
-│  - Select presets    - Queue jobs             - Run inference          │
-│  - View results      - Track status           - Encode video           │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-## Component Responsibilities
-
-### Frontend (React/Vite)
-- **Location**: `/home/flip/oelala/src/frontend/` (TBD)
-- **Port**: 5173 (dev), 80/443 (prod via nginx)
-- **Role**:
-  - User-facing interface
-  - Workflow configuration UI
-  - Real-time status updates
-  - Result gallery
-
-### Backend (FastAPI)
-- **Location**: `/home/flip/oelala/src/backend/` (TBD)
-- **Port**: 7999
-- **Role**:
-  - Workflow management
-  - Job queue management
-  - ComfyUI API communication
-  - User authentication
-  - Result storage
-
-### ComfyUI (Processing Middleware)
-- **Location**: `/home/flip/oelala/ComfyUI/`
-- **Port**: 8188
-- **Role**:
-  - Actual AI processing
-  - Model loading (GGUF, safetensors)
-  - Multi-GPU management
-  - Video generation pipelines
-  - WebSocket status updates
-
-## Workflow Pipeline
+Oelala is een AI video generation platform dat bestaat uit drie hoofdcomponenten:
 
 ```
-User Request → Frontend → Backend → ComfyUI API → GPU Processing → Output
-     │            │          │           │              │            │
-     │            │          │           │              │            ▼
-     │            │          │           │              │       Video File
-     │            │          │           │              ▼            │
-     │            │          │           │        Model Inference    │
-     │            │          │           ▼              │            │
-     │            │          │      Queue Prompt        │            │
-     │            │          ▼           │              │            │
-     │            │     Store Workflow   │              │            │
-     │            ▼          │           │              │            │
-     │       Show UI         │           │              │            │
-     ▼           │           │           │              │            ▼
-  Upload ────────┴───────────┴───────────┴──────────────┴───────▶ Result
+┌─────────────────────────────────────────────────────────────────┐
+│                         User Browser                            │
+│                    http://ai-kvm2:5174                          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend (React + Vite)                      │
+│                    Port: 5174 (dev server)                      │
+│                    Service: oelala-frontend                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Backend (FastAPI/Uvicorn)                    │
+│                    Port: 7998                                   │
+│                    Service: oelala-backend                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ComfyUI (Workflow Engine)                    │
+│                    Port: 8188                                   │
+│                    Service: comfyui                             │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-## ComfyUI API Integration
-
-### Key Endpoints
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/prompt` | POST | Submit workflow for execution |
-| `/queue` | GET | Get current queue status |
-| `/history/{prompt_id}` | GET | Get execution result |
-| `/view` | GET | View generated images/videos |
-| `/system_stats` | GET | Get system/GPU status |
-| `/interrupt` | POST | Cancel current execution |
-
-### Backend → ComfyUI Communication
-```python
-import aiohttp
-
-async def submit_workflow(workflow: dict) -> str:
-    """Submit workflow to ComfyUI and return prompt_id."""
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "http://localhost:8188/prompt",
-            json={"prompt": workflow}
-        ) as resp:
-            result = await resp.json()
-            return result["prompt_id"]
-
-async def get_status(prompt_id: str) -> dict:
-    """Get execution status from ComfyUI."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"http://localhost:8188/history/{prompt_id}"
-        ) as resp:
-            return await resp.json()
-```
-
-## Tested Workflows (Production Ready)
-
-### Wan2.2 I2V Q5 DisTorch2
-- **File**: `wan22_i2v_14b_Q5_distorch2.json`
-- **Models**: Q5_K_S (10GB per model)
-- **Features**: SageAttention, CPU offload
-- **Settings**: 6 steps, CFG 5.0
-
-### Hardware Limits (RTX 5060 Ti 16GB + RTX 3060 12GB)
-
-| Parameter | Min | Recommended | Max (tested) |
-|-----------|-----|-------------|--------------|
-| Resolution | 256×256 | 480×480 | 720×720 |
-| Frames | 17 | 41 | 81 |
-| Model Size | Q4_K_M (9GB) | Q5_K_S (10GB) | Q5_K_S (10GB) |
-| Steps | 4 | 6 | 20 |
-
-### Pending Hardware Tests
-- [ ] 720×480 (16:9 aspect ratio)
-- [ ] 81 frames at 480×480
-- [ ] 121 frames at lower resolution
-- [ ] Higher CFG values (6.0, 7.0)
-- [ ] Different step counts (8, 10, 12)
-
-## Workflow Configuration Schema
-
-Workflows stored by backend should follow this schema:
-
-```json
-{
-  "id": "uuid",
-  "name": "workflow_name",
-  "description": "User-friendly description",
-  "category": "i2v|t2v|img2img|upscale",
-  "comfyui_workflow": { /* full ComfyUI JSON */ },
-  "parameters": {
-    "resolution": {"width": 480, "height": 480},
-    "frames": 41,
-    "steps": 6,
-    "cfg": 5.0,
-    "model": "wan2.2_i2v_low_noise_14B_Q5_K_S.gguf"
-  },
-  "presets": [
-    {"name": "Fast", "steps": 4, "frames": 25},
-    {"name": "Quality", "steps": 8, "frames": 41},
-    {"name": "Maximum", "steps": 12, "frames": 81}
-  ],
-  "hardware_requirements": {
-    "min_vram_gb": 12,
-    "recommended_vram_gb": 16,
-    "cpu_offload_gb": 8
-  }
-}
-```
-
-## Directory Structure (Proposed)
-
-```
-/home/flip/oelala/
-├── ComfyUI/                    # Processing middleware (existing)
-│   ├── models/unet/            # GGUF models
-│   ├── models/loras/           # LoRA files
-│   ├── input/                  # Input images
-│   ├── output/                 # Generated videos
-│   └── user/default/workflows/ # ComfyUI workflows
-├── src/
-│   ├── backend/                # FastAPI backend (TBD)
-│   │   ├── api/
-│   │   ├── services/
-│   │   │   └── comfyui.py      # ComfyUI integration
-│   │   └── main.py
-│   └── frontend/               # React frontend (TBD)
-│       ├── components/
-│       ├── services/
-│       └── App.tsx
-├── configs/
-│   └── workflows/              # Validated workflow configs
-│       ├── i2v_fast.json
-│       ├── i2v_quality.json
-│       └── i2v_maximum.json
-└── docs/
-    ├── ARCHITECTURE.md         # This file
-    └── COMFYUI_INTEGRATION.md
-```
-
-## Next Steps
-
-### Phase 1: Workflow Validation
-1. Test all resolution/frame combinations
-2. Document VRAM usage per configuration
-3. Identify stable presets for frontend
-
-### Phase 2: Backend Development
-1. Create FastAPI service
-2. Implement ComfyUI API wrapper
-3. Add job queue management
-4. Store workflow configurations
-
-### Phase 3: Frontend Development
-1. Build workflow selector UI
-2. Add parameter sliders
-3. Implement real-time progress
-4. Create result gallery
 
 ---
 
-**Last Updated**: December 28, 2025
-**Status**: Architecture defined, ComfyUI working, Q5 workflow tested
+## Service Configuration
+
+### Frontend Service
+**File**: \`~/.config/systemd/user/oelala-frontend.service\`
+
+```ini
+[Unit]
+Description=Oelala Frontend Dev Server (Vite)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/flip/oelala/src/frontend
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5174
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+**Commands:**
+```bash
+systemctl --user start oelala-frontend
+systemctl --user stop oelala-frontend
+systemctl --user status oelala-frontend
+journalctl --user -u oelala-frontend -f
+```
+
+### Backend Service
+**File**: \`~/.config/systemd/user/oelala-backend.service\`
+
+```ini
+[Unit]
+Description=Oelala Backend API (FastAPI/Uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/flip/oelala/src/backend
+Environment="PATH=/home/flip/venvs/gpu/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/flip/venvs/gpu/bin/uvicorn app:app --host 0.0.0.0 --port 7998 --workers 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+---
+
+## Port Inventory
+
+| Service         | Port | Protocol | Description                    |
+|-----------------|------|----------|--------------------------------|
+| Frontend (Vite) | 5174 | HTTP     | React dev server               |
+| Backend (API)   | 7998 | HTTP     | FastAPI REST endpoints         |
+| ComfyUI         | 8188 | HTTP/WS  | Workflow engine + WebSocket    |
+
+---
+
+## Backend Architecture
+
+### Main Components
+
+**File**: \`src/backend/app.py\`
+- FastAPI application with REST endpoints
+- Static file serving for generated videos
+- CORS middleware for frontend access
+
+**File**: \`src/backend/comfyui_client.py\`
+- ComfyUI API client
+- Workflow templating (DisTorch2 workflow)
+- WebSocket progress monitoring
+
+### Key Endpoints
+
+| Endpoint                     | Method | Description                        |
+|------------------------------|--------|------------------------------------|
+| \`/health\`                    | GET    | Health check                       |
+| \`/loras\`                     | GET    | List available LoRA models         |
+| \`/generate-wan22-comfyui\`    | POST   | Generate video via ComfyUI         |
+| \`/videos/{filename}\`         | GET    | Serve generated videos             |
+| \`/list-videos\`               | GET    | List all generated videos          |
+
+### LoRA Endpoint Response
+
+```json
+{
+  "loras": [...],
+  "high_noise": [...],
+  "low_noise": [...],
+  "general": [...]
+}
+```
+
+---
+
+## ComfyUI Workflow: DisTorch2 I2V
+
+De primaire workflow voor image-to-video generatie gebruikt **DisTorch2 dual-pass sampling**.
+
+### Workflow Nodes
+
+| Node | Type                              | Purpose                           |
+|------|-----------------------------------|-----------------------------------|
+| 1    | UnetLoaderGGUFAdvancedDisTorch2   | Load high noise Q6_K model        |
+| 2    | UnetLoaderGGUFAdvancedDisTorch2   | Load low noise Q6_K model         |
+| 3    | VAELoaderDisTorch2MultiGPU        | Load VAE decoder                  |
+| 4    | CLIPLoaderDisTorch2MultiGPU       | Load T5 text encoder (CONVERTED)  |
+| 5-6  | ModelSamplingSD3                  | Configure shift=5 for both models |
+| 7-8  | SageAttention                     | Apply SageAttn optimization       |
+| 9-10 | CLIPTextEncode                    | Encode positive/negative prompts  |
+| 11   | LoadImage                         | Load input image                  |
+| 12   | WanImageToVideo                   | I2V conditioning                  |
+| 13   | KSamplerAdvanced                  | High noise pass (steps 0-3)       |
+| 14   | KSamplerAdvanced                  | Low noise pass (steps 3+)         |
+| 15   | VAEDecode                         | Decode latents to frames          |
+| 16   | VHS_VideoCombine                  | Combine frames to video           |
+| 17   | LoraLoaderModelOnly               | Optional LoRA for high noise      |
+| 18   | LoraLoaderModelOnly               | Optional LoRA for low noise       |
+| 19   | AspectRatioResolution_Warper      | Calculate width/height            |
+
+### Memory Allocation
+
+```
+expert_mode_allocations: "cuda:0,0.25gb;cuda:1,8gb;cpu,*"
+```
+
+- **GPU 0**: 0.25 GB (control overhead)
+- **GPU 1**: 8 GB (primary compute)
+- **CPU**: Remaining weights (offload)
+
+### Model Files
+
+```
+ComfyUI/models/
+├── diffusion_models/
+│   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf
+│   └── wan2.2_i2v_low_noise_14B_Q6_K.gguf
+├── clip/
+│   └── umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors
+├── vae/
+│   └── wan_2.2_vae.safetensors
+└── loras/
+    ├── wan 2.2/           # Wan2.2 specific LoRAs
+    └── ...                # 53+ total LoRA files
+```
+
+---
+
+## Frontend Architecture
+
+### Tech Stack
+- **React 18** with hooks
+- **Vite** dev server with HMR
+- **CSS Variables** for theming
+
+### Key Components
+
+**File**: \`src/frontend/src/dashboard/tools/ImageToVideoTool.jsx\`
+- Main I2V generation interface
+- Image upload (drag & drop, URL, creations)
+- Parameter controls (resolution, duration, fps, aspect ratio)
+- Advanced settings (steps, cfg, seed, LoRA)
+
+### LoRA Selection UI
+- Collapsible panel in Advanced Settings
+- Separate dropdowns for high/low noise models
+- Strength slider (0 - 2.0)
+- "Active" badge when LoRA selected
+
+---
+
+## Development Commands
+
+### Starting All Services
+
+```bash
+# Start all services
+systemctl --user start oelala-frontend oelala-backend
+
+# Check status
+systemctl --user status oelala-frontend oelala-backend
+
+# View logs
+journalctl --user -u oelala-frontend -f
+journalctl --user -u oelala-backend -f
+```
+
+### Building Frontend for Production
+
+```bash
+cd /home/flip/oelala/src/frontend
+npm run build
+```
+
+### Testing Endpoints
+
+```bash
+curl http://localhost:7998/health
+curl http://localhost:7998/loras | jq .
+```
+
+---
+
+## Environment
+
+### Python
+\`/home/flip/venvs/gpu/\` (canonical GPU venv)
+
+### Node.js
+\`/usr/bin/node\` (v22.x)
+
+---
+
+## File Structure
+
+```
+/home/flip/oelala/
+├── src/
+│   ├── backend/
+│   │   ├── app.py
+│   │   ├── comfyui_client.py
+│   │   └── generated/
+│   └── frontend/
+│       └── src/dashboard/tools/
+├── docs/
+│   ├── ARCHITECTURE.md
+│   └── PROJECT_OVERVIEW.md
+├── ComfyUI/
+│   ├── models/
+│   └── user/default/workflows/
+└── README.md
+```
+
+---
+
+*Last Updated: January 2, 2026 - Added LoRA support, DisTorch2 workflow, systemd services*

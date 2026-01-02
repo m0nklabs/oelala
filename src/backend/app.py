@@ -8,6 +8,8 @@ import os
 import sys
 import uvicorn
 import threading
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,34 +22,45 @@ from datetime import datetime
 import json
 from collections import deque
 import uuid
-import requests
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 # Add current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('/home/flip/oelala')  # Add oelala root directory
 
-# Wan2VideoGenerator will be imported lazily in startup to avoid import-time failures
-try:
-    from src.backend.wan2_generator import Wan2VideoGenerator
-    print("✅ Wan2VideoGenerator imported successfully")
-except ImportError as e:
-    print(f"❌ Failed to import Wan2VideoGenerator: {e}")
+# GPU generators are disabled by default - ComfyUI handles all GPU work
+# Set OELALA_LOAD_GPU_GENERATORS=1 to enable local torch-based generators
+LOAD_GPU_GENERATORS = os.environ.get("OELALA_LOAD_GPU_GENERATORS", "0") == "1"
+
+if LOAD_GPU_GENERATORS:
+    # Wan2VideoGenerator - local torch-based generation
+    try:
+        from src.backend.wan2_generator import Wan2VideoGenerator
+        print("✅ Wan2VideoGenerator imported successfully")
+    except ImportError as e:
+        print(f"❌ Failed to import Wan2VideoGenerator: {e}")
+        Wan2VideoGenerator = None
+
+    # SD3ImageGenerator - local torch-based generation
+    try:
+        from src.backend.sd3_generator import SD3ImageGenerator
+        print("✅ SD3ImageGenerator imported successfully")
+    except ImportError as e:
+        print(f"❌ Failed to import SD3ImageGenerator: {e}")
+        SD3ImageGenerator = None
+
+    # RealVisXL Image Generator (SDXL RealVis V5.0)
+    try:
+        from src.backend.realvis_generator import RealVisXLImageGenerator
+        print("✅ RealVisXLImageGenerator imported successfully")
+    except ImportError as e:
+        print(f"❌ Failed to import RealVisXLImageGenerator: {e}")
+        RealVisXLImageGenerator = None
+else:
+    print("ℹ️ GPU generators disabled - using ComfyUI backend only")
     Wan2VideoGenerator = None
-
-# SD3ImageGenerator will be imported lazily
-try:
-    from src.backend.sd3_generator import SD3ImageGenerator
-    print("✅ SD3ImageGenerator imported successfully")
-except ImportError as e:
-    print(f"❌ Failed to import SD3ImageGenerator: {e}")
     SD3ImageGenerator = None
-
-# RealVisXL Image Generator (SDXL RealVis V5.0)
-try:
-    from src.backend.realvis_generator import RealVisXLImageGenerator
-    print("✅ RealVisXLImageGenerator imported successfully")
-except ImportError as e:
-    print(f"❌ Failed to import RealVisXLImageGenerator: {e}")
     RealVisXLImageGenerator = None
 
 # ComfyUI Client for Wan2.2 Q5 GGUF workflows
@@ -58,24 +71,6 @@ except ImportError as e:
     print(f"❌ Failed to import ComfyUIClient: {e}")
     ComfyUIClient = None
     get_comfyui_client = None
-
-# Civitai API client (checkpoint search/download)
-try:
-    from src.backend.civitai_client import CivitaiClient
-    print("✅ CivitaiClient imported successfully")
-except ImportError as e:
-    print(f"❌ Failed to import CivitaiClient: {e}")
-    CivitaiClient = None
-
-# Workflow Loader for JSON-based configurable workflows
-try:
-    from src.backend.workflow_loader import get_registry, reload_registry, WorkflowRegistry
-    print("✅ WorkflowLoader imported successfully")
-except ImportError as e:
-    print(f"❌ Failed to import WorkflowLoader: {e}")
-    get_registry = None
-    reload_registry = None
-    WorkflowRegistry = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -88,10 +83,6 @@ ticker_store = {}    # job_id -> threading.Event to stop ticker
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
-
-# ComfyUI model folders
-COMFYUI_ROOT = Path("/home/flip/oelala/ComfyUI")
-COMFYUI_CHECKPOINTS_DIR = COMFYUI_ROOT / "models" / "checkpoints"
 
 
 def debug_log(message: str):
@@ -132,6 +123,42 @@ def stop_progress_ticker(job_id: str):
         event.set()
     else:
         debug_log(f"⚠️ no active ticker found for job {job_id}")
+
+
+def inject_png_workflow_metadata(image_path: str, workflow: dict, prompt_params: dict) -> bool:
+    """
+    Inject ComfyUI-compatible workflow metadata into a PNG file.
+    This allows ComfyUI to read the workflow when opening the image.
+    
+    Args:
+        image_path: Path to the PNG file
+        workflow: The ComfyUI API workflow dict
+        prompt_params: Additional prompt parameters for reference
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        img = Image.open(image_path)
+        
+        # Create PNG metadata
+        metadata = PngInfo()
+        
+        # ComfyUI expects 'prompt' to contain the API workflow
+        metadata.add_text("prompt", json.dumps(workflow))
+        
+        # Add extra info for reference
+        metadata.add_text("workflow", json.dumps(workflow))  # Some versions look for this
+        metadata.add_text("oelala_params", json.dumps(prompt_params))
+        
+        # Save with metadata
+        img.save(image_path, pnginfo=metadata)
+        logger.info(f"📝 Injected workflow metadata into {image_path}")
+        return True
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to inject PNG metadata: {e}")
+        return False
+
 
 class BufferHandler(logging.Handler):
     def emit(self, record):
@@ -199,11 +226,10 @@ class StreamToBuffer:
 sys.stdout = StreamToBuffer(sys.stdout, "INFO")
 sys.stderr = StreamToBuffer(sys.stderr, "SHELL") # Use SHELL level for stderr (tqdm usually goes here)
 
-# Add buffer handler to root logger and local logger
+# Add buffer handler to root logger only (module loggers propagate by default)
 buffer_handler = BufferHandler()
 buffer_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(buffer_handler)
-logger.addHandler(buffer_handler)
 
 # Attach to common libraries used by the generators so their INFO logs appear
 for noisy_logger in ["diffusers", "transformers", "accelerate"]:
@@ -217,13 +243,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware
+# CRITICAL: Add CORS middleware FIRST, before any mounts or routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Create directories
@@ -234,10 +261,12 @@ COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# Mount static files for frontend
+# Mount static files after CORS
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
-# Mount ComfyUI output for direct serving
-app.mount("/comfyui-output", StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)), name="comfyui_output")
+
+# Mount ComfyUI output directory
+if COMFYUI_OUTPUT_DIR.exists():
+    app.mount("/comfyui-output", StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)), name="comfyui_output")
 
 # Global generator instance
 generator = None
@@ -301,6 +330,157 @@ async def root():
         }
     }
 
+@app.get("/list-comfyui-media")
+async def list_comfyui_media(type: str = "all", grouped: bool = False, include_metadata: bool = False):
+    """List media files from ComfyUI output directory"""
+    comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
+    
+    if not comfyui_output.exists():
+        return {"media": [], "stats": {"videos": 0, "images": 0}}
+    
+    media = []
+    video_count = 0
+    image_count = 0
+    
+    # Collect all media files
+    for file_path in comfyui_output.iterdir():
+        if not file_path.is_file():
+            continue
+            
+        ext = file_path.suffix.lower()
+        media_type = None
+        
+        if ext in ['.mp4', '.webm', '.mov', '.avi']:
+            media_type = 'video'
+            video_count += 1
+        elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
+            media_type = 'image'
+            image_count += 1
+        else:
+            continue
+        
+        # Filter by type if requested
+        if type != 'all' and media_type != type:
+            continue
+        
+        stat = file_path.stat()
+        item = {
+            "filename": file_path.name,
+            "type": media_type,
+            "size": stat.st_size,
+            "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "url": f"/comfyui-output/{file_path.name}"
+        }
+        
+        media.append(item)
+    
+    # Sort by modified time descending
+    media.sort(key=lambda x: x['modified'], reverse=True)
+    
+    return {
+        "media": media,
+        "stats": {
+            "videos": video_count,
+            "images": image_count
+        }
+    }
+
+from pydantic import BaseModel
+
+class DeleteMediaRequest(BaseModel):
+    filenames: List[str]
+
+@app.delete("/delete-comfyui-media")
+async def delete_comfyui_media(request: DeleteMediaRequest):
+    """Delete media files from ComfyUI output directory"""
+    comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
+    
+    if not comfyui_output.exists():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+    
+    deleted = []
+    errors = []
+    
+    for filename in request.filenames:
+        file_path = comfyui_output / filename
+        
+        # Security: prevent path traversal
+        if not str(file_path.resolve()).startswith(str(comfyui_output.resolve())):
+            errors.append({"filename": filename, "error": "Invalid path"})
+            continue
+        
+        if not file_path.exists():
+            errors.append({"filename": filename, "error": "File not found"})
+            continue
+        
+        try:
+            file_path.unlink()
+            deleted.append(filename)
+        except Exception as e:
+            errors.append({"filename": filename, "error": str(e)})
+    
+    return {
+        "deleted": deleted,
+        "errors": errors,
+        "count": len(deleted)
+    }
+
+
+@app.get("/loras")
+async def list_loras():
+    """
+    List available LoRA models from ComfyUI/models/loras folder.
+    Returns LoRAs grouped by noise type (high/low) for Wan2.2 dual-pass workflow.
+    """
+    loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
+    
+    if not loras_dir.exists():
+        return {"loras": [], "high_noise": [], "low_noise": [], "general": []}
+    
+    all_loras = []
+    high_noise = []
+    low_noise = []
+    general = []
+    
+    for lora_path in loras_dir.rglob("*.safetensors"):
+        # Get relative path from loras folder
+        rel_path = str(lora_path.relative_to(loras_dir))
+        name = lora_path.stem
+        
+        lora_info = {
+            "path": rel_path,
+            "name": name,
+            "size_mb": round(lora_path.stat().st_size / (1024 * 1024), 1)
+        }
+        all_loras.append(lora_info)
+        
+        # Categorize by noise type
+        lower_name = name.lower()
+        lower_path = rel_path.lower()
+        
+        if "high" in lower_name or "high" in lower_path or "_h_" in lower_name or "-h-" in lower_name:
+            high_noise.append(lora_info)
+        elif "low" in lower_name or "low" in lower_path or "_l_" in lower_name or "-l-" in lower_name:
+            low_noise.append(lora_info)
+        else:
+            general.append(lora_info)
+    
+    # Sort by name
+    all_loras.sort(key=lambda x: x["name"].lower())
+    high_noise.sort(key=lambda x: x["name"].lower())
+    low_noise.sort(key=lambda x: x["name"].lower())
+    general.sort(key=lambda x: x["name"].lower())
+    
+    return {
+        "loras": all_loras,
+        "high_noise": high_noise,
+        "low_noise": low_noise,
+        "general": general,
+        "count": len(all_loras)
+    }
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -313,174 +493,23 @@ async def health_check():
         "output_dir": str(OUTPUT_DIR)
     }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Workflow API Endpoints - JSON-based configurable ComfyUI workflows
-# ─────────────────────────────────────────────────────────────────────────────
-
-@app.get("/api/workflows")
-async def list_workflows(category: str = None):
-    """List available workflows with their configurable parameters.
+@app.post("/restart")
+async def restart_backend():
+    """Restart the backend server (uvicorn --reload will handle this)"""
+    import signal
+    import os
     
-    Returns workflow definitions that can be used by frontend to build
-    dynamic forms for workflow configuration.
-    """
-    if not get_registry:
-        raise HTTPException(status_code=503, detail="Workflow loader not available")
+    logger.info("🔄 Backend restart requested via API")
     
-    try:
-        registry = get_registry()
-        workflows = registry.list_workflows(category=category)
-        categories = registry.get_categories()
-        
-        return {
-            "workflows": workflows,
-            "categories": categories,
-            "count": len(workflows)
-        }
-    except Exception as e:
-        logger.error(f"Error listing workflows: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/workflows/{workflow_id}")
-async def get_workflow(workflow_id: str):
-    """Get details of a specific workflow including parameters."""
-    if not get_registry:
-        raise HTTPException(status_code=503, detail="Workflow loader not available")
+    # Send SIGHUP to trigger uvicorn reload
+    def delayed_restart():
+        import time
+        time.sleep(0.5)
+        os.kill(os.getpid(), signal.SIGHUP)
     
-    try:
-        registry = get_registry()
-        config = registry.get(workflow_id)
-        
-        if not config:
-            raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
-        
-        info = config.to_dict()
-        info["id"] = workflow_id
-        return info
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting workflow {workflow_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/workflows/{workflow_id}/run")
-async def run_workflow(
-    workflow_id: str,
-    image: UploadFile = File(None),
-    params: str = Form("{}")
-):
-    """Execute a workflow with custom parameters.
+    threading.Thread(target=delayed_restart, daemon=True).start()
     
-    Args:
-        workflow_id: The workflow to run (e.g., "wan22_i2v_q5")
-        image: Optional input image file
-        params: JSON string of workflow parameters (prompt, steps, cfg, etc.)
-    
-    Returns:
-        Job ID for tracking progress and retrieving results
-    """
-    if not get_registry:
-        raise HTTPException(status_code=503, detail="Workflow loader not available")
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
-    try:
-        registry = get_registry()
-        config = registry.get(workflow_id)
-        
-        if not config:
-            raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
-        
-        # Parse parameters
-        try:
-            workflow_params = json.loads(params)
-        except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid params JSON: {e}")
-        
-        # Save uploaded image if provided
-        if image:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            input_filename = f"input_{timestamp}_{image.filename}"
-            input_path = UPLOAD_DIR / input_filename
-            
-            with open(input_path, "wb") as f:
-                content = await image.read()
-                f.write(content)
-            
-            # Add image to parameters
-            workflow_params["image"] = input_filename
-            logger.info(f"Saved input image: {input_path}")
-        
-        # Generate job ID
-        job_id = str(uuid.uuid4())
-        
-        # Initialize progress tracking
-        progress_store[job_id] = {
-            "job_id": job_id,
-            "progress": 5,
-            "status": "running",
-            "workflow_id": workflow_id,
-            "message": "Building workflow...",
-            "updated_at": datetime.now().isoformat()
-        }
-        
-        # Build workflow with parameters
-        workflow = config.build(**workflow_params)
-        
-        # Get ComfyUI client and queue the workflow
-        client = get_comfyui_client()
-        
-        # Update progress
-        progress_store[job_id]["progress"] = 10
-        progress_store[job_id]["message"] = "Queuing workflow to ComfyUI..."
-        
-        # Queue to ComfyUI (this runs async in the client)
-        result = client.queue_workflow(workflow)
-        
-        # Store the ComfyUI prompt ID for tracking
-        prompt_id = result.get("prompt_id")
-        progress_store[job_id]["comfyui_prompt_id"] = prompt_id
-        progress_store[job_id]["progress"] = 15
-        progress_store[job_id]["message"] = "Workflow queued, processing..."
-        
-        # Start progress ticker for UI feedback
-        start_progress_ticker(job_id, step=3, interval=2.0, ceiling=90)
-        
-        return {
-            "job_id": job_id,
-            "workflow_id": workflow_id,
-            "prompt_id": prompt_id,
-            "status": "queued",
-            "message": "Workflow queued successfully"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error running workflow {workflow_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/workflows/reload")
-async def reload_workflows():
-    """Reload workflow registry from disk (for development)."""
-    if not reload_registry:
-        raise HTTPException(status_code=503, detail="Workflow loader not available")
-    
-    try:
-        registry = reload_registry()
-        workflows = registry.list_workflows()
-        return {
-            "success": True,
-            "message": "Workflows reloaded",
-            "count": len(workflows)
-        }
-    except Exception as e:
-        logger.error(f"Error reloading workflows: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "restarting", "message": "Backend will restart shortly"}
 
 @app.get("/files/{filename}")
 async def get_file(filename: str):
@@ -787,16 +816,22 @@ async def generate_wan22_comfyui(
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
     steps: int = Form(6, description="Sampling steps"),
-    cfg: float = Form(5.0, description="CFG guidance scale"),
-    seed: int = Form(-1, description="Random seed (-1 for random)")
+    cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    lora_high_noise: str = Form("", description="LoRA for high noise model (path relative to loras folder)"),
+    lora_low_noise: str = Form("", description="LoRA for low noise model (path relative to loras folder)"),
+    lora_strength: float = Form(1.0, description="LoRA strength (0.0 - 2.0)")
 ):
     """
-    Generate Wan2.2 I2V video via ComfyUI with Q5_K_S GGUF model.
+    Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow.
     
     This endpoint uses ComfyUI with:
-    - wan2.2_i2v_low_noise_14B_Q5_K_S.gguf (10.1GB, fits 16GB VRAM)
-    - DisTorch2 with 40 blocks CPU offload
-    - SageAttention for memory efficiency
+    - Dual-Pass: High Noise model (steps 0-3) → Low Noise model (steps 3+)
+    - DisTorch2 expert_mode_allocations for optimal memory scaling
+    - CONVERTED T5: umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors
+    - SageAttention (sageattn_qk_int8_pv_fp16_triton)
+    
+    Note: num_frames will be adjusted to nearest valid Wan2.2 value (4k+1)
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
@@ -808,6 +843,13 @@ async def generate_wan22_comfyui(
             status_code=503,
             detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
         )
+    
+    # Wan2.2 requires num_frames in format 4k+1 (5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, ...)
+    # Round to nearest valid value
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)  # Minimum k=1 gives 5 frames
+    num_frames = 4 * k + 1
+    logger.info(f"🎞️ Adjusted num_frames to Wan2.2 format: {num_frames} (4*{k}+1)")
     
     # Validate file type
     if not file.content_type.startswith("image/"):
@@ -835,26 +877,70 @@ async def generate_wan22_comfyui(
     
     output_prefix = f"oelala_{timestamp}"
     
+    # Build workflow and inject metadata into input image
+    comfyui = get_comfyui_client()
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    
+    # Build the workflow that will be used
+    workflow = comfyui.build_workflow(
+        image_name=input_filename,
+        prompt=prompt,
+        width=width,
+        height=height,
+        num_frames=num_frames,
+        fps=fps,
+        steps=steps,
+        cfg=cfg,
+        seed=seed if seed >= 0 else 42,
+        output_prefix=output_prefix,
+    )
+    
+    # Inject workflow metadata into the input PNG
+    prompt_params = {
+        "prompt": prompt,
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "cfg": cfg,
+        "seed": seed,
+        "timestamp": timestamp,
+        "lora_high_noise": lora_high_noise or None,
+        "lora_low_noise": lora_low_noise or None,
+        "lora_strength": lora_strength,
+    }
+    inject_png_workflow_metadata(str(input_path), workflow, prompt_params)
+
     try:
         logger.info(f"🎬 Starting Wan2.2 ComfyUI generation")
         logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
         logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
         logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
+        if lora_high_noise or lora_low_noise:
+            logger.info(f"   🎨 LoRA: H={lora_high_noise or 'none'}, L={lora_low_noise or 'none'} @ {lora_strength}")
         logger.info(f"   📝 Prompt: {prompt[:100]}...")
         
-        # Generate video via ComfyUI
-        result_path = comfyui.generate_video(
-            image_path=str(input_path),
-            prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            output_prefix=output_prefix
+        # Generate video via ComfyUI in threadpool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        result_path = await loop.run_in_executor(
+            None,  # Default threadpool
+            lambda: comfyui.generate_video(
+                image_path=str(input_path),
+                prompt=prompt,
+                output_dir=str(OUTPUT_DIR),
+                resolution=resolution,
+                aspect_ratio=aspect_ratio,
+                num_frames=num_frames,
+                fps=fps,
+                steps=steps,
+                cfg=cfg,
+                seed=seed,
+                output_prefix=output_prefix,
+                lora_high_noise=lora_high_noise if lora_high_noise else None,
+                lora_low_noise=lora_low_noise if lora_low_noise else None,
+                lora_strength=lora_strength
+            )
         )
         
         if result_path and Path(result_path).exists():
@@ -893,502 +979,6 @@ async def generate_wan22_comfyui(
         raise HTTPException(status_code=500, detail=f"Wan2.2 ComfyUI generation failed: {str(e)}")
 
 
-@app.post("/generate-wan22-t2i2v-comfyui")
-async def generate_wan22_t2i2v_comfyui(
-    t2i_checkpoint_name: str = Form(..., description="ComfyUI checkpoint filename (must exist under ComfyUI/models/checkpoints)"),
-    t2i_prompt: str = Form(..., description="Text prompt for T2I start image"),
-    t2i_negative_prompt: str = Form("", description="Negative prompt for T2I start image"),
-    t2i_steps: int = Form(20, description="T2I sampling steps"),
-    t2i_cfg: float = Form(6.0, description="T2I CFG guidance scale"),
-    t2i_seed: int = Form(-1, description="T2I seed (-1 for default)"),
-    prompt: str = Form("Motion, subject moving naturally", description="Motion prompt for Wan I2V"),
-    num_frames: int = Form(41, description="Number of frames in video"),
-    output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 720p, 1080p"),
-    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
-    steps: int = Form(6, description="Wan sampling steps"),
-    cfg: float = Form(5.0, description="Wan CFG guidance scale"),
-    seed: int = Form(-1, description="Wan seed (-1 for random)"),
-):
-    """Generate Wan2.2 I2V video via ComfyUI using a checkpoint-generated start image (T2I→I2V)."""
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if not output_filename:
-        output_filename = f"wan22_t2i2v_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
-
-    output_prefix = f"oelala_{timestamp}"
-
-    try:
-        logger.info("🎬 Starting Wan2.2 T2I→I2V ComfyUI generation")
-        logger.info(f"   🧩 Checkpoint: {t2i_checkpoint_name}")
-        logger.info(f"   🖼️ T2I prompt: {t2i_prompt[:100]}...")
-        logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-        logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
-        logger.info(f"   ⚙️ Wan steps: {steps}, CFG: {cfg}, Seed: {seed}")
-
-        result_path = comfyui.generate_video(
-            image_path=None,
-            prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            output_prefix=output_prefix,
-            t2i_checkpoint_name=t2i_checkpoint_name,
-            t2i_prompt=t2i_prompt,
-            t2i_negative_prompt=t2i_negative_prompt,
-            t2i_steps=t2i_steps,
-            t2i_cfg=t2i_cfg,
-            t2i_seed=t2i_seed,
-        )
-
-        if result_path and Path(result_path).exists():
-            final_output = OUTPUT_DIR / output_filename
-            if str(result_path) != str(final_output):
-                shutil.copy(result_path, final_output)
-                result_path = str(final_output)
-
-            return {
-                "success": True,
-                "message": "Wan2.2 video generated via ComfyUI (T2I→I2V)",
-                "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
-                "video_path": result_path,
-                "motion_prompt": prompt,
-                "t2i": {
-                    "checkpoint_name": t2i_checkpoint_name,
-                    "prompt": t2i_prompt,
-                    "negative_prompt": t2i_negative_prompt,
-                    "steps": t2i_steps,
-                    "cfg": t2i_cfg,
-                    "seed": t2i_seed,
-                },
-                "num_frames": num_frames,
-                "fps": fps,
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "timestamp": timestamp,
-                "backend": "comfyui",
-                "model": "wan2.2_i2v_low_noise_14B_Q5_K_S",
-            }
-
-        raise HTTPException(status_code=500, detail="ComfyUI generation returned no output")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ ComfyUI T2I→I2V generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Wan2.2 T2I→I2V generation failed: {str(e)}")
-
-
-@app.post("/generate-wan22-enhanced-comfyui")
-async def generate_wan22_enhanced_comfyui(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, smooth camera movement"),
-    num_frames: int = Form(41, description="Number of frames in video"),
-    output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 720p, 1080p"),
-    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
-    steps: int = Form(4, description="Lightning steps (2+2 recommended)"),
-    cfg: float = Form(1.0, description="CFG scale (1.0 for Lightning)"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    model_variant: str = Form("HIGH", description="Model variant: HIGH or LOW"),
-):
-    """
-    Generate Wan2.2 Enhanced NSFW FAST MOVE V2 video via ComfyUI (Lightning edition).
-
-    This model already includes Lightning LoRAs - do NOT use additional LoRAs.
-    Recommended settings: steps=4, cfg=1.0, scheduler=simple
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"enh_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-
-    # Save uploaded file
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-
-    # Generate output filename
-    if not output_filename:
-        output_filename = f"wan22enh_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
-
-    output_prefix = f"oelala_enh_{timestamp}"
-
-    try:
-        logger.info("🎬 Starting Wan2.2 Enhanced Lightning generation")
-        logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-        logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
-        logger.info(f"   ⚡ Lightning settings: steps={steps}, CFG={cfg}, variant={model_variant}")
-        logger.info(f"   📝 Prompt: {prompt[:100]}...")
-
-        # Generate video via Enhanced workflow
-        result_path = comfyui.generate_enhanced_video(
-            image_path=str(input_path),
-            prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            output_prefix=output_prefix,
-            model_variant=model_variant,
-        )
-
-        if result_path and Path(result_path).exists():
-            final_output = OUTPUT_DIR / output_filename
-            if str(result_path) != str(final_output):
-                shutil.copy(result_path, final_output)
-                result_path = str(final_output)
-
-            return {
-                "success": True,
-                "message": "Wan2.2 Enhanced Lightning video generated",
-                "input_image": input_filename,
-                "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
-                "video_path": result_path,
-                "prompt": prompt,
-                "num_frames": num_frames,
-                "fps": fps,
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "model_variant": model_variant,
-                "timestamp": timestamp,
-                "backend": "comfyui",
-                "model": f"wan22_nsfw_fastmove_v2_Q4KM_{model_variant}",
-            }
-        else:
-            raise HTTPException(status_code=500, detail="ComfyUI Enhanced generation returned no output")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ ComfyUI Enhanced generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Wan2.2 Enhanced generation failed: {str(e)}")
-
-
-@app.post("/generate-wan22-q6-comfyui")
-async def generate_wan22_q6_comfyui(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, smooth camera movement, cinematic"),
-    negative_prompt: str = Form("blurry, distorted, low quality, static, jittery"),
-    num_frames: int = Form(41, description="Number of frames in video"),
-    output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 720p, 1080p"),
-    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
-    steps: int = Form(8, description="Sampling steps (6-12 recommended)"),
-    cfg: float = Form(4.5, description="CFG scale (3.5-6.0 recommended)"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    noise_type: str = Form("low", description="Noise variant: low (subtle) or high (dynamic)"),
-    scheduler: str = Form("dpm++", description="Scheduler: dpm++, unipc, euler, deis, lcm"),
-    blocks_to_swap: int = Form(40, description="CPU offload blocks (40=aggressive, 20=faster)"),
-):
-    """
-    Generate Wan2.2 Q6 DisTorch video via ComfyUI.
-
-    Higher quality 12GB Q6 GGUF models with flexible settings.
-    
-    noise_type:
-        - low: Better for subtle, controlled motion
-        - high: Better for dynamic, dramatic motion
-    
-    scheduler options: dpm++, unipc, euler, deis, lcm
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"q6_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-
-    # Save uploaded file
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-
-    # Generate output filename
-    if not output_filename:
-        output_filename = f"wan22q6_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
-
-    output_prefix = f"oelala_q6_{timestamp}"
-
-    try:
-        logger.info("🎬 Starting Wan2.2 Q6 DisTorch generation")
-        logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-        logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
-        logger.info(f"   🔧 Q6 settings: steps={steps}, CFG={cfg}, noise={noise_type}, sched={scheduler}")
-        logger.info(f"   📝 Prompt: {prompt[:100]}...")
-
-        # Generate video via Q6 workflow
-        result_path = comfyui.generate_q6_video(
-            image_path=str(input_path),
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            output_dir=str(OUTPUT_DIR),
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            output_prefix=output_prefix,
-            noise_type=noise_type,
-            scheduler=scheduler,
-            blocks_to_swap=blocks_to_swap,
-        )
-
-        if result_path and Path(result_path).exists():
-            final_output = OUTPUT_DIR / output_filename
-            if str(result_path) != str(final_output):
-                shutil.copy(result_path, final_output)
-                result_path = str(final_output)
-
-            # Determine model used
-            model_name = f"wan2.2_i2v_{noise_type}_noise_14B_Q6_K.gguf"
-
-            return {
-                "success": True,
-                "message": "Wan2.2 Q6 DisTorch video generated",
-                "input_image": input_filename,
-                "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
-                "video_path": result_path,
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "num_frames": num_frames,
-                "fps": fps,
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "noise_type": noise_type,
-                "scheduler": scheduler,
-                "blocks_to_swap": blocks_to_swap,
-                "timestamp": timestamp,
-                "backend": "comfyui",
-                "model": model_name,
-            }
-        else:
-            raise HTTPException(status_code=500, detail="ComfyUI Q6 generation returned no output")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ ComfyUI Q6 generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Wan2.2 Q6 generation failed: {str(e)}")
-
-
-@app.post("/generate-wan22-distorch2")
-async def generate_wan22_distorch2(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, smooth camera movement, cinematic"),
-    negative_prompt: str = Form("low quality, blurry, out of focus, unstable camera, artifacts, distortion"),
-    num_frames: int = Form(41, description="Number of frames (41=2.5s, 81=5s, 97=6s @ 16fps)"),
-    output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 720p, 1080p"),
-    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
-    steps: int = Form(6, description="Sampling steps (6 recommended for speed)"),
-    cfg: float = Form(1.0, description="CFG scale (1.0 for Lightning LoRA)"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    lora_strength: float = Form(1.5, description="LoRA strength (1.0-2.0)"),
-    enable_nsfw_lora: bool = Form(True, description="Enable NSFW LoRA"),
-    enable_dreamlay_lora: bool = Form(True, description="Enable DR34ML4Y style LoRA"),
-    enable_lightx2v_lora: bool = Form(True, description="Enable LightX2V speed LoRA"),
-    enable_cumshot_lora: bool = Form(True, description="Enable cumshot LoRA"),
-):
-    """
-    Generate Wan2.2 DisTorch2 dual-noise video via ComfyUI.
-    
-    BEST QUALITY - Uses dual high_noise + low_noise Q6_K models with 2-stage sampling.
-    
-    Features:
-    - DisTorch2 multi-GPU: cuda:0 (12GB) + cuda:1 (16GB) + CPU offload
-    - High noise model for first 50% of steps, low noise for remaining 50%
-    - Power Lora Loader with configurable LoRAs
-    - SageAttention for memory efficiency
-    
-    Tested benchmark: 464x688 @ 97 frames (6.1s) = 4.2 minutes
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"distorch2_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-
-    # Save uploaded file
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-
-    # Generate output filename
-    if not output_filename:
-        output_filename = f"wan22_distorch2_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
-
-    output_prefix = f"oelala_distorch2_{timestamp}"
-
-    try:
-        logger.info("🎬 Starting Wan2.2 DisTorch2 Dual-Noise generation")
-        logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-        logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
-        logger.info(f"   🔧 DisTorch2: steps={steps}, CFG={cfg}, lora_strength={lora_strength}")
-        logger.info(f"   🎨 LoRAs: NSFW={enable_nsfw_lora}, DR34ML4Y={enable_dreamlay_lora}, LightX2V={enable_lightx2v_lora}, Cumshot={enable_cumshot_lora}")
-        logger.info(f"   📝 Prompt: {prompt[:100]}...")
-
-        # Generate video via DisTorch2 dual-noise workflow
-        result_path = comfyui.generate_distorch2_video(
-            image_path=str(input_path),
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            output_dir=str(OUTPUT_DIR),
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            output_prefix=output_prefix,
-            lora_strength=lora_strength,
-            enable_nsfw_lora=enable_nsfw_lora,
-            enable_dreamlay_lora=enable_dreamlay_lora,
-            enable_lightx2v_lora=enable_lightx2v_lora,
-            enable_cumshot_lora=enable_cumshot_lora,
-        )
-
-        if result_path and Path(result_path).exists():
-            final_output = OUTPUT_DIR / output_filename
-            if str(result_path) != str(final_output):
-                shutil.copy(result_path, final_output)
-                result_path = str(final_output)
-
-            return {
-                "success": True,
-                "message": "Wan2.2 DisTorch2 Dual-Noise video generated",
-                "input_image": input_filename,
-                "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
-                "video_path": result_path,
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "num_frames": num_frames,
-                "fps": fps,
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "lora_strength": lora_strength,
-                "loras": {
-                    "nsfw": enable_nsfw_lora,
-                    "dreamlay": enable_dreamlay_lora,
-                    "lightx2v": enable_lightx2v_lora,
-                    "cumshot": enable_cumshot_lora,
-                },
-                "timestamp": timestamp,
-                "backend": "comfyui",
-                "model": "wan2.2_i2v_14B_Q6_K_dual_noise",
-            }
-        else:
-            raise HTTPException(status_code=500, detail="ComfyUI DisTorch2 generation returned no output")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ ComfyUI DisTorch2 generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Wan2.2 DisTorch2 generation failed: {str(e)}")
-
-
 @app.get("/comfyui-status")
 async def comfyui_status():
     """Check ComfyUI availability and GPU status"""
@@ -1421,104 +1011,6 @@ async def comfyui_status():
         }
 
 
-@app.get("/civitai/search")
-async def civitai_search(q: str, limit: int = 10, types: str = "Checkpoint"):
-    """Search Civitai for models.
-
-    Returns a trimmed payload suitable for UI consumption.
-    """
-    if not CivitaiClient:
-        raise HTTPException(status_code=503, detail="Civitai client not available")
-    if not q or len(q.strip()) < 2:
-        raise HTTPException(status_code=400, detail="Query too short")
-
-    client = CivitaiClient()
-    try:
-        payload = client.search_models(
-            query=q.strip(),
-            limit=max(1, min(int(limit), 25)),
-            types=[t.strip() for t in types.split(",") if t.strip()],
-        )
-        items = payload.get("items") or []
-        trimmed = []
-        for m in items:
-            versions = m.get("modelVersions") or []
-            trimmed.append(
-                {
-                    "modelId": m.get("id"),
-                    "name": m.get("name"),
-                    "type": m.get("type"),
-                    "nsfw": m.get("nsfw"),
-                    "creator": (m.get("creator") or {}).get("username"),
-                    "versions": [
-                        {
-                            "versionId": v.get("id"),
-                            "name": v.get("name"),
-                            "baseModel": v.get("baseModel"),
-                        }
-                        for v in versions[:5]
-                    ],
-                }
-            )
-        return {"query": q, "items": trimmed}
-    except requests.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Civitai HTTP error: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Civitai search failed: {e}")
-
-
-@app.post("/civitai/download")
-async def civitai_download(payload: dict):
-    """Download a model version file from Civitai into ComfyUI checkpoints folder.
-
-    Expected JSON payload:
-    {"version_id": 12345, "file_id": 67890 (optional)}
-    """
-    if not CivitaiClient:
-        raise HTTPException(status_code=503, detail="Civitai client not available")
-
-    version_id = payload.get("version_id")
-    file_id = payload.get("file_id")
-    if not version_id:
-        raise HTTPException(status_code=400, detail="Missing 'version_id'")
-
-    try:
-        version_id_int = int(version_id)
-        file_id_int = int(file_id) if file_id is not None else None
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid version_id/file_id")
-
-    COMFYUI_CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-    client = CivitaiClient()
-    try:
-        dest = client.download_checkpoint_from_version(
-            version_id=version_id_int,
-            dest_dir=COMFYUI_CHECKPOINTS_DIR,
-            file_id=file_id_int,
-        )
-        return {
-            "success": True,
-            "version_id": version_id_int,
-            "filename": dest.name,
-            "path": str(dest),
-            "comfyui_checkpoint_name": dest.name,
-        }
-    except requests.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Civitai HTTP error: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Civitai download failed: {e}")
-
-
-@app.get("/civitai/local-checkpoints")
-async def civitai_local_checkpoints():
-    """List locally available checkpoints in ComfyUI."""
-    COMFYUI_CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-    exts = {".safetensors", ".ckpt"}
-    files = [p.name for p in COMFYUI_CHECKPOINTS_DIR.iterdir() if p.is_file() and p.suffix.lower() in exts]
-    files.sort(key=str.lower)
-    return {"count": len(files), "items": files}
-
-
 @app.post("/generate-text")
 async def generate_text_video(
     prompt: str = Form(..., description="Text description of the video to generate"),
@@ -1531,6 +1023,11 @@ async def generate_text_video(
 ):
     """
     Generate video from text prompt only
+
+    Args:
+        prompt: Text description of the video to generate
+        num_frames: Number of frames in output video
+        output_filename: Custom name for output file
     """
     global generator
 
@@ -1743,54 +1240,6 @@ async def list_videos():
         })
 
     return {"videos": videos, "count": len(videos)}
-
-
-@app.get("/list-comfyui-media")
-async def list_comfyui_media(type: str = "all"):
-    """
-    List all media files from ComfyUI output directory.
-    
-    Args:
-        type: Filter by type - "all", "video", "image"
-    """
-    media = []
-    
-    # Define patterns based on type
-    if type == "video":
-        patterns = ["*.mp4", "*.webm", "*.mov"]
-    elif type == "image":
-        patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"]
-    else:
-        patterns = ["*.mp4", "*.webm", "*.mov", "*.png", "*.jpg", "*.jpeg", "*.webp"]
-    
-    for pattern in patterns:
-        for file_path in COMFYUI_OUTPUT_DIR.glob(pattern):
-            # Skip directories and hidden files
-            if file_path.is_dir() or file_path.name.startswith('.') or file_path.name.startswith('_'):
-                continue
-            
-            stat = file_path.stat()
-            ext = file_path.suffix.lower()
-            file_type = "video" if ext in [".mp4", ".webm", ".mov"] else "image"
-            
-            media.append({
-                "filename": file_path.name,
-                "type": file_type,
-                "size": stat.st_size,
-                "mtime": stat.st_mtime,
-                "created": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                "url": f"/comfyui-output/{file_path.name}"
-            })
-    
-    # Sort by modification time, newest first
-    media.sort(key=lambda x: x["mtime"], reverse=True)
-    
-    return {
-        "media": media,
-        "count": len(media),
-        "videos": len([m for m in media if m["type"] == "video"]),
-        "images": len([m for m in media if m["type"] == "image"])
-    }
 
 @app.post("/train-lora")
 async def train_lora_model(

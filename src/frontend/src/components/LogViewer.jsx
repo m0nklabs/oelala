@@ -24,7 +24,7 @@ export default function LogViewer() {
     }
 
     fetchLogs()
-    const interval = setInterval(fetchLogs, 1000)
+    const interval = setInterval(fetchLogs, 3000)  // Poll every 3s instead of 1s
     return () => clearInterval(interval)
   }, [isOpen])
 
