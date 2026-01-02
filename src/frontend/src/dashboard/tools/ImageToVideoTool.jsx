@@ -820,7 +820,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           <label className="grok-section-label">
             Resolution 
             <span className="text-muted" style={{ fontWeight: 400 }}>
-              {modelMode === 'wan2.2' ? ' (576p max for 24GB VRAM)' : ' (Higher = Better Quality)'}
+              {' (Higher = Better Quality, more VRAM)'}
             </span>
           </label>
           <div className="grok-toggle-group">
@@ -829,11 +829,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 key={key}
                 className={`grok-toggle-btn ${resolution === key ? 'active' : ''}`}
                 onClick={() => setResolution(key)}
-                disabled={modelMode === 'wan2.2' && key === '720p'}
-                style={{
-                  opacity: modelMode === 'wan2.2' && key === '720p' ? 0.5 : 1,
-                  cursor: modelMode === 'wan2.2' && key === '720p' ? 'not-allowed' : 'pointer'
-                }}
               >
                 {preset.label}
                 <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block' }}>
