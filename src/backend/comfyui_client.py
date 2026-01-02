@@ -1431,7 +1431,7 @@ class ComfyUIClient:
     def wait_for_completion(
         self,
         prompt_id: str,
-        timeout: int = 600,
+        timeout: int = 1800,  # 30 minutes for longer generations
         progress_callback=None
     ) -> Optional[Dict[str, Any]]:
         """Wait for workflow completion using websocket"""

@@ -1,0 +1,37 @@
+{
+  "test_type": "portrait_9:16",
+  "gpu_allocation": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+  "max_working_resolution": "720x1280",
+  "max_working_pixels": 921600,
+  "results": [
+    {
+      "width": 576,
+      "height": 1024,
+      "frames": 81,
+      "pixels": 589824,
+      "aspect_ratio": "9:16",
+      "description": "576x1024 (9:16) ~590k pixels",
+      "status": "success",
+      "time_sec": 388.4,
+      "gpu0_peak_mb": 5605,
+      "gpu1_peak_mb": 15834,
+      "total_vram_mb": 21439,
+      "timestamp": "2025-12-31T22:20:57.453523"
+    },
+    {
+      "width": 720,
+      "height": 1280,
+      "frames": 81,
+      "pixels": 921600,
+      "aspect_ratio": "9:16",
+      "description": "720x1280 (9:16) ~922k pixels",
+      "status": "success",
+      "time_sec": 676.2,
+      "gpu0_peak_mb": 5605,
+      "gpu1_peak_mb": 15834,
+      "total_vram_mb": 21439,
+      "timestamp": "2025-12-31T22:32:14.154340"
+    }
+  ],
+  "last_updated": "2025-12-31T22:32:14.154454"
+}

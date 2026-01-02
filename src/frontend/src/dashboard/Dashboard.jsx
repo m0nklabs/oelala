@@ -3,7 +3,7 @@ import { RefreshCw, Download } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
-import QueuePanel from './QueuePanel'
+import QueueIndicator from './QueueIndicator'
 import { TOOL_IDS } from './nav'
 
 import TextToVideoTool from './tools/TextToVideoTool'
@@ -188,6 +188,20 @@ export default function Dashboard() {
         <div className="top-bar">
           <h1>{toolTitle}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Queue indicator with popup */}
+            <QueueIndicator 
+              refreshToken={queueRefreshToken}
+              onJobComplete={(job) => {
+                setHistoryRefreshToken((n) => n + 1)
+                if (job.output_video) {
+                  setOutput({
+                    kind: 'video',
+                    url: `${BACKEND_BASE}${job.output_video}`,
+                    backendUrl: `${BACKEND_BASE}${job.output_video}`,
+                  })
+                }
+              }}
+            />
             <button
               className="icon-btn"
               onClick={handleRestartBackend}
@@ -213,22 +227,6 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="workspace">
-            {/* Queue Panel - shows running and pending jobs */}
-            <QueuePanel 
-              refreshToken={queueRefreshToken}
-              onJobComplete={(job) => {
-                // When a job completes, refresh history and optionally show output
-                setHistoryRefreshToken((n) => n + 1)
-                if (job.output_video) {
-                  setOutput({
-                    kind: 'video',
-                    url: `${BACKEND_BASE}${job.output_video}`,
-                    backendUrl: `${BACKEND_BASE}${job.output_video}`,
-                  })
-                }
-              }}
-            />
-            
             <section className="controls-panel">
               <div className="panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>

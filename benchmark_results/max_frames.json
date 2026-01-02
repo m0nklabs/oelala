@@ -1,0 +1,23 @@
+{
+  "gpu_allocation": "cuda:0,12gb;cuda:1,16gb",
+  "resolution": "720x400",
+  "max_working_frames": 241,
+  "max_video_seconds": 15.1,
+  "oom_at_frames": null,
+  "results": [
+    {
+      "width": 720,
+      "height": 400,
+      "frames": 241,
+      "video_seconds": 15.1,
+      "description": "241 frames (~15s video)",
+      "status": "success",
+      "time_sec": 624.8,
+      "gpu0_peak_mb": 6695,
+      "gpu1_peak_mb": 15834,
+      "total_vram_mb": 22529,
+      "timestamp": "2026-01-01T00:04:39.282510"
+    }
+  ],
+  "last_updated": "2026-01-01T00:04:39.282665"
+}

@@ -1,0 +1,3 @@
+timestamp,gpu0_mem_mb,gpu0_util,gpu1_mem_mb,gpu1_util,ram_mb,cpu_load
+1767204028.8152027,113,0,570,0,53970,4.98
+1767204029.3992987,113,0,570,0,53993,4.98
