@@ -1,32 +1,79 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { Terminal, X, Maximize2, Minimize2 } from 'lucide-react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { Terminal, X, Maximize2, Minimize2, Wifi, WifiOff } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
+
+// Convert HTTP URL to WebSocket URL
+const getWsUrl = () => {
+  const url = new URL(BACKEND_BASE)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${url.origin}/ws/logs`
+}
 
 export default function LogViewer() {
   const [logs, setLogs] = useState([])
   const [isOpen, setIsOpen] = useState(true)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
   const bottomRef = useRef(null)
+  const wsRef = useRef(null)
+  const reconnectTimeoutRef = useRef(null)
 
-  useEffect(() => {
-    if (!isOpen) return
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return
 
-    const fetchLogs = async () => {
+    const ws = new WebSocket(getWsUrl())
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      setIsConnected(true)
+      console.log('📡 Log WebSocket connected')
+    }
+
+    ws.onmessage = (event) => {
       try {
-        const res = await fetch(`${BACKEND_BASE}/logs`)
-        if (res.ok) {
-          const data = await res.json()
-          setLogs(data)
-        }
+        const log = JSON.parse(event.data)
+        setLogs(prev => {
+          const newLogs = [...prev, log]
+          // Keep last 500 logs to prevent memory bloat
+          return newLogs.slice(-500)
+        })
       } catch (e) {
-        console.error("Failed to fetch logs", e)
+        console.error('Failed to parse log', e)
       }
     }
 
-    fetchLogs()
-    const interval = setInterval(fetchLogs, 3000)  // Poll every 3s instead of 1s
-    return () => clearInterval(interval)
+    ws.onclose = () => {
+      setIsConnected(false)
+      console.log('📡 Log WebSocket disconnected')
+      // Reconnect after 3 seconds
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (isOpen) connect()
+      }, 3000)
+    }
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error', err)
+      ws.close()
+    }
   }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen) {
+      connect()
+    } else {
+      wsRef.current?.close()
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+    }
+
+    return () => {
+      wsRef.current?.close()
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+    }
+  }, [isOpen, connect])
 
   useEffect(() => {
     if (bottomRef.current) {
@@ -89,6 +136,11 @@ export default function LogViewer() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: '#a3a3a3' }}>
           <Terminal size={14} />
           <span>Server Logs</span>
+          {isConnected ? (
+            <Wifi size={12} color="#22c55e" title="Connected" />
+          ) : (
+            <WifiOff size={12} color="#ef4444" title="Disconnected" />
+          )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button 
@@ -117,7 +169,7 @@ export default function LogViewer() {
       }}>
         {logs.map((log, i) => (
           <div key={i} style={{ marginBottom: '4px', display: 'flex', gap: '8px' }}>
-            <span style={{ color: '#525252', flexShrink: 0 }}>{log.timestamp.split('T')[1].split('.')[0]}</span>
+            <span style={{ color: '#525252', flexShrink: 0 }}>{log.timestamp?.split('T')[1]?.split('.')[0] || ''}</span>
             <span style={{ 
               color: log.level === 'ERROR' ? '#ef4444' : 
                      log.level === 'WARNING' ? '#eab308' : '#a3a3a3' 

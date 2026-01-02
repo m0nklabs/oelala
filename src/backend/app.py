@@ -10,7 +10,7 @@ import uvicorn
 import threading
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -80,6 +80,9 @@ logger = logging.getLogger(__name__)
 log_buffer = deque(maxlen=1000) # Increased buffer size for shell output
 progress_store = {}  # job_id -> {progress, status, message, updated_at}
 ticker_store = {}    # job_id -> threading.Event to stop ticker
+
+# WebSocket connections for live log streaming
+log_subscribers: set[WebSocket] = set()
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -188,15 +191,36 @@ def inject_png_workflow_metadata(image_path: str, workflow: dict, prompt_params:
         return False
 
 
+async def broadcast_log(log_entry: dict):
+    """Broadcast a log entry to all WebSocket subscribers"""
+    if not log_subscribers:
+        return
+    message = json.dumps(log_entry)
+    disconnected = set()
+    for ws in log_subscribers:
+        try:
+            await ws.send_text(message)
+        except Exception:
+            disconnected.add(ws)
+    log_subscribers.difference_update(disconnected)
+
+
 class BufferHandler(logging.Handler):
     def emit(self, record):
         try:
             msg = self.format(record)
-            log_buffer.append({
+            log_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "level": record.levelname,
                 "message": msg
-            })
+            }
+            log_buffer.append(log_entry)
+            # Queue broadcast to WebSocket subscribers
+            if log_subscribers:
+                try:
+                    asyncio.get_event_loop().create_task(broadcast_log(log_entry))
+                except RuntimeError:
+                    pass  # No event loop available (startup phase)
         except Exception:
             self.handleError(record)
 
@@ -219,11 +243,18 @@ class StreamToBuffer:
                 # Clean up tqdm's carriage returns for the web view
                 clean_msg = message.replace('\r', '').strip()
                 if clean_msg:
-                    log_buffer.append({
+                    log_entry = {
                         "timestamp": datetime.now().isoformat(),
                         "level": self.level,
                         "message": clean_msg
-                    })
+                    }
+                    log_buffer.append(log_entry)
+                    # Broadcast to WebSocket subscribers
+                    if log_subscribers:
+                        try:
+                            asyncio.get_event_loop().create_task(broadcast_log(log_entry))
+                        except RuntimeError:
+                            pass
         except Exception:
             # If writing to buffer fails, don't crash the app
             pass
@@ -307,6 +338,28 @@ async def get_logs():
     return list(log_buffer)
 
 
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket):
+    """WebSocket endpoint for streaming server logs"""
+    await websocket.accept()
+    log_subscribers.add(websocket)
+    logger.info(f"📡 Log WebSocket connected (total: {len(log_subscribers)})")
+    try:
+        # Send recent logs on connect
+        for log_entry in list(log_buffer)[-50:]:  # Last 50 logs
+            await websocket.send_text(json.dumps(log_entry))
+        # Keep connection alive
+        while True:
+            try:
+                # Wait for pings/close from client
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+    finally:
+        log_subscribers.discard(websocket)
+        logger.info(f"📡 Log WebSocket disconnected (remaining: {len(log_subscribers)})")
+
+
 @app.get("/progress/{job_id}")
 async def get_progress(job_id: str):
     data = progress_store.get(job_id, None)
@@ -340,7 +393,7 @@ async def startup_event():
             logger.error(f"❌ Error initializing generator: {e}")
             logger.info("💡 The model will be loaded on first use instead")
     else:
-        logger.info("ℹ️ Wan2VideoGenerator not available (using ComfyUI backend instead)")
+        logger.info("ℹ️ ComfyUI backend active - GPU generators disabled (set OELALA_LOAD_GPU_GENERATORS=1 to enable)")
 
 @app.get("/")
 async def root():
