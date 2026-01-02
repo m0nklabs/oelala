@@ -129,6 +129,7 @@ def inject_png_workflow_metadata(image_path: str, workflow: dict, prompt_params:
     """
     Inject ComfyUI-compatible workflow metadata into a PNG file.
     This allows ComfyUI to read the workflow when opening the image.
+    Preserves existing T2I prompt metadata if present.
     
     Args:
         image_path: Path to the PNG file
@@ -141,6 +142,26 @@ def inject_png_workflow_metadata(image_path: str, workflow: dict, prompt_params:
     try:
         img = Image.open(image_path)
         
+        # Check for existing metadata (e.g., T2I prompt from original image)
+        existing_info = img.info if hasattr(img, 'info') else {}
+        
+        # Try to extract original T2I prompt from existing workflow
+        original_t2i_prompt = None
+        if 'prompt' in existing_info:
+            try:
+                existing_wf = json.loads(existing_info['prompt'])
+                for node_id, node in existing_wf.items():
+                    if isinstance(node, dict):
+                        inputs = node.get('inputs', {})
+                        # CLIPTextEncode has long T2I prompts
+                        if 'text' in inputs and isinstance(inputs['text'], str):
+                            text = inputs['text']
+                            if len(text) > 50:  # Long prompts are likely T2I
+                                original_t2i_prompt = text
+                                break
+            except json.JSONDecodeError:
+                pass
+        
         # Create PNG metadata
         metadata = PngInfo()
         
@@ -149,6 +170,13 @@ def inject_png_workflow_metadata(image_path: str, workflow: dict, prompt_params:
         
         # Add extra info for reference
         metadata.add_text("workflow", json.dumps(workflow))  # Some versions look for this
+        
+        # Preserve original T2I prompt if we found one
+        if original_t2i_prompt:
+            prompt_params = dict(prompt_params)  # Don't modify original
+            prompt_params['original_t2i_prompt'] = original_t2i_prompt
+            logger.info(f"📝 Preserved original T2I prompt ({len(original_t2i_prompt)} chars)")
+        
         metadata.add_text("oelala_params", json.dumps(prompt_params))
         
         # Save with metadata
@@ -312,7 +340,7 @@ async def startup_event():
             logger.error(f"❌ Error initializing generator: {e}")
             logger.info("💡 The model will be loaded on first use instead")
     else:
-        logger.error("❌ Wan2VideoGenerator not available")
+        logger.info("ℹ️ Wan2VideoGenerator not available (using ComfyUI backend instead)")
 
 @app.get("/")
 async def root():
@@ -331,8 +359,15 @@ async def root():
     }
 
 @app.get("/list-comfyui-media")
-async def list_comfyui_media(type: str = "all", grouped: bool = False, include_metadata: bool = False):
-    """List media files from ComfyUI output directory"""
+async def list_comfyui_media(type: str = "all", grouped: bool = False, include_metadata: bool = False, hide_start_images: bool = True):
+    """List media files from ComfyUI output directory
+    
+    Args:
+        type: Filter by media type ('all', 'video', 'image')
+        grouped: Group videos with source images (not implemented yet)
+        include_metadata: Include PNG metadata in response
+        hide_start_images: Hide images that are start frames for videos (default True)
+    """
     comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
     
     if not comfyui_output.exists():
@@ -342,35 +377,57 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
     video_count = 0
     image_count = 0
     
-    # Collect all media files
+    # First pass: collect all files and extract timestamps from videos
+    video_timestamps = set()
+    all_files = []
+    
     for file_path in comfyui_output.iterdir():
         if not file_path.is_file():
             continue
-            
         ext = file_path.suffix.lower()
-        media_type = None
-        
         if ext in ['.mp4', '.webm', '.mov', '.avi']:
-            media_type = 'video'
-            video_count += 1
+            # Extract timestamp from video filename (e.g., oelala_20260102_075057)
+            import re
+            match = re.search(r'(\d{8}_\d{6})', file_path.name)
+            if match:
+                video_timestamps.add(match.group(1))
+            all_files.append((file_path, 'video'))
         elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
-            media_type = 'image'
-            image_count += 1
+            all_files.append((file_path, 'image'))
+    
+    # Second pass: process files and mark start images
+    for file_path, media_type in all_files:
+        ext = file_path.suffix.lower()
+        
+        if media_type == 'video':
+            video_count += 1
         else:
-            continue
+            image_count += 1
         
         # Filter by type if requested
         if type != 'all' and media_type != type:
             continue
+        
+        # Check if this image is a start image for a video
+        is_start_image = False
+        if media_type == 'image' and hide_start_images:
+            import re
+            match = re.search(r'(\d{8}_\d{6})', file_path.name)
+            if match and match.group(1) in video_timestamps:
+                is_start_image = True
+                # Skip this image if hiding start images
+                continue
         
         stat = file_path.stat()
         item = {
             "filename": file_path.name,
             "type": media_type,
             "size": stat.st_size,
+            "mtime": stat.st_mtime,
             "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
             "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            "url": f"/comfyui-output/{file_path.name}"
+            "url": f"/comfyui-output/{file_path.name}",
+            "is_start_image": is_start_image,
         }
         
         media.append(item)
@@ -380,6 +437,8 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
     
     return {
         "media": media,
+        "videos": video_count,
+        "images": image_count,
         "stats": {
             "videos": video_count,
             "images": image_count
@@ -436,24 +495,35 @@ async def list_loras():
     loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
     
     if not loras_dir.exists():
-        return {"loras": [], "high_noise": [], "low_noise": [], "general": []}
+        return {"loras": [], "high_noise": [], "low_noise": [], "general": [], "by_category": {}}
     
     all_loras = []
     high_noise = []
     low_noise = []
     general = []
+    by_category = {}  # Group by subdirectory
     
     for lora_path in loras_dir.rglob("*.safetensors"):
         # Get relative path from loras folder
         rel_path = str(lora_path.relative_to(loras_dir))
         name = lora_path.stem
         
+        # Get category (subdirectory name, or "root" for top-level files)
+        parent = lora_path.parent.relative_to(loras_dir)
+        category = str(parent) if str(parent) != "." else "root"
+        
         lora_info = {
             "path": rel_path,
             "name": name,
+            "category": category,
             "size_mb": round(lora_path.stat().st_size / (1024 * 1024), 1)
         }
         all_loras.append(lora_info)
+        
+        # Group by category
+        if category not in by_category:
+            by_category[category] = []
+        by_category[category].append(lora_info)
         
         # Categorize by noise type
         lower_name = name.lower()
@@ -472,21 +542,236 @@ async def list_loras():
     low_noise.sort(key=lambda x: x["name"].lower())
     general.sort(key=lambda x: x["name"].lower())
     
+    # Sort each category
+    for cat in by_category:
+        by_category[cat].sort(key=lambda x: x["name"].lower())
+    
     return {
         "loras": all_loras,
         "high_noise": high_noise,
         "low_noise": low_noise,
         "general": general,
+        "by_category": by_category,
         "count": len(all_loras)
     }
+
+
+@app.get("/unet-models")
+async def list_unet_models():
+    """
+    List available GGUF unet models for Wan2.2 I2V.
+    Returns pairs of high/low noise models.
+    """
+    unet_dir = Path("/home/flip/oelala/ComfyUI/models/unet")
+    
+    if not unet_dir.exists():
+        return {"models": [], "pairs": []}
+    
+    all_models = []
+    high_noise = []
+    low_noise = []
+    
+    for model_path in unet_dir.rglob("*.gguf"):
+        rel_path = str(model_path.relative_to(unet_dir))
+        name = model_path.stem
+        
+        model_info = {
+            "path": rel_path,
+            "name": name,
+            "size_gb": round(model_path.stat().st_size / (1024 * 1024 * 1024), 2)
+        }
+        all_models.append(model_info)
+        
+        lower_name = name.lower()
+        lower_path = rel_path.lower()
+        
+        if "high" in lower_name or "high" in lower_path:
+            high_noise.append(model_info)
+        elif "low" in lower_name or "low" in lower_path:
+            low_noise.append(model_info)
+    
+    # Sort
+    all_models.sort(key=lambda x: x["name"].lower())
+    high_noise.sort(key=lambda x: x["name"].lower())
+    low_noise.sort(key=lambda x: x["name"].lower())
+    
+    # Try to match pairs by similar names
+    pairs = []
+    for h in high_noise:
+        h_base = h["name"].lower().replace("high", "").replace("_h_", "_").replace("-h-", "-")
+        for l in low_noise:
+            l_base = l["name"].lower().replace("low", "").replace("_l_", "_").replace("-l-", "-")
+            # Check similarity
+            if h_base == l_base or h_base.replace("noise", "") == l_base.replace("noise", ""):
+                pairs.append({
+                    "name": h["name"].replace("high", "").replace("High", "").replace("_H_", "_").replace("HIGH", "").strip("_- ") or h["name"],
+                    "high": h,
+                    "low": l
+                })
+                break
+    
+    return {
+        "models": all_models,
+        "high_noise": high_noise,
+        "low_noise": low_noise,
+        "pairs": pairs,
+        "count": len(all_models)
+    }
+
+
+@app.post("/extract-metadata")
+async def extract_metadata(file: UploadFile = File(...)):
+    """
+    Extract workflow/prompt metadata from uploaded PNG/image files.
+    
+    Generated images from T2I or I2V have embedded metadata containing:
+    - prompt: The positive prompt used
+    - negative_prompt: The negative prompt
+    - workflow: The ComfyUI workflow used
+    - oelala_params: Additional generation parameters
+    
+    Returns extracted metadata or empty dict if none found.
+    """
+    import tempfile
+    
+    # Save uploaded file temporarily
+    suffix = Path(file.filename).suffix if file.filename else '.png'
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    metadata = {}
+    try:
+        # Try to read PNG metadata
+        img = Image.open(tmp_path)
+        
+        # Check for various metadata formats
+        if hasattr(img, 'info'):
+            info = img.info
+            
+            # Oelala params (our format)
+            if 'oelala_params' in info:
+                try:
+                    params = json.loads(info['oelala_params'])
+                    metadata['prompt'] = params.get('prompt', '')
+                    metadata['negative_prompt'] = params.get('negative_prompt', '')
+                    metadata['workflow'] = params.get('workflow', '')
+                    metadata['resolution'] = params.get('resolution', '')
+                    metadata['steps'] = params.get('steps', '')
+                    metadata['cfg'] = params.get('cfg', '')
+                    metadata['seed'] = params.get('seed', '')
+                    metadata['source'] = 'oelala'
+                    # Check for preserved original T2I prompt (longer, more descriptive)
+                    if params.get('original_t2i_prompt'):
+                        metadata['prompt'] = params['original_t2i_prompt']
+                        metadata['source'] = 'oelala_t2i'
+                    # Store oelala prompt separately so we can compare later
+                    metadata['oelala_prompt'] = params.get('prompt', '')
+                except json.JSONDecodeError:
+                    pass
+            
+            # ComfyUI workflow format - extract longer prompts from workflow nodes
+            if 'prompt' in info:
+                try:
+                    workflow = json.loads(info['prompt'])
+                    # Extract prompt from various node types
+                    for node_id, node in workflow.items():
+                        if isinstance(node, dict):
+                            inputs = node.get('inputs', {})
+                            class_type = node.get('class_type', '')
+                            
+                            # WanVideo text encoder (our I2V workflow) - skip short motion prompts
+                            if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
+                                if len(inputs['positive_prompt']) > 50 and not metadata.get('prompt'):
+                                    metadata['prompt'] = inputs['positive_prompt']
+                                    metadata['source'] = 'comfyui_wan'
+                            if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
+                                if len(inputs['negative_prompt']) > 10 and not metadata.get('negative_prompt'):
+                                    metadata['negative_prompt'] = inputs['negative_prompt']
+                            
+                            # CLIPTextEncode (standard ComfyUI T2I) - prefer longer prompts
+                            if 'text' in inputs and isinstance(inputs['text'], str):
+                                text = inputs['text']
+                                if len(text) > 20:
+                                    # Check if it's a positive or negative prompt
+                                    if 'negative' in class_type.lower():
+                                        if not metadata.get('negative_prompt') or len(text) > len(metadata.get('negative_prompt', '')):
+                                            metadata['negative_prompt'] = text
+                                    else:
+                                        # Prefer longer prompts (T2I prompts are usually longer than I2V motion prompts)
+                                        current = metadata.get('prompt', '')
+                                        if len(text) > len(current):
+                                            metadata['prompt'] = text
+                                            metadata['source'] = 'comfyui'
+                except json.JSONDecodeError:
+                    pass
+            
+            # A1111/Invoke AI format (parameters in 'parameters' key)
+            if 'parameters' in info and not metadata.get('prompt'):
+                params_text = info['parameters']
+                # Format: "prompt text\nNegative prompt: negative text\nSteps: X, ..."
+                lines = params_text.split('\n')
+                if lines:
+                    # First line(s) until "Negative prompt:" is the positive prompt
+                    positive_lines = []
+                    negative_started = False
+                    for line in lines:
+                        if line.startswith('Negative prompt:'):
+                            negative_started = True
+                            neg = line.replace('Negative prompt:', '').strip()
+                            if neg:
+                                metadata['negative_prompt'] = neg
+                        elif line.startswith('Steps:'):
+                            # Parse generation params
+                            parts = line.split(',')
+                            for part in parts:
+                                if ':' in part:
+                                    k, v = part.split(':', 1)
+                                    k = k.strip().lower().replace(' ', '_')
+                                    v = v.strip()
+                                    if k in ['steps', 'cfg', 'seed', 'sampler']:
+                                        metadata[k] = v
+                        elif not negative_started:
+                            positive_lines.append(line)
+                    
+                    if positive_lines:
+                        metadata['prompt'] = '\n'.join(positive_lines).strip()
+                    metadata['source'] = 'a1111'
+        
+        logger.info(f"📋 Extracted metadata from {file.filename}: {list(metadata.keys())}")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to extract metadata from {file.filename}: {e}")
+    finally:
+        # Cleanup temp file
+        try:
+            Path(tmp_path).unlink()
+        except:
+            pass
+    
+    return metadata
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # Check ComfyUI availability (our primary backend now)
+    comfyui_available = False
+    if get_comfyui_client:
+        try:
+            client = get_comfyui_client()
+            comfyui_available = client.is_available() if client else False
+        except:
+            pass
+    
+    # We're healthy if ComfyUI is available OR legacy generators are loaded
+    is_healthy = comfyui_available or generator is not None or image_generator is not None
+    
     return {
-        "status": "healthy" if generator or image_generator else "unhealthy",
+        "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
+        "comfyui_available": comfyui_available,
         "model_loaded": generator is not None,
         "image_model_loaded": image_generator is not None,
         "upload_dir": str(UPLOAD_DIR),
@@ -818,6 +1103,8 @@ async def generate_wan22_comfyui(
     steps: int = Form(6, description="Sampling steps"),
     cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
+    unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
+    unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
     lora_high_noise: str = Form("", description="LoRA for high noise model (path relative to loras folder)"),
     lora_low_noise: str = Form("", description="LoRA for low noise model (path relative to loras folder)"),
     lora_strength: float = Form(1.0, description="LoRA strength (0.0 - 2.0)")
@@ -906,6 +1193,8 @@ async def generate_wan22_comfyui(
         "cfg": cfg,
         "seed": seed,
         "timestamp": timestamp,
+        "unet_high_noise": unet_high_noise,
+        "unet_low_noise": unet_low_noise,
         "lora_high_noise": lora_high_noise or None,
         "lora_low_noise": lora_low_noise or None,
         "lora_strength": lora_strength,
@@ -917,6 +1206,7 @@ async def generate_wan22_comfyui(
         logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
         logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
         logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
+        logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
         if lora_high_noise or lora_low_noise:
             logger.info(f"   🎨 LoRA: H={lora_high_noise or 'none'}, L={lora_low_noise or 'none'} @ {lora_strength}")
         logger.info(f"   📝 Prompt: {prompt[:100]}...")
@@ -937,6 +1227,8 @@ async def generate_wan22_comfyui(
                 cfg=cfg,
                 seed=seed,
                 output_prefix=output_prefix,
+                unet_high_noise=unet_high_noise,
+                unet_low_noise=unet_low_noise,
                 lora_high_noise=lora_high_noise if lora_high_noise else None,
                 lora_low_noise=lora_low_noise if lora_low_noise else None,
                 lora_strength=lora_strength

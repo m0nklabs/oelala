@@ -113,11 +113,13 @@ WantedBy=default.target
 
 | Endpoint                     | Method | Description                        |
 |------------------------------|--------|------------------------------------|
-| \`/health\`                    | GET    | Health check                       |
-| \`/loras\`                     | GET    | List available LoRA models         |
-| \`/generate-wan22-comfyui\`    | POST   | Generate video via ComfyUI         |
-| \`/videos/{filename}\`         | GET    | Serve generated videos             |
-| \`/list-videos\`               | GET    | List all generated videos          |
+| `/health`                    | GET    | Health check (ComfyUI + legacy)    |
+| `/loras`                     | GET    | List available LoRA models         |
+| `/unet-models`               | GET    | List GGUF unet models with pairs   |
+| `/extract-metadata`          | POST   | Extract prompt from PNG metadata   |
+| `/wan22/image-to-video`      | POST   | Generate video via ComfyUI         |
+| `/list-comfyui-media`        | GET    | List output media (hide start imgs)|
+| `/comfyui-output/{filename}` | GET    | Serve generated videos/images      |
 
 ### LoRA Endpoint Response
 
@@ -126,9 +128,28 @@ WantedBy=default.target
   "loras": [...],
   "high_noise": [...],
   "low_noise": [...],
-  "general": [...]
+  "general": [...],
+  "by_category": { "subfolder": [...] }
 }
 ```
+
+### Unet Models Endpoint Response
+
+```json
+{
+  "models": [...],
+  "high_noise": [...],
+  "low_noise": [...],
+  "pairs": [{ "name": "...", "high": {...}, "low": {...} }]
+}
+```
+
+### Metadata Extraction
+
+The `/extract-metadata` endpoint extracts prompts from uploaded images:
+- **oelala_params**: Our custom format with `original_t2i_prompt` preservation
+- **ComfyUI workflow**: CLIPTextEncode nodes, WanVideo positive_prompt
+- **A1111 format**: Parameters text block parsing
 
 ---
 
@@ -198,13 +219,38 @@ ComfyUI/models/
 - Main I2V generation interface
 - Image upload (drag & drop, URL, creations)
 - Parameter controls (resolution, duration, fps, aspect ratio)
-- Advanced settings (steps, cfg, seed, LoRA)
+- Prompt persistence via localStorage
+- Metadata extraction from uploaded images (auto-fill prompts)
 
-### LoRA Selection UI
-- Collapsible panel in Advanced Settings
-- Separate dropdowns for high/low noise models
-- Strength slider (0 - 2.0)
-- "Active" badge when LoRA selected
+**File**: `src/frontend/src/dashboard/tools/MyMediaTool.jsx`
+- Media gallery with grid view
+- Favorites system (localStorage)
+- Sort/filter controls
+- Start image hiding (source images for videos)
+- Multi-select with keyboard shortcuts
+
+### Model Selection UI
+
+**Unet Models:**
+- Collapsible panel in Model Selection
+- Model Pair dropdown (recommended) - auto-selects matching high/low
+- Advanced: separate high/low noise selectors
+
+**LoRA Models:**
+- Collapsible panel in Sampling Settings
+- Category-grouped dropdowns (by subfolder)
+- Separate high/low noise selectors
+- Strength slider (0 - 2.0, default 1.5)
+
+### Prompt System
+
+**Positive Prompt:**
+- Persisted to `localStorage.getItem('oelala_last_prompt')`
+- Auto-filled from uploaded image metadata
+
+**Negative Prompt:**
+- Collapsible section with default text
+- Preserved in generated video metadata
 
 ---
 

@@ -74,6 +74,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [sortBy, setSortBy] = useState('date') // 'date', 'name', 'size', 'favorites'
   const [sortOrder, setSortOrder] = useState('desc') // 'asc', 'desc'
   const [filterBy, setFilterBy] = useState('all') // 'all', 'favorites', 'non-favorites'
+  const [hideStartImages, setHideStartImages] = useState(true)  // Hide start images by default
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
   
   // Compute gridSize from profile
@@ -175,7 +176,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     setError('')
     try {
       // Use grouped mode to pair videos with source images
-      const res = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${filter}&grouped=true&include_metadata=true`)
+      const res = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${filter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
       if (!res.ok) throw new Error('Failed to fetch media')
       const data = await res.json()
       setMediaList(data.media || [])
@@ -186,7 +187,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, hideStartImages])
 
   useEffect(() => {
     fetchMedia()
@@ -750,6 +751,23 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               <option value="favorites">❤️ Favorites</option>
               <option value="non-favorites">🤍 Non-favorites</option>
             </select>
+            
+            {/* Toggle to show/hide start images */}
+            {(filter === 'all' || filter === 'image') && (
+              <button
+                className="sort-btn"
+                onClick={() => setHideStartImages(prev => !prev)}
+                title={hideStartImages ? 'Click to show video source images' : 'Hiding video source images'}
+                style={{ 
+                  background: !hideStartImages ? 'var(--accent-color, #a855f7)' : undefined,
+                  color: !hideStartImages ? '#fff' : undefined,
+                  fontSize: '0.75rem',
+                  padding: '4px 8px'
+                }}
+              >
+                📸{hideStartImages ? '' : '✓'}
+              </button>
+            )}
           </div>
 
           {/* Divider */}

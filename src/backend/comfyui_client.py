@@ -1038,6 +1038,8 @@ class ComfyUIClient:
         scheduler: str = "normal",
         aspect_ratio: str = "1:1",
         long_edge: int = 480,
+        unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+        unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
         lora_high_noise: Optional[str] = None,
         lora_low_noise: Optional[str] = None,
         lora_strength: float = 1.0,
@@ -1054,6 +1056,8 @@ class ComfyUIClient:
             scheduler: "normal", "simple", "karras", etc.
             aspect_ratio: "1:1", "9:16", "16:9", etc. for AspectRatioResolution_Warper
             long_edge: Resolution for the long edge (480, 720, 1080)
+            unet_high_noise: GGUF model for high noise pass
+            unet_low_noise: GGUF model for low noise pass
             lora_high_noise: LoRA path for high noise model (None = disabled)
             lora_low_noise: LoRA path for low noise model (None = disabled)
             lora_strength: LoRA strength (0.0 - 2.0)
@@ -1064,6 +1068,11 @@ class ComfyUIClient:
         k = round((num_frames - 1) / 4)
         k = max(1, k)
         num_frames = 4 * k + 1
+
+        # Node 1 & 2: Unet Loaders - set model names
+        workflow["1"]["inputs"]["unet_name"] = unet_high_noise
+        workflow["2"]["inputs"]["unet_name"] = unet_low_noise
+        logger.info(f"🔧 Unet High: {unet_high_noise}, Unet Low: {unet_low_noise}")
 
         # Node 11: LoadImage
         workflow["11"]["inputs"]["image"] = image_name
@@ -1483,6 +1492,8 @@ class ComfyUIClient:
         seed: int = -1,
         output_prefix: str = "oelala_distorch2",
         progress_callback=None,
+        unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+        unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
         lora_high_noise: Optional[str] = None,
         lora_low_noise: Optional[str] = None,
         lora_strength: float = 1.0,
@@ -1513,6 +1524,8 @@ class ComfyUIClient:
             cfg=cfg,
             seed=seed,
             output_prefix=output_prefix,
+            unet_high_noise=unet_high_noise,
+            unet_low_noise=unet_low_noise,
             lora_high_noise=lora_high_noise,
             lora_low_noise=lora_low_noise,
             lora_strength=lora_strength,
@@ -1536,6 +1549,8 @@ class ComfyUIClient:
         high_noise_steps: int = 3,
         sampler_name: str = "uni_pc",
         scheduler: str = "normal",
+        unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+        unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
         lora_high_noise: Optional[str] = None,
         lora_low_noise: Optional[str] = None,
         lora_strength: float = 1.0,
@@ -1549,6 +1564,8 @@ class ComfyUIClient:
             high_noise_steps: Steps where high noise model switches to low noise (default 3)
             sampler_name: "uni_pc", "euler", "dpmpp_2m", etc.
             scheduler: "normal", "simple", "karras"
+            unet_high_noise: GGUF model for high noise pass
+            unet_low_noise: GGUF model for low noise pass
             lora_high_noise: LoRA path for high noise model (None = disabled)
             lora_low_noise: LoRA path for low noise model (None = disabled)
             lora_strength: LoRA strength (0.0 - 2.0)
@@ -1589,6 +1606,8 @@ class ComfyUIClient:
             scheduler=scheduler,
             aspect_ratio=aspect_ratio,
             long_edge=long_edge,
+            unet_high_noise=unet_high_noise,
+            unet_low_noise=unet_low_noise,
             lora_high_noise=lora_high_noise,
             lora_low_noise=lora_low_noise,
             lora_strength=lora_strength,

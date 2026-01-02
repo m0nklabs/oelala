@@ -55,7 +55,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [previewUrl, setPreviewUrl] = useState('')
   const [uploadTab, setUploadTab] = useState('file') // 'file', 'url', 'creations'
 
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(() => {
+    // Load last used prompt from localStorage
+    try {
+      return localStorage.getItem('oelala_last_prompt') || ''
+    } catch { return '' }
+  })
+  const [negativePrompt, setNegativePrompt] = useState('low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches')
+  const [showNegativePrompt, setShowNegativePrompt] = useState(false)
   const [duration, setDuration] = useState(6) // seconds, 3-15 range
   const [resolution, setResolution] = useState('480p')
   const [modelMode, setModelMode] = useState('wan2.2')  // default to Wan2.2 for quality
@@ -66,14 +73,20 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [steps, setSteps] = useState(6)
   const [cfg, setCfg] = useState(1.0)
   const [seed, setSeed] = useState(-1)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)  // Sampling settings collapsed by default
   
   // LoRA state
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
   const [loraHighNoise, setLoraHighNoise] = useState('')
   const [loraLowNoise, setLoraLowNoise] = useState('')
-  const [loraStrength, setLoraStrength] = useState(1.0)
+  const [loraStrength, setLoraStrength] = useState(1.5)
   const [showLoraPanel, setShowLoraPanel] = useState(false)
+  
+  // Unet model state
+  const [availableUnets, setAvailableUnets] = useState({ high_noise: [], low_noise: [], pairs: [] })
+  const [unetHighNoise, setUnetHighNoise] = useState('wan2.2_i2v_high_noise_14B_Q6_K.gguf')
+  const [unetLowNoise, setUnetLowNoise] = useState('wan2.2_i2v_low_noise_14B_Q6_K.gguf')
+  const [showUnetPanel, setShowUnetPanel] = useState(false)
   
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -99,6 +112,32 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     }
     fetchLoras()
   }, [])
+
+  // Fetch available unet models on mount
+  useEffect(() => {
+    const fetchUnets = async () => {
+      try {
+        const res = await fetch(`${BACKEND_BASE}/unet-models`)
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableUnets(data)
+          if (DEBUG) console.debug('🐛 loaded Unet models:', data.count)
+        }
+      } catch (e) {
+        console.error('Failed to fetch Unet models:', e)
+      }
+    }
+    fetchUnets()
+  }, [])
+
+  // Persist prompt to localStorage on change
+  useEffect(() => {
+    if (prompt) {
+      try {
+        localStorage.setItem('oelala_last_prompt', prompt)
+      } catch { /* ignore storage errors */ }
+    }
+  }, [prompt])
 
   // Expose current params to parent for JSON download
   useEffect(() => {
@@ -170,7 +209,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     }
   }, [uploadTab, file, onCreationsModeChange, selectCreation])
 
-  const onPickFile = (picked) => {
+  const onPickFile = async (picked) => {
     if (!picked) return
     setFile(picked)
     setError('')
@@ -178,6 +217,27 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
     const url = URL.createObjectURL(picked)
     setPreviewUrl(url)
+
+    // Try to extract metadata from uploaded file (T2I/I2V generated images have embedded prompts)
+    try {
+      const formData = new FormData()
+      formData.append('file', picked)
+      const res = await fetch(`${BACKEND_BASE}/extract-metadata`, { method: 'POST', body: formData })
+      if (res.ok) {
+        const meta = await res.json()
+        if (DEBUG) console.debug('🐛 extracted metadata:', meta)
+        // Auto-fill prompts from metadata if found
+        if (meta.prompt && !prompt) {
+          setPrompt(meta.prompt)
+        }
+        if (meta.negative_prompt && negativePrompt === 'low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches') {
+          setNegativePrompt(meta.negative_prompt)
+        }
+      }
+    } catch (e) {
+      // Metadata extraction is optional, don't fail the upload
+      if (DEBUG) console.debug('🐛 no metadata extracted:', e.message)
+    }
   }
 
   const clearFile = () => {
@@ -215,6 +275,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       formData.append('steps', String(steps))
       formData.append('cfg', String(cfg))
       formData.append('seed', String(seed))
+      // Unet parameters
+      if (unetHighNoise) formData.append('unet_high_noise', unetHighNoise)
+      if (unetLowNoise) formData.append('unet_low_noise', unetLowNoise)
       // LoRA parameters
       if (loraHighNoise) formData.append('lora_high_noise', loraHighNoise)
       if (loraLowNoise) formData.append('lora_low_noise', loraLowNoise)
@@ -271,14 +334,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       <div className="grok-card">
         <div className="grok-card-header">
           <div className="grok-card-title">Model Selection</div>
-          <button 
-            className="btn ghost sm" 
-            style={{ fontSize: '0.8rem' }}
-            onClick={() => setShowAdvanced(!showAdvanced)}
-          >
-            <Settings2 size={14} style={{ marginRight: '4px' }} /> 
-            {showAdvanced ? 'Hide' : 'Show'} Advanced
-          </button>
         </div>
         
         <div className="form-group">
@@ -335,6 +390,205 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               High-quality I2V with DisTorch2 + SageAttention (10GB VRAM)
             </div>
           </div>
+        </div>
+
+        {/* Unet Model Selection - Collapsible */}
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+          <div 
+            onClick={() => setShowUnetPanel(!showUnetPanel)}
+            style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '4px 0'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings2 size={16} />
+              <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Unet Model</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                ({unetHighNoise.replace('.gguf', '').replace('wan2.2_i2v_', '')})
+              </span>
+            </div>
+            <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showUnetPanel ? '▼' : '▶'}</span>
+          </div>
+          
+          {showUnetPanel && (
+            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Model Pair Selector - Easy mode */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Model Pair (recommended)
+                </label>
+                <select
+                  onChange={(e) => {
+                    const pair = availableUnets.pairs?.find(p => p.name === e.target.value)
+                    if (pair) {
+                      setUnetHighNoise(pair.high.path)
+                      setUnetLowNoise(pair.low.path)
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem'
+                  }}
+                  value={availableUnets.pairs?.find(p => p.high.path === unetHighNoise && p.low.path === unetLowNoise)?.name || ''}
+                >
+                  {availableUnets.pairs?.map((pair) => (
+                    <option key={pair.name} value={pair.name}>
+                      {pair.name} ({pair.high.size_gb}GB)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <details style={{ fontSize: '0.8rem' }}>
+                <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  ⚙️ Advanced: Select models separately
+                </summary>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
+                  {/* High Noise Model */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      High Noise Model (steps 0-3)
+                    </label>
+                    <select
+                      value={unetHighNoise}
+                      onChange={(e) => setUnetHighNoise(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      {availableUnets.high_noise?.map((model) => (
+                        <option key={model.path} value={model.path}>
+                          {model.name} ({model.size_gb}GB)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Low Noise Model */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      Low Noise Model (steps 3+)
+                    </label>
+                    <select
+                      value={unetLowNoise}
+                      onChange={(e) => setUnetLowNoise(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      {availableUnets.low_noise?.map((model) => (
+                        <option key={model.path} value={model.path}>
+                          {model.name} ({model.size_gb}GB)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Positive Prompt */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Positive Prompt <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.85rem' }}>(Describe the motion)</span></div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Type size={12} /></button>
+            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Sparkles size={12} /></button>
+          </div>
+        </div>
+        
+        <div style={{ position: 'relative' }}>
+          <textarea
+            className="form-textarea"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={4}
+            placeholder="Describe how you want the image to move or animate... (Optional for image-to-video)"
+            style={{ 
+              backgroundColor: '#0f0f0f', 
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              resize: 'vertical',
+              minHeight: '80px',
+              padding: '12px',
+              paddingBottom: '28px',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
+          />
+          <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+            {prompt.length}/2048
+          </div>
+        </div>
+
+        {/* Negative Prompt - Collapsible */}
+        <div style={{ marginTop: '12px' }}>
+          <div 
+            onClick={() => setShowNegativePrompt(!showNegativePrompt)}
+            style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '8px 0'
+            }}
+          >
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Negative Prompt
+            </span>
+            <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showNegativePrompt ? '▼' : '▶'}</span>
+          </div>
+          
+          {showNegativePrompt && (
+            <div style={{ position: 'relative' }}>
+              <textarea
+                className="form-textarea"
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                rows={3}
+                placeholder="Things to avoid in the generation..."
+                style={{ 
+                  backgroundColor: '#0f0f0f', 
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  resize: 'vertical',
+                  minHeight: '60px',
+                  padding: '12px',
+                  paddingBottom: '28px',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontSize: '0.85rem'
+                }}
+              />
+              <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                {negativePrompt.length}/2048
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -628,98 +882,112 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         )}
 
-        {/* Advanced Settings for Wan2.2 */}
-        {modelMode === 'wan2.2' && showAdvanced && (
+        {/* Advanced Settings for Wan2.2 - Always visible, collapsible */}
+        {modelMode === 'wan2.2' && (
           <div style={{ 
             backgroundColor: 'var(--bg-tertiary)', 
             padding: '16px', 
             borderRadius: '8px',
             marginTop: '8px'
           }}>
-            <div style={{ 
-              fontSize: '0.9rem', 
-              fontWeight: 600, 
-              marginBottom: '12px',
-              color: 'var(--text-primary)'
-            }}>
-              ⚙️ Wan2.2 Advanced Settings
+            <div 
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              style={{ 
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ 
+                fontSize: '0.9rem', 
+                fontWeight: 600, 
+                color: 'var(--text-primary)'
+              }}>
+                ⚙️ Sampling Settings
+              </div>
+              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
             </div>
             
-            {/* Steps */}
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <label className="grok-section-label">Sampling Steps</label>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
+            {showAdvanced && (
+              <div style={{ marginTop: '12px' }}>
+                {/* Steps */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Sampling Steps</label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="4"
+                    max="20"
+                    step="1"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    <span>4 (fast)</span>
+                    <span>6 (rec)</span>
+                    <span>20 (quality)</span>
+                  </div>
+                </div>
+                
+                {/* CFG */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">CFG Guidance</label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
+                  </div>
+                  <input
+                  type="range"
+                    min="1.0"
+                    max="10.0"
+                    step="0.5"
+                    value={cfg}
+                    onChange={(e) => setCfg(parseFloat(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    <span>1.0 (rec)</span>
+                    <span>5.0</span>
+                    <span>10.0</span>
+                  </div>
+                </div>
+                
+                {/* Seed */}
+                <div className="form-group">
+                  <label className="grok-section-label">Seed</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number"
+                      value={seed}
+                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
+                      placeholder="-1 for random"
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.9rem'
+                      }}
+                    />
+                    <button
+                      className="btn ghost sm"
+                      onClick={() => setSeed(-1)}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      Random
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    -1 = random seed each generation
+                  </div>
+                </div>
               </div>
-              <input
-                type="range"
-                min="4"
-                max="20"
-                step="1"
-                value={steps}
-                onChange={(e) => setSteps(parseInt(e.target.value, 10))}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                <span>4 (fast)</span>
-                <span>6 (rec)</span>
-                <span>20 (quality)</span>
-              </div>
-            </div>
-            
-            {/* CFG */}
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <label className="grok-section-label">CFG Guidance</label>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
-              </div>
-              <input
-                type="range"
-                min="1.0"
-                max="10.0"
-                step="0.5"
-                value={cfg}
-                onChange={(e) => setCfg(parseFloat(e.target.value))}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                <span>1.0 (rec)</span>
-                <span>5.0</span>
-                <span>10.0</span>
-              </div>
-            </div>
-            
-            {/* Seed */}
-            <div className="form-group">
-              <label className="grok-section-label">Seed</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  value={seed}
-                  onChange={(e) => setSeed(parseInt(e.target.value, 10))}
-                  placeholder="-1 for random"
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '6px',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.9rem'
-                  }}
-                />
-                <button
-                  className="btn ghost sm"
-                  onClick={() => setSeed(-1)}
-                  style={{ whiteSpace: 'nowrap' }}
-                >
-                  Random
-                </button>
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                -1 = random seed each generation
-              </div>
-            </div>
+            )}
 
             {/* LoRA Settings */}
             <div style={{ 
@@ -781,14 +1049,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                       }}
                     >
                       <option value="">None</option>
-                      {availableLoras.high_noise?.map((lora) => (
-                        <option key={lora} value={lora}>{lora.replace('.safetensors', '')}</option>
+                      {/* Group by category (subdirectory) */}
+                      {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
+                        <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
+                          {availableLoras.by_category[category].map((lora) => (
+                            <option key={lora.path} value={lora.path}>
+                              {lora.name} ({lora.size_mb}MB)
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
-                      <optgroup label="General LoRAs">
-                        {availableLoras.general?.map((lora) => (
-                          <option key={lora} value={lora}>{lora.replace('.safetensors', '')}</option>
-                        ))}
-                      </optgroup>
                     </select>
                   </div>
 
@@ -816,14 +1086,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                       }}
                     >
                       <option value="">None</option>
-                      {availableLoras.low_noise?.map((lora) => (
-                        <option key={lora} value={lora}>{lora.replace('.safetensors', '')}</option>
+                      {/* Group by category (subdirectory) */}
+                      {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
+                        <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
+                          {availableLoras.by_category[category].map((lora) => (
+                            <option key={lora.path} value={lora.path}>
+                              {lora.name} ({lora.size_mb}MB)
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
-                      <optgroup label="General LoRAs">
-                        {availableLoras.general?.map((lora) => (
-                          <option key={lora} value={lora}>{lora.replace('.safetensors', '')}</option>
-                        ))}
-                      </optgroup>
                     </select>
                   </div>
 
@@ -848,7 +1120,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                       <span>0</span>
-                      <span>1.0 (default)</span>
+                      <span>1.5 (default)</span>
                       <span>2.0</span>
                     </div>
                   </div>
@@ -926,41 +1198,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               <span className="aspect-label">{ratio.label}</span>
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* Describe Motion */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <div className="grok-card-title">Describe the Motion</div>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Type size={12} /></button>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Sparkles size={12} /></button>
-          </div>
-        </div>
-        
-        <div style={{ position: 'relative' }}>
-          <textarea
-            className="form-textarea"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={6}
-            placeholder="Describe how you want the image to move or animate... (Optional for image-to-video)"
-            style={{ 
-              backgroundColor: '#0f0f0f', 
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              resize: 'vertical',
-              minHeight: '120px',
-              padding: '12px',
-              paddingBottom: '28px',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}
-          />
-          <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            {prompt.length}/2048
-          </div>
         </div>
       </div>
 

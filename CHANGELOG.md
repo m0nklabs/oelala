@@ -1,6 +1,30 @@
 2026-01-02
 Agent: Claude Opus 4.5
 AgentTag: CLAU
+ModelTag: UIUX
+Details:
+- Added Unet model selector with model pairs (auto high/low matching)
+- New /unet-models endpoint returning GGUF models grouped by noise type
+- Prompt persistence via localStorage (last used prompt remembered)
+- Metadata extraction from uploads (/extract-metadata endpoint)
+- Auto-fills prompts from T2I generated images
+- Preserves original T2I prompt through I2V pipeline (original_t2i_prompt)
+- Start image hiding in My Media gallery (hides source images for videos)
+- Health check now includes ComfyUI availability (not just legacy generators)
+- UI restructure: collapsible Sampling Settings, Unet Model panel
+- LoRA grouped by category/subfolder in dropdown
+- Negative prompt section with collapsible panel and default text
+- Positive prompt moved above Upload Photo with "(Describe the motion)"
+FilesChanged:
+- src/backend/app.py (/unet-models, /extract-metadata, hide_start_images, health)
+- src/backend/comfyui_client.py (unet params in workflow builder)
+- src/frontend/src/dashboard/tools/ImageToVideoTool.jsx (unet UI, prompts, localStorage)
+- src/frontend/src/dashboard/tools/MyMediaTool.jsx (hideStartImages toggle)
+- docs/ARCHITECTURE.md (endpoints, UI components)
+
+2026-01-02
+Agent: Claude Opus 4.5
+AgentTag: CLAU
 ModelTag: LORA
 Details:
 - Switched to DisTorch2 dual-pass workflow (WAN2.2-I2V-DisTorch2-NEW.json)

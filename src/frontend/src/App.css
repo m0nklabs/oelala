@@ -28,6 +28,26 @@
   padding: 0;
 }
 
+/* Global select/option styling for dark theme */
+select {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+select option {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  padding: 8px;
+}
+
+select optgroup {
+  background-color: var(--bg-sidebar);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 body {
   background-color: var(--bg-root);
   color: var(--text-primary);

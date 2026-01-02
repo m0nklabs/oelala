@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5174,
+    allowedHosts: ['ai-kvm2', 'localhost', '192.168.1.2'],
     proxy: {
       '/api': {
         target: 'http://192.168.1.2:7998',
