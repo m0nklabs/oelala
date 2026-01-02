@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, HelpCircle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
@@ -63,6 +63,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   })
   const [negativePrompt, setNegativePrompt] = useState('low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches')
   const [showNegativePrompt, setShowNegativePrompt] = useState(false)
+  const [showPromptTips, setShowPromptTips] = useState(false)
   const [duration, setDuration] = useState(6) // seconds, 3-15 range
   const [resolution, setResolution] = useState('480p')
   const [modelMode, setModelMode] = useState('wan2.2')  // default to Wan2.2 for quality
@@ -75,11 +76,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [seed, setSeed] = useState(-1)
   const [showAdvanced, setShowAdvanced] = useState(false)  // Sampling settings collapsed by default
   
-  // LoRA state
+  // LoRA state - now supports multiple LoRAs with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
-  const [loraHighNoise, setLoraHighNoise] = useState('')
-  const [loraLowNoise, setLoraLowNoise] = useState('')
-  const [loraStrength, setLoraStrength] = useState(1.5)
+  // Array of {high: string, low: string, strength: number}
+  const [loraConfigs, setLoraConfigs] = useState([])
   const [showLoraPanel, setShowLoraPanel] = useState(false)
   
   // Unet model state
@@ -155,13 +155,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         cfg,
         seed,
         usePose,
-        loraHighNoise,
-        loraLowNoise,
-        loraStrength,
+        loraConfigs,
         filename: file?.name || null,
       })
     }
-  }, [prompt, duration, resolution, modelMode, modelVersion, aspectRatio, fps, steps, cfg, seed, usePose, loraHighNoise, loraLowNoise, loraStrength, file, onParamsChange])
+  }, [prompt, duration, resolution, modelMode, modelVersion, aspectRatio, fps, steps, cfg, seed, usePose, loraConfigs, file, onParamsChange])
 
   // Select an image from My Creations (called by MyMediaTool in output panel)
   const selectCreation = useCallback(async (item) => {
@@ -278,10 +276,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       // Unet parameters
       if (unetHighNoise) formData.append('unet_high_noise', unetHighNoise)
       if (unetLowNoise) formData.append('unet_low_noise', unetLowNoise)
-      // LoRA parameters
-      if (loraHighNoise) formData.append('lora_high_noise', loraHighNoise)
-      if (loraLowNoise) formData.append('lora_low_noise', loraLowNoise)
-      formData.append('lora_strength', String(loraStrength))
+      // LoRA parameters - send as JSON array
+      if (loraConfigs.length > 0) {
+        formData.append('lora_configs', JSON.stringify(loraConfigs))
+      }
     }
 
     try {
@@ -514,10 +512,72 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       {/* Positive Prompt */}
       <div className="grok-card">
         <div className="grok-card-header">
-          <div className="grok-card-title">Positive Prompt <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.85rem' }}>(Describe the motion)</span></div>
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            Positive Prompt <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.85rem' }}>(Describe the motion)</span>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button 
+                className="icon-btn" 
+                style={{ width: '20px', height: '20px', border: 'none', background: 'transparent', padding: 0 }}
+                onClick={() => setShowPromptTips(!showPromptTips)}
+                title="Prompt tips"
+              >
+                <HelpCircle size={14} color={showPromptTips ? "#fbbf24" : "#666666"} />
+              </button>
+              {showPromptTips && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  marginTop: '8px',
+                  backgroundColor: '#1a1a1a',
+                  border: '1px solid #fbbf24',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  width: '280px',
+                  zIndex: 100,
+                  fontSize: '0.8rem',
+                  color: '#fbbf24',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px' }}>💡 Prompt Tips</div>
+                  <ul style={{ margin: 0, paddingLeft: '16px', lineHeight: 1.6 }}>
+                    <li>Structure: [subject + motion] + [scene] + [camera]</li>
+                    <li>Focus on motion - "walking slowly", "hair blowing"</li>
+                    <li>Add intensity - "quickly", "gently", "dramatically"</li>
+                    <li>Camera moves - "slow zoom in", "pan left"</li>
+                    <li>Describe what you want, not what to avoid</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Type size={12} /></button>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Sparkles size={12} /></button>
+            <button 
+              className="icon-btn" 
+              style={{ width: '24px', height: '24px' }}
+              onClick={async () => {
+                if (!previewUrl) return
+                try {
+                  const res = await fetch(`${BACKEND_BASE}/extract-metadata-url`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_url: previewUrl })
+                  })
+                  const data = await res.json()
+                  if (data.positive_prompt) setPrompt(data.positive_prompt)
+                  if (data.negative_prompt) setNegPrompt(data.negative_prompt)
+                } catch (e) {
+                  console.error('Extract metadata failed:', e)
+                }
+              }}
+              title="Extract prompt from selected image"
+              disabled={!previewUrl}
+            >
+              <FileSearch size={14} color={previewUrl ? "#fbbf24" : "#666666"} />
+            </button>
+            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Type size={14} color="#fbbf24" /></button>
+            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Sparkles size={14} color="#fbbf24" /></button>
           </div>
         </div>
         
@@ -1008,7 +1068,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Layers size={16} />
                   <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>LoRA Models</span>
-                  {(loraHighNoise || loraLowNoise) && (
+                  {loraConfigs.length > 0 && (
                     <span style={{ 
                       fontSize: '0.7rem', 
                       backgroundColor: 'var(--accent-color)', 
@@ -1016,7 +1076,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                       padding: '2px 6px',
                       borderRadius: '4px'
                     }}>
-                      Active
+                      {loraConfigs.length} active
                     </span>
                   )}
                 </div>
@@ -1025,108 +1085,146 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
               {showLoraPanel && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* High Noise LoRA */}
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '0.8rem', 
-                      color: 'var(--text-muted)', 
-                      marginBottom: '4px' 
+                  {/* Existing LoRAs */}
+                  {loraConfigs.map((config, idx) => (
+                    <div key={idx} style={{ 
+                      backgroundColor: 'var(--bg-input)', 
+                      borderRadius: '8px', 
+                      padding: '12px',
+                      border: '1px solid var(--border-color)'
                     }}>
-                      High Noise LoRA (steps 0-3)
-                    </label>
-                    <select
-                      value={loraHighNoise}
-                      onChange={(e) => setLoraHighNoise(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      <option value="">None</option>
-                      {/* Group by category (subdirectory) */}
-                      {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
-                        <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
-                          {availableLoras.by_category[category].map((lora) => (
-                            <option key={lora.path} value={lora.path}>
-                              {lora.name} ({lora.size_mb}MB)
-                            </option>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>LoRA #{idx + 1}</span>
+                        <button
+                          onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            padding: '2px 6px',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          ✕ Remove
+                        </button>
+                      </div>
+                      
+                      {/* High Noise LoRA */}
+                      <div style={{ marginBottom: '8px' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                          High Noise (steps 0-3)
+                        </label>
+                        <select
+                          value={config.high || ''}
+                          onChange={(e) => {
+                            const newConfigs = [...loraConfigs]
+                            newConfigs[idx] = { ...config, high: e.target.value }
+                            setLoraConfigs(newConfigs)
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          <option value="">None</option>
+                          {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
+                            <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
+                              {availableLoras.by_category[category].map((lora) => (
+                                <option key={lora.path} value={lora.path}>
+                                  {lora.name} ({lora.size_mb}MB)
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
+                        </select>
+                      </div>
 
-                  {/* Low Noise LoRA */}
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: '0.8rem', 
-                      color: 'var(--text-muted)', 
-                      marginBottom: '4px' 
-                    }}>
-                      Low Noise LoRA (steps 3+)
-                    </label>
-                    <select
-                      value={loraLowNoise}
-                      onChange={(e) => setLoraLowNoise(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      <option value="">None</option>
-                      {/* Group by category (subdirectory) */}
-                      {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
-                        <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
-                          {availableLoras.by_category[category].map((lora) => (
-                            <option key={lora.path} value={lora.path}>
-                              {lora.name} ({lora.size_mb}MB)
-                            </option>
+                      {/* Low Noise LoRA */}
+                      <div style={{ marginBottom: '8px' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                          Low Noise (steps 3+)
+                        </label>
+                        <select
+                          value={config.low || ''}
+                          onChange={(e) => {
+                            const newConfigs = [...loraConfigs]
+                            newConfigs[idx] = { ...config, low: e.target.value }
+                            setLoraConfigs(newConfigs)
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          <option value="">None (uses High Noise)</option>
+                          {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
+                            <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
+                              {availableLoras.by_category[category].map((lora) => (
+                                <option key={lora.path} value={lora.path}>
+                                  {lora.name} ({lora.size_mb}MB)
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
+                        </select>
+                      </div>
 
-                  {/* LoRA Strength */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        LoRA Strength
-                      </label>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {loraStrength.toFixed(2)}
-                      </span>
+                      {/* Strength slider */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.05"
+                          value={config.strength || 1.0}
+                          onChange={(e) => {
+                            const newConfigs = [...loraConfigs]
+                            newConfigs[idx] = { ...config, strength: parseFloat(e.target.value) }
+                            setLoraConfigs(newConfigs)
+                          }}
+                          style={{ width: '100%', cursor: 'pointer' }}
+                        />
+                      </div>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="2"
-                      step="0.05"
-                      value={loraStrength}
-                      onChange={(e) => setLoraStrength(parseFloat(e.target.value))}
-                      style={{ width: '100%', cursor: 'pointer' }}
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      <span>0</span>
-                      <span>1.5 (default)</span>
-                      <span>2.0</span>
-                    </div>
-                  </div>
+                  ))}
+
+                  {/* Add LoRA button */}
+                  <button
+                    onClick={() => setLoraConfigs([...loraConfigs, { high: '', low: '', strength: 1.0 }])}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: 'transparent',
+                      border: '1px dashed var(--border-color)',
+                      borderRadius: '6px',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    + Add LoRA
+                  </button>
 
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    💡 Use high_noise for style, low_noise for details. Same LoRA on both for consistency.
+                    💡 Stack multiple LoRAs for combined effects. Each LoRA has its own strength.
                   </div>
                 </div>
               )}
@@ -1156,20 +1254,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </label>
         </div>
 
-        <div className="grok-tip-box">
-          <div className="grok-tip-header">
-            <Info size={14} /> Prompt Tips
-          </div>
-          <div className="grok-tip-content">
-            <ul>
-              <li>Structure: [subject + motion] + [scene] + [camera]</li>
-              <li>Focus on motion - "walking slowly", "hair blowing in wind"</li>
-              <li>Add intensity - "quickly", "gently", "dramatically"</li>
-              <li>Camera moves - "slow zoom in", "pan left", "follow shot"</li>
-              <li>No negatives - describe what you want, not what to avoid</li>
-            </ul>
-          </div>
-        </div>
       </div>
 
       {/* Aspect Ratio */}
@@ -1235,7 +1319,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         ) : (
           <>
             <Sparkles size={18} />
-            from Image (20)
+            Generate from Image
           </>
         )}
       </button>

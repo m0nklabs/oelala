@@ -753,6 +753,125 @@ async def extract_metadata(file: UploadFile = File(...)):
     return metadata
 
 
+class ExtractMetadataURLRequest(BaseModel):
+    image_url: str
+
+
+@app.post("/extract-metadata-url")
+async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
+    """
+    Extract workflow/prompt metadata from an image URL.
+    Supports ComfyUI output URLs and local backend URLs.
+    """
+    import tempfile
+    import httpx
+    
+    image_url = request.image_url
+    metadata = {}
+    tmp_path = None
+    
+    try:
+        # Download image from URL
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_url, timeout=30.0)
+            response.raise_for_status()
+            content = response.content
+        
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        # Extract metadata (same logic as file upload)
+        img = Image.open(tmp_path)
+        
+        if hasattr(img, 'info'):
+            info = img.info
+            
+            # Oelala params (our format)
+            if 'oelala_params' in info:
+                try:
+                    params = json.loads(info['oelala_params'])
+                    metadata['positive_prompt'] = params.get('prompt', '')
+                    metadata['negative_prompt'] = params.get('negative_prompt', '')
+                    metadata['workflow'] = params.get('workflow', '')
+                    metadata['source'] = 'oelala'
+                    # Check for preserved original T2I prompt
+                    if params.get('original_t2i_prompt'):
+                        metadata['positive_prompt'] = params['original_t2i_prompt']
+                        metadata['source'] = 'oelala_t2i'
+                except json.JSONDecodeError:
+                    pass
+            
+            # ComfyUI workflow format
+            if 'prompt' in info and not metadata.get('positive_prompt'):
+                try:
+                    workflow = json.loads(info['prompt'])
+                    for node_id, node in workflow.items():
+                        if isinstance(node, dict):
+                            inputs = node.get('inputs', {})
+                            class_type = node.get('class_type', '')
+                            
+                            # Look for prompt inputs in various node types
+                            # Wan nodes use positive_prompt/negative_prompt
+                            if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
+                                text = inputs['positive_prompt'].strip()
+                                if text and len(text) > 5:
+                                    current = metadata.get('positive_prompt', '')
+                                    if len(text) > len(current):
+                                        metadata['positive_prompt'] = text
+                                        metadata['source'] = 'comfyui_wan'
+                            
+                            if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
+                                text = inputs['negative_prompt'].strip()
+                                if text and len(text) > 3:
+                                    metadata['negative_prompt'] = text
+                            
+                            # CLIP/text nodes use 'text' key
+                            if 'text' in inputs and isinstance(inputs['text'], str):
+                                text = inputs['text'].strip()
+                                if text and len(text) > 10:
+                                    if 'negative' in class_type.lower():
+                                        if not metadata.get('negative_prompt') or len(text) > len(metadata.get('negative_prompt', '')):
+                                            metadata['negative_prompt'] = text
+                                    else:
+                                        current = metadata.get('positive_prompt', '')
+                                        if len(text) > len(current):
+                                            metadata['positive_prompt'] = text
+                                            metadata['source'] = 'comfyui'
+                except json.JSONDecodeError:
+                    pass
+            
+            # A1111 format
+            if 'parameters' in info and not metadata.get('positive_prompt'):
+                params_text = info['parameters']
+                lines = params_text.split('\n')
+                positive_lines = []
+                for line in lines:
+                    if line.startswith('Negative prompt:'):
+                        metadata['negative_prompt'] = line.replace('Negative prompt:', '').strip()
+                        break
+                    elif not line.startswith('Steps:'):
+                        positive_lines.append(line)
+                if positive_lines:
+                    metadata['positive_prompt'] = '\n'.join(positive_lines).strip()
+                    metadata['source'] = 'a1111'
+        
+        logger.info(f"📋 Extracted metadata from URL: {list(metadata.keys())}")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to extract metadata from URL: {e}")
+        metadata['error'] = str(e)
+    finally:
+        if tmp_path:
+            try:
+                Path(tmp_path).unlink()
+            except:
+                pass
+    
+    return metadata
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -1105,9 +1224,7 @@ async def generate_wan22_comfyui(
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
     unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
-    lora_high_noise: str = Form("", description="LoRA for high noise model (path relative to loras folder)"),
-    lora_low_noise: str = Form("", description="LoRA for low noise model (path relative to loras folder)"),
-    lora_strength: float = Form(1.0, description="LoRA strength (0.0 - 2.0)")
+    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]")
 ):
     """
     Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow.
@@ -1183,6 +1300,14 @@ async def generate_wan22_comfyui(
     )
     
     # Inject workflow metadata into the input PNG
+    # Parse lora_configs JSON
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
+    
     prompt_params = {
         "prompt": prompt,
         "resolution": resolution,
@@ -1195,9 +1320,7 @@ async def generate_wan22_comfyui(
         "timestamp": timestamp,
         "unet_high_noise": unet_high_noise,
         "unet_low_noise": unet_low_noise,
-        "lora_high_noise": lora_high_noise or None,
-        "lora_low_noise": lora_low_noise or None,
-        "lora_strength": lora_strength,
+        "lora_configs": parsed_lora_configs,
     }
     inject_png_workflow_metadata(str(input_path), workflow, prompt_params)
 
@@ -1207,8 +1330,10 @@ async def generate_wan22_comfyui(
         logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
         logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
         logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
-        if lora_high_noise or lora_low_noise:
-            logger.info(f"   🎨 LoRA: H={lora_high_noise or 'none'}, L={lora_low_noise or 'none'} @ {lora_strength}")
+        if parsed_lora_configs:
+            logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
+            for i, lc in enumerate(parsed_lora_configs):
+                logger.info(f"      [{i+1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}")
         logger.info(f"   📝 Prompt: {prompt[:100]}...")
         
         # Generate video via ComfyUI in threadpool to avoid blocking event loop
@@ -1229,9 +1354,7 @@ async def generate_wan22_comfyui(
                 output_prefix=output_prefix,
                 unet_high_noise=unet_high_noise,
                 unet_low_noise=unet_low_noise,
-                lora_high_noise=lora_high_noise if lora_high_noise else None,
-                lora_low_noise=lora_low_noise if lora_low_noise else None,
-                lora_strength=lora_strength
+                lora_configs=parsed_lora_configs
             )
         )
         

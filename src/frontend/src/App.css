@@ -529,7 +529,7 @@ body {
 .icon-btn {
   background: transparent;
   border: 1px solid var(--border-color);
-  color: var(--text-primary);
+  color: #ffffff;
   width: 36px;
   height: 36px;
   border-radius: var(--radius-sm);
@@ -538,6 +538,14 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+/* Ensure Lucide icons inherit color properly */
+.icon-btn svg {
+  stroke: #ffffff !important;
+  color: #ffffff !important;
+  width: 18px;
+  height: 18px;
 }
 
 .icon-btn:hover {

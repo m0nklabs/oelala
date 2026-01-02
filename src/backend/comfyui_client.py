@@ -10,7 +10,7 @@ import time
 import requests
 import websocket
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 import logging
 import base64
 from PIL import Image
@@ -268,14 +268,7 @@ WAN22_I2V_Q6_API_WORKFLOW = {
             "model": ["8", 0]
         }
     },
-    # Node 19: AspectRatioResolution_Warper - calculates width/height from aspect ratio
-    "19": {
-        "class_type": "AspectRatioResolution_Warper",
-        "inputs": {
-            "aspect_ratio": "1:1 (Square)",
-            "long_edge": 480
-        }
-    },
+    # Node 19 removed: AspectRatioResolution_Warper - now using direct width/height in node 12
     # Node 9: Positive Prompt (CLIPTextEncode)
     "9": {
         "class_type": "CLIPTextEncode",
@@ -300,12 +293,12 @@ WAN22_I2V_Q6_API_WORKFLOW = {
         }
     },
     # Node 12: WanImageToVideo - encodes image to latent + conditioning
-    # Uses AspectRatioResolution_Warper output for width/height
+    # Uses direct width/height values (aspect ratio calculated by script)
     "12": {
         "class_type": "WanImageToVideo",
         "inputs": {
-            "width": ["19", 0],
-            "height": ["19", 1],
+            "width": 480,
+            "height": 848,
             "length": 41,
             "batch_size": 1,
             "positive": ["9", 0],
@@ -1040,9 +1033,7 @@ class ComfyUIClient:
         long_edge: int = 480,
         unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        lora_high_noise: Optional[str] = None,
-        lora_low_noise: Optional[str] = None,
-        lora_strength: float = 1.0,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Build ComfyUI API-format workflow for WAN 2.2 DisTorch2 Dual-Pass.
@@ -1058,9 +1049,7 @@ class ComfyUIClient:
             long_edge: Resolution for the long edge (480, 720, 1080)
             unet_high_noise: GGUF model for high noise pass
             unet_low_noise: GGUF model for low noise pass
-            lora_high_noise: LoRA path for high noise model (None = disabled)
-            lora_low_noise: LoRA path for low noise model (None = disabled)
-            lora_strength: LoRA strength (0.0 - 2.0)
+            lora_configs: List of LoRA configs [{high, low, strength}, ...] for stacking
         """
         workflow = copy.deepcopy(WAN22_I2V_Q6_API_WORKFLOW)
 
@@ -1084,41 +1073,117 @@ class ComfyUIClient:
         workflow["10"]["inputs"]["text"] = negative_prompt
 
         # Node 19: AspectRatioResolution_Warper
-        # Map aspect ratio to node format
-        aspect_map = {
-            "1:1": "1:1 (Square)",
-            "9:16": "9:16 (Portrait Wide)",
-            "16:9": "16:9 (Landscape Wide)",
-            "4:3": "4:3 (Landscape)",
-            "3:4": "3:4 (Portrait)",
-            "3:2": "3:2 (Landscape)",
-            "2:3": "2:3 (Portrait)",
-            "21:9": "21:9 (Ultrawide)",
-            "9:21": "9:21 (Tall)",
+        # Calculate width/height from aspect ratio and long_edge
+        # Aspect ratio parsing
+        aspect_ratios = {
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
-        workflow["19"]["inputs"]["aspect_ratio"] = aspect_map.get(aspect_ratio, aspect_ratio)
-        workflow["19"]["inputs"]["long_edge"] = long_edge
-
-        # Node 12: WanImageToVideo - uses AspectRatioResolution_Warper output
-        # Width/height already linked to node 19 in template
-        workflow["12"]["inputs"]["length"] = num_frames
-
-        # Node 17 & 18: LoRA Loaders (optional)
-        if lora_high_noise:
-            workflow["17"]["inputs"]["lora_name"] = lora_high_noise
-            workflow["17"]["inputs"]["strength_model"] = lora_strength
-            logger.info(f"🎨 High Noise LoRA: {lora_high_noise} @ {lora_strength}")
-        else:
-            # Bypass LoRA node - connect sampler directly to SageAttn
-            workflow["13"]["inputs"]["model"] = ["7", 0]
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
         
-        if lora_low_noise:
-            workflow["18"]["inputs"]["lora_name"] = lora_low_noise
-            workflow["18"]["inputs"]["strength_model"] = lora_strength
-            logger.info(f"🎨 Low Noise LoRA: {lora_low_noise} @ {lora_strength}")
+        # Calculate dimensions based on long edge
+        if ar_w >= ar_h:
+            # Landscape or square - width is long edge
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
         else:
-            # Bypass LoRA node - connect sampler directly to SageAttn
+            # Portrait - height is long edge
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        
+        # Ensure dimensions are multiples of 8 for VAE
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+        
+        # Node 12: WanImageToVideo - set direct width/height values
+        workflow["12"]["inputs"]["width"] = width
+        workflow["12"]["inputs"]["height"] = height
+        workflow["12"]["inputs"]["length"] = num_frames
+        logger.info(f"📐 Resolution: {width}x{height} (aspect {aspect_ratio}, long_edge {long_edge})")
+
+        # Handle LoRA loading - supports multiple stacked LoRAs with individual strengths
+        # For multi-LoRA, we chain LoraLoaderModelOnly nodes
+        if lora_configs and len(lora_configs) > 0:
+            # Find LoRAs for high noise and low noise models
+            high_loras = []
+            low_loras = []
+            for config in lora_configs:
+                if config.get("high"):
+                    high_loras.append({"name": config["high"], "strength": config.get("strength", 1.0)})
+                if config.get("low"):
+                    low_loras.append({"name": config["low"], "strength": config.get("strength", 1.0)})
+                elif config.get("high"):  # If no low specified, use high for both
+                    low_loras.append({"name": config["high"], "strength": config.get("strength", 1.0)})
+            
+            # Apply high noise LoRAs (chain from node 7's output)
+            if high_loras:
+                current_high_model = ["7", 0]  # Start from SageAttn output
+                high_node_id = 170  # Start numbering at 170 for high noise LoRAs
+                for i, lora in enumerate(high_loras):
+                    node_id = str(high_node_id + i)
+                    workflow[node_id] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": lora["name"],
+                            "strength_model": lora["strength"],
+                            "model": current_high_model
+                        }
+                    }
+                    current_high_model = [node_id, 0]
+                    logger.info(f"🎨 High Noise LoRA #{i+1}: {lora['name']} @ {lora['strength']}")
+                # Connect sampler to last LoRA in chain
+                workflow["13"]["inputs"]["model"] = current_high_model
+                # Remove unused node 17
+                if "17" in workflow:
+                    del workflow["17"]
+            else:
+                # No high noise LoRAs - bypass to SageAttn directly
+                workflow["13"]["inputs"]["model"] = ["7", 0]
+                if "17" in workflow:
+                    del workflow["17"]
+            
+            # Apply low noise LoRAs (chain from node 8's output)
+            if low_loras:
+                current_low_model = ["8", 0]  # Start from SageAttn output
+                low_node_id = 180  # Start numbering at 180 for low noise LoRAs
+                for i, lora in enumerate(low_loras):
+                    node_id = str(low_node_id + i)
+                    workflow[node_id] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": lora["name"],
+                            "strength_model": lora["strength"],
+                            "model": current_low_model
+                        }
+                    }
+                    current_low_model = [node_id, 0]
+                    logger.info(f"🎨 Low Noise LoRA #{i+1}: {lora['name']} @ {lora['strength']}")
+                # Connect sampler to last LoRA in chain
+                workflow["14"]["inputs"]["model"] = current_low_model
+                # Remove unused node 18
+                if "18" in workflow:
+                    del workflow["18"]
+            else:
+                # No low noise LoRAs - bypass to SageAttn directly
+                workflow["14"]["inputs"]["model"] = ["8", 0]
+                if "18" in workflow:
+                    del workflow["18"]
+        else:
+            # No LoRAs - bypass LoRA nodes, connect samplers directly to SageAttn
+            workflow["13"]["inputs"]["model"] = ["7", 0]
             workflow["14"]["inputs"]["model"] = ["8", 0]
+            # Remove unused LoRA nodes
+            if "17" in workflow:
+                del workflow["17"]
+            if "18" in workflow:
+                del workflow["18"]
 
         # Node 13: Sampler 1 (High Noise) - steps 0 to high_noise_steps
         workflow["13"]["inputs"]["noise_seed"] = seed if seed >= 0 else 42
@@ -1140,8 +1205,9 @@ class ComfyUIClient:
         workflow["16"]["inputs"]["filename_prefix"] = output_prefix
 
         lora_info = ""
-        if lora_high_noise or lora_low_noise:
-            lora_info = f", LoRA@{lora_strength}"
+        if lora_configs and len(lora_configs) > 0:
+            lora_count = len(lora_configs)
+            lora_info = f", {lora_count} LoRA{'s' if lora_count > 1 else ''}"
         logger.info(f"🔧 Built DisTorch2 workflow: {aspect_ratio}@{long_edge}, {num_frames}f, {steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}")
         return workflow
     
@@ -1494,9 +1560,7 @@ class ComfyUIClient:
         progress_callback=None,
         unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        lora_high_noise: Optional[str] = None,
-        lora_low_noise: Optional[str] = None,
-        lora_strength: float = 1.0,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
         # Legacy T2I params (kept for compatibility)
         t2i_checkpoint_name: Optional[str] = None,
         t2i_prompt: Optional[str] = None,
@@ -1526,9 +1590,7 @@ class ComfyUIClient:
             output_prefix=output_prefix,
             unet_high_noise=unet_high_noise,
             unet_low_noise=unet_low_noise,
-            lora_high_noise=lora_high_noise,
-            lora_low_noise=lora_low_noise,
-            lora_strength=lora_strength,
+            lora_configs=lora_configs,
             progress_callback=progress_callback,
         )
 
@@ -1551,9 +1613,7 @@ class ComfyUIClient:
         scheduler: str = "normal",
         unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        lora_high_noise: Optional[str] = None,
-        lora_low_noise: Optional[str] = None,
-        lora_strength: float = 1.0,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
         progress_callback=None,
     ) -> Optional[str]:
         """
@@ -1566,9 +1626,7 @@ class ComfyUIClient:
             scheduler: "normal", "simple", "karras"
             unet_high_noise: GGUF model for high noise pass
             unet_low_noise: GGUF model for low noise pass
-            lora_high_noise: LoRA path for high noise model (None = disabled)
-            lora_low_noise: LoRA path for low noise model (None = disabled)
-            lora_strength: LoRA strength (0.0 - 2.0)
+            lora_configs: List of LoRA configs [{high, low, strength}, ...] for stacking
         """
         if not self.is_available():
             logger.error("❌ ComfyUI not available")
@@ -1587,8 +1645,8 @@ class ComfyUIClient:
 
         # 3. Build DisTorch2 workflow
         lora_info = ""
-        if lora_high_noise or lora_low_noise:
-            lora_info = f", LoRA@{lora_strength}"
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
         logger.info(f"🔧 Building DisTorch2 workflow: {num_frames}f @ {fps}fps, {steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}")
         
         workflow = self.build_q6_workflow(
@@ -1608,9 +1666,7 @@ class ComfyUIClient:
             long_edge=long_edge,
             unet_high_noise=unet_high_noise,
             unet_low_noise=unet_low_noise,
-            lora_high_noise=lora_high_noise,
-            lora_low_noise=lora_low_noise,
-            lora_strength=lora_strength,
+            lora_configs=lora_configs,
         )
 
         # 4. Queue workflow
