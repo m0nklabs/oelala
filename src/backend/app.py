@@ -619,6 +619,181 @@ async def list_unet_models():
     }
 
 
+# =============================================================================
+# ComfyUI Queue Management Endpoints
+# =============================================================================
+
+# In-memory store for active jobs submitted through Oelala
+# Maps prompt_id -> {status, prompt, created_at, output_path, ...}
+active_jobs = {}
+
+
+@app.get("/comfyui/queue")
+async def get_comfyui_queue():
+    """
+    Get ComfyUI queue status including running and pending jobs.
+    Enriches with Oelala job metadata where available.
+    """
+    import requests
+    
+    try:
+        resp = requests.get("http://localhost:8188/queue", timeout=5)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="ComfyUI not responding")
+        
+        data = resp.json()
+        
+        # Parse queue data
+        running = []
+        for item in data.get("queue_running", []):
+            if len(item) >= 2:
+                prompt_id = item[1]
+                job_info = {
+                    "prompt_id": prompt_id,
+                    "status": "running",
+                    "queue_position": 0,
+                }
+                # Enrich with Oelala metadata if available
+                if prompt_id in active_jobs:
+                    job_info.update(active_jobs[prompt_id])
+                running.append(job_info)
+        
+        pending = []
+        for idx, item in enumerate(data.get("queue_pending", [])):
+            if len(item) >= 2:
+                prompt_id = item[1]
+                job_info = {
+                    "prompt_id": prompt_id,
+                    "status": "pending",
+                    "queue_position": idx + 1,
+                }
+                if prompt_id in active_jobs:
+                    job_info.update(active_jobs[prompt_id])
+                pending.append(job_info)
+        
+        return {
+            "running": running,
+            "pending": pending,
+            "total_running": len(running),
+            "total_pending": len(pending),
+        }
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to get ComfyUI queue: {e}")
+        raise HTTPException(status_code=502, detail=f"ComfyUI connection failed: {str(e)}")
+
+
+@app.get("/comfyui/job/{prompt_id}")
+async def get_job_status(prompt_id: str):
+    """
+    Get status of a specific job by prompt_id.
+    Returns status (queued/running/completed/failed) and output if available.
+    """
+    import requests
+    
+    # Check in our active jobs store
+    job_info = active_jobs.get(prompt_id, {})
+    
+    # Check ComfyUI history for completion status
+    try:
+        history_resp = requests.get(f"http://localhost:8188/history/{prompt_id}", timeout=5)
+        if history_resp.status_code == 200:
+            history = history_resp.json()
+            if prompt_id in history:
+                job_data = history[prompt_id]
+                outputs = job_data.get("outputs", {})
+                
+                # Find video output
+                output_video = None
+                for node_id, node_output in outputs.items():
+                    if "gifs" in node_output:
+                        for gif in node_output["gifs"]:
+                            if gif.get("type") == "output":
+                                output_video = f"/comfyui/output/{gif['filename']}"
+                                break
+                
+                return {
+                    "prompt_id": prompt_id,
+                    "status": "completed",
+                    "output_video": output_video,
+                    **job_info
+                }
+    except Exception as e:
+        logger.warning(f"Error checking history for {prompt_id}: {e}")
+    
+    # Check if it's in the queue
+    try:
+        queue_resp = requests.get("http://localhost:8188/queue", timeout=5)
+        if queue_resp.status_code == 200:
+            queue_data = queue_resp.json()
+            
+            # Check running
+            for item in queue_data.get("queue_running", []):
+                if len(item) >= 2 and item[1] == prompt_id:
+                    return {
+                        "prompt_id": prompt_id,
+                        "status": "running",
+                        **job_info
+                    }
+            
+            # Check pending
+            for idx, item in enumerate(queue_data.get("queue_pending", [])):
+                if len(item) >= 2 and item[1] == prompt_id:
+                    return {
+                        "prompt_id": prompt_id,
+                        "status": "pending",
+                        "queue_position": idx + 1,
+                        **job_info
+                    }
+    except Exception as e:
+        logger.warning(f"Error checking queue for {prompt_id}: {e}")
+    
+    # Not found anywhere - might have failed or been cancelled
+    return {
+        "prompt_id": prompt_id,
+        "status": "unknown",
+        **job_info
+    }
+
+
+@app.get("/comfyui/output/{filename}")
+async def get_comfyui_output(filename: str):
+    """Serve ComfyUI output files (videos/images)"""
+    output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="Output file not found")
+    return FileResponse(output_path)
+
+
+@app.delete("/comfyui/queue/{prompt_id}")
+async def cancel_job(prompt_id: str):
+    """Cancel a queued or running job"""
+    import requests
+    
+    try:
+        # ComfyUI interrupt endpoint
+        resp = requests.post(
+            "http://localhost:8188/interrupt",
+            json={"prompt_id": prompt_id},
+            timeout=5
+        )
+        
+        # Also try to delete from queue
+        delete_resp = requests.post(
+            "http://localhost:8188/queue",
+            json={"delete": [prompt_id]},
+            timeout=5
+        )
+        
+        # Remove from our tracking
+        if prompt_id in active_jobs:
+            del active_jobs[prompt_id]
+        
+        return {"success": True, "prompt_id": prompt_id}
+    except Exception as e:
+        logger.error(f"Failed to cancel job {prompt_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/extract-metadata")
 async def extract_metadata(file: UploadFile = File(...)):
     """
@@ -1392,6 +1567,142 @@ async def generate_wan22_comfyui(
     except Exception as e:
         logger.error(f"❌ ComfyUI generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Wan2.2 ComfyUI generation failed: {str(e)}")
+
+
+@app.post("/generate-wan22-async")
+async def generate_wan22_async(
+    file: UploadFile = File(...),
+    prompt: str = Form("Motion, subject moving naturally"),
+    num_frames: int = Form(41, description="Number of frames in video"),
+    output_filename: str = Form("", description="Custom output filename"),
+    resolution: str = Form("480p", description="Video resolution: 480p, 576p, 720p, 1080p"),
+    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
+    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
+    steps: int = Form(6, description="Sampling steps"),
+    cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
+    unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
+    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]")
+):
+    """
+    Queue Wan2.2 I2V video generation and return immediately.
+    
+    Unlike /generate-wan22-comfyui, this endpoint returns immediately with a prompt_id.
+    Use /comfyui/job/{prompt_id} to poll for completion status.
+    
+    This allows queueing multiple jobs without waiting.
+    """
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    
+    comfyui = get_comfyui_client()
+    
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+        )
+    
+    # Wan2.2 requires num_frames in format 4k+1
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+    
+    # Validate file type
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Generate unique filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"comfyui_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+    
+    # Save uploaded file
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"📤 Saved input image: {input_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    
+    # Upload to ComfyUI
+    image_name = comfyui.upload_image(str(input_path))
+    if not image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+    
+    # Parse lora_configs
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
+    
+    # Generate output prefix
+    if not output_filename:
+        output_filename = f"wan22_async_{timestamp}.mp4"
+    output_prefix = f"oelala_{timestamp}"
+    
+    # Get actual seed
+    actual_seed = seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    
+    # Map resolution to long_edge
+    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
+    long_edge = resolution_map.get(resolution, 480)
+    
+    # Build workflow
+    workflow = comfyui.build_q6_workflow(
+        image_name=image_name,
+        prompt=prompt,
+        num_frames=num_frames,
+        fps=fps,
+        steps=steps,
+        cfg=cfg,
+        seed=actual_seed,
+        output_prefix=output_prefix,
+        aspect_ratio=aspect_ratio,
+        long_edge=long_edge,
+        unet_high_noise=unet_high_noise,
+        unet_low_noise=unet_low_noise,
+        lora_configs=parsed_lora_configs,
+    )
+    
+    # Queue the workflow (non-blocking)
+    prompt_id = comfyui.queue_prompt(workflow)
+    
+    if not prompt_id:
+        raise HTTPException(status_code=500, detail="Failed to queue workflow to ComfyUI")
+    
+    # Store job info for tracking
+    job_info = {
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "seed": actual_seed,
+        "output_prefix": output_prefix,
+        "output_filename": output_filename,
+        "input_image": input_filename,
+        "created_at": timestamp,
+        "lora_count": len(parsed_lora_configs),
+    }
+    active_jobs[prompt_id] = job_info
+    
+    logger.info(f"🚀 Queued async job: {prompt_id}")
+    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
+    logger.info(f"   📝 {prompt[:50]}...")
+    
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "status": "queued",
+        "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
+        **job_info
+    }
 
 
 @app.get("/comfyui-status")

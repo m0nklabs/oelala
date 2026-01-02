@@ -3,6 +3,7 @@ import { RefreshCw, Download } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
+import QueuePanel from './QueuePanel'
 import { TOOL_IDS } from './nav'
 
 import TextToVideoTool from './tools/TextToVideoTool'
@@ -25,6 +26,9 @@ export default function Dashboard() {
 
   const [output, setOutput] = useState(null)
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0)
+  
+  // Queue refresh token - incremented when a job is submitted
+  const [queueRefreshToken, setQueueRefreshToken] = useState(0)
   
   // For I2V creations picker mode
   const [i2vCreationsMode, setI2vCreationsMode] = useState(false)
@@ -131,12 +135,17 @@ export default function Dashboard() {
     const onParamsChange = (params) => {
       toolParamsRef.current = params
     }
+    
+    // Callback for async job submission - refresh queue
+    const onJobSubmitted = () => {
+      setQueueRefreshToken((n) => n + 1)
+    }
 
     switch (activeToolId) {
       case TOOL_IDS.TEXT_TO_VIDEO:
         return <TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} />
       case TOOL_IDS.IMAGE_TO_VIDEO:
-        return <ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} />
+        return <ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
         return <TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} />
       case TOOL_IDS.PIPELINE:
@@ -186,7 +195,7 @@ export default function Dashboard() {
               title="Herstart Backend"
               style={{ opacity: restarting ? 0.5 : 1 }}
             >
-              <RefreshCw size={18} className={restarting ? 'spin' : ''} />
+              <RefreshCw size={18} color="#fbbf24" className={restarting ? 'spin' : ''} />
             </button>
             <div className="status-indicator">
               <div className={`status-dot ${health?.status === 'healthy' ? 'connected' : ''}`} />
@@ -204,6 +213,22 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="workspace">
+            {/* Queue Panel - shows running and pending jobs */}
+            <QueuePanel 
+              refreshToken={queueRefreshToken}
+              onJobComplete={(job) => {
+                // When a job completes, refresh history and optionally show output
+                setHistoryRefreshToken((n) => n + 1)
+                if (job.output_video) {
+                  setOutput({
+                    kind: 'video',
+                    url: `${BACKEND_BASE}${job.output_video}`,
+                    backendUrl: `${BACKEND_BASE}${job.output_video}`,
+                  })
+                }
+              }}
+            />
+            
             <section className="controls-panel">
               <div className="panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>

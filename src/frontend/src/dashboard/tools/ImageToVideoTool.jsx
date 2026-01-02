@@ -48,7 +48,7 @@ const RESOLUTION_PRESETS = {
 // Aspect ratio options
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
-export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange }) {
+export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted }) {
   const fileInputRef = useRef(null)
 
   const [file, setFile] = useState(null)
@@ -265,11 +265,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
     // Choose endpoint
     let endpoint
+    let useAsync = true  // Default to async mode for non-blocking generation
+    
     if (usePose) {
       endpoint = `${BACKEND_BASE}/generate-pose`
+      useAsync = false  // Pose generation is not async yet
     } else {
-      // Use ComfyUI endpoint for Wan2.2 Q6
-      endpoint = `${BACKEND_BASE}/generate-wan22-comfyui`
+      // Use async ComfyUI endpoint for Wan2.2 Q6 - returns immediately with prompt_id
+      endpoint = `${BACKEND_BASE}/generate-wan22-async`
       formData.append('steps', String(steps))
       formData.append('cfg', String(cfg))
       formData.append('seed', String(seed))
@@ -283,25 +286,36 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     }
 
     try {
-      if (DEBUG) console.debug('🐛 submit image-to-video', { duration, numFrames, usePose, resolution, fps, modelMode })
+      if (DEBUG) console.debug('🐛 submit image-to-video', { duration, numFrames, usePose, resolution, fps, modelMode, useAsync })
       const result = await postForm(endpoint, formData)
       if (!result.ok) {
         setError(result.data?.detail || `Generation failed (status ${result.status})`)
         return
       }
 
-      const videoUrl = result.data?.video_url || result.data?.url
-      const outputVideo = result.data?.output_video
-      const url = videoUrl ? `${BACKEND_BASE}${videoUrl}` : ''
+      if (useAsync) {
+        // Async mode - job was queued, notify parent to refresh queue panel
+        if (DEBUG) console.debug('🐛 Job queued:', result.data?.prompt_id)
+        if (onJobSubmitted) {
+          onJobSubmitted(result.data)
+        }
+        // Don't wait - job will appear in queue and output when done
+        // Clear busy state immediately so user can queue more jobs
+      } else {
+        // Sync mode - result contains the video
+        const videoUrl = result.data?.video_url || result.data?.url
+        const outputVideo = result.data?.output_video
+        const url = videoUrl ? `${BACKEND_BASE}${videoUrl}` : ''
 
-      onOutput({
-        kind: 'video',
-        url,
-        backendUrl: url,
-        filename: outputVideo,
-        meta: result.data,
-      })
-      onRefreshHistory()
+        onOutput({
+          kind: 'video',
+          url,
+          backendUrl: url,
+          filename: outputVideo,
+          meta: result.data,
+        })
+        onRefreshHistory()
+      }
     } catch (e) {
       const message = e?.message || 'Failed to generate video'
       setError(message)
