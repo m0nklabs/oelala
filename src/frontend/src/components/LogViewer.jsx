@@ -4,9 +4,10 @@ import { BACKEND_BASE } from '../config'
 
 // Convert HTTP URL to WebSocket URL
 const getWsUrl = () => {
-  const url = new URL(BACKEND_BASE)
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${url.origin}/ws/logs`
+  // BACKEND_BASE is like 'http://192.168.1.2:7998'
+  const wsProtocol = BACKEND_BASE.startsWith('https') ? 'wss:' : 'ws:'
+  const hostPart = BACKEND_BASE.replace(/^https?:\/\//, '')
+  return `${wsProtocol}//${hostPart}/ws/logs`
 }
 
 export default function LogViewer() {
