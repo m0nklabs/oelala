@@ -1273,6 +1273,120 @@ def generate_image(
         stop_progress_ticker(job_id)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SDXL Text-to-Image via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Available SDXL checkpoints (auto-detected from ComfyUI models folder)
+SDXL_CHECKPOINTS = [
+    "CyberRealistic_Pony_v14.1_FP16.safetensors",
+    "dreamshaperXL_lightningDPMSDE.safetensors",
+    "illustriousRealismBy_v10VAE.safetensors",
+    "juggernautXL_ragnarok.safetensors",
+    "novaAnimeXL_ilV150.safetensors",
+    "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+    "reapony_v90.safetensors",
+    "ultraRealisticByStable_v20FP16.safetensors",
+    "waiIllustriousSDXL_v160.safetensors",
+]
+
+@app.get("/sdxl/checkpoints")
+def list_sdxl_checkpoints():
+    """List available SDXL checkpoints"""
+    return {"checkpoints": SDXL_CHECKPOINTS}
+
+@app.post("/generate-sdxl")
+async def generate_sdxl_image(
+    prompt: str = Form(...),
+    negative_prompt: str = Form("ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text"),
+    checkpoint: str = Form("CyberRealistic_Pony_v14.1_FP16.safetensors"),
+    aspect_ratio: str = Form("1:1"),
+    steps: int = Form(30),
+    cfg: float = Form(7.5),
+    seed: int = Form(-1),
+    sampler_name: str = Form("dpmpp_2m"),
+    scheduler: str = Form("karras"),
+    lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
+):
+    """
+    Generate image using SDXL checkpoint via ComfyUI.
+    Supports all SDXL checkpoints including Pony, Illustrious, JuggernautXL, etc.
+    """
+    from .comfyui_client import get_comfyui_client
+    import json as json_lib
+    
+    logger.info(f"🎨 SDXL T2I request: {prompt[:50]}... (checkpoint={checkpoint})")
+    
+    # Parse LoRA configs
+    try:
+        loras = json_lib.loads(lora_configs) if lora_configs else []
+    except json_lib.JSONDecodeError:
+        loras = []
+    
+    # Map aspect ratios to SDXL-optimal resolutions (1MP)
+    resolutions = {
+        "1:1": (1024, 1024),
+        "16:9": (1344, 768),
+        "9:16": (768, 1344),
+        "4:3": (1152, 864),
+        "3:4": (864, 1152),
+        "2:3": (832, 1216),
+        "3:2": (1216, 832),
+        "21:9": (1536, 640),
+        "9:21": (640, 1536),
+    }
+    width, height = resolutions.get(aspect_ratio, (1024, 1024))
+    
+    try:
+        client = get_comfyui_client()
+        
+        output_path = client.generate_sdxl_image(
+            prompt=prompt,
+            output_dir=str(OUTPUT_DIR),
+            negative_prompt=negative_prompt,
+            checkpoint=checkpoint,
+            width=width,
+            height=height,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            lora_configs=loras,
+        )
+        
+        if not output_path:
+            raise HTTPException(status_code=500, detail="SDXL generation failed")
+        
+        # Get just the filename
+        filename = Path(output_path).name
+        
+        return {
+            "status": "success",
+            "url": f"/files/{filename}",
+            "filename": filename,
+            "meta": {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "checkpoint": checkpoint,
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SDXL generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/generate")
 async def generate_video(
     file: UploadFile = File(...),

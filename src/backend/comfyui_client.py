@@ -1547,6 +1547,159 @@ class ComfyUIClient:
             logger.error(f"Output extraction error: {e}")
             return None
     
+    # ─────────────────────────────────────────────────────────────────────────
+    # SDXL Text-to-Image Generation
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def generate_sdxl_image(
+        self,
+        prompt: str,
+        output_dir: str,
+        negative_prompt: str = "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text",
+        checkpoint: str = "CyberRealistic_Pony_v14.1_FP16.safetensors",
+        width: int = 1024,
+        height: int = 1024,
+        steps: int = 30,
+        cfg: float = 7.5,
+        seed: int = -1,
+        sampler_name: str = "dpmpp_2m",
+        scheduler: str = "karras",
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        """
+        Generate image using SDXL checkpoint via ComfyUI.
+        
+        Args:
+            prompt: Text prompt for image generation
+            output_dir: Directory to save output
+            negative_prompt: Negative prompt
+            checkpoint: SDXL checkpoint filename
+            width, height: Image dimensions
+            steps: Number of sampling steps
+            cfg: CFG scale
+            seed: Random seed (-1 for random)
+            sampler_name: Sampler name (dpmpp_2m, euler, etc.)
+            scheduler: Scheduler (karras, normal, etc.)
+            lora_configs: Optional list of LoRA configs [{name, strength}, ...]
+            
+        Returns:
+            Path to generated image, or None on failure
+        """
+        import random
+        
+        if seed == -1:
+            seed = random.randint(0, 2**32 - 1)
+        
+        # Build the SDXL workflow
+        workflow = {
+            "1": {
+                "inputs": {"ckpt_name": checkpoint},
+                "class_type": "CheckpointLoaderSimple",
+                "_meta": {"title": "Load Checkpoint"}
+            },
+            "2": {
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["9", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Positive Prompt"}
+            },
+            "3": {
+                "inputs": {
+                    "text": negative_prompt,
+                    "clip": ["9", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Negative Prompt"}
+            },
+            "4": {
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": 1
+                },
+                "class_type": "EmptyLatentImage",
+                "_meta": {"title": "Empty Latent Image"}
+            },
+            "5": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": sampler_name,
+                    "scheduler": scheduler,
+                    "denoise": 1,
+                    "model": ["9", 0],
+                    "positive": ["2", 0],
+                    "negative": ["3", 0],
+                    "latent_image": ["4", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": {"title": "KSampler"}
+            },
+            "6": {
+                "inputs": {
+                    "samples": ["5", 0],
+                    "vae": ["1", 2]
+                },
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE Decode"}
+            },
+            "8": {
+                "inputs": {
+                    "filename_prefix": "SDXL_T2I",
+                    "images": ["6", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": {"title": "Save Image"}
+            },
+            "9": {
+                "inputs": {
+                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "lora_1": {"on": False, "lora": "None", "strength": 1},
+                    "lora_2": {"on": False, "lora": "None", "strength": 1},
+                    "lora_3": {"on": False, "lora": "None", "strength": 1},
+                    "lora_4": {"on": False, "lora": "None", "strength": 1},
+                    "lora_5": {"on": False, "lora": "None", "strength": 1},
+                    "lora_6": {"on": False, "lora": "None", "strength": 1},
+                    "➕ Add Lora": "",
+                    "model": ["1", 0],
+                    "clip": ["1", 1]
+                },
+                "class_type": "Power Lora Loader (rgthree)",
+                "_meta": {"title": "Power LoRA Loader"}
+            }
+        }
+        
+        # Apply LoRA configs if provided
+        if lora_configs:
+            for i, lora_cfg in enumerate(lora_configs[:6], 1):
+                if lora_cfg.get('name') and lora_cfg.get('name') != 'None':
+                    workflow["9"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": lora_cfg['name'],
+                        "strength": lora_cfg.get('strength', 1.0)
+                    }
+        
+        logger.info(f"🎨 SDXL T2I: {prompt[:50]}... ({width}x{height}, {checkpoint})")
+        
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue SDXL workflow")
+            return None
+        
+        # Wait for completion with timeout
+        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=300)
+        
+        if output_path:
+            logger.info(f"✅ SDXL image generated: {output_path}")
+        else:
+            logger.error("SDXL generation failed or timed out")
+        
+        return output_path
+    
     def generate_video(
         self,
         image_path: Optional[str],
