@@ -820,6 +820,7 @@ class ComfyUIClient:
         # Base heights for each resolution
         base_heights = {
             '480p': 480,
+            '576p': 576,
             '720p': 720,
             '1080p': 1080
         }
@@ -1088,15 +1089,17 @@ class ComfyUIClient:
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
         
-        # Calculate dimensions based on long edge
+        # Calculate dimensions: long_edge is for the SHORT side (the 'p' in 480p/720p refers to height in landscape)
+        # For 480p 9:16 portrait: width=480, height=480*16/9=853
+        # For 480p 16:9 landscape: width=480*16/9=853, height=480
         if ar_w >= ar_h:
-            # Landscape or square - width is long edge
-            width = long_edge
-            height = int(long_edge * ar_h / ar_w)
-        else:
-            # Portrait - height is long edge
+            # Landscape or square - height is the base (short side)
             height = long_edge
             width = int(long_edge * ar_w / ar_h)
+        else:
+            # Portrait - width is the base (short side)
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
         
         # Ensure dimensions are multiples of 8 for VAE
         width = (width // 8) * 8
@@ -1639,7 +1642,7 @@ class ComfyUIClient:
             return None
 
         # 2. Map resolution to long_edge for AspectRatioResolution_Warper
-        resolution_map = {"480p": 480, "720p": 720, "1080p": 1080}
+        resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
         long_edge = resolution_map.get(resolution, 480)
         logger.info(f"📐 Resolution: {resolution} ({aspect_ratio}), long_edge={long_edge}")
 
