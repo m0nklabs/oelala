@@ -1700,6 +1700,313 @@ class ComfyUIClient:
         
         return output_path
     
+    # ─────────────────────────────────────────────────────────────────────────
+    # Flux Dev Text-to-Image Generation
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def generate_flux_image(
+        self,
+        prompt: str,
+        output_dir: str,
+        checkpoint: str = "flux1-dev-fp8.safetensors",
+        width: int = 1024,
+        height: int = 1024,
+        steps: int = 20,
+        guidance: float = 3.5,
+        seed: int = -1,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        """
+        Generate image using Flux Dev via ComfyUI.
+        Note: Flux doesn't use negative prompts or CFG in the traditional sense.
+        
+        Args:
+            prompt: Text prompt for image generation
+            output_dir: Directory to save output
+            checkpoint: Flux checkpoint filename
+            width, height: Image dimensions
+            steps: Number of sampling steps (20 recommended)
+            guidance: Flux guidance scale (3.5 recommended)
+            seed: Random seed (-1 for random)
+            lora_configs: Optional list of LoRA configs [{name, strength}, ...]
+            
+        Returns:
+            Path to generated image, or None on failure
+        """
+        import random
+        
+        if seed == -1:
+            seed = random.randint(0, 2**63 - 1)
+        
+        # Build the Flux workflow with Power LoRA Loader
+        workflow = {
+            "1": {
+                "inputs": {"ckpt_name": checkpoint},
+                "class_type": "CheckpointLoaderSimple",
+                "_meta": {"title": "Load Checkpoint"}
+            },
+            "2": {
+                "inputs": {
+                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "lora_1": {"on": False, "lora": "None", "strength": 1},
+                    "lora_2": {"on": False, "lora": "None", "strength": 1},
+                    "lora_3": {"on": False, "lora": "None", "strength": 1},
+                    "lora_4": {"on": False, "lora": "None", "strength": 1},
+                    "➕ Add Lora": "",
+                    "model": ["1", 0],
+                    "clip": ["1", 1]
+                },
+                "class_type": "Power Lora Loader (rgthree)",
+                "_meta": {"title": "Power LoRA Loader"}
+            },
+            "3": {
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["2", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Positive Prompt"}
+            },
+            "4": {
+                "inputs": {
+                    "text": "",
+                    "clip": ["2", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Negative Prompt (empty for Flux)"}
+            },
+            "5": {
+                "inputs": {
+                    "guidance": guidance,
+                    "conditioning": ["3", 0]
+                },
+                "class_type": "FluxGuidance",
+                "_meta": {"title": "FluxGuidance"}
+            },
+            "6": {
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": 1
+                },
+                "class_type": "EmptySD3LatentImage",
+                "_meta": {"title": "EmptySD3LatentImage"}
+            },
+            "7": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": 1,
+                    "sampler_name": "euler",
+                    "scheduler": "simple",
+                    "denoise": 1,
+                    "model": ["2", 0],
+                    "positive": ["5", 0],
+                    "negative": ["4", 0],
+                    "latent_image": ["6", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": {"title": "KSampler"}
+            },
+            "8": {
+                "inputs": {
+                    "samples": ["7", 0],
+                    "vae": ["1", 2]
+                },
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE Decode"}
+            },
+            "9": {
+                "inputs": {
+                    "filename_prefix": "Flux_T2I",
+                    "images": ["8", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": {"title": "Save Image"}
+            }
+        }
+        
+        # Apply LoRA configs if provided
+        if lora_configs:
+            for i, lora_cfg in enumerate(lora_configs[:4], 1):
+                if lora_cfg.get('name') and lora_cfg.get('name') != 'None':
+                    workflow["2"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": lora_cfg['name'],
+                        "strength": lora_cfg.get('strength', 1.0)
+                    }
+        
+        logger.info(f"⚡ Flux T2I: {prompt[:50]}... ({width}x{height}, guidance={guidance})")
+        
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue Flux workflow")
+            return None
+        
+        # Wait for completion with timeout (Flux is slower)
+        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=600)
+        
+        if output_path:
+            logger.info(f"✅ Flux image generated: {output_path}")
+        else:
+            logger.error("Flux generation failed or timed out")
+        
+        return output_path
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # SD 1.5 Text-to-Image Generation
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def generate_sd15_image(
+        self,
+        prompt: str,
+        output_dir: str,
+        negative_prompt: str = "(deformed, blurry, bad anatomy, extra fingers, mutated hands, poorly drawn face, low quality:1.4)",
+        checkpoint: str = "Realistic_Vision_V5.1.safetensors",
+        width: int = 512,
+        height: int = 768,
+        steps: int = 25,
+        cfg: float = 7.0,
+        seed: int = -1,
+        sampler_name: str = "dpmpp_sde",
+        scheduler: str = "karras",
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        """
+        Generate image using SD 1.5 checkpoint via ComfyUI.
+        
+        Args:
+            prompt: Text prompt for image generation
+            output_dir: Directory to save output
+            negative_prompt: Negative prompt
+            checkpoint: SD 1.5 checkpoint filename
+            width, height: Image dimensions (512x512 to 768x768 optimal)
+            steps: Number of sampling steps
+            cfg: CFG scale
+            seed: Random seed (-1 for random)
+            sampler_name: Sampler name
+            scheduler: Scheduler
+            lora_configs: Optional list of LoRA configs [{name, strength}, ...]
+            
+        Returns:
+            Path to generated image, or None on failure
+        """
+        import random
+        
+        if seed == -1:
+            seed = random.randint(0, 2**32 - 1)
+        
+        # Build the SD 1.5 workflow with Power LoRA Loader
+        workflow = {
+            "1": {
+                "inputs": {"ckpt_name": checkpoint},
+                "class_type": "CheckpointLoaderSimple",
+                "_meta": {"title": "Load Checkpoint"}
+            },
+            "2": {
+                "inputs": {
+                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "lora_1": {"on": False, "lora": "None", "strength": 1},
+                    "lora_2": {"on": False, "lora": "None", "strength": 1},
+                    "lora_3": {"on": False, "lora": "None", "strength": 1},
+                    "lora_4": {"on": False, "lora": "None", "strength": 1},
+                    "lora_5": {"on": False, "lora": "None", "strength": 1},
+                    "lora_6": {"on": False, "lora": "None", "strength": 1},
+                    "➕ Add Lora": "",
+                    "model": ["1", 0],
+                    "clip": ["1", 1]
+                },
+                "class_type": "Power Lora Loader (rgthree)",
+                "_meta": {"title": "Power LoRA Loader"}
+            },
+            "3": {
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["2", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Positive Prompt"}
+            },
+            "4": {
+                "inputs": {
+                    "text": negative_prompt,
+                    "clip": ["2", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Negative Prompt"}
+            },
+            "5": {
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": 1
+                },
+                "class_type": "EmptyLatentImage",
+                "_meta": {"title": "Empty Latent Image"}
+            },
+            "6": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": sampler_name,
+                    "scheduler": scheduler,
+                    "denoise": 1,
+                    "model": ["2", 0],
+                    "positive": ["3", 0],
+                    "negative": ["4", 0],
+                    "latent_image": ["5", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": {"title": "KSampler"}
+            },
+            "7": {
+                "inputs": {
+                    "samples": ["6", 0],
+                    "vae": ["1", 2]
+                },
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE Decode"}
+            },
+            "8": {
+                "inputs": {
+                    "filename_prefix": "SD15_T2I",
+                    "images": ["7", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": {"title": "Save Image"}
+            }
+        }
+        
+        # Apply LoRA configs if provided
+        if lora_configs:
+            for i, lora_cfg in enumerate(lora_configs[:6], 1):
+                if lora_cfg.get('name') and lora_cfg.get('name') != 'None':
+                    workflow["2"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": lora_cfg['name'],
+                        "strength": lora_cfg.get('strength', 1.0)
+                    }
+        
+        logger.info(f"🖼️ SD1.5 T2I: {prompt[:50]}... ({width}x{height}, {checkpoint})")
+        
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue SD1.5 workflow")
+            return None
+        
+        # Wait for completion with timeout
+        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=180)
+        
+        if output_path:
+            logger.info(f"✅ SD1.5 image generated: {output_path}")
+        else:
+            logger.error("SD1.5 generation failed or timed out")
+        
+        return output_path
+    
     def generate_video(
         self,
         image_path: Optional[str],

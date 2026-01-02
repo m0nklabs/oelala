@@ -5,25 +5,36 @@ import { postForm } from '../../api'
 
 // Model categories
 const MODEL_CATEGORIES = {
-  diffusers: [
-    { value: 'sd3.5-large-int8', label: 'SD3.5 Large (INT8)' },
-    { value: 'realvisxl-v5.0', label: 'RealVisXL V5.0' },
+  flux: [
+    { value: 'flux1-dev-fp8', label: 'Flux.1 Dev (FP8)', category: 'Flux' },
   ],
   sdxl: [
     { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony', category: 'Realistic/Pony' },
-    { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper XL Lightning', category: 'General' },
+    { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', category: 'General' },
     { value: 'illustriousRealismBy_v10VAE.safetensors', label: 'Illustrious Realism', category: 'Realistic' },
-    { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL Ragnarok', category: 'General' },
+    { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL', category: 'General' },
     { value: 'novaAnimeXL_ilV150.safetensors', label: 'Nova Anime XL', category: 'Anime' },
     { value: 'ponyDiffusionV6XL_v6StartWithThisOne.safetensors', label: 'Pony Diffusion V6', category: 'Pony' },
     { value: 'reapony_v90.safetensors', label: 'Reapony V9', category: 'Realistic/Pony' },
     { value: 'ultraRealisticByStable_v20FP16.safetensors', label: 'Ultra Realistic', category: 'Realistic' },
-    { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious SDXL', category: 'Anime' },
-  ]
+    { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious', category: 'Anime' },
+  ],
+  sd15: [
+    { value: 'Realistic_Vision_V5.1.safetensors', label: 'Realistic Vision V5.1', category: 'Realistic' },
+  ],
+  diffusers: [
+    { value: 'sd3.5-large-int8', label: 'SD3.5 Large (INT8)' },
+    { value: 'realvisxl-v5.0', label: 'RealVisXL V5.0' },
+  ],
 }
 
-// Check if model is SDXL (ComfyUI)
-const isSDXLModel = (model) => model.endsWith('.safetensors')
+// Determine model type
+const getModelType = (model) => {
+  if (model.startsWith('flux')) return 'flux'
+  if (model === 'Realistic_Vision_V5.1.safetensors') return 'sd15'
+  if (model.endsWith('.safetensors')) return 'sdxl'
+  return 'diffusers'
+}
 
 export default function TextToImageTool({ onOutput }) {
   const [prompt, setPrompt] = useState('')
@@ -37,9 +48,10 @@ export default function TextToImageTool({ onOutput }) {
   const [progress, setProgress] = useState(0)
   const [showAdvanced, setShowAdvanced] = useState(false)
   
-  // Advanced settings for SDXL
+  // Advanced settings
   const [steps, setSteps] = useState(30)
   const [cfg, setCfg] = useState(7.5)
+  const [guidance, setGuidance] = useState(3.5)  // For Flux
   const [seed, setSeed] = useState(-1)
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
@@ -59,11 +71,17 @@ export default function TextToImageTool({ onOutput }) {
         formData.append('prompt', prompt)
         formData.append('aspect_ratio', aspectRatio)
         
-        // Different endpoint for SDXL vs diffusers models
-        const useSDXL = isSDXLModel(model)
-        const endpoint = useSDXL ? '/generate-sdxl' : '/generate-image'
+        // Determine endpoint based on model type
+        const modelType = getModelType(model)
+        let endpoint = '/generate-image'
         
-        if (useSDXL) {
+        if (modelType === 'flux') {
+          endpoint = '/generate-flux'
+          formData.append('steps', steps)
+          formData.append('guidance', guidance)
+          formData.append('seed', seed)
+        } else if (modelType === 'sdxl') {
+          endpoint = '/generate-sdxl'
           formData.append('checkpoint', model)
           formData.append('negative_prompt', negativePrompt)
           formData.append('steps', steps)
@@ -71,7 +89,16 @@ export default function TextToImageTool({ onOutput }) {
           formData.append('seed', seed)
           formData.append('sampler_name', sampler)
           formData.append('scheduler', scheduler)
+        } else if (modelType === 'sd15') {
+          endpoint = '/generate-sd15'
+          formData.append('negative_prompt', negativePrompt)
+          formData.append('steps', steps)
+          formData.append('cfg', cfg)
+          formData.append('seed', seed)
+          formData.append('sampler_name', sampler)
+          formData.append('scheduler', scheduler)
         } else {
+          // Diffusers
           formData.append('mode', mode)
           formData.append('model', model)
           formData.append('job_id', jobId)
@@ -97,7 +124,7 @@ export default function TextToImageTool({ onOutput }) {
           }, 1000)
         }
         
-        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, useSDXL })
+        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType })
         
         const result = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
         if (!result.ok) {
@@ -189,14 +216,37 @@ export default function TextToImageTool({ onOutput }) {
         <div className="grok-card-header">
           <div className="grok-card-title">Model</div>
           <span className="nav-badge" style={{ fontSize: '0.7rem' }}>
-            {isSDXLModel(model) ? 'ComfyUI' : 'Diffusers'}
+            {getModelType(model).toUpperCase()}
           </span>
+        </div>
+        
+        {/* Flux Models */}
+        <div style={{ marginBottom: '12px' }}>
+          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
+            ⚡ Flux (Best Quality)
+          </label>
+          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
+            {MODEL_CATEGORIES.flux.map((option) => (
+              <button
+                key={option.value}
+                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
+                onClick={() => setModel(option.value)}
+                style={{ 
+                  fontSize: '0.75rem', 
+                  padding: '6px 10px',
+                  minWidth: 'auto'
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         
         {/* SDXL Models (ComfyUI) */}
         <div style={{ marginBottom: '12px' }}>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            SDXL Checkpoints (ComfyUI)
+            🎨 SDXL Checkpoints
           </label>
           <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
             {MODEL_CATEGORIES.sdxl.map((option) => (
@@ -217,10 +267,33 @@ export default function TextToImageTool({ onOutput }) {
           </div>
         </div>
         
+        {/* SD 1.5 Models */}
+        <div style={{ marginBottom: '12px' }}>
+          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
+            🖼️ SD 1.5 (Fast, Low VRAM)
+          </label>
+          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
+            {MODEL_CATEGORIES.sd15.map((option) => (
+              <button
+                key={option.value}
+                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
+                onClick={() => setModel(option.value)}
+                style={{ 
+                  fontSize: '0.75rem', 
+                  padding: '6px 10px',
+                  minWidth: 'auto'
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        
         {/* Diffusers Models */}
         <div>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            Diffusers (Python)
+            🐍 Diffusers (Python)
           </label>
           <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
             {MODEL_CATEGORIES.diffusers.map((option) => (
@@ -241,8 +314,8 @@ export default function TextToImageTool({ onOutput }) {
         </div>
       </div>
 
-      {/* Negative Prompt (only for SDXL) */}
-      {isSDXLModel(model) && (
+      {/* Negative Prompt (for SDXL and SD1.5, not Flux) */}
+      {(getModelType(model) === 'sdxl' || getModelType(model) === 'sd15') && (
         <div className="grok-card">
           <div className="grok-card-header">
             <div className="grok-card-title">Negative Prompt</div>
@@ -333,8 +406,61 @@ export default function TextToImageTool({ onOutput }) {
               </div>
             </div>
             
-            {/* SDXL-specific settings */}
-            {isSDXLModel(model) && (
+            {/* Flux-specific settings */}
+            {getModelType(model) === 'flux' && (
+              <>
+                <div className="form-group" style={{ marginTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Steps</label>
+                    <span className="nav-badge">{steps}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="30"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value))}
+                    className="form-range"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Guidance</label>
+                    <span className="nav-badge">{guidance}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    value={guidance}
+                    onChange={(e) => setGuidance(parseFloat(e.target.value))}
+                    className="form-range"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="grok-section-label">Seed (-1 = random)</label>
+                  <input
+                    type="number"
+                    value={seed}
+                    onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
+                    className="form-input"
+                    style={{ 
+                      backgroundColor: '#0f0f0f',
+                      border: '1px solid #333',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+              </>
+            )}
+            
+            {/* SDXL and SD1.5 settings */}
+            {(getModelType(model) === 'sdxl' || getModelType(model) === 'sd15') && (
               <>
                 <div className="form-group" style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>

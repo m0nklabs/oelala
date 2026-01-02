@@ -1387,6 +1387,178 @@ async def generate_sdxl_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Flux Text-to-Image via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/generate-flux")
+async def generate_flux_image(
+    prompt: str = Form(...),
+    aspect_ratio: str = Form("1:1"),
+    steps: int = Form(20),
+    guidance: float = Form(3.5),
+    seed: int = Form(-1),
+    lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
+):
+    """
+    Generate image using Flux Dev via ComfyUI.
+    Flux doesn't use negative prompts - uses guidance instead.
+    """
+    from .comfyui_client import get_comfyui_client
+    import json as json_lib
+    
+    logger.info(f"⚡ Flux T2I request: {prompt[:50]}...")
+    
+    # Parse LoRA configs
+    try:
+        loras = json_lib.loads(lora_configs) if lora_configs else []
+    except json_lib.JSONDecodeError:
+        loras = []
+    
+    # Map aspect ratios to Flux-optimal resolutions
+    resolutions = {
+        "1:1": (1024, 1024),
+        "16:9": (1344, 768),
+        "9:16": (768, 1344),
+        "4:3": (1152, 864),
+        "3:4": (864, 1152),
+        "2:3": (832, 1216),
+        "3:2": (1216, 832),
+        "21:9": (1536, 640),
+        "9:21": (640, 1536),
+    }
+    width, height = resolutions.get(aspect_ratio, (1024, 1024))
+    
+    try:
+        client = get_comfyui_client()
+        
+        output_path = client.generate_flux_image(
+            prompt=prompt,
+            output_dir=str(OUTPUT_DIR),
+            width=width,
+            height=height,
+            steps=steps,
+            guidance=guidance,
+            seed=seed,
+            lora_configs=loras,
+        )
+        
+        if not output_path:
+            raise HTTPException(status_code=500, detail="Flux generation failed")
+        
+        filename = Path(output_path).name
+        
+        return {
+            "status": "success",
+            "url": f"/files/{filename}",
+            "filename": filename,
+            "meta": {
+                "prompt": prompt,
+                "model": "flux1-dev-fp8",
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "guidance": guidance,
+                "seed": seed,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Flux generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SD 1.5 Text-to-Image via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/generate-sd15")
+async def generate_sd15_image(
+    prompt: str = Form(...),
+    negative_prompt: str = Form("(deformed, blurry, bad anatomy, extra fingers, mutated hands, poorly drawn face, low quality:1.4)"),
+    aspect_ratio: str = Form("2:3"),
+    steps: int = Form(25),
+    cfg: float = Form(7.0),
+    seed: int = Form(-1),
+    sampler_name: str = Form("dpmpp_sde"),
+    scheduler: str = Form("karras"),
+    lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
+):
+    """
+    Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI.
+    """
+    from .comfyui_client import get_comfyui_client
+    import json as json_lib
+    
+    logger.info(f"🖼️ SD1.5 T2I request: {prompt[:50]}...")
+    
+    # Parse LoRA configs
+    try:
+        loras = json_lib.loads(lora_configs) if lora_configs else []
+    except json_lib.JSONDecodeError:
+        loras = []
+    
+    # Map aspect ratios to SD1.5-optimal resolutions (512-768 range)
+    resolutions = {
+        "1:1": (512, 512),
+        "16:9": (768, 432),
+        "9:16": (432, 768),
+        "4:3": (640, 480),
+        "3:4": (480, 640),
+        "2:3": (512, 768),
+        "3:2": (768, 512),
+    }
+    width, height = resolutions.get(aspect_ratio, (512, 768))
+    
+    try:
+        client = get_comfyui_client()
+        
+        output_path = client.generate_sd15_image(
+            prompt=prompt,
+            output_dir=str(OUTPUT_DIR),
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            lora_configs=loras,
+        )
+        
+        if not output_path:
+            raise HTTPException(status_code=500, detail="SD1.5 generation failed")
+        
+        filename = Path(output_path).name
+        
+        return {
+            "status": "success",
+            "url": f"/files/{filename}",
+            "filename": filename,
+            "meta": {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "model": "Realistic_Vision_V5.1",
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SD1.5 generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/generate")
 async def generate_video(
     file: UploadFile = File(...),
