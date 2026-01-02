@@ -1559,6 +1559,76 @@ async def generate_sd15_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Wan2.2 Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/generate-wan22-t2i")
+async def generate_wan22_t2i(
+    prompt: str = Form(...),
+    aspect_ratio: str = Form("1:1"),
+    steps: int = Form(8),
+    seed: int = Form(-1),
+):
+    """
+    Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
+    Uses DisTorch2 multi-GPU setup with high/low noise models.
+    Very high quality but slower than other T2I models.
+    """
+    from .comfyui_client import get_comfyui_client
+    
+    logger.info(f"🎬 Wan2.2 T2I request: {prompt[:50]}...")
+    
+    # Map aspect ratios to Wan2.2-compatible resolutions
+    resolutions = {
+        "1:1": (512, 512),
+        "16:9": (832, 480),
+        "9:16": (480, 832),
+        "4:3": (640, 480),
+        "3:4": (480, 640),
+        "2:3": (512, 768),
+        "3:2": (768, 512),
+    }
+    width, height = resolutions.get(aspect_ratio, (512, 512))
+    
+    try:
+        client = get_comfyui_client()
+        
+        output_path = client.generate_wan22_t2i(
+            prompt=prompt,
+            output_dir=str(OUTPUT_DIR),
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed,
+        )
+        
+        if not output_path:
+            raise HTTPException(status_code=500, detail="Wan2.2 T2I generation failed")
+        
+        filename = Path(output_path).name
+        
+        return {
+            "status": "success",
+            "url": f"/files/{filename}",
+            "filename": filename,
+            "meta": {
+                "prompt": prompt,
+                "model": "wan2.2-t2i-distorch2",
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "seed": seed,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Wan2.2 T2I generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/generate")
 async def generate_video(
     file: UploadFile = File(...),

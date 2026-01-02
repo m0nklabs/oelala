@@ -5,6 +5,9 @@ import { postForm } from '../../api'
 
 // Model categories
 const MODEL_CATEGORIES = {
+  wan22: [
+    { value: 'wan2.2-t2i', label: 'Wan2.2 T2I (Multi-GPU)', category: 'Video Model' },
+  ],
   flux: [
     { value: 'flux1-dev-fp8', label: 'Flux.1 Dev (FP8)', category: 'Flux' },
   ],
@@ -30,6 +33,7 @@ const MODEL_CATEGORIES = {
 
 // Determine model type
 const getModelType = (model) => {
+  if (model === 'wan2.2-t2i') return 'wan22'
   if (model.startsWith('flux')) return 'flux'
   if (model === 'Realistic_Vision_V5.1.safetensors') return 'sd15'
   if (model.endsWith('.safetensors')) return 'sdxl'
@@ -75,7 +79,11 @@ export default function TextToImageTool({ onOutput }) {
         const modelType = getModelType(model)
         let endpoint = '/generate-image'
         
-        if (modelType === 'flux') {
+        if (modelType === 'wan22') {
+          endpoint = '/generate-wan22-t2i'
+          formData.append('steps', steps)
+          formData.append('seed', seed)
+        } else if (modelType === 'flux') {
           endpoint = '/generate-flux'
           formData.append('steps', steps)
           formData.append('guidance', guidance)
@@ -161,7 +169,13 @@ export default function TextToImageTool({ onOutput }) {
   
   // Get model display label
   const getModelLabel = () => {
-    const allModels = [...MODEL_CATEGORIES.diffusers, ...MODEL_CATEGORIES.sdxl]
+    const allModels = [
+      ...MODEL_CATEGORIES.wan22,
+      ...MODEL_CATEGORIES.flux,
+      ...MODEL_CATEGORIES.sdxl,
+      ...MODEL_CATEGORIES.sd15,
+      ...MODEL_CATEGORIES.diffusers
+    ]
     const found = allModels.find(m => m.value === model)
     return found?.label || model
   }
@@ -274,6 +288,29 @@ export default function TextToImageTool({ onOutput }) {
           </label>
           <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
             {MODEL_CATEGORIES.sd15.map((option) => (
+              <button
+                key={option.value}
+                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
+                onClick={() => setModel(option.value)}
+                style={{ 
+                  fontSize: '0.75rem', 
+                  padding: '6px 10px',
+                  minWidth: 'auto'
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Wan2.2 Models (Video Model T2I) */}
+        <div style={{ marginBottom: '12px' }}>
+          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
+            🎬 Wan2.2 (Video Model T2I)
+          </label>
+          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
+            {MODEL_CATEGORIES.wan22.map((option) => (
               <button
                 key={option.value}
                 className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
@@ -438,6 +475,46 @@ export default function TextToImageTool({ onOutput }) {
                     onChange={(e) => setGuidance(parseFloat(e.target.value))}
                     className="form-range"
                   />
+                </div>
+                
+                <div className="form-group">
+                  <label className="grok-section-label">Seed (-1 = random)</label>
+                  <input
+                    type="number"
+                    value={seed}
+                    onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
+                    className="form-input"
+                    style={{ 
+                      backgroundColor: '#0f0f0f',
+                      border: '1px solid #333',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+              </>
+            )}
+            
+            {/* Wan2.2 T2I settings */}
+            {getModelType(model) === 'wan22' && (
+              <>
+                <div className="form-group" style={{ marginTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Steps</label>
+                    <span className="nav-badge">{steps}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="50"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value))}
+                    className="form-range"
+                  />
+                  <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: '4px' }}>
+                    Multi-GPU workflow (DisTorch2) - 2-stage denoising
+                  </div>
                 </div>
                 
                 <div className="form-group">

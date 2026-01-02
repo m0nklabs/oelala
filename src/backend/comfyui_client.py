@@ -2007,6 +2007,210 @@ class ComfyUIClient:
         
         return output_path
     
+    # ─────────────────────────────────────────────────────────────────────────
+    # Wan2.2 Text-to-Image Generation (DisTorch2 Multi-GPU)
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    def generate_wan22_t2i(
+        self,
+        prompt: str,
+        output_dir: str,
+        width: int = 512,
+        height: int = 512,
+        steps: int = 8,
+        seed: int = -1,
+    ) -> Optional[str]:
+        """
+        Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
+        Uses DisTorch2 multi-GPU setup with high/low noise models.
+        
+        Args:
+            prompt: Text prompt for image generation
+            output_dir: Directory to save output
+            width, height: Image dimensions
+            steps: Total number of sampling steps (split between high/low noise)
+            seed: Random seed (-1 for random)
+            
+        Returns:
+            Path to generated image, or None on failure
+        """
+        import random
+        
+        if seed == -1:
+            seed = random.randint(0, 2**63 - 1)
+        seed2 = random.randint(0, 2**63 - 1)
+        
+        half_steps = steps // 2
+        
+        # Build the Wan2.2 T2I workflow (DisTorch2 multi-GPU)
+        workflow = {
+            "3": {
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["29", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Positive Prompt"}
+            },
+            "4": {
+                "inputs": {
+                    "text": "",
+                    "clip": ["29", 1]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Negative Prompt"}
+            },
+            "5": {
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "length": 1,
+                    "batch_size": 1
+                },
+                "class_type": "EmptyHunyuanLatentVideo",
+                "_meta": {"title": "Empty HunyuanVideo 1.0 Latent"}
+            },
+            "9": {
+                "inputs": {
+                    "samples": ["36", 0],
+                    "vae": ["55", 0]
+                },
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE Decode"}
+            },
+            "10": {
+                "inputs": {
+                    "filename_prefix": "Wan22_T2I",
+                    "images": ["9", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": {"title": "Save Image"}
+            },
+            "29": {
+                "inputs": {
+                    "lora_name": "Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors",
+                    "strength_model": 0,
+                    "strength_clip": 0,
+                    "model": ["50", 0],
+                    "clip": ["51", 0]
+                },
+                "class_type": "LoraLoader",
+                "_meta": {"title": "Load LoRA"}
+            },
+            "35": {
+                "inputs": {
+                    "add_noise": "enable",
+                    "noise_seed": seed,
+                    "steps": steps,
+                    "cfg": 1,
+                    "sampler_name": "euler",
+                    "scheduler": "simple",
+                    "start_at_step": 0,
+                    "end_at_step": half_steps,
+                    "return_with_leftover_noise": "disable",
+                    "model": ["29", 0],
+                    "positive": ["3", 0],
+                    "negative": ["4", 0],
+                    "latent_image": ["5", 0]
+                },
+                "class_type": "KSamplerAdvanced",
+                "_meta": {"title": "KSampler (Advanced)"}
+            },
+            "36": {
+                "inputs": {
+                    "add_noise": "enable",
+                    "noise_seed": seed2,
+                    "steps": steps,
+                    "cfg": 1,
+                    "sampler_name": "euler",
+                    "scheduler": "simple",
+                    "start_at_step": half_steps,
+                    "end_at_step": steps,
+                    "return_with_leftover_noise": "disable",
+                    "model": ["44", 0],
+                    "positive": ["3", 0],
+                    "negative": ["4", 0],
+                    "latent_image": ["35", 0]
+                },
+                "class_type": "KSamplerAdvanced",
+                "_meta": {"title": "KSampler (Advanced)"}
+            },
+            "44": {
+                "inputs": {
+                    "lora_name": "Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors",
+                    "strength_model": 0,
+                    "model": ["52", 0]
+                },
+                "class_type": "LoraLoaderModelOnly",
+                "_meta": {"title": "LoraLoaderModelOnly"}
+            },
+            "50": {
+                "inputs": {
+                    "unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+                    "weight_dtype": "default",
+                    "compute_device": "cuda:0",
+                    "virtual_vram_gb": 5,
+                    "donor_device": "cuda:1",
+                    "expert_mode_allocations": "",
+                    "eject_models": True
+                },
+                "class_type": "UNETLoaderDisTorch2MultiGPU",
+                "_meta": {"title": "UNETLoaderDisTorch2MultiGPU"}
+            },
+            "51": {
+                "inputs": {
+                    "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+                    "type": "wan",
+                    "device": "cuda:0"
+                },
+                "class_type": "CLIPLoaderMultiGPU",
+                "_meta": {"title": "CLIPLoaderMultiGPU"}
+            },
+            "52": {
+                "inputs": {
+                    "unet_name": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+                    "weight_dtype": "default",
+                    "compute_device": "cuda:0",
+                    "virtual_vram_gb": 5,
+                    "donor_device": "cuda:1",
+                    "expert_mode_allocations": "",
+                    "eject_models": True
+                },
+                "class_type": "UNETLoaderDisTorch2MultiGPU",
+                "_meta": {"title": "UNETLoaderDisTorch2MultiGPU"}
+            },
+            "55": {
+                "inputs": {
+                    "vae_name": "wan_2.1_vae.safetensors",
+                    "compute_device": "cuda:0",
+                    "virtual_vram_gb": 0,
+                    "donor_device": "cuda:1",
+                    "expert_mode_allocations": "",
+                    "eject_models": True
+                },
+                "class_type": "VAELoaderDisTorch2MultiGPU",
+                "_meta": {"title": "VAELoaderDisTorch2MultiGPU"}
+            }
+        }
+        
+        logger.info(f"🎬 Wan2.2 T2I: {prompt[:50]}... ({width}x{height}, {steps} steps)")
+        
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue Wan2.2 T2I workflow")
+            return None
+        
+        # Wait for completion with timeout (Wan2.2 is slower)
+        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=600)
+        
+        if output_path:
+            logger.info(f"✅ Wan2.2 T2I image generated: {output_path}")
+        else:
+            logger.error("Wan2.2 T2I generation failed or timed out")
+        
+        return output_path
+    
     def generate_video(
         self,
         image_path: Optional[str],
