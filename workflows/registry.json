@@ -339,6 +339,112 @@
                 }
             }
         },
+        "wan22_i2v_distorch2": {
+            "name": "WAN 2.2 I2V DisTorch2 Multi-GPU",
+            "file": "ImageToVideo/wan22_i2v_distorch2_api.json",
+            "category": "ImageToVideo",
+            "description": "High performance I2V with DisTorch2 multi-GPU distribution. Uses dual UNET (high/low noise) with LoRAs. Allocation: cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+            "parameters": {
+                "image": {
+                    "node_id": "18",
+                    "input_key": "image",
+                    "type": "image",
+                    "label": "Input Image",
+                    "description": "Source image for video generation"
+                },
+                "prompt": {
+                    "node_id": "7",
+                    "input_key": "text",
+                    "type": "string",
+                    "default": "smooth motion, cinematic",
+                    "label": "Prompt",
+                    "description": "Describe the motion/animation you want"
+                },
+                "negative_prompt": {
+                    "node_id": "8",
+                    "input_key": "text",
+                    "type": "string",
+                    "default": "low quality, blurry, out of focus, unstable camera, artifacts",
+                    "label": "Negative Prompt",
+                    "description": "What to avoid in the generation"
+                },
+                "steps": {
+                    "node_id": "10",
+                    "input_key": "steps",
+                    "type": "integer",
+                    "default": 6,
+                    "min": 4,
+                    "max": 30,
+                    "step": 1,
+                    "label": "Steps",
+                    "description": "Total sampling steps (split between high/low noise)"
+                },
+                "cfg": {
+                    "node_id": "10",
+                    "input_key": "cfg",
+                    "type": "float",
+                    "default": 1.0,
+                    "min": 1.0,
+                    "max": 10.0,
+                    "step": 0.5,
+                    "label": "CFG Scale",
+                    "description": "Classifier-free guidance (1.0 for LightX2V LoRA)"
+                },
+                "seed": {
+                    "node_id": "10",
+                    "input_key": "noise_seed",
+                    "type": "integer",
+                    "default": -1,
+                    "min": -1,
+                    "max": 2147483647,
+                    "label": "Seed",
+                    "description": "-1 for random seed"
+                },
+                "width": {
+                    "node_id": "16",
+                    "input_key": "width",
+                    "type": "integer",
+                    "default": 1024,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Width",
+                    "description": "Output video width"
+                },
+                "height": {
+                    "node_id": "16",
+                    "input_key": "height",
+                    "type": "integer",
+                    "default": 576,
+                    "min": 256,
+                    "max": 1280,
+                    "step": 16,
+                    "label": "Height",
+                    "description": "Output video height"
+                },
+                "num_frames": {
+                    "node_id": "16",
+                    "input_key": "length",
+                    "type": "integer",
+                    "default": 101,
+                    "min": 17,
+                    "max": 161,
+                    "step": 4,
+                    "label": "Frames",
+                    "description": "Number of frames (101=~6s @ 16fps)"
+                },
+                "frame_rate": {
+                    "node_id": "13",
+                    "input_key": "frame_rate",
+                    "type": "integer",
+                    "default": 16,
+                    "min": 8,
+                    "max": 30,
+                    "label": "FPS",
+                    "description": "Output video framerate"
+                }
+            }
+        },
         "joycaption_i2t": {
             "name": "JoyCaption Image to Text",
             "file": "ImageToText/joycaption_i2t_api.json",

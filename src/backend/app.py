@@ -483,6 +483,307 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
             "is_start_image": is_start_image,
         }
         
+        # Include metadata if requested (for images with embedded prompts)
+        if include_metadata and media_type == 'image':
+            try:
+                from PIL import Image
+                img = Image.open(file_path)
+                metadata = {"has_metadata": False}
+                
+                if hasattr(img, 'info') and img.info:
+                    # Try to extract prompt from ComfyUI workflow JSON
+                    if 'prompt' in img.info:
+                        metadata["has_metadata"] = True
+                        try:
+                            workflow = json.loads(img.info['prompt'])
+                            # Collect all text prompts for later analysis
+                            all_texts = []
+                            loras_found = []
+                            
+                            # Extract prompts from various node types
+                            for node_id, node in workflow.items():
+                                if isinstance(node, dict):
+                                    inputs = node.get('inputs', {})
+                                    class_type = node.get('class_type', '')
+                                    
+                                    # Wan2.2 / standard positive_prompt
+                                    if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
+                                        text = inputs['positive_prompt'].strip()
+                                        if len(text) > 20:
+                                            metadata['positive_prompt'] = text
+                                    # Negative prompt
+                                    if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
+                                        text = inputs['negative_prompt'].strip()
+                                        if text:
+                                            metadata['negative_prompt'] = text
+                                    
+                                    # CLIPTextEncode text - collect all for analysis
+                                    if 'text' in inputs and isinstance(inputs['text'], str):
+                                        text = inputs['text'].strip()
+                                        if len(text) > 10:
+                                            all_texts.append({'text': text, 'class_type': class_type, 'node_id': node_id})
+                                    
+                                    # Extract generation params
+                                    if 'steps' in inputs and isinstance(inputs['steps'], (int, float)):
+                                        metadata['steps'] = int(inputs['steps'])
+                                    if 'cfg' in inputs and isinstance(inputs['cfg'], (int, float)):
+                                        metadata['cfg'] = float(inputs['cfg'])
+                                    if 'seed' in inputs and isinstance(inputs['seed'], (int, float)):
+                                        metadata['seed'] = int(inputs['seed'])
+                                    
+                                    # Extract sampler info
+                                    if 'sampler_name' in inputs and isinstance(inputs['sampler_name'], str):
+                                        metadata['sampler'] = inputs['sampler_name']
+                                    if 'scheduler' in inputs and isinstance(inputs['scheduler'], str):
+                                        metadata['scheduler'] = inputs['scheduler']
+                                    
+                                    # Extract resolution from EmptyLatentImage or similar
+                                    if 'width' in inputs and 'height' in inputs:
+                                        w = inputs.get('width')
+                                        h = inputs.get('height')
+                                        if isinstance(w, (int, float)) and isinstance(h, (int, float)):
+                                            metadata['width'] = int(w)
+                                            metadata['height'] = int(h)
+                                    
+                                    # Extract LoRA info
+                                    if 'LoraLoader' in class_type or 'lora' in class_type.lower():
+                                        lora_name = inputs.get('lora_name', '')
+                                        lora_strength = inputs.get('strength_model', inputs.get('strength', 1.0))
+                                        if lora_name:
+                                            loras_found.append({
+                                                'name': lora_name,
+                                                'strength': float(lora_strength) if isinstance(lora_strength, (int, float)) else 1.0
+                                            })
+                                    
+                                    # Wan2.2 specific LoRA loader
+                                    if 'WanVideoLoraSelect' in class_type or 'lora_high' in inputs or 'lora_low' in inputs:
+                                        for key in ['lora_high', 'lora_low', 'lora_name']:
+                                            if key in inputs and inputs[key]:
+                                                lora_name = inputs[key]
+                                                if isinstance(lora_name, str) and lora_name not in ['None', 'none', '']:
+                                                    strength = inputs.get('strength', inputs.get('lora_strength', 1.0))
+                                                    loras_found.append({
+                                                        'name': lora_name,
+                                                        'strength': float(strength) if isinstance(strength, (int, float)) else 1.0
+                                                    })
+                                    
+                                    # Extract model/checkpoint info
+                                    if 'ckpt_name' in inputs and isinstance(inputs['ckpt_name'], str):
+                                        metadata['model'] = inputs['ckpt_name']
+                                    if 'unet_name' in inputs and isinstance(inputs['unet_name'], str):
+                                        if not metadata.get('model'):
+                                            metadata['model'] = inputs['unet_name']
+                            
+                            # Store unique LoRAs
+                            if loras_found:
+                                # Deduplicate by name
+                                seen = set()
+                                unique_loras = []
+                                for lora in loras_found:
+                                    if lora['name'] not in seen:
+                                        seen.add(lora['name'])
+                                        unique_loras.append(lora)
+                                metadata['loras'] = unique_loras
+                            
+                            # If no positive_prompt found, analyze CLIPTextEncode texts
+                            if not metadata.get('positive_prompt') and all_texts:
+                                # Heuristics: negative prompts often contain these keywords
+                                negative_indicators = ['worst', 'bad', 'ugly', 'blurry', 'low quality', '低质量', '最差', 'deformed']
+                                
+                                for item_text in all_texts:
+                                    text = item_text['text']
+                                    text_lower = text.lower()
+                                    
+                                    # Check if it looks like a negative prompt
+                                    is_negative = any(ind in text_lower for ind in negative_indicators)
+                                    
+                                    if is_negative and not metadata.get('negative_prompt'):
+                                        metadata['negative_prompt'] = text
+                                    elif not is_negative and not metadata.get('positive_prompt'):
+                                        metadata['positive_prompt'] = text
+                                
+                                # Fallback: if still no positive, use first text
+                                if not metadata.get('positive_prompt') and all_texts:
+                                    metadata['positive_prompt'] = all_texts[0]['text']
+                                    
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # Oelala params format
+                    if 'oelala_params' in img.info:
+                        metadata["has_metadata"] = True
+                        try:
+                            params = json.loads(img.info['oelala_params'])
+                            if params.get('prompt'):
+                                metadata['positive_prompt'] = params['prompt']
+                            if params.get('negative_prompt'):
+                                metadata['negative_prompt'] = params['negative_prompt']
+                            if params.get('steps'):
+                                metadata['steps'] = params['steps']
+                            if params.get('cfg'):
+                                metadata['cfg'] = params['cfg']
+                            if params.get('seed'):
+                                metadata['seed'] = params['seed']
+                        except json.JSONDecodeError:
+                            pass
+                
+                img.close()
+                item["metadata"] = metadata
+            except Exception as e:
+                item["metadata"] = {"has_metadata": False, "error": str(e)}
+        
+        # For videos, try to find associated PNG with same timestamp or base name
+        if include_metadata and media_type == 'video':
+            import re
+            metadata_found = False
+            
+            def extract_metadata_from_png(png_path):
+                """Extract full metadata from PNG file including LoRAs, sampler, model etc."""
+                from PIL import Image
+                img = Image.open(png_path)
+                metadata = {"has_metadata": False}
+                
+                if hasattr(img, 'info') and 'prompt' in img.info:
+                    metadata["has_metadata"] = True
+                    try:
+                        workflow = json.loads(img.info['prompt'])
+                        all_texts = []
+                        loras_found = []
+                        
+                        for node_id, node in workflow.items():
+                            if isinstance(node, dict):
+                                inputs = node.get('inputs', {})
+                                class_type = node.get('class_type', '')
+                                
+                                # Wan2.2 / standard positive_prompt
+                                if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
+                                    text = inputs['positive_prompt'].strip()
+                                    if len(text) > 20:
+                                        metadata['positive_prompt'] = text
+                                if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
+                                    text = inputs['negative_prompt'].strip()
+                                    if text:
+                                        metadata['negative_prompt'] = text
+                                
+                                # CLIPTextEncode text
+                                if 'text' in inputs and isinstance(inputs['text'], str):
+                                    text = inputs['text'].strip()
+                                    if len(text) > 10:
+                                        all_texts.append({'text': text, 'class_type': class_type})
+                                
+                                # Generation params
+                                if 'steps' in inputs and isinstance(inputs['steps'], (int, float)):
+                                    metadata['steps'] = int(inputs['steps'])
+                                if 'cfg' in inputs and isinstance(inputs['cfg'], (int, float)):
+                                    metadata['cfg'] = float(inputs['cfg'])
+                                if 'seed' in inputs and isinstance(inputs['seed'], (int, float)):
+                                    metadata['seed'] = int(inputs['seed'])
+                                
+                                # Sampler info
+                                if 'sampler_name' in inputs and isinstance(inputs['sampler_name'], str):
+                                    metadata['sampler'] = inputs['sampler_name']
+                                if 'scheduler' in inputs and isinstance(inputs['scheduler'], str):
+                                    metadata['scheduler'] = inputs['scheduler']
+                                
+                                # Resolution
+                                if 'width' in inputs and 'height' in inputs:
+                                    w, h = inputs.get('width'), inputs.get('height')
+                                    if isinstance(w, (int, float)) and isinstance(h, (int, float)):
+                                        metadata['width'] = int(w)
+                                        metadata['height'] = int(h)
+                                
+                                # LoRA info
+                                if 'LoraLoader' in class_type or 'lora' in class_type.lower():
+                                    lora_name = inputs.get('lora_name', '')
+                                    lora_strength = inputs.get('strength_model', inputs.get('strength', 1.0))
+                                    if lora_name:
+                                        loras_found.append({
+                                            'name': lora_name,
+                                            'strength': float(lora_strength) if isinstance(lora_strength, (int, float)) else 1.0
+                                        })
+                                
+                                # Wan2.2 LoRA loader
+                                if 'WanVideoLoraSelect' in class_type or 'lora_high' in inputs or 'lora_low' in inputs:
+                                    for key in ['lora_high', 'lora_low', 'lora_name']:
+                                        if key in inputs and inputs[key]:
+                                            lora_name = inputs[key]
+                                            if isinstance(lora_name, str) and lora_name not in ['None', 'none', '']:
+                                                strength = inputs.get('strength', inputs.get('lora_strength', 1.0))
+                                                loras_found.append({
+                                                    'name': lora_name,
+                                                    'strength': float(strength) if isinstance(strength, (int, float)) else 1.0
+                                                })
+                                
+                                # Model/checkpoint info
+                                if 'ckpt_name' in inputs and isinstance(inputs['ckpt_name'], str):
+                                    metadata['model'] = inputs['ckpt_name']
+                                if 'unet_name' in inputs and isinstance(inputs['unet_name'], str):
+                                    if not metadata.get('model'):
+                                        metadata['model'] = inputs['unet_name']
+                        
+                        # Store unique LoRAs
+                        if loras_found:
+                            seen = set()
+                            unique_loras = []
+                            for lora in loras_found:
+                                if lora['name'] not in seen:
+                                    seen.add(lora['name'])
+                                    unique_loras.append(lora)
+                            metadata['loras'] = unique_loras
+                        
+                        # Analyze CLIPTextEncode texts if no positive_prompt found
+                        if not metadata.get('positive_prompt') and all_texts:
+                            negative_indicators = ['worst', 'bad', 'ugly', 'blurry', 'low quality', '低质量', '最差', 'deformed']
+                            for item in all_texts:
+                                text = item['text']
+                                text_lower = text.lower()
+                                is_negative = any(ind in text_lower for ind in negative_indicators)
+                                if is_negative and not metadata.get('negative_prompt'):
+                                    metadata['negative_prompt'] = text
+                                elif not is_negative and not metadata.get('positive_prompt'):
+                                    metadata['positive_prompt'] = text
+                            if not metadata.get('positive_prompt') and all_texts:
+                                metadata['positive_prompt'] = all_texts[0]['text']
+                                
+                    except json.JSONDecodeError:
+                        pass
+                
+                img.close()
+                return metadata
+            
+            # Method 1: Look for PNG with same timestamp
+            match = re.search(r'(\d{8}_\d{6})', file_path.name)
+            if match:
+                timestamp = match.group(1)
+                for png_file in comfyui_output.glob(f"*{timestamp}*.png"):
+                    try:
+                        metadata = extract_metadata_from_png(png_file)
+                        item["metadata"] = metadata
+                        metadata_found = True
+                        break  # Use first matching PNG
+                    except Exception:
+                        pass
+            
+            # Method 2: Look for PNG with same base name (video.mp4 -> video.png)
+            if not metadata_found:
+                base_name = file_path.stem  # filename without extension
+                png_candidates = [
+                    comfyui_output / f"{base_name}.png",
+                    comfyui_output / f"{base_name}_00001.png",  # ComfyUI pattern
+                ]
+                for png_file in png_candidates:
+                    if png_file.exists():
+                        try:
+                            metadata = extract_metadata_from_png(png_file)
+                            item["metadata"] = metadata
+                            metadata_found = True
+                            break
+                        except Exception:
+                            pass
+            
+            if not metadata_found:
+                item["metadata"] = {"has_metadata": False}
+        
         media.append(item)
     
     # Sort by modified time descending
@@ -1124,6 +1425,96 @@ async def health_check():
         "upload_dir": str(UPLOAD_DIR),
         "output_dir": str(OUTPUT_DIR)
     }
+
+
+# =============================================================================
+# WORKFLOW PRESETS API
+# =============================================================================
+
+@app.get("/api/presets")
+async def get_presets(category: str = None):
+    """Get available workflow presets from registry.json
+    
+    Args:
+        category: Optional filter by category (ImageToVideo, TextToImage, etc.)
+    
+    Returns:
+        List of presets with their parameters
+    """
+    registry_path = Path("/home/flip/oelala/workflows/registry.json")
+    
+    if not registry_path.exists():
+        logger.warning("Workflow registry not found")
+        return {"presets": [], "error": "Registry not found"}
+    
+    try:
+        with open(registry_path, "r") as f:
+            registry = json.load(f)
+        
+        presets = []
+        for workflow_id, workflow in registry.get("workflows", {}).items():
+            # Skip if category filter doesn't match
+            if category and workflow.get("category") != category:
+                continue
+            
+            preset = {
+                "id": workflow_id,
+                "name": workflow.get("name", workflow_id),
+                "file": workflow.get("file"),
+                "category": workflow.get("category", "Unknown"),
+                "description": workflow.get("description", ""),
+                "parameters": workflow.get("parameters", {})
+            }
+            presets.append(preset)
+        
+        # Sort by category, then name
+        presets.sort(key=lambda p: (p["category"], p["name"]))
+        
+        return {
+            "presets": presets,
+            "total": len(presets),
+            "categories": list(set(p["category"] for p in presets))
+        }
+    
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse registry.json: {e}")
+        return {"presets": [], "error": f"Invalid JSON: {str(e)}"}
+    except Exception as e:
+        logger.error(f"Error loading presets: {e}")
+        return {"presets": [], "error": str(e)}
+
+
+@app.get("/api/presets/{preset_id}")
+async def get_preset(preset_id: str):
+    """Get a specific preset by ID"""
+    registry_path = Path("/home/flip/oelala/workflows/registry.json")
+    
+    if not registry_path.exists():
+        raise HTTPException(status_code=404, detail="Registry not found")
+    
+    try:
+        with open(registry_path, "r") as f:
+            registry = json.load(f)
+        
+        workflow = registry.get("workflows", {}).get(preset_id)
+        if not workflow:
+            raise HTTPException(status_code=404, detail=f"Preset '{preset_id}' not found")
+        
+        return {
+            "id": preset_id,
+            "name": workflow.get("name", preset_id),
+            "file": workflow.get("file"),
+            "category": workflow.get("category", "Unknown"),
+            "description": workflow.get("description", ""),
+            "parameters": workflow.get("parameters", {})
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading preset {preset_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/restart")
 async def restart_backend():
@@ -1808,7 +2199,9 @@ async def generate_wan22_comfyui(
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
     unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
-    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]")
+    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]"),
+    extend_mode: str = Form("false", description="Enable sequential clip extension"),
+    clip_count: int = Form(1, description="Number of sequential clips (1-5)")
 ):
     """
     Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow.
@@ -1908,39 +2301,79 @@ async def generate_wan22_comfyui(
     }
     inject_png_workflow_metadata(str(input_path), workflow, prompt_params)
 
+    # Check if sequential/extend mode is enabled
+    is_extend_mode = extend_mode.lower() in ("true", "1", "yes")
+    actual_clip_count = max(1, min(5, clip_count)) if is_extend_mode else 1
+    
     try:
-        logger.info(f"🎬 Starting Wan2.2 ComfyUI generation")
-        logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-        logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
-        logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
-        logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
-        if parsed_lora_configs:
-            logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
-            for i, lc in enumerate(parsed_lora_configs):
-                logger.info(f"      [{i+1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}")
-        logger.info(f"   📝 Prompt: {prompt[:100]}...")
-        
-        # Generate video via ComfyUI in threadpool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
-        result_path = await loop.run_in_executor(
-            None,  # Default threadpool
-            lambda: comfyui.generate_video(
-                image_path=str(input_path),
-                prompt=prompt,
-                output_dir=str(OUTPUT_DIR),
-                resolution=resolution,
-                aspect_ratio=aspect_ratio,
-                num_frames=num_frames,
-                fps=fps,
-                steps=steps,
-                cfg=cfg,
-                seed=seed,
-                output_prefix=output_prefix,
-                unet_high_noise=unet_high_noise,
-                unet_low_noise=unet_low_noise,
-                lora_configs=parsed_lora_configs
+        if is_extend_mode and actual_clip_count > 1:
+            # Sequential generation mode
+            total_frames = num_frames * actual_clip_count
+            logger.info(f"🎬 Starting Sequential Wan2.2 generation ({actual_clip_count} clips)")
+            logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
+            logger.info(f"   🎞️ Frames per clip: {num_frames}, Total: {total_frames}, FPS: {fps}")
+            logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
+            logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
+            if parsed_lora_configs:
+                logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
+            logger.info(f"   📝 Prompt: {prompt[:100]}...")
+            
+            # Generate sequential video via ComfyUI
+            loop = asyncio.get_event_loop()
+            result_path = await loop.run_in_executor(
+                None,
+                lambda: comfyui.generate_sequential_video(
+                    image_path=str(input_path),
+                    prompt=prompt,
+                    output_dir=str(OUTPUT_DIR),
+                    clip_count=actual_clip_count,
+                    resolution=resolution,
+                    aspect_ratio=aspect_ratio,
+                    num_frames=num_frames,
+                    fps=fps,
+                    steps=steps,
+                    cfg=cfg,
+                    seed=seed,
+                    output_prefix=output_prefix,
+                    unet_high_noise=unet_high_noise,
+                    unet_low_noise=unet_low_noise,
+                    lora_configs=parsed_lora_configs
+                )
             )
-        )
+        else:
+            # Standard single-clip generation
+            logger.info(f"🎬 Starting Wan2.2 ComfyUI generation")
+            logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
+            logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
+            logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
+            logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
+            if parsed_lora_configs:
+                logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
+                for i, lc in enumerate(parsed_lora_configs):
+                    logger.info(f"      [{i+1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}")
+            logger.info(f"   📝 Prompt: {prompt[:100]}...")
+            
+            # Generate video via ComfyUI in threadpool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            result_path = await loop.run_in_executor(
+                None,  # Default threadpool
+                lambda: comfyui.generate_video(
+                    image_path=str(input_path),
+                    prompt=prompt,
+                    output_dir=str(OUTPUT_DIR),
+                    resolution=resolution,
+                    aspect_ratio=aspect_ratio,
+                    num_frames=num_frames,
+                    fps=fps,
+                    steps=steps,
+                    cfg=cfg,
+                    seed=seed,
+                    output_prefix=output_prefix,
+                    unet_high_noise=unet_high_noise,
+                    unet_low_noise=unet_low_noise,
+                    lora_configs=parsed_lora_configs
+                )
+            )
         
         if result_path and Path(result_path).exists():
             # Copy to expected output path if different
@@ -1949,15 +2382,20 @@ async def generate_wan22_comfyui(
                 shutil.copy(result_path, final_output)
                 result_path = str(final_output)
             
+            total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
+            
             return {
                 "success": True,
-                "message": "Wan2.2 video generated via ComfyUI",
+                "message": f"Wan2.2 video generated via ComfyUI{' (sequential)' if actual_clip_count > 1 else ''}",
                 "input_image": input_filename,
                 "output_video": output_filename,
                 "video_url": f"/files/{output_filename}",
                 "video_path": result_path,
                 "prompt": prompt,
-                "num_frames": num_frames,
+                "num_frames": total_frames,
+                "frames_per_clip": num_frames,
+                "clip_count": actual_clip_count,
+                "extend_mode": is_extend_mode,
                 "fps": fps,
                 "resolution": resolution,
                 "aspect_ratio": aspect_ratio,
@@ -1966,7 +2404,7 @@ async def generate_wan22_comfyui(
                 "seed": seed,
                 "timestamp": timestamp,
                 "backend": "comfyui",
-                "model": "wan2.2_i2v_low_noise_14B_Q5_K_S"
+                "model": "wan2.2_i2v_14B_Q6"
             }
         else:
             raise HTTPException(status_code=500, detail="ComfyUI video generation returned no output")
@@ -1992,7 +2430,9 @@ async def generate_wan22_async(
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
     unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
-    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]")
+    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]"),
+    extend_mode: str = Form("false", description="Enable sequential clip extension"),
+    clip_count: int = Form(1, description="Number of sequential clips (1-5)")
 ):
     """
     Queue Wan2.2 I2V video generation and return immediately.
@@ -2061,22 +2501,48 @@ async def generate_wan22_async(
     resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
     long_edge = resolution_map.get(resolution, 480)
     
+    # Check if sequential/extend mode is enabled
+    is_extend_mode = extend_mode.lower() in ("true", "1", "yes")
+    actual_clip_count = max(1, min(5, clip_count)) if is_extend_mode else 1
+    
     # Build workflow
-    workflow = comfyui.build_q6_workflow(
-        image_name=image_name,
-        prompt=prompt,
-        num_frames=num_frames,
-        fps=fps,
-        steps=steps,
-        cfg=cfg,
-        seed=actual_seed,
-        output_prefix=output_prefix,
-        aspect_ratio=aspect_ratio,
-        long_edge=long_edge,
-        unet_high_noise=unet_high_noise,
-        unet_low_noise=unet_low_noise,
-        lora_configs=parsed_lora_configs,
-    )
+    if is_extend_mode and actual_clip_count > 1:
+        # Build sequential workflow for multiple clips
+        logger.info(f"🎬 Building sequential workflow: {actual_clip_count} clips × {num_frames} frames")
+        width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+        workflow = comfyui._build_sequential_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            clip_count=actual_clip_count,
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=actual_seed,
+            output_prefix=output_prefix,
+            unet_high_noise=unet_high_noise,
+            unet_low_noise=unet_low_noise,
+            lora_configs=parsed_lora_configs,
+        )
+    else:
+        # Build standard single-clip workflow
+        workflow = comfyui.build_q6_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=actual_seed,
+            output_prefix=output_prefix,
+            aspect_ratio=aspect_ratio,
+            long_edge=long_edge,
+            unet_high_noise=unet_high_noise,
+            unet_low_noise=unet_low_noise,
+            lora_configs=parsed_lora_configs,
+        )
     
     # Queue the workflow (non-blocking)
     prompt_id = comfyui.queue_prompt(workflow)
@@ -2085,11 +2551,15 @@ async def generate_wan22_async(
         raise HTTPException(status_code=500, detail="Failed to queue workflow to ComfyUI")
     
     # Store job info for tracking
+    total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
     job_info = {
         "prompt": prompt[:100],
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
+        "num_frames": total_frames,
+        "frames_per_clip": num_frames,
+        "clip_count": actual_clip_count,
+        "extend_mode": is_extend_mode,
         "fps": fps,
         "steps": steps,
         "seed": actual_seed,
@@ -2101,7 +2571,10 @@ async def generate_wan22_async(
     }
     active_jobs[prompt_id] = job_info
     
-    logger.info(f"🚀 Queued async job: {prompt_id}")
+    if is_extend_mode and actual_clip_count > 1:
+        logger.info(f"🚀 Queued sequential job: {prompt_id} ({actual_clip_count} clips)")
+    else:
+        logger.info(f"🚀 Queued async job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
     logger.info(f"   📝 {prompt[:50]}...")
     

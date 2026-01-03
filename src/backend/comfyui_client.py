@@ -9,6 +9,7 @@ import uuid
 import time
 import requests
 import websocket
+import random
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 import logging
@@ -2413,6 +2414,511 @@ class ComfyUIClient:
 
         # 6. Get output video
         return self.get_output_video(history, output_dir)
+
+    def generate_sequential_video(
+        self,
+        image_path: str,
+        prompt: str,
+        output_dir: str,
+        clip_count: int = 2,
+        resolution: str = "480p",
+        aspect_ratio: str = "16:9",
+        num_frames: int = 41,
+        fps: int = 16,
+        steps: int = 6,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "sequential",
+        unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+        unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
+        lora_configs: list = None,
+        progress_callback=None,
+    ) -> Optional[str]:
+        """
+        Generate a sequential video by chaining multiple clips together.
+        Each clip starts with the last frame of the previous clip.
+        
+        Args:
+            clip_count: Number of clips to chain (1-5)
+            Other args: Same as generate_q6_video
+            
+        Returns:
+            Path to the final combined video
+        """
+        if not self.is_available():
+            logger.error("❌ ComfyUI not available")
+            return None
+
+        clip_count = max(1, min(5, clip_count))  # Clamp to 1-5
+        
+        if clip_count == 1:
+            # Just run normal generation
+            return self.generate_q6_video(
+                image_path=image_path,
+                prompt=prompt,
+                output_dir=output_dir,
+                resolution=resolution,
+                aspect_ratio=aspect_ratio,
+                num_frames=num_frames,
+                fps=fps,
+                steps=steps,
+                cfg=cfg,
+                seed=seed,
+                output_prefix=output_prefix,
+                unet_high_noise=unet_high_noise,
+                unet_low_noise=unet_low_noise,
+                lora_configs=lora_configs,
+                progress_callback=progress_callback,
+            )
+
+        logger.info(f"🎬 Starting sequential generation: {clip_count} clips")
+        
+        # 1. Upload initial image
+        logger.info(f"📤 Uploading initial image: {image_path}")
+        image_name = self.upload_image(image_path)
+        if not image_name:
+            return None
+
+        # 2. Build and execute sequential workflow
+        workflow = self._build_sequential_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            clip_count=clip_count,
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=seed if seed >= 0 else random.randint(0, 2**32 - 1),
+            output_prefix=output_prefix,
+            unet_high_noise=unet_high_noise,
+            unet_low_noise=unet_low_noise,
+            lora_configs=lora_configs or [],
+        )
+
+        # 3. Queue workflow
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            return None
+
+        # 4. Wait for completion
+        total_frames = num_frames * clip_count
+        logger.info(f"⏳ Executing sequential workflow... ({total_frames} total frames)")
+        history = self.wait_for_completion(prompt_id, progress_callback=progress_callback)
+        if not history:
+            return None
+
+        # 5. Get output video (the combined one)
+        return self.get_output_video(history, output_dir)
+
+    def _build_sequential_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        clip_count: int,
+        resolution: str,
+        aspect_ratio: str,
+        num_frames: int,
+        fps: int,
+        steps: int,
+        cfg: float,
+        seed: int,
+        output_prefix: str,
+        unet_high_noise: str,
+        unet_low_noise: str,
+        lora_configs: list,
+    ) -> Dict:
+        """
+        Build a sequential workflow for N clips dynamically.
+        
+        Structure:
+        - Shared: Loaders (Unet High/Low, VAE, CLIP), SageAttention, LoRAs, Prompts
+        - Per clip: WanImageToVideo → KSampler(High) → KSampler(Low) → VAEDecode → VideoCombine
+        - Extract: VHS_SelectImages (indexes="-1") for last frame
+        - Merge: Chain of VHS_MergeImages to combine all clips
+        - Final: VHS_VideoCombine for combined output
+        """
+        # Get dimensions
+        width, height = self.get_resolution_dimensions(resolution, aspect_ratio)
+        split_step = steps // 2
+        
+        workflow = {}
+        node_id = 1
+        
+        # === SHARED LOADERS (nodes 1-8) ===
+        
+        # 1: Unet High Noise Loader
+        workflow[str(node_id)] = {
+            "inputs": {
+                "unet_name": unet_high_noise,
+                "dequant_dtype": "default",
+                "patch_dtype": "default",
+                "patch_on_device": False,
+                "compute_device": "cuda:0",
+                "virtual_vram_gb": 16,
+                "donor_device": "cuda:1",
+                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "eject_models": True
+            },
+            "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+            "_meta": {"title": "GGUF High Noise"}
+        }
+        unet_high_id = str(node_id)
+        node_id += 1
+        
+        # 2: Unet Low Noise Loader
+        workflow[str(node_id)] = {
+            "inputs": {
+                "unet_name": unet_low_noise,
+                "dequant_dtype": "default",
+                "patch_dtype": "default",
+                "patch_on_device": False,
+                "compute_device": "cuda:0",
+                "virtual_vram_gb": 16,
+                "donor_device": "cuda:1",
+                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "eject_models": True
+            },
+            "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+            "_meta": {"title": "GGUF Low Noise"}
+        }
+        unet_low_id = str(node_id)
+        node_id += 1
+        
+        # 3: VAE Loader
+        workflow[str(node_id)] = {
+            "inputs": {
+                "vae_name": "wan_2.1_vae.safetensors",
+                "compute_device": "cuda:0",
+                "virtual_vram_gb": 4,
+                "donor_device": "cuda:1",
+                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "eject_models": True
+            },
+            "class_type": "VAELoaderDisTorch2MultiGPU",
+            "_meta": {"title": "VAE"}
+        }
+        vae_id = str(node_id)
+        node_id += 1
+        
+        # 4: CLIP Loader
+        workflow[str(node_id)] = {
+            "inputs": {
+                "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+                "type": "wan",
+                "device": "cuda:0",
+                "virtual_vram_gb": 4,
+                "donor_device": "cuda:1",
+                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "eject_models": True
+            },
+            "class_type": "CLIPLoaderDisTorch2MultiGPU",
+            "_meta": {"title": "T5-XXL"}
+        }
+        clip_id = str(node_id)
+        node_id += 1
+        
+        # 5: ModelSamplingSD3 High
+        workflow[str(node_id)] = {
+            "inputs": {
+                "shift": 8,
+                "model": [unet_high_id, 0]
+            },
+            "class_type": "ModelSamplingSD3",
+            "_meta": {"title": "ModelSampling High"}
+        }
+        model_shift_high_id = str(node_id)
+        node_id += 1
+        
+        # 6: ModelSamplingSD3 Low
+        workflow[str(node_id)] = {
+            "inputs": {
+                "shift": 8,
+                "model": [unet_low_id, 0]
+            },
+            "class_type": "ModelSamplingSD3",
+            "_meta": {"title": "ModelSampling Low"}
+        }
+        model_shift_low_id = str(node_id)
+        node_id += 1
+        
+        # 7: SageAttention High
+        workflow[str(node_id)] = {
+            "inputs": {
+                "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+                "allow_compile": False,
+                "model": [model_shift_high_id, 0]
+            },
+            "class_type": "PathchSageAttentionKJ",
+            "_meta": {"title": "SageAttn High"}
+        }
+        sage_high_id = str(node_id)
+        node_id += 1
+        
+        # 8: SageAttention Low
+        workflow[str(node_id)] = {
+            "inputs": {
+                "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+                "allow_compile": False,
+                "model": [model_shift_low_id, 0]
+            },
+            "class_type": "PathchSageAttentionKJ",
+            "_meta": {"title": "SageAttn Low"}
+        }
+        sage_low_id = str(node_id)
+        node_id += 1
+        
+        # 9: Power Lora High
+        lora_high_inputs = {
+            "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+            "model": [sage_high_id, 0],
+            "clip": [clip_id, 0]
+        }
+        # Add LoRAs
+        for i, lora in enumerate(lora_configs[:4], 1):
+            lora_high_inputs[f"lora_{i}"] = {
+                "on": True,
+                "lora": lora.get("high", lora.get("name", "")),
+                "strength": lora.get("strength", 1.5)
+            }
+        workflow[str(node_id)] = {
+            "inputs": lora_high_inputs,
+            "class_type": "Power Lora Loader (rgthree)",
+            "_meta": {"title": "Power Lora High"}
+        }
+        lora_high_id = str(node_id)
+        node_id += 1
+        
+        # 10: Power Lora Low
+        lora_low_inputs = {
+            "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+            "model": [sage_low_id, 0]
+        }
+        for i, lora in enumerate(lora_configs[:4], 1):
+            lora_low_inputs[f"lora_{i}"] = {
+                "on": True,
+                "lora": lora.get("low", lora.get("high", lora.get("name", ""))),
+                "strength": lora.get("strength", 1.5)
+            }
+        workflow[str(node_id)] = {
+            "inputs": lora_low_inputs,
+            "class_type": "Power Lora Loader (rgthree)",
+            "_meta": {"title": "Power Lora Low"}
+        }
+        lora_low_id = str(node_id)
+        node_id += 1
+        
+        # 11: Positive Prompt
+        workflow[str(node_id)] = {
+            "inputs": {
+                "text": prompt,
+                "clip": [lora_high_id, 1]
+            },
+            "class_type": "CLIPTextEncode",
+            "_meta": {"title": "Positive Prompt"}
+        }
+        pos_prompt_id = str(node_id)
+        node_id += 1
+        
+        # 12: Negative Prompt
+        workflow[str(node_id)] = {
+            "inputs": {
+                "text": "low quality, blurry, unstable, artifacts, flickering, jitter, sudden changes",
+                "clip": [lora_high_id, 1]
+            },
+            "class_type": "CLIPTextEncode",
+            "_meta": {"title": "Negative Prompt"}
+        }
+        neg_prompt_id = str(node_id)
+        node_id += 1
+        
+        # 13: Load Initial Image
+        workflow[str(node_id)] = {
+            "inputs": {"image": image_name},
+            "class_type": "LoadImage",
+            "_meta": {"title": "Load Start Image"}
+        }
+        load_image_id = str(node_id)
+        node_id += 1
+        
+        # === PER-CLIP NODES ===
+        clip_decode_ids = []  # Store VAEDecode output IDs for merging
+        current_image_id = load_image_id
+        current_image_slot = 0
+        
+        for clip_idx in range(clip_count):
+            clip_seed = seed + clip_idx
+            
+            # WanImageToVideo
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "length": num_frames,
+                    "batch_size": 1,
+                    "positive": [pos_prompt_id, 0],
+                    "negative": [neg_prompt_id, 0],
+                    "vae": [vae_id, 0],
+                    "start_image": [current_image_id, current_image_slot]
+                },
+                "class_type": "WanImageToVideo",
+                "_meta": {"title": f"WanI2V Clip {clip_idx + 1}"}
+            }
+            wan_i2v_id = str(node_id)
+            node_id += 1
+            
+            # KSampler High Noise
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "add_noise": "enable",
+                    "noise_seed": clip_seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": "uni_pc",
+                    "scheduler": "normal",
+                    "start_at_step": 0,
+                    "end_at_step": split_step,
+                    "return_with_leftover_noise": "enable",
+                    "model": [lora_high_id, 0],
+                    "positive": [wan_i2v_id, 0],
+                    "negative": [wan_i2v_id, 1],
+                    "latent_image": [wan_i2v_id, 2]
+                },
+                "class_type": "KSamplerAdvanced",
+                "_meta": {"title": f"Sampler High Clip {clip_idx + 1}"}
+            }
+            sampler_high_id = str(node_id)
+            node_id += 1
+            
+            # KSampler Low Noise
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "add_noise": "disable",
+                    "noise_seed": clip_seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": "uni_pc",
+                    "scheduler": "normal",
+                    "start_at_step": split_step,
+                    "end_at_step": 10000,
+                    "return_with_leftover_noise": "disable",
+                    "model": [lora_low_id, 0],
+                    "positive": [wan_i2v_id, 0],
+                    "negative": [wan_i2v_id, 1],
+                    "latent_image": [sampler_high_id, 0]
+                },
+                "class_type": "KSamplerAdvanced",
+                "_meta": {"title": f"Sampler Low Clip {clip_idx + 1}"}
+            }
+            sampler_low_id = str(node_id)
+            node_id += 1
+            
+            # VAE Decode
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "samples": [sampler_low_id, 0],
+                    "vae": [vae_id, 0]
+                },
+                "class_type": "VAEDecode",
+                "_meta": {"title": f"VAEDecode Clip {clip_idx + 1}"}
+            }
+            vae_decode_id = str(node_id)
+            clip_decode_ids.append(vae_decode_id)
+            node_id += 1
+            
+            # Save individual clip
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": f"{output_prefix}/clip{clip_idx + 1}",
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "trim_to_audio": False,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": [vae_decode_id, 0]
+                },
+                "class_type": "VHS_VideoCombine",
+                "_meta": {"title": f"Save Clip {clip_idx + 1}"}
+            }
+            node_id += 1
+            
+            # Extract last frame for next clip (except for last clip)
+            if clip_idx < clip_count - 1:
+                workflow[str(node_id)] = {
+                    "inputs": {
+                        "image": [vae_decode_id, 0],
+                        "indexes": "-1",
+                        "err_if_missing": True,
+                        "err_if_empty": True
+                    },
+                    "class_type": "VHS_SelectImages",
+                    "_meta": {"title": f"Last Frame Clip {clip_idx + 1}"}
+                }
+                current_image_id = str(node_id)
+                current_image_slot = 0
+                node_id += 1
+        
+        # === MERGE ALL CLIPS ===
+        if clip_count >= 2:
+            # Chain merge: merge clip1+clip2, then result+clip3, etc.
+            current_merge_id = None
+            
+            for i in range(clip_count - 1):
+                if i == 0:
+                    # First merge: clip1 + clip2
+                    workflow[str(node_id)] = {
+                        "inputs": {
+                            "images_A": [clip_decode_ids[0], 0],
+                            "images_B": [clip_decode_ids[1], 0],
+                            "merge_strategy": "match A",
+                            "scale_method": "bilinear",
+                            "crop": "disabled"
+                        },
+                        "class_type": "VHS_MergeImages",
+                        "_meta": {"title": f"Merge Clips 1+2"}
+                    }
+                else:
+                    # Subsequent merges: previous_result + next_clip
+                    workflow[str(node_id)] = {
+                        "inputs": {
+                            "images_A": [current_merge_id, 0],
+                            "images_B": [clip_decode_ids[i + 1], 0],
+                            "merge_strategy": "match A",
+                            "scale_method": "bilinear",
+                            "crop": "disabled"
+                        },
+                        "class_type": "VHS_MergeImages",
+                        "_meta": {"title": f"Merge +Clip {i + 2}"}
+                    }
+                current_merge_id = str(node_id)
+                node_id += 1
+            
+            # Final combined video output
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": f"{output_prefix}/combined",
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "trim_to_audio": False,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": [current_merge_id, 0]
+                },
+                "class_type": "VHS_VideoCombine",
+                "_meta": {"title": "Combined Video"}
+            }
+        
+        logger.info(f"🔧 Built sequential workflow with {len(workflow)} nodes for {clip_count} clips")
+        return workflow
 
     def build_distorch2_workflow(
         self,

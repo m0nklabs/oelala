@@ -1,10 +1,18 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef } from 'react'
 import { BACKEND_BASE } from '../config'
 import { useVideoHistory } from './useVideoHistory'
-import { Download, ExternalLink, History, Film, X, RefreshCw, Check, Image as ImageIcon } from 'lucide-react'
+import { Download, ExternalLink, History, Film, X, RefreshCw, Check, Image as ImageIcon, Clock } from 'lucide-react'
+
+function formatDuration(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
 
 export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo, onClose }) {
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [videoDuration, setVideoDuration] = useState(null)
+  const [showDuration, setShowDuration] = useState(false)
   const { videos, loading, error } = useVideoHistory(refreshToken)
 
   const content = useMemo(() => {
@@ -23,10 +31,30 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
     if (output.kind === 'video') {
       return (
         <div className="media-container">
-          <video className="media-preview" controls src={output.url} autoPlay loop />
+          <div 
+            className="video-wrapper"
+            onMouseEnter={() => setShowDuration(true)}
+            onMouseLeave={() => setShowDuration(false)}
+          >
+            <video 
+              className="media-preview" 
+              controls 
+              src={output.url} 
+              autoPlay 
+              loop
+              onLoadedMetadata={(e) => setVideoDuration(e.target.duration)}
+            />
+            {showDuration && videoDuration && (
+              <div className="video-duration-overlay">
+                <Clock size={14} />
+                <span>{formatDuration(videoDuration)}</span>
+              </div>
+            )}
+          </div>
           <div className="media-info">
             <div className="media-meta">
               {output.filename || 'Generated Video'}
+              {videoDuration && <span className="duration-inline"> • {formatDuration(videoDuration)}</span>}
             </div>
             <div className="media-actions">
               {output.url && (

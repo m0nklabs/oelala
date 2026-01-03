@@ -13,6 +13,7 @@ export const TOOL_IDS = {
   MY_MEDIA_ALL: 'my-media-all',
   MY_MEDIA_VIDEOS: 'my-media-videos',
   MY_MEDIA_IMAGES: 'my-media-images',
+  MY_MEDIA_PROMPTS: 'my-media-prompts',
 }
 
 export const NAV_GROUPS = [
@@ -52,6 +53,7 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.MY_MEDIA_ALL, label: 'All', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_VIDEOS, label: 'Videos', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_IMAGES, label: 'Images', status: 'ready' },
+      { id: TOOL_IDS.MY_MEDIA_PROMPTS, label: 'Prompts', status: 'new' },
     ],
   },
 ]

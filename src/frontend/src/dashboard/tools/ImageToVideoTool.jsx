@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, HelpCircle } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, HelpCircle, Sliders } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
+import PresetSelector from '../../components/PresetSelector'
+import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
 
@@ -87,6 +89,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [unetHighNoise, setUnetHighNoise] = useState('wan2.2_i2v_high_noise_14B_Q6_K.gguf')
   const [unetLowNoise, setUnetLowNoise] = useState('wan2.2_i2v_low_noise_14B_Q6_K.gguf')
   const [showUnetPanel, setShowUnetPanel] = useState(false)
+  
+  // Extend Duration - Sequential clip generation
+  const [extendMode, setExtendMode] = useState(false)
+  const [clipCount, setClipCount] = useState(1)
+  
+  // Preset mode
+  const [usePresets, setUsePresets] = useState(false)
+  const [selectedPreset, setSelectedPreset] = useState(null)
+  const [presetParameters, setPresetParameters] = useState({})
   
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -276,6 +287,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       formData.append('steps', String(steps))
       formData.append('cfg', String(cfg))
       formData.append('seed', String(seed))
+      // Extend mode parameters
+      if (extendMode && clipCount > 1) {
+        formData.append('extend_mode', 'true')
+        formData.append('clip_count', String(clipCount))
+      }
       // Unet parameters
       if (unetHighNoise) formData.append('unet_high_noise', unetHighNoise)
       if (unetLowNoise) formData.append('unet_low_noise', unetLowNoise)
@@ -951,6 +967,71 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         )}
 
+        {/* Workflow Presets - Quick configuration */}
+        {modelMode === 'wan2.2' && (
+          <div style={{ 
+            backgroundColor: 'var(--bg-tertiary)', 
+            padding: '16px', 
+            borderRadius: '8px',
+            marginTop: '8px'
+          }}>
+            <div 
+              onClick={() => setUsePresets(!usePresets)}
+              style={{ 
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sliders size={16} />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Workflow Presets</span>
+                {selectedPreset && (
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    backgroundColor: 'var(--accent-color)', 
+                    color: 'white',
+                    padding: '2px 6px', 
+                    borderRadius: '4px',
+                    marginLeft: '4px'
+                  }}>
+                    {selectedPreset.name}
+                  </span>
+                )}
+              </div>
+              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{usePresets ? '▼' : '▶'}</span>
+            </div>
+            
+            {usePresets && (
+              <div style={{ marginTop: '12px' }}>
+                <PresetSelector 
+                  onPresetChange={(preset) => {
+                    setSelectedPreset(preset)
+                    // Apply preset parameters to local state
+                    if (preset?.parameters) {
+                      const params = preset.parameters
+                      if (params.steps?.default) setSteps(params.steps.default)
+                      if (params.cfg?.default) setCfg(params.cfg.default)
+                      if (params.seed?.default !== undefined) setSeed(params.seed.default)
+                      if (params.frame_rate?.default) setFps(params.frame_rate.default)
+                    }
+                  }}
+                  onParametersChange={(params) => {
+                    setPresetParameters(params)
+                    // Sync with local state
+                    if (params.steps !== undefined) setSteps(params.steps)
+                    if (params.cfg !== undefined) setCfg(params.cfg)
+                    if (params.seed !== undefined) setSeed(params.seed)
+                    if (params.frame_rate !== undefined) setFps(params.frame_rate)
+                  }}
+                  currentParameters={{ steps, cfg, seed, frame_rate: fps }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Advanced Settings for Wan2.2 - Always visible, collapsible */}
         {modelMode === 'wan2.2' && (
           <div style={{ 
@@ -1262,6 +1343,71 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <span className="grok-slider"></span>
           </label>
         </div>
+
+        {/* Extend Duration - Sequential Clips */}
+        <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div className="grok-section-label" style={{ marginBottom: '4px' }}>🎬 Extend Duration</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Chain multiple clips sequentially</div>
+          </div>
+          <label className="grok-switch">
+            <input 
+              type="checkbox" 
+              checked={extendMode}
+              onChange={(e) => {
+                setExtendMode(e.target.checked)
+                if (!e.target.checked) setClipCount(1)
+              }}
+            />
+            <span className="grok-slider"></span>
+          </label>
+        </div>
+
+        {/* Clip Count Slider - Only visible when extendMode is on */}
+        {extendMode && (
+          <div className="form-group" style={{ 
+            background: 'linear-gradient(135deg, rgba(233, 69, 96, 0.1) 0%, rgba(233, 69, 96, 0.05) 100%)',
+            borderRadius: '8px',
+            padding: '12px',
+            marginTop: '-8px',
+            border: '1px solid rgba(233, 69, 96, 0.2)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div className="grok-section-label">Number of Clips: {clipCount}</div>
+              <div style={{ 
+                fontSize: '0.75rem', 
+                color: '#e94560',
+                background: 'rgba(233, 69, 96, 0.15)',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontWeight: '600'
+              }}>
+                ≈ {(duration * clipCount).toFixed(0)}s total
+              </div>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              value={clipCount}
+              onChange={(e) => setClipCount(parseInt(e.target.value))}
+              style={{ 
+                width: '100%',
+                accentColor: '#e94560'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              <span>1</span>
+              <span>2</span>
+              <span>3</span>
+              <span>4</span>
+              <span>5</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px', fontStyle: 'italic' }}>
+              🔗 Each clip continues from the last frame of the previous clip
+            </div>
+          </div>
+        )}
 
       </div>
 

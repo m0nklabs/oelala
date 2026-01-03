@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react'
 import BACKEND_BASE from '../config'
 import { postForm } from '../api'
-import { Upload, Play, Download, Loader, FileText, Image } from 'lucide-react'
+import { Upload, Play, Download, Loader, FileText, Image, Sliders } from 'lucide-react'
+import PresetSelector from './PresetSelector'
 import './VideoGenerator.css'
+import './PresetSelector.css'
 
 function VideoGenerator() {
   const [activeTab, setActiveTab] = useState('image') // 'image' or 'text'
@@ -15,6 +17,11 @@ function VideoGenerator() {
   const [generatedVideo, setGeneratedVideo] = useState(null)
   const [error, setError] = useState('')
   const [usePoseGuidance, setUsePoseGuidance] = useState(false)
+  const [usePresets, setUsePresets] = useState(true) // New: toggle preset mode
+  const [selectedPreset, setSelectedPreset] = useState(null)
+  const [presetParameters, setPresetParameters] = useState({})
+  const [extendMode, setExtendMode] = useState(false) // Sequential clip extension
+  const [clipCount, setClipCount] = useState(1) // Number of sequential clips (1-5)
   const fileInputRef = useRef(null)
 
   const handleFileSelect = (event) => {
@@ -27,6 +34,29 @@ function VideoGenerator() {
       const reader = new FileReader()
       reader.onload = (e) => setPreview(e.target.result)
       reader.readAsDataURL(file)
+    }
+  }
+
+  const handlePresetChange = (preset) => {
+    setSelectedPreset(preset)
+    // Update prompt from preset if available
+    if (preset?.parameters?.prompt?.default) {
+      setPrompt(preset.parameters.prompt.default)
+    }
+    // Update frames from preset
+    if (preset?.parameters?.num_frames?.default) {
+      setNumFrames(preset.parameters.num_frames.default)
+    }
+  }
+
+  const handleParametersChange = (params) => {
+    setPresetParameters(params)
+    // Sync prompt if changed via preset
+    if (params.prompt !== undefined) {
+      setPrompt(params.prompt)
+    }
+    if (params.num_frames !== undefined) {
+      setNumFrames(params.num_frames)
     }
   }
 
@@ -56,6 +86,18 @@ function VideoGenerator() {
       // Add prompt only for regular generation
       if (!usePoseGuidance) {
         formData.append('prompt', prompt)
+      }
+
+      // If using presets, add all preset parameters
+      if (usePresets && selectedPreset) {
+        formData.append('preset_id', selectedPreset.id)
+        formData.append('preset_parameters', JSON.stringify(presetParameters))
+      }
+
+      // Add extend mode parameters for sequential generation
+      if (extendMode && clipCount > 1) {
+        formData.append('extend_mode', 'true')
+        formData.append('clip_count', clipCount.toString())
       }
 
       // Select endpoint based on model type
@@ -163,6 +205,89 @@ function VideoGenerator() {
         </div>
       )}
 
+      {/* Preset Mode Toggle */}
+      <div className="mode-toggle">
+        <button
+          className={`mode-button ${usePresets ? 'active' : ''}`}
+          onClick={() => setUsePresets(true)}
+        >
+          <Sliders size={16} />
+          Use Presets
+        </button>
+        <button
+          className={`mode-button ${!usePresets ? 'active' : ''}`}
+          onClick={() => setUsePresets(false)}
+        >
+          <Image size={16} />
+          Manual Mode
+        </button>
+      </div>
+
+      {/* Preset Selector */}
+      {usePresets && (
+        <PresetSelector
+          onPresetChange={handlePresetChange}
+          onParametersChange={handleParametersChange}
+          currentParameters={presetParameters}
+        />
+      )}
+
+      {/* Extend Duration - Always Visible */}
+      <div className="extend-duration-section">
+        <div className="extend-mode-group">
+          <label className="checkbox-label extend-toggle">
+            <input
+              type="checkbox"
+              checked={extendMode}
+              onChange={(e) => {
+                setExtendMode(e.target.checked)
+                if (!e.target.checked) setClipCount(1)
+              }}
+            />
+            <span className="checkmark"></span>
+            🎬 Extend Duration (Sequential Clips)
+          </label>
+          
+          {extendMode && (
+            <div className="extend-slider-container">
+              <label htmlFor="clipCount">
+                Number of Clips: {clipCount}
+                <span className="clip-duration-info">
+                  ≈ {((numFrames * clipCount) / 16).toFixed(1)}s total @ 16fps
+                </span>
+              </label>
+              <input
+                id="clipCount"
+                type="range"
+                min="1"
+                max="5"
+                value={clipCount}
+                onChange={(e) => setClipCount(parseInt(e.target.value))}
+                step="1"
+                className="clip-slider"
+              />
+              <div className="range-labels clip-labels">
+                <span>1</span>
+                <span>2</span>
+                <span>3</span>
+                <span>4</span>
+                <span>5</span>
+              </div>
+              <div className="extend-explanation">
+                <small>
+                  🔗 Each clip continues from the last frame of the previous clip.
+                  {clipCount > 1 && (
+                    <> <strong>{clipCount} clips × {numFrames} frames = {numFrames * clipCount} total frames</strong></>
+                  )}
+                </small>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Manual Controls (when not using presets) */}
+      {!usePresets && (
       <div className="controls-section">
         <div className="control-group">
           <label htmlFor="prompt">
@@ -292,6 +417,35 @@ function VideoGenerator() {
           )}
         </button>
       </div>
+      )}
+
+      {/* Generate Button (always visible) */}
+      {usePresets && (
+        <div className="preset-generate-section">
+          <button
+            className="generate-btn"
+            onClick={handleGenerate}
+            disabled={
+              (activeTab === 'image' && !selectedFile) ||
+              (activeTab === 'text' && !prompt.trim()) ||
+              isGenerating ||
+              !selectedPreset
+            }
+          >
+            {isGenerating ? (
+              <>
+                <Loader size={20} className="spinning" />
+                Generating with {selectedPreset?.name || 'preset'}...
+              </>
+            ) : (
+              <>
+                <Play size={20} />
+                Generate with {selectedPreset?.name || 'Selected Preset'}
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="error-message">

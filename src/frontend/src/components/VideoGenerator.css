@@ -46,6 +46,57 @@
   border: 1px solid #007bff;
 }
 
+/* Mode Toggle (Presets vs Manual) */
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: white;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mode-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.mode-button:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.mode-button.active {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+/* Preset Generate Section */
+.preset-generate-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.preset-generate-section .generate-btn {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  font-size: 1.1rem;
+}
+
 .upload-section, .text-input-section {
   margin-bottom: 30px;
 }
@@ -323,4 +374,126 @@ input[type="range"]::-moz-range-thumb {
 .model-description small {
   color: #495057;
   line-height: 1.4;
+}
+
+/* Extend Mode - Sequential Clips */
+.extend-duration-section {
+  margin: 20px 0;
+}
+
+.extend-mode-group {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 8px;
+  border: 1px solid #0f3460;
+}
+
+.extend-toggle {
+  color: #e94560;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.extend-toggle input:checked + .checkmark {
+  background-color: #e94560;
+  border-color: #e94560;
+}
+
+.extend-slider-container {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.extend-slider-container label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #eee;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.clip-duration-info {
+  font-size: 12px;
+  color: #e94560;
+  background: rgba(233, 69, 96, 0.15);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.clip-slider {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #0f3460, #e94560);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.clip-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.5);
+  transition: transform 0.2s;
+}
+
+.clip-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.clip-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.5);
+}
+
+.clip-labels {
+  color: #aaa;
+}
+
+.clip-labels span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.extend-explanation {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(233, 69, 96, 0.1);
+  border-left: 3px solid #e94560;
+  border-radius: 4px;
+}
+
+.extend-explanation small {
+  color: #ccc;
+  line-height: 1.5;
+}
+
+.extend-explanation strong {
+  color: #e94560;
 }

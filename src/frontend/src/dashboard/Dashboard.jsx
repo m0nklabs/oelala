@@ -117,6 +117,8 @@ export default function Dashboard() {
         return 'My Media - Videos'
       case TOOL_IDS.MY_MEDIA_IMAGES:
         return 'My Media - Images'
+      case TOOL_IDS.MY_MEDIA_PROMPTS:
+        return 'My Media - Prompts'
       default:
         return 'Tool'
     }
@@ -159,6 +161,8 @@ export default function Dashboard() {
         return <MyMediaTool filter="video" />
       case TOOL_IDS.MY_MEDIA_IMAGES:
         return <MyMediaTool filter="image" />
+      case TOOL_IDS.MY_MEDIA_PROMPTS:
+        return <MyMediaTool filter="prompts" />
 
       case TOOL_IDS.TEXT_TO_IMAGE:
         return <TextToImageTool onOutput={setOutput} />
@@ -221,7 +225,8 @@ export default function Dashboard() {
         {/* Full-width layout for My Media tools */}
         {(activeToolId === TOOL_IDS.MY_MEDIA_ALL || 
           activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS || 
-          activeToolId === TOOL_IDS.MY_MEDIA_IMAGES) ? (
+          activeToolId === TOOL_IDS.MY_MEDIA_IMAGES ||
+          activeToolId === TOOL_IDS.MY_MEDIA_PROMPTS) ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderControls()}
           </div>

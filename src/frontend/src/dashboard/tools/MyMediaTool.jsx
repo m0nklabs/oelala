@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
+
+// Format video duration as MM:SS
+const formatDuration = (seconds) => {
+  if (!seconds || isNaN(seconds)) return null
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
 
 // LocalStorage key for favorites
 const FAVORITES_KEY = 'oelala_media_favorites'
@@ -70,6 +78,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [lastClickedIndex, setLastClickedIndex] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [showMetadata, setShowMetadata] = useState(false)
+  const [promptPopup, setPromptPopup] = useState(null) // { item, x, y } for prompt popup
   const [favorites, setFavorites] = useState(loadFavorites)
   const [sortBy, setSortBy] = useState('date') // 'date', 'name', 'size', 'favorites'
   const [sortOrder, setSortOrder] = useState('desc') // 'asc', 'desc'
@@ -84,6 +93,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [showHelp, setShowHelp] = useState(false)
   const [visibleCount, setVisibleCount] = useState(100)
   const [thumbHeight, setThumbHeight] = useState(320)
+  const [videoDurations, setVideoDurations] = useState({}) // filename -> duration in seconds
   const containerRef = useRef(null)
 
   // Calculate thumb height based on actual grid cell width (9:16 ratio)
@@ -176,10 +186,22 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     setError('')
     try {
       // Use grouped mode to pair videos with source images
-      const res = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${filter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
+      // For prompts filter, fetch all media with metadata then filter client-side
+      const apiFilter = filter === 'prompts' ? 'all' : filter
+      const res = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
       if (!res.ok) throw new Error('Failed to fetch media')
       const data = await res.json()
-      setMediaList(data.media || [])
+      
+      // For prompts view, filter to only items with prompts
+      let media = data.media || []
+      if (filter === 'prompts') {
+        media = media.filter(item => 
+          item.metadata?.positive_prompt || 
+          item.metadata?.prompt
+        )
+      }
+      
+      setMediaList(media)
       setStats({ videos: data.videos || 0, images: data.images || 0 })
       setSelectedItems(new Set()) // Clear selection on refresh
     } catch (err) {
@@ -490,11 +512,138 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           border-color: #ef4444;
         }
 
+        /* ========== PROMPT BUBBLE BUTTON ========== */
+        .prompt-bubble-btn {
+          position: absolute;
+          top: 6px;
+          right: 6px;
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          background: transparent;
+          border: none;
+          opacity: 0;
+          transition: all 0.15s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 21;
+          font-size: 16px;
+          line-height: 1;
+          padding: 0;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+        .thumb-card:hover .prompt-bubble-btn {
+          opacity: 1;
+        }
+        .prompt-bubble-btn:hover {
+          transform: scale(1.2);
+        }
+
+        /* ========== PROMPT POPUP ========== */
+        .prompt-popup-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .prompt-popup {
+          background: var(--bg-secondary, #1f1f1f);
+          border: 1px solid var(--border-color, #333);
+          border-radius: 12px;
+          padding: 20px;
+          max-width: 600px;
+          width: 90%;
+          max-height: 80vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        .prompt-popup-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--border-color, #333);
+        }
+        .prompt-popup-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: var(--text-primary, #fff);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .prompt-popup-close {
+          background: none;
+          border: none;
+          color: var(--text-muted, #888);
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+        }
+        .prompt-popup-close:hover {
+          background: rgba(255,255,255,0.1);
+          color: var(--text-primary, #fff);
+        }
+        .prompt-popup-content {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .prompt-section {
+          background: var(--bg-tertiary, #2a2a2a);
+          padding: 12px;
+          border-radius: 8px;
+        }
+        .prompt-section-label {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--text-muted, #888);
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .prompt-section-text {
+          font-size: 0.9rem;
+          color: var(--text-primary, #fff);
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .prompt-copy-btn {
+          background: var(--accent-color, #a855f7);
+          border: none;
+          color: #fff;
+          padding: 8px 16px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 12px;
+        }
+        .prompt-copy-btn:hover {
+          opacity: 0.9;
+        }
+        .prompt-media-preview {
+          width: 80px;
+          height: 80px;
+          object-fit: cover;
+          border-radius: 8px;
+        }
+
         /* ========== SOURCE IMAGE BADGE ========== */
         .source-image-badge {
           position: absolute;
           top: 8px;
-          right: 8px;
+          right: 40px;
           padding: 3px 6px;
           border-radius: 4px;
           background: rgba(59, 130, 246, 0.9);
@@ -505,6 +654,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           gap: 3px;
           z-index: 20;
         }
+
 
         /* ========== MEDIA OVERLAY (hover info) ========== */
         .media-overlay {
@@ -534,6 +684,17 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         .media-size {
           font-size: 0.65rem;
           color: rgba(255,255,255,0.6);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .media-duration {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          background: rgba(0,0,0,0.4);
+          padding: 1px 5px;
+          border-radius: 3px;
         }
         .overlay-buttons {
           display: flex;
@@ -727,10 +888,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-            {filter === 'all' ? 'All Media' : filter === 'video' ? 'Videos' : 'Images'}
+            {filter === 'all' ? 'All Media' : filter === 'video' ? 'Videos' : filter === 'image' ? 'Images' : 'Prompts'}
           </span>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            🎬 {stats.videos} • 🖼️ {stats.images} • ❤️ {favoritesCount}
+            {filter === 'prompts' ? (
+              <>💬 {sortedMediaList.length} items with prompts</>
+            ) : (
+              <>🎬 {stats.videos} • 🖼️ {stats.images} • ❤️ {favoritesCount}</>
+            )}
             {filterBy !== 'all' && ` • 📋 ${sortedMediaList.length} shown`}
           </span>
         </div>
@@ -1011,13 +1176,171 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           color: 'var(--text-muted)' 
         }}>
           <div style={{ fontSize: '4rem', marginBottom: '16px', opacity: 0.5 }}>📁</div>
-          <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No {filter === 'all' ? 'media' : filter + 's'} yet</div>
+          <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No {filter === 'prompts' ? 'prompts' : filter === 'all' ? 'media' : filter + 's'} yet</div>
           <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>Generated content will appear here</div>
         </div>
       )}
 
-      {/* Media Grid */}
-      {!loading && sortedMediaList.length > 0 && (
+      {/* Prompts List View - Special layout for prompts filter */}
+      {!loading && sortedMediaList.length > 0 && filter === 'prompts' && (
+        <div 
+          ref={containerRef}
+          className="prompts-list"
+          onScroll={handleScroll}
+          style={{ 
+            flex: 1, 
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}
+        >
+          {sortedMediaList.slice(0, visibleCount).map((item, idx) => (
+            <div
+              key={item.filename}
+              style={{
+                display: 'flex',
+                gap: '16px',
+                padding: '16px',
+                backgroundColor: 'var(--bg-secondary, #1f1f1f)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color, #333)',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onClick={() => setSelectedIndex(idx)}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-color, #a855f7)'}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color, #333)'}
+            >
+              {/* Media thumbnail */}
+              <div style={{ flexShrink: 0 }}>
+                {item.type === 'video' ? (
+                  <video
+                    src={`${BACKEND_BASE}${item.url}`}
+                    style={{ 
+                      width: '100px', 
+                      height: '100px', 
+                      objectFit: 'cover', 
+                      borderRadius: '8px' 
+                    }}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={`${BACKEND_BASE}${item.url}`}
+                    alt={item.filename}
+                    style={{ 
+                      width: '100px', 
+                      height: '100px', 
+                      objectFit: 'cover', 
+                      borderRadius: '8px' 
+                    }}
+                    loading="lazy"
+                  />
+                )}
+              </div>
+              
+              {/* Prompt content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'flex-start',
+                  marginBottom: '8px'
+                }}>
+                  <div>
+                    <div style={{ 
+                      fontSize: '0.85rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)',
+                      marginBottom: '4px'
+                    }}>
+                      {item.filename}
+                    </div>
+                    <div style={{ 
+                      fontSize: '0.75rem', 
+                      color: 'var(--text-muted)' 
+                    }}>
+                      {item.type === 'video' ? '🎬' : '🖼️'} {formatSize(item.size)}
+                      {item.metadata?.steps && ` • ${item.metadata.steps} steps`}
+                      {item.metadata?.cfg && ` • CFG ${item.metadata.cfg}`}
+                    </div>
+                  </div>
+                  
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      style={{
+                        background: 'var(--accent-color, #a855f7)',
+                        border: 'none',
+                        color: '#fff',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const text = item.metadata?.positive_prompt || item.metadata?.prompt
+                        navigator.clipboard.writeText(text)
+                      }}
+                    >
+                      <Copy size={12} />
+                      Copy
+                    </button>
+                    <button
+                      className={favorites.has(item.filename) ? '' : ''}
+                      style={{
+                        background: favorites.has(item.filename) ? '#ef4444' : 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        color: '#fff',
+                        padding: '6px',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={(e) => toggleFavorite(item.filename, e)}
+                    >
+                      <Heart 
+                        size={14} 
+                        fill={favorites.has(item.filename) ? '#fff' : 'none'}
+                      />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Prompt text */}
+                <div style={{ 
+                  fontSize: '0.9rem',
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.5,
+                  backgroundColor: 'var(--bg-tertiary, #2a2a2a)',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  maxHeight: '100px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 4,
+                  WebkitBoxOrient: 'vertical'
+                }}>
+                  {item.metadata?.positive_prompt || item.metadata?.prompt}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Media Grid - Standard grid view */}
+      {!loading && sortedMediaList.length > 0 && filter !== 'prompts' && (
         <div 
           ref={containerRef}
           className="media-grid"
@@ -1057,6 +1380,20 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 />
               </div>
               
+              {/* Prompt bubble button - only show if item has a prompt */}
+              {(item.metadata?.positive_prompt || item.metadata?.prompt) && (
+                <button
+                  className="prompt-bubble-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPromptPopup({ item })
+                  }}
+                  title="View prompt"
+                >
+                  💬
+                </button>
+              )}
+              
               {/* Source image badge */}
               {item.has_source_image && (
                 <div className="source-image-badge">
@@ -1074,6 +1411,12 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   muted
                   playsInline
                   preload="metadata"
+                  onLoadedMetadata={(e) => {
+                    const duration = e.target.duration
+                    if (duration && !videoDurations[item.filename]) {
+                      setVideoDurations(prev => ({ ...prev, [item.filename]: duration }))
+                    }
+                  }}
                 />
               ) : (
                 <img
@@ -1086,7 +1429,15 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               <div className="media-overlay">
                 <div>
                   <div className="media-filename">{item.filename}</div>
-                  <div className="media-size">{formatSize(item.size)}</div>
+                  <div className="media-size">
+                    {formatSize(item.size)}
+                    {item.type === 'video' && videoDurations[item.filename] && (
+                      <span className="media-duration">
+                        <Clock size={10} />
+                        {formatDuration(videoDurations[item.filename])}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="overlay-buttons">
                   {item.metadata?.has_metadata && (
@@ -1255,6 +1606,172 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               >
                 <Download size={16} />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prompt Popup Modal */}
+      {promptPopup && (
+        <div 
+          className="prompt-popup-overlay" 
+          onClick={() => setPromptPopup(null)}
+        >
+          <div 
+            className="prompt-popup" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="prompt-popup-header">
+              <div className="prompt-popup-title">
+                <MessageCircle size={18} />
+                Prompt Details
+              </div>
+              <button 
+                className="prompt-popup-close"
+                onClick={() => setPromptPopup(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="prompt-popup-content">
+              {/* Media preview */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                {promptPopup.item.type === 'video' ? (
+                  <video
+                    src={`${BACKEND_BASE}${promptPopup.item.url}`}
+                    className="prompt-media-preview"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={`${BACKEND_BASE}${promptPopup.item.url}`}
+                    alt={promptPopup.item.filename}
+                    className="prompt-media-preview"
+                  />
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {promptPopup.item.filename}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {promptPopup.item.type === 'video' ? '🎬 Video' : '🖼️ Image'} • {formatSize(promptPopup.item.size)}
+                    {promptPopup.item.type === 'video' && videoDurations[promptPopup.item.filename] && (
+                      <> • {formatDuration(videoDurations[promptPopup.item.filename])}</>
+                    )}
+                    {promptPopup.item.metadata?.width && promptPopup.item.metadata?.height && (
+                      <> • {promptPopup.item.metadata.width}×{promptPopup.item.metadata.height}</>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Positive Prompt */}
+              {(promptPopup.item.metadata?.positive_prompt || promptPopup.item.metadata?.prompt) && (
+                <div className="prompt-section">
+                  <div className="prompt-section-label">
+                    ✨ Positive Prompt
+                  </div>
+                  <div className="prompt-section-text">
+                    {promptPopup.item.metadata.positive_prompt || promptPopup.item.metadata.prompt}
+                  </div>
+                  <button 
+                    className="prompt-copy-btn"
+                    onClick={() => {
+                      const text = promptPopup.item.metadata.positive_prompt || promptPopup.item.metadata.prompt
+                      navigator.clipboard.writeText(text)
+                    }}
+                  >
+                    <Copy size={14} />
+                    Copy Prompt
+                  </button>
+                </div>
+              )}
+              
+              {/* Negative Prompt */}
+              {promptPopup.item.metadata?.negative_prompt && (
+                <div className="prompt-section">
+                  <div className="prompt-section-label">
+                    🚫 Negative Prompt
+                  </div>
+                  <div className="prompt-section-text" style={{ color: 'var(--text-muted)' }}>
+                    {promptPopup.item.metadata.negative_prompt}
+                  </div>
+                </div>
+              )}
+              
+              {/* Generation settings if available */}
+              {(promptPopup.item.metadata?.steps || promptPopup.item.metadata?.cfg || promptPopup.item.metadata?.seed || promptPopup.item.metadata?.sampler || promptPopup.item.metadata?.model) && (
+                <div className="prompt-section">
+                  <div className="prompt-section-label">
+                    ⚙️ Generation Settings
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
+                    {promptPopup.item.metadata.steps && (
+                      <span>Steps: <strong>{promptPopup.item.metadata.steps}</strong></span>
+                    )}
+                    {promptPopup.item.metadata.cfg && (
+                      <span>CFG: <strong>{promptPopup.item.metadata.cfg}</strong></span>
+                    )}
+                    {promptPopup.item.metadata.seed && (
+                      <span>Seed: <strong>{promptPopup.item.metadata.seed}</strong></span>
+                    )}
+                    {promptPopup.item.metadata.sampler && (
+                      <span>Sampler: <strong>{promptPopup.item.metadata.sampler}</strong></span>
+                    )}
+                    {promptPopup.item.metadata.scheduler && (
+                      <span>Scheduler: <strong>{promptPopup.item.metadata.scheduler}</strong></span>
+                    )}
+                  </div>
+                  {promptPopup.item.metadata.model && (
+                    <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Model: <strong style={{ color: 'var(--text-primary)' }}>{promptPopup.item.metadata.model}</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* LoRAs used */}
+              {promptPopup.item.metadata?.loras && promptPopup.item.metadata.loras.length > 0 && (
+                <div className="prompt-section">
+                  <div className="prompt-section-label">
+                    🎨 LoRAs Used
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem' }}>
+                    {promptPopup.item.metadata.loras.map((lora, idx) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '6px 10px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ 
+                          fontFamily: 'monospace', 
+                          fontSize: '0.8rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '80%'
+                        }}>
+                          {lora.name}
+                        </span>
+                        <span style={{ 
+                          color: 'var(--accent-color, #a855f7)', 
+                          fontWeight: 600,
+                          fontSize: '0.8rem'
+                        }}>
+                          {(lora.strength * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

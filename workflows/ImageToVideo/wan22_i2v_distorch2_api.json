@@ -1,0 +1,362 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+      "dequant_dtype": "default",
+      "patch_dtype": "default",
+      "patch_on_device": false,
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "eject_models": true
+    },
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "_meta": {
+      "title": "GGUF High Noise (DisTorch2)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
+      "dequant_dtype": "default",
+      "patch_dtype": "default",
+      "patch_on_device": false,
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "eject_models": true
+    },
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "_meta": {
+      "title": "GGUF Low Noise (DisTorch2)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 4,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "eject_models": true
+    },
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "VAE (DisTorch2)"
+    }
+  },
+  "4": {
+    "inputs": {
+      "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+      "type": "wan",
+      "device": "cuda:0",
+      "virtual_vram_gb": 4,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "eject_models": true
+    },
+    "class_type": "CLIPLoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "T5-XXL (DisTorch2)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+      "allow_compile": false,
+      "model": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "PathchSageAttentionKJ",
+    "_meta": {
+      "title": "SageAttn (High Noise)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+      "allow_compile": false,
+      "model": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "PathchSageAttentionKJ",
+    "_meta": {
+      "title": "SageAttn (Low Noise)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "A fit, light-skinned woman with long brown hair, lying on a blue yoga mat on a wooden floor. She wears a white sports bra, exposing her toned abs. Her legs are spread, and she holds a large, erect penis with one hand, the other hand on her knee. The background features large windows with greenery outside. She moves her hand rapidly up and down the shaft of her penis and she ejaculates white sticky liquid from her penis which lands on her face and breasts, as she moans in pleasure",
+      "clip": [
+        "19",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "8": {
+    "inputs": {
+      "text": "low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches",
+      "clip": [
+        "19",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "10": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 1689002707,
+      "steps": 6,
+      "cfg": 1,
+      "sampler_name": "uni_pc",
+      "scheduler": "normal",
+      "start_at_step": 0,
+      "end_at_step": 3,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "19",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "16",
+        1
+      ],
+      "latent_image": [
+        "16",
+        2
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Sampler 1 (High Noise)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 3917220296,
+      "steps": 6,
+      "cfg": 1,
+      "sampler_name": "uni_pc",
+      "scheduler": "normal",
+      "start_at_step": 3,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "20",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "16",
+        1
+      ],
+      "latent_image": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Sampler 2 (Low Noise)"
+    }
+  },
+  "12": {
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "13": {
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "wan22_distorch2_test",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Save Video (MP4)"
+    }
+  },
+  "14": {
+    "inputs": {
+      "shift": 8,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "15": {
+    "inputs": {
+      "shift": 8,
+      "model": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "16": {
+    "inputs": {
+      "width": 1024,
+      "height": 576,
+      "length": 101,
+      "batch_size": 1,
+      "positive": [
+        "7",
+        0
+      ],
+      "negative": [
+        "8",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "start_image": [
+        "18",
+        0
+      ]
+    },
+    "class_type": "WanImageToVideo",
+    "_meta": {
+      "title": "WanImageToVideo"
+    }
+  },
+  "18": {
+    "inputs": {
+      "image": "CyberPony_T2I_00032_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "19": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "wan 2.2/DR34ML4Y_I2V_14B_HIGH.safetensors",
+        "strength": 1.5
+      },
+      "lora_2": {
+        "on": true,
+        "lora": "wan 2.2/NSFW-22-H-e8.safetensors",
+        "strength": 1.5
+      },
+      "lora_3": {
+        "on": true,
+        "lora": "wan/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors",
+        "strength": 1.5
+      },
+      "lora_4": {
+        "on": true,
+        "lora": "masturbation_cumshot_v1.1_e310.safetensors",
+        "strength": 1.5
+      },
+      "\u2795 Add Lora": "",
+      "model": [
+        "5",
+        0
+      ],
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora (High Noise)"
+    }
+  },
+  "20": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "wan 2.2/DR34ML4Y_I2V_14B_LOW.safetensors",
+        "strength": 1.5
+      },
+      "lora_2": {
+        "on": true,
+        "lora": "wan 2.2/NSFW-22-L-e8.safetensors",
+        "strength": 1.5
+      },
+      "lora_3": {
+        "on": true,
+        "lora": "wan/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors",
+        "strength": 1.5
+      },
+      "lora_4": {
+        "on": true,
+        "lora": "masturbation_cumshot_v1.1_e310.safetensors",
+        "strength": 1.5
+      },
+      "\u2795 Add Lora": "",
+      "model": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora (Low Noise)"
+    }
+  }
+}
