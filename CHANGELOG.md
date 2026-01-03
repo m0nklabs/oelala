@@ -1,3 +1,36 @@
+2026-01-03
+Agent: Claude Opus 4.5
+AgentTag: CLAU
+ModelTag: PROMPTS
+Details:
+- Added "Prompts" section to My Media for browsing generation history
+- Prompt bubble (💬) on thumbnails - hover-only visibility with text-shadow
+- Prompt popup modal with full generation details:
+  - Positive/negative prompts with copy-to-clipboard button
+  - Generation settings (steps, CFG, seed, sampler, scheduler)
+  - LoRAs used with strength percentages
+  - Model/checkpoint name
+  - Resolution and video duration for videos
+- Extended metadata extraction from PNG workflow JSON:
+  - LoRA detection from LoraLoader, WanVideoLoraSelect nodes
+  - Sampler and scheduler extraction
+  - Width/height resolution from EmptyLatentImage
+  - Model name from ckpt_name/unet_name
+- Video metadata matching by timestamp pattern or base filename
+- Refactored video metadata extraction to use shared helper function
+- Added PresetSelector component for workflow presets
+- Comprehensive documentation update (ARCHITECTURE, WEB_INTERFACE_README, UI_V2_PLAN, PROJECT_OVERVIEW)
+FilesChanged:
+- src/frontend/src/dashboard/tools/MyMediaTool.jsx (prompt bubble, popup, prompts view)
+- src/frontend/src/dashboard/nav.js (MY_MEDIA_PROMPTS tool ID)
+- src/frontend/src/dashboard/Dashboard.jsx (prompts routing)
+- src/backend/app.py (extended metadata extraction, LoRAs, sampler, model)
+- src/frontend/src/components/PresetSelector.jsx (NEW)
+- src/frontend/src/components/PresetSelector.css (NEW)
+- workflows/ImageToVideo/wan22_i2v_distorch2_api.json (NEW)
+- workflows/registry.json (preset definitions)
+- docs/ARCHITECTURE.md, docs/WEB_INTERFACE_README.md, docs/UI_V2_PLAN.md, docs/PROJECT_OVERVIEW.md
+
 2026-01-02
 Agent: Claude Opus 4.5
 AgentTag: CLAU
