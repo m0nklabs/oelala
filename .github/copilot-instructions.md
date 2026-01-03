@@ -56,6 +56,18 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Subdirectories**: All other files must be organized in subdirectories with a narrow and deep tree structure.
 - **Todo Location**: Store persistent todos in `docs/TODO_LIST.md`.
 
+## Platform Support Policy
+
+- **Supported Platforms**: Windows and Linux only.
+- **macOS**: NOT supported. Do not suggest, implement, or test macOS-specific code. Do not mention macOS in documentation.
+- **Cross-platform code**: When writing cross-platform code, only consider Windows and Linux. Use `sys.platform` checks for `win32` and `linux` only.
+- **Go builds**: Cross-compile for `GOOS=windows` and `GOOS=linux` only.
+
+## Related Repositories
+
+- **oelala-storage**: Separate Go-based storage service. See `docs/MEDIA_STORAGE.md` for architecture.
+- When implementing storage features, defer to oelala-storage rather than building in Python.
+
 ## Python / GPU Virtual Environments
 
 - **Canonical GPU venv**: Use `/home/flip/venvs/gpu` (a symlink) as the single canonical environment for GPU/ML work on this server.

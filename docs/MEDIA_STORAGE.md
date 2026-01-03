@@ -1,10 +1,15 @@
 # Media Storage Architecture
 
-> **Last Updated**: 2026-01-03
+> **Last Updated**: 2026-01-03  
+> **Related Project**: [oelala-storage](https://github.com/m0nklabs/oelala-storage) (separate repo)
 
-## Current Storage Locations
+## Overview
 
-### Development Environment
+Storage is split into two components:
+1. **oelala** - Main application (this repo) - handles generation, UI, business logic
+2. **oelala-storage** - Standalone storage service (separate repo) - handles files, sync, caching
+
+## Current Storage Locations (Development)
 
 | Directory | Purpose | Served Via | Persistence |
 |-----------|---------|------------|-------------|
@@ -82,18 +87,32 @@ MEDIA_TEMP = MEDIA_ROOT / "temp"            # Processing intermediates
 └── temp/                      # Processing workspace
 ```
 
-### Phase 3: Local-First Distributed Storage
+### Phase 3: oelala-storage (Separate Repository)
 
-**Philosophy**: Start local, scale to cloud later. Each node is a full participant.
+> **Repository**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)  
+> **Language**: Go  
+> **Platforms**: Windows, Linux (no macOS support planned)
+
+**Why Go?**
+- Single binary (~10-15MB), no runtime dependencies
+- Excellent I/O performance and concurrency (goroutines)
+- Native cross-compilation for Windows/Linux
+- Battle-tested for storage systems (MinIO, rclone, Syncthing)
+- Long-term maintainability for one-man team
+
+**Philosophy**: Local-first, self-hosted nodes that sync P2P.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Oelala Storage Node                       │
-│                   (Windows / Linux)                          │
+│              oelala-storage node (Go binary)                │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
-│  │  Local FS     │  │  Node API     │  │  Sync Engine  │   │
-│  │  (SQLite DB)  │  │  (REST/gRPC)  │  │  (P2P/WAN)    │   │
+│  │  BadgerDB     │  │  HTTP/gRPC    │  │  Sync Engine  │   │
+│  │  (metadata)   │  │  (S3-compat)  │  │  (P2P/WAN)    │   │
+│  └───────────────┘  └───────────────┘  └───────────────┘   │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │  Local FS     │  │  LRU Cache    │  │  WebSocket    │   │
+│  │  (blobs)      │  │  (hot files)  │  │  (events)     │   │
 │  └───────────────┘  └───────────────┘  └───────────────┘   │
 └─────────────────────────────────────────────────────────────┘
          │                    │                    │
@@ -105,48 +124,87 @@ MEDIA_TEMP = MEDIA_ROOT / "temp"            # Processing intermediates
 └─────────────────┘  └─────────────────┘  └─────────────────┘
 ```
 
+#### Integration with Oelala
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    oelala (FastAPI)                         │
+│  - Generation logic, UI, auth, billing                      │
+│  - Talks to oelala-storage via S3-compatible API            │
+│  - Local Redis/SQLite cache for metadata                    │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           │ S3 API (GET/PUT/DELETE)
+                           │ WebSocket (realtime events)
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  oelala-storage node                        │
+│  - Handles file storage, dedup, sync                        │
+│  - Can run on same machine or separate                      │
+│  - Scales horizontally with more nodes                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
 #### Storage Node Features
 
 | Feature | Description | Priority |
 |---------|-------------|----------|
-| Cross-platform | Python-based, works on Windows/Linux/Mac | High |
-| Local-first | Full functionality without internet | High |
-| SQLite metadata | Lightweight, embedded database | High |
-| REST API | Standard HTTP API for node communication | High |
-| File chunking | Large file support with resumable transfers | Medium |
-| Content addressing | SHA-256 hash for deduplication | Medium |
-| Sync engine | Background sync between nodes | Medium |
-| Conflict resolution | Last-write-wins or manual merge | Medium |
-| Encryption | Optional at-rest and in-transit encryption | Low |
-| Compression | Optional LZ4/ZSTD compression | Low |
+| Go binary | Single executable, ~10-15MB | Critical |
+| Windows + Linux | Native builds, no Wine/WSL | Critical |
+| S3-compatible API | Standard interface for tools | High |
+| BadgerDB metadata | Embedded KV store, no setup | High |
+| Content addressing | SHA-256 hash for deduplication | High |
+| LRU caching | Hot files in memory | High |
+| gRPC node-to-node | Efficient binary protocol for sync | Medium |
+| File chunking | Large file support, resumable | Medium |
+| Sync engine | Background P2P sync | Medium |
+| Conflict resolution | Last-write-wins or versioning | Medium |
+| Encryption | Optional at-rest (ChaCha20-Poly1305) | Low |
+| Compression | Optional LZ4 for bandwidth savings | Low |
 
 #### Node Types
 
 | Type | Description | Use Case |
 |------|-------------|----------|
-| **Primary** | Main production node, always online | Server |
-| **Replica** | Mirror of primary, read-only or failover | Backup |
-| **Edge** | Local cache, partial sync | Desktop/Laptop |
-| **Archive** | Cold storage, infrequent access | Long-term backup |
+| **Primary** | Main node, write-enabled | Production server |
+| **Replica** | Mirror, can be promoted | Failover/backup |
+| **Edge** | Local cache, partial sync | User's desktop |
+| **Archive** | Cold storage, async sync | Long-term backup |
 
-#### Sync Strategies
+#### Configuration Example
 
-```python
-# Example: Node configuration
-node_config = {
-    "node_id": "node_abc123",
-    "node_type": "primary",
-    "storage_path": "/home/flip/oelala/media",
-    "max_storage_gb": 500,
-    "sync_peers": [
-        {"url": "http://192.168.1.100:7999", "type": "replica"},
-        {"url": "https://vps.example.com:7999", "type": "archive"}
-    ],
-    "sync_strategy": "realtime",  # realtime, scheduled, manual
-    "sync_interval_minutes": 15,
-    "encryption_enabled": True,
-    "compression": "lz4"
-}
+```yaml
+# oelala-storage.yaml
+node:
+  id: "node_abc123"
+  name: "Home Server"
+  type: primary
+  
+storage:
+  path: "/data/oelala"
+  max_size_gb: 500
+  cache_size_mb: 2048
+  
+api:
+  http_port: 7999
+  grpc_port: 7998
+  enable_tls: true
+  
+sync:
+  peers:
+    - url: "https://node-b.example.com:7999"
+      type: replica
+    - url: "https://archive.example.com:7999"  
+      type: archive
+  strategy: realtime  # realtime, scheduled, manual
+  interval_minutes: 15
+  
+security:
+  encryption_at_rest: true
+  auth_tokens:
+    - name: "oelala-main"
+      token: "${OELALA_STORAGE_TOKEN}"
+      permissions: ["read", "write", "delete"]
 ```
 
 ### Phase 4: Cloud Integration (Future)
