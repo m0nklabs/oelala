@@ -1,136 +1,138 @@
 # Oelala UI v2 Plan (Grok-Imagine inspired)
 
-## Goal
+## Status: IMPLEMENTED ✅
 
-Build a new dashboard UI inspired by the provided Grok Imagine screenshots:
-- Left sidebar navigation (grouped tools)
-- Main area split into **Controls** (left) and **Generated output** (right)
-- A consistent **History** affordance in the output panel
-- Minimal, fast operator UX for driving the backend generation/training endpoints
+The dashboard UI has been implemented with the following features:
 
-This is a UX/layout reference plan, not a pixel-perfect clone.
+### Completed Features
 
-## Current backend capabilities (source of truth)
+#### Dashboard Layout ✅
+- Left sidebar navigation with grouped tools
+- Main content area with controls + output panels
+- Collapsible sidebar sections
+- Dark theme with CSS variables
 
-Implemented FastAPI endpoints (see `src/backend/app.py`):
+#### Video Tools
+- ✅ **Image to Video** - Full ComfyUI integration with DisTorch2
+  - Image upload (drag & drop, URL, from gallery)
+  - Positive/negative prompts with persistence
+  - Model pair selection (high/low noise GGUF)
+  - LoRA selection with strength control
+  - Resolution, duration, FPS controls
+  - Preset system for workflow configurations
+- ⏳ Text to Video - Planned
+- ⏳ Video to Video - Planned
 
-### Generation
-- `POST /generate` — Image → Video (multipart upload: `file`, plus `prompt`, `num_frames`, `output_filename`)
-- `POST /generate-text` — Text → Video (form: `prompt`, `num_frames`, `model_type`, `output_filename`)
-- `POST /generate-pose` — Pose-guided Image → Video (multipart upload: `file`, `num_frames`, `output_filename`)
+#### Image Tools
+- ⏳ Text to Image - Planned
+- ⏳ Image to Image - Planned
+- ⏳ Face Swap - Planned
+- ⏳ Upscaler - Planned
 
-### Output / history
-- `GET /health`
-- `GET /files/{filename}` (generic file serving)
-- `GET /videos/{filename}`
-- `GET /images/{filename}`
-- `GET /list-videos` — lists generated mp4 files
+#### My Media ✅
+- ✅ **Gallery View** - Grid layout with thumbnails
+- ✅ **Filters** - All, Images, Videos, Favorites
+- ✅ **Prompts Section** - NEW! Browse generation history
+  - Prompt bubble (💬) on thumbnails
+  - Popup modal with full generation details
+  - Copy prompts to clipboard
+  - View LoRAs, sampler, model, resolution
+- ✅ **Favorites** - Star items, filter by favorites
+- ✅ **Multi-select** - Shift/Ctrl+click for bulk operations
+- ✅ **Sorting** - By date, name, size
 
-### Training
-- `POST /train-lora` — LoRA training (multipart multiple files)
-- `POST /train-lora-placeholder` — placeholder artifact creation
+#### Training
+- ⏳ Train LoRA - Placeholder ready
 
-### Telemetry
-- `POST /client-log` — persist client-side logs
+---
 
-## Feature matrix (UI modules vs backend support)
+## Current Backend Capabilities
 
-| UI module (Grok reference) | Backend support today | Notes |
-|---|---:|---|
-| Text to Image | ❌ missing | No endpoint yet |
-| Text to Video | ✅ supported | `POST /generate-text` |
-| Image to Video | ✅ supported | `POST /generate` |
-| Video to Video | ❌ missing | No endpoint yet |
-| Image to Image | ❌ missing | No endpoint yet |
-| Reframe | ❌ missing | No endpoint yet |
-| Face Swap | ❌ missing | No endpoint yet |
-| Upscaler | ❌ missing | No endpoint yet |
-| History | ✅ supported | `GET /list-videos` + direct video URLs |
-| LoRA training | ✅ supported (but may be limited by env) | `POST /train-lora`, plus placeholder endpoint |
+### Generation Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/wan22/image-to-video\` | POST | ComfyUI-based I2V with DisTorch2 |
+| \`/health\` | GET | Backend + ComfyUI status |
 
-## v1 (MVP) scope — end-to-end working
+### Media Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/list-comfyui-media\` | GET | List media with metadata |
+| \`/comfyui-output/{file}\` | GET | Serve generated files |
+| \`/delete-comfyui-media\` | DELETE | Bulk delete files |
+| \`/extract-metadata\` | POST | Extract prompt from image |
 
-v1 should deliver a Grok-style shell but only wire the flows that are actually available:
+### Model Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/loras\` | GET | List LoRAs by category |
+| \`/unet-models\` | GET | List GGUF model pairs |
+| \`/api/presets\` | GET | List workflow presets |
 
-1. **Text to Video**
-   - Prompt textarea
-   - Duration/frames control (maps to `num_frames`)
-   - Model type selection (maps to `model_type`)
-   - Submit -> show generated video + download
+---
 
-2. **Image to Video**
-   - Upload image
-   - Prompt (optional)
-   - Frames control
-   - Submit -> show generated video + download
+## Frontend Architecture
 
-3. **Pose-guided Image to Video (optional toggle under Image→Video)**
-   - Upload image
-   - Pose toggle -> routes to `POST /generate-pose`
+### File Structure
+\`\`\`
+src/frontend/src/
+├── dashboard/
+│   ├── Dashboard.jsx       # Main layout with sidebar
+│   ├── Dashboard.css       # Dashboard styles
+│   ├── OutputPanel.jsx     # Right panel for output
+│   ├── nav.js              # Navigation configuration
+│   └── tools/
+│       ├── ImageToVideoTool.jsx  # I2V generation
+│       ├── TextToVideoTool.jsx   # T2V (planned)
+│       └── MyMediaTool.jsx       # Gallery + prompts
+└── components/
+    ├── PresetSelector.jsx  # Preset dropdown
+    └── VideoGenerator.jsx  # Legacy component
+\`\`\`
 
-4. **History (always available on the right panel)**
-   - “History” button opens a list of prior generated mp4s from `/list-videos`
-   - Clicking an item loads it into the output preview
+### Navigation Structure (nav.js)
 
-5. **LoRA Training**
-   - Multi-image upload
-   - Model name + epochs + learning rate
-   - Submit -> show training response + artifact path
+\`\`\`javascript
+{
+  id: 'video-tools',
+  label: 'Video Tools',
+  items: [
+    { id: 'text-to-video', label: 'Text to Video' },
+    { id: 'image-to-video', label: 'Image to Video' },
+    { id: 'video-to-video', label: 'Video to Video', status: 'soon' }
+  ]
+},
+{
+  id: 'my-media',
+  label: 'My Media',
+  items: [
+    { id: 'my-media-all', label: 'All' },
+    { id: 'my-media-images', label: 'Images' },
+    { id: 'my-media-videos', label: 'Videos' },
+    { id: 'my-media-favorites', label: 'Favorites' },
+    { id: 'my-media-prompts', label: 'Prompts', status: 'new' }
+  ]
+}
+\`\`\`
 
-## v2 scope — requires backend work
+---
 
-These modules can be added after we implement backend endpoints:
-- Text to Image
-- Image to Image
-- Video to Video
-- Reframe
-- Face Swap
-- Upscaler
+## Next Steps (v3)
 
-When implementing these, keep the exact same pattern:
-- Controls (left) -> submit -> output (right) -> History
+### Planned Features
+1. **Text to Video** - Direct text prompt to video generation
+2. **Video to Video** - Style transfer / video editing
+3. **Text to Image** - ComfyUI T2I workflows
+4. **LoRA Training** - Fine-tune models on custom images
+5. **Batch Processing** - Queue multiple generations
 
-## UI information architecture (IA)
+### Technical Improvements
+- TypeScript migration
+- React Query for data fetching
+- Zustand for state management
+- Improved error handling
+- WebSocket progress updates
 
-### Sidebar groups (mirrors Grok)
-- **Video tools**
-  - Text to Video (v1)
-  - Image to Video (v1)
-  - Video to Video (v2)
-- **Image tools**
-  - Text to Image (v2)
-  - Image to Image (v2)
-  - Reframe (v2)
-  - Face Swap (v2)
-  - Upscaler (v2)
-- **My content**
-  - History (v1)
-  - LoRA Training (v1)
+---
 
-### Shared page layout
-- Left sidebar (collapsible)
-- Main content area:
-  - **Controls panel (left)**: mode settings, upload/prompt, advanced settings
-  - **Output panel (right)**: preview player/image, status/errors, History button
-
-## API wiring notes (practical)
-
-- Prefer a single lightweight client helper around `fetch` (already in `src/frontend/src/api.js`).
-- Use `POST /client-log` for any UI exceptions.
-- `GET /list-videos` can drive History; videos can be played from `GET /videos/{filename}`.
-
-## Known gaps / risks
-
-- Current frontend is React+Vite but not yet TypeScript/Tailwind/Zustand/React Query.
-  - For v1, we can keep it minimal and re-layout with existing tooling.
-  - Alternatively, migrate to TS/Tailwind and follow the stricter frontend conventions.
-- Backend parameter mismatch: frontend currently sends `model_type` to `/generate`, but backend `/generate` does not accept it.
-  - v1 should align UI fields with actual backend params to avoid confusion.
-
-## Next implementation steps
-
-1. Implement new UI shell (sidebar + two-panel layout)
-2. Implement MVP pages: Text→Video, Image→Video (pose toggle)
-3. Add output preview + downloads + History panel
-4. Wire LoRA training screen
-5. Polish error/loading states and logging
+*Last Updated: January 3, 2026*

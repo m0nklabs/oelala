@@ -3,6 +3,28 @@ Oelala Documentation Change Log
 
 All documentation edits and provenance for the Oelala project.
 
+2026-01-03 | GitHub Copilot
+- Major documentation update for dashboard UI v2 and Prompts feature
+- Updated ARCHITECTURE.md with current system overview, metadata extraction, frontend navigation
+- Updated WEB_INTERFACE_README.md with new features, API endpoints, metadata response format
+- Rewrote UI_V2_PLAN.md to reflect implemented status
+- Updated PROJECT_OVERVIEW.md with current project status and structure
+
+Why:
+- Documentation was outdated after implementing Prompts section and extended metadata extraction.
+
+Files changed:
+- `docs/ARCHITECTURE.md` - System diagram, endpoint table, frontend components
+- `docs/WEB_INTERFACE_README.md` - Features, API docs, file structure
+- `docs/UI_V2_PLAN.md` - Implementation status, completed features
+- `docs/PROJECT_OVERVIEW.md` - Project status, directory structure
+
+New features documented:
+- Prompts section in My Media with 💬 bubble and popup modal
+- Extended metadata extraction (LoRAs, sampler, scheduler, model, resolution)
+- Preset selector component
+- Video duration in prompt popup
+
 2025-12-27 | GitHub Copilot
 - Added UI reference folder for the new dashboard direction.
 - Captured the Grok Imagine feature set as a screenshot manifest + filename convention so we can align navigation and panel layout.

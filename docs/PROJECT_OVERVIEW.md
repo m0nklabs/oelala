@@ -2,22 +2,22 @@
 
 ## Overview
 
-**Oelala** is an AI-driven project for video generation, pose estimation, and realistic avatar creation. The project combines state-of-the-art AI models to generate consistent and realistic AI avatars in videos through an intuitive web interface.
+**Oelala** is an AI-driven video generation platform with a modern web dashboard. The project integrates ComfyUI with Wan2.2 workflows for high-quality image-to-video generation through an intuitive web interface.
 
 ### Project Goals
-- Develop an integrated pipeline for AI video generation
-- Implement pose estimation for improved movements
-- Create realistic and consistent AI avatars
-- Build a standalone, portable web application
-- Provide user-friendly interface for AI video creation
+- Develop an integrated pipeline for AI video generation via ComfyUI
+- Build a modern dashboard UI for video generation control
+- Provide comprehensive media management with prompt history
+- Support multiple LoRA models and GGUF model pairs
+- Enable workflow presets for quick configuration
 
 ### Core Technologies
-- **Wan2.2**: Advanced image-to-video generation (Wan-AI/Wan2.2-I2V-A14B)
-- **OpenPose**: Pose estimation and keypoint detection
+- **Wan2.2**: Advanced image-to-video generation (14B parameter models)
+- **ComfyUI**: Workflow engine with DisTorch2 dual-pass sampling
 - **FastAPI**: High-performance web API backend
-- **React**: Modern frontend framework with Vite
-- **PyTorch**: Deep learning framework with CUDA acceleration
-- **Python/C++**: Programming languages for prototyping and production
+- **React + Vite**: Modern frontend framework
+- **GGUF Models**: Quantized models for efficient VRAM usage
+- **LoRA**: Fine-tuning support for style customization
 
 ---
 
@@ -27,32 +27,39 @@
 
 #### 1. Project Setup (Completed)
 - **Workspace**: `/home/flip/oelala/` created and configured
-- **Git Repository**: Initialized with proper structure
-- **dependencies**: CUDA 12.9, cuDNN 8.9.7, PyTorch 2.5.1+cu121
-- **Build System**: CMake configuration for OpenPose
+- **Git Repository**: GitHub repo at m0nklabs/oelala
+- **Dependencies**: CUDA 12.9, cuDNN 8.9.7, PyTorch 2.5.1+cu121
+- **Python Environment**: `/home/flip/venvs/gpu` (canonical GPU venv)
 
-#### 2. OpenPose Python Bindings (Completed)
-- **Python Environment**: Python 3.10.18 virtual environment (`/home/flip/openpose_py310/`)
-- **Build**: Successful compilation with Python bindings enabled
-- **Libraries**: All shared libraries properly installed
-- **testing**: Functional demo scripts and validation tests
-- **API**: Fully working Python interface for pose estimation
+#### 2. ComfyUI Integration (Completed)
+- **Port**: 8188 with WebSocket support
+- **Workflows**: DisTorch2 dual-pass I2V workflow
+- **Models**: GGUF quantized models (Q6_K) for 14B parameters
+- **LoRA Support**: 53+ LoRA files with category organization
+- **Output**: `/home/flip/oelala/ComfyUI/output/`
 
-#### 3. Wan2.2 Integration (Completed)
-- **Model**: Wan-AI/Wan2.2-I2V-A14B (1.3B parameters, 14B text encoder)
-- **Pipeline**: Image-to-video generation with optional text prompts
-- **Environment**: PyTorch 2.5.1 with CUDA 12.1 support
-- **dependencies**: diffusers, transformers, accelerate, safetensors, opencv-Python
-- **testing**: Validation scripts, demo implementation, and error handling
-- **Performance**: GPU-accelerated with RTX 3060 (11.8GB VRAM)
+#### 3. Web Dashboard (Completed)
+- **Backend**: FastAPI on port 7998, serves built frontend
+- **Frontend**: React + Vite with sidebar navigation
+- **Features**:
+  - Image to Video generation
+  - Model pair selection (high/low noise)
+  - LoRA selection with strength control
+  - Preset system for workflow configurations
+  - My Media gallery with filters
+  - **Prompts section** with full metadata display (NEW)
 
-#### 4. Web Interface (Completed)
-- **backend**: FastAPI server with comprehensive REST API
-- **frontend**: React 18 + Vite application with modern UI
-- **Features**: Image upload, video generation, real-time progress, download
-- **API endpoints**: `/generate`, `/videos/{filename}`, `/health`, `/list-videos`
-- **Integration**: Seamless connection between frontend and Wan2.2 pipeline
-- **Deployment**: Ready for production with automated startup script
+#### 4. My Media Features (Completed)
+- **Gallery View**: Grid layout with thumbnails
+- **Filters**: All, Images, Videos, Favorites, Prompts
+- **Prompt Bubble**: 💬 icon on thumbnails with prompts
+- **Prompt Popup**: Full generation details modal
+  - Positive/negative prompts with copy
+  - Steps, CFG, seed, sampler, scheduler
+  - LoRAs used with strength percentages
+  - Model name and resolution
+  - Video duration
+- **Metadata Extraction**: From PNG workflow JSON (images + videos)
 
 **Technical Details:**
 ```Python
@@ -84,20 +91,25 @@ keypoints = datum.poseKeypoints
 
 ### 🔄 Current Status
 
-#### OpenPose component
-- **Status**: Fully functional with Python 3.10 bindings
-- **test Results**: All demo scripts working correctly
-- **Performance**: GPU-accelerated with CUDA support
-- **Models**: BODY_25 model loaded and operational
-- **Output**: 25 keypoints per person (x, y, confidence scores)
-- **Integration**: Ready for pose-guided video generation
+#### Dashboard UI
+- **Status**: Fully functional with sidebar navigation
+- **Tools Available**:
+  - ✅ Image to Video (ComfyUI DisTorch2)
+  - ✅ My Media (All, Images, Videos, Favorites, Prompts)
+  - ⏳ Text to Video (planned)
+  - ⏳ Text to Image (planned)
+  - ⏳ LoRA Training (placeholder)
 
-#### Wan2.2 component
-- **Status**: Fully integrated and operational
-- **Model**: Wan-AI/Wan2.2-I2V-A14B loaded on-demand
-- **Capabilities**: Image-to-video generation with text prompts
-- **Performance**: ~16GB VRAM recommended, working with 11.8GB RTX 3060
-- **Features**: 8-32 frame videos, customizable prompts, MP4 output
+#### ComfyUI Integration
+- **Status**: Fully integrated with WebSocket progress monitoring
+- **Workflow**: DisTorch2 dual-pass sampling (high/low noise)
+- **Models**: GGUF Q6_K models loaded via DisTorch2 nodes
+- **LoRAs**: Category-organized with separate high/low noise selection
+
+#### Metadata System
+- **Status**: Full extraction from PNG workflow JSON
+- **Fields**: Prompts, steps, CFG, seed, sampler, scheduler, LoRAs, model, resolution
+- **Video Matching**: By timestamp pattern or base filename
 - **Error Handling**: Graceful fallback and user-friendly error messages
 
 #### Web Interface
@@ -151,93 +163,63 @@ keypoints = datum.poseKeypoints
 ### Directory Structure
 ```
 /home/flip/oelala/
-├── src/                          # Main source code
-│   ├── backend/                  # FastAPI backend
-│   │   ├── app.py               # Main FastAPI application
-│   │   └── requirements.txt     # Python dependencies
-│   └── frontend/                # React frontend
-│       ├── src/
-│       │   ├── App.jsx          # Main React application
-│       │   ├── main.jsx         # React entry point
-│       │   ├── App.CSS          # Application styles
-│       │   ├── index.CSS        # Global styles
-│       │   └── components/
-│       │       └── VideoGenerator.jsx  # Main video generation component
-│       ├── package.json         # Node.js dependencies
-│       ├── vite.config.js       # Vite configuration
-│       └── index.html           # HTML template
-├── uploads/                     # Uploaded images directory
-├── generated/                   # Generated videos directory
-├── CMakeLists.txt              # CMake build configuration
-├── README.md                   # Project overview
-├── PROJECT_PLAN.md            # Detailed project plan
-├── KEYWORDS.md                # Project keywords
-├── OPENPOSE_TECHNICAL_GUIDE.md # OpenPose documentation
-├── WAN2_README.md             # Wan2.2 integration guide
-├── WEB_INTERFACE_README.md    # Web interface documentation
-├── wan2_generator.py          # Wan2.2 video generator
-├── demo_wan2.py              # Wan2.2 demo script
-├── test_wan2_setup.py        # Wan2.2 validation
-├── test_web_interface.py     # Web interface testing
-├── start_web.sh              # Automated startup script
-├── docs/                      # Project documentation
-├── src/                       # C++ source code (legacy)
-│   └── main.cpp              # Basic OpenPose demo
-├── Python/                    # Python scripts
-│   ├── demo_openpose.py      # Pose estimation demo
-│   ├── test_real_image.py    # Real image testing
-│   └── test_openpose.py      # Comprehensive validation
-├── build/                     # Build artifacts
-├── models/                    # AI models directory
-└── openpose/                  # OpenPose source code
-    ├── build/                # OpenPose build directory
-    ├── models/               # Pose estimation models
-    └── 3rdparty/             # Third-party dependencies
+├── src/
+│   ├── backend/
+│   │   ├── app.py                    # FastAPI application
+│   │   ├── comfyui_client.py         # ComfyUI WebSocket client
+│   │   └── requirements.txt          # Python dependencies
+│   └── frontend/
+│       ├── package.json              # Node dependencies
+│       ├── vite.config.js            # Vite configuration
+│       ├── dist/                     # Built frontend
+│       └── src/
+│           ├── App.jsx               # Main React app
+│           ├── dashboard/
+│           │   ├── Dashboard.jsx     # Dashboard layout
+│           │   ├── nav.js            # Navigation config
+│           │   └── tools/
+│           │       ├── ImageToVideoTool.jsx
+│           │       └── MyMediaTool.jsx
+│           └── components/
+│               ├── PresetSelector.jsx
+│               └── VideoGenerator.jsx
+├── ComfyUI/
+│   ├── output/                       # Generated media
+│   └── models/
+│       ├── diffusion_models/         # GGUF unet models
+│       ├── loras/                    # LoRA files
+│       ├── clip/                     # Text encoders
+│       └── vae/                      # VAE models
+├── workflows/
+│   ├── registry.json                 # Preset definitions
+│   └── ImageToVideo/                 # Workflow templates
+├── docs/                             # Documentation
+└── README.md                         # Project readme
 ```
 
-### dependencies & Requirements
+### Dependencies & Requirements
 
-#### Systeem Requirements
+#### System Requirements
 - **OS**: Linux (Ubuntu 24.04)
-- **CUDA**: 12.9 with cuDNN 8.9.7
-- **Python**: 3.10.18 (dead snakes PPA)
-- **Compiler**: GCC 13.3.0
-- **Build System**: CMake 3.28+
+- **GPU**: NVIDIA RTX 3060+ with 12GB+ VRAM
+- **CUDA**: 12.1+ with cuDNN 8.9+
+- **Python**: 3.10+ with venv
+- **Node.js**: 18+ with npm
 
 #### Python Environment
-- **Virtual Environment**: `/home/flip/openpose_py310/`
-- **Python Version**: 3.10.18 (via deadsnakes PPA)
+- **Virtual Environment**: `/home/flip/venvs/gpu/`
 - **Key Packages**:
-  - setuptools, pybind11, numpy
-  - torch 2.5.1+cu121, torchvision
-  - diffusers, transformers, accelerate, safetensors
-  - opencv-Python, Pillow
-  - fastapi, uvicorn[standard], Python-multipart, pydantic
-  - openpose (compiled Python bindings)
+  - fastapi, uvicorn[standard], python-multipart
+  - pillow, aiofiles, websockets
+  - torch (for metadata extraction)
 
-#### Node.js Environment (frontend)
-- **Node Version**: 16+ (recommended 18+)
+#### Node.js Environment (Frontend)
+- **Node Version**: 18+ (v22.x recommended)
 - **Package Manager**: npm
 - **Key Packages**:
   - react ^18.2.0, react-dom ^18.2.0
-  - axios ^1.6.0 (HTTP client)
-  - lucide-react ^0.294.0 (icons)
-  - @vitejs/plugin-react ^4.2.1 (Vite React plugin)
-  - eslint (code linting)
-
-#### C++ dependencies
-- **OpenPose**: v1.7.0 with Python bindings
-- **Boost**: 1.83 (system libraries)
-- **OpenCV**: 4.6.0 with CUDA support
-- **HDF5**: System libraries for data storage
-- **Protobuf**: 3.21.12 for serialization
-
-#### C++ dependencies
-- **OpenPose**: v1.7.0
-- **Boost**: 1.83
-- **OpenCV**: 4.6.0
-- **HDF5**: Systeem libraries
-- **Protobuf**: 3.21.12
+  - lucide-react (icons)
+  - @vitejs/plugin-react (Vite React plugin)
 
 ### Build & Installatie
 
@@ -426,54 +408,37 @@ cv2.imwrite('result.jpg', image)
 
 ## Quick Start Guide
 
-### Automated Setup
+### Production Setup
 ```bash
-cd /home/flip/oelala
-./start_web.sh
-```
-This will start both the backend (port 7999) and frontend (port 3000).
-
-### Manual Setup
-
-#### 1. backend Setup
-```bash
-# Activate Python environment
-cd /home/flip/openpose_py310
-source bin/activate
-
-# Install dependencies
-pip install -r /home/flip/oelala/src/backend/requirements.txt
-
-# Start backend
-cd /home/flip/oelala/src/backend
-Python app.py
-```
-
-#### 2. frontend Setup
-```bash
-# Install dependencies
+# 1. Build frontend
 cd /home/flip/oelala/src/frontend
-npm install
+npm install && npm run build
 
-# Start development server
-npm run dev
+# 2. Start backend (serves frontend)
+source /home/flip/venvs/gpu/bin/activate
+cd /home/flip/oelala/src/backend
+uvicorn app:app --host 0.0.0.0 --port 7998
+
+# 3. Access at http://localhost:7998
 ```
 
-#### 3. Access the Application
-- **Web Interface**: http://192.168.1.2:5174
-- **API Documentation**: http://192.168.1.2:7998/docs
-- **Health Check**: http://192.168.1.2:7998/health
-
-### testing
+### Development Setup
 ```bash
-# Run comprehensive test
-cd /home/flip/oelala
-python tests/test_web_interface.py
+# Terminal 1 - Backend with hot reload
+source /home/flip/venvs/gpu/bin/activate
+cd /home/flip/oelala/src/backend
+uvicorn app:app --host 0.0.0.0 --port 7998 --reload
 
-# test individual components
-python tests/test_wan2_setup.py
-python examples/demo_wan2.py
+# Terminal 2 - Frontend dev server
+cd /home/flip/oelala/src/frontend
+npm run dev
+# Access at http://localhost:5174
 ```
+
+### Prerequisites
+- ComfyUI running on port 8188
+- GGUF models in `ComfyUI/models/diffusion_models/`
+- LoRAs in `ComfyUI/models/loras/`
 
 ---
 
@@ -557,7 +522,7 @@ python examples/demo_wan2.py
 
 ---
 
-*Last Updated: September 7, 2025*
-*Status: Web interface fully operational, ready for pose-video integration*
-*Version: 1.0.0 - Production Ready*
-*Progress: ~75-80% Complete*
+*Last Updated: January 3, 2026*
+*Status: Dashboard fully operational with ComfyUI integration*
+*Version: 2.0.0 - Dashboard UI with Prompts feature*
+*Progress: Dashboard UI ✅ | Image-to-Video ✅ | My Media ✅ | Prompts ✅*

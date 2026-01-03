@@ -2,33 +2,33 @@
 
 ## System Overview
 
-Oelala is een AI video generation platform dat bestaat uit drie hoofdcomponenten:
+Oelala is een AI video generation platform met een modern dashboard UI. Het platform integreert met ComfyUI voor video generatie via Wan2.2 workflows.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         User Browser                            │
-│                    http://ai-kvm2:5174                          │
+│                    http://localhost:7998                        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Frontend (React + Vite)                      │
-│                    Port: 5174 (dev server)                      │
-│                    Service: oelala-frontend                     │
+│                    Port: 5174 (dev) / 7998 (prod via backend)   │
+│                    Dashboard UI with sidebar navigation         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Backend (FastAPI/Uvicorn)                    │
 │                    Port: 7998                                   │
-│                    Service: oelala-backend                      │
+│                    Serves static frontend + API                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ComfyUI (Workflow Engine)                    │
 │                    Port: 8188                                   │
-│                    Service: comfyui                             │
+│                    DisTorch2 dual-pass workflows                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,7 +118,8 @@ WantedBy=default.target
 | `/unet-models`               | GET    | List GGUF unet models with pairs   |
 | `/extract-metadata`          | POST   | Extract prompt from PNG metadata   |
 | `/wan22/image-to-video`      | POST   | Generate video via ComfyUI         |
-| `/list-comfyui-media`        | GET    | List output media (hide start imgs)|
+| `/list-comfyui-media`        | GET    | List output media with metadata    |
+| `/api/presets`               | GET    | List available workflow presets    |
 | `/comfyui-output/{filename}` | GET    | Serve generated videos/images      |
 
 ### LoRA Endpoint Response
@@ -150,6 +151,15 @@ The `/extract-metadata` endpoint extracts prompts from uploaded images:
 - **oelala_params**: Our custom format with `original_t2i_prompt` preservation
 - **ComfyUI workflow**: CLIPTextEncode nodes, WanVideo positive_prompt
 - **A1111 format**: Parameters text block parsing
+
+The `/list-comfyui-media` endpoint returns comprehensive metadata when `include_metadata=true`:
+- **Prompt extraction**: Positive/negative prompts from workflow JSON
+- **Generation params**: Steps, CFG, seed
+- **Sampler info**: Sampler name, scheduler
+- **Resolution**: Width × height from EmptyLatentImage
+- **LoRAs**: Array of `{name, strength}` from LoraLoader nodes
+- **Model**: Checkpoint/GGUF model name
+- **Heuristic detection**: Negative prompts identified by keywords (worst, bad, ugly, etc.)
 
 ---
 
@@ -212,22 +222,78 @@ ComfyUI/models/
 - **React 18** with hooks
 - **Vite** dev server with HMR
 - **CSS Variables** for theming
+- **Lucide React** icons
+
+### Dashboard Navigation (Sidebar)
+
+The dashboard uses a collapsible sidebar with grouped tools:
+
+```
+┌─────────────────────────────────┐
+│ 🎬 Oelala                      │
+├─────────────────────────────────┤
+│ ▶ Video Tools                   │
+│   • Text to Video               │
+│   • Image to Video      ✓       │
+│   • Video to Video      soon    │
+├─────────────────────────────────┤
+│ ▶ Image Tools                   │
+│   • Text to Image               │
+│   • Image to Image      soon    │
+│   • Reframe             soon    │
+│   • Face Swap           soon    │
+│   • Upscaler            soon    │
+├─────────────────────────────────┤
+│ ▶ My Media                      │
+│   • All                         │
+│   • Images                      │
+│   • Videos                      │
+│   • Favorites                   │
+│   • Prompts             NEW     │
+├─────────────────────────────────┤
+│ ▶ Training                      │
+│   • Train LoRA          soon    │
+└─────────────────────────────────┘
+```
 
 ### Key Components
 
-**File**: \`src/frontend/src/dashboard/tools/ImageToVideoTool.jsx\`
+**File**: `src/frontend/src/dashboard/Dashboard.jsx`
+- Main dashboard container with sidebar + content layout
+- Tool routing based on active tool ID
+- Full-width mode for My Media tools
+
+**File**: `src/frontend/src/dashboard/nav.js`
+- Navigation structure definition
+- Tool IDs and labels
+- Status badges (new, soon, etc.)
+
+**File**: `src/frontend/src/dashboard/tools/ImageToVideoTool.jsx`
 - Main I2V generation interface
 - Image upload (drag & drop, URL, creations)
 - Parameter controls (resolution, duration, fps, aspect ratio)
 - Prompt persistence via localStorage
 - Metadata extraction from uploaded images (auto-fill prompts)
+- Preset selector for workflow selection
 
 **File**: `src/frontend/src/dashboard/tools/MyMediaTool.jsx`
-- Media gallery with grid view
+- Media gallery with grid view (images, videos, all, prompts)
 - Favorites system (localStorage)
-- Sort/filter controls
+- Sort/filter controls (date, name, size, favorites)
 - Start image hiding (source images for videos)
 - Multi-select with keyboard shortcuts
+- **Prompt bubble (💬)** on thumbnails with prompt metadata
+- **Prompt popup modal** showing:
+  - Positive/negative prompts with copy button
+  - Generation settings (steps, CFG, seed, sampler, scheduler)
+  - LoRA models used with strength percentages
+  - Model/checkpoint name
+  - Resolution and video duration
+- Dedicated **Prompts list view** for browsing generation history
+
+**File**: `src/frontend/src/components/PresetSelector.jsx`
+- Workflow preset selection dropdown
+- API-driven preset list from `/api/presets`
 
 ### Model Selection UI
 
@@ -318,4 +384,4 @@ curl http://localhost:7998/loras | jq .
 
 ---
 
-*Last Updated: January 2, 2026 - Added LoRA support, DisTorch2 workflow, systemd services*
+*Last Updated: January 3, 2026 - Added Prompts section, extended metadata extraction, preset support*

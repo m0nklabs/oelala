@@ -2,152 +2,197 @@
 
 ## AI Video Generation Web Application
 
-This web interface provides an easy-to-use frontend for the Oelala AI video generation pipeline, powered by Wan2.2 and OpenPose.
+This web interface provides a modern dashboard for the Oelala AI video generation platform, powered by ComfyUI with Wan2.2 workflows.
 
 ## Features
 
-- 🎨 **Image upload**: Drag & drop or click to upload images
-- 🎬 **Video Generation**: Transform images into videos with AI
-- 📝 **Text Prompts**: Add custom prompts to guide video generation
-- ⚙️ **Parameter Control**: Adjust number of frames (8-32)
-- 📥 **Download Videos**: Download generated videos directly
-- 🔄 **Real-time Status**: Live backend health monitoring
+### Video Generation
+- 🎬 **Image to Video**: Transform images into videos with AI (Wan2.2 DisTorch2)
+- 📝 **Text Prompts**: Positive and negative prompts for guidance
+- ⚙️ **Advanced Controls**: Resolution, duration, FPS, aspect ratio
+- 🎛️ **Model Selection**: GGUF model pairs (high/low noise)
+- 🎨 **LoRA Support**: Apply LoRA models with adjustable strength
+- 📋 **Presets**: Save and load workflow presets
+
+### Media Management (My Media)
+- 📁 **Gallery View**: Grid layout with thumbnails
+- 🖼️ **Filter by Type**: All, Images, Videos, Favorites
+- 💬 **Prompts Section**: Browse generation history with full metadata
+- ⭐ **Favorites**: Mark and filter favorite items
+- 🗑️ **Multi-select**: Bulk delete with keyboard shortcuts (Shift/Ctrl+click)
+- 🔍 **Sort Options**: By date, name, size
+
+### Prompt Viewing (NEW)
+- 💬 **Prompt Bubble**: Hover over thumbnails to see prompt indicator
+- 📋 **Popup Modal**: Click to view full prompt details:
+  - ✨ Positive prompt with copy button
+  - 🚫 Negative prompt
+  - ⚙️ Generation settings (steps, CFG, seed, sampler, scheduler)
+  - 🎨 LoRAs used with strength percentages
+  - 📐 Resolution and video duration
+  - 🤖 Model/checkpoint name
 
 ## Architecture
 
-### backend (FastAPI)
+### Backend (FastAPI)
 - **Framework**: FastAPI with automatic API documentation
-- **AI Engine**: Wan2.2 Image-to-Video generation
-- **file Handling**: Secure upload/download with validation
-- **CORS**: Configured for frontend communication
-- **Health Checks**: Real-time Status monitoring
+- **ComfyUI Client**: WebSocket-based workflow execution
+- **Static Serving**: Built frontend served from `/`
+- **CORS**: Configured for development frontend
+- **Endpoints**: REST API for generation, media listing, presets
 
-### frontend (React + Vite)
+### Frontend (React + Vite)
 - **Framework**: React 18 with modern hooks
-- **Build tool**: Vite for fast development
-- **Styling**: Custom CSS with responsive design
+- **Build Tool**: Vite for fast development
+- **Styling**: CSS Variables with dark theme
 - **Icons**: Lucide React icons
-- **HTTP Client**: Axios for API communication
+- **State**: Local component state + localStorage persistence
 
 ## Quick Start
 
 ### Prerequisites
-- Python 3.10 with virtual environment
-- Node.js 16+ and npm
-- CUDA-compatible GPU (recommended)
-
-### Installation
-
-1. **backend dependencies**:
-```bash
-cd /home/flip/openpose_py310
-source bin/activate
-pip install -r /home/flip/oelala/src/backend/requirements.txt
-```
-
-2. **frontend dependencies**:
-```bash
-cd /home/flip/oelala/src/frontend
-npm install
-```
+- Python 3.10+ with GPU venv (`/home/flip/venvs/gpu`)
+- Node.js 18+ and npm
+- CUDA-compatible GPU (RTX 3060+ recommended)
+- ComfyUI running on port 8188
 
 ### Running the Application
 
-**Option 1: Automated Startup**
+**Option 1: Production (recommended)**
 ```bash
-cd /home/flip/oelala
-./start_web.sh
-```
+# Build frontend
+cd /home/flip/oelala/src/frontend
+npm run build
 
-**Option 2: Manual Startup**
-
-Terminal 1 - backend:
-```bash
+# Start backend (serves built frontend)
 source /home/flip/venvs/gpu/bin/activate
 cd /home/flip/oelala/src/backend
-python app.py
+uvicorn app:app --host 0.0.0.0 --port 7998
 ```
 
-Terminal 2 - frontend:
+**Option 2: Development (hot reload)**
 ```bash
+# Terminal 1 - Backend
+source /home/flip/venvs/gpu/bin/activate
+cd /home/flip/oelala/src/backend
+uvicorn app:app --host 0.0.0.0 --port 7998 --reload
+
+# Terminal 2 - Frontend dev server
 cd /home/flip/oelala/src/frontend
 npm run dev
 ```
 
 ### Access the Application
 
-- **frontend**: http://192.168.1.2:5174
-- **backend API**: http://192.168.1.2:7998
-- **API Documentation**: http://192.168.1.2:7998/docs
+- **Web Interface**: http://localhost:7998 (production) or http://localhost:5174 (dev)
+- **API Documentation**: http://localhost:7998/docs
+- **ComfyUI**: http://localhost:8188
 
-## API endpoints
+## API Endpoints
 
-### Core endpoints
+### Core Endpoints
 
-- `GET /` - API information and available endpoints
-- `GET /health` - backend health and model Status
-- `POST /generate` - generate video from image
-  - **Parameters**:
-    - `file`: Image file (required)
-    - `prompt`: Text prompt (optional)
-    - `num_frames`: Number of frames (8-32, default: 16)
-    - `output_filename`: Custom output filename (optional)
-- `GET /videos/{filename}` - Download generated video
-- `GET /images/{filename}` - Download uploaded image
-- `GET /list-videos` - list all generated videos
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Backend + ComfyUI health status |
+| `/loras` | GET | List available LoRA models |
+| `/unet-models` | GET | List GGUF unet model pairs |
+| `/api/presets` | GET | List workflow presets |
+| `/extract-metadata` | POST | Extract prompt from image |
+| `/wan22/image-to-video` | POST | Generate video via ComfyUI |
 
-### Example API Usage
+### Media Endpoints
 
-```Python
-import requests
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/list-comfyui-media` | GET | List media with metadata |
+| `/comfyui-output/{file}` | GET | Serve generated files |
+| `/delete-comfyui-media` | DELETE | Delete selected files |
 
-# upload and generate video
-files = {'file': open('person.jpg', 'rb')}
-data = {'prompt': 'dancing gracefully', 'num_frames': 16}
-response = requests.post('http://192.168.1.2:7998/generate', files=files, data=data)
-result = response.json()
+### Media Listing Parameters
 
-# Download video
-video_url = f"http://192.168.1.2:7998{result['video_url']}"
+```
+GET /list-comfyui-media?type=video&include_metadata=true&hide_start_images=true
 ```
 
-## file Structure
+- `type`: `all`, `image`, `video`
+- `include_metadata`: Include prompt/generation info
+- `hide_start_images`: Hide source images for videos
+- `grouped`: Group by timestamp (for video/image pairs)
+
+### Metadata Response
+
+When `include_metadata=true`, each item includes:
+
+```json
+{
+  "filename": "video_00001.mp4",
+  "type": "video",
+  "metadata": {
+    "has_metadata": true,
+    "positive_prompt": "a beautiful scene...",
+    "negative_prompt": "worst quality, blurry",
+    "steps": 6,
+    "cfg": 1.0,
+    "seed": 123456,
+    "sampler": "uni_pc",
+    "scheduler": "normal",
+    "width": 576,
+    "height": 1024,
+    "model": "wan2.2_i2v_14B_Q6_K.gguf",
+    "loras": [
+      {"name": "style_lora.safetensors", "strength": 1.5}
+    ]
+  }
+}
+```
+
+## File Structure
 
 ```
 /home/flip/oelala/
 ├── src/
 │   ├── backend/
-│   │   ├── app.py              # FastAPI application
-│   │   ├── requirements.txt    # Python dependencies
-│   │   └── api/                # API endpoints directory
+│   │   ├── app.py                    # FastAPI application
+│   │   ├── comfyui_client.py         # ComfyUI WebSocket client
+│   │   └── requirements.txt          # Python dependencies
 │   └── frontend/
-│       ├── package.json        # Node dependencies
-│       ├── vite.config.js      # Vite configuration
-│       ├── index.html          # HTML template
+│       ├── package.json              # Node dependencies
+│       ├── vite.config.js            # Vite configuration
+│       ├── dist/                     # Built frontend (served by backend)
 │       └── src/
-│           ├── App.jsx         # Main React app
-│           ├── main.jsx        # React entry point
-│           ├── App.CSS         # App styles
-│           ├── index.CSS       # Global styles
+│           ├── App.jsx               # Main React app
+│           ├── main.jsx              # React entry point
+│           ├── dashboard/
+│           │   ├── Dashboard.jsx     # Dashboard layout
+│           │   ├── nav.js            # Navigation config
+│           │   └── tools/
+│           │       ├── ImageToVideoTool.jsx  # I2V interface
+│           │       └── MyMediaTool.jsx       # Media gallery + prompts
 │           └── components/
-│               ├── VideoGenerator.jsx    # Main component
-│               └── VideoGenerator.CSS    # component styles
-├── uploads/                    # Uploaded images
-├── generated/                  # Generated videos
-├── scripts/start_web.sh        # Startup script
-└── WAN2_README.md            # Wan2.2 documentation
+│               ├── PresetSelector.jsx        # Preset dropdown
+│               └── VideoGenerator.jsx        # Legacy generator
+├── ComfyUI/
+│   ├── output/                       # Generated media
+│   └── models/                       # AI models
+├── workflows/
+│   ├── registry.json                 # Preset definitions
+│   └── ImageToVideo/                 # I2V workflow templates
+└── docs/                             # Documentation
 ```
 
 ## Configuration
 
-### backend Configuration
-- **Host**: 192.168.1.2
-- **Port**: 7999
-- **upload Directory**: `/home/flip/oelala/uploads/`
-- **Output Directory**: `/home/flip/oelala/generated/`
-- **Max file Size**: Limited by FastAPI defaults
+### Backend Configuration
+- **Host**: 0.0.0.0 (all interfaces)
+- **Port**: 7998
+- **ComfyUI**: http://localhost:8188
+- **Output Directory**: `/home/flip/oelala/ComfyUI/output/`
 
-### frontend Configuration
+### Frontend Configuration
+- **Dev Port**: 5174
+- **API Proxy**: Proxied to backend in dev mode
+- **Theme**: Dark mode with CSS variables
 - **Host**: 192.168.1.2
 - **Port**: 3000
 - **API proxy**: `/api` routes proxied to backend
@@ -217,11 +262,12 @@ npm run build
 - [ ] Advanced parameter controls
 - [ ] Mobile-responsive improvements
 
-## Recent edits and provenance
+## Recent Updates
 
-- 2025-09-07: Updated project network IPs to use 192.168.1.2 and added notes about the 7000-7999 port convention.
-- 2025-09-07: Fixed example API usage URLs to use 192.168.1.2.
-
-Edits performed by: GitHub Copilot
-
-Notes: Edited to align documentation examples and network notes with the project's LAN convention; see `DOCS_CHANGELOG.md` for a full record.
+- **January 3, 2026**: Added Prompts section with full metadata display
+  - Prompt bubble (💬) on thumbnails
+  - Popup modal with prompts, settings, LoRAs, model info
+  - Dedicated prompts list view
+  - Extended metadata extraction (sampler, scheduler, resolution, LoRAs)
+- **January 2, 2026**: Added LoRA support, model pair selection, presets
+- **December 2025**: ComfyUI integration with DisTorch2 workflows
