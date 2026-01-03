@@ -101,20 +101,46 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 - [ ] API key management
 - [ ] Team/organization support
 
-### Phase 8: Storage & Distribution
+### Phase 8: Local-First Distributed Storage
 
-**Goal**: Scalable, distributed storage
+**Goal**: Self-hosted, cross-platform storage nodes before cloud integration
+
+#### Storage Node Architecture
+| Feature | Status | Priority |
+|---------|--------|----------|
+| Cross-platform node daemon (Win/Linux/Mac) | ⏳ Todo | Critical |
+| SQLite metadata database | ⏳ Todo | Critical |
+| REST API for node communication | ⏳ Todo | High |
+| Content-addressed storage (SHA-256) | ⏳ Todo | High |
+| P2P sync engine | ⏳ Todo | High |
+| File chunking & resumable transfers | ⏳ Todo | Medium |
+| Conflict resolution (LWW/manual) | ⏳ Todo | Medium |
+| Node discovery (mDNS/manual) | ⏳ Todo | Medium |
+| At-rest encryption (optional) | ⏳ Todo | Low |
+| LZ4/ZSTD compression (optional) | ⏳ Todo | Low |
+
+#### Node Types
+| Type | Description | Typical Hardware |
+|------|-------------|------------------|
+| **Primary** | Main node, always online | Home server, VPS |
+| **Replica** | Mirror/failover, read-heavy | Secondary server |
+| **Edge** | Local cache, partial sync | Desktop, laptop |
+| **Archive** | Cold storage, infrequent access | NAS, external drive |
+
+### Phase 9: Cloud Integration (Post-Local)
+
+**Goal**: Add cloud backends once local distribution is stable
 
 | Feature | Status | Priority |
 |---------|--------|----------|
-| S3-compatible storage backend | ⏳ Todo | High |
+| S3-compatible backend (MinIO, AWS, etc.) | ⏳ Todo | High |
 | CDN integration (CloudFlare/Bunny) | ⏳ Todo | High |
 | Multi-region redundancy | ⏳ Todo | Medium |
 | Automatic backup/archival | ⏳ Todo | Medium |
 | Content deduplication | ⏳ Todo | Low |
 | IPFS/decentralized option | ⏳ Todo | Low |
 
-### Phase 9: Security & Compliance
+### Phase 10: Security & Compliance
 
 **Goal**: Enterprise-ready security
 

@@ -82,13 +82,82 @@ MEDIA_TEMP = MEDIA_ROOT / "temp"            # Processing intermediates
 └── temp/                      # Processing workspace
 ```
 
-### Phase 3: Distributed Storage (Commercial)
+### Phase 3: Local-First Distributed Storage
+
+**Philosophy**: Start local, scale to cloud later. Each node is a full participant.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Oelala Storage Node                       │
+│                   (Windows / Linux)                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │  Local FS     │  │  Node API     │  │  Sync Engine  │   │
+│  │  (SQLite DB)  │  │  (REST/gRPC)  │  │  (P2P/WAN)    │   │
+│  └───────────────┘  └───────────────┘  └───────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  Node A         │  │  Node B         │  │  Node C         │
+│  (Home Server)  │◀─▶│  (Office PC)    │◀─▶│  (Cloud VPS)    │
+│  Linux          │  │  Windows        │  │  Linux          │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+#### Storage Node Features
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Cross-platform | Python-based, works on Windows/Linux/Mac | High |
+| Local-first | Full functionality without internet | High |
+| SQLite metadata | Lightweight, embedded database | High |
+| REST API | Standard HTTP API for node communication | High |
+| File chunking | Large file support with resumable transfers | Medium |
+| Content addressing | SHA-256 hash for deduplication | Medium |
+| Sync engine | Background sync between nodes | Medium |
+| Conflict resolution | Last-write-wins or manual merge | Medium |
+| Encryption | Optional at-rest and in-transit encryption | Low |
+| Compression | Optional LZ4/ZSTD compression | Low |
+
+#### Node Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| **Primary** | Main production node, always online | Server |
+| **Replica** | Mirror of primary, read-only or failover | Backup |
+| **Edge** | Local cache, partial sync | Desktop/Laptop |
+| **Archive** | Cold storage, infrequent access | Long-term backup |
+
+#### Sync Strategies
+
+```python
+# Example: Node configuration
+node_config = {
+    "node_id": "node_abc123",
+    "node_type": "primary",
+    "storage_path": "/home/flip/oelala/media",
+    "max_storage_gb": 500,
+    "sync_peers": [
+        {"url": "http://192.168.1.100:7999", "type": "replica"},
+        {"url": "https://vps.example.com:7999", "type": "archive"}
+    ],
+    "sync_strategy": "realtime",  # realtime, scheduled, manual
+    "sync_interval_minutes": 15,
+    "encryption_enabled": True,
+    "compression": "lz4"
+}
+```
+
+### Phase 4: Cloud Integration (Future)
+
+Once local distributed storage is stable, add cloud backends:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Storage Abstraction Layer                │
 ├─────────────────────────────────────────────────────────────┤
-│  Local FS  │  S3/MinIO  │  GCS  │  Azure Blob  │  IPFS     │
+│  Oelala Nodes  │  S3/MinIO  │  GCS  │  Azure Blob  │  IPFS │
 └─────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐
@@ -97,11 +166,11 @@ MEDIA_TEMP = MEDIA_ROOT / "temp"            # Processing intermediates
                     └───────────────────┘
 ```
 
-**Features**:
-- Pluggable storage backends
-- Automatic replication/redundancy
+**Cloud Features** (Phase 4+):
+- S3-compatible API for existing tools
 - CDN integration for delivery
 - Geographic distribution
+- Tiered storage (hot/warm/cold)
 
 ## File Naming Convention
 

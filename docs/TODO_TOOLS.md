@@ -359,40 +359,46 @@ Automatically generate and sync audio to video.
 - ComfyUI-MMAudio (video-conditioned audio generation)
 - Uses CLIP + Synchformer for video understanding
 
-### 🔴 Lip Sync - NOT STARTED
+### ✅ Lip Sync - DONE (Jan 3)
 Sync video lips to audio.
 
-- [ ] Upload video (face)
-- [ ] Upload or generate audio
-- [ ] Auto lip sync
+- [x] Upload video (face)
+- [x] Upload or generate audio
+- [x] Auto lip sync (LatentSyncNode)
+- [x] Settings: lips_expression, inference_steps, seed
+- [x] Progress tracking & result display
 - [ ] Preview before render
 
-**ComfyUI nodes:**
-- ComfyUI-LatentSyncWrapper (ByteDance LatentSync) ⭐
-- ComfyUI_wav2lip
+**Backend implemented:**
+- `/lip-sync` endpoint ✅
+- Uses LatentSyncNode via ComfyUI
+- VHS_LoadVideo + LoadAudio + VHS_VideoCombine
 
-### 🔴 YouTube Video Importer - NOT STARTED
+**Frontend:**
+- LipSyncTool.jsx ✅
+
+### ✅ YouTube Video Importer - DONE (Jan 3)
 Import videos from YouTube for processing.
 
-- [ ] Paste YouTube URL
-- [ ] Preview video info
-- [ ] Quality selector (360p - 4K)
-- [ ] Download as:
-  - Video only
-  - Audio only (mp3/wav/flac)
-  - Both
+- [x] Paste YouTube URL
+- [x] Preview video info (title, duration, thumbnail)
+- [x] Quality selector (format_id)
+- [x] Download as:
+  - [x] Video only
+  - [x] Audio only (mp3/wav/flac)
+  - [x] Both
 - [ ] Time range cropping
 - [ ] Auto-caption extraction
-- [ ] Use in Video-to-Text tool
+- [x] Use in Video-to-Text tool
 - [ ] Playlist support
 
-**ComfyUI nodes:**
-- ComfyUI-ytdl_nodes (supports 1000+ sites)
+**Backend implemented:**
+- `/youtube/info` endpoint ✅ (yt-dlp metadata)
+- `/youtube/download` endpoint ✅ (format selection)
+- Fixed: yt-dlp PATH issue with shutil.which() fallback
 
-**Backend needs:**
-- `/youtube/info` - get video metadata
-- `/youtube/download` - download video/audio
-- Requires: yt-dlp, ffmpeg
+**Frontend:**
+- Integrated in VideoToTextTool.jsx ✅
 
 ### 🔴 Audio Stem Separation - NOT STARTED
 Separate vocals, drums, bass, other from audio.
@@ -468,7 +474,7 @@ Separate vocals, drums, bass, other from audio.
 3. 🟡 **LoRA Training** real implementation
 4. 🟡 **Text to Video frontend** update
 
-### 🔴 Phase 3 - Audio Pipeline (CURRENT PRIORITY)
+### ✅ Phase 3 - Audio Pipeline (COMPLETE - Jan 3, 2026)
 > Full audio production suite - ElevenLabs-style functionality
 
 1. ✅ **Install ComfyUI audio nodes** (Jan 3):
@@ -476,18 +482,31 @@ Separate vocals, drums, bass, other from audio.
    - ✅ ComfyUI-F5-TTS (standalone voice cloning)
    - ✅ ComfyUI-ytdl_nodes (YouTube import)
    - ✅ ComfyUI-LatentSyncWrapper (lip sync)
-2. 🔴 **YouTube Video Importer** in Video to Text
-3. 🔴 **Real TTS integration** (replace placeholders)
-4. 🔴 **Voice Training/Cloning** tool
-5. 🔴 **Text to SFX** (MMAudio integration)
-6. 🔴 **Audio to Video Sync** (MMAudio)
-7. 🔴 **Lip Sync** tool
+2. ✅ **YouTube Video Importer** - `/youtube/info` & `/youtube/download` endpoints
+3. ✅ **Real TTS integration** - ChatterBox via ComfyUI (multi-language)
+4. ✅ **Voice Cloning** - F5-TTS with 8 model variants, VoiceCloningTool.jsx
+5. ✅ **Lip Sync** - LatentSyncNode, LipSyncTool.jsx
+6. 🟡 **Text to SFX** (MMAudio integration) - partial
+7. 🟡 **Audio to Video Sync** (MMAudio) - partial
 
-### Phase 4 - Upcoming
+### 🔴 Phase 4 - Media Management & Storage (CURRENT PRIORITY)
+> Unified storage, local-first distributed nodes
+
+1. 🔴 **Unify storage locations** - Merge `generated/` + `ComfyUI/output/`
+2. 🔴 **ComfyUI symlinks** - Point ComfyUI to unified `/media/` directory
+3. 🔴 **Storage Node service** - Cross-platform (Windows/Linux) node daemon
+4. 🔴 **Node API** - REST endpoints for node discovery & file sync
+5. 🔴 **Sync engine** - P2P file synchronization between nodes
+6. 🔴 **SQLite metadata** - Local database for file index & sync state
+7. 🟡 **My Media** enhancements - Search, tags, folders
+8. 🟢 **Encryption** - Optional at-rest encryption
+
+### Phase 5 - Advanced Generation
 1. 🟡 **Pipeline** node editor
-2. 🟢 **My Media** enhancements
-3. 🟢 **Prompt Library**
-4. 🟢 **Audio Stem Separation**
+2. 🔴 **ControlNet integration**
+3. 🔴 **LoRA browser & loading**
+4. 🟢 **Prompt Library**
+5. 🟢 **Audio Stem Separation**
 
 ---
 
@@ -533,14 +552,14 @@ Separate vocals, drums, bass, other from audio.
 - [x] ReframeTool.jsx ✅
 - [x] FaceSwapTool.jsx ✅
 
-**Audio Tools (Phase 3)**:
-- [ ] TTSTool.jsx (advanced TTS)
-- [ ] VoiceTrainingTool.jsx (voice cloning)
-- [ ] SoundEffectsTool.jsx (text-to-SFX)
-- [ ] AudioSyncTool.jsx (video-to-audio)
-- [ ] LipSyncTool.jsx
-- [ ] YouTubeImporterTool.jsx (or integrate in V2T)
-- [ ] StemSeparationTool.jsx
+**Audio Tools (Phase 3)**: ✅ COMPLETE
+- [x] AudioGenerationTool.jsx ✅ (TTS via ChatterBox)
+- [x] VoiceCloningTool.jsx ✅ (F5-TTS integration)
+- [ ] SoundEffectsTool.jsx (text-to-SFX) - MMAudio pending
+- [ ] AudioSyncTool.jsx (video-to-audio) - MMAudio pending
+- [x] LipSyncTool.jsx ✅
+- [x] YouTubeImporterTool.jsx (integrated in VideoToTextTool) ✅
+- [ ] StemSeparationTool.jsx - audio-separation-nodes pending
 
 ---
 
