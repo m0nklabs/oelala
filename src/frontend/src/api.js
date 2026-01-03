@@ -27,3 +27,19 @@ export async function getJson(url) {
     return { ok: res.ok, status: res.status, data: text }
   }
 }
+
+export async function postJson(url, body = {}) {
+  const res = await fetch(url, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+  })
+  const text = await res.text()
+  try {
+    const data = text ? JSON.parse(text) : null
+    return { ok: res.ok, status: res.status, data }
+  } catch (e) {
+    return { ok: res.ok, status: res.status, data: text }
+  }
+}

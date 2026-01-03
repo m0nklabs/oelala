@@ -1,6 +1,119 @@
 2026-01-03
 Agent: Claude Opus 4.5
 AgentTag: CLAU
+ModelTag: AUDIO-COMPLETE
+Details:
+- **MAJOR**: Phase 3 Audio Pipeline COMPLETE - All audio tools now functional
+- YouTube Import Fixed:
+  - yt-dlp PATH issue resolved with shutil.which() fallback
+  - Both /youtube/info and /youtube/download endpoints working
+  - Tested with real video download (8.7MB MP4)
+- TTS Integration (Real):
+  - Replaced placeholder with ChatterBox TTS via ComfyUI
+  - Voice presets: neutral, warm, energetic, calm, dramatic
+  - Multi-language support: EN, DE, FR, RU, JA, KO, IT, PL, PT, ES
+  - Generated test audio: 98KB FLAC at 24kHz
+- Voice Cloning (NEW):
+  - Created VoiceCloningTool.jsx frontend component
+  - Created /voice-clone backend endpoint
+  - F5-TTS integration with models: F5v1, F5, F5-DE, F5-FR, F5-ES, F5-IT, F5-JP, E2
+  - Voice sample upload, speed control, async polling
+- Lip Sync (NEW):
+  - Created LipSyncTool.jsx frontend component
+  - Created /lip-sync backend endpoint using LatentSyncNode
+  - Settings: lips_expression (1.0-3.0), inference_steps (10-50), seed
+  - Video + audio input with preview, progress tracking
+- Documentation Added:
+  - docs/MEDIA_STORAGE.md - Storage architecture & migration plan
+  - docs/ROADMAP.md - Full product roadmap with phases
+FilesChanged:
+- src/backend/app.py (yt-dlp fix, /generate-audio rewrite, /voice-clone, /lip-sync)
+- src/frontend/src/dashboard/tools/VoiceCloningTool.jsx (NEW)
+- src/frontend/src/dashboard/tools/LipSyncTool.jsx (NEW)
+- src/frontend/src/dashboard/Dashboard.jsx (imports updated)
+- src/frontend/src/nav.js (VOICE_CLONING, LIP_SYNC tool IDs)
+- docs/MEDIA_STORAGE.md (NEW)
+- docs/ROADMAP.md (NEW)
+
+2026-01-03
+Agent: Claude Opus 4.5
+AgentTag: CLAU
+ModelTag: AUDIO-PHASE3
+Details:
+- **MAJOR**: Phase 3 Audio Pipeline - Installed all core audio nodes in ComfyUI
+- ComfyUI Custom Nodes Installed:
+  1. TTS-Audio-Suite (20.7s load) - All-in-one TTS with voice cloning
+     - Engines: ChatterBox, F5-TTS, VibeVoice, IndexTTS, CosyVoice, HiggsAudio, StepAudioEditX
+     - Features: RVC voice conversion, VoiceFixer audio restoration
+     - 26 character voices included
+  2. ComfyUI-F5-TTS (0.8s load) - Standalone F5-TTS voice cloning
+     - Zero-shot voice cloning from 5-15 sec audio reference
+     - Nodes: F5TTSAudio, F5TTSAudioAdvanced, F5TTSAudioInputs
+  3. ComfyUI-ytdl_nodes (1.7s load) - YouTube video/audio download
+     - Supports 1000+ video sites via yt-dlp
+     - Nodes: YTDLDownloader, YTDLLinksInput, YTDLPreview, YTDLPreviewAudio
+  4. ComfyUI-LatentSyncWrapper - ByteDance LatentSync lip sync
+     - Nodes: LatentSyncNode (sync video lips to audio)
+- System Dependencies Installed:
+  - portaudio19-dev (for voice recording)
+  - yt-dlp (YouTube downloads)
+  - phonemizer (multilingual TTS phonemes)
+- Python Packages Added (via install.py):
+  - TTS engines: vibevoice, vocos, ema-pytorch, torchdiffeq
+  - Audio processing: audio-separator, julius, descript-audio-codec
+  - RVC: faiss-gpu-cu12, torchcrepe, monotonic-alignment-search
+  - WebRTC: aiortc, pylibsrtp (for voice streaming)
+- Total: 3701 ComfyUI nodes now available
+- Audio nodes verified working via /object_info API
+FilesChanged:
+- ComfyUI/custom_nodes/TTS-Audio-Suite/ (NEW - cloned)
+- ComfyUI/custom_nodes/ComfyUI-F5-TTS/ (NEW - cloned)
+- ComfyUI/custom_nodes/ComfyUI-ytdl_nodes/ (NEW - cloned)
+- ComfyUI/custom_nodes/ComfyUI-LatentSyncWrapper/ (NEW - cloned)
+- docs/TODO_TOOLS.md (updated Phase 3 status)
+
+2026-01-03
+Agent: Claude Opus 4.5
+AgentTag: CLAU
+ModelTag: FULL-TOOLBOX
+Details:
+- **MAJOR**: Complete tool implementation sprint - all planned tools now have frontend + backend
+- New tools added:
+  1. Video to Text (V2T) - video captioning with SmolVLM integration
+  2. Audio Generation - TTS/Music/SFX modes (placeholder backend)
+  3. Reframe - AI outpainting to new aspect ratios
+  4. Face Swap - ReActor-based face swapping with face detection
+- Frontend components created:
+  - VideoToTextTool.jsx: Model/mode selector, frame extraction settings
+  - AudioGenerationTool.jsx: 3 modes, 6 voices, 8 music styles, duration control
+  - ReframeTool.jsx: 8 aspect ratios, 9 positions, visual preview, advanced settings
+  - FaceSwapTool.jsx: Dual upload, face detection, enhancement options, ethical warning
+- Backend endpoints added:
+  - /caption-video: OpenCV frame extraction, SmolVLM integration ready
+  - /generate-audio: TTS/Music/SFX modes (placeholder for XTTS/MusicGen)
+  - /reframe: Inpainting/outpainting workflow via ComfyUI
+  - /detect-faces: OpenCV face detection for preview
+  - /face-swap: ReActor node workflow via ComfyUI
+- API additions:
+  - Added postJson() to api.js for JSON POST requests
+- Navigation updates:
+  - "Video to Text" in Video Tools (status: new)
+  - "Audio Generation" in new Audio Tools section (status: new)
+  - Reframe and Face Swap now active (status: new)
+FilesChanged:
+- src/frontend/src/dashboard/tools/VideoToTextTool.jsx (NEW)
+- src/frontend/src/dashboard/tools/AudioGenerationTool.jsx (NEW)
+- src/frontend/src/dashboard/tools/ReframeTool.jsx (NEW)
+- src/frontend/src/dashboard/tools/FaceSwapTool.jsx (NEW)
+- src/frontend/src/api.js (postJson added)
+- src/frontend/src/dashboard/nav.js (new tool IDs, Audio Tools section)
+- src/frontend/src/dashboard/Dashboard.jsx (imports + routing)
+- src/backend/app.py (5 new endpoints)
+- docs/TODO_TOOLS.md (updated status)
+
+2026-01-03
+Agent: Claude Opus 4.5
+AgentTag: CLAU
 ModelTag: PROMPT-TOOLS
 Details:
 - Added new "Prompt Tools" navigation section

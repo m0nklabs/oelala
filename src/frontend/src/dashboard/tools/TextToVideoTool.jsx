@@ -1,31 +1,77 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
-import { Settings, Wand2 } from 'lucide-react'
+import { Settings, Wand2, Loader2, Video, ChevronDown } from 'lucide-react'
 
-// Resolution presets with pixel dimensions
+// Resolution presets
 const RESOLUTION_PRESETS = [
-  { value: '480p', label: '480p', width: 854, height: 480 },
-  { value: '720p', label: '720p', width: 1280, height: 720 },
-  { value: '1080p', label: '1080p', width: 1920, height: 1080 },
+  { value: '480p', label: '480p', desc: 'Fast' },
+  { value: '720p', label: '720p', desc: 'Balanced' },
 ]
 
 const FPS_OPTIONS = [8, 12, 16, 24]
+const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
-export default function TextToVideoTool({ onOutput, onRefreshHistory }) {
-  const [prompt, setPrompt] = useState('')
-  const [numFrames, setNumFrames] = useState(16)
-  const [modelType, setModelType] = useState('light')
-  const [outputFilename, setOutputFilename] = useState('')
-  const [aspectRatio, setAspectRatio] = useState('16:9')
-  const [resolution, setResolution] = useState('720p')
+export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted }) {
+  const [prompt, setPrompt] = useState(() => localStorage.getItem('t2v_prompt') || '')
+  const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, ugly')
+  const [numFrames, setNumFrames] = useState(41)
+  const [aspectRatio, setAspectRatio] = useState('1:1')
+  const [resolution, setResolution] = useState('480p')
   const [fps, setFps] = useState(16)
+  
+  // Advanced settings
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [steps, setSteps] = useState(6)
+  const [cfg, setCfg] = useState(1.0)
+  const [seed, setSeed] = useState(-1)
+  const [t2iSteps, setT2iSteps] = useState(20)
+  const [t2iCfg, setT2iCfg] = useState(6.0)
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
+  const [progress, setProgress] = useState(0)
+  
+  const pollerRef = useRef(null)
+
+  // Save prompt to localStorage
+  const handlePromptChange = (value) => {
+    setPrompt(value)
+    localStorage.setItem('t2v_prompt', value)
+  }
 
   const canSubmit = useMemo(() => prompt.trim().length > 0 && !busy, [prompt, busy])
+
+  // Poll for job completion
+  const pollForCompletion = async (promptId, maxAttempts = 180) => {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      try {
+        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
+        if (!res.ok) continue
+        const data = await res.json()
+        
+        if (data.status === 'pending') {
+          setStatus('Queued...')
+          setProgress(Math.min(10, attempt))
+        } else if (data.status === 'running') {
+          setStatus('Generating...')
+          setProgress(Math.min(90, 10 + attempt))
+        } else if (data.status === 'completed') {
+          setProgress(100)
+          setStatus('Done!')
+          return data
+        } else if (data.status === 'failed') {
+          throw new Error(data.error || 'Generation failed')
+        }
+      } catch (e) {
+        if (e.message.includes('failed')) throw e
+      }
+    }
+    throw new Error('Generation timed out')
+  }
 
   const handleSubmit = async () => {
     if (!prompt.trim()) {
@@ -35,44 +81,57 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory }) {
 
     setBusy(true)
     setError('')
+    setStatus('Submitting...')
+    setProgress(0)
 
     const formData = new FormData()
     formData.append('prompt', prompt)
     formData.append('num_frames', String(numFrames))
-    formData.append('model_type', modelType)
     formData.append('aspect_ratio', aspectRatio)
     formData.append('resolution', resolution)
     formData.append('fps', String(fps))
-    if (outputFilename.trim()) formData.append('output_filename', outputFilename.trim())
 
     try {
-      if (DEBUG) console.debug('🐛 submit text-to-video', { numFrames, modelType, resolution, fps })
+      if (DEBUG) console.debug('🎬 T2V request:', { prompt, numFrames, resolution, fps })
+      
       const result = await postForm(`${BACKEND_BASE}/generate-text`, formData)
+      
       if (!result.ok) {
-        setError(result.data?.detail || `Generation failed (status ${result.status})`)
-        return
+        throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
       }
 
-      const videoUrl = result.data?.video_url
-      const outputVideo = result.data?.output_video
-      const url = videoUrl ? `${BACKEND_BASE}${videoUrl}` : ''
+      const promptId = result.data?.prompt_id
+      if (!promptId) {
+        throw new Error('No prompt_id returned')
+      }
 
-      onOutput({
-        kind: 'video',
-        url,
-        backendUrl: url,
-        filename: outputVideo,
-        meta: result.data,
-      })
-      onRefreshHistory()
+      if (DEBUG) console.debug('📋 T2V queued:', promptId)
+      setStatus('Queued...')
+      
+      // Notify queue indicator
+      if (onJobSubmitted) onJobSubmitted()
+
+      // Poll for completion
+      const completed = await pollForCompletion(promptId)
+      
+      if (completed.output_video || completed.url) {
+        const videoUrl = completed.output_video || completed.url
+        const fullUrl = videoUrl.startsWith('http') ? videoUrl : `${BACKEND_BASE}${videoUrl}`
+        
+        onOutput({
+          kind: 'video',
+          url: fullUrl,
+          backendUrl: fullUrl,
+          filename: videoUrl.split('/').pop(),
+          meta: { ...result.data?.meta, prompt_id: promptId },
+        })
+        
+        if (onRefreshHistory) onRefreshHistory()
+      }
+      
     } catch (e) {
       const message = e?.message || 'Failed to generate video'
-      // Check for network/fetch errors vs backend errors
-      if (message.includes('NetworkError') || message.includes('fetch')) {
-        setError('Connection error - backend may be down or endpoint not available')
-      } else {
-        setError(message)
-      }
+      setError(message)
       await sendClientLog({
         level: 'error',
         message: 'Text-to-video failed',
@@ -81,65 +140,41 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory }) {
       })
     } finally {
       setBusy(false)
+      setStatus('')
+      setProgress(0)
     }
   }
 
   return (
     <div className="tool-container">
-      {/* Mode Selection Card */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <span className="grok-card-title">Mode Selection</span>
-          <button className="btn ghost" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-            <Settings size={14} style={{ marginRight: 6 }} /> Advanced Settings
-          </button>
-        </div>
-        
-        <div className="field">
-          <label className="grok-section-label">Mode</label>
-          <select className="select" value={modelType} onChange={(e) => setModelType(e.target.value)}>
-            <option value="light">🚀 Turbo (Light)</option>
-            <option value="svd">⚡ Standard (SVD)</option>
-            <option value="wan2.2">🌟 Quality (Wan2.2)</option>
-          </select>
-          <div className="muted" style={{ marginTop: 8, fontSize: '0.8rem' }}>
-            {modelType === 'light' && 'Fastest generation speed. Good for quick previews.'}
-            {modelType === 'svd' && 'Balanced quality and speed using Stable Video Diffusion.'}
-            {modelType === 'wan2.2' && 'Highest quality video generation with Wan2.2 model.'}
-          </div>
-        </div>
-      </div>
-
       {/* Prompt Card */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <span className="grok-card-title">Enter Video Prompt</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="icon-btn" title="Enhance Prompt"><Wand2 size={14} /></button>
-          </div>
-        </div>
+      <div className="tool-section">
+        <h3>
+          <Video size={18} />
+          Video Prompt
+        </h3>
         <textarea
-          className="textarea"
+          className="prompt-textarea"
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={5}
-          placeholder="Describe the video you want to generate..."
-          style={{ backgroundColor: '#0f0f0f', border: 'none', resize: 'none' }}
+          onChange={(e) => handlePromptChange(e.target.value)}
+          rows={4}
+          placeholder="Describe the video you want to generate... (e.g., 'a cat walking through a field of flowers, cinematic')"
         />
+        <div className="char-count">{prompt.length} characters</div>
       </div>
 
-      {/* Settings Card */}
-      <div className="grok-card">
-        {/* Resolution Presets */}
-        <div className="field" style={{ marginBottom: 24 }}>
-          <div className="grok-card-header">
-            <span className="grok-card-title">Resolution</span>
-          </div>
-          <div className="grok-toggle-group" style={{ marginBottom: 16 }}>
+      {/* Quick Settings */}
+      <div className="tool-section">
+        <h3>Settings</h3>
+        
+        {/* Resolution */}
+        <div className="form-group">
+          <label>Resolution</label>
+          <div className="button-group">
             {RESOLUTION_PRESETS.map((preset) => (
               <button
                 key={preset.value}
-                className={`grok-toggle-btn ${resolution === preset.value ? 'active' : ''}`}
+                className={`btn-option ${resolution === preset.value ? 'active' : ''}`}
                 onClick={() => setResolution(preset.value)}
                 type="button"
               >
@@ -147,94 +182,336 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory }) {
               </button>
             ))}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {RESOLUTION_PRESETS.find(p => p.value === resolution)?.width}×{RESOLUTION_PRESETS.find(p => p.value === resolution)?.height}px
-          </div>
         </div>
 
         {/* Aspect Ratio */}
-        <div className="field" style={{ marginBottom: 24 }}>
-          <div className="grok-card-header">
-            <span className="grok-card-title">Aspect Ratio</span>
-          </div>
-          <div className="aspect-grid">
-            {['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'].map((ratio) => (
+        <div className="form-group">
+          <label>Aspect Ratio</label>
+          <div className="button-group">
+            {ASPECT_RATIOS.map((ratio) => (
               <button
                 key={ratio}
-                className={`aspect-btn ${aspectRatio === ratio ? 'active' : ''}`}
+                className={`btn-option ${aspectRatio === ratio ? 'active' : ''}`}
                 onClick={() => setAspectRatio(ratio)}
                 type="button"
               >
-                <div className="aspect-icon" style={{ 
-                  width: ratio === '16:9' ? 32 : ratio === '9:16' ? 18 : ratio === '21:9' ? 36 : 24,
-                  height: ratio === '16:9' ? 18 : ratio === '9:16' ? 32 : ratio === '21:9' ? 15 : 24
-                }} />
-                <span className="aspect-label">{ratio}</span>
+                {ratio}
               </button>
             ))}
           </div>
         </div>
 
-        {/* FPS Control */}
-        <div className="field" style={{ marginBottom: 24 }}>
-          <div className="grok-card-header">
-            <span className="grok-card-title">Frame Rate (FPS)</span>
-            <span className="status-pill">{fps} fps</span>
-          </div>
-          <div className="grok-toggle-group">
+        {/* FPS */}
+        <div className="form-group">
+          <label>Frame Rate</label>
+          <div className="button-group">
             {FPS_OPTIONS.map((f) => (
               <button
                 key={f}
-                className={`grok-toggle-btn ${fps === f ? 'active' : ''}`}
+                className={`btn-option ${fps === f ? 'active' : ''}`}
                 onClick={() => setFps(f)}
                 type="button"
               >
-                {f}
+                {f} fps
               </button>
             ))}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
-            Higher FPS = smoother motion, more VRAM required
           </div>
         </div>
 
         {/* Duration */}
-        <div className="field">
-          <div className="grok-card-header">
-            <span className="grok-card-title">Duration</span>
-            <span className="status-pill">{(numFrames / fps).toFixed(1)}s ({numFrames}f)</span>
-          </div>
+        <div className="form-group">
+          <label>
+            Duration 
+            <span className="label-value">{(numFrames / fps).toFixed(1)}s ({numFrames} frames)</span>
+          </label>
           <input
-            className="range"
             type="range"
-            min="8"
-            max="48"
+            min="17"
+            max="81"
             step="4"
             value={numFrames}
             onChange={(e) => setNumFrames(parseInt(e.target.value, 10))}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            <span>{(8 / fps).toFixed(1)}s (8f)</span>
-            <span>{(48 / fps).toFixed(1)}s (48f)</span>
+          <div className="range-labels">
+            <span>{(17 / fps).toFixed(1)}s</span>
+            <span>{(81 / fps).toFixed(1)}s</span>
           </div>
         </div>
       </div>
 
-      <div className="field">
-        <label className="label">Output filename (optional)</label>
-        <input
-          className="input"
-          value={outputFilename}
-          onChange={(e) => setOutputFilename(e.target.value)}
-          placeholder="my_video.mp4"
-        />
+      {/* Advanced Settings */}
+      <div className="tool-section collapsible">
+        <button 
+          className="section-toggle"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+        >
+          <Settings size={16} />
+          Advanced Settings
+          <ChevronDown size={16} className={showAdvanced ? 'rotated' : ''} />
+        </button>
+        
+        {showAdvanced && (
+          <div className="advanced-content">
+            <div className="form-row">
+              <div className="form-group half">
+                <label>Video Steps</label>
+                <input
+                  type="number"
+                  value={steps}
+                  onChange={(e) => setSteps(parseInt(e.target.value) || 6)}
+                  min="1"
+                  max="30"
+                />
+              </div>
+              <div className="form-group half">
+                <label>Video CFG</label>
+                <input
+                  type="number"
+                  value={cfg}
+                  onChange={(e) => setCfg(parseFloat(e.target.value) || 1.0)}
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                />
+              </div>
+            </div>
+            
+            <div className="form-row">
+              <div className="form-group half">
+                <label>T2I Steps</label>
+                <input
+                  type="number"
+                  value={t2iSteps}
+                  onChange={(e) => setT2iSteps(parseInt(e.target.value) || 20)}
+                  min="1"
+                  max="50"
+                />
+              </div>
+              <div className="form-group half">
+                <label>T2I CFG</label>
+                <input
+                  type="number"
+                  value={t2iCfg}
+                  onChange={(e) => setT2iCfg(parseFloat(e.target.value) || 6.0)}
+                  min="1"
+                  max="20"
+                  step="0.5"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Seed (-1 = random)</label>
+              <input
+                type="number"
+                value={seed}
+                onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Negative Prompt</label>
+              <textarea
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                rows={2}
+                placeholder="Things to avoid..."
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {/* Progress */}
+      {busy && (
+        <div className="progress-section">
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="progress-status">
+            <Loader2 size={16} className="spin" />
+            {status}
+          </div>
+        </div>
+      )}
 
-      <button className="primary-btn" type="button" disabled={!canSubmit} onClick={handleSubmit}>
-        {busy ? 'Generating Video...' : 'Generate Video'}
+      {error && <div className="error-message">⚠️ {error}</div>}
+
+      <button 
+        className="btn-primary btn-large" 
+        type="button" 
+        disabled={!canSubmit} 
+        onClick={handleSubmit}
+      >
+        {busy ? (
+          <>
+            <Loader2 size={18} className="spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Video size={18} />
+            Generate Video
+          </>
+        )}
       </button>
+
+      <div className="tool-info">
+        💡 Text-to-Video first generates an image from your prompt, then animates it using Wan2.2
+      </div>
+
+      <style>{`
+        .prompt-textarea {
+          width: 100%;
+          padding: 12px;
+          border-radius: 8px;
+          border: 1px solid var(--border-color, #444);
+          background: var(--bg-secondary, #1a1a1a);
+          color: var(--text-color, #fff);
+          font-family: inherit;
+          font-size: 14px;
+          resize: vertical;
+        }
+        .char-count {
+          text-align: right;
+          font-size: 12px;
+          color: var(--text-muted, #888);
+          margin-top: 4px;
+        }
+        .form-group {
+          margin-bottom: 16px;
+        }
+        .form-group label {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 8px;
+          font-size: 13px;
+          color: var(--text-secondary, #aaa);
+        }
+        .label-value {
+          color: var(--accent-color, #7c3aed);
+          font-weight: 500;
+        }
+        .button-group {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .btn-option {
+          padding: 8px 16px;
+          border: 1px solid var(--border-color, #444);
+          border-radius: 8px;
+          background: transparent;
+          color: var(--text-color, #fff);
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 13px;
+        }
+        .btn-option:hover {
+          border-color: var(--accent-color, #7c3aed);
+        }
+        .btn-option.active {
+          background: var(--accent-color, #7c3aed);
+          border-color: var(--accent-color, #7c3aed);
+        }
+        .range-labels {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: var(--text-muted, #888);
+          margin-top: 4px;
+        }
+        .form-row {
+          display: flex;
+          gap: 16px;
+        }
+        .form-group.half {
+          flex: 1;
+        }
+        .form-group input[type="number"],
+        .form-group textarea {
+          width: 100%;
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid var(--border-color, #444);
+          background: var(--bg-secondary, #1a1a1a);
+          color: var(--text-color, #fff);
+          font-size: 13px;
+        }
+        .section-toggle {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 12px;
+          background: transparent;
+          border: 1px solid var(--border-color, #333);
+          border-radius: 8px;
+          color: var(--text-secondary, #aaa);
+          cursor: pointer;
+          font-size: 13px;
+        }
+        .section-toggle:hover {
+          border-color: var(--border-color, #555);
+        }
+        .section-toggle .rotated {
+          transform: rotate(180deg);
+        }
+        .section-toggle svg:last-child {
+          margin-left: auto;
+          transition: transform 0.2s;
+        }
+        .advanced-content {
+          margin-top: 16px;
+          padding-top: 16px;
+          border-top: 1px solid var(--border-color, #333);
+        }
+        .progress-section {
+          margin: 16px 0;
+        }
+        .progress-bar {
+          height: 4px;
+          background: var(--bg-secondary, #333);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .progress-fill {
+          height: 100%;
+          background: var(--accent-color, #7c3aed);
+          transition: width 0.3s;
+        }
+        .progress-status {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 8px;
+          font-size: 13px;
+          color: var(--text-secondary, #aaa);
+        }
+        .error-message {
+          padding: 12px;
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          border-radius: 8px;
+          color: #ef4444;
+          margin: 12px 0;
+        }
+        .tool-info {
+          margin-top: 16px;
+          padding: 12px;
+          background: rgba(124, 58, 237, 0.1);
+          border-radius: 8px;
+          font-size: 13px;
+          color: var(--text-secondary, #aaa);
+        }
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

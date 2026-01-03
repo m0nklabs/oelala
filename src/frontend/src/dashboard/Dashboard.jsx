@@ -10,10 +10,19 @@ import TextToVideoTool from './tools/TextToVideoTool'
 import ImageToVideoTool from './tools/ImageToVideoTool'
 import TextToImageTool from './tools/TextToImageTool'
 import TextToImageToVideoTool from './tools/TextToImageToVideoTool'
+import VideoToVideoTool from './tools/VideoToVideoTool'
+import VideoToTextTool from './tools/VideoToTextTool'
 import PipelineTool from './tools/PipelineTool'
 import LoRATrainingTool from './tools/LoRATrainingTool'
 import ImageToTextTool from './tools/ImageToTextTool'
 import PromptGeneratorTool from './tools/PromptGeneratorTool'
+import ImageToImageTool from './tools/ImageToImageTool'
+import UpscalerTool from './tools/UpscalerTool'
+import AudioGenerationTool from './tools/AudioGenerationTool'
+import VoiceCloningTool from './tools/VoiceCloningTool'
+import LipSyncTool from './tools/LipSyncTool'
+import ReframeTool from './tools/ReframeTool'
+import FaceSwapTool from './tools/FaceSwapTool'
 import ComingSoonTool from './tools/ComingSoonTool'
 import MyMediaTool from './tools/MyMediaTool'
 import LogViewer from '../components/LogViewer'
@@ -97,14 +106,16 @@ export default function Dashboard() {
         return 'Image to Video'
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
         return 'Text to Image to Video'
+      case TOOL_IDS.VIDEO_TO_VIDEO:
+        return 'Video to Video'
+      case TOOL_IDS.VIDEO_TO_TEXT:
+        return 'Video to Text'
       case TOOL_IDS.PIPELINE:
         return 'Pipeline'
       case TOOL_IDS.LORA_TRAINING:
         return 'LoRA Training'
       case TOOL_IDS.TEXT_TO_IMAGE:
         return 'Text to Image'
-      case TOOL_IDS.VIDEO_TO_VIDEO:
-        return 'Video to Video'
       case TOOL_IDS.IMAGE_TO_IMAGE:
         return 'Image to Image'
       case TOOL_IDS.REFRAME:
@@ -117,6 +128,12 @@ export default function Dashboard() {
         return 'Image to Text'
       case TOOL_IDS.PROMPT_GENERATOR:
         return 'Prompt Generator'
+      case TOOL_IDS.AUDIO_GENERATION:
+        return 'Audio Generation'
+      case TOOL_IDS.VOICE_CLONING:
+        return 'Voice Cloning'
+      case TOOL_IDS.LIP_SYNC:
+        return 'Lip Sync'
       case TOOL_IDS.MY_MEDIA_ALL:
         return 'My Media - All'
       case TOOL_IDS.MY_MEDIA_VIDEOS:
@@ -178,12 +195,29 @@ export default function Dashboard() {
       case TOOL_IDS.PROMPT_GENERATOR:
         return <PromptGeneratorTool />
 
-      case TOOL_IDS.VIDEO_TO_VIDEO:
       case TOOL_IDS.IMAGE_TO_IMAGE:
-      case TOOL_IDS.REFRAME:
-      case TOOL_IDS.FACE_SWAP:
+        return <ImageToImageTool onOutput={setOutput} />
       case TOOL_IDS.UPSCALER:
-        return <ComingSoonTool title={toolTitle} />
+        return <UpscalerTool onOutput={setOutput} />
+
+      case TOOL_IDS.VIDEO_TO_VIDEO:
+        return <VideoToVideoTool onOutput={setOutput} />
+      case TOOL_IDS.VIDEO_TO_TEXT:
+        return <VideoToTextTool />
+
+      case TOOL_IDS.AUDIO_GENERATION:
+        return <AudioGenerationTool onOutput={setOutput} />
+
+      case TOOL_IDS.VOICE_CLONING:
+        return <VoiceCloningTool onOutput={setOutput} />
+      
+      case TOOL_IDS.LIP_SYNC:
+        return <LipSyncTool onOutput={setOutput} />
+
+      case TOOL_IDS.REFRAME:
+        return <ReframeTool onOutput={setOutput} />
+      case TOOL_IDS.FACE_SWAP:
+        return <FaceSwapTool onOutput={setOutput} />
 
       default:
         return <ComingSoonTool title={toolTitle} />

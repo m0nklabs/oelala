@@ -52,6 +52,14 @@ export default function TextToImageTool({ onOutput }) {
   const [progress, setProgress] = useState(0)
   const [showAdvanced, setShowAdvanced] = useState(false)
   
+  // LoRA settings
+  const [availableLoras, setAvailableLoras] = useState([])
+  const [selectedLoras, setSelectedLoras] = useState([
+    { name: 'None', strength: 1.0 },
+    { name: 'None', strength: 1.0 },
+    { name: 'None', strength: 1.0 },
+  ])
+  
   // Advanced settings
   const [steps, setSteps] = useState(30)
   const [cfg, setCfg] = useState(7.5)
@@ -61,6 +69,31 @@ export default function TextToImageTool({ onOutput }) {
   const [scheduler, setScheduler] = useState('karras')
   
   const pollerRef = useRef(null)
+  
+  // Fetch available LoRAs on mount
+  useEffect(() => {
+    const fetchLoras = async () => {
+      try {
+        const res = await fetch(`${BACKEND_BASE}/loras`)
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableLoras(data.loras || [])
+        }
+      } catch (e) {
+        console.warn('Failed to fetch LoRAs:', e)
+      }
+    }
+    fetchLoras()
+  }, [])
+  
+  // Update LoRA selection
+  const updateLora = (index, field, value) => {
+    setSelectedLoras(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -128,6 +161,11 @@ export default function TextToImageTool({ onOutput }) {
           formData.append('seed', seed)
           formData.append('sampler_name', sampler)
           formData.append('scheduler', scheduler)
+          // Add LoRA configs
+          const activeLoras = selectedLoras.filter(l => l.name && l.name !== 'None')
+          if (activeLoras.length > 0) {
+            formData.append('lora_configs', JSON.stringify(activeLoras))
+          }
           useComfyUIPolling = true
         } else if (modelType === 'sd15') {
           endpoint = '/generate-sd15'
@@ -639,6 +677,60 @@ export default function TextToImageTool({ onOutput }) {
                     }}
                   />
                 </div>
+                
+                {/* LoRA Settings (SDXL only) */}
+                {getModelType(model) === 'sdxl' && availableLoras.length > 0 && (
+                  <div className="form-group">
+                    <label className="grok-section-label" style={{ marginBottom: '8px' }}>
+                      LoRAs (up to 3)
+                    </label>
+                    {selectedLoras.map((lora, idx) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        gap: '8px', 
+                        marginBottom: '8px',
+                        alignItems: 'center'
+                      }}>
+                        <select
+                          value={lora.name}
+                          onChange={(e) => updateLora(idx, 'name', e.target.value)}
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#0f0f0f',
+                            border: '1px solid #333',
+                            borderRadius: '6px',
+                            padding: '6px 8px',
+                            color: '#fff',
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          <option value="None">None</option>
+                          {availableLoras.map((l) => (
+                            <option key={l} value={l}>{l.replace('.safetensors', '')}</option>
+                          ))}
+                        </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '80px' }}>
+                          <input
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={lora.strength}
+                            onChange={(e) => updateLora(idx, 'strength', parseFloat(e.target.value))}
+                            disabled={lora.name === 'None'}
+                            style={{ width: '50px' }}
+                          />
+                          <span style={{ fontSize: '0.7rem', opacity: lora.name === 'None' ? 0.3 : 1 }}>
+                            {lora.strength.toFixed(1)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: '0.65rem', opacity: 0.5, marginTop: '4px' }}>
+                      Strength: 0.5-1.0 recommended
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </>

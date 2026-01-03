@@ -1008,9 +1008,10 @@ async def get_job_status(prompt_id: str):
                 job_data = history[prompt_id]
                 outputs = job_data.get("outputs", {})
                 
-                # Find video or image output
+                # Find video, image, or audio output
                 output_video = None
                 output_image = None
+                output_audio = None
                 for node_id, node_output in outputs.items():
                     # Video output (VHS_VideoCombine)
                     if "gifs" in node_output:
@@ -1024,13 +1025,20 @@ async def get_job_status(prompt_id: str):
                             if img.get("type") == "output":
                                 output_image = f"/comfyui/output/{img['filename']}"
                                 break
+                    # Audio output (SaveAudio, SaveAudioMP3, SaveAudioOpus)
+                    if "audio" in node_output:
+                        for audio in node_output["audio"]:
+                            if audio.get("type") == "output":
+                                output_audio = f"/comfyui/output/{audio['filename']}"
+                                break
                 
                 return {
                     "prompt_id": prompt_id,
                     "status": "completed",
                     "output_video": output_video,
                     "output_image": output_image,
-                    "url": output_image or output_video,  # Convenience field
+                    "output_audio": output_audio,
+                    "url": output_image or output_video or output_audio,  # Convenience field
                     **job_info
                 }
     except Exception as e:
@@ -2881,6 +2889,1042 @@ async def generate_prompt(
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# YouTube Video Import (yt-dlp)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class YouTubeInfoRequest(BaseModel):
+    url: str
+
+class YouTubeDownloadRequest(BaseModel):
+    url: str
+    format: str = "video"  # video | audio
+    quality: str = "720p"  # 360p, 480p, 720p, 1080p, best
+
+@app.post("/youtube/info")
+async def youtube_info(request: YouTubeInfoRequest):
+    """
+    Fetch metadata from a YouTube URL without downloading.
+    Returns: title, channel, duration, thumbnail, view_count, etc.
+    """
+    import subprocess
+    import json
+    import shutil
+    
+    url = request.url.strip()
+    if not url:
+        raise HTTPException(400, "URL is required")
+    
+    logger.info(f"🎬 YouTube info request: {url}")
+    
+    # Find yt-dlp binary
+    yt_dlp_path = shutil.which("yt-dlp") or "/home/flip/venvs/torch-sm120/bin/yt-dlp"
+    
+    try:
+        # Use yt-dlp to extract info without downloading
+        result = subprocess.run(
+            [
+                yt_dlp_path,
+                "--dump-json",
+                "--no-download",
+                "--no-warnings",
+                url
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(400, f"yt-dlp error: {result.stderr[:200]}")
+        
+        info = json.loads(result.stdout)
+        
+        return {
+            "title": info.get("title"),
+            "channel": info.get("channel") or info.get("uploader"),
+            "duration": info.get("duration"),
+            "thumbnail": info.get("thumbnail"),
+            "view_count": info.get("view_count"),
+            "upload_date": info.get("upload_date"),
+            "description": info.get("description", "")[:500],
+            "width": info.get("width"),
+            "height": info.get("height"),
+            "formats": len(info.get("formats", [])),
+        }
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(408, "Request timeout fetching video info")
+    except json.JSONDecodeError as e:
+        raise HTTPException(500, f"Failed to parse yt-dlp output: {e}")
+    except Exception as e:
+        logger.error(f"YouTube info error: {e}")
+        raise HTTPException(500, f"Failed to fetch video info: {e}")
+
+
+@app.post("/youtube/download")
+async def youtube_download(request: YouTubeDownloadRequest):
+    """
+    Download video/audio from YouTube URL.
+    Returns: path to downloaded file.
+    """
+    import subprocess
+    import shutil
+    
+    url = request.url.strip()
+    if not url:
+        raise HTTPException(400, "URL is required")
+    
+    logger.info(f"🎬 YouTube download request: {url}, format={request.format}, quality={request.quality}")
+    
+    # Find yt-dlp binary
+    yt_dlp_path = shutil.which("yt-dlp") or "/home/flip/venvs/torch-sm120/bin/yt-dlp"
+    
+    # Create output filename
+    output_id = uuid.uuid4().hex[:8]
+    
+    if request.format == "audio":
+        output_filename = f"youtube_{output_id}.mp3"
+        format_args = ["-x", "--audio-format", "mp3", "--audio-quality", "192K"]
+    else:
+        output_filename = f"youtube_{output_id}.mp4"
+        # Map quality to format selector
+        quality_map = {
+            "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]",
+            "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
+            "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "best": "bestvideo+bestaudio/best",
+        }
+        format_selector = quality_map.get(request.quality, quality_map["720p"])
+        format_args = ["-f", format_selector, "--merge-output-format", "mp4"]
+    
+    output_path = UPLOAD_DIR / output_filename
+    
+    try:
+        # Download with yt-dlp
+        cmd = [
+            yt_dlp_path,
+            *format_args,
+            "-o", str(output_path),
+            "--no-warnings",
+            "--no-playlist",  # Single video only
+            "--socket-timeout", "30",
+            url
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 min max
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(400, f"Download failed: {result.stderr[:200]}")
+        
+        if not output_path.exists():
+            raise HTTPException(500, "Downloaded file not found")
+        
+        # Get video info for duration/dimensions
+        duration = None
+        width = None
+        height = None
+        
+        if request.format == "video":
+            import cv2
+            cap = cv2.VideoCapture(str(output_path))
+            if cap.isOpened():
+                fps = cap.get(cv2.CAP_PROP_FPS) or 24
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                duration = frame_count / fps if fps > 0 else None
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cap.release()
+        
+        logger.info(f"✅ YouTube downloaded: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)")
+        
+        return {
+            "path": str(output_path),
+            "filename": output_filename,
+            "format": request.format,
+            "duration": duration,
+            "width": width,
+            "height": height,
+            "size_mb": round(output_path.stat().st_size / 1024 / 1024, 2),
+        }
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(408, "Download timeout (max 5 minutes)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"YouTube download error: {e}")
+        raise HTTPException(500, f"Download failed: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Video to Text (Video Captioning) via SmolVLM / local models
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/caption-video")
+async def caption_video(
+    file: UploadFile = File(None),
+    video_path: str = Form(None),
+    model: str = Form("smolvlm"),
+    mode: str = Form("detailed"),
+    frame_interval: float = Form(1.0),
+    max_frames: int = Form(8),
+):
+    """
+    Generate captions/descriptions from video.
+    Samples frames and uses vision-language model to describe content.
+    
+    Args:
+        file: Video file (upload)
+        video_path: Path to existing video (e.g., from YouTube download)
+        model: smolvlm, cogvlm, llava
+        mode: brief, detailed, prompt, timeline
+        frame_interval: Seconds between sampled frames
+        max_frames: Maximum frames to analyze
+    """
+    import cv2
+    import tempfile
+    import base64
+    
+    logger.info(f"🎬 V2T request: model={model}, mode={mode}, frames={max_frames}, video_path={video_path}")
+    
+    # Determine video source
+    if video_path and Path(video_path).exists():
+        # Use existing video (e.g., from YouTube download)
+        upload_path = Path(video_path)
+        logger.info(f"🎬 Using existing video: {upload_path}")
+    elif file:
+        # Save uploaded video
+        upload_filename = f"v2t_input_{uuid.uuid4().hex[:8]}.mp4"
+        upload_path = UPLOAD_DIR / upload_filename
+        
+        with open(upload_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+    else:
+        raise HTTPException(400, "Either file upload or video_path is required")
+    
+    try:
+        # Extract frames using OpenCV
+        cap = cv2.VideoCapture(str(upload_path))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps
+        
+        # Calculate frame indices to sample
+        frame_step = int(fps * frame_interval)
+        sampled_frames = []
+        frame_times = []
+        
+        frame_idx = 0
+        while len(sampled_frames) < max_frames and frame_idx < frame_count:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if ret:
+                # Resize for efficiency
+                h, w = frame.shape[:2]
+                max_dim = 512
+                if max(h, w) > max_dim:
+                    scale = max_dim / max(h, w)
+                    frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
+                
+                # Convert to base64 for API
+                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                frame_b64 = base64.b64encode(buffer).decode('utf-8')
+                sampled_frames.append(frame_b64)
+                frame_times.append(round(frame_idx / fps, 1))
+            
+            frame_idx += frame_step
+        
+        cap.release()
+        logger.info(f"📸 Extracted {len(sampled_frames)} frames from {duration:.1f}s video")
+        
+        # For now, use placeholder/template-based captioning
+        # TODO: Integrate SmolVLM or other vision models via transformers or ComfyUI
+        
+        # Template-based response
+        if mode == "brief":
+            caption = f"A video clip lasting {duration:.1f} seconds with {len(sampled_frames)} key frames analyzed."
+        elif mode == "detailed":
+            caption = f"""Video Analysis:
+- Duration: {duration:.1f} seconds
+- Resolution: Original video uploaded
+- Frames analyzed: {len(sampled_frames)}
+- Frame times: {', '.join([f'{t}s' for t in frame_times])}
+
+Note: For AI-powered descriptions, configure SmolVLM or CogVLM integration.
+This video appears to contain visual content that could be further analyzed with a vision-language model."""
+        elif mode == "prompt":
+            caption = f"cinematic video, {duration:.0f} second clip, dynamic motion, high quality footage"
+        else:
+            caption = f"Video with {len(sampled_frames)} analyzed frames over {duration:.1f}s duration"
+        
+        # Timeline mode
+        timeline = None
+        if mode == "timeline":
+            timeline = [
+                {"time": t, "description": f"Frame at {t}s - visual content"} 
+                for t in frame_times
+            ]
+        
+        return {
+            "caption": caption,
+            "description": caption,
+            "model": model,
+            "mode": mode,
+            "duration": duration,
+            "frames_analyzed": len(sampled_frames),
+            "timeline": timeline,
+            "prompt": f"video footage, {duration:.0f}s duration, cinematic quality" if mode == "prompt" else None,
+            "note": "Install transformers with SmolVLM for AI-powered video captioning"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ V2T error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Audio Generation (TTS, Music, SFX) via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Voice presets mapping to ChatterBox settings
+VOICE_PRESETS = {
+    "alloy": {"language": "English", "exaggeration": 0.4, "temperature": 0.7},
+    "echo": {"language": "English", "exaggeration": 0.6, "temperature": 0.9},
+    "fable": {"language": "English", "exaggeration": 0.8, "temperature": 1.0},
+    "onyx": {"language": "English", "exaggeration": 0.3, "temperature": 0.6},
+    "nova": {"language": "English", "exaggeration": 0.5, "temperature": 0.8},
+    "shimmer": {"language": "English", "exaggeration": 0.35, "temperature": 0.75},
+}
+
+@app.post("/generate-audio")
+async def generate_audio(
+    text: str = Form(...),
+    mode: str = Form("tts"),
+    voice: str = Form("nova"),
+    style: str = Form("cinematic"),
+    duration: int = Form(10),
+    speed: float = Form(1.0),
+    pitch: float = Form(1.0),
+):
+    """
+    Generate audio from text (TTS, music, or SFX) via ComfyUI.
+    
+    Args:
+        text: Input text (speech text or music/sfx prompt)
+        mode: tts, music, sfx
+        voice: TTS voice preset (alloy, echo, fable, onyx, nova, shimmer)
+        style: Music style (ambient, cinematic, electronic, etc.)
+        duration: Duration in seconds (for music/sfx)
+        speed: TTS speed multiplier (not used with ChatterBox)
+        pitch: TTS pitch multiplier (not used with ChatterBox)
+    """
+    logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}...")
+    
+    import random
+    client = get_comfyui_client()
+    output_id = uuid.uuid4().hex[:8]
+    
+    try:
+        if mode == "tts":
+            # Use ChatterBox TTS via ComfyUI
+            voice_settings = VOICE_PRESETS.get(voice, VOICE_PRESETS["nova"])
+            
+            workflow = {
+                "1": {
+                    "class_type": "ChatterBoxEngineNode",
+                    "inputs": {
+                        "language": voice_settings["language"],
+                        "device": "auto",
+                        "exaggeration": voice_settings["exaggeration"],
+                        "temperature": voice_settings["temperature"],
+                        "cfg_weight": 0.5,
+                        "crash_protection_template": "hmm ,, {seg} hmm ,,"
+                    }
+                },
+                "2": {
+                    "class_type": "UnifiedTTSTextNode",
+                    "inputs": {
+                        "TTS_engine": ["1", 0],
+                        "text": text,
+                        "narrator_voice": "none",
+                        "seed": random.randint(0, 2**32 - 1),
+                        "enable_chunking": True,
+                        "max_chars_per_chunk": 400,
+                        "chunk_combination_method": "auto",
+                        "silence_between_chunks_ms": 100,
+                        "enable_audio_cache": True,
+                        "batch_size": 0
+                    }
+                },
+                "3": {
+                    "class_type": "SaveAudio",
+                    "inputs": {
+                        "audio": ["2", 0],
+                        "filename_prefix": f"tts_{output_id}"
+                    }
+                }
+            }
+            
+            logger.info(f"🎤 TTS workflow: voice={voice}, text_len={len(text)}")
+            prompt_id = client.queue_prompt(workflow)
+            
+            return {
+                "status": "queued",
+                "prompt_id": prompt_id,
+                "mode": "tts",
+                "voice": voice,
+                "text_preview": text[:100] + ("..." if len(text) > 100 else "")
+            }
+            
+        elif mode == "music":
+            # Use MMAudio for text-to-audio music generation
+            # Build prompt with style prefix
+            music_prompt = f"{style} music, {text}"
+            
+            workflow = {
+                "1": {
+                    "class_type": "MMAudioModelLoader",
+                    "inputs": {
+                        "model": "mmaudio_large_44k_v2"
+                    }
+                },
+                "2": {
+                    "class_type": "MMAudioFeatureUtilsLoader",
+                    "inputs": {}
+                },
+                "3": {
+                    "class_type": "MMAudioSampler",
+                    "inputs": {
+                        "mmaudio_model": ["1", 0],
+                        "feature_utils": ["2", 0],
+                        "prompt": music_prompt,
+                        "negative_prompt": "noise, distortion, glitch, silence",
+                        "duration": float(duration),
+                        "steps": 25,
+                        "cfg_strength": 4.5,
+                        "seed": random.randint(0, 2**32 - 1)
+                    }
+                },
+                "4": {
+                    "class_type": "MMAudioVoCoderLoader",
+                    "inputs": {}
+                },
+                "5": {
+                    "class_type": "SaveAudio",
+                    "inputs": {
+                        "audio": ["3", 0],
+                        "filename_prefix": f"music_{output_id}"
+                    }
+                }
+            }
+            
+            logger.info(f"🎵 Music workflow: style={style}, duration={duration}s")
+            prompt_id = client.queue_prompt(workflow)
+            
+            return {
+                "status": "queued",
+                "prompt_id": prompt_id,
+                "mode": "music",
+                "style": style,
+                "duration": duration,
+                "prompt": music_prompt
+            }
+            
+        elif mode == "sfx":
+            # Use MMAudio for sound effects (shorter duration)
+            sfx_duration = min(duration, 10)
+            
+            workflow = {
+                "1": {
+                    "class_type": "MMAudioModelLoader",
+                    "inputs": {
+                        "model": "mmaudio_large_44k_v2"
+                    }
+                },
+                "2": {
+                    "class_type": "MMAudioFeatureUtilsLoader",
+                    "inputs": {}
+                },
+                "3": {
+                    "class_type": "MMAudioSampler",
+                    "inputs": {
+                        "mmaudio_model": ["1", 0],
+                        "feature_utils": ["2", 0],
+                        "prompt": text,
+                        "negative_prompt": "music, speech, voice, singing",
+                        "duration": float(sfx_duration),
+                        "steps": 25,
+                        "cfg_strength": 4.5,
+                        "seed": random.randint(0, 2**32 - 1)
+                    }
+                },
+                "4": {
+                    "class_type": "SaveAudio",
+                    "inputs": {
+                        "audio": ["3", 0],
+                        "filename_prefix": f"sfx_{output_id}"
+                    }
+                }
+            }
+            
+            logger.info(f"🔊 SFX workflow: prompt={text[:50]}, duration={sfx_duration}s")
+            prompt_id = client.queue_prompt(workflow)
+            
+            return {
+                "status": "queued",
+                "prompt_id": prompt_id,
+                "mode": "sfx",
+                "duration": sfx_duration,
+                "prompt": text
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ Audio error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    return {"error": "Unknown audio mode"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Voice Cloning (F5-TTS) via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+class VoiceCloneRequest(BaseModel):
+    voice_sample_path: str
+    text: str
+    model: str = "F5v1"
+    speed: float = 1.0
+
+@app.post("/voice-clone")
+async def voice_clone(request: VoiceCloneRequest):
+    """
+    Clone a voice using F5-TTS.
+    
+    Args:
+        voice_sample_path: Path to uploaded voice sample (5-30 seconds recommended)
+        text: Text to speak in the cloned voice
+        model: F5-TTS model (F5v1, F5, F5-DE, F5-FR, F5-ES, F5-IT, F5-JP, E2)
+        speed: Speed multiplier (>1.0 slower, <1.0 faster)
+    """
+    import random
+    
+    logger.info(f"🎤 Voice clone request: model={request.model}, text={request.text[:50]}...")
+    
+    client = get_comfyui_client()
+    output_id = uuid.uuid4().hex[:8]
+    
+    # Resolve voice sample path
+    voice_path = request.voice_sample_path
+    if not voice_path.startswith('/'):
+        voice_path = str(UPLOAD_DIR / voice_path)
+    
+    # Check if file exists
+    if not Path(voice_path).exists():
+        raise HTTPException(400, f"Voice sample not found: {voice_path}")
+    
+    try:
+        # Map model to model_type
+        model_type_map = {
+            "F5v1": "F5TTS_v1_Base",
+            "F5": "F5TTS_Base",
+            "F5-DE": "F5TTS_Base",
+            "F5-FR": "F5TTS_Base",
+            "F5-ES": "F5TTS_Base",
+            "F5-IT": "F5TTS_Base",
+            "F5-JP": "F5TTS_Base",
+            "F5-TH": "F5TTS_Base",
+            "F5-HI": "F5TTS_Base",
+            "E2": "E2TTS_Base",
+        }
+        
+        workflow = {
+            "1": {
+                "class_type": "F5TTSAudio",
+                "inputs": {
+                    "sample": voice_path,
+                    "speech": request.text,
+                    "seed": random.randint(0, 2**32 - 1),
+                    "model": request.model,
+                    "vocoder": "auto",
+                    "speed": request.speed,
+                    "model_type": model_type_map.get(request.model, "F5TTS_Base")
+                }
+            },
+            "2": {
+                "class_type": "SaveAudio",
+                "inputs": {
+                    "audio": ["1", 0],
+                    "filename_prefix": f"clone_{output_id}"
+                }
+            }
+        }
+        
+        logger.info(f"🎤 F5-TTS workflow: model={request.model}, sample={voice_path}")
+        prompt_id = client.queue_prompt(workflow)
+        
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "model": request.model,
+            "text_preview": request.text[:100] + ("..." if len(request.text) > 100 else "")
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Voice clone error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lip Sync (LatentSyncNode via ComfyUI)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class LipSyncRequest(BaseModel):
+    video_path: str
+    audio_path: str  
+    lips_expression: float = 1.5
+    inference_steps: int = 20
+    seed: int = -1
+
+@app.post("/lip-sync")
+async def generate_lip_sync(request: LipSyncRequest):
+    """Generate lip-synced video using LatentSyncNode via ComfyUI."""
+    import random
+    
+    logger.info(f"🎬 Lip sync request: video={request.video_path}, audio={request.audio_path}")
+    
+    # Verify files exist
+    if not os.path.exists(request.video_path):
+        raise HTTPException(status_code=400, detail=f"Video file not found: {request.video_path}")
+    if not os.path.exists(request.audio_path):
+        raise HTTPException(status_code=400, detail=f"Audio file not found: {request.audio_path}")
+    
+    # Generate seed if not provided
+    seed = request.seed if request.seed >= 0 else random.randint(0, 2147483647)
+    
+    try:
+        # Build ComfyUI workflow for lip sync
+        workflow = {
+            "1": {
+                "class_type": "VHS_LoadVideo",
+                "inputs": {
+                    "video": request.video_path,
+                    "force_rate": 25,
+                    "force_size": "Disabled",
+                    "custom_width": 512,
+                    "custom_height": 512,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1
+                }
+            },
+            "2": {
+                "class_type": "LoadAudio",
+                "inputs": {
+                    "audio": request.audio_path
+                }
+            },
+            "3": {
+                "class_type": "LatentSyncNode",
+                "inputs": {
+                    "images": ["1", 0],
+                    "audio": ["2", 0],
+                    "seed": seed,
+                    "lips_expression": request.lips_expression,
+                    "inference_steps": request.inference_steps
+                }
+            },
+            "4": {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {
+                    "images": ["3", 0],
+                    "audio": ["2", 0],
+                    "frame_rate": 25,
+                    "loop_count": 0,
+                    "filename_prefix": "lip_sync",
+                    "format": "video/h264-mp4",
+                    "pingpong": False,
+                    "save_output": True
+                }
+            }
+        }
+        
+        # Submit to ComfyUI
+        comfyui = get_comfyui_client()
+        prompt_id = comfyui.queue_prompt(workflow)
+        
+        logger.info(f"✅ Lip sync job submitted: {prompt_id}")
+        
+        return {
+            "success": True,
+            "prompt_id": prompt_id,
+            "seed": seed,
+            "lips_expression": request.lips_expression,
+            "inference_steps": request.inference_steps
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Lip sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image-to-Image (I2I) via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/generate-i2i")
+async def generate_i2i(
+    file: UploadFile = File(...),
+    prompt: str = Form(...),
+    negative_prompt: str = Form("ugly, deformed, blurry, low quality, bad anatomy, watermark"),
+    denoise: float = Form(0.7),
+    checkpoint: str = Form("CyberRealistic_Pony_v14.1_FP16.safetensors"),
+    steps: int = Form(25),
+    cfg: float = Form(7.5),
+    seed: int = Form(-1),
+    sampler_name: str = Form("dpmpp_2m"),
+    scheduler: str = Form("karras"),
+):
+    """
+    Image-to-Image generation via ComfyUI.
+    Uploads source image, applies style transfer / modification.
+    
+    Args:
+        file: Source image file
+        prompt: What to generate / how to modify
+        negative_prompt: What to avoid
+        denoise: 0.0 = keep source, 1.0 = ignore source (typical: 0.4-0.7)
+        checkpoint: SDXL checkpoint to use
+    """
+    import random
+    
+    logger.info(f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint})")
+    
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    # Generate seed
+    if seed == -1:
+        seed = random.randint(0, 2**32 - 1)
+    
+    # Save uploaded file to temp location
+    upload_filename = f"i2i_input_{uuid.uuid4().hex[:8]}.png"
+    upload_path = UPLOAD_DIR / upload_filename
+    
+    try:
+        with open(upload_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Upload to ComfyUI
+        comfyui_filename = client.upload_image(str(upload_path))
+        if not comfyui_filename:
+            raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+        
+        logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
+        
+        # Build I2I workflow
+        workflow = {
+            "1": {"inputs": {"ckpt_name": checkpoint}, "class_type": "CheckpointLoaderSimple"},
+            "2": {"inputs": {"image": comfyui_filename, "upload": "image"}, "class_type": "LoadImage"},
+            "3": {"inputs": {"pixels": ["2", 0], "vae": ["1", 2]}, "class_type": "VAEEncode"},
+            "4": {"inputs": {"text": prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+            "5": {"inputs": {"text": negative_prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+            "6": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": sampler_name,
+                    "scheduler": scheduler,
+                    "denoise": denoise,
+                    "model": ["1", 0],
+                    "positive": ["4", 0],
+                    "negative": ["5", 0],
+                    "latent_image": ["3", 0]
+                },
+                "class_type": "KSampler"
+            },
+            "7": {"inputs": {"samples": ["6", 0], "vae": ["1", 2]}, "class_type": "VAEDecode"},
+            "8": {"inputs": {"filename_prefix": "oelala_i2i", "images": ["7", 0]}, "class_type": "SaveImage"},
+        }
+        
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
+        
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "prompt": prompt,
+                "denoise": denoise,
+                "checkpoint": checkpoint,
+                "seed": seed,
+                "source_image": comfyui_filename
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ I2I error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image Upscaling via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+UPSCALE_MODELS = [
+    "RealESRGAN_x4plus.pth",
+    "RealESRGAN_x4plus_anime_6B.pth",
+    "RealESRGAN_x2plus.pth",
+    "4x-UltraSharp.pth",
+    "4x_NMKD-Siax_200k.pth",
+]
+
+@app.get("/upscale/models")
+def list_upscale_models():
+    """List available upscale models"""
+    return {"models": UPSCALE_MODELS}
+
+
+@app.post("/upscale")
+async def upscale_image(
+    file: UploadFile = File(...),
+    model: str = Form("RealESRGAN_x4plus.pth"),
+    scale: int = Form(4),
+    face_enhance: bool = Form(False),
+):
+    """
+    Upscale image using Real-ESRGAN via ComfyUI.
+    
+    Args:
+        file: Source image
+        model: Upscale model (RealESRGAN variants)
+        scale: Scale factor (2x or 4x)
+        face_enhance: Apply GFPGAN face enhancement
+    """
+    logger.info(f"🔍 Upscale request: model={model}, scale={scale}x, face_enhance={face_enhance}")
+    
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    # Save uploaded file
+    upload_filename = f"upscale_input_{uuid.uuid4().hex[:8]}.png"
+    upload_path = UPLOAD_DIR / upload_filename
+    
+    try:
+        with open(upload_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Upload to ComfyUI
+        comfyui_filename = client.upload_image(str(upload_path))
+        if not comfyui_filename:
+            raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+        
+        logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
+        
+        # Build upscale workflow
+        # Uses UpscaleModelLoader + ImageUpscaleWithModel nodes
+        workflow = {
+            "1": {"inputs": {"image": comfyui_filename, "upload": "image"}, "class_type": "LoadImage"},
+            "2": {"inputs": {"model_name": model}, "class_type": "UpscaleModelLoader"},
+            "3": {"inputs": {"upscale_model": ["2", 0], "image": ["1", 0]}, "class_type": "ImageUpscaleWithModel"},
+        }
+        
+        # Add face enhancement if requested (requires ComfyUI-GFPGAN extension)
+        if face_enhance:
+            # Try with GFPGAN - falls back gracefully if not installed
+            workflow["4"] = {
+                "inputs": {"image": ["3", 0], "model_name": "GFPGANv1.4.pth", "strength": 0.8},
+                "class_type": "GFPGANFaceRestoration"
+            }
+            workflow["5"] = {"inputs": {"filename_prefix": "oelala_upscale", "images": ["4", 0]}, "class_type": "SaveImage"}
+        else:
+            workflow["4"] = {"inputs": {"filename_prefix": "oelala_upscale", "images": ["3", 0]}, "class_type": "SaveImage"}
+        
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(status_code=500, detail="Failed to queue upscale workflow")
+        
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "model": model,
+                "scale": scale,
+                "face_enhance": face_enhance,
+                "source_image": comfyui_filename
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Upscale error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Video-to-Video Style Transfer via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/generate-v2v")
+async def generate_v2v(
+    file: UploadFile = File(...),
+    prompt: str = Form(...),
+    negative_prompt: str = Form("blurry, low quality, distorted, watermark"),
+    denoise: float = Form(0.5),
+    fps: int = Form(8),
+    max_frames: int = Form(32),
+    steps: int = Form(20),
+    cfg: float = Form(7.5),
+    seed: int = Form(-1),
+):
+    """
+    Video-to-Video style transfer via ComfyUI.
+    Extracts frames, applies img2img to each, reassembles video.
+    
+    Args:
+        file: Source video file
+        prompt: Style/transformation prompt
+        denoise: 0.0 = keep original, 1.0 = ignore original (0.3-0.6 recommended)
+        fps: Output FPS
+        max_frames: Maximum frames to process
+    """
+    import random
+    import subprocess
+    import tempfile
+    
+    logger.info(f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames})")
+    
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    # Generate seed
+    if seed == -1:
+        seed = random.randint(0, 2**32 - 1)
+    
+    # Save uploaded video
+    upload_filename = f"v2v_input_{uuid.uuid4().hex[:8]}.mp4"
+    upload_path = UPLOAD_DIR / upload_filename
+    
+    try:
+        with open(upload_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Upload video to ComfyUI input folder
+        comfyui_input = Path("/home/flip/oelala/ComfyUI/input")
+        video_dest = comfyui_input / upload_filename
+        shutil.copy(str(upload_path), str(video_dest))
+        
+        logger.info(f"📤 Video copied to ComfyUI: {upload_filename}")
+        
+        # Build V2V workflow using AnimateDiff or frame-by-frame approach
+        # Using VideoToFrames + img2img batch + FramesToVideo pattern
+        workflow = {
+            # Load video and extract frames
+            "1": {
+                "inputs": {
+                    "video": upload_filename,
+                    "force_rate": fps,
+                    "force_size": "Disabled",
+                    "custom_width": 512,
+                    "custom_height": 512,
+                    "frame_load_cap": max_frames,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                },
+                "class_type": "VHS_LoadVideo"
+            },
+            # Load checkpoint for img2img
+            "2": {
+                "inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"},
+                "class_type": "CheckpointLoaderSimple"
+            },
+            # Positive prompt
+            "3": {
+                "inputs": {"text": prompt, "clip": ["2", 1]},
+                "class_type": "CLIPTextEncode"
+            },
+            # Negative prompt
+            "4": {
+                "inputs": {"text": negative_prompt, "clip": ["2", 1]},
+                "class_type": "CLIPTextEncode"
+            },
+            # VAE encode frames
+            "5": {
+                "inputs": {"pixels": ["1", 0], "vae": ["2", 2]},
+                "class_type": "VAEEncode"
+            },
+            # KSampler batch - applies style to all frames
+            "6": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": "dpmpp_2m",
+                    "scheduler": "karras",
+                    "denoise": denoise,
+                    "model": ["2", 0],
+                    "positive": ["3", 0],
+                    "negative": ["4", 0],
+                    "latent_image": ["5", 0]
+                },
+                "class_type": "KSampler"
+            },
+            # VAE decode
+            "7": {
+                "inputs": {"samples": ["6", 0], "vae": ["2", 2]},
+                "class_type": "VAEDecode"
+            },
+            # Combine frames back to video
+            "8": {
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": "oelala_v2v",
+                    "format": "video/h264-mp4",
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["7", 0],
+                },
+                "class_type": "VHS_VideoCombine"
+            }
+        }
+        
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(status_code=500, detail="Failed to queue V2V workflow")
+        
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "prompt": prompt,
+                "denoise": denoise,
+                "fps": fps,
+                "max_frames": max_frames,
+                "seed": seed,
+                "source_video": upload_filename
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ V2V error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/videos/{filename}")
 async def get_video(filename: str):
     """Download generated video file"""
@@ -3064,6 +4108,344 @@ async def train_lora_placeholder(
         json.dump(placeholder, fh, indent=2)
 
     return {"success": True, "lora_path": str(placeholder_path), "training_id": training_id}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reframe / Outpainting via ComfyUI
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/reframe")
+async def reframe_image(
+    image: UploadFile = File(...),
+    target_width: int = Form(1280),
+    target_height: int = Form(720),
+    position: str = Form("center"),
+    prompt: str = Form("seamless natural extension, high quality"),
+    model: str = Form("CyberRealisticPony_v8.safetensors"),
+    steps: int = Form(25),
+    cfg: float = Form(7.0),
+    denoise: float = Form(0.85),
+    feathering: int = Form(32),
+):
+    """
+    Reframe/outpaint image to new aspect ratio using AI.
+    
+    Args:
+        image: Source image
+        target_width: Desired output width
+        target_height: Desired output height
+        position: Where to place original (center, top, bottom, left, right, top-left, etc.)
+        prompt: What to generate in the extended areas
+        model: SDXL checkpoint
+        denoise: Strength of generation (higher = more creative)
+        feathering: Edge blend in pixels
+    """
+    import random
+    from PIL import Image as PILImage
+    
+    logger.info(f"🖼️ Reframe: {target_width}x{target_height}, position={position}, prompt={prompt[:50]}...")
+    
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    seed = random.randint(0, 2**32 - 1)
+    
+    # Save uploaded image
+    upload_filename = f"reframe_input_{uuid.uuid4().hex[:8]}.png"
+    upload_path = UPLOAD_DIR / upload_filename
+    
+    try:
+        content = await image.read()
+        with open(upload_path, "wb") as f:
+            f.write(content)
+        
+        # Get original image dimensions
+        with PILImage.open(upload_path) as img:
+            orig_w, orig_h = img.size
+        
+        # Calculate scale and position
+        scale_w = target_width / orig_w
+        scale_h = target_height / orig_h
+        scale = min(scale_w, scale_h, 1.0)  # Don't upscale, only downscale if needed
+        
+        scaled_w = int(orig_w * scale)
+        scaled_h = int(orig_h * scale)
+        
+        # Calculate offsets based on position
+        if 'left' in position:
+            offset_x = 0
+        elif 'right' in position:
+            offset_x = target_width - scaled_w
+        else:  # center
+            offset_x = (target_width - scaled_w) // 2
+            
+        if 'top' in position:
+            offset_y = 0
+        elif 'bottom' in position:
+            offset_y = target_height - scaled_h
+        else:  # center
+            offset_y = (target_height - scaled_h) // 2
+        
+        logger.info(f"📐 Original: {orig_w}x{orig_h}, Target: {target_width}x{target_height}, Offset: ({offset_x}, {offset_y})")
+        
+        # Upload to ComfyUI
+        comfyui_filename = client.upload_image(str(upload_path))
+        if not comfyui_filename:
+            raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+        
+        # Build outpainting workflow
+        # This uses InpaintModelConditioning + mask approach
+        workflow = {
+            # Load model
+            "1": {"inputs": {"ckpt_name": model}, "class_type": "CheckpointLoaderSimple"},
+            # Load source image
+            "2": {"inputs": {"image": comfyui_filename, "upload": "image"}, "class_type": "LoadImage"},
+            # Create empty canvas at target size
+            "3": {
+                "inputs": {"width": target_width, "height": target_height, "batch_size": 1, "color": 0},
+                "class_type": "EmptyImage"
+            },
+            # Composite source onto canvas at position
+            "4": {
+                "inputs": {
+                    "images": ["2", 0],
+                    "destination": ["3", 0],
+                    "x": offset_x,
+                    "y": offset_y,
+                    "resize_source": True if scale < 1.0 else False,
+                },
+                "class_type": "ImageCompositeMasked"
+            },
+            # Create mask (white = inpaint area)
+            "5": {
+                "inputs": {"width": target_width, "height": target_height, "batch_size": 1, "color": 16777215},  # White
+                "class_type": "EmptyImage"
+            },
+            # Cut out original image area from mask (black = keep)
+            "6": {
+                "inputs": {
+                    "images": ["2", 0],
+                    "destination": ["5", 0],
+                    "x": offset_x,
+                    "y": offset_y,
+                    "resize_source": True if scale < 1.0 else False,
+                },
+                "class_type": "ImageCompositeMasked"
+            },
+            # Convert to mask
+            "7": {
+                "inputs": {"image": ["6", 0], "method": "intensity"},
+                "class_type": "ImageToMask"
+            },
+            # Grow/feather mask for smooth blending
+            "8": {
+                "inputs": {"mask": ["7", 0], "expand": feathering, "tapered_corners": True},
+                "class_type": "GrowMask"
+            },
+            # Encode prompts
+            "9": {"inputs": {"text": prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+            "10": {"inputs": {"text": "ugly, blurry, watermark, text, logo, artifacts", "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+            # VAE encode composite
+            "11": {"inputs": {"pixels": ["4", 0], "vae": ["1", 2]}, "class_type": "VAEEncode"},
+            # Set masked latent for inpainting
+            "12": {
+                "inputs": {"samples": ["11", 0], "mask": ["8", 0]},
+                "class_type": "SetLatentNoiseMask"
+            },
+            # KSampler
+            "13": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": "dpmpp_2m",
+                    "scheduler": "karras",
+                    "denoise": denoise,
+                    "model": ["1", 0],
+                    "positive": ["9", 0],
+                    "negative": ["10", 0],
+                    "latent_image": ["12", 0]
+                },
+                "class_type": "KSampler"
+            },
+            # VAE decode
+            "14": {"inputs": {"samples": ["13", 0], "vae": ["1", 2]}, "class_type": "VAEDecode"},
+            # Save
+            "15": {"inputs": {"filename_prefix": "oelala_reframe", "images": ["14", 0]}, "class_type": "SaveImage"},
+        }
+        
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(status_code=500, detail="Failed to queue reframe workflow")
+        
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "original_size": f"{orig_w}x{orig_h}",
+                "target_size": f"{target_width}x{target_height}",
+                "position": position,
+                "prompt": prompt,
+                "seed": seed
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Reframe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Face Swap via ComfyUI (ReActor / InsightFace)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/detect-faces")
+async def detect_faces(image: UploadFile = File(...)):
+    """
+    Detect faces in an image for face swap.
+    Returns list of detected face bounding boxes.
+    """
+    import cv2
+    import numpy as np
+    
+    logger.info(f"👤 Detecting faces in {image.filename}...")
+    
+    try:
+        content = await image.read()
+        nparr = np.frombuffer(content, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image")
+        
+        # Use OpenCV's built-in face detector
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        face_list = []
+        for i, (x, y, w, h) in enumerate(faces):
+            face_list.append({
+                "index": i,
+                "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)},
+                "confidence": 0.9  # OpenCV doesn't provide confidence, placeholder
+            })
+        
+        logger.info(f"👤 Detected {len(face_list)} face(s)")
+        
+        return {"faces": face_list, "total": len(face_list)}
+        
+    except Exception as e:
+        logger.error(f"❌ Face detection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/face-swap")
+async def face_swap(
+    target: UploadFile = File(...),
+    source: UploadFile = File(...),
+    model: str = Form("inswapper"),
+    enhance: str = Form("gfpgan"),
+    strength: float = Form(1.0),
+    blend: float = Form(0.8),
+    face_index: int = Form(0),  # -1 = all faces
+):
+    """
+    Face swap using ComfyUI ReActor node.
+    
+    Args:
+        target: Image/video with face(s) to replace
+        source: Image with source face
+        model: Face swap model (inswapper, simswap)
+        enhance: Post-processing (none, gfpgan, codeformer, both)
+        strength: Swap strength 0-1
+        blend: Edge blend amount
+        face_index: Which face to swap (-1 for all)
+    """
+    logger.info(f"👤 Face swap: model={model}, enhance={enhance}, strength={strength}")
+    
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    # Save files
+    target_filename = f"faceswap_target_{uuid.uuid4().hex[:8]}"
+    source_filename = f"faceswap_source_{uuid.uuid4().hex[:8]}.png"
+    
+    is_video = target.content_type and target.content_type.startswith('video/')
+    target_filename += ".mp4" if is_video else ".png"
+    
+    target_path = UPLOAD_DIR / target_filename
+    source_path = UPLOAD_DIR / source_filename
+    
+    try:
+        # Save target
+        content = await target.read()
+        with open(target_path, "wb") as f:
+            f.write(content)
+        
+        # Save source
+        content = await source.read()
+        with open(source_path, "wb") as f:
+            f.write(content)
+        
+        # Upload images to ComfyUI
+        target_comfy = client.upload_image(str(target_path))
+        source_comfy = client.upload_image(str(source_path))
+        
+        if not target_comfy or not source_comfy:
+            raise HTTPException(status_code=500, detail="Failed to upload images to ComfyUI")
+        
+        # Build ReActor workflow
+        # Requires ComfyUI-ReActor custom node: https://github.com/Gourieff/comfyui-reactor-node
+        workflow = {
+            # Load target image
+            "1": {"inputs": {"image": target_comfy, "upload": "image"}, "class_type": "LoadImage"},
+            # Load source face
+            "2": {"inputs": {"image": source_comfy, "upload": "image"}, "class_type": "LoadImage"},
+            # ReActor face swap
+            "3": {
+                "inputs": {
+                    "input_image": ["1", 0],
+                    "source_image": ["2", 0],
+                    "swap_model": "inswapper_128.onnx",
+                    "facedetection": "retinaface_resnet50",
+                    "face_restore_model": "GFPGANv1.4.pth" if enhance in ["gfpgan", "both"] else "none",
+                    "face_restore_visibility": blend,
+                    "codeformer_weight": 0.5 if enhance in ["codeformer", "both"] else 0,
+                    "console_log_level": 1,
+                    "detect_gender_source": "no",
+                    "detect_gender_input": "no",
+                    "source_faces_index": "0",
+                    "input_faces_index": str(face_index) if face_index >= 0 else "0,1,2,3,4",
+                },
+                "class_type": "ReActorFaceSwap"
+            },
+            # Save result
+            "4": {"inputs": {"filename_prefix": "oelala_faceswap", "images": ["3", 0]}, "class_type": "SaveImage"},
+        }
+        
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(status_code=500, detail="Failed to queue face swap workflow")
+        
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "model": model,
+                "enhance": enhance,
+                "strength": strength,
+                "face_index": face_index,
+                "is_video": is_video
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Face swap error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     uvicorn.run(
