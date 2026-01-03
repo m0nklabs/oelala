@@ -67,7 +67,12 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory }) {
       onRefreshHistory()
     } catch (e) {
       const message = e?.message || 'Failed to generate video'
-      setError(message)
+      // Check for network/fetch errors vs backend errors
+      if (message.includes('NetworkError') || message.includes('fetch')) {
+        setError('Connection error - backend may be down or endpoint not available')
+      } else {
+        setError(message)
+      }
       await sendClientLog({
         level: 'error',
         message: 'Text-to-video failed',

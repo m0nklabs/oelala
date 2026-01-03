@@ -22,7 +22,7 @@ export const NAV_GROUPS = [
     title: 'Video Tools',
     items: [
       { id: TOOL_IDS.IMAGE_TO_VIDEO, label: 'Image to Video', status: 'ready' },
-      { id: TOOL_IDS.TEXT_TO_VIDEO, label: 'Text to Video', status: 'ready' },
+      { id: TOOL_IDS.TEXT_TO_VIDEO, label: 'Text to Video', status: 'soon' },
       { id: TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO, label: 'Text to Image to Video', status: 'new' },
       { id: TOOL_IDS.VIDEO_TO_VIDEO, label: 'Video to Video', status: 'missing-backend' },
     ],

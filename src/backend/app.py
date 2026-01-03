@@ -2668,7 +2668,10 @@ async def generate_text_video(
                 raise HTTPException(status_code=503, detail="Video generator initialization failed")
 
     if not generator:
-        raise HTTPException(status_code=503, detail="Video generator not available")
+        raise HTTPException(
+            status_code=503, 
+            detail="Text-to-Video is not yet available. Please use Image-to-Video instead (ComfyUI-based)."
+        )
 
     # Load model if not already loaded (skip for light model - already initialized)
     if generator.model_type != "light" and (not hasattr(generator, 'pipeline') or generator.pipeline is None):
