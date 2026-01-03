@@ -12,6 +12,8 @@ import TextToImageTool from './tools/TextToImageTool'
 import TextToImageToVideoTool from './tools/TextToImageToVideoTool'
 import PipelineTool from './tools/PipelineTool'
 import LoRATrainingTool from './tools/LoRATrainingTool'
+import ImageToTextTool from './tools/ImageToTextTool'
+import PromptGeneratorTool from './tools/PromptGeneratorTool'
 import ComingSoonTool from './tools/ComingSoonTool'
 import MyMediaTool from './tools/MyMediaTool'
 import LogViewer from '../components/LogViewer'
@@ -111,6 +113,10 @@ export default function Dashboard() {
         return 'Face Swap'
       case TOOL_IDS.UPSCALER:
         return 'Upscaler'
+      case TOOL_IDS.IMAGE_TO_TEXT:
+        return 'Image to Text'
+      case TOOL_IDS.PROMPT_GENERATOR:
+        return 'Prompt Generator'
       case TOOL_IDS.MY_MEDIA_ALL:
         return 'My Media - All'
       case TOOL_IDS.MY_MEDIA_VIDEOS:
@@ -166,6 +172,11 @@ export default function Dashboard() {
 
       case TOOL_IDS.TEXT_TO_IMAGE:
         return <TextToImageTool onOutput={setOutput} />
+
+      case TOOL_IDS.IMAGE_TO_TEXT:
+        return <ImageToTextTool />
+      case TOOL_IDS.PROMPT_GENERATOR:
+        return <PromptGeneratorTool />
 
       case TOOL_IDS.VIDEO_TO_VIDEO:
       case TOOL_IDS.IMAGE_TO_IMAGE:

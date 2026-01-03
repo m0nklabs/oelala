@@ -1,6 +1,37 @@
 2026-01-03
 Agent: Claude Opus 4.5
 AgentTag: CLAU
+ModelTag: PROMPT-TOOLS
+Details:
+- Added new "Prompt Tools" navigation section
+- Image to Text tool (ImageToTextTool.jsx):
+  - Upload image dropzone
+  - Model selector (Florence-2, BLIP-2, CogVLM)
+  - Caption mode (brief, detailed, tags, structured)
+  - Copy to clipboard, send to prompt
+- Prompt Generator tool (PromptGeneratorTool.jsx):
+  - Style presets (10 styles: cinematic, anime, cyberpunk, etc.)
+  - Quick generate (template-based)
+  - AI enhance (LLM integration ready)
+  - Negative prompt auto-generation
+  - Motion prompts for video
+  - Copy buttons for all outputs
+- Backend endpoints:
+  - /caption-image: Florence2 ComfyUI integration with fallback
+  - /generate-prompt: Template-based prompt enhancement
+- Created comprehensive TODO_TOOLS.md with implementation roadmap
+- Updated nav.js with proper status labels (ready, soon, new)
+FilesChanged:
+- src/frontend/src/dashboard/nav.js (Prompt Tools section, status updates)
+- src/frontend/src/dashboard/Dashboard.jsx (new tool routing)
+- src/frontend/src/dashboard/tools/ImageToTextTool.jsx (NEW)
+- src/frontend/src/dashboard/tools/PromptGeneratorTool.jsx (NEW)
+- src/backend/app.py (/caption-image, /generate-prompt endpoints)
+- docs/TODO_TOOLS.md (NEW - comprehensive implementation roadmap)
+
+2026-01-03
+Agent: Claude Opus 4.5
+AgentTag: CLAU
 ModelTag: COMFYUI-MIGRATION
 Details:
 - Removed all legacy Wan2VideoGenerator/SD3ImageGenerator/RealVisXLImageGenerator code

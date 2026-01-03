@@ -2692,6 +2692,195 @@ async def generate_pose_video(
         }
     }
 
+
+# =============================================================================
+# PROMPT TOOLS ENDPOINTS
+# =============================================================================
+
+@app.post("/caption-image")
+async def caption_image(
+    file: UploadFile = File(...),
+    model: str = Form("florence2", description="Model: florence2, blip2, cogvlm"),
+    mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured")
+):
+    """
+    Generate a caption/description for an uploaded image.
+    Uses ComfyUI Florence2 node or falls back to template response.
+    """
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    # Save uploaded file
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"caption_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+    # Try ComfyUI Florence2 if available
+    if get_comfyui_client:
+        comfyui = get_comfyui_client()
+        if comfyui.is_available():
+            try:
+                # Upload image to ComfyUI
+                comfyui_image = comfyui.upload_image(str(input_path))
+                if comfyui_image:
+                    # Build Florence2 workflow
+                    workflow = {
+                        "1": {
+                            "class_type": "LoadImage",
+                            "inputs": {"image": comfyui_image}
+                        },
+                        "2": {
+                            "class_type": "Florence2Run",
+                            "inputs": {
+                                "image": ["1", 0],
+                                "florence2_model": ["3", 0],
+                                "text_input": "",
+                                "task": "detailed_caption" if mode == "detailed" else "caption",
+                                "fill_mask": False,
+                                "keep_model_loaded": True,
+                                "max_new_tokens": 1024,
+                                "num_beams": 3,
+                                "do_sample": False,
+                                "output_mask_select": ""
+                            }
+                        },
+                        "3": {
+                            "class_type": "DownloadAndLoadFlorence2Model",
+                            "inputs": {
+                                "model": "microsoft/Florence-2-large",
+                                "precision": "fp16",
+                                "attention": "sdpa"
+                            }
+                        }
+                    }
+                    
+                    # Queue and wait for result
+                    prompt_id = comfyui.queue_prompt(workflow)
+                    if prompt_id:
+                        # Wait for completion (max 60s)
+                        import time
+                        for _ in range(60):
+                            history = comfyui.get_history(prompt_id)
+                            if history and prompt_id in history:
+                                outputs = history[prompt_id].get("outputs", {})
+                                # Florence2Run outputs text
+                                for node_id, output in outputs.items():
+                                    if "text" in output:
+                                        caption = output["text"]
+                                        if isinstance(caption, list):
+                                            caption = caption[0] if caption else ""
+                                        return {"caption": caption, "model": "florence2", "mode": mode}
+                                break
+                            time.sleep(1)
+            except Exception as e:
+                logger.warning(f"Florence2 captioning failed: {e}")
+
+    # Fallback: return placeholder (no vision model available)
+    # In production, you'd integrate with local transformers or external API
+    logger.info(f"Using placeholder caption (no vision model available)")
+    
+    placeholder_captions = {
+        "brief": "An image uploaded by the user.",
+        "detailed": "This is an uploaded image. To get accurate captions, install Florence2 in ComfyUI: ComfyUI-Florence2 custom node.",
+        "tags": "image, uploaded, user content",
+        "structured": "Subject: unknown, Style: photograph, Mood: neutral, Setting: unidentified",
+    }
+    
+    return {
+        "caption": placeholder_captions.get(mode, placeholder_captions["detailed"]),
+        "model": "placeholder",
+        "mode": mode,
+        "note": "Install ComfyUI-Florence2 for real image captioning"
+    }
+
+
+@app.post("/generate-prompt")
+async def generate_prompt(
+    input: str = Form(..., description="Basic idea or keywords"),
+    style: str = Form(None, description="Style preset"),
+    mode: str = Form("expand", description="Mode: expand, refine, variations"),
+    include_negative: bool = Form(True),
+    include_motion: bool = Form(False)
+):
+    """
+    Generate enhanced prompts from basic input.
+    Uses templates by default, can integrate with LLM for smarter enhancement.
+    """
+    if not input or not input.strip():
+        raise HTTPException(status_code=400, detail="Input is required")
+
+    base_input = input.strip()
+    
+    # Style keywords mapping
+    STYLE_KEYWORDS = {
+        "cinematic": "cinematic lighting, film grain, dramatic shadows, professional photography, movie still",
+        "anime": "anime style, vibrant colors, cel shading, Japanese animation, detailed linework",
+        "photorealistic": "photorealistic, highly detailed, 8k resolution, sharp focus, professional photo, DSLR",
+        "abstract": "abstract art, geometric shapes, vibrant colors, artistic, modern art",
+        "vintage": "vintage aesthetic, retro, film photography, nostalgic, 1970s style, grain",
+        "cyberpunk": "cyberpunk, neon lights, futuristic, dystopian, high tech low life, rain",
+        "fantasy": "fantasy art, magical, ethereal lighting, mystical, enchanted, detailed illustration",
+        "minimalist": "minimalist, clean, simple, negative space, modern, elegant",
+        "horror": "dark atmosphere, eerie, horror, unsettling, creepy, moody lighting",
+        "scifi": "science fiction, futuristic, space, advanced technology, sleek design",
+    }
+    
+    # Quality boosters
+    quality_suffix = ", masterpiece, best quality, highly detailed"
+    
+    # Build enhanced prompt
+    style_part = STYLE_KEYWORDS.get(style, "") if style else ""
+    if style_part:
+        enhanced_prompt = f"{base_input}, {style_part}{quality_suffix}"
+    else:
+        enhanced_prompt = f"{base_input}{quality_suffix}"
+    
+    # Generate negative prompt
+    negative_prompt = ""
+    if include_negative:
+        negative_prompt = "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text, cropped, worst quality, low resolution, jpeg artifacts, duplicate, morbid, mutilated, out of frame, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck"
+    
+    # Generate motion prompt for video
+    motion_prompt = ""
+    if include_motion:
+        motion_keywords = [
+            "smooth camera motion",
+            "cinematic movement", 
+            "fluid animation",
+            "natural motion",
+            "gentle movement"
+        ]
+        motion_prompt = ", ".join(motion_keywords)
+    
+    # Generate variations if requested
+    variations = None
+    if mode == "variations":
+        variations = [
+            f"{base_input}, dramatic lighting{quality_suffix}",
+            f"{base_input}, soft natural light{quality_suffix}",
+            f"{base_input}, studio lighting, professional{quality_suffix}",
+        ]
+        if style_part:
+            variations = [f"{v}, {style_part}" for v in variations]
+    
+    return {
+        "prompt": enhanced_prompt,
+        "negative_prompt": negative_prompt,
+        "motion_prompt": motion_prompt,
+        "variations": variations,
+        "input": base_input,
+        "style": style,
+        "mode": mode
+    }
+
+
 @app.get("/videos/{filename}")
 async def get_video(filename: str):
     """Download generated video file"""
