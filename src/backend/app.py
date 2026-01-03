@@ -29,41 +29,7 @@ from PIL.PngImagePlugin import PngInfo
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('/home/flip/oelala')  # Add oelala root directory
 
-# GPU generators are disabled by default - ComfyUI handles all GPU work
-# Set OELALA_LOAD_GPU_GENERATORS=1 to enable local torch-based generators
-LOAD_GPU_GENERATORS = os.environ.get("OELALA_LOAD_GPU_GENERATORS", "0") == "1"
-
-if LOAD_GPU_GENERATORS:
-    # Wan2VideoGenerator - local torch-based generation
-    try:
-        from src.backend.wan2_generator import Wan2VideoGenerator
-        print("✅ Wan2VideoGenerator imported successfully")
-    except ImportError as e:
-        print(f"❌ Failed to import Wan2VideoGenerator: {e}")
-        Wan2VideoGenerator = None
-
-    # SD3ImageGenerator - local torch-based generation
-    try:
-        from src.backend.sd3_generator import SD3ImageGenerator
-        print("✅ SD3ImageGenerator imported successfully")
-    except ImportError as e:
-        print(f"❌ Failed to import SD3ImageGenerator: {e}")
-        SD3ImageGenerator = None
-
-    # RealVisXL Image Generator (SDXL RealVis V5.0)
-    try:
-        from src.backend.realvis_generator import RealVisXLImageGenerator
-        print("✅ RealVisXLImageGenerator imported successfully")
-    except ImportError as e:
-        print(f"❌ Failed to import RealVisXLImageGenerator: {e}")
-        RealVisXLImageGenerator = None
-else:
-    print("ℹ️ GPU generators disabled - using ComfyUI backend only")
-    Wan2VideoGenerator = None
-    SD3ImageGenerator = None
-    RealVisXLImageGenerator = None
-
-# ComfyUI Client for Wan2.2 Q5 GGUF workflows
+# ComfyUI Client for all image/video generation
 try:
     from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
     print("✅ ComfyUIClient imported successfully")
@@ -327,11 +293,6 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 if COMFYUI_OUTPUT_DIR.exists():
     app.mount("/comfyui-output", StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)), name="comfyui_output")
 
-# Global generator instance
-generator = None
-image_generator = None
-realvis_generator = None
-
 @app.get("/logs")
 async def get_logs():
     """Get recent server logs"""
@@ -377,31 +338,22 @@ async def serve_video_test():
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the Wan2.2 generator on startup"""
-    global generator
-    if Wan2VideoGenerator:
-        try:
-            # Use lightweight model for better memory efficiency
-            model_type = os.getenv("MODEL_TYPE", "light")  # Default to light model
-            # Use Diffusers-compatible model path
-            model_path = "Wan-AI/Wan2.2-I2V-A14B-Diffusers"
-            logger.info(f"Initializing generator with model type: {model_type}")
-            generator = Wan2VideoGenerator(model_path=model_path, model_type=model_type)
-            # Don't call load_model() for light model - __init__ already configured it
-            logger.info("✅ Wan2.2 generator ready!")
-        except Exception as e:
-            logger.error(f"❌ Error initializing generator: {e}")
-            logger.info("💡 The model will be loaded on first use instead")
+    """Log startup status"""
+    client = get_comfyui_client()
+    if client and client.is_available():
+        logger.info("✅ ComfyUI backend available and ready!")
     else:
-        logger.info("ℹ️ ComfyUI backend active - GPU generators disabled (set OELALA_LOAD_GPU_GENERATORS=1 to enable)")
+        logger.warning("⚠️ ComfyUI backend not available - some features may not work")
 
 @app.get("/")
 async def root():
     """Root endpoint"""
+    client = get_comfyui_client()
+    comfyui_ok = client and client.is_available() if client else False
     return {
         "message": "Oelala AI Video Generator API",
         "version": "1.0.0",
-        "status": "ready" if generator else "error",
+        "status": "ready" if comfyui_ok else "error",
         "endpoints": {
             "POST /generate": "Generate video from image",
             "POST /generate-text": "Generate video from text prompt",
@@ -1056,19 +1008,29 @@ async def get_job_status(prompt_id: str):
                 job_data = history[prompt_id]
                 outputs = job_data.get("outputs", {})
                 
-                # Find video output
+                # Find video or image output
                 output_video = None
+                output_image = None
                 for node_id, node_output in outputs.items():
+                    # Video output (VHS_VideoCombine)
                     if "gifs" in node_output:
                         for gif in node_output["gifs"]:
                             if gif.get("type") == "output":
                                 output_video = f"/comfyui/output/{gif['filename']}"
+                                break
+                    # Image output (SaveImage)
+                    if "images" in node_output:
+                        for img in node_output["images"]:
+                            if img.get("type") == "output":
+                                output_image = f"/comfyui/output/{img['filename']}"
                                 break
                 
                 return {
                     "prompt_id": prompt_id,
                     "status": "completed",
                     "output_video": output_video,
+                    "output_image": output_image,
+                    "url": output_image or output_video,  # Convenience field
                     **job_info
                 }
     except Exception as e:
@@ -1413,15 +1375,13 @@ async def health_check():
         except:
             pass
     
-    # We're healthy if ComfyUI is available OR legacy generators are loaded
-    is_healthy = comfyui_available or generator is not None or image_generator is not None
+    # We're healthy if ComfyUI is available
+    is_healthy = comfyui_available
     
     return {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
         "comfyui_available": comfyui_available,
-        "model_loaded": generator is not None,
-        "image_model_loaded": image_generator is not None,
         "upload_dir": str(UPLOAD_DIR),
         "output_dir": str(OUTPUT_DIR)
     }
@@ -1582,140 +1542,62 @@ async def client_log(payload: dict):
         raise HTTPException(status_code=500, detail="Failed to save client log")
 
 @app.post("/generate-image")
-def generate_image(
+async def generate_image_legacy(
     prompt: str = Form(...),
     aspect_ratio: str = Form("1:1"),
     mode: str = Form("normal"),
     output_filename: str = Form(""),
     job_id: str = Form(None),
-    model: str = Form("sd3.5-large-int8")
+    model: str = Form("sdxl")
 ):
     """
-    Generate image from text prompt using selectable models (SD3.5 INT8 or RealVisXL V5.0)
+    Legacy endpoint - redirects to SDXL via ComfyUI.
+    Use /generate-sdxl for direct SDXL generation.
     """
-    global image_generator, realvis_generator
+    logger.info(f"🔄 Legacy generate-image request redirected to SDXL: {prompt[:50]}...")
     
-    logger.info(f"🚀 Received generate-image request: {prompt[:50]}... (model={model})")
-    if not job_id:
-        job_id = str(uuid.uuid4())
-
-    progress_store[job_id] = {
-        "job_id": job_id,
-        "progress": 5,
-        "status": "running",
-        "updated_at": datetime.now().isoformat()
+    # Build response using SDXL workflow
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    import random
+    seed = random.randint(0, 2**32 - 1)
+    
+    # Map aspect ratios to SDXL-optimal resolutions (1MP)
+    resolutions = {
+        "1:1": (1024, 1024),
+        "16:9": (1344, 768),
+        "9:16": (768, 1344),
+        "4:3": (1152, 864),
+        "3:4": (864, 1152),
+        "2:3": (832, 1216),
+        "3:2": (1216, 832),
+        "21:9": (1536, 640),
+        "9:21": (640, 1536),
     }
-    start_progress_ticker(job_id)
-
-    # Select generator based on requested model
-    model_key = (model or "sd3.5-large-int8").lower().strip()
-    selected = None
-    selected_name = "sd3.5-large-int8"
-
-    if model_key in ["sd3", "sd3.5", "sd3.5-large", "sd3.5-large-int8", "sd35", "sd35-int8"]:
-        if image_generator is None and SD3ImageGenerator:
-            try:
-                logger.info("Loading SD3.5 Image Generator on first use...")
-                image_generator = SD3ImageGenerator()
-            except Exception as e:
-                logger.error(f"Failed to initialize SD3.5 image generator: {e}")
-                raise HTTPException(status_code=503, detail="SD3.5 image generator initialization failed")
-        if not image_generator:
-            logger.error("SD3.5 image generator not available (import failed or crashed)")
-            raise HTTPException(status_code=503, detail="SD3.5 image generator not available")
-        selected = image_generator
-        selected_name = "sd3.5-large-int8"
-
-    elif model_key in ["realvis", "realvisxl", "realvisxl-v5", "realvisxl_v5", "realvisxl-v5.0", "realvisxl v5.0"]:
-        if realvis_generator is None and RealVisXLImageGenerator:
-            try:
-                logger.info("Loading RealVisXL Image Generator on first use...")
-                realvis_generator = RealVisXLImageGenerator()
-            except Exception as e:
-                logger.error(f"Failed to initialize RealVisXL image generator: {e}")
-                raise HTTPException(status_code=503, detail="RealVisXL image generator initialization failed")
-        if not realvis_generator:
-            logger.error("RealVisXL image generator not available (import failed or crashed)")
-            raise HTTPException(status_code=503, detail="RealVisXL image generator not available")
-        selected = realvis_generator
-        selected_name = "realvisxl-v5.0"
-
-    else:
-        logger.error(f"Unsupported model requested: {model}")
-        raise HTTPException(status_code=400, detail=f"Unsupported model '{model}'")
-
-    try:
-        # Map aspect ratios to resolutions (approx 1MP)
-        resolutions = {
-            "1:1": (1024, 1024),
-            "16:9": (1344, 768),
-            "9:16": (768, 1344),
-            "4:3": (1152, 864),
-            "3:4": (864, 1152),
-            "2:3": (832, 1216),
-            "3:2": (1216, 832),
-            "4:5": (896, 1120),
-            "5:4": (1120, 896),
-            "21:9": (1536, 640),
-            "9:21": (640, 1536),
-        }
-        
-        width, height = resolutions.get(aspect_ratio, (1024, 1024))
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if not output_filename:
-            output_filename = f"t2i_{timestamp}.png"
-        
-        if not output_filename.endswith('.png'):
-            output_filename += '.png'
-            
-        output_path = OUTPUT_DIR / output_filename
-        
-        logger.info(f"Generating image: {prompt} ({width}x{height})")
-        
-        image = selected.generate(
-            prompt=prompt,
-            width=width,
-            height=height,
-            num_inference_steps=28
-        )
-        
-        image.save(output_path)
-        logger.info(f"Image saved to {output_path}")
-
-        progress_store[job_id] = {
-            "job_id": job_id,
-            "progress": 100,
-            "status": "done",
-            "url": f"/files/{output_filename}",
-            "updated_at": datetime.now().isoformat()
-        }
-        stop_progress_ticker(job_id)
-        
-        return {
-            "status": "success",
-            "url": f"/files/{output_filename}",
-            "filename": output_filename,
-            "meta": {
-                "prompt": prompt,
-                "width": width,
-                "height": height,
-                "model": selected_name
-            },
-            "job_id": job_id
-        }
-        
-    except Exception as e:
-        logger.error(f"Image generation failed: {e}")
-        progress_store[job_id] = {
-            "job_id": job_id,
-            "progress": progress_store.get(job_id, {}).get("progress", 0),
-            "status": "failed",
-            "message": str(e),
-            "updated_at": datetime.now().isoformat()
-        }
-        stop_progress_ticker(job_id)
-        raise HTTPException(status_code=500, detail=str(e))
+    width, height = resolutions.get(aspect_ratio, (1024, 1024))
+    
+    # Build simple SDXL workflow
+    workflow = {
+        "1": {"inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"}, "class_type": "CheckpointLoaderSimple"},
+        "2": {"inputs": {"text": prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+        "3": {"inputs": {"text": "ugly, blurry, low quality", "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+        "4": {"inputs": {"width": width, "height": height, "batch_size": 1}, "class_type": "EmptyLatentImage"},
+        "5": {"inputs": {"seed": seed, "steps": 25, "cfg": 7.5, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1, "model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["4", 0]}, "class_type": "KSampler"},
+        "6": {"inputs": {"samples": ["5", 0], "vae": ["1", 2]}, "class_type": "VAEDecode"},
+        "7": {"inputs": {"filename_prefix": "oelala_t2i", "images": ["6", 0]}, "class_type": "SaveImage"},
+    }
+    
+    prompt_id = client.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(status_code=500, detail="Failed to queue workflow")
+    
+    return {
+        "status": "queued",
+        "prompt_id": prompt_id,
+        "meta": {"prompt": prompt, "width": width, "height": height, "seed": seed}
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1754,11 +1636,12 @@ async def generate_sdxl_image(
     lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
 ):
     """
-    Generate image using SDXL checkpoint via ComfyUI.
-    Supports all SDXL checkpoints including Pony, Illustrious, JuggernautXL, etc.
+    Queue SDXL image generation via ComfyUI.
+    Returns immediately with prompt_id - use /comfyui/status/{prompt_id} to poll.
     """
-    from .comfyui_client import get_comfyui_client
     import json as json_lib
+    import random
+    import copy
     
     logger.info(f"🎨 SDXL T2I request: {prompt[:50]}... (checkpoint={checkpoint})")
     
@@ -1782,34 +1665,89 @@ async def generate_sdxl_image(
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
     
+    # Generate seed if random
+    if seed == -1:
+        seed = random.randint(0, 2**32 - 1)
+    
     try:
         client = get_comfyui_client()
         
-        output_path = client.generate_sdxl_image(
-            prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
-            negative_prompt=negative_prompt,
-            checkpoint=checkpoint,
-            width=width,
-            height=height,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            lora_configs=loras,
-        )
+        # Build SDXL workflow inline (same as ComfyUIClient.generate_sdxl_image)
+        workflow = {
+            "1": {
+                "inputs": {"ckpt_name": checkpoint},
+                "class_type": "CheckpointLoaderSimple",
+            },
+            "2": {
+                "inputs": {"text": prompt, "clip": ["9", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            "3": {
+                "inputs": {"text": negative_prompt, "clip": ["9", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            "4": {
+                "inputs": {"width": width, "height": height, "batch_size": 1},
+                "class_type": "EmptyLatentImage",
+            },
+            "5": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": sampler_name,
+                    "scheduler": scheduler,
+                    "denoise": 1,
+                    "model": ["9", 0],
+                    "positive": ["2", 0],
+                    "negative": ["3", 0],
+                    "latent_image": ["4", 0]
+                },
+                "class_type": "KSampler",
+            },
+            "6": {
+                "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
+                "class_type": "VAEDecode",
+            },
+            "8": {
+                "inputs": {"filename_prefix": "oelala_t2i", "images": ["6", 0]},
+                "class_type": "SaveImage",
+            },
+            "9": {
+                "inputs": {
+                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "lora_1": {"on": False, "lora": "None", "strength": 1},
+                    "lora_2": {"on": False, "lora": "None", "strength": 1},
+                    "lora_3": {"on": False, "lora": "None", "strength": 1},
+                    "➕ Add Lora": "",
+                    "model": ["1", 0],
+                    "clip": ["1", 1]
+                },
+                "class_type": "Power Lora Loader (rgthree)",
+            }
+        }
         
-        if not output_path:
-            raise HTTPException(status_code=500, detail="SDXL generation failed")
+        # Apply LoRA configs
+        if loras:
+            for i, lora_cfg in enumerate(loras[:3], 1):
+                if lora_cfg.get('name') and lora_cfg.get('name') != 'None':
+                    workflow["9"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": lora_cfg['name'],
+                        "strength": lora_cfg.get('strength', 1.0)
+                    }
         
-        # Get just the filename
-        filename = Path(output_path).name
+        # Queue to ComfyUI (non-blocking)
+        prompt_id = client.queue_prompt(workflow)
+        
+        if not prompt_id:
+            raise HTTPException(status_code=500, detail="Failed to queue workflow")
+        
+        logger.info(f"📋 SDXL queued: {prompt_id}")
         
         return {
-            "status": "success",
-            "url": f"/files/{filename}",
-            "filename": filename,
+            "status": "queued",
+            "prompt_id": prompt_id,
             "meta": {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
@@ -1827,7 +1765,7 @@ async def generate_sdxl_image(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"SDXL generation failed: {e}")
+        logger.error(f"SDXL queue failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1848,7 +1786,6 @@ async def generate_flux_image(
     Generate image using Flux Dev via ComfyUI.
     Flux doesn't use negative prompts - uses guidance instead.
     """
-    from .comfyui_client import get_comfyui_client
     import json as json_lib
     
     logger.info(f"⚡ Flux T2I request: {prompt[:50]}...")
@@ -1933,7 +1870,6 @@ async def generate_sd15_image(
     """
     Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI.
     """
-    from .comfyui_client import get_comfyui_client
     import json as json_lib
     
     logger.info(f"🖼️ SD1.5 T2I request: {prompt[:50]}...")
@@ -2019,7 +1955,6 @@ async def generate_wan22_t2i(
     Uses DisTorch2 multi-GPU setup with high/low noise models.
     Very high quality but slower than other T2I models.
     """
-    from .comfyui_client import get_comfyui_client
     
     logger.info(f"🎬 Wan2.2 T2I request: {prompt[:50]}...")
     
@@ -2077,66 +2012,36 @@ async def generate_wan22_t2i(
 async def generate_video(
     file: UploadFile = File(...),
     prompt: str = Form(""),
-    num_frames: int = Form(16, description="Number of frames in video"),
+    num_frames: int = Form(41, description="Number of frames in video"),
     output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("720p", description="Video resolution: 480p, 720p, 1080p"),
+    resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("16:9", description="Video aspect ratio")
+    aspect_ratio: str = Form("1:1", description="Video aspect ratio")
 ):
     """
-    Generate video from uploaded image
-
-    Args:
-        file: Image file to process
-        prompt: Text prompt to guide generation
-        num_frames: Number of frames in output video
-        output_filename: Custom name for output file
+    Generate video from uploaded image via ComfyUI.
+    This endpoint wraps the ComfyUI Wan2.2 I2V workflow.
     """
-    global generator
-
-    # Initialize generator if not already done
-    if generator is None and Wan2VideoGenerator:
-        try:
-            logger.info("Loading Wan2.2 generator on first use...")
-            generator = Wan2VideoGenerator()
-        except Exception as e:
-            logger.error(f"Failed to initialize generator: {e}")
-            raise HTTPException(status_code=503, detail="Video generator initialization failed")
-
-    if not generator:
-        # If generator isn't available but placeholder forcing is enabled, allow placeholder flow
-        if os.environ.get("OELALA_FORCE_LORA_PLACEHOLDER", "0") == "1":
-            logger.info("Generator unavailable but placeholder flow is enabled; will create placeholder artifact")
-        else:
-            raise HTTPException(status_code=503, detail="Video generator not available")
-
-    # Load model if not already loaded (only when generator exists)
-    if generator and (not hasattr(generator, 'pipeline') or generator.pipeline is None):
-        logger.info("🔄 Attempting to load Wan2.2 model...")
-        logger.info(f"📊 Generator object: {type(generator)}")
-        logger.info(f"🔧 Generator attributes: {dir(generator)}")
-
-        success = generator.load_model()
-        logger.info(f"📈 Model loading result: {success}")
-
-        if not success:
-            logger.error("❌ Model loading failed - check Wan2VideoGenerator logs above")
-            logger.error("🔍 Troubleshooting:")
-            logger.error("   1. Wan2.2 pipeline may not be available in current diffusers version")
-            logger.error("   2. Check GPU memory and CUDA availability")
-            logger.error("   3. Consider using alternative video generation models")
-            raise HTTPException(status_code=503, detail="Failed to load Wan2.2 model")
-
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    
+    comfyui = get_comfyui_client()
+    
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+        )
+    
     # Validate file type
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    # Generate unique filename
+    # Save uploaded file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"{timestamp}_{file.filename}"
+    input_filename = f"i2v_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
 
-    # Save uploaded file
     try:
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -2144,45 +2049,56 @@ async def generate_video(
         logger.error(f"Error saving file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
 
-    # Generate output filename
-    if not output_filename:
-        output_filename = f"video_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
+    # Upload to ComfyUI
+    comfyui_image_name = comfyui.upload_image(str(input_path))
+    if not comfyui_image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
 
-    output_path = OUTPUT_DIR / output_filename
+    # Get resolution dimensions
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
 
-    try:
-        logger.info(f"Generating video: {input_path} -> {output_path}")
-        logger.info(f"Prompt: '{prompt}', Frames: {num_frames}, FPS: {fps}, Resolution: {resolution}")
+    # Build I2V workflow
+    import random
+    seed = random.randint(0, 2**32 - 1)
+    
+    # Adjust num_frames to Wan2.2 format (4k+1)
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
 
-        # Generate video
-        result = generator.generate_video_from_image(
-            image_path=str(input_path),
-            prompt=prompt,
-            output_path=str(output_path),
-            num_frames=num_frames
-        )
+    workflow = comfyui.build_api_workflow(
+        image_name=comfyui_image_name,
+        prompt=prompt or "smooth motion, cinematic",
+        width=width,
+        height=height,
+        num_frames=num_frames,
+        fps=fps,
+        steps=6,
+        cfg=1.0,
+        seed=seed,
+        output_prefix=f"oelala_i2v_{timestamp}"
+    )
 
-        if result:
-            # Return video info
-            return {
-                "success": True,
-                "message": "Video generated successfully",
-                "input_image": input_filename,
-                "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
-                "video_path": str(output_path),
-                "prompt": prompt,
-                "num_frames": num_frames,
-                "timestamp": timestamp
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Video generation failed")
+    # Queue workflow
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
-    except Exception as e:
-        logger.error(f"Error generating video: {e}")
-        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+    logger.info(f"📋 I2V queued: {prompt_id}")
+    
+    return {
+        "status": "queued",
+        "prompt_id": prompt_id,
+        "input_image": input_filename,
+        "meta": {
+            "prompt": prompt,
+            "width": width,
+            "height": height,
+            "num_frames": num_frames,
+            "fps": fps,
+            "seed": seed,
+        }
+    }
 
 
 @app.post("/generate-wan22-comfyui")
@@ -2622,148 +2538,109 @@ async def comfyui_status():
 @app.post("/generate-text")
 async def generate_text_video(
     prompt: str = Form(..., description="Text description of the video to generate"),
-    num_frames: int = Form(16, description="Number of frames in video"),
-    model_type: str = Form("light", description="Model type to use: light, svd, wan2.2"),
+    num_frames: int = Form(41, description="Number of frames in video"),
+    model_type: str = Form("wan2.2", description="Model type (wan2.2)"),
     output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("720p", description="Video resolution: 480p, 720p, 1080p"),
+    resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("16:9", description="Video aspect ratio")
+    aspect_ratio: str = Form("1:1", description="Video aspect ratio")
 ):
     """
-    Generate video from text prompt only
-
-    Args:
-        prompt: Text description of the video to generate
-        num_frames: Number of frames in output video
-        output_filename: Custom name for output file
+    Generate video from text prompt via ComfyUI T2V workflow.
+    Note: Text-to-Video first generates an image, then animates it.
     """
-    global generator
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    
+    comfyui = get_comfyui_client()
+    
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+        )
 
     if not prompt or len(prompt.strip()) == 0:
         raise HTTPException(status_code=400, detail="Prompt is required")
 
-    # Map frontend mode values to backend model types
-    mode_mapping = {
-        "🚀 Turbo (Light)": "light",
-        "⚡ Standard (SVD)": "svd", 
-        "🌟 Quality (Wan2.2)": "wan2.2",
-        "light": "light",
-        "svd": "svd",
-        "wan2.2": "wan2.2"
-    }
-    requested_model_type = mode_mapping.get(model_type, model_type)
-    logger.info(f"🎯 Requested model_type: {model_type} → {requested_model_type}")
+    # Get resolution dimensions
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
 
-    # Initialize or re-initialize generator if model type changed
-    if generator is None or generator.model_type != requested_model_type:
-        if Wan2VideoGenerator:
-            try:
-                if generator is not None:
-                    logger.info(f"🔄 Switching model from '{generator.model_type}' to '{requested_model_type}'")
-                else:
-                    logger.info(f"🆕 Initializing generator with model_type: {requested_model_type}")
-                generator = Wan2VideoGenerator(model_type=requested_model_type)
-            except Exception as e:
-                logger.error(f"Failed to initialize generator: {e}")
-                raise HTTPException(status_code=503, detail="Video generator initialization failed")
-
-    if not generator:
-        raise HTTPException(
-            status_code=503, 
-            detail="Text-to-Video is not yet available. Please use Image-to-Video instead (ComfyUI-based)."
-        )
-
-    # Load model if not already loaded (skip for light model - already initialized)
-    if generator.model_type != "light" and (not hasattr(generator, 'pipeline') or generator.pipeline is None):
-        logger.info("🔄 Attempting to load model for text-to-video...")
-        success = generator.load_model()
-        if not success:
-            raise HTTPException(status_code=503, detail="Failed to load model")
-
-    # Generate unique filename
+    # Generate unique timestamp
+    import random
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if output_filename:
-        output_filename = f"{timestamp}_{output_filename}.mp4"
-    else:
-        output_filename = f"{timestamp}_text_video.mp4"
+    seed = random.randint(0, 2**32 - 1)
 
-    output_path = OUTPUT_DIR / output_filename
+    # Adjust num_frames to Wan2.2 format (4k+1)
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
 
-    try:
-        logger.info(f"🎬 Generating text-to-video with prompt: {prompt}")
-        logger.info(f"📊 Settings: {num_frames} frames, {fps} fps, {resolution}, aspect {aspect_ratio}")
+    # Build T2V workflow (using T2I + I2V)
+    workflow = comfyui.build_t2v_workflow(
+        prompt=prompt,
+        width=width,
+        height=height,
+        num_frames=num_frames,
+        fps=fps,
+        steps=6,
+        cfg=1.0,
+        seed=seed,
+        output_prefix=f"oelala_t2v_{timestamp}"
+    )
 
-        # Try text-to-video generation
-        result = generator.generate_text_video(
-            prompt=prompt,
-            output_path=str(output_path),
-            num_frames=num_frames
-        )
+    # Queue workflow
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
-        if result:
-            return {
-                "success": True,
-                "message": "Text-to-video generated successfully",
-                "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
-                "video_path": str(output_path),
-                "prompt": prompt,
-                "num_frames": num_frames,
-                "timestamp": timestamp,
-                "type": "text-to-video"
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Text-to-video generation failed")
-
-    except Exception as e:
-        logger.error(f"Error generating text-to-video: {e}")
-        raise HTTPException(status_code=500, detail=f"Text-to-video generation failed: {str(e)}")
+    logger.info(f"📋 T2V queued: {prompt_id}")
+    
+    return {
+        "status": "queued",
+        "prompt_id": prompt_id,
+        "meta": {
+            "prompt": prompt,
+            "width": width,
+            "height": height,
+            "num_frames": num_frames,
+            "fps": fps,
+            "seed": seed,
+            "type": "text-to-video"
+        }
+    }
 
 @app.post("/generate-pose")
 async def generate_pose_video(
     file: UploadFile = File(...),
-    num_frames: int = Form(16, description="Number of frames in video"),
+    num_frames: int = Form(41, description="Number of frames in video"),
     output_filename: str = Form("", description="Custom output filename")
 ):
     """
-    Generate pose-guided video from uploaded image using OpenPose
-
-    Args:
-        file: Image file to process
-        num_frames: Number of frames in output video
-        output_filename: Custom name for output file
+    Generate pose-guided video from uploaded image.
+    Note: Pose-guided generation is not yet implemented in ComfyUI workflows.
+    This endpoint will use the standard I2V workflow for now.
     """
-    global generator
-
-    # Initialize generator if not already done
-    if generator is None and Wan2VideoGenerator:
-        try:
-            logger.info("Loading Wan2.2 generator on first use...")
-            generator = Wan2VideoGenerator()
-        except Exception as e:
-            logger.error(f"Failed to initialize generator: {e}")
-            raise HTTPException(status_code=503, detail="Video generator initialization failed")
-
-    if not generator:
-        # Generator is unavailable; continue and create a placeholder artifact instead of failing.
-        logger.info("Generator unavailable; continuing with placeholder LoRA artifact creation")
-
-    # Load model if not already loaded
-    if not hasattr(generator, 'pipeline') or generator.pipeline is None:
-        logger.info("Loading Wan2.2 model...")
-        if not generator.load_model():
-            raise HTTPException(status_code=503, detail="Failed to load Wan2.2 model")
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    
+    comfyui = get_comfyui_client()
+    
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+        )
 
     # Validate file type
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    # Generate unique filename
+    # Save uploaded file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"{timestamp}_{file.filename}"
+    input_filename = f"pose_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
 
-    # Save uploaded file
     try:
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -2771,43 +2648,49 @@ async def generate_pose_video(
         logger.error(f"Error saving file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
 
-    # Generate output filename
-    if not output_filename:
-        output_filename = f"pose_video_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
+    # Upload to ComfyUI
+    comfyui_image_name = comfyui.upload_image(str(input_path))
+    if not comfyui_image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
 
-    output_path = OUTPUT_DIR / output_filename
+    # Build I2V workflow (pose control not yet implemented in ComfyUI)
+    import random
+    seed = random.randint(0, 2**32 - 1)
+    
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
 
-    try:
-        logger.info(f"Generating pose-guided video: {input_path} -> {output_path}")
-        logger.info(f"Frames: {num_frames}")
+    workflow = comfyui.build_api_workflow(
+        image_name=comfyui_image_name,
+        prompt="smooth motion, natural movement",
+        width=480,
+        height=480,
+        num_frames=num_frames,
+        fps=16,
+        steps=6,
+        cfg=1.0,
+        seed=seed,
+        output_prefix=f"oelala_pose_{timestamp}"
+    )
 
-        # Generate pose-guided video
-        result = generator.generate_pose_guided_video(
-            image_path=str(input_path),
-            output_path=str(output_path),
-            num_frames=num_frames
-        )
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
-        if result:
-            # Return video info
-            return {
-                "success": True,
-                "message": "Pose-guided video generated successfully",
-                "input_image": input_filename,
-                "output_video": output_filename,
-                "video_url": f"/videos/{output_filename}",
-                "num_frames": num_frames,
-                "timestamp": timestamp,
-                "type": "pose-guided"
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Pose-guided video generation failed")
-
-    except Exception as e:
-        logger.error(f"Error generating pose-guided video: {e}")
-        raise HTTPException(status_code=500, detail=f"Pose-guided video generation failed: {str(e)}")
+    logger.info(f"📋 Pose video queued: {prompt_id}")
+    
+    return {
+        "status": "queued",
+        "prompt_id": prompt_id,
+        "input_image": input_filename,
+        "note": "Using standard I2V workflow (pose control coming soon)",
+        "meta": {
+            "num_frames": num_frames,
+            "seed": seed,
+            "type": "pose-guided"
+        }
+    }
 
 @app.get("/videos/{filename}")
 async def get_video(filename: str):
@@ -2860,46 +2743,10 @@ async def train_lora_model(
     learning_rate: float = Form(1e-4, description="Learning rate")
 ):
     """
-    Train LoRA adapter on multiple uploaded images for consistent avatar generation
-
-    Args:
-        files: List of image files for training
-        num_epochs: Number of training epochs
-        learning_rate: Learning rate for training
-        output_name: Custom name for the trained model
+    Train LoRA adapter on multiple uploaded images for consistent avatar generation.
+    Note: LoRA training is not yet implemented via ComfyUI.
+    This endpoint saves the images and creates a placeholder for future training.
     """
-    global generator
-    global Wan2VideoGenerator
-
-    # Initialize generator if not already done
-    if generator is None:
-        # Try to import Wan2VideoGenerator lazily
-        if Wan2VideoGenerator is None:
-            try:
-                from wan2_generator import Wan2VideoGenerator as _W2
-                Wan2VideoGenerator = _W2
-            except Exception as e:
-                logger.warning(f"Wan2VideoGenerator import failed at request time: {e}")
-
-        if Wan2VideoGenerator:
-            try:
-                logger.info("Instantiating Wan2.2 generator for LoRA training...")
-                generator = Wan2VideoGenerator()
-            except Exception as e:
-                logger.error(f"Failed to initialize generator: {e}")
-                # Continue: allow placeholder flow if forced
-        else:
-            logger.info("Wan2VideoGenerator not available; will attempt placeholder flow if allowed")
-
-    if not generator:
-        raise HTTPException(status_code=503, detail="Video generator not available")
-
-    # Load model if not already loaded
-    if not hasattr(generator, 'pipeline') or generator.pipeline is None:
-        logger.info("Loading Wan2.2 model...")
-        if not generator.load_model():
-            raise HTTPException(status_code=503, detail="Failed to load Wan2.2 model")
-
     # Validate files
     if len(files) < 2:
         raise HTTPException(status_code=400, detail="At least 2 images required for LoRA training")
@@ -2937,53 +2784,35 @@ async def train_lora_model(
     output_dir = OUTPUT_DIR / model_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        logger.info(f"Starting LoRA training: {len(image_paths)} images, {num_epochs} epochs")
-        logger.info(f"Training ID: {training_id}, Output: {output_dir}")
+    # Create placeholder artifact (LoRA training not yet ComfyUI-integrated)
+    placeholder = {
+        "note": "LoRA training placeholder - ComfyUI integration coming soon",
+        "image_count": len(image_paths),
+        "training_id": training_id,
+        "model_name": model_name,
+        "num_epochs": num_epochs,
+        "learning_rate": learning_rate,
+        "image_paths": image_paths,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+    placeholder_path = output_dir / "lora_config.json"
+    with open(placeholder_path, "w") as fh:
+        json.dump(placeholder, fh, indent=2)
 
-        # If generator is available, run real training; otherwise, create a placeholder artifact
-        if generator:
-            lora_path = generator.train_lora(
-                image_paths=image_paths,
-                output_dir=str(output_dir),
-                num_epochs=num_epochs,
-                learning_rate=learning_rate
-            )
+    logger.info(f"📋 LoRA training placeholder created: {training_id} with {len(image_paths)} images")
 
-            if not lora_path:
-                raise HTTPException(status_code=500, detail="LoRA training failed")
-
-        else:
-            # Create placeholder artifact
-            os.makedirs(output_dir, exist_ok=True)
-            placeholder = {
-                "note": "LoRA training skipped because generator unavailable; placeholder created",
-                "image_count": len(image_paths),
-                "training_id": training_id,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            }
-            placeholder_path = output_dir / "lora_placeholder.json"
-            with open(placeholder_path, "w") as fh:
-                json.dump(placeholder, fh, indent=2)
-            lora_path = str(placeholder_path)
-
-        # Return training results
-        return {
-            "success": True,
-            "message": "LoRA training completed successfully",
-            "training_id": training_id,
-            "lora_path": lora_path,
-            "num_images": len(image_paths),
-            "num_epochs": num_epochs,
-            "learning_rate": learning_rate,
-            "model_name": model_name,
-            "status": "completed",
-            "timestamp": timestamp
-        }
-
-    except Exception as e:
-        logger.error(f"Error during LoRA training: {e}")
-        raise HTTPException(status_code=500, detail=f"LoRA training failed: {str(e)}")
+    return {
+        "success": True,
+        "message": "LoRA training data saved (full training coming soon)",
+        "training_id": training_id,
+        "lora_path": str(placeholder_path),
+        "num_images": len(image_paths),
+        "num_epochs": num_epochs,
+        "learning_rate": learning_rate,
+        "model_name": model_name,
+        "status": "placeholder",
+        "timestamp": timestamp
+    }
 
 
 @app.post("/train-lora-placeholder")

@@ -1,6 +1,29 @@
 2026-01-03
 Agent: Claude Opus 4.5
 AgentTag: CLAU
+ModelTag: COMFYUI-MIGRATION
+Details:
+- Removed all legacy Wan2VideoGenerator/SD3ImageGenerator/RealVisXLImageGenerator code
+- All generation endpoints now use ComfyUI queue-based approach
+- Endpoints return immediately with prompt_id for polling
+- Frontend polls /comfyui/job/{prompt_id} for completion
+- /generate (I2V) - now queue-based with ComfyUI Wan2.2 workflow
+- /generate-text (T2V) - queue-based, uses T2I+I2V pipeline
+- /generate-sdxl (T2I) - queue-based with CyberRealistic Pony
+- /generate-pose - queue-based (pose control coming soon, uses I2V)
+- /train-lora - simplified to placeholder (ComfyUI integration planned)
+- Added build_t2v_workflow() to comfyui_client.py
+- Added get_output_image() and wait_and_download_image() to comfyui_client.py
+- /comfyui/job/{prompt_id} now detects both video (gifs) and image outputs
+- Health endpoint simplified (removed legacy model_loaded checks)
+FilesChanged:
+- src/backend/app.py (removed legacy generators, all endpoints queue-based)
+- src/backend/comfyui_client.py (build_t2v_workflow, get_output_image, wait_and_download_image)
+- src/frontend/src/dashboard/tools/TextToImageTool.jsx (polling via pollForCompletion)
+
+2026-01-03
+Agent: Claude Opus 4.5
+AgentTag: CLAU
 ModelTag: PROMPTS
 Details:
 - Added "Prompts" section to My Media for browsing generation history

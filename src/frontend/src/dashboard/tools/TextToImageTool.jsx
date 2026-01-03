@@ -68,6 +68,34 @@ export default function TextToImageTool({ onOutput }) {
     setProgress(0)
     setError('')
 
+    // Helper to poll for job completion
+    const pollForCompletion = async (promptId, maxAttempts = 120) => {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        try {
+          const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
+          if (!res.ok) continue
+          const data = await res.json()
+          
+          // Update progress based on status
+          if (data.status === 'pending') {
+            setProgress(Math.min(10, attempt))
+          } else if (data.status === 'running') {
+            setProgress(Math.min(90, 10 + attempt * 2))
+          } else if (data.status === 'completed') {
+            setProgress(100)
+            return data
+          } else if (data.status === 'failed') {
+            throw new Error('Generation failed')
+          }
+        } catch (e) {
+          if (e.message === 'Generation failed') throw e
+          // Continue polling on network errors
+        }
+      }
+      throw new Error('Generation timed out')
+    }
+
     try {
       for (let i = 0; i < batchCount; i++) {
         const jobId = `t2i-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -78,16 +106,19 @@ export default function TextToImageTool({ onOutput }) {
         // Determine endpoint based on model type
         const modelType = getModelType(model)
         let endpoint = '/generate-image'
+        let useComfyUIPolling = false
         
         if (modelType === 'wan22') {
           endpoint = '/generate-wan22-t2i'
           formData.append('steps', steps)
           formData.append('seed', seed)
+          useComfyUIPolling = true
         } else if (modelType === 'flux') {
           endpoint = '/generate-flux'
           formData.append('steps', steps)
           formData.append('guidance', guidance)
           formData.append('seed', seed)
+          useComfyUIPolling = true
         } else if (modelType === 'sdxl') {
           endpoint = '/generate-sdxl'
           formData.append('checkpoint', model)
@@ -97,6 +128,7 @@ export default function TextToImageTool({ onOutput }) {
           formData.append('seed', seed)
           formData.append('sampler_name', sampler)
           formData.append('scheduler', scheduler)
+          useComfyUIPolling = true
         } else if (modelType === 'sd15') {
           endpoint = '/generate-sd15'
           formData.append('negative_prompt', negativePrompt)
@@ -105,52 +137,41 @@ export default function TextToImageTool({ onOutput }) {
           formData.append('seed', seed)
           formData.append('sampler_name', sampler)
           formData.append('scheduler', scheduler)
+          useComfyUIPolling = true
         } else {
-          // Diffusers
+          // Diffusers (legacy)
           formData.append('mode', mode)
           formData.append('model', model)
           formData.append('job_id', jobId)
-          
-          // Start polling backend progress for diffusers models
-          if (pollerRef.current) {
-            clearInterval(pollerRef.current)
-            pollerRef.current = null
-          }
-          pollerRef.current = setInterval(async () => {
-            try {
-              const res = await fetch(`${BACKEND_BASE}/progress/${jobId}`)
-              if (!res.ok) return
-              const data = await res.json()
-              if (typeof data.progress === 'number') setProgress(data.progress)
-              if (data.status === 'done' || data.status === 'failed') {
-                clearInterval(pollerRef.current)
-                pollerRef.current = null
-              }
-            } catch (e) {
-              // Swallow polling errors
-            }
-          }, 1000)
         }
         
-        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType })
+        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType, useComfyUIPolling })
         
         const result = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
         if (!result.ok) {
           throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
         }
 
-        console.log(`Batch ${i+1}/${batchCount} success:`, result.data)
+        console.log(`Batch ${i+1}/${batchCount} queued:`, result.data)
 
-        const imageUrl = result.data?.url
+        let imageUrl = result.data?.url
+        let filename = result.data?.filename
+
+        // If using ComfyUI polling, wait for completion
+        if (useComfyUIPolling && result.data?.prompt_id) {
+          const completedJob = await pollForCompletion(result.data.prompt_id)
+          imageUrl = completedJob.url || completedJob.output_image
+          filename = imageUrl?.split('/').pop()
+        }
+
         const url = imageUrl ? `${BACKEND_BASE}${imageUrl}` : ''
-
         setProgress(100)
 
         onOutput({
           kind: 'image',
           url,
           backendUrl: url,
-          filename: result.data?.filename,
+          filename,
           meta: result.data?.meta,
         })
       }

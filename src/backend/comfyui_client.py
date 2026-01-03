@@ -959,6 +959,47 @@ class ComfyUIClient:
         logger.info(f"🔧 Built workflow: {width}x{height}, {num_frames}f, {steps} steps, cfg={cfg}")
         return workflow
 
+    def build_t2v_workflow(
+        self,
+        prompt: str,
+        width: int = 480,
+        height: int = 480,
+        num_frames: int = 41,
+        fps: int = 16,
+        steps: int = 6,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_t2v",
+        t2i_checkpoint_name: str = "realvisxlV50_v50Bakedvae.safetensors",
+        t2i_steps: int = 20,
+        t2i_cfg: float = 6.0
+    ) -> Dict[str, Any]:
+        """
+        Build Text-to-Video workflow using T2I + I2V pipeline.
+        First generates an image from the prompt, then animates it.
+        """
+        # Use a placeholder image name - the T2I output will override it
+        return self.build_api_workflow(
+            image_name="placeholder.png",  # Will be overridden by T2I
+            prompt=prompt,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            output_prefix=output_prefix,
+            t2i_checkpoint_name=t2i_checkpoint_name,
+            t2i_prompt=prompt,
+            t2i_negative_prompt="blurry, low quality, distorted",
+            t2i_steps=t2i_steps,
+            t2i_cfg=t2i_cfg,
+            t2i_seed=seed,
+            t2i_sampler_name="euler",
+            t2i_scheduler="normal"
+        )
+
     def build_enhanced_workflow(
         self,
         image_name: str,
@@ -1548,6 +1589,60 @@ class ComfyUIClient:
             logger.error(f"Output extraction error: {e}")
             return None
     
+    def get_output_image(self, history: Dict[str, Any], output_dir: str) -> Optional[str]:
+        """Extract output image path from history (SaveImage node output)"""
+        try:
+            outputs = history.get('outputs', {})
+            
+            # Find SaveImage node output
+            for node_id, node_output in outputs.items():
+                if 'images' in node_output:
+                    for img in node_output['images']:
+                        filename = img.get('filename')
+                        subfolder = img.get('subfolder', '')
+                        
+                        # Download the image from ComfyUI
+                        params = {'filename': filename, 'subfolder': subfolder, 'type': 'output'}
+                        resp = requests.get(f"{self.base_url}/view", params=params)
+                        
+                        if resp.status_code == 200:
+                            output_path = Path(output_dir) / filename
+                            output_path.parent.mkdir(parents=True, exist_ok=True)
+                            with open(output_path, 'wb') as f:
+                                f.write(resp.content)
+                            logger.info(f"📥 Image downloaded: {output_path}")
+                            return str(output_path)
+            
+            logger.warning("No image output found in history")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Image extraction error: {e}")
+            return None
+    
+    def wait_and_download_image(
+        self,
+        prompt_id: str,
+        output_dir: str,
+        timeout: int = 300,
+        progress_callback=None
+    ) -> Optional[str]:
+        """Wait for workflow completion and download resulting image.
+        
+        Args:
+            prompt_id: ComfyUI prompt ID
+            output_dir: Directory to save downloaded image
+            timeout: Timeout in seconds
+            progress_callback: Optional callback(percent, node_name)
+            
+        Returns:
+            Path to downloaded image, or None on failure
+        """
+        history = self.wait_for_completion(prompt_id, timeout, progress_callback)
+        if not history:
+            return None
+        return self.get_output_image(history, output_dir)
+    
     # ─────────────────────────────────────────────────────────────────────────
     # SDXL Text-to-Image Generation
     # ─────────────────────────────────────────────────────────────────────────
@@ -1692,7 +1787,7 @@ class ComfyUIClient:
             return None
         
         # Wait for completion with timeout
-        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=300)
+        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=300)
         
         if output_path:
             logger.info(f"✅ SDXL image generated: {output_path}")
@@ -1846,7 +1941,7 @@ class ComfyUIClient:
             return None
         
         # Wait for completion with timeout (Flux is slower)
-        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=600)
+        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)
         
         if output_path:
             logger.info(f"✅ Flux image generated: {output_path}")
@@ -1999,7 +2094,7 @@ class ComfyUIClient:
             return None
         
         # Wait for completion with timeout
-        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=180)
+        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=180)
         
         if output_path:
             logger.info(f"✅ SD1.5 image generated: {output_path}")
@@ -2203,7 +2298,7 @@ class ComfyUIClient:
             return None
         
         # Wait for completion with timeout (Wan2.2 is slower)
-        output_path = self.wait_for_completion(prompt_id, output_dir, timeout=600)
+        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)
         
         if output_path:
             logger.info(f"✅ Wan2.2 T2I image generated: {output_path}")
