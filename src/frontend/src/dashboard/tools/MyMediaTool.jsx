@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
 
 // Format video duration as MM:SS
@@ -83,6 +83,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [sortBy, setSortBy] = useState('date') // 'date', 'name', 'size', 'favorites'
   const [sortOrder, setSortOrder] = useState('desc') // 'asc', 'desc'
   const [filterBy, setFilterBy] = useState('all') // 'all', 'favorites', 'non-favorites'
+  const [searchQuery, setSearchQuery] = useState('') // Search by filename or prompt
   const [hideStartImages, setHideStartImages] = useState(true)  // Hide start images by default
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
   
@@ -141,12 +142,27 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
   // Filtered and sorted media list
   const sortedMediaList = useMemo(() => {
-    // First filter
+    // First filter by favorites
     let filtered = [...mediaList]
     if (filterBy === 'favorites') {
       filtered = filtered.filter(item => favorites.has(item.filename))
     } else if (filterBy === 'non-favorites') {
       filtered = filtered.filter(item => !favorites.has(item.filename))
+    }
+    
+    // Then filter by search query (filename or prompt)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter(item => {
+        // Search in filename
+        if (item.filename.toLowerCase().includes(query)) return true
+        // Search in positive prompt
+        if (item.metadata?.positive_prompt?.toLowerCase().includes(query)) return true
+        if (item.metadata?.prompt?.toLowerCase().includes(query)) return true
+        // Search in negative prompt
+        if (item.metadata?.negative_prompt?.toLowerCase().includes(query)) return true
+        return false
+      })
     }
     
     // Then sort
@@ -179,7 +195,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       return sortOrder === 'desc' ? -comparison : comparison
     })
     return filtered
-  }, [mediaList, sortBy, sortOrder, filterBy, favorites])
+  }, [mediaList, sortBy, sortOrder, filterBy, favorites, searchQuery])
 
   const fetchMedia = useCallback(async () => {
     setLoading(true)
@@ -901,6 +917,46 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Search input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+            <Search size={14} style={{ color: 'var(--text-muted)', position: 'absolute', left: '8px' }} />
+            <input
+              type="text"
+              placeholder="Search filename or prompt..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                padding: '6px 8px 6px 28px',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem',
+                width: '200px',
+                outline: 'none',
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '6px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '2px',
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
+
           {/* Filter controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Filter size={14} style={{ color: 'var(--text-muted)' }} />
