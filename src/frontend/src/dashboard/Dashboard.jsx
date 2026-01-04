@@ -280,9 +280,9 @@ export default function Dashboard() {
               onClick={handleRestartBackend}
               disabled={restarting}
               title="Herstart Backend"
-              style={{ opacity: restarting ? 0.5 : 1 }}
+              style={{ opacity: restarting ? 0.5 : 1, fontSize: '16px' }}
             >
-              <RefreshCw size={18} color="#fbbf24" className={restarting ? 'spin' : ''} />
+              {restarting ? '⏳' : '🔄'}
             </button>
             <div className="status-indicator">
               <div className={`status-dot ${health?.status === 'healthy' ? 'connected' : ''}`} />

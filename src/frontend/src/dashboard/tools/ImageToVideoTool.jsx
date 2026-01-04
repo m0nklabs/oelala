@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, HelpCircle, Sliders, Clock } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
@@ -591,11 +591,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ position: 'relative', display: 'inline-block' }}>
               <button 
                 className="icon-btn" 
-                style={{ width: '20px', height: '20px', border: 'none', background: 'transparent', padding: 0 }}
+                style={{ width: '20px', height: '20px', border: 'none', background: 'transparent', padding: 0, fontSize: '14px' }}
                 onClick={() => setShowPromptTips(!showPromptTips)}
                 title="Prompt tips"
               >
-                <HelpCircle size={14} color={showPromptTips ? "#fbbf24" : "#666666"} />
+                {showPromptTips ? '💡' : '❓'}
               </button>
               {showPromptTips && (
                 <div style={{
@@ -629,7 +629,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           <div style={{ display: 'flex', gap: '4px' }}>
             <button 
               className="icon-btn" 
-              style={{ width: '24px', height: '24px' }}
+              style={{ width: '24px', height: '24px', fontSize: '14px' }}
               onClick={async () => {
                 if (!previewUrl) return
                 try {
@@ -648,16 +648,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               title="Extract prompt from selected image"
               disabled={!previewUrl}
             >
-              <FileSearch size={14} color={previewUrl ? "#fbbf24" : "#666666"} />
+              🔍
             </button>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }} title="Show prompt tips"><Type size={14} color="#fbbf24" /></button>
+            <button className="icon-btn" style={{ width: '24px', height: '24px', fontSize: '12px' }} title="Show prompt tips">📝</button>
             <button 
               className="icon-btn" 
-              style={{ width: '24px', height: '24px' }}
+              style={{ width: '24px', height: '24px', fontSize: '14px' }}
               onClick={() => setPrompt(getRandomPrompt(nsfwEnabled))}
-              title="Generate random creative prompt ✨"
+              title="Generate random creative prompt"
             >
-              <Sparkles size={14} color="#fbbf24" />
+              ✨
             </button>
           </div>
         </div>

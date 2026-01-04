@@ -126,11 +126,11 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           </span>
           <button
             className="icon-btn"
-            style={{ width: '28px', height: '28px' }}
+            style={{ width: '28px', height: '28px', fontSize: '16px' }}
             onClick={() => handlePromptChange(getRandomPrompt(false))}
-            title="Generate random creative prompt ✨"
+            title="Generate random creative prompt"
           >
-            <Sparkles size={16} color="#fbbf24" />
+            ✨
           </button>
         </h3>
         <textarea

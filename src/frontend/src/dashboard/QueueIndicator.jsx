@@ -111,11 +111,9 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
         }}
         title={isRunning ? `${queue.total_running} running, ${queue.total_pending} queued` : 'No active jobs'}
       >
-        {isRunning ? (
-          <Loader2 size={14} color="#22c55e" className="spin" />
-        ) : (
-          <Clock size={14} color="var(--text-muted)" />
-        )}
+        <span style={{ fontSize: '14px' }}>
+          {isRunning ? '⏳' : '🕐'}
+        </span>
         <span style={{ fontWeight: 500 }}>
           {isRunning ? queue.total_running : 0}
         </span>
