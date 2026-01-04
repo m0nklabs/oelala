@@ -77,7 +77,7 @@ async def get_balance(user: User = Depends(get_current_user)):
     
     # Check if Supabase is configured
     if not manager.service_key:
-        logger.warning("SUPABASE_SERVICE_KEY not configured - returning default balance")
+        debug_log("SUPABASE_SERVICE_KEY not configured - returning default balance")
         return CreditBalance(
             balance=25,  # Welcome credits
             lifetime_purchased=0,
