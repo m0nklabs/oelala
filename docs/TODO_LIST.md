@@ -100,14 +100,19 @@
 - [x] Credit system backend (CreditManager, API endpoints)
 - [x] Supabase migrations for credits tables
 - [x] Credit cost calculation per generation type
-- [ ] Stripe integration (checkout, webhooks)
-- [ ] Frontend credits UI (balance, purchase modal)
+- [x] Frontend credits UI (balance, purchase modal)
+- [ ] Stripe integration (checkout, webhooks) - needs STRIPE_SECRET_KEY
 - [ ] Credit deduction in generate endpoints
+- [ ] Run Supabase migration (001_credits_system.sql)
 
 ---
 
 ## ✅ Recently Completed
 
+- [x] **Frontend credits UI** (2026-01-04)
+  - CreditsContext: balance, packages, purchase flow
+  - PurchaseCreditsModal: shows packages with pricing
+  - UserMenu: credits display + buy button
 - [x] **Credit-based monetization model** (2026-01-04)
   - Backend: `credits.py`, `credits_api.py`
   - DB: `migrations/001_credits_system.sql`
