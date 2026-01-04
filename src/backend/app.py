@@ -1517,6 +1517,11 @@ async def list_user_media(
         return {"media": media, "stats": stats}
         
     except Exception as e:
+        # 404 means user has no storage yet - return empty list
+        import httpx
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
+            logger.info(f"User {user.id} has no storage bucket yet (404)")
+            return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
         logger.error(f"Failed to list user media: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

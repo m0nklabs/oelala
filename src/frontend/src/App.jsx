@@ -3,6 +3,7 @@ import Dashboard from './dashboard/Dashboard'
 import LoginPage from './pages/LoginPage'
 import { NSFWProvider } from './contexts/NSFWContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { CreditsProvider } from './contexts/CreditsContext'
 import { isAuthEnabled } from './lib/supabase'
 import './App.css'
 import './components/ProgressBar.css'
@@ -13,9 +14,11 @@ function AppContent() {
   // If auth is not configured, show dashboard directly (dev mode)
   if (!isAuthEnabled()) {
     return (
-      <NSFWProvider>
-        <Dashboard />
-      </NSFWProvider>
+      <CreditsProvider>
+        <NSFWProvider>
+          <Dashboard />
+        </NSFWProvider>
+      </CreditsProvider>
     )
   }
 
@@ -33,11 +36,13 @@ function AppContent() {
     return <LoginPage />
   }
 
-  // Logged in - show dashboard
+  // Logged in - show dashboard with credits
   return (
-    <NSFWProvider>
-      <Dashboard />
-    </NSFWProvider>
+    <CreditsProvider>
+      <NSFWProvider>
+        <Dashboard />
+      </NSFWProvider>
+    </CreditsProvider>
   )
 }
 

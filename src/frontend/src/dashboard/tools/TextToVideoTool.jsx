@@ -2,8 +2,10 @@ import React, { useMemo, useState } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
-import { Settings, Wand2, Loader2, Video, ChevronDown } from 'lucide-react'
+import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock } from 'lucide-react'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
+import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
+import { estimateT2VTime } from '../../utils/timeEstimates'
 
 // Resolution presets
 const RESOLUTION_PRESETS = [
@@ -15,7 +17,10 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted }) {
-  const [prompt, setPrompt] = useState(() => localStorage.getItem('t2v_prompt') || '')
+  const [prompt, setPrompt] = useState(() => {
+    const saved = localStorage.getItem('t2v_prompt')
+    return saved && saved.trim() ? saved : getDefaultPrompt(false)
+  })
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, ugly')
   const [numFrames, setNumFrames] = useState(41)
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -42,6 +47,11 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   }
 
   const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting, [prompt, submitting])
+
+  // Calculate estimated generation time
+  const timeEstimate = useMemo(() => {
+    return estimateT2VTime({ resolution, numFrames, steps, t2iSteps })
+  }, [resolution, numFrames, steps, t2iSteps])
 
   const handleSubmit = async () => {
     if (!prompt.trim()) {
@@ -109,9 +119,19 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     <div className="tool-container">
       {/* Prompt Card */}
       <div className="tool-section">
-        <h3>
-          <Video size={18} />
-          Video Prompt
+        <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Video size={18} />
+            Video Prompt
+          </span>
+          <button
+            className="icon-btn"
+            style={{ width: '28px', height: '28px' }}
+            onClick={() => handlePromptChange(getRandomPrompt(false))}
+            title="Generate random creative prompt ✨"
+          >
+            <Sparkles size={16} color="#fbbf24" />
+          </button>
         </h3>
         <textarea
           className="prompt-textarea"
@@ -293,6 +313,22 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       )}
 
       {error && <div className="error-message">⚠️ {error}</div>}
+
+      {/* Time estimate indicator */}
+      {!submitting && canSubmit && (
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          gap: '6px',
+          marginBottom: '8px',
+          fontSize: '0.85rem',
+          color: 'var(--text-muted)',
+        }}>
+          <Clock size={14} />
+          <span>Estimated time: ~{timeEstimate.formatted}</span>
+        </div>
+      )}
 
       <button 
         className="btn-primary btn-large" 

@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, HelpCircle, Sliders } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, HelpCircle, Sliders, Clock } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
+import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
+import { estimateI2VTime } from '../../utils/timeEstimates'
 import PresetSelector from '../../components/PresetSelector'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import '../../components/PresetSelector.css'
@@ -61,10 +63,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [uploadTab, setUploadTab] = useState('file') // 'file', 'url', 'creations'
 
   const [prompt, setPrompt] = useState(() => {
-    // Load last used prompt from localStorage
-    try {
-      return localStorage.getItem('oelala_last_prompt') || ''
-    } catch { return '' }
+    // Load saved prompt or generate a random default for new users
+    return getDefaultPrompt(false) // nsfwEnabled starts false
   })
   const [negativePrompt, setNegativePrompt] = useState('low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches')
   const [showNegativePrompt, setShowNegativePrompt] = useState(false)
@@ -112,6 +112,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [selectedCreation, setSelectedCreation] = useState(null)
 
   const canSubmit = useMemo(() => !!file && !busy, [file, busy])
+
+  // Calculate estimated generation time
+  const timeEstimate = useMemo(() => {
+    return estimateI2VTime({ resolution, duration, steps })
+  }, [resolution, duration, steps])
 
   // Fetch available LoRAs on mount
   useEffect(() => {
@@ -645,8 +650,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             >
               <FileSearch size={14} color={previewUrl ? "#fbbf24" : "#666666"} />
             </button>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Type size={14} color="#fbbf24" /></button>
-            <button className="icon-btn" style={{ width: '24px', height: '24px' }}><Sparkles size={14} color="#fbbf24" /></button>
+            <button className="icon-btn" style={{ width: '24px', height: '24px' }} title="Show prompt tips"><Type size={14} color="#fbbf24" /></button>
+            <button 
+              className="icon-btn" 
+              style={{ width: '24px', height: '24px' }}
+              onClick={() => setPrompt(getRandomPrompt(nsfwEnabled))}
+              title="Generate random creative prompt ✨"
+            >
+              <Sparkles size={14} color="#fbbf24" />
+            </button>
           </div>
         </div>
         
@@ -1493,6 +1505,22 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           fontSize: '0.9rem'
         }}>
           {error}
+        </div>
+      )}
+
+      {/* Time estimate indicator */}
+      {!busy && canSubmit && (
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          gap: '6px',
+          marginBottom: '8px',
+          fontSize: '0.85rem',
+          color: 'var(--text-muted)',
+        }}>
+          <Clock size={14} />
+          <span>Estimated time: ~{timeEstimate.formatted}</span>
         </div>
       )}
 

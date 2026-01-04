@@ -211,16 +211,40 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       const apiFilter = filter === 'prompts' ? 'all' : filter
       
       // Fetch from both ComfyUI output (legacy) and user storage (new)
-      const [comfyRes, userMedia] = await Promise.all([
-        // Legacy: ComfyUI output folder (for backwards compatibility)
-        fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
+      // If user is logged in, ONLY show their personal storage (not shared ComfyUI output)
+      // EXCEPT for admin/dev accounts who see both
+      const ADMIN_EMAILS = ['mark.op.mobiel@gmail.com']
+      const isAdmin = user && ADMIN_EMAILS.includes(user.email)
+      
+      console.log('🎬 MyMedia: Fetching media, user:', user?.id, user?.email, 'isAdmin:', isAdmin)
+      
+      let comfyRes = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
+      let userMedia = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
+      
+      if (user) {
+        // Logged in: fetch from user storage (private, user-scoped)
+        userMedia = await listUserMedia(apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all')
+          .then(data => {
+            console.log('🎬 MyMedia: User storage response:', data)
+            return data
+          })
+          .catch(err => {
+            console.error('🎬 MyMedia: User storage error:', err)
+            return { media: [], stats: { videos: 0, images: 0, audio: 0 } }
+          })
+        
+        // Admin accounts also see ComfyUI shared output
+        if (isAdmin) {
+          comfyRes = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
+            .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
+            .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
+        }
+      } else {
+        // Not logged in: show ComfyUI shared output (legacy/demo mode)
+        comfyRes = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
           .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
-          .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } })),
-        // New: User storage (authenticated, user-scoped)
-        user ? listUserMedia(apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all')
           .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
-          : Promise.resolve({ media: [], stats: { videos: 0, images: 0, audio: 0 } })
-      ])
+      }
       
       // Mark user storage items with source flag
       const userItems = (userMedia.media || []).map(item => ({
