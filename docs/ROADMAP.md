@@ -38,26 +38,33 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 
 ## Short-Term Roadmap (Q1 2026)
 
-### Phase 4: Media Management 🔄 In Progress
+### Phase 4: Media Management ✅ DONE
 
 **Goal**: Unified media storage and improved developer experience
 
 | Task | Status | Priority |
 |------|--------|----------|
-| Unify storage locations (generated + ComfyUI/output) | 🔄 Planned | High |
-| ComfyUI symlink integration | 🔄 Planned | High |
-| Improved My Media browser | 🔄 Planned | Medium |
+| Unify storage locations (generated + ComfyUI/output) | ✅ Done | High |
+| ComfyUI symlink integration | ✅ Done | High |
+| Improved My Media browser | ✅ Done | Medium |
+| Search by filename and prompt | ✅ Done | Medium |
 | Media metadata indexing | ⏳ Todo | Medium |
 | Batch operations (delete, download, share) | ⏳ Todo | Low |
 
-### Phase 4.5: oelala-storage Integration 💰 NEW
+### Phase 4.5: oelala-storage Integration 🔄 In Progress
 
 **Goal**: Monetization-ready storage backend (Go service)
 
-> **Repository**: [oelala-storage](https://github.com/m0nklabs/oelala-storage)
+> **Repository**: [oelala-storage](https://github.com/m0nklabs/oelala-storage)  
+> **Status**: Core server running (HTTP :7990, gRPC :7991, Metrics :7992)
 
 | Task | Status | Priority | Monetization Impact |
 |------|--------|----------|---------------------|
+| Core HTTP/gRPC server | ✅ Done | Critical | Foundation |
+| Metrics endpoint (Prometheus) | ✅ Done | High | Observability |
+| TLS support | ✅ Done | High | Security |
+| Systemd service | ✅ Done | High | Reliability |
+| Python client (storage_client.py) | ✅ Done | High | Integration |
 | User/tenant isolation | ⏳ Todo | Critical | Enables multi-user |
 | Storage quota tracking | ⏳ Todo | Critical | Upsell trigger |
 | Usage metering (bytes, bandwidth) | ⏳ Todo | Critical | Billing foundation |
