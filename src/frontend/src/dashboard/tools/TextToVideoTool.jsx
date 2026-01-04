@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react'
+import React, { useMemo, useState } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
@@ -31,12 +31,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [t2iSteps, setT2iSteps] = useState(20)
   const [t2iCfg, setT2iCfg] = useState(6.0)
 
-  const [busy, setBusy] = useState(false)
+  const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState('')
-  const [status, setStatus] = useState('')
-  const [progress, setProgress] = useState(0)
-  
-  const pollerRef = useRef(null)
+  const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
 
   // Save prompt to localStorage
   const handlePromptChange = (value) => {
@@ -44,36 +41,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     localStorage.setItem('t2v_prompt', value)
   }
 
-  const canSubmit = useMemo(() => prompt.trim().length > 0 && !busy, [prompt, busy])
-
-  // Poll for job completion
-  const pollForCompletion = async (promptId, maxAttempts = 180) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      try {
-        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-        if (!res.ok) continue
-        const data = await res.json()
-        
-        if (data.status === 'pending') {
-          setStatus('Queued...')
-          setProgress(Math.min(10, attempt))
-        } else if (data.status === 'running') {
-          setStatus('Generating...')
-          setProgress(Math.min(90, 10 + attempt))
-        } else if (data.status === 'completed') {
-          setProgress(100)
-          setStatus('Done!')
-          return data
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'Generation failed')
-        }
-      } catch (e) {
-        if (e.message.includes('failed')) throw e
-      }
-    }
-    throw new Error('Generation timed out')
-  }
+  const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting, [prompt, submitting])
 
   const handleSubmit = async () => {
     if (!prompt.trim()) {
@@ -81,10 +49,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       return
     }
 
-    setBusy(true)
+    setSubmitting(true)
     setError('')
-    setStatus('Submitting...')
-    setProgress(0)
+    setLastQueued(null)
 
     // Build prompt with camera motion prefix
     const motionPrefix = getCameraMotionPrefix(cameraMotion)
@@ -112,28 +79,17 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       }
 
       if (DEBUG) console.debug('📋 T2V queued:', promptId)
-      setStatus('Queued...')
       
-      // Notify queue indicator
-      if (onJobSubmitted) onJobSubmitted()
-
-      // Poll for completion
-      const completed = await pollForCompletion(promptId)
+      // Show queued confirmation
+      setLastQueued({
+        promptId,
+        prompt: prompt.substring(0, 40) + (prompt.length > 40 ? '...' : '')
+      })
       
-      if (completed.output_video || completed.url) {
-        const videoUrl = completed.output_video || completed.url
-        const fullUrl = videoUrl.startsWith('http') ? videoUrl : `${BACKEND_BASE}${videoUrl}`
-        
-        onOutput({
-          kind: 'video',
-          url: fullUrl,
-          backendUrl: fullUrl,
-          filename: videoUrl.split('/').pop(),
-          meta: { ...result.data?.meta, prompt_id: promptId },
-        })
-        
-        if (onRefreshHistory) onRefreshHistory()
-      }
+      // Notify queue indicator - job will be tracked in queue panel
+      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+      
+      // Don't wait for completion - job will appear in queue/history when done
       
     } catch (e) {
       const message = e?.message || 'Failed to generate video'
@@ -145,9 +101,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         meta: { message },
       })
     } finally {
-      setBusy(false)
-      setStatus('')
-      setProgress(0)
+      setSubmitting(false)
     }
   }
 
@@ -331,16 +285,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         )}
       </div>
 
-      {/* Progress */}
-      {busy && (
-        <div className="progress-section">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="progress-status">
-            <Loader2 size={16} className="spin" />
-            {status}
-          </div>
+      {/* Queued notification */}
+      {lastQueued && (
+        <div className="queued-notice">
+          ✅ Job queued! Check the Queue panel for progress.
         </div>
       )}
 
@@ -352,10 +300,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         disabled={!canSubmit} 
         onClick={handleSubmit}
       >
-        {busy ? (
+        {submitting ? (
           <>
             <Loader2 size={18} className="spin" />
-            Generating...
+            Queueing...
           </>
         ) : (
           <>

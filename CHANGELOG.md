@@ -1,6 +1,41 @@
 2026-01-04
 Agent: Claude Opus 4.5
 AgentTag: CLAU
+ModelTag: UX-POLISH
+Details:
+- **Services Migration**: Converted all user services to systemd system services
+  - oelala-backend.service (port 7998, uvicorn 2 workers)
+  - oelala-frontend.service (port 5174, npm dev)
+  - comfyui.service (port 8188, --enable-manager)
+  - Services now survive user logout
+- **Speech to Video Tool (NEW)**: Combined TTS + Lip Sync workflow
+  - Upload video → Generate speech → Apply lip sync
+  - TTS model selection (F5v1, E2)
+  - Voice presets and reference audio upload
+  - Lip sync settings (expression, steps, seed)
+- **TTS Male/Female Selection**:
+  - Voices now grouped by gender
+  - Female: Nova (default), Shimmer, Alloy
+  - Male: Echo, Fable, Onyx
+- **Nav Menu Fixes**:
+  - Video to Text moved from Video Tools → Prompt Tools
+  - Prompt Generator now first in Prompt Tools
+  - Logical grouping: generation tools vs analysis tools
+- **Async Generate Pattern**: All tools now fire-and-forget (no polling)
+- **ComfyUI Manager**: Enabled via pip package + --enable-manager flag
+FilesChanged:
+- deploy/oelala-backend.service (NEW - system service)
+- deploy/oelala-frontend.service (NEW - system service)
+- deploy/comfyui.service (NEW - system service with manager)
+- src/frontend/src/dashboard/tools/SpeechToVideoTool.jsx (NEW)
+- src/frontend/src/dashboard/tools/AudioGenerationTool.jsx (gender groups)
+- src/frontend/src/dashboard/nav.js (tool ordering)
+- src/frontend/src/dashboard/Dashboard.jsx (imports)
+- .github/copilot-instructions.md (services docs)
+
+2026-01-04
+Agent: Claude Opus 4.5
+AgentTag: CLAU
 ModelTag: MEDIA-UX
 Details:
 - **Phase 4 Complete**: Media Management & UX Improvements

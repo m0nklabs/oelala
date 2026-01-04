@@ -19,7 +19,7 @@ const F5_MODELS = [
   { value: 'E2', label: 'E2-TTS', desc: 'Alternative English model' },
 ]
 
-export default function VoiceCloningTool({ onOutput }) {
+export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
   // Voice sample state
   const [voiceSample, setVoiceSample] = useState(null)
   const [voiceSampleUrl, setVoiceSampleUrl] = useState(null)
@@ -46,10 +46,10 @@ export default function VoiceCloningTool({ onOutput }) {
   const [isResultPlaying, setIsResultPlaying] = useState(false)
   
   // Generation state
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
-  const [status, setStatus] = useState('')
-  const [progress, setProgress] = useState(0)
+  const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
 
   // Handle file drop/select
@@ -133,34 +133,6 @@ export default function VoiceCloningTool({ onOutput }) {
     }
   }
 
-  // Poll for completion
-  const pollForCompletion = async (promptId, maxAttempts = 180) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      try {
-        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-        if (!res.ok) continue
-        const data = await res.json()
-        
-        if (data.status === 'pending') {
-          setStatus('Queued...')
-          setProgress(Math.min(10, attempt * 2))
-        } else if (data.status === 'running') {
-          setStatus('Cloning voice...')
-          setProgress(Math.min(90, 10 + attempt))
-        } else if (data.status === 'completed') {
-          setProgress(100)
-          return data
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'Voice cloning failed')
-        }
-      } catch (e) {
-        if (e.message.includes('failed')) throw e
-      }
-    }
-    throw new Error('Voice cloning timed out')
-  }
-
   // Generate cloned voice
   const handleGenerate = async () => {
     if (!voiceSample || !text.trim()) {
@@ -168,10 +140,10 @@ export default function VoiceCloningTool({ onOutput }) {
       return
     }
     
-    setLoading(true)
+    setSubmitting(true)
+    setUploading(true)
     setError(null)
-    setStatus('Uploading voice sample...')
-    setProgress(0)
+    setLastQueued(null)
     setResult(null)
     
     try {
@@ -181,8 +153,7 @@ export default function VoiceCloningTool({ onOutput }) {
         audioPath = await uploadVoiceSample()
       }
       
-      setStatus('Starting voice cloning...')
-      setProgress(5)
+      setUploading(false)
       
       // Request voice cloning via F5-TTS
       const res = await postJson(`${BACKEND_BASE}/voice-clone`, {
@@ -197,34 +168,26 @@ export default function VoiceCloningTool({ onOutput }) {
       }
       
       if (res.data?.prompt_id) {
-        setStatus('Processing...')
-        const completed = await pollForCompletion(res.data.prompt_id)
+        // Show queued confirmation
+        setLastQueued({
+          promptId: res.data.prompt_id,
+          model: F5_MODELS.find(m => m.value === model)?.label || model
+        })
         
-        if (completed.output_audio || completed.url) {
-          const audioUrl = completed.output_audio || completed.url
-          const fullUrl = audioUrl.startsWith('http') ? audioUrl : `${BACKEND_BASE}${audioUrl}`
-          setResult({ url: fullUrl, filename: audioUrl.split('/').pop() })
-          setStatus('Complete!')
-          
-          if (onOutput) {
-            onOutput({
-              kind: 'audio',
-              url: fullUrl,
-              filename: audioUrl.split('/').pop(),
-            })
-          }
-        } else {
-          throw new Error('No audio output received')
-        }
+        // Notify queue indicator
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
+        
+        if (DEBUG) console.debug('📋 Voice cloning queued:', res.data.prompt_id)
+        
+        // Don't wait for completion - job will appear in queue/history when done
       }
       
     } catch (err) {
       console.error('Voice cloning error:', err)
       setError(err.message)
-      setStatus('')
     } finally {
-      setLoading(false)
-      setProgress(0)
+      setSubmitting(false)
+      setUploading(false)
     }
   }
 
@@ -233,6 +196,7 @@ export default function VoiceCloningTool({ onOutput }) {
     setVoiceSample(null)
     setVoiceSampleUrl(null)
     setUploadedPath(null)
+    setLastQueued(null)
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
@@ -401,17 +365,25 @@ export default function VoiceCloningTool({ onOutput }) {
         </div>
       </div>
 
+      {/* Queued notification */}
+      {lastQueued && (
+        <div className="queued-notice">
+          ✅ Job queued! Check the Queue panel for progress.
+          <span className="queued-mode">{lastQueued.model}</span>
+        </div>
+      )}
+
       {/* Generate Button */}
       <div className="tool-section">
         <button
           className="generate-btn"
           onClick={handleGenerate}
-          disabled={loading || !voiceSample || !text.trim()}
+          disabled={submitting || !voiceSample || !text.trim()}
         >
-          {loading ? (
+          {submitting ? (
             <>
               <Loader2 size={20} className="spin" />
-              <span>{status || 'Processing...'}</span>
+              <span>{uploading ? 'Uploading...' : 'Queueing...'}</span>
             </>
           ) : (
             <>
@@ -420,12 +392,6 @@ export default function VoiceCloningTool({ onOutput }) {
             </>
           )}
         </button>
-        
-        {loading && progress > 0 && (
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-        )}
       </div>
 
       {/* Error */}

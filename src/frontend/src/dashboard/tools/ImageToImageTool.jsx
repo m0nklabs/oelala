@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
@@ -12,7 +12,7 @@ const CHECKPOINTS = [
   { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious (Anime)' },
 ]
 
-export default function ImageToImageTool({ onOutput }) {
+export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [prompt, setPrompt] = useState('')
@@ -28,10 +28,9 @@ export default function ImageToImageTool({ onOutput }) {
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
 
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
-  const [status, setStatus] = useState('')
-  const [progress, setProgress] = useState(0)
+  const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
 
   const handleFileChange = useCallback((e) => {
@@ -41,6 +40,7 @@ export default function ImageToImageTool({ onOutput }) {
       setPreview(URL.createObjectURL(f))
       setResult(null)
       setError(null)
+      setLastQueued(null)
     }
   }, [])
 
@@ -52,45 +52,16 @@ export default function ImageToImageTool({ onOutput }) {
       setPreview(URL.createObjectURL(f))
       setResult(null)
       setError(null)
+      setLastQueued(null)
     }
   }, [])
-
-  // Poll for completion
-  const pollForCompletion = async (promptId, maxAttempts = 120) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      try {
-        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-        if (!res.ok) continue
-        const data = await res.json()
-        
-        if (data.status === 'pending') {
-          setStatus('Queued...')
-          setProgress(Math.min(10, attempt))
-        } else if (data.status === 'running') {
-          setStatus('Processing...')
-          setProgress(Math.min(90, 10 + attempt * 2))
-        } else if (data.status === 'completed') {
-          setProgress(100)
-          setStatus('Done!')
-          return data
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'Generation failed')
-        }
-      } catch (e) {
-        if (e.message.includes('failed')) throw e
-      }
-    }
-    throw new Error('Generation timed out')
-  }
 
   const handleGenerate = async () => {
     if (!file) return
     
-    setLoading(true)
+    setSubmitting(true)
     setError(null)
-    setStatus('Uploading...')
-    setProgress(0)
+    setLastQueued(null)
     
     try {
       const formData = new FormData()
@@ -118,33 +89,24 @@ export default function ImageToImageTool({ onOutput }) {
         throw new Error('No prompt_id returned')
       }
       
-      setStatus('Queued...')
+      // Show queued confirmation
+      setLastQueued({
+        promptId,
+        checkpoint: CHECKPOINTS.find(c => c.value === checkpoint)?.label || checkpoint
+      })
       
-      // Poll for completion
-      const completed = await pollForCompletion(promptId)
+      // Notify queue indicator
+      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
       
-      if (completed.output_image || completed.url) {
-        const imageUrl = completed.output_image || completed.url
-        const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${BACKEND_BASE}${imageUrl}`
-        setResult(fullUrl)
-        
-        if (onOutput) {
-          onOutput({
-            kind: 'image',
-            url: fullUrl,
-            filename: imageUrl.split('/').pop(),
-            meta: res.data?.meta,
-          })
-        }
-      }
+      if (DEBUG) console.debug('📋 I2I queued:', promptId)
+      
+      // Don't wait for completion - job will appear in queue/history when done
       
     } catch (err) {
       console.error('I2I error:', err)
       setError(err.message)
     } finally {
-      setLoading(false)
-      setStatus('')
-      setProgress(0)
+      setSubmitting(false)
     }
   }
 
@@ -312,16 +274,11 @@ export default function ImageToImageTool({ onOutput }) {
         )}
       </div>
 
-      {/* Progress */}
-      {loading && (
-        <div className="progress-section">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="progress-status">
-            <Loader2 size={16} className="spin" />
-            {status}
-          </div>
+      {/* Queued notification */}
+      {lastQueued && (
+        <div className="queued-notice">
+          ✅ Job queued! Check the Queue panel for progress.
+          <span className="queued-mode">{lastQueued.checkpoint}</span>
         </div>
       )}
 
@@ -330,12 +287,12 @@ export default function ImageToImageTool({ onOutput }) {
       <button
         className="btn-primary btn-large"
         onClick={handleGenerate}
-        disabled={!file || loading}
+        disabled={!file || submitting}
       >
-        {loading ? (
+        {submitting ? (
           <>
             <Loader2 size={18} className="spin" />
-            Transforming...
+            Queueing...
           </>
         ) : (
           <>

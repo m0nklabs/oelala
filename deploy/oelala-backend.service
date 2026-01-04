@@ -1,0 +1,19 @@
+[Unit]
+Description=Oelala Backend API (FastAPI/Uvicorn)
+After=network.target comfyui.service
+Wants=comfyui.service
+
+[Service]
+Type=simple
+User=flip
+WorkingDirectory=/home/flip/oelala/src/backend
+Environment=PATH=/home/flip/venvs/gpu/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/flip/venvs/gpu/bin/uvicorn app:app --host 0.0.0.0 --port 7998 --workers 2
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Sparkles, Settings2, Image as ImageIcon, Info, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
@@ -40,7 +40,7 @@ const getModelType = (model) => {
   return 'diffusers'
 }
 
-export default function TextToImageTool({ onOutput }) {
+export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text')
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -49,8 +49,8 @@ export default function TextToImageTool({ onOutput }) {
   const [batchCount, setBatchCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
-  const [progress, setProgress] = useState(0)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [lastQueued, setLastQueued] = useState(null)
   
   // LoRA settings
   const [availableLoras, setAvailableLoras] = useState([])
@@ -67,8 +67,6 @@ export default function TextToImageTool({ onOutput }) {
   const [seed, setSeed] = useState(-1)
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
-  
-  const pollerRef = useRef(null)
   
   // Fetch available LoRAs on mount
   useEffect(() => {
@@ -98,38 +96,12 @@ export default function TextToImageTool({ onOutput }) {
   const handleGenerate = async () => {
     if (!prompt.trim()) return
     setIsGenerating(true)
-    setProgress(0)
     setError('')
-
-    // Helper to poll for job completion
-    const pollForCompletion = async (promptId, maxAttempts = 120) => {
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        try {
-          const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-          if (!res.ok) continue
-          const data = await res.json()
-          
-          // Update progress based on status
-          if (data.status === 'pending') {
-            setProgress(Math.min(10, attempt))
-          } else if (data.status === 'running') {
-            setProgress(Math.min(90, 10 + attempt * 2))
-          } else if (data.status === 'completed') {
-            setProgress(100)
-            return data
-          } else if (data.status === 'failed') {
-            throw new Error('Generation failed')
-          }
-        } catch (e) {
-          if (e.message === 'Generation failed') throw e
-          // Continue polling on network errors
-        }
-      }
-      throw new Error('Generation timed out')
-    }
+    setLastQueued(null)
 
     try {
+      const queuedJobs = []
+      
       for (let i = 0; i < batchCount; i++) {
         const jobId = `t2i-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         const formData = new FormData()
@@ -139,19 +111,16 @@ export default function TextToImageTool({ onOutput }) {
         // Determine endpoint based on model type
         const modelType = getModelType(model)
         let endpoint = '/generate-image'
-        let useComfyUIPolling = false
         
         if (modelType === 'wan22') {
           endpoint = '/generate-wan22-t2i'
           formData.append('steps', steps)
           formData.append('seed', seed)
-          useComfyUIPolling = true
         } else if (modelType === 'flux') {
           endpoint = '/generate-flux'
           formData.append('steps', steps)
           formData.append('guidance', guidance)
           formData.append('seed', seed)
-          useComfyUIPolling = true
         } else if (modelType === 'sdxl') {
           endpoint = '/generate-sdxl'
           formData.append('checkpoint', model)
@@ -166,7 +135,6 @@ export default function TextToImageTool({ onOutput }) {
           if (activeLoras.length > 0) {
             formData.append('lora_configs', JSON.stringify(activeLoras))
           }
-          useComfyUIPolling = true
         } else if (modelType === 'sd15') {
           endpoint = '/generate-sd15'
           formData.append('negative_prompt', negativePrompt)
@@ -175,7 +143,6 @@ export default function TextToImageTool({ onOutput }) {
           formData.append('seed', seed)
           formData.append('sampler_name', sampler)
           formData.append('scheduler', scheduler)
-          useComfyUIPolling = true
         } else {
           // Diffusers (legacy)
           formData.append('mode', mode)
@@ -183,46 +150,36 @@ export default function TextToImageTool({ onOutput }) {
           formData.append('job_id', jobId)
         }
         
-        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType, useComfyUIPolling })
+        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType })
         
         const result = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
         if (!result.ok) {
           throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
         }
 
-        console.log(`Batch ${i+1}/${batchCount} queued:`, result.data)
-
-        let imageUrl = result.data?.url
-        let filename = result.data?.filename
-
-        // If using ComfyUI polling, wait for completion
-        if (useComfyUIPolling && result.data?.prompt_id) {
-          const completedJob = await pollForCompletion(result.data.prompt_id)
-          imageUrl = completedJob.url || completedJob.output_image
-          filename = imageUrl?.split('/').pop()
+        if (DEBUG) console.log(`📋 Batch ${i+1}/${batchCount} queued:`, result.data)
+        
+        // Track queued job
+        if (result.data?.prompt_id) {
+          queuedJobs.push(result.data.prompt_id)
         }
-
-        const url = imageUrl ? `${BACKEND_BASE}${imageUrl}` : ''
-        setProgress(100)
-
-        onOutput({
-          kind: 'image',
-          url,
-          backendUrl: url,
-          filename,
-          meta: result.data?.meta,
-        })
+        
+        // Notify queue indicator
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: result.data?.prompt_id })
       }
+      
+      // Show queued confirmation
+      setLastQueued({
+        count: batchCount,
+        model: getModelLabel(),
+        promptIds: queuedJobs
+      })
+      
     } catch (e) {
       console.error('Generation error:', e)
       setError(e.message || 'Failed to generate image')
     } finally {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current)
-        pollerRef.current = null
-      }
       setIsGenerating(false)
-      setTimeout(() => setProgress(0), 500)
     }
   }
   
@@ -759,7 +716,7 @@ export default function TextToImageTool({ onOutput }) {
         }}
       >
         {isGenerating ? (
-          <>Generating...</>
+          <>Queueing...</>
         ) : (
           <>
             <Sparkles size={18} />
@@ -768,9 +725,32 @@ export default function TextToImageTool({ onOutput }) {
         )}
       </button>
 
-      {isGenerating && (
-        <div className="progress-container">
-          <div className="progress-fill" style={{ width: `${Math.min(progress, 100)}%` }}></div>
+      {/* Queued confirmation */}
+      {lastQueued && (
+        <div style={{ 
+          padding: '12px 16px', 
+          backgroundColor: 'rgba(34, 197, 94, 0.2)', 
+          border: '1px solid rgba(34, 197, 94, 0.5)',
+          borderRadius: '8px',
+          color: '#86efac',
+          fontSize: '0.875rem',
+          marginTop: '12px'
+        }}>
+          ✅ {lastQueued.count > 1 ? `${lastQueued.count} jobs` : 'Job'} queued! ({lastQueued.model}) - Check queue panel for progress
+        </div>
+      )}
+
+      {error && (
+        <div style={{ 
+          padding: '12px 16px', 
+          backgroundColor: 'rgba(239, 68, 68, 0.2)', 
+          border: '1px solid rgba(239, 68, 68, 0.5)',
+          borderRadius: '8px',
+          color: '#fca5a5',
+          fontSize: '0.875rem',
+          marginTop: '12px'
+        }}>
+          {error}
         </div>
       )}
     </div>

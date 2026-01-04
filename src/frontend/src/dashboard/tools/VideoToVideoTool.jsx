@@ -27,7 +27,7 @@ const STYLE_PROMPTS = {
   '3d-render': '3d render, modern cgi, photorealistic, octane render, unreal engine',
 }
 
-export default function VideoToVideoTool({ onOutput }) {
+export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
@@ -44,10 +44,9 @@ export default function VideoToVideoTool({ onOutput }) {
   const [cfg, setCfg] = useState(7.5)
   const [seed, setSeed] = useState(-1)
   
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
-  const [status, setStatus] = useState('')
-  const [progress, setProgress] = useState(0)
+  const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
   
   const videoRef = useRef(null)
@@ -60,6 +59,7 @@ export default function VideoToVideoTool({ onOutput }) {
       setPreview(url)
       setResult(null)
       setError(null)
+      setLastQueued(null)
       
       // Get video info
       const video = document.createElement('video')
@@ -83,6 +83,7 @@ export default function VideoToVideoTool({ onOutput }) {
       setPreview(url)
       setResult(null)
       setError(null)
+      setLastQueued(null)
       
       const video = document.createElement('video')
       video.onloadedmetadata = () => {
@@ -95,35 +96,6 @@ export default function VideoToVideoTool({ onOutput }) {
       video.src = url
     }
   }, [])
-
-  // Poll for completion
-  const pollForCompletion = async (promptId, maxAttempts = 300) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      try {
-        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-        if (!res.ok) continue
-        const data = await res.json()
-        
-        if (data.status === 'pending') {
-          setStatus('Queued...')
-          setProgress(Math.min(5, attempt))
-        } else if (data.status === 'running') {
-          setStatus('Transforming video...')
-          setProgress(Math.min(95, 5 + attempt * 0.5))
-        } else if (data.status === 'completed') {
-          setProgress(100)
-          setStatus('Done!')
-          return data
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'V2V failed')
-        }
-      } catch (e) {
-        if (e.message.includes('failed')) throw e
-      }
-    }
-    throw new Error('V2V timed out - video processing can take several minutes')
-  }
 
   const handleTransform = async () => {
     if (!file) return
@@ -138,10 +110,9 @@ export default function VideoToVideoTool({ onOutput }) {
       return
     }
     
-    setLoading(true)
+    setSubmitting(true)
     setError(null)
-    setStatus('Uploading...')
-    setProgress(0)
+    setLastQueued(null)
     
     try {
       const formData = new FormData()
@@ -168,33 +139,24 @@ export default function VideoToVideoTool({ onOutput }) {
         throw new Error('No prompt_id returned')
       }
       
-      setStatus('Queued...')
+      // Show queued confirmation
+      setLastQueued({
+        promptId,
+        style: style !== 'none' ? style : 'custom'
+      })
       
-      // Poll for completion
-      const completed = await pollForCompletion(promptId)
+      // Notify queue indicator
+      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
       
-      if (completed.output_video || completed.url) {
-        const videoUrl = completed.output_video || completed.url
-        const fullUrl = videoUrl.startsWith('http') ? videoUrl : `${BACKEND_BASE}${videoUrl}`
-        setResult(fullUrl)
-        
-        if (onOutput) {
-          onOutput({
-            kind: 'video',
-            url: fullUrl,
-            filename: videoUrl.split('/').pop(),
-            meta: res.data?.meta,
-          })
-        }
-      }
+      if (DEBUG) console.debug('📋 V2V queued:', promptId)
+      
+      // Don't wait for completion - job will appear in queue/history when done
       
     } catch (err) {
       console.error('V2V error:', err)
       setError(err.message)
     } finally {
-      setLoading(false)
-      setStatus('')
-      setProgress(0)
+      setSubmitting(false)
     }
   }
 
@@ -386,16 +348,11 @@ export default function VideoToVideoTool({ onOutput }) {
         )}
       </div>
 
-      {/* Progress */}
-      {loading && (
-        <div className="progress-section">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="progress-status">
-            <Loader2 size={16} className="spin" />
-            {status}
-          </div>
+      {/* Queued notification */}
+      {lastQueued && (
+        <div className="queued-notice">
+          ✅ Job queued! Check the Queue panel for progress.
+          <span className="queued-mode">{lastQueued.style.toUpperCase()}</span>
         </div>
       )}
 
@@ -404,12 +361,12 @@ export default function VideoToVideoTool({ onOutput }) {
       <button
         className="btn-primary btn-large"
         onClick={handleTransform}
-        disabled={!file || loading}
+        disabled={!file || submitting}
       >
-        {loading ? (
+        {submitting ? (
           <>
             <Loader2 size={18} className="spin" />
-            Transforming...
+            Queueing...
           </>
         ) : (
           <>

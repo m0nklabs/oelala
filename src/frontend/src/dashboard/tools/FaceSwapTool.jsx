@@ -15,7 +15,7 @@ const ENHANCE_OPTIONS = [
   { id: 'both', label: 'Both (Best)' },
 ]
 
-export default function FaceSwapTool() {
+export default function FaceSwapTool({ onJobSubmitted }) {
   const [targetFile, setTargetFile] = useState(null)
   const [targetPreview, setTargetPreview] = useState(null)
   const [sourceFile, setSourceFile] = useState(null)
@@ -27,11 +27,11 @@ export default function FaceSwapTool() {
   const [faceIndex, setFaceIndex] = useState(0)
   const [swapAllFaces, setSwapAllFaces] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [detectedFaces, setDetectedFaces] = useState(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [lastQueued, setLastQueued] = useState(null)
   
   const targetInputRef = useRef(null)
   const sourceInputRef = useRef(null)
@@ -44,6 +44,7 @@ export default function FaceSwapTool() {
       setResult(null)
       setError(null)
       setDetectedFaces(null)
+      setLastQueued(null)
       const url = URL.createObjectURL(dropped)
       setTargetPreview(url)
     }
@@ -56,6 +57,7 @@ export default function FaceSwapTool() {
       setSourceFile(dropped)
       setResult(null)
       setError(null)
+      setLastQueued(null)
       const url = URL.createObjectURL(dropped)
       setSourcePreview(url)
     }
@@ -89,27 +91,6 @@ export default function FaceSwapTool() {
     }
   }
 
-  const pollForCompletion = async (promptId) => {
-    const maxAttempts = 300
-    let attempts = 0
-    
-    while (attempts < maxAttempts) {
-      await new Promise(r => setTimeout(r, 1000))
-      attempts++
-      setProgress(Math.min(95, attempts * 0.5))
-      
-      const res = await getJson(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-      if (DEBUG) console.log('🔍 FaceSwap poll:', res.data)
-      
-      if (res.data?.status === 'completed') {
-        return res.data
-      } else if (res.data?.status === 'error') {
-        throw new Error(res.data?.error || 'Face swap failed')
-      }
-    }
-    throw new Error('Face swap timed out')
-  }
-
   const handleGenerate = async () => {
     if (!targetFile || !sourceFile) {
       setError('Please upload both target and source face images')
@@ -117,9 +98,9 @@ export default function FaceSwapTool() {
     }
     
     setIsLoading(true)
-    setProgress(0)
     setError(null)
     setResult(null)
+    setLastQueued(null)
     
     try {
       const formData = new FormData()
@@ -142,25 +123,22 @@ export default function FaceSwapTool() {
       }
       
       if (res.data?.prompt_id) {
-        setProgress(5)
-        const completed = await pollForCompletion(res.data.prompt_id)
+        // Show queued confirmation
+        setLastQueued({
+          promptId: res.data.prompt_id,
+          model: model.label
+        })
         
-        if (completed.images?.length > 0) {
-          setResult({
-            url: completed.images[0],
-            prompt_id: res.data.prompt_id
-          })
-        } else if (completed.url) {
-          setResult({
-            url: completed.url,
-            prompt_id: res.data.prompt_id
-          })
-        }
+        // Notify queue indicator
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
+        
+        if (DEBUG) console.debug('📋 FaceSwap queued:', res.data.prompt_id)
+        
+        // Don't wait for completion - job will appear in queue/history when done
       } else if (res.data?.url) {
         setResult({ url: res.data.url })
       }
       
-      setProgress(100)
     } catch (err) {
       console.error('❌ FaceSwap error:', err)
       setError(err.message)
@@ -187,6 +165,7 @@ export default function FaceSwapTool() {
     setSourcePreview(tempPreview)
     setResult(null)
     setDetectedFaces(null)
+    setLastQueued(null)
   }
 
   return (

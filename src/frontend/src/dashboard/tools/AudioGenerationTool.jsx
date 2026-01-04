@@ -1,15 +1,17 @@
 import React, { useState, useRef } from 'react'
 import { Volume2, Music, Mic, Loader2, Play, Pause, Download, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
-import { postForm, postJson } from '../../api'
+import { postForm } from '../../api'
 
 const TTS_VOICES = [
-  { value: 'alloy', label: 'Alloy', desc: 'Neutral, versatile' },
-  { value: 'echo', label: 'Echo', desc: 'Warm, conversational' },
-  { value: 'fable', label: 'Fable', desc: 'Expressive, dramatic' },
-  { value: 'onyx', label: 'Onyx', desc: 'Deep, authoritative' },
-  { value: 'nova', label: 'Nova', desc: 'Friendly, upbeat' },
-  { value: 'shimmer', label: 'Shimmer', desc: 'Soft, gentle' },
+  // Female voices
+  { value: 'nova', label: 'Nova', desc: 'Friendly, upbeat', gender: 'female' },
+  { value: 'shimmer', label: 'Shimmer', desc: 'Soft, gentle', gender: 'female' },
+  { value: 'alloy', label: 'Alloy', desc: 'Neutral, versatile', gender: 'female' },
+  // Male voices
+  { value: 'echo', label: 'Echo', desc: 'Warm, conversational', gender: 'male' },
+  { value: 'fable', label: 'Fable', desc: 'Expressive, dramatic', gender: 'male' },
+  { value: 'onyx', label: 'Onyx', desc: 'Deep, authoritative', gender: 'male' },
 ]
 
 const AUDIO_MODES = [
@@ -29,7 +31,7 @@ const MUSIC_STYLES = [
   { value: 'hiphop', label: 'Hip-Hop' },
 ]
 
-export default function AudioGenerationTool({ onOutput }) {
+export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
   const [mode, setMode] = useState('tts')
   const [text, setText] = useState('')
   const [voice, setVoice] = useState('nova')
@@ -41,109 +43,87 @@ export default function AudioGenerationTool({ onOutput }) {
   const [speed, setSpeed] = useState(1.0)
   const [pitch, setPitch] = useState(1.0)
   
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState(null)
-  const [status, setStatus] = useState('')
-  const [progress, setProgress] = useState(0)
+  const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
   const [result, setResult] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   
   const audioRef = useRef(null)
 
-  // Poll for completion
-  const pollForCompletion = async (promptId, maxAttempts = 120) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      try {
-        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-        if (!res.ok) continue
-        const data = await res.json()
-        
-        if (data.status === 'pending') {
-          setStatus('Queued...')
-          setProgress(Math.min(10, attempt * 2))
-        } else if (data.status === 'running') {
-          setStatus('Generating audio...')
-          setProgress(Math.min(90, 10 + attempt * 2))
-        } else if (data.status === 'completed') {
-          setProgress(100)
-          return data
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'Generation failed')
-        }
-      } catch (e) {
-        if (e.message.includes('failed')) throw e
-      }
-    }
-    throw new Error('Generation timed out')
-  }
-
   const handleGenerate = async () => {
     if (!text.trim()) return
     
-    setLoading(true)
+    setSubmitting(true)
     setError(null)
-    setStatus('Starting...')
-    setProgress(0)
-    setResult(null)
+    setLastQueued(null)
     
     try {
       let endpoint = '/generate-audio'
-      const payload = {
-        text: text.trim(),
-        mode,
-      }
+      
+      // Build FormData - backend expects Form parameters
+      const formData = new FormData()
+      formData.append('text', text.trim())
+      formData.append('mode', mode)
       
       if (mode === 'tts') {
-        payload.voice = voice
-        payload.speed = speed
-        payload.pitch = pitch
+        formData.append('voice', voice)
+        formData.append('speed', speed.toString())
+        formData.append('pitch', pitch.toString())
       } else if (mode === 'music') {
-        payload.style = musicStyle
-        payload.duration = duration
+        formData.append('style', musicStyle)
+        formData.append('duration', duration.toString())
       } else if (mode === 'sfx') {
-        payload.duration = Math.min(duration, 5) // SFX shorter
+        formData.append('duration', Math.min(duration, 10).toString()) // SFX max 10s
       }
       
-      if (DEBUG) console.debug('🎵 Audio request:', payload)
+      if (DEBUG) console.debug('🎵 Audio request:', { text: text.trim(), mode, voice, musicStyle, duration })
       
-      const res = await postJson(`${BACKEND_BASE}${endpoint}`, payload)
+      const res = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
       
       if (!res.ok) {
-        throw new Error(res.data?.detail || 'Audio generation failed')
+        // Better error extraction
+        const errMsg = typeof res.data === 'object' 
+          ? (res.data?.detail || JSON.stringify(res.data)) 
+          : (res.data || 'Audio generation failed')
+        throw new Error(errMsg)
       }
       
-      // Check if async (has prompt_id) or sync (has url directly)
+      // Job was queued - notify parent and show confirmation
       if (res.data?.prompt_id) {
-        setStatus('Queued...')
-        const completed = await pollForCompletion(res.data.prompt_id)
+        setLastQueued({
+          promptId: res.data.prompt_id,
+          mode,
+          text: text.substring(0, 50) + (text.length > 50 ? '...' : '')
+        })
         
-        if (completed.output_audio || completed.url) {
-          const audioUrl = completed.output_audio || completed.url
-          const fullUrl = audioUrl.startsWith('http') ? audioUrl : `${BACKEND_BASE}${audioUrl}`
-          setResult({ url: fullUrl, filename: audioUrl.split('/').pop() })
+        // Notify parent to refresh queue panel
+        if (onJobSubmitted) {
+          onJobSubmitted(res.data)
         }
+        
+        // Output will appear in queue/history when done - don't wait
+        if (DEBUG) console.debug('🎵 Job queued:', res.data.prompt_id)
       } else if (res.data?.url) {
+        // Sync result - show immediately
         const audioUrl = res.data.url
         const fullUrl = audioUrl.startsWith('http') ? audioUrl : `${BACKEND_BASE}${audioUrl}`
         setResult({ url: fullUrl, filename: audioUrl.split('/').pop() })
-      }
-      
-      if (onOutput && result) {
-        onOutput({
-          kind: 'audio',
-          url: result.url,
-          filename: result.filename,
-        })
+        
+        if (onOutput) {
+          onOutput({
+            kind: 'audio',
+            url: fullUrl,
+            filename: audioUrl.split('/').pop(),
+          })
+        }
       }
       
     } catch (err) {
       console.error('Audio error:', err)
       setError(err.message)
     } finally {
-      setLoading(false)
-      setStatus('')
-      setProgress(0)
+      setSubmitting(false)
     }
   }
 
@@ -205,17 +185,37 @@ export default function AudioGenerationTool({ onOutput }) {
       {mode === 'tts' && (
         <div className="tool-section">
           <h3>Voice</h3>
-          <div className="voice-grid">
-            {TTS_VOICES.map((v) => (
-              <button
-                key={v.value}
-                className={`voice-btn ${voice === v.value ? 'active' : ''}`}
-                onClick={() => setVoice(v.value)}
-              >
-                <span className="voice-name">{v.label}</span>
-                <span className="voice-desc">{v.desc}</span>
-              </button>
-            ))}
+          {/* Female voices */}
+          <div className="voice-group">
+            <span className="voice-group-label">Female</span>
+            <div className="voice-grid">
+              {TTS_VOICES.filter(v => v.gender === 'female').map((v) => (
+                <button
+                  key={v.value}
+                  className={`voice-btn ${voice === v.value ? 'active' : ''}`}
+                  onClick={() => setVoice(v.value)}
+                >
+                  <span className="voice-name">{v.label}</span>
+                  <span className="voice-desc">{v.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Male voices */}
+          <div className="voice-group">
+            <span className="voice-group-label">Male</span>
+            <div className="voice-grid">
+              {TTS_VOICES.filter(v => v.gender === 'male').map((v) => (
+                <button
+                  key={v.value}
+                  className={`voice-btn ${voice === v.value ? 'active' : ''}`}
+                  onClick={() => setVoice(v.value)}
+                >
+                  <span className="voice-name">{v.label}</span>
+                  <span className="voice-desc">{v.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -305,16 +305,11 @@ export default function AudioGenerationTool({ onOutput }) {
         </div>
       )}
 
-      {/* Progress */}
-      {loading && (
-        <div className="progress-section">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="progress-status">
-            <Loader2 size={16} className="spin" />
-            {status}
-          </div>
+      {/* Queued notification */}
+      {lastQueued && (
+        <div className="queued-notice">
+          ✅ Job queued! Check the Queue panel for progress.
+          <span className="queued-mode">{lastQueued.mode.toUpperCase()}</span>
         </div>
       )}
 
@@ -323,12 +318,12 @@ export default function AudioGenerationTool({ onOutput }) {
       <button
         className="btn-primary btn-large"
         onClick={handleGenerate}
-        disabled={!text.trim() || loading}
+        disabled={!text.trim() || submitting}
       >
-        {loading ? (
+        {submitting ? (
           <>
             <Loader2 size={18} className="spin" />
-            Generating...
+            Queueing...
           </>
         ) : (
           <>
@@ -419,6 +414,21 @@ export default function AudioGenerationTool({ onOutput }) {
           color: var(--text-color, #fff);
           font-size: 14px;
           resize: none;
+        }
+        .voice-group {
+          margin-bottom: 12px;
+        }
+        .voice-group:last-child {
+          margin-bottom: 0;
+        }
+        .voice-group-label {
+          display: block;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text-muted, #888);
+          margin-bottom: 8px;
         }
         .voice-grid {
           display: grid;

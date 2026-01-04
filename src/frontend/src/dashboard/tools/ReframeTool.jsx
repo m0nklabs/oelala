@@ -31,7 +31,7 @@ const MODELS = [
   { id: 'flux', label: 'Flux (Fast)', file: 'flux1-dev-bnb-nf4.safetensors' },
 ]
 
-export default function ReframeTool() {
+export default function ReframeTool({ onJobSubmitted }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
@@ -44,10 +44,10 @@ export default function ReframeTool() {
   const [denoise, setDenoise] = useState(0.85)
   const [feathering, setFeathering] = useState(32)
   const [isLoading, setIsLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [lastQueued, setLastQueued] = useState(null)
   const fileInputRef = useRef(null)
 
   const handleFileDrop = useCallback((e) => {
@@ -57,6 +57,7 @@ export default function ReframeTool() {
       setFile(dropped)
       setResult(null)
       setError(null)
+      setLastQueued(null)
       
       // Get original dimensions
       const url = URL.createObjectURL(dropped)
@@ -71,27 +72,6 @@ export default function ReframeTool() {
 
   const handleDragOver = (e) => e.preventDefault()
 
-  const pollForCompletion = async (promptId) => {
-    const maxAttempts = 300
-    let attempts = 0
-    
-    while (attempts < maxAttempts) {
-      await new Promise(r => setTimeout(r, 1000))
-      attempts++
-      setProgress(Math.min(95, attempts * 0.5))
-      
-      const res = await getJson(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-      if (DEBUG) console.log('🔍 Reframe poll:', res.data)
-      
-      if (res.data?.status === 'completed') {
-        return res.data
-      } else if (res.data?.status === 'error') {
-        throw new Error(res.data?.error || 'Generation failed')
-      }
-    }
-    throw new Error('Generation timed out')
-  }
-
   const handleGenerate = async () => {
     if (!file) {
       setError('Please upload an image first')
@@ -99,9 +79,9 @@ export default function ReframeTool() {
     }
     
     setIsLoading(true)
-    setProgress(0)
     setError(null)
     setResult(null)
+    setLastQueued(null)
     
     try {
       const formData = new FormData()
@@ -128,25 +108,22 @@ export default function ReframeTool() {
       }
       
       if (res.data?.prompt_id) {
-        setProgress(5)
-        const completed = await pollForCompletion(res.data.prompt_id)
+        // Show queued confirmation
+        setLastQueued({
+          promptId: res.data.prompt_id,
+          aspectRatio: aspectRatio.label
+        })
         
-        if (completed.images?.length > 0) {
-          setResult({
-            url: completed.images[0],
-            prompt_id: res.data.prompt_id
-          })
-        } else if (completed.url) {
-          setResult({
-            url: completed.url,
-            prompt_id: res.data.prompt_id
-          })
-        }
+        // Notify queue indicator
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
+        
+        if (DEBUG) console.debug('📋 Reframe queued:', res.data.prompt_id)
+        
+        // Don't wait for completion - job will appear in queue/history when done
       } else if (res.data?.url) {
         setResult({ url: res.data.url })
       }
       
-      setProgress(100)
     } catch (err) {
       console.error('❌ Reframe error:', err)
       setError(err.message)
@@ -436,7 +413,7 @@ export default function ReframeTool() {
         {isLoading ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            Reframing... {progress > 0 && `${Math.round(progress)}%`}
+            Queueing...
           </>
         ) : (
           <>
@@ -445,6 +422,13 @@ export default function ReframeTool() {
           </>
         )}
       </button>
+
+      {/* Queued confirmation */}
+      {lastQueued && (
+        <div className="p-3 bg-green-900/50 border border-green-700 rounded-lg text-green-200 text-sm">
+          ✅ Reframe job queued! ({lastQueued.aspectRatio}) - Check queue panel for progress
+        </div>
+      )}
 
       {/* Error */}
       {error && (

@@ -368,7 +368,7 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
     """List media files from ComfyUI output directory
     
     Args:
-        type: Filter by media type ('all', 'video', 'image')
+        type: Filter by media type ('all', 'video', 'image', 'audio')
         grouped: Group videos with source images (not implemented yet)
         include_metadata: Include PNG metadata in response
         hide_start_images: Hide images that are start frames for videos (default True)
@@ -376,11 +376,12 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
     comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
     
     if not comfyui_output.exists():
-        return {"media": [], "stats": {"videos": 0, "images": 0}}
+        return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
     
     media = []
     video_count = 0
     image_count = 0
+    audio_count = 0
     
     # First pass: collect all files and extract timestamps from videos
     video_timestamps = set()
@@ -399,6 +400,8 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
             all_files.append((file_path, 'video'))
         elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
             all_files.append((file_path, 'image'))
+        elif ext in ['.wav', '.mp3', '.flac', '.ogg', '.opus', '.m4a', '.aac']:
+            all_files.append((file_path, 'audio'))
     
     # Second pass: process files and mark start images
     for file_path, media_type in all_files:
@@ -406,8 +409,10 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
         
         if media_type == 'video':
             video_count += 1
-        else:
+        elif media_type == 'image':
             image_count += 1
+        elif media_type == 'audio':
+            audio_count += 1
         
         # Filter by type if requested
         if type != 'all' and media_type != type:
@@ -745,9 +750,11 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
         "media": media,
         "videos": video_count,
         "images": image_count,
+        "audio": audio_count,
         "stats": {
             "videos": video_count,
-            "images": image_count
+            "images": image_count,
+            "audio": audio_count
         }
     }
 
@@ -3289,16 +3296,26 @@ async def generate_audio(
             # Build prompt with style prefix
             music_prompt = f"{style} music, {text}"
             
+            # NOTE: MMAudio requires specific models to be downloaded
+            # Models needed from: https://huggingface.co/Kijai/MMAudio_safetensors
+            # These go in: ComfyUI/models/mmaudio/
             workflow = {
                 "1": {
                     "class_type": "MMAudioModelLoader",
                     "inputs": {
-                        "model": "mmaudio_large_44k_v2"
+                        "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
+                        "base_precision": "fp16"
                     }
                 },
                 "2": {
                     "class_type": "MMAudioFeatureUtilsLoader",
-                    "inputs": {}
+                    "inputs": {
+                        "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
+                        "vae_model": "mmaudio_vae_44k_fp16.safetensors",
+                        "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+                        "mode": "44k",
+                        "precision": "fp16"
+                    }
                 },
                 "3": {
                     "class_type": "MMAudioSampler",
@@ -3309,15 +3326,13 @@ async def generate_audio(
                         "negative_prompt": "noise, distortion, glitch, silence",
                         "duration": float(duration),
                         "steps": 25,
-                        "cfg_strength": 4.5,
-                        "seed": random.randint(0, 2**32 - 1)
+                        "cfg": 4.5,
+                        "seed": random.randint(0, 2**32 - 1),
+                        "mask_away_clip": False,
+                        "force_offload": True
                     }
                 },
                 "4": {
-                    "class_type": "MMAudioVoCoderLoader",
-                    "inputs": {}
-                },
-                "5": {
                     "class_type": "SaveAudio",
                     "inputs": {
                         "audio": ["3", 0],
@@ -3346,12 +3361,19 @@ async def generate_audio(
                 "1": {
                     "class_type": "MMAudioModelLoader",
                     "inputs": {
-                        "model": "mmaudio_large_44k_v2"
+                        "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
+                        "base_precision": "fp16"
                     }
                 },
                 "2": {
                     "class_type": "MMAudioFeatureUtilsLoader",
-                    "inputs": {}
+                    "inputs": {
+                        "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
+                        "vae_model": "mmaudio_vae_44k_fp16.safetensors",
+                        "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+                        "mode": "44k",
+                        "precision": "fp16"
+                    }
                 },
                 "3": {
                     "class_type": "MMAudioSampler",
@@ -3362,8 +3384,10 @@ async def generate_audio(
                         "negative_prompt": "music, speech, voice, singing",
                         "duration": float(sfx_duration),
                         "steps": 25,
-                        "cfg_strength": 4.5,
-                        "seed": random.randint(0, 2**32 - 1)
+                        "cfg": 4.5,
+                        "seed": random.randint(0, 2**32 - 1),
+                        "mask_away_clip": False,
+                        "force_offload": True
                     }
                 },
                 "4": {

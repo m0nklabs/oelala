@@ -5,15 +5,16 @@ export const TOOL_IDS = {
   IMAGE_TO_VIDEO: 'image-to-video',
   TEXT_TO_IMAGE_TO_VIDEO: 'text-to-image-to-video',
   VIDEO_TO_VIDEO: 'video-to-video',
-  VIDEO_TO_TEXT: 'video-to-text',
+  SPEECH_TO_VIDEO: 'speech-to-video',
   // Image Tools
   IMAGE_TO_IMAGE: 'image-to-image',
   REFRAME: 'reframe',
   FACE_SWAP: 'face-swap',
   UPSCALER: 'upscaler',
   // Prompt Tools
-  IMAGE_TO_TEXT: 'image-to-text',
   PROMPT_GENERATOR: 'prompt-generator',
+  IMAGE_TO_TEXT: 'image-to-text',
+  VIDEO_TO_TEXT: 'video-to-text',
   // Audio Tools
   AUDIO_GENERATION: 'audio-generation',
   VOICE_CLONING: 'voice-cloning',
@@ -25,6 +26,7 @@ export const TOOL_IDS = {
   MY_MEDIA_ALL: 'my-media-all',
   MY_MEDIA_VIDEOS: 'my-media-videos',
   MY_MEDIA_IMAGES: 'my-media-images',
+  MY_MEDIA_AUDIO: 'my-media-audio',
   MY_MEDIA_PROMPTS: 'my-media-prompts',
 }
 
@@ -37,7 +39,7 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.TEXT_TO_VIDEO, label: 'Text to Video', status: 'ready' },
       { id: TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO, label: 'Text to Image to Video', status: 'ready' },
       { id: TOOL_IDS.VIDEO_TO_VIDEO, label: 'Video to Video', status: 'ready' },
-      { id: TOOL_IDS.VIDEO_TO_TEXT, label: 'Video to Text', status: 'new' },
+      { id: TOOL_IDS.SPEECH_TO_VIDEO, label: 'Speech to Video', status: 'new' },
     ],
   },
   {
@@ -55,8 +57,9 @@ export const NAV_GROUPS = [
     id: 'prompt-tools',
     title: 'Prompt Tools',
     items: [
-      { id: TOOL_IDS.IMAGE_TO_TEXT, label: 'Image to Text', status: 'new' },
       { id: TOOL_IDS.PROMPT_GENERATOR, label: 'Prompt Generator', status: 'new' },
+      { id: TOOL_IDS.IMAGE_TO_TEXT, label: 'Image to Text', status: 'new' },
+      { id: TOOL_IDS.VIDEO_TO_TEXT, label: 'Video to Text', status: 'new' },
     ],
   },
   {
@@ -83,6 +86,7 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.MY_MEDIA_ALL, label: 'All', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_VIDEOS, label: 'Videos', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_IMAGES, label: 'Images', status: 'ready' },
+      { id: TOOL_IDS.MY_MEDIA_AUDIO, label: 'Audio', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_PROMPTS, label: 'Prompts', status: 'ready' },
     ],
   },

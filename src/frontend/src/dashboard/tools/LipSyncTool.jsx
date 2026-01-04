@@ -9,7 +9,7 @@ import { postForm, postJson } from '../../api'
 const SUPPORTED_VIDEO_FORMATS = ['video/mp4', 'video/webm', 'video/quicktime']
 const SUPPORTED_AUDIO_FORMATS = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/flac', 'audio/ogg', 'audio/webm']
 
-export default function LipSyncTool({ onOutput }) {
+export default function LipSyncTool({ onOutput, onJobSubmitted }) {
   // Video state
   const [videoFile, setVideoFile] = useState(null)
   const [videoUrl, setVideoUrl] = useState(null)
@@ -31,10 +31,10 @@ export default function LipSyncTool({ onOutput }) {
   const resultVideoRef = useRef(null)
   
   // Generation state
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
-  const [status, setStatus] = useState('')
-  const [progress, setProgress] = useState(0)
+  const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
 
   // Handle video drop/select
@@ -46,6 +46,7 @@ export default function LipSyncTool({ onOutput }) {
       setVideoUrl(URL.createObjectURL(file))
       setUploadedVideoPath(null)
       setError(null)
+      setLastQueued(null)
     } else if (file) {
       setError('Please upload a valid video file (MP4, WebM)')
     }
@@ -60,6 +61,7 @@ export default function LipSyncTool({ onOutput }) {
       setAudioUrl(URL.createObjectURL(file))
       setUploadedAudioPath(null)
       setError(null)
+      setLastQueued(null)
     } else if (file) {
       setError('Please upload a valid audio file (WAV, MP3, FLAC)')
     }
@@ -81,34 +83,6 @@ export default function LipSyncTool({ onOutput }) {
     }
   }
 
-  // Poll for completion
-  const pollForCompletion = async (promptId, maxAttempts = 300) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      try {
-        const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
-        if (!res.ok) continue
-        const data = await res.json()
-        
-        if (data.status === 'pending') {
-          setStatus('Queued...')
-          setProgress(Math.min(10, attempt * 2))
-        } else if (data.status === 'running') {
-          setStatus('Syncing lips to audio...')
-          setProgress(Math.min(90, 10 + (attempt * 0.3)))
-        } else if (data.status === 'completed') {
-          setProgress(100)
-          return data
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'Lip sync failed')
-        }
-      } catch (e) {
-        if (e.message.includes('failed')) throw e
-      }
-    }
-    throw new Error('Lip sync timed out')
-  }
-
   // Generate lip synced video
   const handleGenerate = async () => {
     if (!videoFile || !audioFile) {
@@ -116,17 +90,16 @@ export default function LipSyncTool({ onOutput }) {
       return
     }
     
-    setLoading(true)
+    setSubmitting(true)
+    setUploading(true)
     setError(null)
-    setStatus('Uploading files...')
-    setProgress(0)
+    setLastQueued(null)
     setResult(null)
     
     try {
       // Upload video if needed
       let videoPath = uploadedVideoPath
       if (!videoPath) {
-        setStatus('Uploading video...')
         videoPath = await uploadFile(videoFile)
         setUploadedVideoPath(videoPath)
       }
@@ -134,13 +107,11 @@ export default function LipSyncTool({ onOutput }) {
       // Upload audio if needed
       let audioPath = uploadedAudioPath
       if (!audioPath) {
-        setStatus('Uploading audio...')
         audioPath = await uploadFile(audioFile)
         setUploadedAudioPath(audioPath)
       }
       
-      setStatus('Starting lip sync...')
-      setProgress(5)
+      setUploading(false)
       
       // Request lip sync
       const res = await postJson(`${BACKEND_BASE}/lip-sync`, {
@@ -156,34 +127,23 @@ export default function LipSyncTool({ onOutput }) {
       }
       
       if (res.data?.prompt_id) {
-        setStatus('Processing...')
-        const completed = await pollForCompletion(res.data.prompt_id)
+        // Show queued confirmation
+        setLastQueued({ promptId: res.data.prompt_id })
         
-        if (completed.output_video || completed.url) {
-          const videoUrl = completed.output_video || completed.url
-          const fullUrl = videoUrl.startsWith('http') ? videoUrl : `${BACKEND_BASE}${videoUrl}`
-          setResult({ url: fullUrl, filename: videoUrl.split('/').pop() })
-          setStatus('Complete!')
-          
-          if (onOutput) {
-            onOutput({
-              kind: 'video',
-              url: fullUrl,
-              filename: videoUrl.split('/').pop(),
-            })
-          }
-        } else {
-          throw new Error('No video output received')
-        }
+        // Notify queue indicator
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
+        
+        if (DEBUG) console.debug('📋 LipSync queued:', res.data.prompt_id)
+        
+        // Don't wait for completion - job will appear in queue/history when done
       }
       
     } catch (err) {
       console.error('Lip sync error:', err)
       setError(err.message)
-      setStatus('')
     } finally {
-      setLoading(false)
-      setProgress(0)
+      setSubmitting(false)
+      setUploading(false)
     }
   }
 
@@ -334,17 +294,24 @@ export default function LipSyncTool({ onOutput }) {
         </div>
       </div>
 
+      {/* Queued notification */}
+      {lastQueued && (
+        <div className="queued-notice">
+          ✅ Job queued! Check the Queue panel for progress.
+        </div>
+      )}
+
       {/* Generate Button */}
       <div className="tool-section">
         <button
           className="generate-btn"
           onClick={handleGenerate}
-          disabled={loading || !videoFile || !audioFile}
+          disabled={submitting || !videoFile || !audioFile}
         >
-          {loading ? (
+          {submitting ? (
             <>
               <Loader2 size={20} className="spin" />
-              <span>{status || 'Processing...'}</span>
+              <span>{uploading ? 'Uploading...' : 'Queueing...'}</span>
             </>
           ) : (
             <>
@@ -353,12 +320,6 @@ export default function LipSyncTool({ onOutput }) {
             </>
           )}
         </button>
-        
-        {loading && progress > 0 && (
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-        )}
       </div>
 
       {/* Error */}

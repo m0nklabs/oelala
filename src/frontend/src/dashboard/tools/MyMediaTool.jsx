@@ -72,7 +72,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [mediaList, setMediaList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [stats, setStats] = useState({ videos: 0, images: 0 })
+  const [stats, setStats] = useState({ videos: 0, images: 0, audio: 0 })
   const [selectedIndex, setSelectedIndex] = useState(null)
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [lastClickedIndex, setLastClickedIndex] = useState(null)
@@ -218,7 +218,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       }
       
       setMediaList(media)
-      setStats({ videos: data.videos || 0, images: data.images || 0 })
+      setStats({ videos: data.videos || 0, images: data.images || 0, audio: data.audio || 0 })
       setSelectedItems(new Set()) // Clear selection on refresh
     } catch (err) {
       setError(err.message)
@@ -493,6 +493,42 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           height: 100%;
           object-fit: cover;
           display: block;
+        }
+        
+        /* ========== AUDIO THUMBNAIL ========== */
+        .audio-thumb {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .audio-thumb .audio-icon {
+          font-size: 3rem;
+          margin-bottom: 8px;
+        }
+        .audio-thumb audio {
+          display: none;
+        }
+        .audio-lightbox {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 40px;
+          background: rgba(0,0,0,0.8);
+          border-radius: 12px;
+        }
+        .audio-lightbox .audio-icon-large {
+          font-size: 6rem;
+          margin-bottom: 20px;
+        }
+        .audio-lightbox .audio-filename {
+          color: var(--text-primary);
+          font-size: 1.2rem;
+          margin-bottom: 10px;
         }
 
         /* ========== SELECTION CHECKBOX ========== */
@@ -925,13 +961,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-            {filter === 'all' ? 'All Media' : filter === 'video' ? 'Videos' : filter === 'image' ? 'Images' : 'Prompts'}
+            {filter === 'all' ? 'All Media' : filter === 'video' ? 'Videos' : filter === 'image' ? 'Images' : filter === 'audio' ? 'Audio' : 'Prompts'}
           </span>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             {filter === 'prompts' ? (
               <>💬 {sortedMediaList.length} items with prompts</>
             ) : (
-              <>🎬 {stats.videos} • 🖼️ {stats.images} • ❤️ {favoritesCount}</>
+              <>🎬 {stats.videos} • 🖼️ {stats.images} • 🎵 {stats.audio} • ❤️ {favoritesCount}</>
             )}
             {filterBy !== 'all' && ` • 📋 ${sortedMediaList.length} shown`}
           </span>
@@ -1351,7 +1387,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                       fontSize: '0.75rem', 
                       color: 'var(--text-muted)' 
                     }}>
-                      {item.type === 'video' ? '🎬' : '🖼️'} {formatSize(item.size)}
+                      {item.type === 'video' ? '🎬' : item.type === 'audio' ? '🎵' : '🖼️'} {formatSize(item.size)}
                       {item.metadata?.steps && ` • ${item.metadata.steps} steps`}
                       {item.metadata?.cfg && ` • CFG ${item.metadata.cfg}`}
                     </div>
@@ -1503,6 +1539,20 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                     }
                   }}
                 />
+              ) : item.type === 'audio' ? (
+                <div className="audio-thumb">
+                  <div className="audio-icon">🎵</div>
+                  <audio
+                    src={`${BACKEND_BASE}${item.url}`}
+                    preload="metadata"
+                    onLoadedMetadata={(e) => {
+                      const duration = e.target.duration
+                      if (duration && !videoDurations[item.filename]) {
+                        setVideoDurations(prev => ({ ...prev, [item.filename]: duration }))
+                      }
+                    }}
+                  />
+                </div>
               ) : (
                 <img
                   src={`${BACKEND_BASE}${item.url}`}
@@ -1516,7 +1566,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <div className="media-filename">{item.filename}</div>
                   <div className="media-size">
                     {formatSize(item.size)}
-                    {item.type === 'video' && videoDurations[item.filename] && (
+                    {(item.type === 'video' || item.type === 'audio') && videoDurations[item.filename] && (
                       <span className="media-duration">
                         <Clock size={10} />
                         {formatDuration(videoDurations[item.filename])}
@@ -1621,6 +1671,17 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 controls
                 style={{ borderRadius: '12px' }}
               />
+            ) : selectedItem.type === 'audio' ? (
+              <div className="audio-lightbox">
+                <div className="audio-icon-large">🎵</div>
+                <div className="audio-filename">{selectedItem.filename}</div>
+                <audio
+                  src={`${BACKEND_BASE}${selectedItem.url}`}
+                  autoPlay
+                  controls
+                  style={{ width: '100%', maxWidth: '400px', marginTop: '20px' }}
+                />
+              </div>
             ) : (
               <img
                 src={`${BACKEND_BASE}${selectedItem.url}`}

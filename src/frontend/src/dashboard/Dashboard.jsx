@@ -12,6 +12,7 @@ import TextToImageTool from './tools/TextToImageTool'
 import TextToImageToVideoTool from './tools/TextToImageToVideoTool'
 import VideoToVideoTool from './tools/VideoToVideoTool'
 import VideoToTextTool from './tools/VideoToTextTool'
+import SpeechToVideoTool from './tools/SpeechToVideoTool'
 import PipelineTool from './tools/PipelineTool'
 import LoRATrainingTool from './tools/LoRATrainingTool'
 import ImageToTextTool from './tools/ImageToTextTool'
@@ -134,6 +135,8 @@ export default function Dashboard() {
         return 'Voice Cloning'
       case TOOL_IDS.LIP_SYNC:
         return 'Lip Sync'
+      case TOOL_IDS.SPEECH_TO_VIDEO:
+        return 'Speech to Video'
       case TOOL_IDS.MY_MEDIA_ALL:
         return 'My Media - All'
       case TOOL_IDS.MY_MEDIA_VIDEOS:
@@ -168,11 +171,11 @@ export default function Dashboard() {
 
     switch (activeToolId) {
       case TOOL_IDS.TEXT_TO_VIDEO:
-        return <TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} />
+        return <TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.IMAGE_TO_VIDEO:
         return <ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
-        return <TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} />
+        return <TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.PIPELINE:
         return <PipelineTool />
       case TOOL_IDS.LORA_TRAINING:
@@ -184,11 +187,13 @@ export default function Dashboard() {
         return <MyMediaTool filter="video" />
       case TOOL_IDS.MY_MEDIA_IMAGES:
         return <MyMediaTool filter="image" />
+      case TOOL_IDS.MY_MEDIA_AUDIO:
+        return <MyMediaTool filter="audio" />
       case TOOL_IDS.MY_MEDIA_PROMPTS:
         return <MyMediaTool filter="prompts" />
 
       case TOOL_IDS.TEXT_TO_IMAGE:
-        return <TextToImageTool onOutput={setOutput} />
+        return <TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
       case TOOL_IDS.IMAGE_TO_TEXT:
         return <ImageToTextTool />
@@ -196,28 +201,31 @@ export default function Dashboard() {
         return <PromptGeneratorTool />
 
       case TOOL_IDS.IMAGE_TO_IMAGE:
-        return <ImageToImageTool onOutput={setOutput} />
+        return <ImageToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.UPSCALER:
-        return <UpscalerTool onOutput={setOutput} />
+        return <UpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
       case TOOL_IDS.VIDEO_TO_VIDEO:
-        return <VideoToVideoTool onOutput={setOutput} />
+        return <VideoToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.VIDEO_TO_TEXT:
         return <VideoToTextTool />
 
       case TOOL_IDS.AUDIO_GENERATION:
-        return <AudioGenerationTool onOutput={setOutput} />
+        return <AudioGenerationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
       case TOOL_IDS.VOICE_CLONING:
-        return <VoiceCloningTool onOutput={setOutput} />
+        return <VoiceCloningTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
       
       case TOOL_IDS.LIP_SYNC:
-        return <LipSyncTool onOutput={setOutput} />
+        return <LipSyncTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+
+      case TOOL_IDS.SPEECH_TO_VIDEO:
+        return <SpeechToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
       case TOOL_IDS.REFRAME:
-        return <ReframeTool onOutput={setOutput} />
+        return <ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.FACE_SWAP:
-        return <FaceSwapTool onOutput={setOutput} />
+        return <FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
       default:
         return <ComingSoonTool title={toolTitle} />
@@ -271,6 +279,7 @@ export default function Dashboard() {
         {(activeToolId === TOOL_IDS.MY_MEDIA_ALL || 
           activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS || 
           activeToolId === TOOL_IDS.MY_MEDIA_IMAGES ||
+          activeToolId === TOOL_IDS.MY_MEDIA_AUDIO ||
           activeToolId === TOOL_IDS.MY_MEDIA_PROMPTS) ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderControls()}

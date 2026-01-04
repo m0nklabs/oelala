@@ -145,37 +145,7 @@ Dit document beschrijft alle tools die geïmplementeerd moeten worden in de Oela
 
 ## 💬 Prompt Tools (NEW SECTION)
 
-### 🔴 Image to Text (I2T) - ✅ DONE
-Caption/describe images using vision models.
-
-- [x] Upload image
-- [x] Model selector (SmolVLM, CogVLM, LLaVA)
-- [x] Caption mode (Brief, Detailed, Tags, Prompt-style)
-- [x] Copy to clipboard
-- [x] Send to T2I/I2V prompt
-
-**Backend implemented:**
-- `/caption-image` endpoint ✅
-- Uses ComfyUI Florence2 or JoyTag nodes
-
-### 🔴 Video to Text (V2T) - ✅ PARTIAL
-Caption/describe videos using vision models.
-
-- [x] Upload video
-- [x] Model selector (SmolVLM, CogVLM, LLaVA)
-- [x] Caption mode (Brief, Detailed, Prompt, Timeline)
-- [x] Frame interval selector
-- [x] Max frames control
-- [x] Copy to clipboard
-- [ ] **YouTube URL import** (paste link, auto-download)
-- [ ] Auto-extract existing captions/subtitles
-- [ ] Timeline-based captioning with timestamps
-
-**Backend implemented:**
-- `/caption-video` endpoint ✅
-- OpenCV frame extraction
-- (SmolVLM integration TODO)
-- (YouTube import TODO via ComfyUI-ytdl_nodes)
+> **Note (Jan 4)**: Video to Text moved here from Video Tools. Prompt Generator is now first item.
 
 ### 🔴 Prompt Generator - ✅ PARTIAL
 AI-powered prompt enhancement and generation.
@@ -278,30 +248,32 @@ Save and organize prompts.
 - ytdl: YTDLDownloader, YTDLLinksInput, YTDLPreview, YTDLPreviewAudio
 - LatentSync: LatentSyncNode (lip sync to audio)
 
-### 🔴 Text to Speech (TTS) - PRIORITY
+### 🔴 Text to Speech (TTS) - ✅ UPDATED
 Advanced TTS with voice cloning.
 
-- [ ] Multi-engine support:
-  - [ ] F5-TTS (fast, good quality)
+- [x] Multi-engine support:
+  - [x] F5-TTS (F5v1, E2 models)
+  - [x] ChatterBox
   - [ ] XTTS v2 (17 languages)
   - [ ] VibeVoice (expressive long-form)
-  - [ ] ChatterBox
   - [ ] IndexTTS (dialogue)
-- [ ] Voice cloning:
-  - [ ] Upload reference audio (5-15 sec)
-  - [ ] Zero-shot cloning
+- [x] Voice cloning:
+  - [x] Upload reference audio (5-15 sec)
+  - [x] Zero-shot cloning
   - [ ] Voice library management
+- [x] **Gender selection (Jan 4)**:
+  - [x] Female voices: Nova (default), Shimmer, Alloy
+  - [x] Male voices: Echo, Fable, Onyx
+  - [x] Visual grouping in UI
 - [ ] Emotion/style control
-- [ ] Speed/pitch adjustment
+- [x] Speed/pitch adjustment
 - [ ] Multi-speaker support (tag-based)
 - [ ] SRT subtitle import
 - [ ] 23+ languages
 
-**Backend needs:**
-- `/tts/generate` endpoint
-- `/tts/voices` - list/manage voices
-- `/tts/clone` - clone voice from audio
-- ComfyUI integration via TTS-Audio-Suite
+**Backend implemented:**
+- `/generate-audio` endpoint ✅ (tts, music, sfx modes)
+- `/voice-clone` endpoint ✅ (F5-TTS models)
 
 ### 🔴 Voice Training/Cloning - NOT STARTED
 Train custom voices (ElevenLabs-style).

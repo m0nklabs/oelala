@@ -80,6 +80,17 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - Oelala defaults:
     - Frontend dev server: 5174
     - Backend API: 7998
+    - ComfyUI: 8188
+
+## Services
+
+- **Backend API**: Runs as a systemd service `oelala-api.service`. Do NOT start/stop manually with uvicorn commands.
+  - Restart: `sudo systemctl restart oelala-api`
+  - Logs: `journalctl -u oelala-api -f`
+- **ComfyUI**: Runs as a systemd service `comfyui.service`.
+  - Restart: `sudo systemctl restart comfyui`
+  - Logs: `journalctl -u comfyui -f`
+- **Frontend**: Runs via `npm run dev` in development, or as static build in production.
 
 ## Safety & secrets
 
