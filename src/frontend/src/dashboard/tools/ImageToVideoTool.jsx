@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
 import PresetSelector from '../../components/PresetSelector'
+import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
@@ -49,26 +50,6 @@ const RESOLUTION_PRESETS = {
 
 // Aspect ratio options
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
-
-// Camera motion presets for Wan2.2
-const CAMERA_MOTIONS = [
-  { value: '', label: 'None', desc: 'No camera motion', prefix: '' },
-  { value: 'static', label: '📷 Static', desc: 'Camera stays still', prefix: 'static camera shot, ' },
-  { value: 'pan_left', label: '⬅️ Pan Left', desc: 'Camera pans left', prefix: 'camera slowly panning left, ' },
-  { value: 'pan_right', label: '➡️ Pan Right', desc: 'Camera pans right', prefix: 'camera slowly panning right, ' },
-  { value: 'tilt_up', label: '⬆️ Tilt Up', desc: 'Camera tilts up', prefix: 'camera slowly tilting up, ' },
-  { value: 'tilt_down', label: '⬇️ Tilt Down', desc: 'Camera tilts down', prefix: 'camera slowly tilting down, ' },
-  { value: 'zoom_in', label: '🔍 Zoom In', desc: 'Camera zooms in', prefix: 'camera slowly zooming in, ' },
-  { value: 'zoom_out', label: '🔭 Zoom Out', desc: 'Camera zooms out', prefix: 'camera slowly zooming out, ' },
-  { value: 'dolly_in', label: '🎬 Dolly In', desc: 'Camera moves forward', prefix: 'camera dollying forward, ' },
-  { value: 'dolly_out', label: '🎬 Dolly Out', desc: 'Camera moves back', prefix: 'camera dollying backward, ' },
-  { value: 'orbit_left', label: '🔄 Orbit Left', desc: 'Camera orbits left', prefix: 'camera orbiting left around subject, ' },
-  { value: 'orbit_right', label: '🔄 Orbit Right', desc: 'Camera orbits right', prefix: 'camera orbiting right around subject, ' },
-  { value: 'handheld', label: '📹 Handheld', desc: 'Slight shake', prefix: 'shaky handheld camera, ' },
-  { value: 'tracking', label: '🏃 Tracking', desc: 'Follows subject', prefix: 'camera tracking shot following subject, ' },
-  { value: 'crane_up', label: '🏗️ Crane Up', desc: 'Camera rises up', prefix: 'crane shot rising up, ' },
-  { value: 'crane_down', label: '🏗️ Crane Down', desc: 'Camera lowers', prefix: 'crane shot lowering down, ' },
-]
 
 export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted }) {
   const fileInputRef = useRef(null)
@@ -298,8 +279,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     
     // Build prompt with camera motion prefix
     if (!usePose) {
-      const motionPreset = CAMERA_MOTIONS.find(m => m.value === cameraMotion)
-      const motionPrefix = motionPreset?.prefix || ''
+      const motionPrefix = getCameraMotionPrefix(cameraMotion)
       const finalPrompt = motionPrefix + (prompt || 'Motion, subject moving naturally')
       formData.append('prompt', finalPrompt)
     }
@@ -642,39 +622,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         </div>
         
         {/* Camera Motion Selector */}
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Camera Motion</span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              {cameraMotion ? CAMERA_MOTIONS.find(m => m.value === cameraMotion)?.desc : 'Optional'}
-            </span>
-          </div>
-          <div style={{ 
-            display: 'flex', 
-            flexWrap: 'wrap', 
-            gap: '6px' 
-          }}>
-            {CAMERA_MOTIONS.map(motion => (
-              <button
-                key={motion.value}
-                onClick={() => setCameraMotion(motion.value === cameraMotion ? '' : motion.value)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: cameraMotion === motion.value ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                  background: cameraMotion === motion.value ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                  color: cameraMotion === motion.value ? 'var(--accent-color)' : 'var(--text-secondary)',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-                title={motion.desc}
-              >
-                {motion.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <CameraMotionSelector value={cameraMotion} onChange={setCameraMotion} />
         
         <div style={{ position: 'relative' }}>
           <textarea
