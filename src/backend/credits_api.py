@@ -101,6 +101,20 @@ async def get_packages():
     Returns list of packages with credits and prices.
     """
     manager = get_credit_manager()
+    
+    # Check if Supabase is configured - if not, return defaults silently
+    if not manager.service_key:
+        return [
+            CreditPackageResponse(
+                id=p.id,
+                name=p.name,
+                credits=p.credits,
+                price_cents=p.price_cents,
+                currency=p.currency,
+            )
+            for p in DEFAULT_PACKAGES
+        ]
+    
     try:
         packages = await manager.get_packages()
         return packages
