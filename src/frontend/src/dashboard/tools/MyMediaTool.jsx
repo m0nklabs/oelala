@@ -406,6 +406,27 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     link.click()
   }
 
+  // Batch download selected items
+  const handleBatchDownload = async () => {
+    if (selectedItems.size === 0) return
+    
+    const items = sortedMediaList.filter(item => selectedItems.has(item.filename))
+    
+    // Download one by one with small delay to avoid browser blocking
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      const link = document.createElement('a')
+      link.href = `${BACKEND_BASE}${item.url}`
+      link.download = item.filename
+      link.click()
+      
+      // Small delay between downloads
+      if (i < items.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+    }
+  }
+
   const handleDownloadMetadata = async (item, e) => {
     e?.stopPropagation()
     try {
@@ -1058,6 +1079,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               </button>
               <button className="header-btn" onClick={selectAll}>
                 Select All
+              </button>
+              <button 
+                className="header-btn"
+                onClick={handleBatchDownload}
+                title="Download selected items"
+              >
+                <Download size={16} />
+                Download
               </button>
               <button 
                 className="delete-btn" 

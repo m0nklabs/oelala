@@ -2,6 +2,9 @@
 // Set the backend base URL explicitly to the LAN address used by Oelala
 const BACKEND_BASE = 'http://192.168.1.2:7998'
 
+// Storage service URL (oelala-storage Go service)
+const STORAGE_BASE = 'http://192.168.1.2:7990'
+
 // Global debug flag for UI logging
 const DEBUG = import.meta.env?.DEV ?? false
 
@@ -12,6 +15,6 @@ const EXTERNAL_SERVICES = {
   NADSCAB: 'http://192.168.1.2:7000/'
 }
 
-export { BACKEND_BASE, EXTERNAL_SERVICES }
+export { BACKEND_BASE, STORAGE_BASE, EXTERNAL_SERVICES }
 export default BACKEND_BASE
 export { DEBUG }
