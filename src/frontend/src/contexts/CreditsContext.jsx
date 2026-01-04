@@ -69,11 +69,17 @@ export function CreditsProvider({ children }) {
     }
   }, [])
 
-  // Initial load
+  // Fetch balance when user changes (use user.id as stable reference)
   useEffect(() => {
     fetchBalance()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]) // Only refetch when user.id actually changes
+
+  // Fetch packages once on mount (they don't depend on user)
+  useEffect(() => {
     fetchPackages()
-  }, [fetchBalance, fetchPackages])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only fetch once on mount
 
   /**
    * Estimate credits for a generation

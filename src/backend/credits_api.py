@@ -74,6 +74,16 @@ async def get_balance(user: User = Depends(get_current_user)):
     Returns balance, lifetime purchased, and lifetime used.
     """
     manager = get_credit_manager()
+    
+    # Check if Supabase is configured
+    if not manager.service_key:
+        logger.warning("SUPABASE_SERVICE_KEY not configured - returning default balance")
+        return CreditBalance(
+            balance=25,  # Welcome credits
+            lifetime_purchased=0,
+            lifetime_used=0,
+        )
+    
     try:
         balance = await manager.get_balance(user.id)
         debug_log(f"Balance for {user.id}: {balance.balance}")

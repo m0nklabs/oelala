@@ -284,11 +284,16 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     } finally {
       setLoading(false)
     }
-  }, [filter, hideStartImages, user])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, hideStartImages, user?.id]) // Use user.id for stable reference
 
+  // Fetch on mount and when dependencies change (but not on every user object change)
   useEffect(() => {
-    fetchMedia()
-  }, [fetchMedia])
+    let mounted = true
+    if (mounted) fetchMedia()
+    return () => { mounted = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, hideStartImages, user?.id])
 
   // Keyboard navigation
   useEffect(() => {

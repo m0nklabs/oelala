@@ -18,15 +18,23 @@ export default function LogViewer() {
   const bottomRef = useRef(null)
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
+  const reconnectAttempts = useRef(0)
+  const maxReconnectAttempts = 5
+  const baseReconnectDelay = 3000
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      // Stop trying after max attempts - WebSocket might not work via tunnel
+      return
+    }
 
     const ws = new WebSocket(getWsUrl())
     wsRef.current = ws
 
     ws.onopen = () => {
       setIsConnected(true)
+      reconnectAttempts.current = 0 // Reset on successful connect
       console.log('📡 Log WebSocket connected')
     }
 
@@ -39,21 +47,28 @@ export default function LogViewer() {
           return newLogs.slice(-500)
         })
       } catch (e) {
-        console.error('Failed to parse log', e)
+        // Silently ignore parse errors
       }
     }
 
     ws.onclose = () => {
       setIsConnected(false)
-      console.log('📡 Log WebSocket disconnected')
-      // Reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(() => {
-        if (isOpen) connect()
-      }, 3000)
+      reconnectAttempts.current++
+      
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        // Exponential backoff: 3s, 6s, 12s, 24s, 48s
+        const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts.current - 1)
+        console.log(`📡 Log WebSocket disconnected, retry ${reconnectAttempts.current}/${maxReconnectAttempts} in ${delay/1000}s`)
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (isOpen) connect()
+        }, delay)
+      } else {
+        console.log('📡 Log WebSocket: max reconnect attempts reached, giving up')
+      }
     }
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error', err)
+    ws.onerror = () => {
+      // Don't log errors to console, they're noisy
       ws.close()
     }
   }, [isOpen])
