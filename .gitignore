@@ -38,7 +38,8 @@ ComfyUI/input/
 generated/
 uploads/
 logs/
-wan_experiments/
+data/
+build/
 
 # ======================
 # PYTHON CACHE
