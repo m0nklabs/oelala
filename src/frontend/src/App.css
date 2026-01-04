@@ -71,6 +71,40 @@ body {
   overflow: hidden;
 }
 
+/* NSFW Toggle Button */
+.nsfw-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nsfw-toggle.nsfw-disabled {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.nsfw-toggle.nsfw-disabled:hover {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.nsfw-toggle.nsfw-enabled {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.nsfw-toggle.nsfw-enabled:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
 /* Sidebar */
 .sidebar {
   width: 260px;

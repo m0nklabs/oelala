@@ -1,6 +1,6 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-01-03  
+> **Last Updated**: 2026-01-04  
 > **Version**: 0.2.0 (Alpha)
 
 ## Vision
@@ -91,6 +91,28 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Custom LoRA training interface | ⏳ Todo | Medium |
 | Inpainting/outpainting tools | ⏳ Todo | Medium |
 | Frame interpolation (FI) | ⏳ Todo | Low |
+
+### Phase 5.5: Content Filtering
+
+**Goal**: NSFW content management for monetization compliance
+
+| Task | Status | Priority |
+|------|--------|----------|
+| Global NSFW toggle in header | ✅ Done | High |
+| Keyword-based NSFW detection | ✅ Done | High |
+| LoRA filtering by NSFW flag | ✅ Done | High |
+| Manual NSFW tagging system | ⏳ Todo | Medium |
+| NSFW flags in metadata DB | ⏳ Todo | Medium |
+| Auto-tag NSFW on generation | ⏳ Todo | Medium |
+| Model/checkpoint NSFW filtering | ⏳ Todo | Low |
+| Generated content NSFW scanning | ⏳ Todo | Low |
+
+**NSFW Access Control** (requires User System):
+- Default (not logged in): SFW only, no toggle visible
+- Logged in as adult: NSFW toggle available
+- Age verification at registration (DOB/checkbox)
+- Content generated with NSFW components → auto-tagged NSFW
+- NSFW flag stored in media metadata
 
 ### Phase 6: Avatar System
 

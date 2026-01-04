@@ -3,6 +3,7 @@ import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen,
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
+import { useNSFW } from '../../contexts/NSFWContext'
 import PresetSelector from '../../components/PresetSelector'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import '../../components/PresetSelector.css'
@@ -52,6 +53,7 @@ const RESOLUTION_PRESETS = {
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted }) {
+  const { nsfwEnabled } = useNSFW()
   const fileInputRef = useRef(null)
 
   const [file, setFile] = useState(null)
@@ -127,6 +129,33 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     }
     fetchLoras()
   }, [])
+
+  // Filter LoRAs based on NSFW setting
+  const filteredLoras = useMemo(() => {
+    if (nsfwEnabled) return availableLoras
+    
+    // Filter each category
+    const filterList = (list) => (list || []).filter(l => !l.nsfw)
+    
+    // Filter by_category object
+    const filteredByCategory = {}
+    if (availableLoras.by_category) {
+      Object.keys(availableLoras.by_category).forEach(cat => {
+        const filtered = filterList(availableLoras.by_category[cat])
+        if (filtered.length > 0) {
+          filteredByCategory[cat] = filtered
+        }
+      })
+    }
+    
+    return {
+      high_noise: filterList(availableLoras.high_noise),
+      low_noise: filterList(availableLoras.low_noise),
+      general: filterList(availableLoras.general),
+      loras: filterList(availableLoras.loras),
+      by_category: filteredByCategory,
+    }
+  }, [availableLoras, nsfwEnabled])
 
   // Fetch available unet models on mount
   useEffect(() => {
@@ -1236,9 +1265,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                           }}
                         >
                           <option value="">None</option>
-                          {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
+                          {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
                             <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
-                              {availableLoras.by_category[category].map((lora) => (
+                              {filteredLoras.by_category[category].map((lora) => (
                                 <option key={lora.path} value={lora.path}>
                                   {lora.name} ({lora.size_mb}MB)
                                 </option>
@@ -1271,9 +1300,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                           }}
                         >
                           <option value="">None (uses High Noise)</option>
-                          {availableLoras.by_category && Object.keys(availableLoras.by_category).sort().map((category) => (
+                          {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
                             <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
-                              {availableLoras.by_category[category].map((lora) => (
+                              {filteredLoras.by_category[category].map((lora) => (
                                 <option key={lora.path} value={lora.path}>
                                   {lora.name} ({lora.size_mb}MB)
                                 </option>

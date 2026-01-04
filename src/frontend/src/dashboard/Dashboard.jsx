@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
 import QueueIndicator from './QueueIndicator'
+import { useNSFW } from '../contexts/NSFWContext'
 import { TOOL_IDS } from './nav'
 
 import TextToVideoTool from './tools/TextToVideoTool'
@@ -232,19 +233,29 @@ export default function Dashboard() {
     }
   }
 
+  const { nsfwEnabled, setNsfwEnabled } = useNSFW()
+
   return (
     <div className="dashboard-container">
-      <Sidebar
-        activeToolId={activeToolId}
-        onSelectTool={setActiveToolId}
-        collapsed={sidebarCollapsed}
-        onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
-      />
+        <Sidebar
+          activeToolId={activeToolId}
+          onSelectTool={setActiveToolId}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+        />
 
       <main className="main-content">
         <div className="top-bar">
           <h1>{toolTitle}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* NSFW Toggle */}
+            <button
+              className={`nsfw-toggle ${nsfwEnabled ? 'nsfw-enabled' : 'nsfw-disabled'}`}
+              onClick={() => setNsfwEnabled(!nsfwEnabled)}
+              title={nsfwEnabled ? 'NSFW content visible' : 'NSFW content hidden'}
+            >
+              {nsfwEnabled ? '🔞 NSFW' : '🛡️ SFW'}
+            </button>
             {/* Queue indicator with popup */}
             <QueueIndicator 
               refreshToken={queueRefreshToken}

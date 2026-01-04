@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Sparkles, Settings2, Image as ImageIcon, Info, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useNSFW } from '../../contexts/NSFWContext'
 
 // Model categories
 const MODEL_CATEGORIES = {
@@ -41,6 +42,8 @@ const getModelType = (model) => {
 }
 
 export default function TextToImageTool({ onOutput, onJobSubmitted }) {
+  const { nsfwEnabled } = useNSFW()
+  
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text')
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -83,6 +86,12 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
     }
     fetchLoras()
   }, [])
+  
+  // Filter LoRAs based on NSFW setting
+  const filteredLoras = useMemo(() => {
+    if (nsfwEnabled) return availableLoras
+    return availableLoras.filter(l => !l.nsfw)
+  }, [availableLoras, nsfwEnabled])
   
   // Update LoRA selection
   const updateLora = (index, field, value) => {
@@ -636,10 +645,14 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 </div>
                 
                 {/* LoRA Settings (SDXL only) */}
-                {getModelType(model) === 'sdxl' && availableLoras.length > 0 && (
+                {getModelType(model) === 'sdxl' && filteredLoras.length > 0 && (
                   <div className="form-group">
                     <label className="grok-section-label" style={{ marginBottom: '8px' }}>
-                      LoRAs (up to 3)
+                      LoRAs (up to 3) {!nsfwEnabled && availableLoras.length > filteredLoras.length && (
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                          ({availableLoras.length - filteredLoras.length} hidden)
+                        </span>
+                      )}
                     </label>
                     {selectedLoras.map((lora, idx) => (
                       <div key={idx} style={{ 
@@ -662,8 +675,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                           }}
                         >
                           <option value="None">None</option>
-                          {availableLoras.map((l) => (
-                            <option key={l} value={l}>{l.replace('.safetensors', '')}</option>
+                          {filteredLoras.map((l) => (
+                            <option key={l.path} value={l.name}>{l.name}</option>
                           ))}
                         </select>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '80px' }}>

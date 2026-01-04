@@ -1,6 +1,36 @@
 2026-01-04
 Agent: Claude Opus 4.5
 AgentTag: CLAU
+ModelTag: NSFW-TOGGLE
+Details:
+- **Global NSFW Toggle**: Header switch to show/hide NSFW content
+  - Toggle button in top-bar (🛡️ SFW / 🔞 NSFW)
+  - NSFWContext.jsx - React context for global state
+  - localStorage persistence (oelala_nsfw_enabled)
+  - Default: SFW mode (safe default)
+- **LoRA NSFW Detection**: Keyword-based filtering
+  - Backend /loras endpoint now returns nsfw flag per LoRA
+  - 50+ NSFW keywords for detection
+  - Filtering in TextToImageTool and ImageToVideoTool
+  - Shows "(X hidden)" count when SFW mode active
+- **Docs Updated**: NSFW roadmap & future requirements
+  - Phase 5.5 Content Filtering in ROADMAP.md
+  - Future: manual tagging, metadata DB, user-gated access
+  - Future: auto-tag content generated with NSFW components
+FilesChanged:
+- src/frontend/src/contexts/NSFWContext.jsx (NEW)
+- src/frontend/src/dashboard/Dashboard.jsx (NSFW toggle in top-bar)
+- src/frontend/src/App.jsx (NSFWProvider wrapper)
+- src/frontend/src/App.css (NSFW toggle styling)
+- src/backend/app.py (NSFW detection in /loras)
+- src/frontend/src/dashboard/tools/TextToImageTool.jsx (filteredLoras)
+- src/frontend/src/dashboard/tools/ImageToVideoTool.jsx (filteredLoras)
+- docs/ROADMAP.md (Phase 5.5 Content Filtering)
+- docs/AGENT_CONTEXT.md (NSFW context for next session)
+
+2026-01-04
+Agent: Claude Opus 4.5
+AgentTag: CLAU
 ModelTag: UX-POLISH
 Details:
 - **Services Migration**: Converted all user services to systemd system services

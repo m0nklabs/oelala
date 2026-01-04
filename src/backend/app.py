@@ -804,11 +804,42 @@ async def list_loras():
     """
     List available LoRA models from ComfyUI/models/loras folder.
     Returns LoRAs grouped by noise type (high/low) for Wan2.2 dual-pass workflow.
+    Includes NSFW detection based on filename patterns.
     """
     loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
     
     if not loras_dir.exists():
         return {"loras": [], "high_noise": [], "low_noise": [], "general": [], "by_category": {}}
+    
+    # NSFW keywords for detection
+    NSFW_KEYWORDS = [
+        'nsfw', 'nude', 'naked', 'sex', 'porn', 'xxx', 'adult', 'erotic',
+        'cumshot', 'cum', 'anal', 'blowjob', 'bj', 'fuck', 'cock', 'dick', 
+        'pussy', 'boob', 'tit', 'nipple', 'ass', 'butt', 'penis', 'vagina',
+        'masturbat', 'orgasm', 'penetrat', 'bbc', 'creampie', 'gangbang',
+        'threesome', 'foursome', 'orgy', 'handjob', 'footjob', 'titjob',
+        'lesbian', 'gay', 'milf', 'teen', 'hentai', 'ahegao', 'ecchi',
+        'bounce', 'ride', 'cowgirl', 'doggy', 'missionary', 'facial',
+        'deepthroat', 'swallow', 'squirt', 'fetish', 'bdsm', 'bondage',
+        'dominat', 'submiss', 'slave', 'whip', 'spank', 'choke',
+    ]
+    
+    # SFW keywords - if contains these AND no NSFW keywords, mark as SFW
+    SFW_KEYWORDS = [
+        'add_details', 'body_weight', 'style', 'realistic', 'cinematic',
+        'lighting', 'color', 'texture', 'film', 'grain', 'vintage',
+        'anime', 'cartoon', 'sketch', 'painting', 'art', 'portrait',
+        'landscape', 'architecture', 'nature', 'animal', 'food',
+    ]
+    
+    def is_nsfw(name: str, path: str) -> bool:
+        """Check if a LoRA is NSFW based on name/path."""
+        check_str = f"{name} {path}".lower()
+        # Check for NSFW keywords
+        for kw in NSFW_KEYWORDS:
+            if kw in check_str:
+                return True
+        return False
     
     all_loras = []
     high_noise = []
@@ -825,11 +856,15 @@ async def list_loras():
         parent = lora_path.parent.relative_to(loras_dir)
         category = str(parent) if str(parent) != "." else "root"
         
+        # Detect NSFW
+        nsfw = is_nsfw(name, rel_path)
+        
         lora_info = {
             "path": rel_path,
             "name": name,
             "category": category,
-            "size_mb": round(lora_path.stat().st_size / (1024 * 1024), 1)
+            "size_mb": round(lora_path.stat().st_size / (1024 * 1024), 1),
+            "nsfw": nsfw
         }
         all_loras.append(lora_info)
         

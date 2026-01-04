@@ -158,13 +158,25 @@ journalctl -u oelala-backend -f
 ## ❌ Wat moet nog
 
 ### Prioriteit 1 (UX) 🔴
-- [ ] **Global NSFW toggle** - Header switch to show/hide NSFW content
-  - LoRA filtering (most are NSFW)
-  - Prompt generator uncensored mode
-  - Model filtering
+- [x] **Global NSFW toggle** - Header switch to show/hide NSFW content
+  - Toggle button in top-bar (🛡️ SFW / 🔞 NSFW)
+  - LoRA filtering (keyword-based detection)
+  - Persisted via localStorage
+- [ ] **NSFW catalogisering** - Proper tagging of NSFW content
+  - Current: keyword-based detection (50+ keywords)
+  - Todo: Manual tagging in LoRA/model metadata
+  - Todo: UI for marking content as NSFW
+  - Todo: Backend database for NSFW flags
+- [ ] **NSFW + User System integratie** (vereist user system)
+  - Standaard (niet ingelogd): SFW only, geen toggle zichtbaar
+  - Ingelogd als adult: NSFW toggle beschikbaar
+  - Adult verificatie bij registratie (geboortedatum/checkbox)
+  - Content gegenereerd met NSFW componenten → automatisch NSFW tagged
+  - NSFW flag in media metadata opslaan
 - [ ] **User system** - Accounts, login, media ownership
   - Migrate current media to "dev" account
   - Auth via JWT or session
+  - Age verification for NSFW access
 
 ### Prioriteit 2 (Features) 🟡
 - [ ] **ElevenLabs integration** - Alternative TTS/SFX provider
@@ -279,16 +291,36 @@ refactor: description
 
 ## 💡 Context voor Volgende Sessie
 
-### Lopende Discussies
-1. **NSFW toggle** - Needs React context, header component, filtering in tools
-2. **User system** - JWT auth, user_id in media paths, account management
-3. **ElevenLabs** - API integration for TTS/SFX (low priority)
+### Zojuist Afgerond (2026-01-04)
+1. **NSFW toggle geïmplementeerd** ✅
+   - `NSFWContext.jsx` - React context voor global state
+   - Toggle button in `Dashboard.jsx` top-bar (🛡️ SFW / 🔞 NSFW)
+   - Keyword-based NSFW detectie in backend `/loras` endpoint
+   - Filtering in `TextToImageTool.jsx` en `ImageToVideoTool.jsx`
+   - localStorage persistence (`oelala_nsfw_enabled`)
+
+### Open Todos (prioriteit volgorde)
+1. **NSFW catalogisering** - Manual tagging systeem, metadata DB voor NSFW flags
+2. **NSFW + User integratie** - Toggle alleen voor adults, auto-tag bij NSFW generation
+3. **User system** - JWT auth, registratie, leeftijdsverificatie, media ownership
+4. **ElevenLabs** - API integration voor TTS/SFX (low priority)
 
 ### Recente Beslissingen
-- Services zijn nu **system** services (niet user) - survive logout
-- TTS voices gegroepeerd op **gender** (female default)
-- Video to Text verplaatst naar **Prompt Tools** (logischer)
-- **Fire-and-forget** pattern voor alle generate buttons
+- NSFW toggle standaard **SFW** (false) - safe default
+- Keyword-based detection is **tijdelijk** - later manual tagging
+- Zonder login: **geen NSFW toggle** zichtbaar (toekomstig)
+- Content met NSFW componenten: **automatisch tagged** (toekomstig)
+- Services zijn **system** services (niet user) - survive logout
+
+### Bestanden Recent Gewijzigd
+- `src/frontend/src/contexts/NSFWContext.jsx` - **NEW** NSFW state
+- `src/frontend/src/dashboard/Dashboard.jsx` - NSFW toggle in top-bar
+- `src/frontend/src/App.jsx` - NSFWProvider wrapper
+- `src/frontend/src/App.css` - NSFW toggle styling
+- `src/backend/app.py` - NSFW detection in /loras endpoint
+- `src/frontend/src/dashboard/tools/TextToImageTool.jsx` - LoRA filtering
+- `src/frontend/src/dashboard/tools/ImageToVideoTool.jsx` - LoRA filtering
+- `docs/ROADMAP.md` - Phase 5.5 Content Filtering toegevoegd
 
 ### Bestanden die vaak veranderen
 - `src/backend/app.py` - Backend endpoints (4400+ lines)
