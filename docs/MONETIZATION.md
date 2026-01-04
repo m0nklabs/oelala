@@ -210,6 +210,63 @@
 
 ---
 
+## Storage as Revenue Driver 💰
+
+> **Key Insight**: Storage quotas zijn de #1 upsell trigger in SaaS.
+
+### oelala-storage Features per Tier
+
+| Feature | Free | Creator | Pro | Studio |
+|---------|------|---------|-----|--------|
+| **Storage quota** | 2 GB | 50 GB | 200 GB | 1 TB |
+| **Retention** | 30 days | ∞ | ∞ | ∞ |
+| **Multi-device sync** | ❌ | ❌ | ✅ | ✅ |
+| **Edge nodes** | ❌ | ❌ | 2 | ∞ |
+| **Signed URL shares** | ❌ | 10/mo | 100/mo | ∞ |
+| **Bandwidth** | 10 GB/mo | 100 GB/mo | 500 GB/mo | 2 TB/mo |
+| **Watermark** | Yes | No | No | No |
+| **API access** | ❌ | Limited | Full | Full |
+
+### Storage Upsell Triggers
+
+| Trigger | Message | Target Tier |
+|---------|---------|-------------|
+| 80% quota reached | "Running low on storage" | Next tier |
+| File expires soon (free) | "Upgrade to keep forever" | Creator |
+| Wants to share | "Get signed URLs with Creator" | Creator |
+| Multi-device need | "Sync across devices with Pro" | Pro |
+| High bandwidth | "Upgrade for more bandwidth" | Next tier |
+
+### Storage Add-ons (À la carte)
+
+| Add-on | Price | Notes |
+|--------|-------|-------|
+| Extra 50 GB storage | $5/month | Stack up to 500GB |
+| Remove 30-day expiry | $3/month | Free tier only |
+| Extra sync node | $2/month | Pro tier only |
+| Bandwidth overage | $0.05/GB | All tiers |
+
+### Implementation: oelala-storage Service
+
+> **Repository**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)
+
+**Required for monetization:**
+1. User/tenant isolation (namespacing)
+2. Storage quota tracking + enforcement
+3. Usage metering (for billing integration)
+4. Retention policy enforcement
+5. Signed URL generation
+6. Watermark injection hooks
+
+**Integration flow:**
+```
+User uploads → oelala backend → oelala-storage (quota check) → store
+                                      ↓
+                              Usage event → Stripe metering
+```
+
+---
+
 ## Conversion Funnel
 
 ```

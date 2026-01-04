@@ -50,6 +50,29 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Media metadata indexing | ⏳ Todo | Medium |
 | Batch operations (delete, download, share) | ⏳ Todo | Low |
 
+### Phase 4.5: oelala-storage Integration 💰 NEW
+
+**Goal**: Monetization-ready storage backend (Go service)
+
+> **Repository**: [oelala-storage](https://github.com/m0nklabs/oelala-storage)
+
+| Task | Status | Priority | Monetization Impact |
+|------|--------|----------|---------------------|
+| User/tenant isolation | ⏳ Todo | Critical | Enables multi-user |
+| Storage quota tracking | ⏳ Todo | Critical | Upsell trigger |
+| Usage metering (bytes, bandwidth) | ⏳ Todo | Critical | Billing foundation |
+| Tier-based limits enforcement | ⏳ Todo | High | Plan differentiation |
+| Retention policies (30d free) | ⏳ Todo | High | Free tier cleanup |
+| Signed URL generation | ⏳ Todo | Medium | Premium sharing |
+| Watermark injection hook | ⏳ Todo | Medium | Conversion driver |
+| Content deduplication | ⏳ Todo | Low | Cost optimization |
+
+**Why separate service?**
+- Go = single binary, no Python venv issues
+- Better I/O performance (goroutines vs GIL)
+- Can run on edge devices (Android, low-resource servers)
+- S3-compatible = easy integration with existing tools
+
 ### Phase 5: Advanced Generation
 
 **Goal**: More control over generation process
