@@ -231,6 +231,133 @@ class StorageClient:
         # The storage service doesn't have a native list-buckets endpoint yet
         # For now, we know the buckets are: generated, uploads, archive, temp
         return ["generated", "uploads", "archive", "temp"]
+    
+    # =========================================================================
+    # User-scoped media operations
+    # =========================================================================
+    
+    @staticmethod
+    def user_bucket(user_id: str) -> str:
+        """Get bucket path for user media: users/<user_id>"""
+        return f"users/{user_id}"
+    
+    @staticmethod
+    def user_key(media_type: str, filename: str) -> str:
+        """Get key path within user bucket: <type>/<filename>"""
+        return f"{media_type}/{filename}"
+    
+    def put_user_media(
+        self,
+        user_id: str,
+        media_type: str,  # 'images', 'videos', 'audio'
+        filename: str,
+        data: Union[bytes, BinaryIO, Path],
+        content_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Upload media for a specific user.
+        
+        Args:
+            user_id: Supabase user ID (UUID)
+            media_type: Type of media ('images', 'videos', 'audio')
+            filename: Filename to store as
+            data: File content
+            content_type: MIME type
+            
+        Returns:
+            Object metadata with full path
+        """
+        bucket = self.user_bucket(user_id)
+        key = self.user_key(media_type, filename)
+        result = self.put(bucket, key, data, content_type)
+        result["user_id"] = user_id
+        result["media_type"] = media_type
+        return result
+    
+    def get_user_media(
+        self,
+        user_id: str,
+        media_type: str,
+        filename: str,
+    ) -> bytes:
+        """Download user's media file."""
+        bucket = self.user_bucket(user_id)
+        key = self.user_key(media_type, filename)
+        return self.get(bucket, key)
+    
+    def delete_user_media(
+        self,
+        user_id: str,
+        media_type: str,
+        filename: str,
+    ) -> bool:
+        """Delete user's media file."""
+        bucket = self.user_bucket(user_id)
+        key = self.user_key(media_type, filename)
+        return self.delete(bucket, key)
+    
+    def list_user_media(
+        self,
+        user_id: str,
+        media_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        List all media for a user, optionally filtered by type.
+        
+        Args:
+            user_id: Supabase user ID
+            media_type: Optional filter ('images', 'videos', 'audio')
+            
+        Returns:
+            List of object metadata
+        """
+        bucket = self.user_bucket(user_id)
+        prefix = f"{media_type}/" if media_type else ""
+        objects = self.list(bucket, prefix)
+        
+        # Enrich with user info and parsed media type
+        for obj in objects:
+            obj["user_id"] = user_id
+            key = obj.get("key", "")
+            parts = key.split("/", 1)
+            if len(parts) >= 1:
+                obj["media_type"] = parts[0]
+            if len(parts) >= 2:
+                obj["filename"] = parts[1]
+        
+        return objects
+    
+    def user_media_exists(
+        self,
+        user_id: str,
+        media_type: str,
+        filename: str,
+    ) -> bool:
+        """Check if user's media file exists."""
+        bucket = self.user_bucket(user_id)
+        key = self.user_key(media_type, filename)
+        return self.exists(bucket, key)
+    
+    def get_user_media_url(
+        self,
+        user_id: str,
+        media_type: str,
+        filename: str,
+        external: bool = False,
+    ) -> str:
+        """
+        Get URL for user's media file.
+        
+        Args:
+            external: If True, return production URL (storage.oelala.xyz)
+        """
+        bucket = self.user_bucket(user_id)
+        key = self.user_key(media_type, filename)
+        
+        if external:
+            return f"https://storage.oelala.xyz/{bucket}/{key}"
+        else:
+            return f"{self.base_url}/{bucket}/{key}"
 
 
 # Module-level singleton for convenience

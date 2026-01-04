@@ -1,402 +1,328 @@
 # Oelala Monetization Plan
 
-> **Last Updated**: 2026-01-03  
-> **Status**: Planning Phase
+> **Last Updated**: 2026-01-04  
+> **Status**: Implementation Phase  
+> **Model**: Credit-based (Pay-as-you-go)
 
-## Business Model: Freemium SaaS
+## Business Model: Credits-Based Generation
 
-### Target Markets
+### Waarom Credits?
 
-| Segment | Description | Size |
-|---------|-------------|------|
-| **Hobbyists** | AI art enthusiasts, experimenters | Large |
-| **Content Creators** | YouTubers, TikTokers, streamers | Medium |
-| **Professionals** | Video editors, VFX artists | Small |
-| **Studios** | Production companies, agencies | Very Small |
-
----
-
-## Pricing Tiers
-
-### Free Tier
-**Price**: $0/month
-
-| Feature | Limit |
-|---------|-------|
-| Generations | 50/month |
-| Storage | 2 GB |
-| Max resolution | 720p |
-| Max video length | 6 seconds |
-| Queue priority | Low |
-| Watermark | Yes (small) |
-| Models | Basic set only |
-| API access | No |
-
-### Creator Tier
-**Price**: $19/month ($190/year = 2 months free)
-
-| Feature | Limit |
-|---------|-------|
-| Generations | 500/month |
-| Storage | 50 GB |
-| Max resolution | 1080p |
-| Max video length | 15 seconds |
-| Queue priority | Normal |
-| Watermark | No |
-| Models | All public models |
-| API access | Limited (100 req/day) |
-| Voice cloning | 3 voices |
-| Commercial use | Yes |
-
-### Pro Tier
-**Price**: $49/month ($490/year = 2 months free)
-
-| Feature | Limit |
-|---------|-------|
-| Generations | 2000/month |
-| Storage | 200 GB |
-| Max resolution | 4K |
-| Max video length | 30 seconds |
-| Queue priority | High |
-| Watermark | No |
-| Models | All models + early access |
-| API access | Full (1000 req/day) |
-| Voice cloning | 10 voices |
-| Custom LoRA upload | 5 LoRAs |
-| Commercial use | Yes |
-| Priority support | Email |
-
-### Studio Tier
-**Price**: $199/month ($1990/year = 2 months free)
-
-| Feature | Limit |
-|---------|-------|
-| Generations | Unlimited* |
-| Storage | 1 TB |
-| Max resolution | 4K+ |
-| Max video length | 60 seconds |
-| Queue priority | Highest |
-| Watermark | No |
-| Models | All + private models |
-| API access | Unlimited |
-| Voice cloning | Unlimited |
-| Custom LoRA upload | Unlimited |
-| Custom model training | Yes |
-| Commercial use | Yes + white-label |
-| Priority support | Slack/Discord |
-| SLA | 99.5% uptime |
-
-*Fair use policy: ~10,000 generations/month
-
-### Enterprise / Self-Hosted
-**Price**: Custom (starting $999/month)
-
-- On-premise deployment
-- Dedicated GPU resources
-- Custom integrations
-- SSO/SAML
-- Audit logs
-- Custom SLA (99.9%+)
-- Dedicated support
+Credits bieden flexibiliteit voor gebruikers die niet elke maand dezelfde hoeveelheid genereren:
+- **Geen waste**: Je betaalt alleen voor wat je gebruikt
+- **Geen commitment**: Geen maandelijkse abonnementen nodig
+- **Schaalbaar**: Kleine gebruikers betalen weinig, power users betalen meer
+- **Predictable costs**: Elke generatie heeft een vaste credit cost
 
 ---
 
-## Add-ons (À la carte)
+## Credit Pricing
 
-| Add-on | Price | Description |
-|--------|-------|-------------|
-| Extra storage | $5/50GB/month | Additional storage |
-| Extra generations | $10/500 | One-time credit pack |
-| Priority queue boost | $5/month | Jump the queue |
-| Custom voice clone | $10/voice | Additional voice slot |
-| Custom LoRA training | $25/training | Train on your images |
-| Remove watermark (Free tier) | $3/month | Keep free limits |
-| API overage | $0.02/request | Beyond tier limit |
+### Credit Packages
 
----
+| Package | Credits | Price | Per Credit | Savings |
+|---------|---------|-------|------------|---------|
+| **Starter** | 100 | €5 | €0.050 | - |
+| **Basic** | 500 | €20 | €0.040 | 20% |
+| **Pro** | 1500 | €50 | €0.033 | 33% |
+| **Studio** | 5000 | €150 | €0.030 | 40% |
+| **Enterprise** | 20000 | €500 | €0.025 | 50% |
 
-## Payment Processing
-
-### Recommended: Stripe
-
-| Feature | Status |
-|---------|--------|
-| Subscription billing | Required |
-| Usage-based billing | Required |
-| Invoicing | Required |
-| Tax calculation | Required |
-| Multi-currency | Nice to have |
-| Crypto payments | Future |
-
-### Alternative: Paddle
-- Handles EU VAT automatically
-- Acts as Merchant of Record
-- Higher fees but less compliance burden
-
-### Implementation Priority
-
-1. **Phase 1**: Stripe Checkout (hosted page)
-   - Quick to implement
-   - Handles subscriptions
-   - No PCI compliance needed
-
-2. **Phase 2**: Stripe Elements (embedded)
-   - Better UX
-   - Custom checkout flow
-
-3. **Phase 3**: Usage metering
-   - Track generations
-   - Overage billing
+### Welcome Bonus
+- **Nieuwe gebruikers**: 25 gratis credits bij registratie
+- **Verificatie bonus**: +10 credits na e-mail verificatie
 
 ---
 
-## Revenue Projections
+## Generation Costs (Credits)
 
-### Conservative Scenario (Year 1)
+### Image Generation
 
-| Month | Free | Creator | Pro | Studio | MRR |
-|-------|------|---------|-----|--------|-----|
-| M1 | 100 | 5 | 1 | 0 | $144 |
-| M3 | 500 | 25 | 5 | 1 | $839 |
-| M6 | 2000 | 100 | 20 | 3 | $3,477 |
-| M12 | 10000 | 400 | 80 | 10 | $13,510 |
+| Type | Resolution | Credits | Notes |
+|------|------------|---------|-------|
+| **SDXL** | 1024x1024 | 1 | Standard quality |
+| **SDXL** | 1536x1536 | 2 | Higher resolution |
+| **Flux.1** | 1024x1024 | 2 | Better quality |
+| **Flux.1** | 1536x1536 | 3 | HD quality |
+| **Wan2.2 T2I** | 1280x720 | 2 | Video model T2I |
 
-**Year 1 Total**: ~$80,000
+### Video Generation
 
-### Moderate Scenario (Year 1)
+| Type | Duration | Resolution | Credits |
+|------|----------|------------|---------|
+| **Wan2.2 I2V** | 3 sec | 720p | 5 |
+| **Wan2.2 I2V** | 5 sec | 720p | 8 |
+| **Wan2.2 I2V** | 3 sec | 1080p | 10 |
+| **Wan2.2 I2V** | 5 sec | 1080p | 15 |
+| **Wan2.2 T2V** | 3 sec | 720p | 8 |
+| **Wan2.2 T2V** | 5 sec | 720p | 12 |
 
-| Month | Free | Creator | Pro | Studio | MRR |
-|-------|------|---------|-----|--------|-----|
-| M1 | 200 | 10 | 2 | 0 | $288 |
-| M3 | 1000 | 75 | 15 | 2 | $2,158 |
-| M6 | 5000 | 300 | 60 | 8 | $9,332 |
-| M12 | 25000 | 1200 | 300 | 30 | $43,530 |
+### Audio Generation
 
-**Year 1 Total**: ~$250,000
-
----
-
-## Cost Structure
-
-### Infrastructure Costs (per user/month)
-
-| Component | Free | Creator | Pro | Studio |
-|-----------|------|---------|-----|--------|
-| GPU compute | $0.50 | $3 | $8 | $25 |
-| Storage | $0.02 | $0.50 | $2 | $10 |
-| Bandwidth | $0.10 | $0.50 | $2 | $5 |
-| **Total** | $0.62 | $4 | $12 | $40 |
-
-### Gross Margins
-
-| Tier | Price | Cost | Margin |
-|------|-------|------|--------|
-| Free | $0 | $0.62 | -$0.62 |
-| Creator | $19 | $4 | 79% |
-| Pro | $49 | $12 | 76% |
-| Studio | $199 | $40 | 80% |
-
-### Fixed Costs (Monthly)
-
-| Item | Cost |
-|------|------|
-| GPU servers (base) | $500-2000 |
-| Storage (base) | $100-500 |
-| Payment processing | 2.9% + $0.30 |
-| Domain/SSL | $10 |
-| Monitoring | $50 |
-| Backups | $50 |
-| **Total** | ~$800-3000 |
+| Type | Duration | Credits |
+|------|----------|---------|
+| **MMAudio** | <10 sec | 3 |
+| **MMAudio** | 10-30 sec | 5 |
+| **Voice Clone** | per voice | 20 |
 
 ---
 
-## Storage as Revenue Driver 💰
+## Credit System Architecture
 
-> **Key Insight**: Storage quotas zijn de #1 upsell trigger in SaaS.
+### Database Schema (Supabase)
 
-### oelala-storage Features per Tier
+```sql
+-- User credit balance
+CREATE TABLE user_credits (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    balance INTEGER NOT NULL DEFAULT 0,
+    lifetime_purchased INTEGER NOT NULL DEFAULT 0,
+    lifetime_used INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-| Feature | Free | Creator | Pro | Studio |
-|---------|------|---------|-----|--------|
-| **Storage quota** | 2 GB | 50 GB | 200 GB | 1 TB |
-| **Retention** | 30 days | ∞ | ∞ | ∞ |
-| **Multi-device sync** | ❌ | ❌ | ✅ | ✅ |
-| **Edge nodes** | ❌ | ❌ | 2 | ∞ |
-| **Signed URL shares** | ❌ | 10/mo | 100/mo | ∞ |
-| **Bandwidth** | 10 GB/mo | 100 GB/mo | 500 GB/mo | 2 TB/mo |
-| **Watermark** | Yes | No | No | No |
-| **API access** | ❌ | Limited | Full | Full |
+-- Credit transactions log
+CREATE TABLE credit_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,  -- Positive = add, negative = deduct
+    type TEXT NOT NULL CHECK (type IN ('purchase', 'bonus', 'generation', 'refund', 'admin')),
+    description TEXT,
+    reference_id TEXT,  -- Stripe payment ID or job ID
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### Storage Upsell Triggers
+-- Credit packages for purchase
+CREATE TABLE credit_packages (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    credits INTEGER NOT NULL,
+    price_cents INTEGER NOT NULL,
+    currency TEXT DEFAULT 'EUR',
+    stripe_price_id TEXT,
+    is_active BOOLEAN DEFAULT true,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-| Trigger | Message | Target Tier |
-|---------|---------|-------------|
-| 80% quota reached | "Running low on storage" | Next tier |
-| File expires soon (free) | "Upgrade to keep forever" | Creator |
-| Wants to share | "Get signed URLs with Creator" | Creator |
-| Multi-device need | "Sync across devices with Pro" | Pro |
-| High bandwidth | "Upgrade for more bandwidth" | Next tier |
+-- Indexes for performance
+CREATE INDEX idx_credit_transactions_user ON credit_transactions(user_id);
+CREATE INDEX idx_credit_transactions_created ON credit_transactions(created_at DESC);
+CREATE INDEX idx_credit_transactions_type ON credit_transactions(type);
 
-### Storage Add-ons (À la carte)
+-- RLS Policies
+ALTER TABLE user_credits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_transactions ENABLE ROW LEVEL SECURITY;
 
-| Add-on | Price | Notes |
-|--------|-------|-------|
-| Extra 50 GB storage | $5/month | Stack up to 500GB |
-| Remove 30-day expiry | $3/month | Free tier only |
-| Extra sync node | $2/month | Pro tier only |
-| Bandwidth overage | $0.05/GB | All tiers |
+-- Users can only read their own credits
+CREATE POLICY "Users can view own credits" ON user_credits
+    FOR SELECT USING (auth.uid() = user_id);
 
-### Implementation: oelala-storage Service
+-- Users can only read their own transactions
+CREATE POLICY "Users can view own transactions" ON credit_transactions
+    FOR SELECT USING (auth.uid() = user_id);
 
-> **Repository**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)
+-- Credit packages are public (read-only)
+CREATE POLICY "Anyone can view packages" ON credit_packages
+    FOR SELECT USING (is_active = true);
 
-**Required for monetization:**
-1. User/tenant isolation (namespacing)
-2. Storage quota tracking + enforcement
-3. Usage metering (for billing integration)
-4. Retention policy enforcement
-5. Signed URL generation
-6. Watermark injection hooks
+-- Trigger to auto-create user_credits on signup
+CREATE OR REPLACE FUNCTION create_user_credits()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.user_credits (user_id, balance)
+    VALUES (NEW.id, 25)  -- 25 welcome credits
+    ON CONFLICT (user_id) DO NOTHING;
+    
+    -- Log welcome bonus
+    INSERT INTO public.credit_transactions (user_id, amount, type, description)
+    VALUES (NEW.id, 25, 'bonus', 'Welcome bonus credits');
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-**Integration flow:**
-```
-User uploads → oelala backend → oelala-storage (quota check) → store
-                                      ↓
-                              Usage event → Stripe metering
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION create_user_credits();
+
+-- Insert default packages
+INSERT INTO credit_packages (id, name, credits, price_cents, currency, sort_order) VALUES
+    ('starter', 'Starter', 100, 500, 'EUR', 1),
+    ('basic', 'Basic', 500, 2000, 'EUR', 2),
+    ('pro', 'Pro', 1500, 5000, 'EUR', 3),
+    ('studio', 'Studio', 5000, 15000, 'EUR', 4),
+    ('enterprise', 'Enterprise', 20000, 50000, 'EUR', 5)
+ON CONFLICT (id) DO UPDATE SET
+    credits = EXCLUDED.credits,
+    price_cents = EXCLUDED.price_cents;
 ```
 
 ---
 
-## Conversion Funnel
+## API Endpoints
+
+### Credit Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/credits` | Get current balance |
+| GET | `/api/credits/packages` | List available packages |
+| POST | `/api/credits/purchase` | Initiate Stripe checkout |
+| GET | `/api/credits/history` | Transaction history |
+| POST | `/api/credits/estimate` | Estimate generation cost |
+
+### Response Examples
+
+```json
+// GET /api/credits
+{
+    "balance": 150,
+    "lifetime_purchased": 500,
+    "lifetime_used": 350
+}
+
+// GET /api/credits/packages
+{
+    "packages": [
+        {"id": "starter", "name": "Starter", "credits": 100, "price_cents": 500, "currency": "EUR"},
+        {"id": "basic", "name": "Basic", "credits": 500, "price_cents": 2000, "currency": "EUR"}
+    ]
+}
+
+// POST /api/credits/estimate
+// Request:
+{
+    "generation_type": "wan22_i2v",
+    "params": {"duration_seconds": 5, "width": 1920, "height": 1080}
+}
+// Response:
+{
+    "estimated_credits": 15,
+    "breakdown": {
+        "base": 10,
+        "hd_multiplier": 1.5
+    },
+    "current_balance": 150,
+    "sufficient": true
+}
+```
+
+---
+
+## Credit Deduction Flow
 
 ```
-Visitors → Sign-ups → Active → Paying → Retained
-  100%       10%        30%       5%       80%
-
-Example:
-10,000 visitors/month
-→ 1,000 sign-ups
-→ 300 active users  
-→ 15 paying customers
-→ 12 retained next month
+1. User initiates generation
+          ↓
+2. Calculate required credits
+          ↓
+3. Check balance (user_credits.balance >= required)
+          ↓ (insufficient?)
+          → Return 402 Payment Required
+          ↓ (sufficient)
+4. Atomic credit reserve (UPDATE ... SET balance = balance - X WHERE balance >= X)
+          ↓ (race condition / insufficient)
+          → Return 402
+          ↓ (reserved)
+5. Start generation job
+          ↓
+6. On completion:
+          ↓ (success)
+          → Log transaction (type='generation')
+          ↓ (failure)
+          → Refund credits + log (type='refund')
 ```
 
-### Conversion Optimization
+---
 
-| Stage | Target | Strategy |
-|-------|--------|----------|
-| Visit → Signup | 15% | Landing page, social proof |
-| Signup → Active | 50% | Onboarding, quick win |
-| Active → Paid | 10% | Feature gating, trials |
-| Paid → Retained | 90% | Quality, support, features |
+## Payment Integration (Stripe)
+
+### Checkout Flow
+
+1. User clicks "Buy Credits" → selects package
+2. Frontend: `POST /api/credits/purchase` with `package_id`
+3. Backend creates Stripe Checkout Session
+4. User redirected to Stripe payment page
+5. After payment → Stripe webhook → credits added
+6. User redirected back with updated balance
+
+### Webhook Handler
+
+```python
+@app.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
+    
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        user_id = session["client_reference_id"]
+        package_id = session["metadata"]["package_id"]
+        
+        package = await get_package(package_id)
+        await credit_manager.add_credits(
+            user_id=user_id,
+            amount=package.credits,
+            type="purchase",
+            reference_id=session["payment_intent"],
+            description=f"Purchased {package.name} package"
+        )
+    
+    return {"status": "ok"}
+```
 
 ---
 
-## Marketing Channels
+## Free Tier & Limits
 
-### Organic (Low Cost)
+### Welcome Credits
+| Trigger | Credits | Notes |
+|---------|---------|-------|
+| Account creation | 25 | Automatic |
+| Email verification | 10 | Optional bonus |
+| **Total** | **35** | Enough for ~5 videos |
 
-| Channel | Strategy |
-|---------|----------|
-| SEO | Blog, tutorials, comparisons |
-| Social | Twitter/X, Reddit, Discord |
-| YouTube | Tutorials, showcases |
-| Product Hunt | Launch campaign |
-| Hacker News | Show HN post |
+### Rate Limits (Anti-abuse)
 
-### Paid (Growth Phase)
-
-| Channel | CPA Target |
-|---------|------------|
-| Google Ads | $10-20 |
-| Reddit Ads | $5-15 |
-| Twitter Ads | $15-25 |
-| Influencer | $5-10 |
+| Limit | Value | Reason |
+|-------|-------|--------|
+| Generations/minute | 5 | Prevent spam |
+| Generations/hour | 30 | Fair usage |
+| Concurrent jobs | 2 | Queue fairness |
+| Max daily spend | 500 credits | Fraud protection |
 
 ---
 
-## Competitive Pricing Analysis
+## Implementation Status
 
-| Competitor | Comparable Tier | Price | Notes |
-|------------|-----------------|-------|-------|
-| RunwayML | Standard | $15/mo | Limited seconds |
-| Pika Labs | Pro | $58/mo | 700 credits |
-| Luma AI | Pro | $29/mo | Limited features |
-| ElevenLabs | Creator | $22/mo | Voice only |
-| Midjourney | Standard | $30/mo | Images only |
+### Phase 1: Core Credits
+- [x] Database schema design (this doc)
+- [ ] `src/backend/credits.py` - CreditManager module
+- [ ] Credit API endpoints
+- [ ] Generation cost calculation
+- [ ] Credit deduction middleware
 
-**Positioning**: Competitive with more features (video + voice + image in one platform)
+### Phase 2: Payments
+- [ ] Stripe account setup
+- [ ] Checkout flow
+- [ ] Webhook handlers
+- [ ] Receipt emails
 
----
-
-## Legal & Compliance
-
-### Required
-
-- [ ] Terms of Service
-- [ ] Privacy Policy
-- [ ] Cookie Policy
-- [ ] Refund Policy
-- [ ] Acceptable Use Policy
-- [ ] DMCA Policy
-
-### Regional
-
-- [ ] GDPR compliance (EU)
-- [ ] CCPA compliance (California)
-- [ ] Age verification (13+/18+)
-
-### Content
-
-- [ ] NSFW policy (allowed/gated?)
-- [ ] Copyright/IP policy
-- [ ] AI-generated content disclosure
-
----
-
-## Implementation Roadmap
-
-### Phase 1: Free Launch (Month 1-2)
-- [ ] Core generation features
-- [ ] User accounts (basic)
-- [ ] Usage tracking
-- [ ] Waitlist/invite system
-
-### Phase 2: Paid Launch (Month 3-4)
-- [ ] Stripe integration
-- [ ] Subscription management
-- [ ] Feature gating by tier
-- [ ] Basic analytics
-
-### Phase 3: Growth (Month 5-8)
-- [ ] Usage-based billing
-- [ ] API access
-- [ ] Referral program
-- [ ] Team accounts
-
-### Phase 4: Scale (Month 9-12)
-- [ ] Enterprise tier
-- [ ] Self-hosted option
-- [ ] Marketplace (LoRAs, voices)
-- [ ] White-label
-
----
-
-## Key Metrics to Track
-
-| Metric | Definition | Target |
-|--------|------------|--------|
-| MRR | Monthly recurring revenue | Growing |
-| ARPU | Average revenue per user | $15+ |
-| CAC | Customer acquisition cost | <$50 |
-| LTV | Lifetime value | >$200 |
-| Churn | Monthly cancellation rate | <5% |
-| NPS | Net promoter score | >50 |
+### Phase 3: Frontend
+- [ ] Credits display in UI
+- [ ] Purchase modal
+- [ ] Transaction history
+- [ ] Low balance warnings
 
 ---
 
 ## Related Documents
 
 - [ROADMAP.md](./ROADMAP.md) - Product roadmap
-- [MEDIA_STORAGE.md](./MEDIA_STORAGE.md) - Storage architecture
-- [../ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
+- [MEDIA_STORAGE.md](./MEDIA_STORAGE.md) - Storage architecture  
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
+- [MONETIZATION_OLD.md](./MONETIZATION_OLD.md) - Previous subscription model (archived)

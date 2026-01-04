@@ -1,16 +1,23 @@
 // Frontend configuration
-// Set the backend base URL explicitly to the LAN address used by Oelala
-const BACKEND_BASE = 'http://192.168.1.2:7998'
+// Detect if running on production domain or local
+const isProduction = window.location.hostname === 'oelala.xyz'
+
+// Set the backend base URL based on environment
+const BACKEND_BASE = isProduction 
+  ? 'https://api.oelala.xyz'
+  : 'http://192.168.1.2:7998'
 
 // Storage service URL (oelala-storage Go service)
-const STORAGE_BASE = 'http://192.168.1.2:7990'
+const STORAGE_BASE = isProduction
+  ? 'https://storage.oelala.xyz'  // TODO: Add to tunnel when needed
+  : 'http://192.168.1.2:7990'
 
 // Global debug flag for UI logging
 const DEBUG = import.meta.env?.DEV ?? false
 
 // External service URLs
 const EXTERNAL_SERVICES = {
-  COMFYUI: 'http://192.168.1.2:8188/',
+  COMFYUI: isProduction ? 'https://comfy.oelala.xyz/' : 'http://192.168.1.2:8188/',
   TARS_AI: 'http://192.168.1.35:8001/',
   NADSCAB: 'http://192.168.1.2:7000/'
 }

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
+import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 // Format video duration as MM:SS
 const formatDuration = (seconds) => {
@@ -197,6 +199,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     return filtered
   }, [mediaList, sortBy, sortOrder, filterBy, favorites, searchQuery])
 
+  // Get auth context for user-scoped fetching
+  const { user } = useAuth()
+
   const fetchMedia = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -204,12 +209,35 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       // Use grouped mode to pair videos with source images
       // For prompts filter, fetch all media with metadata then filter client-side
       const apiFilter = filter === 'prompts' ? 'all' : filter
-      const res = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
-      if (!res.ok) throw new Error('Failed to fetch media')
-      const data = await res.json()
+      
+      // Fetch from both ComfyUI output (legacy) and user storage (new)
+      const [comfyRes, userMedia] = await Promise.all([
+        // Legacy: ComfyUI output folder (for backwards compatibility)
+        fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
+          .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
+          .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } })),
+        // New: User storage (authenticated, user-scoped)
+        user ? listUserMedia(apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all')
+          .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
+          : Promise.resolve({ media: [], stats: { videos: 0, images: 0, audio: 0 } })
+      ])
+      
+      // Mark user storage items with source flag
+      const userItems = (userMedia.media || []).map(item => ({
+        ...item,
+        source: 'storage',
+      }))
+      
+      // Mark comfy items with source flag
+      const comfyItems = (comfyRes.media || []).map(item => ({
+        ...item,
+        source: 'comfyui',
+      }))
+      
+      // Combine both sources
+      let media = [...userItems, ...comfyItems]
       
       // For prompts view, filter to only items with prompts
-      let media = data.media || []
       if (filter === 'prompts') {
         media = media.filter(item => 
           item.metadata?.positive_prompt || 
@@ -217,15 +245,22 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         )
       }
       
+      // Combine stats
+      const stats = {
+        videos: (comfyRes.stats?.videos || 0) + (userMedia.stats?.videos || 0),
+        images: (comfyRes.stats?.images || 0) + (userMedia.stats?.images || 0),
+        audio: (comfyRes.stats?.audio || 0) + (userMedia.stats?.audio || 0),
+      }
+      
       setMediaList(media)
-      setStats({ videos: data.videos || 0, images: data.images || 0, audio: data.audio || 0 })
+      setStats(stats)
       setSelectedItems(new Set()) // Clear selection on refresh
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }, [filter, hideStartImages])
+  }, [filter, hideStartImages, user])
 
   useEffect(() => {
     fetchMedia()
@@ -378,16 +413,36 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     
     setDeleting(true)
     try {
-      const res = await fetch(`${BACKEND_BASE}/delete-comfyui-media`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filenames })
-      })
+      // Separate items by source
+      const selectedList = Array.from(selectedItems)
+        .map(idx => sortedMediaList[idx])
+        .filter(Boolean)
       
-      if (!res.ok) throw new Error('Failed to delete')
+      const comfyItems = selectedList.filter(item => item.source === 'comfyui' || !item.source)
+      const storageItems = selectedList.filter(item => item.source === 'storage')
       
-      const result = await res.json()
-      console.log('Deleted:', result)
+      // Delete ComfyUI items (legacy)
+      if (comfyItems.length > 0) {
+        const comfyFilenames = comfyItems.map(item => item.filename)
+        const res = await apiFetch(`${BACKEND_BASE}/delete-comfyui-media`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames: comfyFilenames })
+        })
+        if (!res.ok) console.error('Failed to delete some ComfyUI items')
+      }
+      
+      // Delete storage items (user-scoped)
+      for (const item of storageItems) {
+        try {
+          // Parse media type from URL: /user/media/<type>/<filename>
+          const urlParts = (item.url || '').split('/')
+          const mediaType = urlParts[3] || 'images'
+          await deleteUserMedia(mediaType, item.name || item.filename)
+        } catch (e) {
+          console.error(`Failed to delete storage item ${item.filename}:`, e)
+        }
+      }
       
       // Refresh the list
       await fetchMedia()

@@ -10,11 +10,11 @@ import uvicorn
 import threading
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Optional
 import shutil
 from pathlib import Path
 import logging
@@ -28,6 +28,16 @@ from PIL.PngImagePlugin import PngInfo
 # Add current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('/home/flip/oelala')  # Add oelala root directory
+
+# Authentication
+from auth import get_current_user, get_optional_user, User, SYSTEM_USER
+
+# Storage client for user media
+from storage_client import StorageClient, get_client as get_storage_client
+
+# Credits system
+from credits import calculate_credits, get_credit_manager, InsufficientCreditsError
+from credits_api import router as credits_router, check_credits, deduct_credits, refund_credits
 
 # ComfyUI Client for all image/video generation
 try:
@@ -277,6 +287,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Include API routers
+app.include_router(credits_router)
 
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")
@@ -1434,6 +1447,201 @@ async def health_check():
         "comfyui_available": comfyui_available,
         "upload_dir": str(UPLOAD_DIR),
         "output_dir": str(OUTPUT_DIR)
+    }
+
+
+# =============================================================================
+# USER MEDIA API (Storage-backed, user-scoped)
+# =============================================================================
+
+@app.get("/user/media")
+async def list_user_media(
+    type: str = "all",
+    user: User = Depends(get_current_user)
+):
+    """
+    List media files for the authenticated user from oelala-storage.
+    
+    Args:
+        type: Filter by media type ('all', 'images', 'videos', 'audio')
+    
+    Returns:
+        List of user's media with metadata
+    """
+    try:
+        storage = get_storage_client()
+        
+        # Map frontend types to storage types
+        media_type = None
+        if type != "all":
+            type_map = {"video": "videos", "image": "images", "audio": "audio"}
+            media_type = type_map.get(type, type)
+        
+        objects = storage.list_user_media(user.id, media_type)
+        
+        # Transform to match existing frontend format
+        media = []
+        for obj in objects:
+            key = obj.get("key", "")
+            filename = obj.get("filename", key.split("/")[-1] if "/" in key else key)
+            obj_type = obj.get("media_type", "")
+            
+            # Determine type from media_type or content_type
+            if obj_type == "videos" or (obj.get("content_type", "").startswith("video/")):
+                item_type = "video"
+            elif obj_type == "audio" or (obj.get("content_type", "").startswith("audio/")):
+                item_type = "audio"
+            else:
+                item_type = "image"
+            
+            media.append({
+                "name": filename,
+                "type": item_type,
+                "url": f"/user/media/{obj_type}/{filename}",
+                "size": obj.get("size", 0),
+                "modified": obj.get("modified_at", datetime.now()).isoformat() if isinstance(obj.get("modified_at"), datetime) else obj.get("modified_at", ""),
+                "mtime": obj.get("modified_at", datetime.now()).timestamp() if isinstance(obj.get("modified_at"), datetime) else 0,
+                "hash": obj.get("hash", ""),
+            })
+        
+        # Sort by modified (newest first)
+        media.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+        
+        # Count stats
+        stats = {
+            "videos": sum(1 for m in media if m["type"] == "video"),
+            "images": sum(1 for m in media if m["type"] == "image"),
+            "audio": sum(1 for m in media if m["type"] == "audio"),
+        }
+        
+        return {"media": media, "stats": stats}
+        
+    except Exception as e:
+        logger.error(f"Failed to list user media: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/user/media/{media_type}/{filename:path}")
+async def get_user_media(
+    media_type: str,
+    filename: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    Serve a user's media file from storage.
+    """
+    try:
+        storage = get_storage_client()
+        data = storage.get_user_media(user.id, media_type, filename)
+        
+        # Determine content type
+        ext = Path(filename).suffix.lower()
+        content_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".flac": "audio/flac",
+            ".ogg": "audio/ogg",
+        }
+        content_type = content_types.get(ext, "application/octet-stream")
+        
+        return StreamingResponse(
+            iter([data]),
+            media_type=content_type,
+            headers={"Content-Disposition": f'inline; filename="{filename}"'}
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get user media: {e}")
+        raise HTTPException(status_code=404, detail="Media not found")
+
+
+@app.post("/user/media/{media_type}")
+async def upload_user_media(
+    media_type: str,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user)
+):
+    """
+    Upload media to user's storage.
+    
+    Args:
+        media_type: 'images', 'videos', or 'audio'
+        file: The file to upload
+    """
+    if media_type not in ("images", "videos", "audio"):
+        raise HTTPException(status_code=400, detail="Invalid media type")
+    
+    try:
+        storage = get_storage_client()
+        data = await file.read()
+        
+        # Generate unique filename if needed
+        filename = file.filename or f"{uuid.uuid4()}{Path(file.filename or '').suffix}"
+        
+        result = storage.put_user_media(
+            user.id,
+            media_type,
+            filename,
+            data,
+            file.content_type
+        )
+        
+        return {
+            "success": True,
+            "filename": filename,
+            "url": f"/user/media/{media_type}/{filename}",
+            "size": len(data),
+            **result
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to upload user media: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/user/media/{media_type}/{filename:path}")
+async def delete_user_media(
+    media_type: str,
+    filename: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    Delete a user's media file.
+    """
+    try:
+        storage = get_storage_client()
+        success = storage.delete_user_media(user.id, media_type, filename)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Media not found")
+        
+        return {"success": True, "deleted": filename}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete user media: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/user/profile")
+async def get_user_profile(user: User = Depends(get_current_user)):
+    """
+    Get authenticated user's profile info.
+    """
+    return {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role,
+        "metadata": user.user_metadata,
     }
 
 

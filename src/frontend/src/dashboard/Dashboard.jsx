@@ -4,7 +4,9 @@ import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
 import QueueIndicator from './QueueIndicator'
+import UserMenu from '../components/UserMenu'
 import { useNSFW } from '../contexts/NSFWContext'
+import { useAuth } from '../contexts/AuthContext'
 import { TOOL_IDS } from './nav'
 
 import TextToVideoTool from './tools/TextToVideoTool'
@@ -234,6 +236,7 @@ export default function Dashboard() {
   }
 
   const { nsfwEnabled, setNsfwEnabled } = useNSFW()
+  const { user, isAdult } = useAuth()
 
   return (
     <div className="dashboard-container">
@@ -248,14 +251,16 @@ export default function Dashboard() {
         <div className="top-bar">
           <h1>{toolTitle}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* NSFW Toggle */}
-            <button
-              className={`nsfw-toggle ${nsfwEnabled ? 'nsfw-enabled' : 'nsfw-disabled'}`}
-              onClick={() => setNsfwEnabled(!nsfwEnabled)}
-              title={nsfwEnabled ? 'NSFW content visible' : 'NSFW content hidden'}
-            >
-              {nsfwEnabled ? '🔞 NSFW' : '🛡️ SFW'}
-            </button>
+            {/* NSFW Toggle - only for logged-in adults */}
+            {isAdult && (
+              <button
+                className={`nsfw-toggle ${nsfwEnabled ? 'nsfw-enabled' : 'nsfw-disabled'}`}
+                onClick={() => setNsfwEnabled(!nsfwEnabled)}
+                title={nsfwEnabled ? 'NSFW content visible' : 'NSFW content hidden'}
+              >
+                {nsfwEnabled ? '🔞 NSFW' : '🛡️ SFW'}
+              </button>
+            )}
             {/* Queue indicator with popup */}
             <QueueIndicator 
               refreshToken={queueRefreshToken}
@@ -283,6 +288,8 @@ export default function Dashboard() {
               <div className={`status-dot ${health?.status === 'healthy' ? 'connected' : ''}`} />
               <span>{health?.status === 'healthy' ? 'Connected' : 'Disconnected'}</span>
             </div>
+            {/* User menu */}
+            <UserMenu />
           </div>
         </div>
 
