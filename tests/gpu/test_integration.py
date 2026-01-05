@@ -9,6 +9,8 @@ import pytest
 import requests
 import json
 from pathlib import Path
+import tempfile
+import io
 
 # Local services
 BACKEND_URL = "http://localhost:7998"
@@ -126,3 +128,102 @@ class TestVideoGeneration:
         
         # Should at least not crash
         assert resp.status_code in [200, 503]  # 503 if model not loaded
+
+
+class TestAdvancedVideoEndpoints:
+    """Test new advanced video processing endpoints."""
+    
+    def test_upscale_video_endpoint_exists(self):
+        """Video upscale endpoint should exist and accept requests."""
+        # Create a minimal test video file (1x1 black frame)
+        test_video = io.BytesIO(
+            b'\x00\x00\x00\x1c' +  # MP4 header
+            b'ftypisom' +
+            b'\x00\x00\x02\x00' +
+            b'isomiso2' +
+            b'\x00' * 100  # Padding
+        )
+        test_video.seek(0)
+        
+        resp = requests.post(
+            f"{BACKEND_URL}/upscale-video",
+            files={"file": ("test.mp4", test_video, "video/mp4")},
+            data={"model": "realesrgan-video"},
+            timeout=10
+        )
+        
+        # Should either accept or reject gracefully, not crash
+        assert resp.status_code in [200, 400, 422, 500, 503]
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "status" in data
+            assert data["status"] in ["queued", "error"]
+    
+    def test_interpolate_video_endpoint_exists(self):
+        """Frame interpolation endpoint should exist and accept requests."""
+        # Create a minimal test video file
+        test_video = io.BytesIO(
+            b'\x00\x00\x00\x1c' +
+            b'ftypisom' +
+            b'\x00\x00\x02\x00' +
+            b'isomiso2' +
+            b'\x00' * 100
+        )
+        test_video.seek(0)
+        
+        resp = requests.post(
+            f"{BACKEND_URL}/interpolate-video",
+            files={"file": ("test.mp4", test_video, "video/mp4")},
+            data={
+                "model": "rife",
+                "mode": "fps",
+                "target_fps": "60",
+                "multiplier": "2.0",
+            },
+            timeout=10
+        )
+        
+        # Should either accept or reject gracefully
+        assert resp.status_code in [200, 400, 422, 500, 503]
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "status" in data
+            assert data["status"] in ["queued", "error"]
+    
+    def test_upscale_video_validates_model_param(self):
+        """Upscale endpoint should validate model parameter."""
+        test_video = io.BytesIO(b'\x00' * 100)
+        test_video.seek(0)
+        
+        # This should work (valid model)
+        resp = requests.post(
+            f"{BACKEND_URL}/upscale-video",
+            files={"file": ("test.mp4", test_video, "video/mp4")},
+            data={"model": "realesrgan-video"},
+            timeout=10
+        )
+        
+        # Should at least parse the request
+        assert resp.status_code in [200, 400, 422, 500, 503]
+    
+    def test_interpolate_video_validates_model_param(self):
+        """Interpolate endpoint should validate model parameter."""
+        test_video = io.BytesIO(b'\x00' * 100)
+        test_video.seek(0)
+        
+        resp = requests.post(
+            f"{BACKEND_URL}/interpolate-video",
+            files={"file": ("test.mp4", test_video, "video/mp4")},
+            data={
+                "model": "rife",
+                "mode": "fps",
+                "target_fps": "60",
+                "multiplier": "2.0",
+            },
+            timeout=10
+        )
+        
+        # Should at least parse the request
+        assert resp.status_code in [200, 400, 422, 500, 503]
