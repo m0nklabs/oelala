@@ -4721,9 +4721,6 @@ async def upscale_video(
             "prompt_id": prompt_id,
             "meta": {
                 "model": model,
-                "resolution_preset": resolution_preset,
-                "quality_preset": quality_preset,
-                "batch_size": batch_size,
                 "source_video": comfyui_filename,
             },
         }
@@ -4850,7 +4847,6 @@ async def interpolate_video(
                 "mode": mode,
                 "target_fps": target_fps,
                 "multiplier": multiplier,
-                "show_flow_viz": show_flow_viz,
                 "source_video": comfyui_filename,
             },
         }
