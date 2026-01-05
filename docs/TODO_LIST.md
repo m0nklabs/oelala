@@ -96,6 +96,29 @@
 - [ ] ControlNet integration
 - [ ] Inpainting tools
 
+### Advanced Video Workflows
+- [x] **Video Upscaling** (2026-01-05)
+  - VideoUpscalerTool.jsx component
+  - `/upscale-video` backend endpoint
+  - Resolution presets: 480p → 720p → 1080p → 4K
+  - Quality vs speed presets (fast, balanced, quality)
+  - Workflow: `workflows/VideoUpscale/video_upscale_realesrgan.json`
+- [x] **Frame Interpolation** (2026-01-05)
+  - FrameInterpolationTool.jsx component
+  - `/interpolate-video` backend endpoint
+  - FPS conversion: 15fps → 30fps → 60fps
+  - Slow motion modes: 2x, 4x, 8x
+  - RIFE/FILM model support
+  - Workflow: `workflows/FrameInterpolation/rife_interpolation.json`
+- [x] **Image-to-Video enhancements** (already existed)
+  - Camera motion presets (16 options)
+  - Multiple duration options (3-15s)
+  - CameraMotionSelector component
+- [ ] **Video Extension** (planned)
+  - Extend video forwards/backwards
+  - Seamless loop creation
+  - Workflow: `workflows/VideoExtension/extend_video_wan22.json`
+
 ### Monetization
 - [x] Credit system backend (CreditManager, API endpoints)
 - [x] Supabase migrations for credits tables
