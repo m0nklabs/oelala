@@ -17,9 +17,9 @@ Complete inventory of available resources on the self-hosted GPU runner.
 
 ### DisTorch2 Allocation
 ```
-cuda:0,12gb;cuda:1,16gb
+cuda:0,11gb;cuda:1,15gb;cpu,2gb
 ```
-GPU-only mode, no CPU fallback for model weights.
+Safe allocation with 1GB buffer per GPU + 2GB CPU fallback for edge cases.
 
 ---
 
@@ -31,7 +31,7 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 - `VAELoaderDisTorch2MultiGPU`
 - `CLIPLoaderDisTorch2MultiGPU`
 
-**All loader nodes MUST include `expert_mode_allocations: "cuda:0,12gb;cuda:1,16gb"`**
+**All loader nodes MUST include `expert_mode_allocations: "cuda:0,11gb;cuda:1,15gb;cpu,2gb"`**
 
 ### Video Generation (Wan 2.2 14B Q6_K)
 
