@@ -1,0 +1,267 @@
+# ComfyUI Server Inventory
+
+Complete inventory of available resources on the self-hosted GPU runner.
+**Last updated**: 2026-01-05
+
+---
+
+## 🎮 Hardware
+
+| Component | Specs | CUDA Device |
+|-----------|-------|-------------|
+| GPU 1 | RTX 3060 12GB | `cuda:0` |
+| GPU 2 | RTX 5060 Ti 16GB | `cuda:1` |
+| **Total VRAM** | **28GB** | |
+| RAM | 128GB DDR4 | |
+| Storage | NVMe SSD | |
+
+### DisTorch2 Allocation
+```
+cuda:0,12gb;cuda:1,16gb
+```
+GPU-only mode, no CPU fallback for model weights.
+
+---
+
+## 📦 Checkpoints (SDXL/Pony/Flux)
+
+| Model | Category | Notes |
+|-------|----------|-------|
+| `CyberRealistic_Pony_v14.1_FP16.safetensors` | Realistic/Pony | High quality |
+| `dreamshaperXL_lightningDPMSDE.safetensors` | SDXL | **Fast** - recommended for T2I |
+| `flux1-dev-fp8.safetensors` | Flux | FP8 quantized |
+| `illustriousRealismBy_v10VAE.safetensors` | Realistic | Built-in VAE |
+| `juggernautXL_ragnarok.safetensors` | SDXL | Popular |
+| `novaAnimeXL_ilV150.safetensors` | Anime | SDXL |
+| `ponyDiffusionV6XL_v6StartWithThisOne.safetensors` | Pony | Base Pony model |
+| `Realistic_Vision_V5.1.safetensors` | SD1.5 | Legacy support |
+| `reapony_v90.safetensors` | Realistic/Pony | |
+| `ultraRealisticByStable_v20FP16.safetensors` | Realistic | FP16 |
+| `waiIllustriousSDXL_v160.safetensors` | Anime | Illustrious-based |
+
+---
+
+## 🎬 Video Models (Wan 2.2)
+
+### UNET Models (GGUF - for DisTorch2)
+
+| Model | Type | Quality |
+|-------|------|---------|
+| `wan2.2_i2v_high_noise_14B_Q6_K.gguf` | I2V High | Standard |
+| `wan2.2_i2v_low_noise_14B_Q6_K.gguf` | I2V Low | Standard |
+| `Wan22-I2V_A14B-Lightning-H-Q6_K.gguf` | I2V High | **Lightning (fast)** |
+| `Wan22-I2V_A14B-Lightning-L-Q6_K.gguf` | I2V Low | **Lightning (fast)** |
+| `smoothMixWan22GGUF_highQ6K.gguf` | I2V High | Smooth motion |
+| `smoothMixWan22GGUF_lowQ6K.gguf` | I2V Low | Smooth motion |
+| `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH.gguf` | I2V High | NSFW + camera |
+| `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KL.gguf` | I2V Low | NSFW + camera |
+| `wan22EnhancedNSFW_V2_Q6K_HIGH.gguf` | I2V High | Enhanced NSFW |
+| `wan22EnhancedNSFW_V2_Q6K_LOW.gguf` | I2V Low | Enhanced NSFW |
+
+### UNET Models (FP8 - for T2V)
+
+| Model | Type |
+|-------|------|
+| `Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors` | T2V High |
+| `Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors` | T2V Low |
+| `wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors` | T2V High |
+| `wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors` | T2V Low |
+
+### Video Generation Limits
+
+| Resolution | Max Frames | Duration (16fps) |
+|------------|------------|------------------|
+| 480p (848x480) | 81 | ~5 sec |
+| 720p (1280x720) | 41 | ~2.5 sec |
+| 1080p | 17-25 | ~1-1.5 sec |
+
+---
+
+## 🎨 LoRAs
+
+### Wan 2.2 Video LoRAs (Dual High/Low Noise)
+
+#### Motion & Action
+| Name | High Noise | Low Noise |
+|------|------------|-----------|
+| Bounce | `BounceHighWan2_2.safetensors` | `BounceLowWan2_2.safetensors` |
+| Smooth XXX Animation | `SmoothXXXAnimation_High.safetensors` | `SmoothXXXAnimation_Low.safetensors` |
+| DR34MJOB | `DR34MJOB_I2V_14b_HighNoise.safetensors` | `DR34MJOB_I2V_14b_LowNoise.safetensors` |
+| DR34ML4Y | `DR34ML4Y_I2V_14B_HIGH.safetensors` | `DR34ML4Y_I2V_14B_LOW.safetensors` |
+| SF Behind | `sfbehind_v2.1_high_noise.safetensors` | `sfbehind_v2.1_low_noise.safetensors` |
+
+#### Specific Actions
+| Name | High Noise | Low Noise |
+|------|------------|-----------|
+| POV Cowgirl | `WAN-2.2-I2V-POV-Cowgirl-HIGH-v1.0-fixed.safetensors` | `WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors` |
+| Reverse Cowgirl | `wan22.r3v3rs3_c0wg1rl-14b-High-i2v_e70.safetensors` | `wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors` |
+| Titfuck/Paizuri | `WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors` | `WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors` |
+| Breast Play | `WAN-2.2-I2V-BreastPlay-HIGH-v2.safetensors` | `WAN-2.2-I2V-BreastPlay-LOW-v2.safetensors` |
+| Handjob/Blowjob Combo | `WAN-2.2-I2V-HandjobBlowjobCombo-HIGH-v1.safetensors` | `WAN-2.2-I2V-HandjobBlowjobCombo-LOW-v1.safetensors` |
+| Deepthroat | `wan22-ultimatedeepthroat-i2v-102epoc-high-k3nk.safetensors` | `wan22-ultimatedeepthroat-I2V-101epoc-low-k3nk.safetensors` |
+| Throat V3 | `Wan22_ThroatV3_High.safetensors` | `Wan22_ThroatV3_Low.safetensors` |
+| Facesplash | `wan22-f4c3spl4sh-100epoc-high-k3nk.safetensors` | `wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors` |
+| Cum V2 | `Wan22_CumV2_High.safetensors` | `Wan22_CumV2_Low.safetensors` |
+| BBC Ride | `bbcRide_wan22_I2V_high_e30.safetensors` | `bbcRide_wan22_I2V_low_e30.safetensors` |
+| Anal Insertion | `anal_insertion_HIGH_V01.safetensors` | `anal_insertion_LOW_V01.safetensors` |
+| Cowgirl Insertion | `W22_POV_Cowgirl_Insertion_i2v_HN_v1A.safetensors` | `W22_POV_Cowgirl_Insertion_i2v_LN_v1.safetensors` |
+| Cumshot Aesthetics | `23High noise-Cumshot Aesthetics.safetensors` | `56Low noise-Cumshot Aesthetics.safetensors` |
+
+### SDXL/Pony LoRAs
+
+| Name | File | Purpose |
+|------|------|---------|
+| Add Details | `Add_Details_v1.2.safetensors` | Detail enhancement |
+| Amateur Style | `amateur_style_v1_pony.safetensors` | Realistic amateur look |
+| IG Baddie | `igbaddie-PN.safetensors` | Instagram style |
+| Tattoo Girls | `tattoogirls-PN.safetensors` | Tattoo style |
+| Incase Style | `incase_style_v3-1_ponyxl_ilff.safetensors` | Artist style |
+| Real Skin | `RealSkin_xxXL_v1.safetensors` | Skin texture |
+| Shiny Skin | `ShinySkinSlider3.0_800steps.safetensors` | Slider |
+| Natural Breasts | `natural_breasts_v1.safetensors` | Body type |
+| Body Weight Slider | `body_weight_slider_v1.safetensors` | Slider |
+| Pony Realism | `Pony Realism Slider.safetensors` | Slider |
+| Dramatic Lighting | `Dramatic Lighting Slider.safetensors` | Slider |
+| Realism Yogi V2 | `Realism_Lora_By_Stable_Yogi_Pony_V2.safetensors` | Realism |
+| Real Cum V6 | `realcumv6.55.safetensors` | Effect |
+| Uncensored Pony | `Uncensored_PonyXL_cpt_v03.safetensors` | Uncensor |
+
+---
+
+## 🔧 VAE Models
+
+| Model | Purpose |
+|-------|---------|
+| `ae.safetensors` | General |
+| `sdxl_vae.safetensors` | SDXL |
+| `wan_2.1_vae.safetensors` | Wan 2.1/2.2 video |
+| `Wan2.1_VAE.safetensors` | Wan 2.1/2.2 video |
+| `qwen_image_vae.safetensors` | QwenVL |
+
+---
+
+## 📝 CLIP/Text Encoders
+
+| Model | Purpose |
+|-------|---------|
+| `clip_l.safetensors` | CLIP-L (SDXL) |
+| `t5xxl_fp8_e4m3fn.safetensors` | T5-XXL FP8 (Wan/Flux) |
+| `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (Wan 2.2) |
+
+---
+
+## 🔊 Audio Models (MMAudio)
+
+| Model | Purpose |
+|-------|---------|
+| `mmaudio_large_44k_v2_fp16.safetensors` | Main audio model |
+| `mmaudio_vae_44k_fp16.safetensors` | Audio VAE |
+| `mmaudio_synchformer_fp16.safetensors` | Sync model |
+| `apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors` | CLIP for audio |
+
+---
+
+## 🧩 Custom Nodes
+
+### Video Generation
+- `ComfyUI-WanVideoWrapper` - Wan 2.2 workflow wrapper
+- `ComfyUI-MultiGPU` - DisTorch2 multi-GPU distribution
+- `ComfyUI-GGUF` - GGUF model loading
+- `ComfyUI-gguf-vae` - GGUF VAE support
+- `ComfyUI-Frame-Interpolation` - RIFE interpolation
+- `ComfyUI-VFI` - Video frame interpolation
+- `ComfyUI-GIMM-VFI` - GIMM-VFI
+- `ComfyUI-VideoHelperSuite` - Video utilities
+- `ComfyUI-FramePackWrapper` - Frame packing
+- `ComfyUI-PainterI2V` - Painter I2V
+- `ComfyUI-PainterLongVideo` - Long video generation
+- `ComfyUI-LatentSyncWrapper` - LatentSync wrapper
+- `ComfyUI-SeedVR2_VideoUpscaler` - Video upscaling
+
+### Audio
+- `ComfyUI-MMAudio` - MMAudio integration
+- `ComfyUI-F5-TTS` - Text-to-speech
+- `ComfyUI-SoundFlow` - Audio flow
+- `TTS-Audio-Suite` - TTS utilities
+- `ComfyUI-MelBandRoFormer` - Audio separation
+
+### Image Processing
+- `ComfyUI-Florence2` - Florence2 vision
+- `ComfyUI-QwenVL` - QwenVL vision
+- `ComfyUI_QwenImageEdit` - Qwen image editing
+- `ComfyUI-JoyCaption` - Image captioning
+- `ComfyUI-Image-Filters` - Image filters
+- `ComfyUI-RMBG` - Background removal
+- `ComfyUI-ColorCorrection` - Color correction
+- `Comfyui-ColorMatchNodes` - Color matching
+- `ComfyUI-WarperNodes` - Image warping
+
+### Utilities
+- `ComfyUI-Impact-Pack` - Detection, masking
+- `ComfyUI-Inspire-Pack` - Inspiration tools
+- `ComfyUI-KJNodes` - KJ utilities
+- `ComfyUI_essentials` - Essential nodes
+- `ComfyUI-Easy-Use` - Simplified nodes
+- `ComfyUI-Crystools` - Crystal tools
+- `ComfyUI-Custom-Scripts` - Custom scripts
+- `was-node-suite-comfyui` - WAS node suite
+- `rgthree-comfy` - rgthree nodes
+- `efficiency-nodes-comfyui` - Efficiency nodes
+- `ComfyUI_Comfyroll_CustomNodes` - Comfyroll
+- `ComfyUI_tinyterraNodes` - TinyTerra
+- `Derfuu_ComfyUI_ModdedNodes` - Derfuu nodes
+
+### ControlNet & Preprocessing
+- `comfyui_controlnet_aux` - ControlNet preprocessors
+- `ComfyUI-Addoor` - Addoor nodes
+
+### Prompt & Text
+- `comfyui-dynamicprompts` - Dynamic prompts
+- `comfyui-portrait-master` - Portrait prompts
+- `ComfyUI-Ollama-Describer` - Ollama integration
+- `ComfyUI-Miaoshouai-Tagger` - Tagging
+
+### Workflow Control
+- `ComfyUI-AsyncPause` - Async pause
+- `ComfyUI-pause` - Pause nodes
+- `cg-use-everywhere` - Use everywhere
+- `ComfyUI-TripleKSampler` - Triple KSampler
+- `ComfyUI-SamplerSchedulerSelector` - Sampler selection
+- `sigmas_tools_and_the_golden_scheduler` - Sigma tools
+- `ComfyUI-WanMoeKSampler` - MoE KSampler
+- `ComfyUI-TeaCache` - TeaCache acceleration
+
+---
+
+## 🚫 NOT Available
+
+- `realvisxlV50_v50Bakedvae.safetensors` - **Removed**
+- ESRGAN upscale models - **Not installed** (empty folder)
+- ControlNet models - **Not installed**
+
+---
+
+## 📁 Key Paths
+
+```
+/home/flip/oelala/ComfyUI/models/
+├── checkpoints/       # SDXL/Pony/Flux checkpoints
+├── unet/              # Wan 2.2 GGUF/FP8 models
+├── loras/             # All LoRAs
+├── vae/               # VAE models
+├── clip/              # CLIP/T5 text encoders
+├── mmaudio/           # MMAudio models
+├── upscale_models/    # Empty (not installed)
+└── controlnet/        # Empty (not installed)
+
+/home/flip/oelala/ComfyUI/custom_nodes/  # All custom nodes
+/home/flip/venvs/gpu/                     # GPU Python environment
+```
+
+---
+
+## 🔗 References
+
+- [MULTI_GPU_SETUP.md](./MULTI_GPU_SETUP.md) - DisTorch2 configuration
+- [copilot-instructions.md](../.github/copilot-instructions.md) - Agent instructions
+- [gpu-tests.yml](../.github/workflows/gpu-tests.yml) - GPU test workflow

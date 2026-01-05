@@ -161,6 +161,7 @@ cuda:0,12gb;cuda:1,16gb
 | 1080p | 17-25 | May need lower frames |
 
 ### Key Files
+- `docs/COMFYUI_INVENTORY.md` - **Complete inventory of all models, LoRAs, custom nodes**
 - `docs/MULTI_GPU_SETUP.md` - Full multi-GPU configuration guide
 - `ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py` - DisTorch2 with local fixes
 - `workflows/ImageToVideo/wan22_i2v_distorch2_api.json` - DisTorch2 API workflow
@@ -170,6 +171,7 @@ cuda:0,12gb;cuda:1,16gb
 2. Include `expert_mode_allocations` on ALL loader nodes
 3. Test with both low (17 frames) and high (81 frames) settings
 4. Check ComfyUI logs for distribution: `[MultiGPU DisTorch V2]`
+5. **Consult `docs/COMFYUI_INVENTORY.md`** for available models/LoRAs
 
 ## Debug Code Requirements
 
