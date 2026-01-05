@@ -93,11 +93,11 @@ export async function postForm(url, formData, headers = {}) {
     // Fallback: return raw text when JSON parsing fails
     data = text
   }
-  
+
   // Check for insufficient credits error (402)
   if (res.status === 402 && data?.detail) {
     // Validate that we have all required properties for insufficient credits
-    if (typeof data.detail === 'object' && 
+    if (typeof data.detail === 'object' &&
         data.detail.error === 'insufficient_credits' &&
         typeof data.detail.required === 'number' &&
         typeof data.detail.available === 'number') {
@@ -111,7 +111,7 @@ export async function postForm(url, formData, headers = {}) {
       }))
     }
   }
-  
+
   return { ok: res.ok, status: res.status, data }
 }
 

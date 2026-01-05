@@ -6,12 +6,12 @@
 import React, { useEffect, useRef } from 'react'
 import { AlertCircle, Coins, X } from 'lucide-react'
 
-export default function InsufficientCreditsModal({ 
-  required, 
-  available, 
-  packages = [], 
-  onClose, 
-  onPurchase 
+export default function InsufficientCreditsModal({
+  required,
+  available,
+  packages = [],
+  onClose,
+  onPurchase
 }) {
   const deficit = required - available
   const modalRef = useRef(null)
@@ -23,7 +23,7 @@ export default function InsufficientCreditsModal({
         onClose()
       }
     }
-    
+
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [onClose])
@@ -176,9 +176,9 @@ export default function InsufficientCreditsModal({
                 const suitable = packages
                   .filter(p => p.credits >= deficit)
                   .sort((a, b) => a.credits - b.credits)[0]
-                
+
                 const recommended = suitable || packages[0]
-                
+
                 return (
                   <div
                     onClick={() => onPurchase(recommended)}

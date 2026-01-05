@@ -33,9 +33,9 @@ This creates:
 
 Run this query in SQL Editor:
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
   AND table_name IN ('user_credits', 'credit_transactions', 'credit_packages');
 ```
 
@@ -319,8 +319,8 @@ Complete the checkout and verify:
 - Verify trigger is working: `SELECT * FROM user_credits;`
 - Manually grant credits:
   ```sql
-  INSERT INTO user_credits (user_id, balance) 
-  VALUES ('USER_UUID', 25) 
+  INSERT INTO user_credits (user_id, balance)
+  VALUES ('USER_UUID', 25)
   ON CONFLICT (user_id) DO UPDATE SET balance = 25;
   ```
 

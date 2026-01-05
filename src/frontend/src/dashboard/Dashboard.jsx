@@ -39,13 +39,13 @@ import { sendClientLog } from '../logging'
 export default function Dashboard() {
   const [activeToolId, setActiveToolId] = useState(TOOL_IDS.IMAGE_TO_VIDEO)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  
+
   // Credits context
-  const { 
-    purchaseSuccess, 
-    purchaseCancelled, 
-    clearPurchaseSuccess, 
-    clearPurchaseCancelled 
+  const {
+    purchaseSuccess,
+    purchaseCancelled,
+    clearPurchaseSuccess,
+    clearPurchaseCancelled
   } = useCredits()
 
   const [health, setHealth] = useState(null)
