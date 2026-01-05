@@ -39,6 +39,9 @@ from storage_client import StorageClient, get_client as get_storage_client
 from credits import calculate_credits, get_credit_manager, InsufficientCreditsError
 from credits_api import router as credits_router, check_credits, deduct_credits, refund_credits
 
+# Gallery system
+from gallery_api import router as gallery_router
+
 # ComfyUI Client for all image/video generation
 try:
     from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
@@ -290,6 +293,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(credits_router)
+app.include_router(gallery_router)
 
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")

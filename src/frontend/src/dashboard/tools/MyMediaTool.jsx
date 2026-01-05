@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
 import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import PublishModal from '../../components/PublishModal'
+import { getMediaType } from '../../utils/mediaUtils'
 
 // Format video duration as MM:SS
 const formatDuration = (seconds) => {
@@ -88,6 +90,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [searchQuery, setSearchQuery] = useState('') // Search by filename or prompt
   const [hideStartImages, setHideStartImages] = useState(true)  // Hide start images by default
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
+  const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
+  const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
   
   // Compute gridSize from profile
   const activeProfile = profile === 'auto' ? detectProfile() : profile
@@ -98,6 +102,31 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [thumbHeight, setThumbHeight] = useState(320)
   const [videoDurations, setVideoDurations] = useState({}) // filename -> duration in seconds
   const containerRef = useRef(null)
+
+  // Get auth context for user-scoped fetching (must be declared before use in other hooks)
+  const { user } = useAuth()
+
+  // Fetch user's published items to show published state correctly
+  useEffect(() => {
+    if (!user) return
+    
+    const fetchPublishedItems = async () => {
+      try {
+        // Fetch first 100 items - good balance between performance and coverage
+        // TODO: Implement a dedicated endpoint that returns only storage paths for better performance
+        const response = await apiFetch(`/api/gallery/users/${user.id}?per_page=100`)
+        if (response.ok) {
+          const data = await response.json()
+          const publishedPaths = new Set(data.items.map(item => item.storage_path))
+          setPublishedItems(publishedPaths)
+        }
+      } catch (err) {
+        console.error('Failed to fetch published items:', err)
+      }
+    }
+    
+    fetchPublishedItems()
+  }, [user])
 
   // Calculate thumb height based on actual grid cell width (9:16 ratio)
   useEffect(() => {
@@ -198,9 +227,6 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     })
     return filtered
   }, [mediaList, sortBy, sortOrder, filterBy, favorites, searchQuery])
-
-  // Get auth context for user-scoped fetching
-  const { user } = useAuth()
 
   const fetchMedia = useCallback(async () => {
     setLoading(true)
@@ -667,6 +693,33 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           opacity: 1;
           background: #ef4444;
           border-color: #ef4444;
+        }
+
+        /* ========== PUBLISH BUTTON ========== */
+        .publish-btn {
+          position: absolute;
+          top: 8px;
+          left: 70px;
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          background: rgba(0,0,0,0.7);
+          border: 2px solid rgba(255,255,255,0.8);
+          opacity: 0;
+          transition: opacity 0.15s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 20;
+        }
+        .thumb-card:hover .publish-btn {
+          opacity: 1;
+        }
+        .publish-btn.is-published {
+          opacity: 1;
+          background: #10b981;
+          border-color: #10b981;
         }
 
         /* ========== PROMPT BUBBLE BUTTON ========== */
@@ -1584,6 +1637,24 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   fill={favorites.has(item.filename) ? '#fff' : 'none'}
                 />
               </div>
+
+              {/* Publish button - only show for logged-in users on their own storage media */}
+              {user && item.source === 'storage' && (
+                <div 
+                  className={`publish-btn ${publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? 'is-published' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPublishModalItem(item)
+                  }}
+                  title={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? 'Published to gallery' : 'Publish to gallery'}
+                >
+                  <Upload 
+                    size={14} 
+                    color={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? '#fff' : 'rgba(255,255,255,0.7)'}
+                    fill={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? '#fff' : 'none'}
+                  />
+                </div>
+              )}
               
               {/* Prompt bubble button - only show if item has a prompt */}
               {(item.metadata?.positive_prompt || item.metadata?.prompt) && (
@@ -2005,6 +2076,19 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             </div>
           </div>
         </div>
+      )}
+
+      {/* Publish Modal */}
+      {publishModalItem && (
+        <PublishModal
+          mediaItem={publishModalItem}
+          onClose={() => setPublishModalItem(null)}
+          onPublished={(published) => {
+            // Add to published items set
+            setPublishedItems(prev => new Set([...prev, published.storage_path]))
+            setPublishModalItem(null)
+          }}
+        />
       )}
     </div>
   )

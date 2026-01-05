@@ -14,15 +14,26 @@ This web interface provides a modern dashboard for the Oelala AI video generatio
 - 🎨 **LoRA Support**: Apply LoRA models with adjustable strength
 - 📋 **Presets**: Save and load workflow presets
 
+### Community Gallery (NEW)
+- 🖼️ **Publish to Gallery**: Share your best AI creations with the community
+- 🌐 **Browse Content**: Discover amazing creations from other users
+- 🔍 **Filter & Sort**: By media type, newest, most liked, most viewed
+- 👁️ **Detail View**: Full-size media with prompts, settings, and metadata
+- ❤️ **Like & Share**: Engage with content (auth required for likes)
+- 🔒 **SFW Default**: Safe browsing for anonymous users
+- 🔞 **NSFW Toggle**: Authenticated users can view age-restricted content
+- 📊 **Analytics**: View counts and like counts for your published content
+
 ### Media Management (My Media)
 - 📁 **Gallery View**: Grid layout with thumbnails
 - 🖼️ **Filter by Type**: All, Images, Videos, Favorites
 - 💬 **Prompts Section**: Browse generation history with full metadata
 - ⭐ **Favorites**: Mark and filter favorite items
+- 📤 **Publish Button**: Quick publish to community gallery
 - 🗑️ **Multi-select**: Bulk delete with keyboard shortcuts (Shift/Ctrl+click)
 - 🔍 **Sort Options**: By date, name, size
 
-### Prompt Viewing (NEW)
+### Prompt Viewing
 - 💬 **Prompt Bubble**: Hover over thumbnails to see prompt indicator
 - 📋 **Popup Modal**: Click to view full prompt details:
   - ✨ Positive prompt with copy button
@@ -264,6 +275,15 @@ npm run build
 
 ## Recent Updates
 
+- **January 5, 2026**: 🖼️ **Community Gallery System**
+  - Publish your best creations to a public gallery
+  - Title, description, tags, and NSFW tagging
+  - Browse community content with filters and sorting
+  - Like and share functionality
+  - View counts and engagement tracking
+  - SFW-only viewing for anonymous users
+  - Full detail modal with prompts and settings
+  - See [GALLERY_SYSTEM.md](./GALLERY_SYSTEM.md) for full documentation
 - **January 3, 2026**: Added Prompts section with full metadata display
   - Prompt bubble (💬) on thumbnails
   - Popup modal with prompts, settings, LoRAs, model info

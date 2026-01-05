@@ -29,6 +29,7 @@ import ReframeTool from './tools/ReframeTool'
 import FaceSwapTool from './tools/FaceSwapTool'
 import ComingSoonTool from './tools/ComingSoonTool'
 import MyMediaTool from './tools/MyMediaTool'
+import Gallery from '../pages/Gallery'
 import LogViewer from '../components/LogViewer'
 import { sendClientLog } from '../logging'
 
@@ -148,6 +149,8 @@ export default function Dashboard() {
         return 'My Media - Images'
       case TOOL_IDS.MY_MEDIA_PROMPTS:
         return 'My Media - Prompts'
+      case TOOL_IDS.GALLERY:
+        return 'Community Gallery'
       default:
         return 'Tool'
     }
@@ -194,6 +197,8 @@ export default function Dashboard() {
         return <MyMediaTool filter="audio" />
       case TOOL_IDS.MY_MEDIA_PROMPTS:
         return <MyMediaTool filter="prompts" />
+      case TOOL_IDS.GALLERY:
+        return <Gallery />
 
       case TOOL_IDS.TEXT_TO_IMAGE:
         return <TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
@@ -293,12 +298,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Full-width layout for My Media tools */}
+        {/* Full-width layout for My Media tools and Gallery */}
         {(activeToolId === TOOL_IDS.MY_MEDIA_ALL || 
           activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS || 
           activeToolId === TOOL_IDS.MY_MEDIA_IMAGES ||
           activeToolId === TOOL_IDS.MY_MEDIA_AUDIO ||
-          activeToolId === TOOL_IDS.MY_MEDIA_PROMPTS) ? (
+          activeToolId === TOOL_IDS.MY_MEDIA_PROMPTS ||
+          activeToolId === TOOL_IDS.GALLERY) ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderControls()}
           </div>

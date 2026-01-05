@@ -22,6 +22,8 @@ export const TOOL_IDS = {
   // Advanced
   PIPELINE: 'pipeline',
   LORA_TRAINING: 'lora-training',
+  // Community
+  GALLERY: 'gallery',
   // My Media
   MY_MEDIA_ALL: 'my-media-all',
   MY_MEDIA_VIDEOS: 'my-media-videos',
@@ -77,6 +79,13 @@ export const NAV_GROUPS = [
     items: [
       { id: TOOL_IDS.PIPELINE, label: 'Pipeline', status: 'ready' },
       { id: TOOL_IDS.LORA_TRAINING, label: 'LoRA Training', status: 'ready' },
+    ],
+  },
+  {
+    id: 'community',
+    title: 'Community',
+    items: [
+      { id: TOOL_IDS.GALLERY, label: 'Gallery', status: 'new', emoji: '🖼️' },
     ],
   },
   {
