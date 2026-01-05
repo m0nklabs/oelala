@@ -54,13 +54,80 @@
       "title": "Negative Prompt"
     }
   },
+  "5": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+      "dequant_dtype": "default",
+      "patch_dtype": "default",
+      "patch_on_device": false,
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "_meta": {
+      "title": "GGUF High Noise (DisTorch2)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 4,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "VAE (DisTorch2)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "clip_name": "umt5-xxl-enc-bf16.safetensors",
+      "type": "wan",
+      "device": "cuda:0",
+      "virtual_vram_gb": 4,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "CLIPLoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "T5-XXL (DisTorch2)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+      "allow_compile": false,
+      "model": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "PathchSageAttentionKJ",
+    "_meta": {
+      "title": "SageAttn (VRAM optimization)"
+    }
+  },
   "10": {
     "inputs": {
-      "unet_name": "wan2.2_i2v_high_noise_14B_Q6_K.gguf"
+      "unet": [
+        "8",
+        0
+      ],
+      "clip": [
+        "7",
+        0
+      ]
     },
-    "class_type": "UnetLoaderGGUF",
+    "class_type": "ModelSamplingDiscreteDistilled",
     "_meta": {
-      "title": "Load WAN 2.2 Model"
+      "title": "Model + CLIP"
     }
   },
   "11": {
@@ -79,6 +146,10 @@
       ],
       "model": [
         "10",
+        0
+      ],
+      "vae": [
+        "6",
         0
       ],
       "cfg": 1.0,

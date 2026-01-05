@@ -2,6 +2,31 @@
 
 This directory contains ComfyUI workflow templates for advanced video processing capabilities.
 
+## 🖥️ GPU Configuration (oelala-gpu)
+
+**Hardware:**
+- RTX 5060 Ti 16GB (cuda:1)
+- RTX 3060 12GB (cuda:0)
+- Total: 28GB VRAM
+
+**DisTorch2 Allocation:**
+```
+expert_mode_allocations: "cuda:0,11gb;cuda:1,15gb;cpu,2gb"
+```
+
+This allocation is used across all video generation workflows to distribute model weights across both GPUs with a small CPU fallback for overflow.
+
+**Performance Benefits:**
+- 2x faster than single GPU
+- Enables longer videos (up to 241 frames @ 720×400)
+- Better VRAM utilization
+- SageAttention reduces VRAM by 15-20%
+
+**See Also:**
+- `docs/COMFYUI_INVENTORY.md` - Complete model & VRAM inventory
+- `docs/HARDWARE_LIMITS.md` - Tested resolution/frame limits
+- `docs/MULTI_GPU_SETUP.md` - DisTorch2 setup guide
+
 ## 📁 Directory Structure
 
 ```
@@ -65,18 +90,37 @@ Smooth frame interpolation using RIFE (Real-Time Intermediate Flow Estimation).
 ## 🎞️ Video Extension
 
 ### extend_video_wan22.json
-Extend videos forwards or backwards using WAN 2.2 video generation.
+Extend videos forwards or backwards using WAN 2.2 video generation with DisTorch2 multi-GPU support.
 
 **Features:**
 - Extend video forwards (continuation)
 - Extend video backwards (prequel)
 - Seamless loop creation
 - Scene continuation with AI
+- **DisTorch2 multi-GPU distribution** for faster processing
 
 **Required Nodes:**
 - VHS (Video Helper Suite)
 - ComfyUI-WanVideoWrapper (WAN 2.2 models)
+- ComfyUI-MultiGPU (DisTorch2 support)
 - Video concatenation nodes
+
+**DisTorch2 Configuration:**
+```json
+{
+  "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+  "compute_device": "cuda:0",
+  "donor_device": "cuda:1",
+  "virtual_vram_gb": 16,
+  "eject_models": true
+}
+```
+
+**Nodes Used:**
+- `UnetLoaderGGUFAdvancedDisTorch2MultiGPU` - Load WAN 2.2 GGUF model with GPU distribution
+- `VAELoaderDisTorch2MultiGPU` - Load VAE with GPU distribution
+- `CLIPLoaderDisTorch2MultiGPU` - Load T5 encoder with GPU distribution
+- `PathchSageAttentionKJ` - Reduce VRAM usage by 15-20%
 
 **Usage:**
 ```json
