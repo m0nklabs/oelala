@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS public.published_media (
     view_count INTEGER DEFAULT 0 CHECK (view_count >= 0),
     like_count INTEGER DEFAULT 0 CHECK (like_count >= 0),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT published_media_user_storage_unique UNIQUE (user_id, storage_path)
 );
 
 COMMENT ON TABLE public.published_media IS 'User-published media items for community gallery';

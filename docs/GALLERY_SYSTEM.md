@@ -102,7 +102,7 @@ Returns new like state and count.
 
 ### Get User's Published Items
 ```http
-GET /api/gallery/user/{user_id}?page=1&per_page=30
+GET /api/gallery/users/{user_id}?page=1&per_page=30
 ```
 
 Anonymous users only see SFW content.

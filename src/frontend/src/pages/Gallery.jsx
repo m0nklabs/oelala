@@ -463,7 +463,6 @@ export default function Gallery() {
         )}
       </div>
 
-      {/* TODO: Add MediaDetailModal here when selectedItem is set */}
       {selectedItem && (
         <MediaDetailModal
           item={selectedItem}

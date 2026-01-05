@@ -105,9 +105,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
   // Fetch user's published items to show published state correctly
   useEffect(() => {
+    if (!user) return
+    
     const fetchPublishedItems = async () => {
-      if (!user) return
-      
       try {
         const response = await apiFetch(`/api/gallery/users/${user.id}?per_page=1000`)
         if (response.ok) {

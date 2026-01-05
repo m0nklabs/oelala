@@ -13,6 +13,11 @@ export function getMediaType(filename) {
   
   const ext = filename.toLowerCase().split('.').pop()
   
+  // Handle edge case where filename has no extension or ends with a dot
+  if (!ext || ext === filename.toLowerCase()) {
+    return 'image'
+  }
+  
   if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv'].includes(ext)) {
     return 'video'
   }

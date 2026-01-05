@@ -46,6 +46,8 @@ export default function MediaDetailModal({ item, onClose }) {
   }
 
   // Copy share link
+  // TODO: Implement proper deep linking when URL routing is added to the app
+  // For now, this shares the gallery URL but won't deep link to specific items
   const handleShare = async () => {
     const url = `${window.location.origin}/gallery/${item.id}`
     try {
