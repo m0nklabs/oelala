@@ -96,14 +96,17 @@ export async function postForm(url, formData, headers = {}) {
   
   // Check for insufficient credits error (402)
   if (res.status === 402 && data?.detail) {
-    // Data might have error info with packages
-    if (typeof data.detail === 'object' && data.detail.error === 'insufficient_credits') {
+    // Validate that we have all required properties for insufficient credits
+    if (typeof data.detail === 'object' && 
+        data.detail.error === 'insufficient_credits' &&
+        typeof data.detail.required === 'number' &&
+        typeof data.detail.available === 'number') {
       // Dispatch custom event that CreditsContext can listen to
       window.dispatchEvent(new CustomEvent('insufficient-credits', {
         detail: {
           required: data.detail.required,
           available: data.detail.available,
-          packages: data.detail.packages || []
+          packages: Array.isArray(data.detail.packages) ? data.detail.packages : []
         }
       }))
     }

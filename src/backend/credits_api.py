@@ -322,6 +322,12 @@ async def stripe_webhook(request: Request):
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         
+        # Verify payment was successful
+        payment_status = session.get("payment_status")
+        if payment_status != "paid":
+            logger.warning(f"Payment not completed: status={payment_status}, session={session['id']}")
+            return {"status": "pending", "message": "Payment not yet completed"}
+        
         user_id = session.get("client_reference_id")
         metadata = session.get("metadata", {})
         package_id = metadata.get("package_id")

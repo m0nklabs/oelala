@@ -74,9 +74,6 @@ You can create products either via Dashboard or CLI:
 
 Install Stripe CLI:
 ```bash
-# macOS
-brew install stripe/stripe-cli/stripe
-
 # Linux
 wget https://github.com/stripe/stripe-cli/releases/latest/download/stripe_linux_amd64.tar.gz
 tar -xvf stripe_linux_amd64.tar.gz

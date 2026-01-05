@@ -3,7 +3,7 @@
  * Shown when user tries to generate but doesn't have enough credits
  */
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { AlertCircle, Coins, X } from 'lucide-react'
 
 export default function InsufficientCreditsModal({ 
@@ -14,6 +14,47 @@ export default function InsufficientCreditsModal({
   onPurchase 
 }) {
   const deficit = required - available
+  const modalRef = useRef(null)
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [onClose])
+
+  // Focus trap and initial focus
+  useEffect(() => {
+    if (modalRef.current) {
+      const focusableElements = modalRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements[focusableElements.length - 1]
+
+      firstElement?.focus()
+
+      const handleTab = (e) => {
+        if (e.key === 'Tab') {
+          if (e.shiftKey && document.activeElement === firstElement) {
+            e.preventDefault()
+            lastElement?.focus()
+          } else if (!e.shiftKey && document.activeElement === lastElement) {
+            e.preventDefault()
+            firstElement?.focus()
+          }
+        }
+      }
+
+      modalRef.current.addEventListener('keydown', handleTab)
+      return () => modalRef.current?.removeEventListener('keydown', handleTab)
+    }
+  }, [])
 
   return (
     <>
@@ -27,10 +68,16 @@ export default function InsufficientCreditsModal({
           zIndex: 1100,
         }}
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="insufficient-credits-title"
+        aria-describedby="insufficient-credits-description"
         style={{
           position: 'fixed',
           top: '50%',
@@ -67,15 +114,17 @@ export default function InsufficientCreditsModal({
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
+              aria-hidden="true"
             >
               <AlertCircle size={20} color="#ef4444" />
             </div>
-            <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary, white)' }}>
+            <h2 id="insufficient-credits-title" style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary, white)' }}>
               Insufficient Credits
             </h2>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close modal"
             style={{
               background: 'none',
               border: 'none',
@@ -90,7 +139,7 @@ export default function InsufficientCreditsModal({
         </div>
 
         {/* Body */}
-        <div style={{ padding: '24px' }}>
+        <div id="insufficient-credits-description" style={{ padding: '24px' }}>
           {/* Balance Info */}
           <div
             style={{
@@ -207,6 +256,7 @@ export default function InsufficientCreditsModal({
             <button
               onClick={() => {
                 onClose()
+                // onPurchase() with no arguments shows the full purchase modal with all packages
                 onPurchase()
               }}
               style={{

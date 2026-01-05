@@ -37,7 +37,7 @@ from storage_client import StorageClient, get_client as get_storage_client
 
 # Credits system
 from credits import calculate_credits, get_credit_manager, InsufficientCreditsError
-from credits_api import router as credits_router, stripe_router, check_credits, deduct_credits, refund_credits
+from credits_api import router as credits_router, stripe_router, check_credits, deduct_credits
 
 # Gallery system
 from gallery_api import router as gallery_router

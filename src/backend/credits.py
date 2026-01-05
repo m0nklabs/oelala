@@ -439,42 +439,45 @@ class CreditManager:
         metadata: Dict[str, Any] = None,
     ) -> bool:
         """
-        Deduct credits and log transaction.
+        Deduct credits and log transaction atomically.
         
         Call this after generation completes successfully.
         Balance should be verified with check_credits before calling this.
+        
+        Uses database RPC function to avoid race conditions.
         """
         client = await self.get_client()
         
-        # Get current balance
-        balance = await self.get_balance(user_id)
-        
-        # Deduct credits
-        response = await client.patch(
-            "/user_credits",
-            params={"user_id": f"eq.{user_id}"},
+        # Use atomic database RPC function to deduct credits
+        # This handles: balance check, deduction, lifetime_used update, and transaction logging
+        response = await client.post(
+            "/rpc/deduct_credits",
             json={
-                "balance": balance.balance - amount,
-                "lifetime_used": balance.lifetime_used + amount,
-                "updated_at": datetime.utcnow().isoformat(),
+                "p_user_id": user_id,
+                "p_amount": amount,
+                "p_description": description or f"Generation job",
+                "p_reference_id": reference_id,
+                "p_metadata": metadata or {},
             },
         )
         
-        if response.status_code not in (200, 204):
-            logger.error(f"Failed to deduct credits: {response.text}")
+        if response.status_code not in (200, 201):
+            logger.error(f"Failed to deduct credits via RPC: {response.text}")
             raise Exception("Failed to deduct credits")
         
-        # Log transaction
-        await self._log_transaction(
-            user_id=user_id,
-            amount=-amount,  # Negative for deduction
-            type="generation",
-            description=description or f"Generation job",
-            reference_id=reference_id,
-            metadata=metadata,
-        )
+        # Check RPC result
+        result = response.json()
+        if result and len(result) > 0:
+            result_row = result[0]
+            if not result_row.get("success", False):
+                error_msg = result_row.get("error", "Unknown error")
+                logger.error(f"Credit deduction failed: {error_msg}")
+                raise Exception(f"Failed to deduct credits: {error_msg}")
+            
+            debug_log(f"Deducted {amount} credits from user {user_id}, new balance: {result_row.get('new_balance')}, ref={reference_id}")
+        else:
+            logger.warning("RPC returned empty result")
         
-        debug_log(f"Deducted {amount} credits from user {user_id}, ref={reference_id}")
         return True
     
     async def add_credits(

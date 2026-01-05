@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
-import { RefreshCw, Download, CheckCircle, XCircle } from 'lucide-react'
+import { Download, CheckCircle, XCircle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'

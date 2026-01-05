@@ -59,7 +59,7 @@ export function CreditsProvider({ children }) {
       // Auto-clear cancelled message
       setTimeout(() => setPurchaseCancelled(false), NOTIFICATION_TIMEOUT_MS)
     }
-  }, [])
+  }, [fetchBalance])
 
   // Fetch balance when user changes
   const fetchBalance = useCallback(async () => {
@@ -260,26 +260,29 @@ export function CreditsProvider({ children }) {
       {children}
       
       {/* Insufficient Credits Modal */}
-      {showInsufficientModal && insufficientData && (
-        <InsufficientCreditsModal
-          required={insufficientData.required}
-          available={insufficientData.available}
-          packages={insufficientData.packages}
-          onClose={() => setShowInsufficientModal(false)}
-          onPurchase={(pkg) => {
-            setShowInsufficientModal(false)
-            if (pkg) {
-              // Direct purchase of specific package
-              purchaseCredits(pkg.id).then(url => {
-                if (url) window.location.href = url
-              })
-            } else {
-              // Show all packages
-              setShowPurchaseModal(true)
-            }
-          }}
-        />
-      )}
+      {showInsufficientModal &&
+        insufficientData &&
+        Array.isArray(insufficientData.packages) &&
+        insufficientData.packages.length > 0 && (
+          <InsufficientCreditsModal
+            required={insufficientData.required}
+            available={insufficientData.available}
+            packages={insufficientData.packages}
+            onClose={() => setShowInsufficientModal(false)}
+            onPurchase={(pkg) => {
+              setShowInsufficientModal(false)
+              if (pkg) {
+                // Direct purchase of specific package
+                purchaseCredits(pkg.id).then(url => {
+                  if (url) window.location.href = url
+                })
+              } else {
+                // Show all packages
+                setShowPurchaseModal(true)
+              }
+            }}
+          />
+        )}
       
       {/* Purchase Credits Modal */}
       {showPurchaseModal && (
