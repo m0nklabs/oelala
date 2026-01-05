@@ -134,7 +134,7 @@ class TestAdvancedVideoEndpoints:
 
     def test_upscale_video_endpoint_exists(self):
         """Video upscale endpoint should exist and accept requests.
-        
+
         Note: This test uses a fake MP4 file to verify endpoint accessibility,
         not actual video processing functionality.
         """
@@ -158,7 +158,7 @@ class TestAdvancedVideoEndpoints:
         # Should either accept or reject gracefully, not crash
         # Endpoint exists if we get any of these status codes
         assert resp.status_code in [200, 400, 422, 500, 503]
-        
+
         # If successful, check response structure
         if resp.status_code == 200:
             data = resp.json()
@@ -167,7 +167,7 @@ class TestAdvancedVideoEndpoints:
 
     def test_interpolate_video_endpoint_exists(self):
         """Frame interpolation endpoint should exist and accept requests.
-        
+
         Note: This test uses a fake MP4 file to verify endpoint accessibility,
         not actual video processing functionality.
         """
