@@ -19,6 +19,8 @@ import TextToImageToVideoTool from './tools/TextToImageToVideoTool'
 import VideoToVideoTool from './tools/VideoToVideoTool'
 import VideoToTextTool from './tools/VideoToTextTool'
 import SpeechToVideoTool from './tools/SpeechToVideoTool'
+import VideoUpscalerTool from './tools/VideoUpscalerTool'
+import FrameInterpolationTool from './tools/FrameInterpolationTool'
 import PipelineTool from './tools/PipelineTool'
 import LoRATrainingTool from './tools/LoRATrainingTool'
 import ImageToTextTool from './tools/ImageToTextTool'
@@ -129,6 +131,10 @@ export default function Dashboard() {
         return 'Video to Video'
       case TOOL_IDS.VIDEO_TO_TEXT:
         return 'Video to Text'
+      case TOOL_IDS.VIDEO_UPSCALER:
+        return 'Video Upscaler'
+      case TOOL_IDS.FRAME_INTERPOLATION:
+        return 'Frame Interpolation'
       case TOOL_IDS.PIPELINE:
         return 'Pipeline'
       case TOOL_IDS.LORA_TRAINING:
@@ -231,6 +237,10 @@ export default function Dashboard() {
         return <VideoToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.VIDEO_TO_TEXT:
         return <VideoToTextTool />
+      case TOOL_IDS.VIDEO_UPSCALER:
+        return <VideoUpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+      case TOOL_IDS.FRAME_INTERPOLATION:
+        return <FrameInterpolationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
       case TOOL_IDS.AUDIO_GENERATION:
         return <AudioGenerationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />

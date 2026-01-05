@@ -4619,6 +4619,211 @@ async def upscale_image(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Video Upscaling
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/upscale-video")
+async def upscale_video(
+    file: UploadFile = File(...),
+    model: str = Form("realesrgan-video"),
+    resolution_preset: str = Form("480p → 720p"),
+    quality_preset: str = Form("balanced"),
+    batch_size: int = Form(16),
+):
+    """
+    Upscale video using AI-enhanced upscaling (Real-ESRGAN Video).
+
+    Args:
+        file: Source video
+        model: Upscale model (realesrgan-video, basic-lanczos)
+        resolution_preset: Target resolution (e.g., "480p → 720p")
+        quality_preset: Quality vs speed (fast, balanced, quality)
+        batch_size: Frames processed together (higher = faster, more VRAM)
+    """
+    logger.info(
+        f"🎬 Video upscale request: model={model}, preset={resolution_preset}, quality={quality_preset}, batch={batch_size}"
+    )
+
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+
+    # Save uploaded video
+    upload_filename = f"upscale_video_input_{uuid.uuid4().hex[:8]}.mp4"
+    upload_path = UPLOAD_DIR / upload_filename
+
+    try:
+        with open(upload_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        # Upload to ComfyUI
+        comfyui_filename = client.upload_video(str(upload_path))
+        if not comfyui_filename:
+            raise HTTPException(
+                status_code=500, detail="Failed to upload video to ComfyUI"
+            )
+
+        logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
+
+        # Parse quality preset for denoise strength
+        denoise_map = {"fast": 0.3, "balanced": 0.5, "quality": 0.7}
+        denoise = denoise_map.get(quality_preset, 0.5)
+
+        # Build video upscaling workflow (placeholder - requires video upscale nodes)
+        workflow = {
+            "1": {
+                "inputs": {"video": comfyui_filename, "upload": "video"},
+                "class_type": "LoadVideo",
+            },
+            "2": {"inputs": {"model_name": "RealESRGAN_x4plus.pth"}, "class_type": "UpscaleModelLoader"},
+            "3": {
+                "inputs": {
+                    "upscale_model": ["2", 0],
+                    "frames": ["1", 0],
+                    "batch_size": batch_size,
+                },
+                "class_type": "VideoUpscaleWithModel",
+            },
+            "4": {
+                "inputs": {
+                    "filename_prefix": "oelala_upscale_video",
+                    "fps": 30,
+                    "frames": ["3", 0],
+                },
+                "class_type": "SaveVideo",
+            },
+        }
+
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(
+                status_code=500, detail="Failed to queue video upscale workflow"
+            )
+
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "model": model,
+                "resolution_preset": resolution_preset,
+                "quality_preset": quality_preset,
+                "batch_size": batch_size,
+                "source_video": comfyui_filename,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Video upscale error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Frame Interpolation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/interpolate-video")
+async def interpolate_video(
+    file: UploadFile = File(...),
+    model: str = Form("rife"),
+    mode: str = Form("fps"),
+    target_fps: int = Form(60),
+    multiplier: float = Form(2.0),
+    show_flow_viz: bool = Form(False),
+):
+    """
+    Frame interpolation for smooth video (RIFE/FILM).
+
+    Args:
+        file: Source video
+        model: Interpolation model (rife, film)
+        mode: fps (increase framerate) or slowmo (slow motion)
+        target_fps: Target FPS for fps mode
+        multiplier: Frame multiplier (2x, 4x, etc.)
+        show_flow_viz: Show optical flow visualization
+    """
+    logger.info(
+        f"⚡ Frame interpolation request: model={model}, mode={mode}, target_fps={target_fps}, multiplier={multiplier}x"
+    )
+
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+
+    # Save uploaded video
+    upload_filename = f"interpolate_input_{uuid.uuid4().hex[:8]}.mp4"
+    upload_path = UPLOAD_DIR / upload_filename
+
+    try:
+        with open(upload_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        # Upload to ComfyUI
+        comfyui_filename = client.upload_video(str(upload_path))
+        if not comfyui_filename:
+            raise HTTPException(
+                status_code=500, detail="Failed to upload video to ComfyUI"
+            )
+
+        logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
+
+        # Build frame interpolation workflow (placeholder - requires RIFE/FILM nodes)
+        workflow = {
+            "1": {
+                "inputs": {"video": comfyui_filename, "upload": "video"},
+                "class_type": "LoadVideo",
+            },
+            "2": {
+                "inputs": {"model_name": model.upper()},
+                "class_type": "RIFEInterpolation" if model == "rife" else "FILMInterpolation",
+            },
+            "3": {
+                "inputs": {
+                    "frames": ["1", 0],
+                    "interpolation_model": ["2", 0],
+                    "multiplier": int(multiplier),
+                    "show_flow": show_flow_viz,
+                },
+                "class_type": "FrameInterpolation",
+            },
+            "4": {
+                "inputs": {
+                    "filename_prefix": "oelala_interpolated",
+                    "fps": target_fps if mode == "fps" else 30,
+                    "frames": ["3", 0],
+                },
+                "class_type": "SaveVideo",
+            },
+        }
+
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(
+                status_code=500, detail="Failed to queue interpolation workflow"
+            )
+
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "meta": {
+                "model": model,
+                "mode": mode,
+                "target_fps": target_fps,
+                "multiplier": multiplier,
+                "show_flow_viz": show_flow_viz,
+                "source_video": comfyui_filename,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Interpolation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Video-to-Video Style Transfer via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
 
