@@ -1,6 +1,6 @@
 /**
  * Site Footer
- * Contains legal links and copyright notice
+ * Compact legal links bar
  */
 
 import React from 'react'
@@ -9,48 +9,24 @@ export default function Footer({ onShowLegal }) {
   return (
     <footer
       style={{
-        padding: '16px 24px',
-        borderTop: '1px solid #1f2937',
-        background: '#0d1117',
+        padding: '8px 16px',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        background: 'transparent',
         display: 'flex',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '12px',
+        gap: '8px',
+        fontSize: '11px',
+        color: '#4b5563',
       }}
     >
-      {/* Copyright */}
-      <div style={{ color: '#6b7280', fontSize: '13px' }}>
-        © {new Date().getFullYear()} oelala.xyz — AI-powered creativity
-      </div>
-      
-      {/* Legal Links */}
-      <div style={{ display: 'flex', gap: '20px' }}>
-        <button
-          onClick={() => onShowLegal?.('privacy')}
-          style={linkStyle}
-        >
-          Privacy
-        </button>
-        <button
-          onClick={() => onShowLegal?.('terms')}
-          style={linkStyle}
-        >
-          Terms of Service
-        </button>
-        <button
-          onClick={() => onShowLegal?.('dmca')}
-          style={linkStyle}
-        >
-          DMCA
-        </button>
-        <a
-          href="mailto:support@oelala.xyz"
-          style={linkStyle}
-        >
-          Contact
-        </a>
-      </div>
+      <span>© {new Date().getFullYear()} oelala.xyz</span>
+      <span style={{ opacity: 0.3 }}>•</span>
+      <button onClick={() => onShowLegal?.('privacy')} style={linkStyle}>Privacy</button>
+      <span style={{ opacity: 0.3 }}>•</span>
+      <button onClick={() => onShowLegal?.('terms')} style={linkStyle}>Terms</button>
+      <span style={{ opacity: 0.3 }}>•</span>
+      <button onClick={() => onShowLegal?.('dmca')} style={linkStyle}>DMCA</button>
     </footer>
   )
 }
@@ -58,9 +34,9 @@ export default function Footer({ onShowLegal }) {
 const linkStyle = {
   background: 'transparent',
   border: 'none',
-  color: '#6b7280',
-  fontSize: '13px',
+  color: '#4b5563',
+  fontSize: '11px',
   cursor: 'pointer',
-  textDecoration: 'none',
-  transition: 'color 0.2s',
+  padding: 0,
 }
+linkStyle[':hover'] = { color: '#6b7280' }
