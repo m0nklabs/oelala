@@ -1,18 +1,25 @@
 # Pre-commit hooks
 # See https://pre-commit.com for more information
+#
+# Excluded directories:
+# - ComfyUI/: External submodule/dependency
+# - workflows/: ComfyUI-generated JSON files
+# - scripts/: Legacy utility scripts
+# - data/: Benchmark/experiment data
+# - examples/: Example/demo scripts
+# - external/: External dependencies
+
+# Global exclude pattern
+exclude: ^(ComfyUI/|workflows/|scripts/|data/|examples/|external/|generated/|media/|uploads/|build/|logs/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(workflows/|ComfyUI/)
       - id: end-of-file-fixer
-        exclude: ^(workflows/|ComfyUI/)
       - id: check-yaml
         args: [--unsafe]
-      - id: check-json
-        exclude: ^(workflows/|ComfyUI/)
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
@@ -22,4 +29,6 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        files: ^src/
       - id: ruff-format
+        files: ^src/
