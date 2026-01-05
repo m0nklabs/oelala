@@ -28,7 +28,6 @@ const MODEL_CATEGORIES = {
   ],
   diffusers: [
     { value: 'sd3.5-large-int8', label: 'SD3.5 Large (INT8)' },
-    { value: 'realvisxl-v5.0', label: 'RealVisXL V5.0' },
   ],
 }
 

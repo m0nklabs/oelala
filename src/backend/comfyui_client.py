@@ -1002,7 +1002,7 @@ class ComfyUIClient:
         cfg: float = 1.0,
         seed: int = -1,
         output_prefix: str = "oelala_t2v",
-        t2i_checkpoint_name: str = "realvisxlV50_v50Bakedvae.safetensors",
+        t2i_checkpoint_name: str = "dreamshaperXL_lightningDPMSDE.safetensors",
         t2i_steps: int = 20,
         t2i_cfg: float = 6.0,
     ) -> Dict[str, Any]:

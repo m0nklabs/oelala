@@ -110,6 +110,31 @@ These instructions apply to GitHub Copilot in the context of this repository.
     3. Mock external services (APIs, databases) in unit tests.
     4. Minimum coverage: Aim for high coverage (e.g., 80%) for new code.
 
+## GPU Integration Testing (Self-Hosted Runner)
+
+This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct access to:
+- ComfyUI API at `localhost:8188`
+- Backend API at `localhost:7998`  
+- GPU (RTX 4080 16GB VRAM)
+- All installed models in `/home/flip/oelala/ComfyUI/models/`
+
+**When working on video/ComfyUI related code:**
+
+1. **Add tests to `tests/gpu/`** - These run on the self-hosted runner with real GPU access.
+2. **Trigger GPU tests via workflow** - The `gpu-tests.yml` workflow runs on PRs touching:
+   - `src/backend/comfyui_client.py`
+   - `src/backend/app.py`
+   - `workflows/**`
+   - `tests/gpu/**`
+3. **Test actual workflow execution** - You can queue real ComfyUI workflows:
+   ```python
+   # In tests/gpu/test_*.py
+   resp = requests.post("http://localhost:8188/prompt", json={"prompt": workflow})
+   ```
+4. **Use available models only** - Check `/api/models/checkpoints` for available models.
+   Do NOT use `realvisxlV50_v50Bakedvae.safetensors` (removed).
+5. **Python environment** - Use `/home/flip/venvs/gpu` for GPU-enabled Python.
+
 ## Debug Code Requirements
 
 When implementing any feature or component:
