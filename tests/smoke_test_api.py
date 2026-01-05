@@ -1,8 +1,7 @@
 import requests
-import time
-import os
 
 BASE_URL = "http://192.168.1.2:7998"
+
 
 def test_health():
     print("Testing /health...")
@@ -14,6 +13,7 @@ def test_health():
     except Exception as e:
         print(f"Failed: {e}")
         return False
+
 
 def test_list_videos():
     print("\nTesting /list-videos...")
@@ -27,6 +27,7 @@ def test_list_videos():
         print(f"Failed: {e}")
         return False
 
+
 def test_generate_text_validation():
     print("\nTesting /generate-text validation (empty prompt)...")
     try:
@@ -37,6 +38,7 @@ def test_generate_text_validation():
     except Exception as e:
         print(f"Failed: {e}")
         return False
+
 
 if __name__ == "__main__":
     print(f"Smoke testing API at {BASE_URL}")

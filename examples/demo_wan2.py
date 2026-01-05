@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from wan2_generator import Wan2VideoGenerator
 
+
 def demo_wan2_generation():
     """Demo function showing how to use Wan2.2 generator"""
 
@@ -67,10 +68,7 @@ def demo_wan2_generation():
     print(f"📝 Prompt: {prompt}")
 
     result = generator.generate_video_from_image(
-        image_path=image_path,
-        prompt=prompt,
-        output_path=output_path,
-        num_frames=16
+        image_path=image_path, prompt=prompt, output_path=output_path, num_frames=16
     )
 
     if result:
@@ -78,6 +76,7 @@ def demo_wan2_generation():
         print("🎉 Wan2.2 Image-to-Video generation is working!")
     else:
         print("❌ Demo failed. Check the error messages above.")
+
 
 if __name__ == "__main__":
     demo_wan2_generation()

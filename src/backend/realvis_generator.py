@@ -48,7 +48,11 @@ class RealVisXLImageGenerator:
         if not self.pipe:
             raise RuntimeError("Model not initialized")
 
-        generator = torch.Generator(device=self.device).manual_seed(seed) if seed is not None else None
+        generator = (
+            torch.Generator(device=self.device).manual_seed(seed)
+            if seed is not None
+            else None
+        )
         logger.info(f"🎨 [RealVisXL] Generating image for prompt: {prompt[:80]}...")
 
         with torch.inference_mode():
