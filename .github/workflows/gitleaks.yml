@@ -26,4 +26,10 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
 
       - name: Run Gitleaks (full scan)
-        run: gitleaks detect --source . --log-opts="--all" --verbose --exit-code 1
+        run: |
+          # Use custom config if exists, otherwise defaults
+          if [ -f .gitleaks.toml ]; then
+            gitleaks detect --source . --config .gitleaks.toml --log-opts="--all" --verbose --exit-code 1
+          else
+            gitleaks detect --source . --log-opts="--all" --verbose --exit-code 1
+          fi
