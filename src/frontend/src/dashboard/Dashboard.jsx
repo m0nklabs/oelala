@@ -249,13 +249,14 @@ export default function Dashboard() {
   const { user, isAdult } = useAuth()
 
   return (
-    <div className="dashboard-container">
-        <Sidebar
-          activeToolId={activeToolId}
-          onSelectTool={setActiveToolId}
-          collapsed={sidebarCollapsed}
-          onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
-        />
+    <div className="dashboard-wrapper">
+      <div className="dashboard-container">
+          <Sidebar
+            activeToolId={activeToolId}
+            onSelectTool={setActiveToolId}
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+          />
 
       <main className="main-content">
         <div className="top-bar">
@@ -369,6 +370,7 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+      </div>
       <Footer onShowLegal={setLegalType} />
       {legalType && (
         <LegalModal type={legalType} onClose={() => setLegalType(null)} />
