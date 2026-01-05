@@ -848,7 +848,7 @@ class ComfyUIClient:
 
     def upload_video(self, video_path: str, subfolder: str = "") -> Optional[str]:
         """Upload video to ComfyUI input folder.
-        
+
         ComfyUI's /upload/image endpoint accepts any file type,
         despite the 'image' field name.
         """
@@ -883,7 +883,9 @@ class ComfyUIClient:
                 logger.info(f"🎬 Video uploaded: {result.get('name')}")
                 return result.get("name")
             else:
-                logger.error(f"🎬 Video upload failed: {resp.status_code} - {resp.text}")
+                logger.error(
+                    f"🎬 Video upload failed: {resp.status_code} - {resp.text}"
+                )
                 return None
         except Exception as e:
             logger.error(f"🎬 Video upload error: {e}")

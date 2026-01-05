@@ -4639,7 +4639,7 @@ async def upscale_video(
             - bicubic: Bicubic interpolation (fast, no AI)
             - seedvr2: SeedVR2 AI upscaler (slow, requires GPU, best quality)
         scale: Upscale factor (2.0 = double resolution)
-    
+
     Note: AI upscale models (realesrgan) are not currently installed.
     Use 'lanczos' for reliable basic upscaling.
     """
@@ -4650,7 +4650,7 @@ async def upscale_video(
     if model not in valid_models and model != "seedvr2":
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model '{model}'. Available: {valid_models + ['seedvr2']}"
+            detail=f"Invalid model '{model}'. Available: {valid_models + ['seedvr2']}",
         )
 
     client = get_comfyui_client()
@@ -4688,7 +4688,7 @@ async def upscale_video(
                         "custom_height": 512,
                         "frame_load_cap": 0,
                         "skip_first_frames": 0,
-                        "select_every_nth": 1
+                        "select_every_nth": 1,
                     },
                     "class_type": "VHS_LoadVideo",
                 },
@@ -4745,7 +4745,7 @@ async def upscale_video(
             # Default input assumed ~480p, so 2x = ~960p
             target_width = int(1920 * scale / 2)  # Scale from 960 base
             target_height = int(1080 * scale / 2)  # Scale from 540 base
-            
+
             workflow = {
                 "1": {
                     "inputs": {
@@ -4756,7 +4756,7 @@ async def upscale_video(
                         "custom_height": 512,
                         "frame_load_cap": 0,
                         "skip_first_frames": 0,
-                        "select_every_nth": 1
+                        "select_every_nth": 1,
                     },
                     "class_type": "VHS_LoadVideo",
                 },
@@ -4830,7 +4830,7 @@ async def interpolate_video(
         mode: fps (increase framerate) or slowmo (slow motion)
         target_fps: Target FPS for fps mode
         multiplier: Frame multiplier (2x, 4x, etc.)
-    
+
     Note: Optical flow visualization is not yet implemented.
     """
     logger.info(
@@ -4862,7 +4862,7 @@ async def interpolate_video(
         # Build frame interpolation workflow
         # Flow: VHS_LoadVideo → RIFE VFI → VHS_VideoCombine
         # Note: RIFE VFI takes frames directly and returns interpolated frames
-        
+
         # Select correct checkpoint based on model
         if model == "rife":
             ckpt_name = "rife47.pth"
@@ -4873,7 +4873,7 @@ async def interpolate_video(
         else:
             ckpt_name = "rife47.pth"
             class_type = "RIFE VFI"
-        
+
         workflow = {
             "1": {
                 "inputs": {
@@ -4884,7 +4884,7 @@ async def interpolate_video(
                     "custom_height": 512,
                     "frame_load_cap": 0,
                     "skip_first_frames": 0,
-                    "select_every_nth": 1
+                    "select_every_nth": 1,
                 },
                 "class_type": "VHS_LoadVideo",
             },
@@ -4896,7 +4896,7 @@ async def interpolate_video(
                     "multiplier": int(multiplier),
                     "fast_mode": True,
                     "ensemble": True,
-                    "scale_factor": 1.0
+                    "scale_factor": 1.0,
                 },
                 "class_type": class_type,
             },
