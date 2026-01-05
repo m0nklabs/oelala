@@ -133,9 +133,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
     }
   }
 
-  const selectedPreset = RESOLUTION_PRESETS.find(p => p.label === resolutionPreset)
-  const selectedQuality = QUALITY_PRESETS.find(p => p.value === qualityPreset)
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
       <div style={{ marginBottom: '8px' }}>
@@ -387,7 +384,9 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       {/* Result */}
       {result && (
         <div>
-          <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>Result ({selectedPreset?.label})</h3>
+          <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>
+            Result ({RESOLUTION_PRESETS.find(p => p.label === resolutionPreset)?.label})
+          </h3>
           <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
             <video src={result} controls style={{ width: '100%', display: 'block' }} />
           </div>

@@ -4671,28 +4671,47 @@ async def upscale_video(
         denoise_map = {"fast": 0.3, "balanced": 0.5, "quality": 0.7}
         denoise = denoise_map.get(quality_preset, 0.5)
 
-        # Build video upscaling workflow (placeholder - requires video upscale nodes)
+        # Build video upscaling workflow matching the JSON template
+        # Uses VHS (Video Helper Suite) nodes for video I/O
         workflow = {
             "1": {
-                "inputs": {"video": comfyui_filename, "upload": "video"},
-                "class_type": "LoadVideo",
+                "inputs": {
+                    "video": comfyui_filename,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                    "custom_width": 512,
+                    "custom_height": 512,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1
+                },
+                "class_type": "VHS_LoadVideo",
             },
-            "2": {"inputs": {"model_name": "RealESRGAN_x4plus.pth"}, "class_type": "UpscaleModelLoader"},
+            "2": {
+                "inputs": {"model_name": "RealESRGAN_x4plus.pth"},
+                "class_type": "UpscaleModelLoader"
+            },
             "3": {
                 "inputs": {
                     "upscale_model": ["2", 0],
-                    "frames": ["1", 0],
-                    "batch_size": batch_size,
+                    "image": ["1", 0],
                 },
-                "class_type": "VideoUpscaleWithModel",
+                "class_type": "ImageUpscaleWithModel",
             },
             "4": {
                 "inputs": {
+                    "frame_rate": 30,
+                    "loop_count": 0,
                     "filename_prefix": "oelala_upscale_video",
-                    "fps": 30,
-                    "frames": ["3", 0],
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["3", 0],
                 },
-                "class_type": "SaveVideo",
+                "class_type": "VHS_VideoCombine",
             },
         }
 
@@ -4770,32 +4789,55 @@ async def interpolate_video(
 
         logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
 
-        # Build frame interpolation workflow (placeholder - requires RIFE/FILM nodes)
+        # Build frame interpolation workflow matching the JSON template
+        # Uses VHS + RIFE nodes
         workflow = {
             "1": {
-                "inputs": {"video": comfyui_filename, "upload": "video"},
-                "class_type": "LoadVideo",
+                "inputs": {
+                    "video": comfyui_filename,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                    "custom_width": 512,
+                    "custom_height": 512,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1
+                },
+                "class_type": "VHS_LoadVideo",
             },
             "2": {
-                "inputs": {"model_name": model.upper()},
-                "class_type": "RIFEInterpolation" if model == "rife" else "FILMInterpolation",
+                "inputs": {
+                    "ckpt_name": "rife47.pth" if model == "rife" else "film_net_fp32.pt",
+                    "clear_cache_after_n_frames": 10,
+                    "multiplier": int(multiplier),
+                    "fast_mode": True,
+                    "ensemble": True,
+                    "scale_factor": 1.0
+                },
+                "class_type": "RIFE VFI",
             },
             "3": {
                 "inputs": {
                     "frames": ["1", 0],
-                    "interpolation_model": ["2", 0],
-                    "multiplier": int(multiplier),
-                    "show_flow": show_flow_viz,
+                    "interpolation": ["2", 0],
+                    "optional_interpolation_states": ["2", 1],
                 },
-                "class_type": "FrameInterpolation",
+                "class_type": "VFI",
             },
             "4": {
                 "inputs": {
+                    "frame_rate": target_fps if mode == "fps" else 30,
+                    "loop_count": 0,
                     "filename_prefix": "oelala_interpolated",
-                    "fps": target_fps if mode == "fps" else 30,
-                    "frames": ["3", 0],
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["3", 0],
                 },
-                "class_type": "SaveVideo",
+                "class_type": "VHS_VideoCombine",
             },
         }
 

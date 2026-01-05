@@ -145,9 +145,6 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
     }
   }
 
-  const selectedFps = FPS_PRESETS.find(p => p.label === fpsPreset)
-  const selectedSlowMo = SLOW_MOTION_PRESETS.find(p => p.value === slowMoPreset)
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
       <div style={{ marginBottom: '8px' }}>
@@ -446,7 +443,9 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
       {result && (
         <div>
           <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>
-            Result ({mode === 'fps' ? selectedFps?.label : selectedSlowMo?.label})
+            Result ({mode === 'fps' 
+              ? FPS_PRESETS.find(p => p.label === fpsPreset)?.label 
+              : SLOW_MOTION_PRESETS.find(p => p.value === slowMoPreset)?.label})
           </h3>
           <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
             <video src={result} controls style={{ width: '100%', display: 'block' }} />
