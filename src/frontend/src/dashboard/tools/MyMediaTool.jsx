@@ -103,6 +103,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [videoDurations, setVideoDurations] = useState({}) // filename -> duration in seconds
   const containerRef = useRef(null)
 
+  // Get auth context for user-scoped fetching (must be declared before use in other hooks)
+  const { user } = useAuth()
+
   // Fetch user's published items to show published state correctly
   useEffect(() => {
     if (!user) return
@@ -224,9 +227,6 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     })
     return filtered
   }, [mediaList, sortBy, sortOrder, filterBy, favorites, searchQuery])
-
-  // Get auth context for user-scoped fetching
-  const { user } = useAuth()
 
   const fetchMedia = useCallback(async () => {
     setLoading(true)

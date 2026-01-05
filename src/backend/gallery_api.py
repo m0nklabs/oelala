@@ -503,9 +503,9 @@ async def get_user_published_media(
             has_more=has_more,
         )
         
-    except Exception as e:
-        logger.error(f"Error getting user media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error getting user media")
+        raise HTTPException(status_code=500, detail="Failed to fetch user media")
 
 
 # ============================================================================
