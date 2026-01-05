@@ -9,7 +9,6 @@ import pytest
 import requests
 import json
 from pathlib import Path
-import tempfile
 import io
 
 # Local services
@@ -134,8 +133,12 @@ class TestAdvancedVideoEndpoints:
     """Test new advanced video processing endpoints."""
 
     def test_upscale_video_endpoint_exists(self):
-        """Video upscale endpoint should exist and accept requests."""
-        # Create a minimal test video file (1x1 black frame)
+        """Video upscale endpoint should exist and accept requests.
+        
+        Note: This test uses a fake MP4 file to verify endpoint accessibility,
+        not actual video processing functionality.
+        """
+        # Create a minimal test video file (invalid but tests endpoint)
         test_video = io.BytesIO(
             b'\x00\x00\x00\x1c' +  # MP4 header
             b'ftypisom' +
@@ -153,15 +156,21 @@ class TestAdvancedVideoEndpoints:
         )
 
         # Should either accept or reject gracefully, not crash
+        # Endpoint exists if we get any of these status codes
         assert resp.status_code in [200, 400, 422, 500, 503]
-
+        
+        # If successful, check response structure
         if resp.status_code == 200:
             data = resp.json()
-            assert "status" in data
-            assert data["status"] in ["queued", "error"]
+            # Should have prompt_id or error message
+            assert "prompt_id" in data or "detail" in data
 
     def test_interpolate_video_endpoint_exists(self):
-        """Frame interpolation endpoint should exist and accept requests."""
+        """Frame interpolation endpoint should exist and accept requests.
+        
+        Note: This test uses a fake MP4 file to verify endpoint accessibility,
+        not actual video processing functionality.
+        """
         # Create a minimal test video file
         test_video = io.BytesIO(
             b'\x00\x00\x00\x1c' +
@@ -187,10 +196,11 @@ class TestAdvancedVideoEndpoints:
         # Should either accept or reject gracefully
         assert resp.status_code in [200, 400, 422, 500, 503]
 
+        # If successful, check response structure
         if resp.status_code == 200:
             data = resp.json()
-            assert "status" in data
-            assert data["status"] in ["queued", "error"]
+            # Should have prompt_id or error message
+            assert "prompt_id" in data or "detail" in data
 
     def test_upscale_video_validates_model_param(self):
         """Upscale endpoint should validate model parameter."""

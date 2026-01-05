@@ -4859,20 +4859,17 @@ async def interpolate_video(
 
         logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
 
-        # Build frame interpolation workflow
-        # Flow: VHS_LoadVideo → RIFE VFI → VHS_VideoCombine
-        # Note: RIFE VFI takes frames directly and returns interpolated frames
+        # Build frame interpolation workflow matching the JSON template
+        # Flow: VHS_LoadVideo → RIFE VFI (model) → VFI (apply) → VHS_VideoCombine
+        # The RIFE VFI node loads the model, VFI node applies interpolation
 
         # Select correct checkpoint based on model
         if model == "rife":
             ckpt_name = "rife47.pth"
-            class_type = "RIFE VFI"
         elif model == "film":
             ckpt_name = "film_net_fp32.pt"  # May not be installed
-            class_type = "FILM VFI"
         else:
             ckpt_name = "rife47.pth"
-            class_type = "RIFE VFI"
 
         workflow = {
             "1": {
@@ -4891,16 +4888,23 @@ async def interpolate_video(
             "2": {
                 "inputs": {
                     "ckpt_name": ckpt_name,
-                    "frames": ["1", 0],  # Connect to VHS_LoadVideo output
                     "clear_cache_after_n_frames": 10,
                     "multiplier": int(multiplier),
                     "fast_mode": True,
                     "ensemble": True,
                     "scale_factor": 1.0,
                 },
-                "class_type": class_type,
+                "class_type": "RIFE VFI",
             },
             "3": {
+                "inputs": {
+                    "frames": ["1", 0],  # From VHS_LoadVideo
+                    "interpolation": ["2", 0],  # From RIFE VFI
+                    "optional_interpolation_states": ["2", 1],
+                },
+                "class_type": "VFI",
+            },
+            "4": {
                 "inputs": {
                     "frame_rate": target_fps if mode == "fps" else 30,
                     "loop_count": 0,
@@ -4911,7 +4915,7 @@ async def interpolate_video(
                     "save_metadata": True,
                     "pingpong": False,
                     "save_output": True,
-                    "images": ["2", 0],  # Connect to RIFE VFI output
+                    "images": ["3", 0],  # Connect to VFI output
                 },
                 "class_type": "VHS_VideoCombine",
             },

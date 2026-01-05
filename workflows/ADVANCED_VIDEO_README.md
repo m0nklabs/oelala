@@ -14,7 +14,11 @@ This directory contains ComfyUI workflow templates for advanced video processing
 expert_mode_allocations: "cuda:0,11gb;cuda:1,15gb;cpu,2gb"
 ```
 
-This allocation is used across all video generation workflows to distribute model weights across both GPUs with a small CPU fallback for overflow.
+This allocation distributes model weights across both GPUs with a small CPU fallback for overflow.
+- 11GB on RTX 3060 (cuda:0)
+- 15GB on RTX 5060 Ti (cuda:1)
+- 2GB CPU fallback
+- Total: 26GB allocated out of 28GB available (leaves 2GB headroom for VRAM overhead)
 
 **Performance Benefits:**
 - 2x faster than single GPU
@@ -70,7 +74,7 @@ Smooth frame interpolation using RIFE (Real-Time Intermediate Flow Estimation).
 **Features:**
 - FPS conversion: 15fps → 30fps → 60fps
 - Slow motion creation (2x, 4x, 8x slower)
-- Optical flow visualization
+- Optical flow visualization (planned, not yet implemented)
 - Fast & high quality
 
 **Required Nodes:**

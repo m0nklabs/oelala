@@ -9,22 +9,6 @@ const UPSCALE_MODELS = [
   { value: 'basic-lanczos', label: 'Basic Lanczos', desc: 'Fast traditional upscaling', scale: [2, 4] },
 ]
 
-// Resolution presets
-const RESOLUTION_PRESETS = [
-  { from: '480p', to: '720p', scale: 1.5, label: '480p → 720p' },
-  { from: '480p', to: '1080p', scale: 2.25, label: '480p → 1080p' },
-  { from: '720p', to: '1080p', scale: 1.5, label: '720p → 1080p' },
-  { from: '720p', to: '4K', scale: 3, label: '720p → 4K' },
-  { from: '1080p', to: '4K', scale: 2, label: '1080p → 4K' },
-]
-
-// Quality vs Speed presets
-const QUALITY_PRESETS = [
-  { value: 'fast', label: 'Fast', desc: 'Lower quality, faster processing', denoise: 0.3 },
-  { value: 'balanced', label: 'Balanced', desc: 'Good quality & speed', denoise: 0.5 },
-  { value: 'quality', label: 'Quality', desc: 'Best quality, slower', denoise: 0.7 },
-]
-
 export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -35,7 +19,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
-  const [result, setResult] = useState(null)
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
@@ -67,7 +50,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       setFile(f)
       const url = URL.createObjectURL(f)
       setPreview(url)
-      setResult(null)
       setError(null)
       setLastQueued(null)
 
@@ -220,7 +202,7 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       {lastQueued && (
         <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '6px' }}>
           <p style={{ fontSize: '0.85rem', color: '#22c55e' }}>
-            ✓ Video upscale queued! ({lastQueued.model}, {lastQueued.preset})
+            ✓ Video upscale queued! ({lastQueued.model})
           </p>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Job ID: {lastQueued.promptId}
@@ -260,18 +242,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
           </>
         )}
       </button>
-
-      {/* Result */}
-      {result && (
-        <div>
-          <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>
-            Result ({RESOLUTION_PRESETS.find(p => p.label === resolutionPreset)?.label})
-          </h3>
-          <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
-            <video src={result} controls style={{ width: '100%', display: 'block' }} />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
