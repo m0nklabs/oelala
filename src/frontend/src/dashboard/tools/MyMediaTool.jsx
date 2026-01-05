@@ -109,7 +109,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     
     const fetchPublishedItems = async () => {
       try {
-        const response = await apiFetch(`/api/gallery/users/${user.id}?per_page=1000`)
+        // Fetch first 100 items - good balance between performance and coverage
+        // TODO: Implement a dedicated endpoint that returns only storage paths for better performance
+        const response = await apiFetch(`/api/gallery/users/${user.id}?per_page=100`)
         if (response.ok) {
           const data = await response.json()
           const publishedPaths = new Set(data.items.map(item => item.storage_path))

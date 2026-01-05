@@ -41,7 +41,16 @@ export function getMediaType(filename) {
  */
 export function getFileExtension(filename) {
   if (!filename) return ''
-  return filename.toLowerCase().split('.').pop()
+  
+  const lowerFilename = filename.toLowerCase()
+  const ext = lowerFilename.split('.').pop()
+  
+  // Handle edge case where filename has no extension or ends with a dot
+  if (!ext || ext === lowerFilename) {
+    return ''
+  }
+  
+  return ext
 }
 
 /**

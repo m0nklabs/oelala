@@ -100,10 +100,18 @@ router = APIRouter(prefix="/api/gallery", tags=["gallery"])
 
 
 # ============================================================================
-# Helper: Get Supabase client
+# Helper: Get Supabase client (module-level singleton)
 # ============================================================================
+_supabase_client = None
+
 def get_supabase_client():
-    """Get Supabase client (service role for admin operations)"""
+    """Get Supabase client (service role for admin operations). 
+    Uses a singleton pattern to avoid creating new clients on every request."""
+    global _supabase_client
+    
+    if _supabase_client is not None:
+        return _supabase_client
+    
     try:
         from supabase import create_client, Client
         url = os.getenv("SUPABASE_URL")
@@ -111,7 +119,8 @@ def get_supabase_client():
         if not url or not key:
             logger.warning("Supabase credentials not configured")
             return None
-        return create_client(url, key)
+        _supabase_client = create_client(url, key)
+        return _supabase_client
     except Exception as e:
         logger.error(f"Failed to create Supabase client: {e}")
         return None
@@ -207,8 +216,8 @@ async def publish_media(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error publishing media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error publishing media")
+        raise HTTPException(status_code=500, detail="Failed to publish media")
 
 
 # ============================================================================
@@ -249,8 +258,8 @@ async def unpublish_media(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error unpublishing media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error unpublishing media")
+        raise HTTPException(status_code=500, detail="Failed to unpublish media")
 
 
 # ============================================================================
@@ -340,8 +349,8 @@ async def list_published_media(
         )
         
     except Exception as e:
-        logger.error(f"Error listing gallery: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error listing gallery")
+        raise HTTPException(status_code=500, detail="Failed to list gallery items")
 
 
 # ============================================================================
@@ -421,8 +430,8 @@ async def get_published_media(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error getting media")
+        raise HTTPException(status_code=500, detail="Failed to fetch media item")
 
 
 # ============================================================================
@@ -552,5 +561,5 @@ async def toggle_like(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error toggling like: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error toggling like")
+        raise HTTPException(status_code=500, detail="Failed to toggle like")

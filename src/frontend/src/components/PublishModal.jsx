@@ -54,11 +54,9 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
         .filter(t => t.length > 0)
         .slice(0, 10) // Max 10 tags
 
-      // Build storage path
+      // Build storage path (always include media_type prefix for validation)
       const mediaType = getMediaType(mediaItem.filename)
-      const storagePath = mediaItem.source === 'storage' 
-        ? `${mediaType}/${mediaItem.filename}`
-        : mediaItem.filename
+      const storagePath = `${mediaType}/${mediaItem.filename}`
 
       const payload = {
         storage_path: storagePath,
