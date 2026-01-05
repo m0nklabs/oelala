@@ -12,6 +12,9 @@ import PurchaseCreditsModal from '../components/PurchaseCreditsModal'
 
 const CreditsContext = createContext(null)
 
+// Constants
+const NOTIFICATION_TIMEOUT_MS = 5000  // Auto-clear notifications after 5 seconds
+
 /**
  * Credits Provider - wraps app to provide credit state
  */
@@ -45,16 +48,16 @@ export function CreditsProvider({ children }) {
       fetchBalance()
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname)
-      // Auto-clear success message after 5 seconds
-      setTimeout(() => setPurchaseSuccess(false), 5000)
+      // Auto-clear success message
+      setTimeout(() => setPurchaseSuccess(false), NOTIFICATION_TIMEOUT_MS)
     }
     
     if (cancelled === 'true') {
       setPurchaseCancelled(true)
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname)
-      // Auto-clear cancelled message after 5 seconds
-      setTimeout(() => setPurchaseCancelled(false), 5000)
+      // Auto-clear cancelled message
+      setTimeout(() => setPurchaseCancelled(false), NOTIFICATION_TIMEOUT_MS)
     }
   }, [])
 

@@ -442,7 +442,7 @@ class CreditManager:
         Deduct credits and log transaction.
         
         Call this after generation completes successfully.
-        This should only be called after check_and_reserve or check_credits has verified balance.
+        Balance should be verified with check_credits before calling this.
         """
         client = await self.get_client()
         
