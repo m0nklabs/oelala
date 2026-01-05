@@ -21,6 +21,33 @@ export function CreditsProvider({ children }) {
   const [packages, setPackages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false)
+  const [purchaseCancelled, setPurchaseCancelled] = useState(false)
+
+  // Check URL parameters for Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const success = params.get('success')
+    const cancelled = params.get('cancelled')
+    
+    if (success === 'true') {
+      setPurchaseSuccess(true)
+      // Refresh balance after successful purchase
+      fetchBalance()
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+      // Auto-clear success message after 5 seconds
+      setTimeout(() => setPurchaseSuccess(false), 5000)
+    }
+    
+    if (cancelled === 'true') {
+      setPurchaseCancelled(true)
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+      // Auto-clear cancelled message after 5 seconds
+      setTimeout(() => setPurchaseCancelled(false), 5000)
+    }
+  }, [])
 
   // Fetch balance when user changes
   const fetchBalance = useCallback(async () => {
@@ -168,6 +195,8 @@ export function CreditsProvider({ children }) {
     packages,
     loading,
     error,
+    purchaseSuccess,
+    purchaseCancelled,
     
     // Actions
     fetchBalance,
@@ -177,6 +206,8 @@ export function CreditsProvider({ children }) {
     deductCredits,
     refundCredits,
     clearError: () => setError(null),
+    clearPurchaseSuccess: () => setPurchaseSuccess(false),
+    clearPurchaseCancelled: () => setPurchaseCancelled(false),
   }
 
   return (
