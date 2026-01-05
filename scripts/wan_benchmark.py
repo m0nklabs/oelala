@@ -131,6 +131,8 @@ def wait_for_completion(prompt_id, timeout=600):
                     return True, peak_vram, time.time() - start, None
 
         except Exception:
+            # Intentionally ignore transient errors when querying queue/history;
+            # the outer loop will keep polling until success or overall timeout.
             pass
 
         # Track VRAM
