@@ -115,7 +115,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct access to:
 - ComfyUI API at `localhost:8188`
 - Backend API at `localhost:7998`  
-- GPU (RTX 4080 16GB VRAM)
+- GPU (RTX 5060 Ti 16GB + RTX 3060 12GB)
 - All installed models in `/home/flip/oelala/ComfyUI/models/`
 
 **When working on video/ComfyUI related code:**
