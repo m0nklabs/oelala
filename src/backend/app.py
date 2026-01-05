@@ -159,8 +159,8 @@ def inject_png_workflow_metadata(
                             if len(text) > 50:  # Long prompts are likely T2I
                                 original_t2i_prompt = text
                                 break
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.debug(f"🐛 Failed to decode existing prompt metadata as JSON: {e}")
 
         # Create PNG metadata
         metadata = PngInfo()
@@ -257,8 +257,9 @@ class StreamToBuffer:
                             asyncio.get_event_loop().create_task(
                                 broadcast_log(log_entry)
                             )
-                        except RuntimeError:
-                            pass
+                        except RuntimeError as exc:
+                            # 🐛 Debug: ignore missing event loop when broadcasting logs
+                            logging.debug("🐛 Failed to schedule log broadcast task: %s", exc)
         except Exception:
             # If writing to buffer fails, don't crash the app
             pass
@@ -267,6 +268,7 @@ class StreamToBuffer:
         try:
             self.original_stream.flush()
         except Exception:
+            # Ignore flush errors to avoid crashing on non-critical I/O issues
             pass
 
     # Proxy common file-like attributes used by uvicorn/print/tqdm
@@ -911,8 +913,12 @@ async def list_comfyui_media(
                             if not metadata.get("positive_prompt") and all_texts:
                                 metadata["positive_prompt"] = all_texts[0]["text"]
 
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as exc:
+                        logging.debug(
+                            "🐛 Failed to decode JSON metadata from PNG prompt in %s: %s",
+                            png_path,
+                            exc,
+                        )
 
                 img.close()
                 return metadata
@@ -1452,7 +1458,7 @@ async def cancel_job(prompt_id: str):
         )
 
         # Also try to delete from queue
-        delete_resp = requests.post(
+        requests.post(
             "http://localhost:8188/queue", json={"delete": [prompt_id]}, timeout=5
         )
 
@@ -1563,8 +1569,8 @@ async def extract_metadata(file: UploadFile = File(...)):
                                         if len(text) > len(current):
                                             metadata["prompt"] = text
                                             metadata["source"] = "comfyui"
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as exc:
+                    logger.debug("🐛 Failed to decode JSON from PNG 'prompt' metadata: %s", exc)
 
             # A1111/Invoke AI format (parameters in 'parameters' key)
             if "parameters" in info and not metadata.get("prompt"):
@@ -1608,8 +1614,10 @@ async def extract_metadata(file: UploadFile = File(...)):
         # Cleanup temp file
         try:
             Path(tmp_path).unlink()
-        except:
-            pass
+        except FileNotFoundError:
+            logger.debug(f"🐛 Temp file already removed or missing during cleanup: {tmp_path}")
+        except OSError as e:
+            logger.warning(f"⚠️ Failed to remove temp file {tmp_path}: {e}")
 
     return metadata
 
@@ -1735,7 +1743,8 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
         if tmp_path:
             try:
                 Path(tmp_path).unlink()
-            except:
+            except Exception:
+                # Failed to cleanup temp file, not critical
                 pass
 
     return metadata
@@ -1750,7 +1759,7 @@ async def health_check():
         try:
             client = get_comfyui_client()
             comfyui_available = client.is_available() if client else False
-        except:
+        except Exception:
             pass
 
     # We're healthy if ComfyUI is available
@@ -3165,7 +3174,7 @@ async def generate_wan22_async(
         logger.info(
             f"🎬 Building sequential workflow: {actual_clip_count} clips × {num_frames} frames"
         )
-        width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+        comfyui.get_resolution_dimensions(resolution, aspect_ratio)
         workflow = comfyui._build_sequential_workflow(
             image_name=image_name,
             prompt=prompt,
