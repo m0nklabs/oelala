@@ -6,10 +6,13 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^(workflows/|ComfyUI/)
       - id: end-of-file-fixer
+        exclude: ^(workflows/|ComfyUI/)
       - id: check-yaml
         args: [--unsafe]
       - id: check-json
+        exclude: ^(workflows/|ComfyUI/)
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
