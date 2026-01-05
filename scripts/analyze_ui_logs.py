@@ -44,7 +44,9 @@ def analyze(log_path=DEFAULT_LOG, top_n=10):
             ts = entry.get("timestamp") or entry.get("time")
             if ts:
                 try:
-                    times.append(datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")))
+                    times.append(
+                        datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    )
                 except Exception:
                     pass
 
@@ -68,7 +70,9 @@ def analyze(log_path=DEFAULT_LOG, top_n=10):
 def main():
     parser = argparse.ArgumentParser(description="Summarize frontend UI logs")
     parser.add_argument("--log", default=DEFAULT_LOG, help="Path to ui_client.log file")
-    parser.add_argument("--top", type=int, default=10, help="How many top messages to show")
+    parser.add_argument(
+        "--top", type=int, default=10, help="How many top messages to show"
+    )
     args = parser.parse_args()
 
     return analyze(args.log, args.top)

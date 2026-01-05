@@ -1233,7 +1233,7 @@ class ComfyUIClient:
                     }
                     current_high_model = [node_id, 0]
                     logger.info(
-                        f"🎨 High Noise LoRA #{i+1}: {lora['name']} @ {lora['strength']}"
+                        f"🎨 High Noise LoRA #{i + 1}: {lora['name']} @ {lora['strength']}"
                     )
                 # Connect sampler to last LoRA in chain
                 workflow["13"]["inputs"]["model"] = current_high_model
@@ -1262,7 +1262,7 @@ class ComfyUIClient:
                     }
                     current_low_model = [node_id, 0]
                     logger.info(
-                        f"🎨 Low Noise LoRA #{i+1}: {lora['name']} @ {lora['strength']}"
+                        f"🎨 Low Noise LoRA #{i + 1}: {lora['name']} @ {lora['strength']}"
                     )
                 # Connect sampler to last LoRA in chain
                 workflow["14"]["inputs"]["model"] = current_low_model
@@ -3150,7 +3150,7 @@ class ComfyUIClient:
                     "strength": lora_strength,
                 }
 
-            logger.info(f"   🎨 LoRA {idx+1}: HIGH={high_path}, LOW={low_path}")
+            logger.info(f"   🎨 LoRA {idx + 1}: HIGH={high_path}, LOW={low_path}")
 
         logger.info(
             f"🔧 DisTorch2 workflow built: {width}x{height}, {num_frames}f, steps={steps} (split@{split_step}), cfg={cfg}, loras={len(lora_config)}"

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
-import { RefreshCw, Download } from 'lucide-react'
+import { Download, CheckCircle, XCircle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
@@ -9,6 +9,7 @@ import Footer from '../components/Footer'
 import LegalModal from '../components/LegalModal'
 import { useNSFW } from '../contexts/NSFWContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useCredits } from '../contexts/CreditsContext'
 import { TOOL_IDS } from './nav'
 
 import TextToVideoTool from './tools/TextToVideoTool'
@@ -38,6 +39,14 @@ import { sendClientLog } from '../logging'
 export default function Dashboard() {
   const [activeToolId, setActiveToolId] = useState(TOOL_IDS.IMAGE_TO_VIDEO)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  // Credits context
+  const {
+    purchaseSuccess,
+    purchaseCancelled,
+    clearPurchaseSuccess,
+    clearPurchaseCancelled
+  } = useCredits()
 
   const [health, setHealth] = useState(null)
   const [restarting, setRestarting] = useState(false)
@@ -303,6 +312,77 @@ export default function Dashboard() {
             <UserMenu />
           </div>
         </div>
+
+        {/* Purchase Success/Cancel Notification */}
+        {purchaseSuccess && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1))',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              margin: '0 16px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '0.9rem',
+              color: '#10b981',
+            }}
+          >
+            <CheckCircle size={20} />
+            <span style={{ flex: 1 }}>
+              <strong>Credits purchased successfully!</strong> Your balance has been updated.
+            </span>
+            <button
+              onClick={clearPurchaseSuccess}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#10b981',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                fontSize: '1.2rem',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {purchaseCancelled && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              margin: '0 16px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '0.9rem',
+              color: '#ef4444',
+            }}
+          >
+            <XCircle size={20} />
+            <span style={{ flex: 1 }}>
+              Purchase cancelled. No charges were made.
+            </span>
+            <button
+              onClick={clearPurchaseCancelled}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#ef4444',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                fontSize: '1.2rem',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Full-width layout for My Media tools and Gallery */}
         {(activeToolId === TOOL_IDS.MY_MEDIA_ALL ||

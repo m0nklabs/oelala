@@ -45,7 +45,12 @@ from storage_client import get_client as get_storage_client
 
 # Credits system
 from credits import calculate_credits
-from credits_api import router as credits_router, check_credits, deduct_credits
+from credits_api import (
+    router as credits_router,
+    stripe_router,
+    check_credits,
+    deduct_credits,
+)
 
 # Gallery system
 from gallery_api import router as gallery_router
@@ -154,8 +159,10 @@ def inject_png_workflow_metadata(
                             if len(text) > 50:  # Long prompts are likely T2I
                                 original_t2i_prompt = text
                                 break
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.debug(
+                    f"🐛 Failed to decode existing prompt metadata as JSON: {e}"
+                )
 
         # Create PNG metadata
         metadata = PngInfo()
@@ -252,8 +259,11 @@ class StreamToBuffer:
                             asyncio.get_event_loop().create_task(
                                 broadcast_log(log_entry)
                             )
-                        except RuntimeError:
-                            pass
+                        except RuntimeError as exc:
+                            # 🐛 Debug: ignore missing event loop when broadcasting logs
+                            logging.debug(
+                                "🐛 Failed to schedule log broadcast task: %s", exc
+                            )
         except Exception:
             # If writing to buffer fails, don't crash the app
             pass
@@ -262,6 +272,7 @@ class StreamToBuffer:
         try:
             self.original_stream.flush()
         except Exception:
+            # Ignore flush errors to avoid crashing on non-critical I/O issues
             pass
 
     # Proxy common file-like attributes used by uvicorn/print/tqdm
@@ -317,6 +328,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(credits_router)
+app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
 
 # Create directories
@@ -463,8 +475,6 @@ async def list_comfyui_media(
 
     # Second pass: process files and mark start images
     for file_path, media_type in all_files:
-        ext = file_path.suffix.lower()
-
         if media_type == "video":
             video_count += 1
         elif media_type == "image":
@@ -704,6 +714,7 @@ async def list_comfyui_media(
                                     metadata["positive_prompt"] = all_texts[0]["text"]
 
                         except json.JSONDecodeError:
+                            # Ignore malformed JSON in PNG 'prompt' metadata
                             pass
 
                     # Oelala params format
@@ -722,7 +733,10 @@ async def list_comfyui_media(
                             if params.get("seed"):
                                 metadata["seed"] = params["seed"]
                         except json.JSONDecodeError:
-                            pass
+                            logging.getLogger(__name__).debug(
+                                "🐛 Failed to decode oelala_params JSON from image metadata",
+                                exc_info=True,
+                            )
 
                 img.close()
                 item["metadata"] = metadata
@@ -905,8 +919,12 @@ async def list_comfyui_media(
                             if not metadata.get("positive_prompt") and all_texts:
                                 metadata["positive_prompt"] = all_texts[0]["text"]
 
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as exc:
+                        logging.debug(
+                            "🐛 Failed to decode JSON metadata from PNG prompt in %s: %s",
+                            png_path,
+                            exc,
+                        )
 
                 img.close()
                 return metadata
@@ -922,6 +940,7 @@ async def list_comfyui_media(
                         metadata_found = True
                         break  # Use first matching PNG
                     except Exception:
+                        # Ignore errors reading individual PNG metadata
                         pass
 
             # Method 2: Look for PNG with same base name (video.mp4 -> video.png)
@@ -939,6 +958,7 @@ async def list_comfyui_media(
                             metadata_found = True
                             break
                         except Exception:
+                            # Ignore errors reading PNG metadata from start image
                             pass
 
             if not metadata_found:
@@ -1078,32 +1098,6 @@ async def list_loras():
         "whip",
         "spank",
         "choke",
-    ]
-
-    # SFW keywords - if contains these AND no NSFW keywords, mark as SFW
-    SFW_KEYWORDS = [
-        "add_details",
-        "body_weight",
-        "style",
-        "realistic",
-        "cinematic",
-        "lighting",
-        "color",
-        "texture",
-        "film",
-        "grain",
-        "vintage",
-        "anime",
-        "cartoon",
-        "sketch",
-        "painting",
-        "art",
-        "portrait",
-        "landscape",
-        "architecture",
-        "nature",
-        "animal",
-        "food",
     ]
 
     def is_nsfw(name: str, path: str) -> bool:
@@ -1444,9 +1438,10 @@ async def cancel_job(prompt_id: str):
         resp = requests.post(
             "http://localhost:8188/interrupt", json={"prompt_id": prompt_id}, timeout=5
         )
+        resp.raise_for_status()
 
         # Also try to delete from queue
-        delete_resp = requests.post(
+        requests.post(
             "http://localhost:8188/queue", json={"delete": [prompt_id]}, timeout=5
         )
 
@@ -1509,8 +1504,11 @@ async def extract_metadata(file: UploadFile = File(...)):
                         metadata["source"] = "oelala_t2i"
                     # Store oelala prompt separately so we can compare later
                     metadata["oelala_prompt"] = params.get("prompt", "")
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as exc:
+                    logger.debug(
+                        "🐛 Failed to decode JSON from PNG 'oelala_params' metadata: %s",
+                        exc,
+                    )
 
             # ComfyUI workflow format - extract longer prompts from workflow nodes
             if "prompt" in info:
@@ -1557,8 +1555,10 @@ async def extract_metadata(file: UploadFile = File(...)):
                                         if len(text) > len(current):
                                             metadata["prompt"] = text
                                             metadata["source"] = "comfyui"
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as exc:
+                    logger.debug(
+                        "🐛 Failed to decode JSON from PNG 'prompt' metadata: %s", exc
+                    )
 
             # A1111/Invoke AI format (parameters in 'parameters' key)
             if "parameters" in info and not metadata.get("prompt"):
@@ -1602,8 +1602,12 @@ async def extract_metadata(file: UploadFile = File(...)):
         # Cleanup temp file
         try:
             Path(tmp_path).unlink()
-        except:
-            pass
+        except FileNotFoundError:
+            logger.debug(
+                f"🐛 Temp file already removed or missing during cleanup: {tmp_path}"
+            )
+        except OSError as e:
+            logger.warning(f"⚠️ Failed to remove temp file {tmp_path}: {e}")
 
     return metadata
 
@@ -1656,6 +1660,7 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
                         metadata["positive_prompt"] = params["original_t2i_prompt"]
                         metadata["source"] = "oelala_t2i"
                 except json.JSONDecodeError:
+                    # Ignore malformed oelala_params JSON in PNG metadata
                     pass
 
             # ComfyUI workflow format
@@ -1700,8 +1705,12 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
                                         if len(text) > len(current):
                                             metadata["positive_prompt"] = text
                                             metadata["source"] = "comfyui"
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as exc:
+                    # 🐛 Ignore malformed JSON in embedded prompt metadata, but log for debugging
+                    logger.debug(
+                        "Failed to decode JSON from PNG 'prompt' metadata, skipping: %s",
+                        exc,
+                    )
 
             # A1111 format
             if "parameters" in info and not metadata.get("positive_prompt"):
@@ -1729,7 +1738,8 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
         if tmp_path:
             try:
                 Path(tmp_path).unlink()
-            except:
+            except Exception:
+                # Failed to cleanup temp file, not critical
                 pass
 
     return metadata
@@ -1744,7 +1754,8 @@ async def health_check():
         try:
             client = get_comfyui_client()
             comfyui_available = client.is_available() if client else False
-        except:
+        except Exception:
+            # ComfyUI client not available or failed to connect
             pass
 
     # We're healthy if ComfyUI is available
@@ -2286,7 +2297,6 @@ async def generate_sdxl_image(
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
 
     # Calculate and check credits
-    is_hd = width > 1024 or height > 1024
     credits_required = calculate_credits("generate_sdxl", width=width, height=height)
     logger.info(f"💰 SDXL generation costs {credits_required} credits")
     await check_credits(user, credits_required)
@@ -2955,7 +2965,7 @@ async def generate_wan22_comfyui(
                 logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
                 for i, lc in enumerate(parsed_lora_configs):
                     logger.info(
-                        f"      [{i+1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}"
+                        f"      [{i + 1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}"
                     )
             logger.info(f"   📝 Prompt: {prompt[:100]}...")
 
@@ -3159,7 +3169,7 @@ async def generate_wan22_async(
         logger.info(
             f"🎬 Building sequential workflow: {actual_clip_count} clips × {num_frames} frames"
         )
-        width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+        comfyui.get_resolution_dimensions(resolution, aspect_ratio)
         workflow = comfyui._build_sequential_workflow(
             image_name=image_name,
             prompt=prompt,
@@ -3660,7 +3670,6 @@ async def youtube_info(request: YouTubeInfoRequest):
     Returns: title, channel, duration, thumbnail, view_count, etc.
     """
     import subprocess
-    import json
     import shutil
 
     url = request.url.strip()
@@ -3913,7 +3922,7 @@ async def caption_video(
 - Duration: {duration:.1f} seconds
 - Resolution: Original video uploaded
 - Frames analyzed: {len(sampled_frames)}
-- Frame times: {', '.join([f'{t}s' for t in frame_times])}
+- Frame times: {", ".join([f"{t}s" for t in frame_times])}
 
 Note: For AI-powered descriptions, configure SmolVLM or CogVLM integration.
 This video appears to contain visual content that could be further analyzed with a vision-language model."""

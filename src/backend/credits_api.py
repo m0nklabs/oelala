@@ -22,8 +22,9 @@ from credits import (
 
 logger = logging.getLogger(__name__)
 
-# Create router
+# Create routers
 router = APIRouter(prefix="/api/credits", tags=["credits"])
+stripe_router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 
 # Debug flag
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -276,10 +277,11 @@ async def initiate_purchase(
 
 # =============================================================================
 # Webhook for Stripe (no auth required)
+# Mounted at /api/stripe/webhook for Stripe compatibility
 # =============================================================================
 
 
-@router.post("/webhook/stripe")
+@stripe_router.post("/webhook")
 async def stripe_webhook(request: Request):
     """
     Handle Stripe webhook events.
@@ -323,6 +325,14 @@ async def stripe_webhook(request: Request):
     # Handle checkout completion
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
+
+        # Verify payment was successful
+        payment_status = session.get("payment_status")
+        if payment_status != "paid":
+            logger.warning(
+                f"Payment not completed: status={payment_status}, session={session['id']}"
+            )
+            return {"status": "pending", "message": "Payment not yet completed"}
 
         user_id = session.get("client_reference_id")
         metadata = session.get("metadata", {})

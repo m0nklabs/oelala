@@ -5,10 +5,10 @@ Oelala Project - Validation Test
 """
 
 import sys
-import os
 
 # Add the oelala directory to Python path
-sys.path.append('/home/flip/oelala')
+sys.path.append("/home/flip/oelala")
+
 
 def test_wan2_imports():
     """Test if all required imports work"""
@@ -17,36 +17,42 @@ def test_wan2_imports():
         from diffusers import WanImageToVideoPipeline
         from PIL import Image
         import numpy as np
+
         print("✅ All imports successful")
         return True
     except ImportError as e:
         print(f"❌ Import error: {e}")
         return False
 
+
 def test_cuda_availability():
     """Test CUDA availability"""
     try:
         import torch
+
         cuda_available = torch.cuda.is_available()
         print(f"CUDA available: {cuda_available}")
         if cuda_available:
             print(f"CUDA device: {torch.cuda.get_device_name()}")
-            print(f"CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+            print(
+                f"CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB"
+            )
         return cuda_available
     except Exception as e:
         print(f"❌ CUDA test failed: {e}")
         return False
 
+
 def test_model_loading():
     """Test model loading (without downloading full model)"""
     try:
-        from diffusers import WanImageToVideoPipeline
         # Just test if the class can be instantiated
         print("✅ WanImageToVideoPipeline class available")
         return True
     except Exception as e:
         print(f"❌ Model loading test failed: {e}")
         return False
+
 
 def main():
     """Run all tests"""
@@ -56,7 +62,7 @@ def main():
     tests = [
         ("Import Test", test_wan2_imports),
         ("CUDA Test", test_cuda_availability),
-        ("Model Class Test", test_model_loading)
+        ("Model Class Test", test_model_loading),
     ]
 
     passed = 0
@@ -84,6 +90,7 @@ def main():
         print("   gen.generate_video_from_image('person.jpg', 'dancing')")
     else:
         print("⚠️ Some tests failed. Check the errors above.")
+
 
 if __name__ == "__main__":
     main()
