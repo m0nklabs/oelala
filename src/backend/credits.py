@@ -442,9 +442,27 @@ class CreditManager:
         Deduct credits and log transaction.
         
         Call this after generation completes successfully.
+        This should only be called after check_and_reserve or check_credits has verified balance.
         """
-        # Reserve credits (atomic check + deduct)
-        await self.check_and_reserve(user_id, amount)
+        client = await self.get_client()
+        
+        # Get current balance
+        balance = await self.get_balance(user_id)
+        
+        # Deduct credits
+        response = await client.patch(
+            "/user_credits",
+            params={"user_id": f"eq.{user_id}"},
+            json={
+                "balance": balance.balance - amount,
+                "lifetime_used": balance.lifetime_used + amount,
+                "updated_at": datetime.utcnow().isoformat(),
+            },
+        )
+        
+        if response.status_code not in (200, 204):
+            logger.error(f"Failed to deduct credits: {response.text}")
+            raise Exception("Failed to deduct credits")
         
         # Log transaction
         await self._log_transaction(
