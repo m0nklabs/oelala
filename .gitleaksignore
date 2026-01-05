@@ -1,0 +1,10 @@
+# Gitleaks ignore file
+# These are false positives - placeholder tokens in documentation examples
+
+# Documentation placeholder tokens (YOUR_JWT_TOKEN, YOUR_API_KEY, etc.)
+docs/CREDITS_SETUP.md:curl-auth-header
+docs/GALLERY_SETUP.md:curl-auth-header
+
+# Example/template files with placeholder secrets
+*.example:*
+.env.example:*
