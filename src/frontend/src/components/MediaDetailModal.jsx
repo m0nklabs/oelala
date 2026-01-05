@@ -76,8 +76,8 @@ export default function MediaDetailModal({ item, onClose }) {
   const mediaUrl = getMediaUrl()
 
   return (
-    <div 
-      className="modal-overlay" 
+    <div
+      className="modal-overlay"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -90,7 +90,7 @@ export default function MediaDetailModal({ item, onClose }) {
         padding: '20px',
       }}
     >
-      <div 
+      <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -106,7 +106,7 @@ export default function MediaDetailModal({ item, onClose }) {
         }}
       >
         {/* Media Display */}
-        <div style={{ 
+        <div style={{
           flex: '0 0 60%',
           background: '#000',
           display: 'flex',
@@ -120,8 +120,8 @@ export default function MediaDetailModal({ item, onClose }) {
               controls
               autoPlay
               loop
-              style={{ 
-                maxWidth: '100%', 
+              style={{
+                maxWidth: '100%',
                 maxHeight: '100%',
                 objectFit: 'contain'
               }}
@@ -130,8 +130,8 @@ export default function MediaDetailModal({ item, onClose }) {
             <img
               src={mediaUrl}
               alt={item.title}
-              style={{ 
-                maxWidth: '100%', 
+              style={{
+                maxWidth: '100%',
                 maxHeight: '100%',
                 objectFit: 'contain'
               }}
@@ -140,14 +140,14 @@ export default function MediaDetailModal({ item, onClose }) {
         </div>
 
         {/* Info Panel */}
-        <div style={{ 
+        <div style={{
           flex: '0 0 40%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           {/* Header */}
-          <div style={{ 
+          <div style={{
             padding: '20px',
             borderBottom: '1px solid #333',
             display: 'flex',
@@ -155,7 +155,7 @@ export default function MediaDetailModal({ item, onClose }) {
             alignItems: 'flex-start'
           }}>
             <div style={{ flex: 1 }}>
-              <h2 style={{ 
+              <h2 style={{
                 margin: '0 0 8px',
                 fontSize: '1.25rem',
                 fontWeight: 600,
@@ -163,10 +163,10 @@ export default function MediaDetailModal({ item, onClose }) {
               }}>
                 {item.title}
               </h2>
-              
+
               {/* Stats */}
-              <div style={{ 
-                display: 'flex', 
+              <div style={{
+                display: 'flex',
                 gap: '16px',
                 fontSize: '14px',
                 color: '#888'
@@ -199,7 +199,7 @@ export default function MediaDetailModal({ item, onClose }) {
           </div>
 
           {/* Scrollable Content */}
-          <div style={{ 
+          <div style={{
             flex: 1,
             overflowY: 'auto',
             padding: '20px'
@@ -207,7 +207,7 @@ export default function MediaDetailModal({ item, onClose }) {
             {/* Description */}
             {item.description && (
               <div style={{ marginBottom: '20px' }}>
-                <p style={{ 
+                <p style={{
                   margin: 0,
                   fontSize: '14px',
                   lineHeight: 1.6,
@@ -221,7 +221,7 @@ export default function MediaDetailModal({ item, onClose }) {
             {/* Tags */}
             {item.tags && item.tags.length > 0 && (
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ 
+                <div style={{
                   fontSize: '13px',
                   color: '#888',
                   marginBottom: '8px',
@@ -252,13 +252,13 @@ export default function MediaDetailModal({ item, onClose }) {
             {/* Prompt */}
             {(item.metadata?.positive_prompt || item.metadata?.prompt) && (
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ 
+                <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   marginBottom: '8px'
                 }}>
-                  <div style={{ 
+                  <div style={{
                     fontSize: '13px',
                     color: '#888',
                     fontWeight: 500
@@ -293,7 +293,7 @@ export default function MediaDetailModal({ item, onClose }) {
                     )}
                   </button>
                 </div>
-                <div style={{ 
+                <div style={{
                   padding: '12px',
                   background: '#2a2a2a',
                   borderRadius: '8px',
@@ -313,7 +313,7 @@ export default function MediaDetailModal({ item, onClose }) {
             {/* Negative Prompt */}
             {item.metadata?.negative_prompt && (
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ 
+                <div style={{
                   fontSize: '13px',
                   color: '#888',
                   marginBottom: '8px',
@@ -321,7 +321,7 @@ export default function MediaDetailModal({ item, onClose }) {
                 }}>
                   Negative Prompt
                 </div>
-                <div style={{ 
+                <div style={{
                   padding: '12px',
                   background: '#2a2a2a',
                   borderRadius: '8px',
@@ -341,7 +341,7 @@ export default function MediaDetailModal({ item, onClose }) {
             {/* Generation Settings */}
             {item.metadata && Object.keys(item.metadata).length > 0 && (
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ 
+                <div style={{
                   fontSize: '13px',
                   color: '#888',
                   marginBottom: '8px',
@@ -349,7 +349,7 @@ export default function MediaDetailModal({ item, onClose }) {
                 }}>
                   Settings
                 </div>
-                <div style={{ 
+                <div style={{
                   padding: '12px',
                   background: '#2a2a2a',
                   borderRadius: '8px',
@@ -387,7 +387,7 @@ export default function MediaDetailModal({ item, onClose }) {
           </div>
 
           {/* Actions */}
-          <div style={{ 
+          <div style={{
             padding: '16px 20px',
             borderTop: '1px solid #333',
             display: 'flex',
@@ -411,7 +411,7 @@ export default function MediaDetailModal({ item, onClose }) {
                 {likeError}
               </div>
             )}
-            
+
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button

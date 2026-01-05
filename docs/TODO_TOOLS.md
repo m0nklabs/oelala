@@ -1,7 +1,7 @@
 # Oelala Tools Implementation Todo List
 
-> Created: 2026-01-03  
-> Status: Active Development  
+> Created: 2026-01-03
+> Status: Active Development
 > Priority: High = 🔴, Medium = 🟡, Low = 🟢
 
 ---
@@ -74,7 +74,7 @@ Dit document beschrijft alle tools die geïmplementeerd moeten worden in de Oela
 - [x] Negative prompt input
 - [x] LoRA selector with strength
 - [ ] Sampler selector
-- [ ] Scheduler selector  
+- [ ] Scheduler selector
 - [ ] Batch generation (1-4 images)
 - [ ] Image size presets
 - [ ] Seed history/favorites
@@ -159,7 +159,7 @@ AI-powered prompt enhancement and generation.
 - [ ] **Priority**: Positive prompt focus (neg optional toggle)
 - [ ] Output mode selector:
   - Positive only
-  - Negative only  
+  - Negative only
   - Both (default)
 - [ ] Motion prompts for video (camera movements)
 - [ ] Favorites/bookmarks

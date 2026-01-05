@@ -5,7 +5,7 @@ import './PresetSelector.css'
 
 /**
  * PresetSelector - Component for selecting and configuring workflow presets
- * 
+ *
  * Presets are workflow configurations that can be loaded to customize
  * video generation parameters like steps, CFG, seed, dimensions, etc.
  */
@@ -29,7 +29,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
       if (!response.ok) throw new Error('Failed to fetch presets')
       const data = await response.json()
       setPresets(data.presets || [])
-      
+
       // Auto-select first preset if available
       if (data.presets?.length > 0) {
         const firstPreset = data.presets[0]
@@ -48,7 +48,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
 
   const initializeParameters = (preset) => {
     if (!preset?.parameters) return
-    
+
     const initialParams = {}
     Object.entries(preset.parameters).forEach(([key, config]) => {
       // Skip image parameter - handled separately
@@ -89,7 +89,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
   }
 
   const getPresetBadge = (preset) => {
-    if (preset.name?.toLowerCase().includes('lightning') || 
+    if (preset.name?.toLowerCase().includes('lightning') ||
         preset.name?.toLowerCase().includes('fast')) {
       return <span className="preset-badge fast">⚡ Fast</span>
     }
@@ -106,7 +106,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
 
   const renderParameterInput = (key, config) => {
     const value = parameters[key] ?? config.default ?? ''
-    
+
     // Skip image type - handled by upload component
     if (config.type === 'image') return null
 
@@ -232,7 +232,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
   // Group parameters by category
   const groupedParameters = () => {
     if (!selectedPreset?.parameters) return {}
-    
+
     const groups = {
       prompt: [],
       generation: [],
@@ -242,7 +242,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
 
     Object.entries(selectedPreset.parameters).forEach(([key, config]) => {
       if (config.type === 'image') return // Skip image
-      
+
       if (key.includes('prompt')) {
         groups.prompt.push([key, config])
       } else if (['steps', 'cfg', 'seed', 'frame_rate'].includes(key)) {
@@ -304,12 +304,12 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
           {selectedPreset && (
             <div className="preset-parameters">
               <h4><Settings size={16} /> Parameters</h4>
-              
+
               {/* Prompt Section */}
               {groupedParameters().prompt?.length > 0 && (
                 <div className="param-section">
                   <h5>📝 Prompts</h5>
-                  {groupedParameters().prompt.map(([key, config]) => 
+                  {groupedParameters().prompt.map(([key, config]) =>
                     renderParameterInput(key, config)
                   )}
                 </div>
@@ -320,7 +320,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
                 <div className="param-section">
                   <h5>⚙️ Generation</h5>
                   <div className="param-grid">
-                    {groupedParameters().generation.map(([key, config]) => 
+                    {groupedParameters().generation.map(([key, config]) =>
                       renderParameterInput(key, config)
                     )}
                   </div>
@@ -332,7 +332,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
                 <div className="param-section">
                   <h5>📐 Dimensions</h5>
                   <div className="param-grid">
-                    {groupedParameters().dimensions.map(([key, config]) => 
+                    {groupedParameters().dimensions.map(([key, config]) =>
                       renderParameterInput(key, config)
                     )}
                   </div>
@@ -343,7 +343,7 @@ function PresetSelector({ onPresetChange, onParametersChange, currentParameters 
               {groupedParameters().other?.length > 0 && (
                 <div className="param-section">
                   <h5>🔧 Other</h5>
-                  {groupedParameters().other.map(([key, config]) => 
+                  {groupedParameters().other.map(([key, config]) =>
                     renderParameterInput(key, config)
                   )}
                 </div>

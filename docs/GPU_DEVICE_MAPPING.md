@@ -32,7 +32,7 @@ This remaps devices so PyTorch sees:
 
 ### Allocation Strategy (34GB GGUF model):
 - **cuda:0 (5060 Ti)**: Up to 14GB allocation
-- **cuda:1 (3060)**: Up to 10GB allocation  
+- **cuda:1 (3060)**: Up to 10GB allocation
 - **CPU**: Remainder (~10-14GB)
 
 ### Safe Working Config:

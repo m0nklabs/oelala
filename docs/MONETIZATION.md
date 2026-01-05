@@ -1,7 +1,7 @@
 # Oelala Monetization Plan
 
-> **Last Updated**: 2026-01-04  
-> **Status**: Implementation Phase  
+> **Last Updated**: 2026-01-04
+> **Status**: Implementation Phase
 > **Model**: Credit-based (Pay-as-you-go)
 
 ## Business Model: Credits-Based Generation
@@ -135,11 +135,11 @@ BEGIN
     INSERT INTO public.user_credits (user_id, balance)
     VALUES (NEW.id, 25)  -- 25 welcome credits
     ON CONFLICT (user_id) DO NOTHING;
-    
+
     -- Log welcome bonus
     INSERT INTO public.credit_transactions (user_id, amount, type, description)
     VALUES (NEW.id, 25, 'bonus', 'Welcome bonus credits');
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -257,12 +257,12 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     event = stripe.Webhook.construct_event(payload, sig_header, WEBHOOK_SECRET)
-    
+
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session["client_reference_id"]
         package_id = session["metadata"]["package_id"]
-        
+
         package = await get_package(package_id)
         await credit_manager.add_credits(
             user_id=user_id,
@@ -271,7 +271,7 @@ async def stripe_webhook(request: Request):
             reference_id=session["payment_intent"],
             description=f"Purchased {package.name} package"
         )
-    
+
     return {"status": "ok"}
 ```
 
@@ -323,6 +323,6 @@ async def stripe_webhook(request: Request):
 ## Related Documents
 
 - [ROADMAP.md](./ROADMAP.md) - Product roadmap
-- [MEDIA_STORAGE.md](./MEDIA_STORAGE.md) - Storage architecture  
+- [MEDIA_STORAGE.md](./MEDIA_STORAGE.md) - Storage architecture
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
 - [MONETIZATION_OLD.md](./MONETIZATION_OLD.md) - Previous subscription model (archived)

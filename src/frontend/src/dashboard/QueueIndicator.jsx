@@ -231,9 +231,9 @@ function JobRow({ job, status, onCancel }) {
     }}>
       <Icon size={12} color={colors[status]} className={status === 'running' ? 'spin' : ''} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ 
-          whiteSpace: 'nowrap', 
-          overflow: 'hidden', 
+        <div style={{
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
           textOverflow: 'ellipsis',
           fontWeight: 500,
         }}>

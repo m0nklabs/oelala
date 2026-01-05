@@ -50,7 +50,7 @@ export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggl
             {group.items.map((item) => {
               const isActive = activeToolId === item.id
               const icon = ICONS[item.id] || '🔧'
-              
+
               return (
                 <button
                   key={item.id}
@@ -69,11 +69,11 @@ export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggl
           </div>
         ))}
       </nav>
-      
+
       <div className="sidebar-footer">
-        <button 
+        <button
             onClick={onToggleCollapsed}
-            className="nav-item collapse-btn" 
+            className="nav-item collapse-btn"
         >
             <span className="nav-icon" style={{ fontSize: '16px' }}>
               {collapsed ? '▶️' : '◀️'}

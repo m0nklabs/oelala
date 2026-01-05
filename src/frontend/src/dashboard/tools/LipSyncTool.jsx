@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
-import { 
-  Video, Upload, Play, Pause, Download, Loader2, X, 
+import {
+  Video, Upload, Play, Pause, Download, Loader2, X,
   FileAudio, FileVideo, Volume2, Trash2, Sliders
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
@@ -14,22 +14,22 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
   const [videoFile, setVideoFile] = useState(null)
   const [videoUrl, setVideoUrl] = useState(null)
   const [uploadedVideoPath, setUploadedVideoPath] = useState(null)
-  
+
   // Audio state
   const [audioFile, setAudioFile] = useState(null)
   const [audioUrl, setAudioUrl] = useState(null)
   const [uploadedAudioPath, setUploadedAudioPath] = useState(null)
-  
+
   // Settings
   const [lipsExpression, setLipsExpression] = useState(1.5)
   const [inferenceSteps, setInferenceSteps] = useState(20)
   const [seed, setSeed] = useState(-1)
-  
+
   // Playback refs
   const videoRef = useRef(null)
   const audioRef = useRef(null)
   const resultVideoRef = useRef(null)
-  
+
   // Generation state
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -71,7 +71,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
   const uploadFile = async (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    
+
     try {
       const res = await postForm(`${BACKEND_BASE}/upload`, formData)
       if (res.ok && res.data?.path) {
@@ -89,13 +89,13 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
       setError('Please provide both a video and audio file')
       return
     }
-    
+
     setSubmitting(true)
     setUploading(true)
     setError(null)
     setLastQueued(null)
     setResult(null)
-    
+
     try {
       // Upload video if needed
       let videoPath = uploadedVideoPath
@@ -103,16 +103,16 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
         videoPath = await uploadFile(videoFile)
         setUploadedVideoPath(videoPath)
       }
-      
+
       // Upload audio if needed
       let audioPath = uploadedAudioPath
       if (!audioPath) {
         audioPath = await uploadFile(audioFile)
         setUploadedAudioPath(audioPath)
       }
-      
+
       setUploading(false)
-      
+
       // Request lip sync
       const res = await postJson(`${BACKEND_BASE}/lip-sync`, {
         video_path: videoPath,
@@ -121,23 +121,23 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
         inference_steps: inferenceSteps,
         seed: seed === -1 ? Math.floor(Math.random() * 2147483647) : seed,
       })
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Lip sync request failed')
       }
-      
+
       if (res.data?.prompt_id) {
         // Show queued confirmation
         setLastQueued({ promptId: res.data.prompt_id })
-        
+
         // Notify queue indicator
         if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
-        
+
         if (DEBUG) console.debug('📋 LipSync queued:', res.data.prompt_id)
-        
+
         // Don't wait for completion - job will appear in queue/history when done
       }
-      
+
     } catch (err) {
       console.error('Lip sync error:', err)
       setError(err.message)
@@ -168,7 +168,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           <FileVideo size={18} />
           Input Video (with face)
         </h3>
-        
+
         {!videoFile ? (
           <div
             className="drop-zone"
@@ -211,7 +211,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           <FileAudio size={18} />
           Audio Track (speech/dialogue)
         </h3>
-        
+
         {!audioFile ? (
           <div
             className="drop-zone"
@@ -249,7 +249,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           <Sliders size={18} />
           Settings
         </h3>
-        
+
         <div className="setting-row">
           <label>Lips Expression</label>
           <div className="slider-row">
@@ -368,46 +368,46 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
+
         .drop-zone:hover {
           border-color: #fbbf24;
           background: rgba(251, 191, 36, 0.05);
         }
-        
+
         .drop-zone p {
           margin: 12px 0 4px;
           color: #ccc;
         }
-        
+
         .supported-formats {
           font-size: 12px;
           color: #888;
         }
-        
+
         .media-preview, .audio-preview {
           background: #1a1a1a;
           border-radius: 12px;
           padding: 16px;
         }
-        
+
         .preview-video, .result-video {
           width: 100%;
           max-height: 300px;
           border-radius: 8px;
           background: #000;
         }
-        
+
         .preview-audio {
           width: 100%;
         }
-        
+
         .file-info-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
           margin-top: 12px;
         }
-        
+
         .filename {
           color: #ccc;
           font-size: 13px;
@@ -415,7 +415,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        
+
         .icon-btn {
           padding: 8px;
           border-radius: 8px;
@@ -425,51 +425,51 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
+
         .icon-btn:hover {
           background: #3a3a3a;
         }
-        
+
         .icon-btn.danger:hover {
           background: rgba(239, 68, 68, 0.2);
           color: #ef4444;
         }
-        
+
         .setting-row {
           margin-bottom: 16px;
         }
-        
+
         .setting-row label {
           display: block;
           margin-bottom: 8px;
           color: #ccc;
           font-size: 13px;
         }
-        
+
         .slider-row {
           display: flex;
           align-items: center;
           gap: 12px;
         }
-        
+
         .slider-row input[type="range"] {
           flex: 1;
         }
-        
+
         .slider-value {
           min-width: 50px;
           text-align: right;
           color: #fbbf24;
           font-weight: 500;
         }
-        
+
         .setting-hint {
           display: block;
           font-size: 11px;
           color: #666;
           margin-top: 4px;
         }
-        
+
         .seed-input {
           width: 100%;
           padding: 10px 12px;
@@ -479,25 +479,25 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           color: #fff;
           font-size: 14px;
         }
-        
+
         .result-section {
           background: rgba(34, 197, 94, 0.1);
           border: 1px solid rgba(34, 197, 94, 0.3);
           border-radius: 12px;
           padding: 16px;
         }
-        
+
         .video-result {
           margin-top: 12px;
         }
-        
+
         .result-actions {
           display: flex;
           align-items: center;
           justify-content: space-between;
           margin-top: 12px;
         }
-        
+
         .download-btn {
           display: flex;
           align-items: center;
@@ -510,11 +510,11 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           font-weight: 500;
           transition: all 0.2s;
         }
-        
+
         .download-btn:hover {
           background: #f59e0b;
         }
-        
+
         .error-message {
           display: flex;
           align-items: center;
@@ -526,7 +526,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           color: #ef4444;
           font-size: 13px;
         }
-        
+
         .progress-bar {
           height: 4px;
           background: #2a2a2a;
@@ -534,17 +534,17 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
           margin-top: 12px;
           overflow: hidden;
         }
-        
+
         .progress-fill {
           height: 100%;
           background: linear-gradient(90deg, #fbbf24, #f59e0b);
           transition: width 0.3s;
         }
-        
+
         .spin {
           animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }

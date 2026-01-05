@@ -205,10 +205,10 @@ function renderContent(text) {
   const elements = []
   let inTable = false
   let tableRows = []
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    
+
     // Table handling
     if (line.startsWith('|')) {
       if (!inTable) {
@@ -244,7 +244,7 @@ function renderContent(text) {
       inTable = false
       tableRows = []
     }
-    
+
     // Headers
     if (line.startsWith('# ')) {
       elements.push(<h1 key={i} style={styles.h1}>{line.slice(2)}</h1>)
@@ -270,7 +270,7 @@ function renderContent(text) {
       elements.push(<div key={i} style={{ height: '8px' }} />)
     }
   }
-  
+
   return elements
 }
 
@@ -300,7 +300,7 @@ const styles = {
 export default function LegalModal({ type = 'privacy', onClose }) {
   const content = CONTENT[type] || CONTENT.privacy
   const Icon = content.icon
-  
+
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e) => {
@@ -309,7 +309,7 @@ export default function LegalModal({ type = 'privacy', onClose }) {
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
   }, [onClose])
-  
+
   return (
     <>
       {/* Backdrop */}
@@ -322,7 +322,7 @@ export default function LegalModal({ type = 'privacy', onClose }) {
           zIndex: 9998,
         }}
       />
-      
+
       {/* Modal */}
       <div
         style={{
@@ -371,7 +371,7 @@ export default function LegalModal({ type = 'privacy', onClose }) {
             <X size={20} style={{ color: '#6b7280' }} />
           </button>
         </div>
-        
+
         {/* Content */}
         <div
           style={{
@@ -382,7 +382,7 @@ export default function LegalModal({ type = 'privacy', onClose }) {
         >
           {renderContent(content.content)}
         </div>
-        
+
         {/* Footer */}
         <div
           style={{
@@ -451,13 +451,13 @@ const linkStyle = {
 // Export a hook to easily show legal modals
 export function useLegalModal() {
   const [modalType, setModalType] = useState(null)
-  
+
   useEffect(() => {
     const handler = (e) => setModalType(e.detail)
     window.addEventListener('showLegal', handler)
     return () => window.removeEventListener('showLegal', handler)
   }, [])
-  
+
   return {
     modalType,
     showPrivacy: () => setModalType('privacy'),

@@ -41,7 +41,7 @@ export default function PurchaseCreditsModal({ onClose }) {
     clearError()
 
     const checkoutUrl = await purchaseCredits(pkg.id)
-    
+
     if (checkoutUrl) {
       // Redirect to Stripe Checkout
       window.location.href = checkoutUrl

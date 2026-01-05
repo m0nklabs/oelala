@@ -45,13 +45,13 @@ COMMENT ON COLUMN public.credit_transactions.type IS 'Transaction type: purchase
 COMMENT ON COLUMN public.credit_transactions.reference_id IS 'External reference (Stripe ID, job ID, etc.)';
 
 -- Indexes for efficient querying
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_user 
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user
     ON public.credit_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_created 
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_created
     ON public.credit_transactions(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_type 
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_type
     ON public.credit_transactions(type);
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_reference 
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_reference
     ON public.credit_transactions(reference_id) WHERE reference_id IS NOT NULL;
 
 -- ============================================================================
@@ -85,18 +85,18 @@ ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_packages ENABLE ROW LEVEL SECURITY;
 
 -- user_credits: Users can only view their own balance
-CREATE POLICY "Users can view own credits" 
-    ON public.user_credits FOR SELECT 
+CREATE POLICY "Users can view own credits"
+    ON public.user_credits FOR SELECT
     USING (auth.uid() = user_id);
 
 -- credit_transactions: Users can only view their own transactions
-CREATE POLICY "Users can view own transactions" 
-    ON public.credit_transactions FOR SELECT 
+CREATE POLICY "Users can view own transactions"
+    ON public.credit_transactions FOR SELECT
     USING (auth.uid() = user_id);
 
 -- credit_packages: Anyone can view active packages (public catalog)
-CREATE POLICY "Anyone can view active packages" 
-    ON public.credit_packages FOR SELECT 
+CREATE POLICY "Anyone can view active packages"
+    ON public.credit_packages FOR SELECT
     USING (is_active = true);
 
 -- ============================================================================
@@ -126,12 +126,12 @@ BEGIN
     INSERT INTO public.user_credits (user_id, balance, lifetime_purchased, lifetime_used)
     VALUES (NEW.id, welcome_credits, 0, 0)
     ON CONFLICT (user_id) DO NOTHING;
-    
+
     -- Log the welcome bonus transaction
     INSERT INTO public.credit_transactions (user_id, amount, type, description)
     VALUES (NEW.id, welcome_credits, 'bonus', 'Welcome bonus - thanks for joining Oelala!')
     ON CONFLICT DO NOTHING;
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -186,32 +186,32 @@ BEGIN
     FROM public.user_credits
     WHERE user_id = p_user_id
     FOR UPDATE;
-    
+
     -- Check if user exists
     IF NOT FOUND THEN
         RETURN QUERY SELECT false, 0, 'User not found'::TEXT;
         RETURN;
     END IF;
-    
+
     -- Check sufficient balance
     IF current_balance < p_amount THEN
         RETURN QUERY SELECT false, current_balance, 'Insufficient credits'::TEXT;
         RETURN;
     END IF;
-    
+
     -- Deduct credits
     new_bal := current_balance - p_amount;
-    
+
     UPDATE public.user_credits
     SET balance = new_bal,
         lifetime_used = lifetime_used + p_amount,
         updated_at = NOW()
     WHERE user_id = p_user_id;
-    
+
     -- Log transaction
     INSERT INTO public.credit_transactions (user_id, amount, type, description, reference_id, metadata)
     VALUES (p_user_id, -p_amount, 'generation', p_description, p_reference_id, p_metadata);
-    
+
     RETURN QUERY SELECT true, new_bal, NULL::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -236,7 +236,7 @@ DECLARE
     is_purchase BOOLEAN;
 BEGIN
     is_purchase := p_type = 'purchase';
-    
+
     -- Upsert user credits
     INSERT INTO public.user_credits (user_id, balance, lifetime_purchased, lifetime_used)
     VALUES (p_user_id, p_amount, CASE WHEN is_purchase THEN p_amount ELSE 0 END, 0)
@@ -245,11 +245,11 @@ BEGIN
         lifetime_purchased = public.user_credits.lifetime_purchased + CASE WHEN is_purchase THEN p_amount ELSE 0 END,
         updated_at = NOW()
     RETURNING balance INTO new_bal;
-    
+
     -- Log transaction
     INSERT INTO public.credit_transactions (user_id, amount, type, description, reference_id, metadata)
     VALUES (p_user_id, p_amount, p_type, p_description, p_reference_id, p_metadata);
-    
+
     RETURN QUERY SELECT true, new_bal, NULL::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

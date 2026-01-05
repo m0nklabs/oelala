@@ -138,7 +138,7 @@ If any provision of these Terms is found unenforceable, the remaining provisions
 
 For questions about these Terms:
 
-**Email**: legal@oelala.xyz  
+**Email**: legal@oelala.xyz
 **Address**: [Your business address in Netherlands]
 
 ---

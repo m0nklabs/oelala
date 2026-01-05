@@ -1,6 +1,6 @@
 # User System - Supabase Auth Integration
 
-> **Status**: Planning  
+> **Status**: Planning
 > **Last Updated**: 2026-01-04
 
 ---
@@ -66,7 +66,7 @@ class UserProfile:
     is_adult: bool     # Age verification for NSFW
     tier: str          # 'free' | 'pro' | 'enterprise'
     created_at: datetime
-    
+
     # Preferences
     nsfw_enabled: bool      # User's NSFW toggle preference
     default_model: str      # Preferred generation model
@@ -213,13 +213,13 @@ from supabase import create_client
 async def get_current_user(authorization: str = Header(None)):
     if not authorization:
         return None  # Anonymous user
-    
+
     token = authorization.replace("Bearer ", "")
     user = supabase.auth.get_user(token)
-    
+
     if not user:
         raise HTTPException(401, "Invalid token")
-    
+
     return user
 
 # Usage

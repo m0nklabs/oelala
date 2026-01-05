@@ -25,7 +25,7 @@ The `_load_list()` function returns 5-element tuples in ComfyUI 0.6.0+. Update t
 # Line ~520: In _assign_blocks_by_memory()
 name, size, target_device, _ = entry[0], entry[2], entry[3], entry[4]
 
-# Line ~545: In _assign_blocks_greedy()  
+# Line ~545: In _assign_blocks_greedy()
 name, size, target_device, _ = entry[0], entry[2], entry[3], entry[4]
 
 # Line ~565: In _assign_blocks_even()

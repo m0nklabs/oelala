@@ -37,7 +37,7 @@ SUPABASE_JWT_SECRET=your_jwt_secret_here
 OELALA_DEBUG=0
 ```
 
-**Important**: 
+**Important**:
 - Use the **service role key** for SUPABASE_SERVICE_KEY (has full database access)
 - The JWT secret is used for token validation
 - Never commit these keys to version control

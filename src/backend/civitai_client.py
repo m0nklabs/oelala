@@ -51,17 +51,23 @@ class CivitaiClient:
             }
         )
 
-    def search_models(self, query: str, limit: int = 10, types: Optional[List[str]] = None) -> Dict[str, Any]:
+    def search_models(
+        self, query: str, limit: int = 10, types: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"query": query, "limit": limit}
         if types:
             # Civitai supports repeated 'types' query params; requests handles list values
             params["types"] = types
-        resp = self.session.get(f"{CIVITAI_BASE_URL}/models", params=params, timeout=self.timeout)
+        resp = self.session.get(
+            f"{CIVITAI_BASE_URL}/models", params=params, timeout=self.timeout
+        )
         resp.raise_for_status()
         return resp.json()
 
     def get_model_version(self, version_id: int) -> Dict[str, Any]:
-        resp = self.session.get(f"{CIVITAI_BASE_URL}/model-versions/{version_id}", timeout=self.timeout)
+        resp = self.session.get(
+            f"{CIVITAI_BASE_URL}/model-versions/{version_id}", timeout=self.timeout
+        )
         resp.raise_for_status()
         return resp.json()
 

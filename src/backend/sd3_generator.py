@@ -1,23 +1,22 @@
 import os
 import torch
-import gc
 from diffusers import StableDiffusion3Pipeline, SD3Transformer2DModel
 from transformers import BitsAndBytesConfig, T5EncoderModel
 import logging
-import os
 
 logger = logging.getLogger(__name__)
+
 
 class SD3ImageGenerator:
     def __init__(self):
         self.pipe = None
         self.device_map = None
-        
+
         # Ensure CUDA devices are visible if not already set
         # Note: This might need to be set before process start in production
         if "CUDA_VISIBLE_DEVICES" not in os.environ:
             os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-            
+
         self._load_model()
 
     def _load_model(self):
@@ -40,7 +39,9 @@ class SD3ImageGenerator:
 
         for cand in candidates:
             try:
-                logger.info(f"🚀 Loading {cand['name']} from {cand['repo']} (INT8 multi-GPU)...")
+                logger.info(
+                    f"🚀 Loading {cand['name']} from {cand['repo']} (INT8 multi-GPU)..."
+                )
 
                 quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
@@ -98,6 +99,7 @@ class SD3ImageGenerator:
                 last_error = e
                 logger.error(f"❌ Failed to load {cand['name']}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 # Try next candidate
 
@@ -107,7 +109,18 @@ class SD3ImageGenerator:
             f"SD3 pipeline failed to load after attempts: {[c['name'] for c in candidates]}; last error: {last_error}"
         )
 
-    def generate(self, prompt, negative_prompt="", width=1024, height=1024, num_inference_steps=28, guidance_scale=4.5, seed=None, callback=None, callback_steps=1):
+    def generate(
+        self,
+        prompt,
+        negative_prompt="",
+        width=1024,
+        height=1024,
+        num_inference_steps=28,
+        guidance_scale=4.5,
+        seed=None,
+        callback=None,
+        callback_steps=1,
+    ):
         if not self.pipe:
             raise RuntimeError("Model not initialized")
 
@@ -117,7 +130,7 @@ class SD3ImageGenerator:
             generator = None
 
         logger.info(f"🎨 Generating image for prompt: {prompt[:50]}...")
-        
+
         with torch.inference_mode():
             # SD3 pipeline in this version does not support callback; we ignore callback params to avoid errors
             image = self.pipe(  # type: ignore[call-arg]
@@ -129,5 +142,5 @@ class SD3ImageGenerator:
                 width=width,
                 generator=generator,
             ).images[0]
-            
+
         return image

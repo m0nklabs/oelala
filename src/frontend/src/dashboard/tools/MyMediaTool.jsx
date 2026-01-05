@@ -92,7 +92,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
   const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
   const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
-  
+
   // Compute gridSize from profile
   const activeProfile = profile === 'auto' ? detectProfile() : profile
   const profileSettings = MONITOR_PROFILES[activeProfile] || MONITOR_PROFILES['1080p']
@@ -109,7 +109,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   // Fetch user's published items to show published state correctly
   useEffect(() => {
     if (!user) return
-    
+
     const fetchPublishedItems = async () => {
       try {
         // Fetch first 100 items - good balance between performance and coverage
@@ -124,7 +124,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         console.error('Failed to fetch published items:', err)
       }
     }
-    
+
     fetchPublishedItems()
   }, [user])
 
@@ -180,7 +180,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     } else if (filterBy === 'non-favorites') {
       filtered = filtered.filter(item => !favorites.has(item.filename))
     }
-    
+
     // Then filter by search query (filename or prompt)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
@@ -195,7 +195,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         return false
       })
     }
-    
+
     // Then sort
     filtered.sort((a, b) => {
       let comparison = 0
@@ -235,18 +235,18 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       // Use grouped mode to pair videos with source images
       // For prompts filter, fetch all media with metadata then filter client-side
       const apiFilter = filter === 'prompts' ? 'all' : filter
-      
+
       // Fetch from both ComfyUI output (legacy) and user storage (new)
       // If user is logged in, ONLY show their personal storage (not shared ComfyUI output)
       // EXCEPT for admin/dev accounts who see both
       const ADMIN_EMAILS = ['mark.op.mobiel@gmail.com']
       const isAdmin = user && ADMIN_EMAILS.includes(user.email)
-      
+
       console.log('🎬 MyMedia: Fetching media, user:', user?.id, user?.email, 'isAdmin:', isAdmin)
-      
+
       let comfyRes = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
       let userMedia = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
-      
+
       if (user) {
         // Logged in: fetch from user storage (private, user-scoped)
         userMedia = await listUserMedia(apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all')
@@ -258,7 +258,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             console.error('🎬 MyMedia: User storage error:', err)
             return { media: [], stats: { videos: 0, images: 0, audio: 0 } }
           })
-        
+
         // Admin accounts also see ComfyUI shared output
         if (isAdmin) {
           comfyRes = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
@@ -271,37 +271,37 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
           .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
       }
-      
+
       // Mark user storage items with source flag
       const userItems = (userMedia.media || []).map(item => ({
         ...item,
         source: 'storage',
       }))
-      
+
       // Mark comfy items with source flag
       const comfyItems = (comfyRes.media || []).map(item => ({
         ...item,
         source: 'comfyui',
       }))
-      
+
       // Combine both sources
       let media = [...userItems, ...comfyItems]
-      
+
       // For prompts view, filter to only items with prompts
       if (filter === 'prompts') {
-        media = media.filter(item => 
-          item.metadata?.positive_prompt || 
+        media = media.filter(item =>
+          item.metadata?.positive_prompt ||
           item.metadata?.prompt
         )
       }
-      
+
       // Combine stats
       const stats = {
         videos: (comfyRes.stats?.videos || 0) + (userMedia.stats?.videos || 0),
         images: (comfyRes.stats?.images || 0) + (userMedia.stats?.images || 0),
         audio: (comfyRes.stats?.audio || 0) + (userMedia.stats?.audio || 0),
       }
-      
+
       setMediaList(media)
       setStats(stats)
       setSelectedItems(new Set()) // Clear selection on refresh
@@ -330,7 +330,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         setShowHelp(prev => !prev)
         return
       }
-      
+
       // Profile cycling with +/- keys
       if (e.key === '+' || e.key === '=') {
         e.preventDefault()
@@ -354,7 +354,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         })
         return
       }
-      
+
       if (selectedIndex === null) return
       if (e.key === 'Escape') {
         setSelectedIndex(null)
@@ -368,7 +368,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         if (item) toggleFavorite(item.filename)
       }
     }
-    
+
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
@@ -383,24 +383,24 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       toggleSelection(idx, e)
       return
     }
-    
+
     // In selection mode, call onSelectItem callback
     if (selectionMode && onSelectItem) {
       const item = sortedMediaList[idx]
       onSelectItem(item)
       return
     }
-    
+
     // Regular click opens lightbox
     setSelectedIndex(idx)
   }
 
   const toggleSelection = (idx, e) => {
     e?.stopPropagation()
-    
+
     setSelectedItems(prev => {
       const newSet = new Set(prev)
-      
+
       // Shift+click: range select
       if (e?.shiftKey && lastClickedIndex !== null) {
         const start = Math.min(lastClickedIndex, idx)
@@ -425,10 +425,10 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           newSet.add(idx)
         }
       }
-      
+
       return newSet
     })
-    
+
     setLastClickedIndex(idx)
   }
 
@@ -442,40 +442,40 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
   const handleDelete = async () => {
     if (selectedItems.size === 0) return
-    
+
     // Check how many favorites are in selection - filter out undefined items
     const filenames = Array.from(selectedItems)
       .map(idx => sortedMediaList[idx]?.filename)
       .filter(Boolean)
-    
+
     if (filenames.length === 0) {
       setError('No valid items selected for deletion')
       return
     }
-    
+
     const favoritesInSelection = filenames.filter(f => favorites.has(f))
     const favCount = favoritesInSelection.length
-    
+
     // Build confirmation message
     let message = `Delete ${filenames.length} item${filenames.length > 1 ? 's' : ''} and their associated files (source images, metadata)?`
-    
+
     if (favCount > 0) {
       message = `⚠️ WARNING: ${favCount} favorite${favCount > 1 ? 's' : ''} selected!\n\n${message}\n\nFavorites to delete:\n• ${favoritesInSelection.slice(0, 5).join('\n• ')}${favCount > 5 ? `\n• ... and ${favCount - 5} more` : ''}`
     }
-    
+
     const confirmed = window.confirm(message)
     if (!confirmed) return
-    
+
     setDeleting(true)
     try {
       // Separate items by source
       const selectedList = Array.from(selectedItems)
         .map(idx => sortedMediaList[idx])
         .filter(Boolean)
-      
+
       const comfyItems = selectedList.filter(item => item.source === 'comfyui' || !item.source)
       const storageItems = selectedList.filter(item => item.source === 'storage')
-      
+
       // Delete ComfyUI items (legacy)
       if (comfyItems.length > 0) {
         const comfyFilenames = comfyItems.map(item => item.filename)
@@ -486,7 +486,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         })
         if (!res.ok) console.error('Failed to delete some ComfyUI items')
       }
-      
+
       // Delete storage items (user-scoped)
       for (const item of storageItems) {
         try {
@@ -498,7 +498,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           console.error(`Failed to delete storage item ${item.filename}:`, e)
         }
       }
-      
+
       // Refresh the list
       await fetchMedia()
     } catch (err) {
@@ -519,9 +519,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   // Batch download selected items
   const handleBatchDownload = async () => {
     if (selectedItems.size === 0) return
-    
+
     const items = sortedMediaList.filter(item => selectedItems.has(item.filename))
-    
+
     // Download one by one with small delay to avoid browser blocking
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
@@ -529,7 +529,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       link.href = `${BACKEND_BASE}${item.url}`
       link.download = item.filename
       link.click()
-      
+
       // Small delay between downloads
       if (i < items.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 300))
@@ -543,7 +543,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       const res = await fetch(`${BACKEND_BASE}/comfyui-metadata/${item.filename}`)
       if (!res.ok) throw new Error('No metadata available')
       const data = await res.json()
-      
+
       // Download as JSON
       const blob = new Blob([JSON.stringify(data.metadata, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -567,9 +567,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const favoritesCount = mediaList.filter(item => favorites.has(item.filename)).length
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       height: '100%',
       backgroundColor: 'var(--bg-primary)'
     }}>
@@ -604,7 +604,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           object-fit: cover;
           display: block;
         }
-        
+
         /* ========== AUDIO THUMBNAIL ========== */
         .audio-thumb {
           width: 100%;
@@ -1086,9 +1086,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       `}</style>
 
       {/* Header with selection controls */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         padding: '12px 16px',
         borderBottom: '1px solid var(--border-color)',
@@ -1109,7 +1109,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             {filterBy !== 'all' && ` • 📋 ${sortedMediaList.length} shown`}
           </span>
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Search input */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
@@ -1154,7 +1154,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           {/* Filter controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Filter size={14} style={{ color: 'var(--text-muted)' }} />
-            <select 
+            <select
               className="sort-select"
               value={filterBy}
               onChange={(e) => {
@@ -1166,14 +1166,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               <option value="favorites">❤️ Favorites</option>
               <option value="non-favorites">🤍 Non-favorites</option>
             </select>
-            
+
             {/* Toggle to show/hide start images */}
             {(filter === 'all' || filter === 'image') && (
               <button
                 className="sort-btn"
                 onClick={() => setHideStartImages(prev => !prev)}
                 title={hideStartImages ? 'Click to show video source images' : 'Hiding video source images'}
-                style={{ 
+                style={{
                   background: !hideStartImages ? 'var(--accent-color, #a855f7)' : undefined,
                   color: !hideStartImages ? '#fff' : undefined,
                   fontSize: '0.75rem',
@@ -1191,7 +1191,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           {/* Sort controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <ArrowUpDown size={14} style={{ color: 'var(--text-muted)' }} />
-            <select 
+            <select
               className="sort-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -1223,7 +1223,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 className="sort-btn"
                 onClick={() => { setProfile(p); saveProfile(p); }}
                 title={p === 'auto' ? `Auto-detect (currently ${detectProfile()})` : MONITOR_PROFILES[p]?.label || p}
-                style={{ 
+                style={{
                   background: profile === p ? 'var(--accent-color, #a855f7)' : undefined,
                   color: profile === p ? '#fff' : undefined,
                   fontSize: '0.7rem',
@@ -1240,7 +1240,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
           {/* Divider */}
           <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
-          
+
           {/* Selection info and actions */}
           {selectedItems.size > 0 && (
             <>
@@ -1253,7 +1253,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               <button className="header-btn" onClick={selectAll}>
                 Select All
               </button>
-              <button 
+              <button
                 className="header-btn"
                 onClick={handleBatchDownload}
                 title="Download selected items"
@@ -1261,8 +1261,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 <Download size={16} />
                 Download
               </button>
-              <button 
-                className="delete-btn" 
+              <button
+                className="delete-btn"
                 onClick={handleDelete}
                 disabled={deleting}
               >
@@ -1271,7 +1271,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               </button>
             </>
           )}
-          
+
           <button
             onClick={fetchMedia}
             disabled={loading}
@@ -1309,7 +1309,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Keyboard Shortcuts Help Modal */}
       {showHelp && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             top: 0,
@@ -1324,7 +1324,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           }}
           onClick={() => setShowHelp(false)}
         >
-          <div 
+          <div
             style={{
               backgroundColor: 'var(--bg-primary, #1a1a1a)',
               borderRadius: '12px',
@@ -1350,7 +1350,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 <X size={20} />
               </button>
             </div>
-            
+
             <div style={{ color: 'var(--text-secondary, #ccc)', fontSize: '0.9rem' }}>
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ color: 'var(--accent-color, #a855f7)', fontWeight: 600, marginBottom: '8px' }}>Grid View</div>
@@ -1363,7 +1363,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <span>Show this help</span>
                 </div>
               </div>
-              
+
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ color: 'var(--accent-color, #a855f7)', fontWeight: 600, marginBottom: '8px' }}>Lightbox (Image View)</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '6px 16px' }}>
@@ -1377,7 +1377,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <span>Close lightbox</span>
                 </div>
               </div>
-              
+
               <div>
                 <div style={{ color: 'var(--accent-color, #a855f7)', fontWeight: 600, marginBottom: '8px' }}>Selection</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '6px 16px' }}>
@@ -1388,7 +1388,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 </div>
               </div>
             </div>
-            
+
             <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-color, #333)', textAlign: 'center' }}>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Press <kbd style={{ background: '#333', padding: '2px 6px', borderRadius: '4px' }}>?</kbd> or <kbd style={{ background: '#333', padding: '2px 6px', borderRadius: '4px' }}>Esc</kbd> to close</span>
             </div>
@@ -1398,9 +1398,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Error */}
       {error && (
-        <div style={{ 
-          padding: '12px 16px', 
-          backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
           color: '#ef4444',
           textAlign: 'center'
         }}>
@@ -1410,13 +1410,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Loading */}
       {loading && (
-        <div style={{ 
+        <div style={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--text-muted)' 
+          color: 'var(--text-muted)'
         }}>
           <RefreshCw size={40} style={{ animation: 'spin 1s linear infinite', marginBottom: '16px' }} />
           <div>Loading media...</div>
@@ -1425,13 +1425,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Empty State */}
       {!loading && mediaList.length === 0 && (
-        <div style={{ 
+        <div style={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--text-muted)' 
+          color: 'var(--text-muted)'
         }}>
           <div style={{ fontSize: '4rem', marginBottom: '16px', opacity: 0.5 }}>📁</div>
           <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No {filter === 'prompts' ? 'prompts' : filter === 'all' ? 'media' : filter + 's'} yet</div>
@@ -1441,12 +1441,12 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Prompts List View - Special layout for prompts filter */}
       {!loading && sortedMediaList.length > 0 && filter === 'prompts' && (
-        <div 
+        <div
           ref={containerRef}
           className="prompts-list"
           onScroll={handleScroll}
-          style={{ 
-            flex: 1, 
+          style={{
+            flex: 1,
             overflowY: 'auto',
             overflowX: 'hidden',
             padding: '16px',
@@ -1477,11 +1477,11 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 {item.type === 'video' ? (
                   <video
                     src={`${BACKEND_BASE}${item.url}`}
-                    style={{ 
-                      width: '100px', 
-                      height: '100px', 
-                      objectFit: 'cover', 
-                      borderRadius: '8px' 
+                    style={{
+                      width: '100px',
+                      height: '100px',
+                      objectFit: 'cover',
+                      borderRadius: '8px'
                     }}
                     autoPlay
                     loop
@@ -1492,44 +1492,44 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <img
                     src={`${BACKEND_BASE}${item.url}`}
                     alt={item.filename}
-                    style={{ 
-                      width: '100px', 
-                      height: '100px', 
-                      objectFit: 'cover', 
-                      borderRadius: '8px' 
+                    style={{
+                      width: '100px',
+                      height: '100px',
+                      objectFit: 'cover',
+                      borderRadius: '8px'
                     }}
                     loading="lazy"
                   />
                 )}
               </div>
-              
+
               {/* Prompt content */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'flex-start',
                   marginBottom: '8px'
                 }}>
                   <div>
-                    <div style={{ 
-                      fontSize: '0.85rem', 
-                      fontWeight: 600, 
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
                       color: 'var(--text-primary)',
                       marginBottom: '4px'
                     }}>
                       {item.filename}
                     </div>
-                    <div style={{ 
-                      fontSize: '0.75rem', 
-                      color: 'var(--text-muted)' 
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--text-muted)'
                     }}>
                       {item.type === 'video' ? '🎬' : item.type === 'audio' ? '🎵' : '🖼️'} {formatSize(item.size)}
                       {item.metadata?.steps && ` • ${item.metadata.steps} steps`}
                       {item.metadata?.cfg && ` • CFG ${item.metadata.cfg}`}
                     </div>
                   </div>
-                  
+
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
@@ -1566,16 +1566,16 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                       }}
                       onClick={(e) => toggleFavorite(item.filename, e)}
                     >
-                      <Heart 
-                        size={14} 
+                      <Heart
+                        size={14}
                         fill={favorites.has(item.filename) ? '#fff' : 'none'}
                       />
                     </button>
                   </div>
                 </div>
-                
+
                 {/* Prompt text */}
-                <div style={{ 
+                <div style={{
                   fontSize: '0.9rem',
                   color: 'var(--text-primary)',
                   lineHeight: 1.5,
@@ -1599,12 +1599,12 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Media Grid - Standard grid view */}
       {!loading && sortedMediaList.length > 0 && filter !== 'prompts' && (
-        <div 
+        <div
           ref={containerRef}
           className="media-grid"
           onScroll={handleScroll}
-          style={{ 
-            flex: 1, 
+          style={{
+            flex: 1,
             overflowY: 'auto',
             overflowX: 'hidden',
             gridTemplateColumns: `repeat(${gridSize}, 1fr)`
@@ -1618,7 +1618,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               onClick={(e) => handleItemClick(idx, e)}
             >
               {/* Selection checkbox */}
-              <div 
+              <div
                 className="select-checkbox"
                 onClick={(e) => toggleSelection(idx, e)}
               >
@@ -1626,13 +1626,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               </div>
 
               {/* Favorite button */}
-              <div 
+              <div
                 className={`favorite-btn ${favorites.has(item.filename) ? 'is-favorite' : ''}`}
                 onClick={(e) => toggleFavorite(item.filename, e)}
                 title={favorites.has(item.filename) ? 'Remove from favorites' : 'Add to favorites'}
               >
-                <Heart 
-                  size={14} 
+                <Heart
+                  size={14}
                   color={favorites.has(item.filename) ? '#fff' : 'rgba(255,255,255,0.7)'}
                   fill={favorites.has(item.filename) ? '#fff' : 'none'}
                 />
@@ -1640,7 +1640,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
               {/* Publish button - only show for logged-in users on their own storage media */}
               {user && item.source === 'storage' && (
-                <div 
+                <div
                   className={`publish-btn ${publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? 'is-published' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -1648,14 +1648,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   }}
                   title={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? 'Published to gallery' : 'Publish to gallery'}
                 >
-                  <Upload 
-                    size={14} 
+                  <Upload
+                    size={14}
                     color={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? '#fff' : 'rgba(255,255,255,0.7)'}
                     fill={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? '#fff' : 'none'}
                   />
                 </div>
               )}
-              
+
               {/* Prompt bubble button - only show if item has a prompt */}
               {(item.metadata?.positive_prompt || item.metadata?.prompt) && (
                 <button
@@ -1669,7 +1669,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   💬
                 </button>
               )}
-              
+
               {/* Source image badge */}
               {item.has_source_image && (
                 <div className="source-image-badge">
@@ -1677,7 +1677,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <span>+IMG</span>
                 </div>
               )}
-              
+
               {/* Media content */}
               {item.type === 'video' ? (
                 <video
@@ -1731,7 +1731,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 </div>
                 <div className="overlay-buttons">
                   {item.metadata?.has_metadata && (
-                    <button 
+                    <button
                       className="overlay-btn"
                       onClick={(e) => handleDownloadMetadata(item, e)}
                       title="Download metadata JSON"
@@ -1739,7 +1739,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                       <FileJson size={14} />
                     </button>
                   )}
-                  <button 
+                  <button
                     className="overlay-btn"
                     onClick={(e) => handleDownload(item, e)}
                     title="Download"
@@ -1759,7 +1759,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           <button className="lightbox-close" onClick={() => setSelectedIndex(null)}>
             <X size={24} />
           </button>
-          
+
           {/* Metadata panel toggle */}
           {selectedItem.metadata?.has_metadata && (
             <button
@@ -1784,7 +1784,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               {showMetadata ? 'Hide Prompt' : 'Show Prompt'}
             </button>
           )}
-          
+
           {/* Metadata panel */}
           {showMetadata && selectedItem.metadata && (
             <div className="lightbox-metadata" onClick={(e) => e.stopPropagation()}>
@@ -1804,10 +1804,10 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               )}
             </div>
           )}
-          
+
           {/* Navigation */}
-          <button 
-            className="lightbox-nav" 
+          <button
+            className="lightbox-nav"
             style={{ left: '20px' }}
             onClick={(e) => {
               e.stopPropagation()
@@ -1816,7 +1816,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           >
             <ChevronLeft size={28} />
           </button>
-          
+
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             {selectedItem.type === 'video' ? (
               <video
@@ -1845,9 +1845,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               />
             )}
           </div>
-          
-          <button 
-            className="lightbox-nav" 
+
+          <button
+            className="lightbox-nav"
             style={{ right: '20px' }}
             onClick={(e) => {
               e.stopPropagation()
@@ -1870,20 +1870,20 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             <span style={{ color: 'rgba(255,255,255,0.5)' }}>{selectedIndex + 1} / {sortedMediaList.length}</span>
             <div style={{ display: 'flex', gap: '8px' }}>
               {/* Favorite toggle in lightbox */}
-              <button 
+              <button
                 className="overlay-btn"
                 onClick={(e) => toggleFavorite(selectedItem.filename, e)}
                 title={favorites.has(selectedItem.filename) ? 'Remove from favorites' : 'Add to favorites'}
                 style={{ background: favorites.has(selectedItem.filename) ? 'rgba(239, 68, 68, 0.5)' : undefined }}
               >
-                <Heart 
-                  size={16} 
+                <Heart
+                  size={16}
                   fill={favorites.has(selectedItem.filename) ? '#ef4444' : 'none'}
                   color={favorites.has(selectedItem.filename) ? '#ef4444' : '#fff'}
                 />
               </button>
               {selectedItem.has_source_image && selectedItem.source_image && (
-                <button 
+                <button
                   className="overlay-btn"
                   onClick={(e) => handleDownload(selectedItem.source_image, e)}
                   title="Download source image"
@@ -1892,7 +1892,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 </button>
               )}
               {selectedItem.metadata?.has_metadata && (
-                <button 
+                <button
                   className="overlay-btn"
                   onClick={(e) => handleDownloadMetadata(selectedItem, e)}
                   title="Download metadata JSON"
@@ -1900,7 +1900,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <FileJson size={16} />
                 </button>
               )}
-              <button 
+              <button
                 className="overlay-btn"
                 onClick={(e) => handleDownload(selectedItem, e)}
                 title="Download"
@@ -1914,12 +1914,12 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
 
       {/* Prompt Popup Modal */}
       {promptPopup && (
-        <div 
-          className="prompt-popup-overlay" 
+        <div
+          className="prompt-popup-overlay"
           onClick={() => setPromptPopup(null)}
         >
-          <div 
-            className="prompt-popup" 
+          <div
+            className="prompt-popup"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="prompt-popup-header">
@@ -1927,14 +1927,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 <MessageCircle size={18} />
                 Prompt Details
               </div>
-              <button 
+              <button
                 className="prompt-popup-close"
                 onClick={() => setPromptPopup(null)}
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="prompt-popup-content">
               {/* Media preview */}
               <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -1969,7 +1969,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   </div>
                 </div>
               </div>
-              
+
               {/* Positive Prompt */}
               {(promptPopup.item.metadata?.positive_prompt || promptPopup.item.metadata?.prompt) && (
                 <div className="prompt-section">
@@ -1979,7 +1979,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <div className="prompt-section-text">
                     {promptPopup.item.metadata.positive_prompt || promptPopup.item.metadata.prompt}
                   </div>
-                  <button 
+                  <button
                     className="prompt-copy-btn"
                     onClick={() => {
                       const text = promptPopup.item.metadata.positive_prompt || promptPopup.item.metadata.prompt
@@ -1991,7 +1991,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   </button>
                 </div>
               )}
-              
+
               {/* Negative Prompt */}
               {promptPopup.item.metadata?.negative_prompt && (
                 <div className="prompt-section">
@@ -2003,7 +2003,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   </div>
                 </div>
               )}
-              
+
               {/* Generation settings if available */}
               {(promptPopup.item.metadata?.steps || promptPopup.item.metadata?.cfg || promptPopup.item.metadata?.seed || promptPopup.item.metadata?.sampler || promptPopup.item.metadata?.model) && (
                 <div className="prompt-section">
@@ -2034,7 +2034,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   )}
                 </div>
               )}
-              
+
               {/* LoRAs used */}
               {promptPopup.item.metadata?.loras && promptPopup.item.metadata.loras.length > 0 && (
                 <div className="prompt-section">
@@ -2043,16 +2043,16 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem' }}>
                     {promptPopup.item.metadata.loras.map((lora, idx) => (
-                      <div key={idx} style={{ 
-                        display: 'flex', 
+                      <div key={idx} style={{
+                        display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         padding: '6px 10px',
                         backgroundColor: 'var(--bg-secondary)',
                         borderRadius: '4px'
                       }}>
-                        <span style={{ 
-                          fontFamily: 'monospace', 
+                        <span style={{
+                          fontFamily: 'monospace',
                           fontSize: '0.8rem',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -2061,8 +2061,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                         }}>
                           {lora.name}
                         </span>
-                        <span style={{ 
-                          color: 'var(--accent-color, #a855f7)', 
+                        <span style={{
+                          color: 'var(--accent-color, #a855f7)',
                           fontWeight: 600,
                           fontSize: '0.8rem'
                         }}>

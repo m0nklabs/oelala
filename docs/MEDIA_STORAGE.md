@@ -1,6 +1,6 @@
 # Media Storage Architecture
 
-> **Last Updated**: 2026-01-03  
+> **Last Updated**: 2026-01-03
 > **Related Project**: [oelala-storage](https://github.com/m0nklabs/oelala-storage) (separate repo)
 
 ## Overview
@@ -89,8 +89,8 @@ MEDIA_TEMP = MEDIA_ROOT / "temp"            # Processing intermediates
 
 ### Phase 3: oelala-storage (Separate Repository)
 
-> **Repository**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)  
-> **Language**: Go  
+> **Repository**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)
+> **Language**: Go
 > **Platforms**: Windows, Linux (no macOS support planned)
 
 **Why Go?**
@@ -179,26 +179,26 @@ node:
   id: "node_abc123"
   name: "Home Server"
   type: primary
-  
+
 storage:
   path: "/data/oelala"
   max_size_gb: 500
   cache_size_mb: 2048
-  
+
 api:
   http_port: 7999
   grpc_port: 7998
   enable_tls: true
-  
+
 sync:
   peers:
     - url: "https://node-b.example.com:7999"
       type: replica
-    - url: "https://archive.example.com:7999"  
+    - url: "https://archive.example.com:7999"
       type: archive
   strategy: realtime  # realtime, scheduled, manual
   interval_minutes: 15
-  
+
 security:
   encryption_at_rest: true
   auth_tokens:

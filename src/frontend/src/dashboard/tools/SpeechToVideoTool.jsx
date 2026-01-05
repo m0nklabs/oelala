@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
-import { 
-  Video, Upload, Play, Pause, Download, Loader2, X, 
+import {
+  Video, Upload, Play, Pause, Download, Loader2, X,
   MessageSquare, Volume2, Mic, Settings2, ChevronDown
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
@@ -30,18 +30,18 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   const [videoFile, setVideoFile] = useState(null)
   const [videoUrl, setVideoUrl] = useState(null)
   const [uploadedVideoPath, setUploadedVideoPath] = useState(null)
-  
+
   // TTS state
   const [text, setText] = useState('')
   const [ttsModel, setTtsModel] = useState('f5v1')
   const [voicePreset, setVoicePreset] = useState('nova')
   const [voiceSampleFile, setVoiceSampleFile] = useState(null)
   const [voiceSampleUrl, setVoiceSampleUrl] = useState(null)
-  
+
   // Lip sync settings
   const [lipsExpression, setLipsExpression] = useState(1.5)
   const [inferenceSteps, setInferenceSteps] = useState(20)
-  
+
   // UI state
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -49,7 +49,7 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   const [currentStep, setCurrentStep] = useState(null)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
-  
+
   // Refs
   const videoRef = useRef(null)
   const videoInputRef = useRef(null)
@@ -87,7 +87,7 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   const uploadFile = async (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    
+
     try {
       const res = await postForm(`${BACKEND_BASE}/upload`, formData)
       if (res.ok && res.data?.path) {
@@ -116,54 +116,54 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
       // Step 1: Upload video if needed
       setCurrentStep('Uploading video...')
       setUploading(true)
-      
+
       let videoPath = uploadedVideoPath
       if (!videoPath) {
         videoPath = await uploadFile(videoFile)
         setUploadedVideoPath(videoPath)
       }
-      
+
       // Upload voice sample if custom
       let voiceSamplePath = null
       if (voicePreset === 'custom' && voiceSampleFile) {
         setCurrentStep('Uploading voice sample...')
         voiceSamplePath = await uploadFile(voiceSampleFile)
       }
-      
+
       setUploading(false)
 
       // Step 2: Generate TTS audio
       setCurrentStep('Generating speech...')
-      
+
       const ttsFormData = new FormData()
       ttsFormData.append('text', text)
       ttsFormData.append('model', ttsModel)
-      
+
       if (voicePreset === 'custom' && voiceSamplePath) {
         ttsFormData.append('voice_sample', voiceSamplePath)
       } else if (voicePreset !== 'custom') {
         ttsFormData.append('voice_preset', voicePreset)
       }
-      
+
       if (DEBUG) console.log('🗣️ TTS request:', { text: text.slice(0, 50), model: ttsModel, voice: voicePreset })
-      
+
       const ttsRes = await postForm(`${BACKEND_BASE}/voice-clone`, ttsFormData)
-      
+
       if (!ttsRes.ok) {
         throw new Error(ttsRes.data?.detail || 'TTS generation failed')
       }
-      
+
       // Get the generated audio path
       const audioPath = ttsRes.data?.path || ttsRes.data?.audio_path
       if (!audioPath) {
         throw new Error('TTS did not return audio path')
       }
-      
+
       if (DEBUG) console.log('🎵 TTS audio generated:', audioPath)
 
       // Step 3: Apply lip sync
       setCurrentStep('Applying lip sync...')
-      
+
       const lipSyncData = {
         video_path: videoPath,
         audio_path: audioPath,
@@ -171,26 +171,26 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
         inference_steps: inferenceSteps,
         seed: -1,
       }
-      
+
       if (DEBUG) console.log('👄 Lip sync request:', lipSyncData)
-      
+
       const lipSyncRes = await postJson(`${BACKEND_BASE}/lip-sync`, lipSyncData)
-      
+
       if (!lipSyncRes.ok) {
         throw new Error(lipSyncRes.data?.detail || 'Lip sync failed')
       }
-      
+
       // Show queued notification
       setLastQueued({
         promptId: lipSyncRes.data?.prompt_id,
         text: text.slice(0, 30) + (text.length > 30 ? '...' : '')
       })
-      
+
       // Notify queue indicator
       if (onJobSubmitted) onJobSubmitted({ prompt_id: lipSyncRes.data?.prompt_id })
-      
+
       if (DEBUG) console.log('✅ Speech-to-Video queued:', lipSyncRes.data?.prompt_id)
-      
+
     } catch (err) {
       console.error('❌ Speech-to-Video error:', err)
       setError(err.message)
@@ -377,7 +377,7 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
           </span>
           <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
         </button>
-        
+
         {showAdvanced && (
           <div className="p-4 space-y-4 bg-gray-850">
             <div>
@@ -395,7 +395,7 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
               />
               <span className="text-xs text-gray-500">Higher = more pronounced lip movement</span>
             </div>
-            
+
             <div>
               <label className="block text-sm text-gray-400 mb-1">
                 Inference Steps: {inferenceSteps}

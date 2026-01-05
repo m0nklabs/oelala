@@ -9,12 +9,20 @@ import sys
 import uvicorn
 import threading
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import (
+    FastAPI,
+    File,
+    UploadFile,
+    Form,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    Depends,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List
 import shutil
 from pathlib import Path
 import logging
@@ -27,17 +35,17 @@ from PIL.PngImagePlugin import PngInfo
 
 # Add current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append('/home/flip/oelala')  # Add oelala root directory
+sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
-from auth import get_current_user, get_optional_user, User, SYSTEM_USER
+from auth import get_current_user, User
 
 # Storage client for user media
-from storage_client import StorageClient, get_client as get_storage_client
+from storage_client import get_client as get_storage_client
 
 # Credits system
-from credits import calculate_credits, get_credit_manager, InsufficientCreditsError
-from credits_api import router as credits_router, check_credits, deduct_credits, refund_credits
+from credits import calculate_credits
+from credits_api import router as credits_router, check_credits, deduct_credits
 
 # Gallery system
 from gallery_api import router as gallery_router
@@ -45,6 +53,7 @@ from gallery_api import router as gallery_router
 # ComfyUI Client for all image/video generation
 try:
     from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
+
     print("✅ ComfyUIClient imported successfully")
 except ImportError as e:
     print(f"❌ Failed to import ComfyUIClient: {e}")
@@ -56,9 +65,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Log Buffer for UI
-log_buffer = deque(maxlen=1000) # Increased buffer size for shell output
+log_buffer = deque(maxlen=1000)  # Increased buffer size for shell output
 progress_store = {}  # job_id -> {progress, status, message, updated_at}
-ticker_store = {}    # job_id -> threading.Event to stop ticker
+ticker_store = {}  # job_id -> threading.Event to stop ticker
 
 # WebSocket connections for live log streaming
 log_subscribers: set[WebSocket] = set()
@@ -73,7 +82,9 @@ def debug_log(message: str):
         logger.info(f"🐛 {message}")
 
 
-def start_progress_ticker(job_id: str, step: int = 5, interval: float = 2.0, ceiling: int = 95):
+def start_progress_ticker(
+    job_id: str, step: int = 5, interval: float = 2.0, ceiling: int = 95
+):
     """Start a background ticker that nudges progress up to a ceiling while job is running."""
     debug_log(f"🔍 starting progress ticker for job {job_id}")
     stop_event = threading.Event()
@@ -88,7 +99,7 @@ def start_progress_ticker(job_id: str, step: int = 5, interval: float = 2.0, cei
             progress_store[job_id] = {
                 **record,
                 "progress": pct,
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now().isoformat(),
             }
             stop_event.wait(interval)
         debug_log(f"✅ progress ticker finished for job {job_id}")
@@ -107,60 +118,66 @@ def stop_progress_ticker(job_id: str):
         debug_log(f"⚠️ no active ticker found for job {job_id}")
 
 
-def inject_png_workflow_metadata(image_path: str, workflow: dict, prompt_params: dict) -> bool:
+def inject_png_workflow_metadata(
+    image_path: str, workflow: dict, prompt_params: dict
+) -> bool:
     """
     Inject ComfyUI-compatible workflow metadata into a PNG file.
     This allows ComfyUI to read the workflow when opening the image.
     Preserves existing T2I prompt metadata if present.
-    
+
     Args:
         image_path: Path to the PNG file
         workflow: The ComfyUI API workflow dict
         prompt_params: Additional prompt parameters for reference
-    
+
     Returns:
         True if successful, False otherwise
     """
     try:
         img = Image.open(image_path)
-        
+
         # Check for existing metadata (e.g., T2I prompt from original image)
-        existing_info = img.info if hasattr(img, 'info') else {}
-        
+        existing_info = img.info if hasattr(img, "info") else {}
+
         # Try to extract original T2I prompt from existing workflow
         original_t2i_prompt = None
-        if 'prompt' in existing_info:
+        if "prompt" in existing_info:
             try:
-                existing_wf = json.loads(existing_info['prompt'])
+                existing_wf = json.loads(existing_info["prompt"])
                 for node_id, node in existing_wf.items():
                     if isinstance(node, dict):
-                        inputs = node.get('inputs', {})
+                        inputs = node.get("inputs", {})
                         # CLIPTextEncode has long T2I prompts
-                        if 'text' in inputs and isinstance(inputs['text'], str):
-                            text = inputs['text']
+                        if "text" in inputs and isinstance(inputs["text"], str):
+                            text = inputs["text"]
                             if len(text) > 50:  # Long prompts are likely T2I
                                 original_t2i_prompt = text
                                 break
             except json.JSONDecodeError:
                 pass
-        
+
         # Create PNG metadata
         metadata = PngInfo()
-        
+
         # ComfyUI expects 'prompt' to contain the API workflow
         metadata.add_text("prompt", json.dumps(workflow))
-        
+
         # Add extra info for reference
-        metadata.add_text("workflow", json.dumps(workflow))  # Some versions look for this
-        
+        metadata.add_text(
+            "workflow", json.dumps(workflow)
+        )  # Some versions look for this
+
         # Preserve original T2I prompt if we found one
         if original_t2i_prompt:
             prompt_params = dict(prompt_params)  # Don't modify original
-            prompt_params['original_t2i_prompt'] = original_t2i_prompt
-            logger.info(f"📝 Preserved original T2I prompt ({len(original_t2i_prompt)} chars)")
-        
+            prompt_params["original_t2i_prompt"] = original_t2i_prompt
+            logger.info(
+                f"📝 Preserved original T2I prompt ({len(original_t2i_prompt)} chars)"
+            )
+
         metadata.add_text("oelala_params", json.dumps(prompt_params))
-        
+
         # Save with metadata
         img.save(image_path, pnginfo=metadata)
         logger.info(f"📝 Injected workflow metadata into {image_path}")
@@ -191,7 +208,7 @@ class BufferHandler(logging.Handler):
             log_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "level": record.levelname,
-                "message": msg
+                "message": msg,
             }
             log_buffer.append(log_entry)
             # Queue broadcast to WebSocket subscribers
@@ -202,6 +219,7 @@ class BufferHandler(logging.Handler):
                     pass  # No event loop available (startup phase)
         except Exception:
             self.handleError(record)
+
 
 # Capture Stdout/Stderr for Shell Output (tqdm, print, etc)
 class StreamToBuffer:
@@ -216,22 +234,24 @@ class StreamToBuffer:
             # Write to original stream first
             self.original_stream.write(message)
             self.original_stream.flush()
-            
+
             # Filter out empty newlines or carriage returns that are just moving cursor
             if message and message.strip():
                 # Clean up tqdm's carriage returns for the web view
-                clean_msg = message.replace('\r', '').strip()
+                clean_msg = message.replace("\r", "").strip()
                 if clean_msg:
                     log_entry = {
                         "timestamp": datetime.now().isoformat(),
                         "level": self.level,
-                        "message": clean_msg
+                        "message": clean_msg,
                     }
                     log_buffer.append(log_entry)
                     # Broadcast to WebSocket subscribers
                     if log_subscribers:
                         try:
-                            asyncio.get_event_loop().create_task(broadcast_log(log_entry))
+                            asyncio.get_event_loop().create_task(
+                                broadcast_log(log_entry)
+                            )
                         except RuntimeError:
                             pass
         except Exception:
@@ -243,7 +263,6 @@ class StreamToBuffer:
             self.original_stream.flush()
         except Exception:
             pass
-
 
     # Proxy common file-like attributes used by uvicorn/print/tqdm
     def isatty(self):
@@ -260,13 +279,18 @@ class StreamToBuffer:
         for line in lines:
             self.write(line)
 
+
 # Redirect sys.stdout and sys.stderr
 sys.stdout = StreamToBuffer(sys.stdout, "INFO")
-sys.stderr = StreamToBuffer(sys.stderr, "SHELL") # Use SHELL level for stderr (tqdm usually goes here)
+sys.stderr = StreamToBuffer(
+    sys.stderr, "SHELL"
+)  # Use SHELL level for stderr (tqdm usually goes here)
 
 # Add buffer handler to root logger only (module loggers propagate by default)
 buffer_handler = BufferHandler()
-buffer_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+buffer_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+)
 logging.getLogger().addHandler(buffer_handler)
 
 # Attach to common libraries used by the generators so their INFO logs appear
@@ -278,7 +302,7 @@ for noisy_logger in ["diffusers", "transformers", "accelerate"]:
 app = FastAPI(
     title="Oelala AI Video Generator",
     description="AI-powered video generation from images using Wan2.2",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # CRITICAL: Add CORS middleware FIRST, before any mounts or routes
@@ -308,7 +332,12 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 # Mount ComfyUI output directory
 if COMFYUI_OUTPUT_DIR.exists():
-    app.mount("/comfyui-output", StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)), name="comfyui_output")
+    app.mount(
+        "/comfyui-output",
+        StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)),
+        name="comfyui_output",
+    )
+
 
 @app.get("/logs")
 async def get_logs():
@@ -335,7 +364,9 @@ async def websocket_logs(websocket: WebSocket):
                 break
     finally:
         log_subscribers.discard(websocket)
-        logger.info(f"📡 Log WebSocket disconnected (remaining: {len(log_subscribers)})")
+        logger.info(
+            f"📡 Log WebSocket disconnected (remaining: {len(log_subscribers)})"
+        )
 
 
 @app.get("/progress/{job_id}")
@@ -345,6 +376,7 @@ async def get_progress(job_id: str):
         return {"job_id": job_id, "progress": 0, "status": "unknown"}
     return data
 
+
 @app.get("/video-test.html")
 async def serve_video_test():
     """Serve video test page"""
@@ -352,6 +384,7 @@ async def serve_video_test():
     if not test_page.exists():
         raise HTTPException(status_code=404, detail="Test page not found")
     return FileResponse(test_page, media_type="text/html")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -361,6 +394,7 @@ async def startup_event():
         logger.info("✅ ComfyUI backend available and ready!")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
+
 
 @app.get("/")
 async def root():
@@ -376,14 +410,20 @@ async def root():
             "POST /generate-text": "Generate video from text prompt",
             "POST /generate-image": "Generate image from text prompt",
             "GET /files/{filename}": "Download generated video",
-            "GET /health": "Health check"
-        }
+            "GET /health": "Health check",
+        },
     }
 
+
 @app.get("/list-comfyui-media")
-async def list_comfyui_media(type: str = "all", grouped: bool = False, include_metadata: bool = False, hide_start_images: bool = True):
+async def list_comfyui_media(
+    type: str = "all",
+    grouped: bool = False,
+    include_metadata: bool = False,
+    hide_start_images: bool = True,
+):
     """List media files from ComfyUI output directory
-    
+
     Args:
         type: Filter by media type ('all', 'video', 'image', 'audio')
         grouped: Group videos with source images (not implemented yet)
@@ -391,60 +431,62 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
         hide_start_images: Hide images that are start frames for videos (default True)
     """
     comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
-    
+
     if not comfyui_output.exists():
         return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
-    
+
     media = []
     video_count = 0
     image_count = 0
     audio_count = 0
-    
+
     # First pass: collect all files and extract timestamps from videos
     video_timestamps = set()
     all_files = []
-    
+
     for file_path in comfyui_output.iterdir():
         if not file_path.is_file():
             continue
         ext = file_path.suffix.lower()
-        if ext in ['.mp4', '.webm', '.mov', '.avi']:
+        if ext in [".mp4", ".webm", ".mov", ".avi"]:
             # Extract timestamp from video filename (e.g., oelala_20260102_075057)
             import re
-            match = re.search(r'(\d{8}_\d{6})', file_path.name)
+
+            match = re.search(r"(\d{8}_\d{6})", file_path.name)
             if match:
                 video_timestamps.add(match.group(1))
-            all_files.append((file_path, 'video'))
-        elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
-            all_files.append((file_path, 'image'))
-        elif ext in ['.wav', '.mp3', '.flac', '.ogg', '.opus', '.m4a', '.aac']:
-            all_files.append((file_path, 'audio'))
-    
+            all_files.append((file_path, "video"))
+        elif ext in [".png", ".jpg", ".jpeg", ".webp"]:
+            all_files.append((file_path, "image"))
+        elif ext in [".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac"]:
+            all_files.append((file_path, "audio"))
+
     # Second pass: process files and mark start images
     for file_path, media_type in all_files:
         ext = file_path.suffix.lower()
-        
-        if media_type == 'video':
+
+        if media_type == "video":
             video_count += 1
-        elif media_type == 'image':
+        elif media_type == "image":
             image_count += 1
-        elif media_type == 'audio':
+        elif media_type == "audio":
             audio_count += 1
-        
+
         # Filter by type if requested
-        if type != 'all' and media_type != type:
+        if type != "all" and media_type != type:
             continue
-        
+
         # Check if this image is a start image for a video
         is_start_image = False
-        if media_type == 'image' and hide_start_images:
+        if media_type == "image" and hide_start_images:
             import re
-            match = re.search(r'(\d{8}_\d{6})', file_path.name)
+
+            match = re.search(r"(\d{8}_\d{6})", file_path.name)
             if match and match.group(1) in video_timestamps:
                 is_start_image = True
                 # Skip this image if hiding start images
                 continue
-        
+
         stat = file_path.stat()
         item = {
             "filename": file_path.name,
@@ -456,277 +498,421 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
             "url": f"/comfyui-output/{file_path.name}",
             "is_start_image": is_start_image,
         }
-        
+
         # Include metadata if requested (for images with embedded prompts)
-        if include_metadata and media_type == 'image':
+        if include_metadata and media_type == "image":
             try:
                 from PIL import Image
+
                 img = Image.open(file_path)
                 metadata = {"has_metadata": False}
-                
-                if hasattr(img, 'info') and img.info:
+
+                if hasattr(img, "info") and img.info:
                     # Try to extract prompt from ComfyUI workflow JSON
-                    if 'prompt' in img.info:
+                    if "prompt" in img.info:
                         metadata["has_metadata"] = True
                         try:
-                            workflow = json.loads(img.info['prompt'])
+                            workflow = json.loads(img.info["prompt"])
                             # Collect all text prompts for later analysis
                             all_texts = []
                             loras_found = []
-                            
+
                             # Extract prompts from various node types
                             for node_id, node in workflow.items():
                                 if isinstance(node, dict):
-                                    inputs = node.get('inputs', {})
-                                    class_type = node.get('class_type', '')
-                                    
+                                    inputs = node.get("inputs", {})
+                                    class_type = node.get("class_type", "")
+
                                     # Wan2.2 / standard positive_prompt
-                                    if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
-                                        text = inputs['positive_prompt'].strip()
+                                    if "positive_prompt" in inputs and isinstance(
+                                        inputs["positive_prompt"], str
+                                    ):
+                                        text = inputs["positive_prompt"].strip()
                                         if len(text) > 20:
-                                            metadata['positive_prompt'] = text
+                                            metadata["positive_prompt"] = text
                                     # Negative prompt
-                                    if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
-                                        text = inputs['negative_prompt'].strip()
+                                    if "negative_prompt" in inputs and isinstance(
+                                        inputs["negative_prompt"], str
+                                    ):
+                                        text = inputs["negative_prompt"].strip()
                                         if text:
-                                            metadata['negative_prompt'] = text
-                                    
+                                            metadata["negative_prompt"] = text
+
                                     # CLIPTextEncode text - collect all for analysis
-                                    if 'text' in inputs and isinstance(inputs['text'], str):
-                                        text = inputs['text'].strip()
+                                    if "text" in inputs and isinstance(
+                                        inputs["text"], str
+                                    ):
+                                        text = inputs["text"].strip()
                                         if len(text) > 10:
-                                            all_texts.append({'text': text, 'class_type': class_type, 'node_id': node_id})
-                                    
+                                            all_texts.append(
+                                                {
+                                                    "text": text,
+                                                    "class_type": class_type,
+                                                    "node_id": node_id,
+                                                }
+                                            )
+
                                     # Extract generation params
-                                    if 'steps' in inputs and isinstance(inputs['steps'], (int, float)):
-                                        metadata['steps'] = int(inputs['steps'])
-                                    if 'cfg' in inputs and isinstance(inputs['cfg'], (int, float)):
-                                        metadata['cfg'] = float(inputs['cfg'])
-                                    if 'seed' in inputs and isinstance(inputs['seed'], (int, float)):
-                                        metadata['seed'] = int(inputs['seed'])
-                                    
+                                    if "steps" in inputs and isinstance(
+                                        inputs["steps"], (int, float)
+                                    ):
+                                        metadata["steps"] = int(inputs["steps"])
+                                    if "cfg" in inputs and isinstance(
+                                        inputs["cfg"], (int, float)
+                                    ):
+                                        metadata["cfg"] = float(inputs["cfg"])
+                                    if "seed" in inputs and isinstance(
+                                        inputs["seed"], (int, float)
+                                    ):
+                                        metadata["seed"] = int(inputs["seed"])
+
                                     # Extract sampler info
-                                    if 'sampler_name' in inputs and isinstance(inputs['sampler_name'], str):
-                                        metadata['sampler'] = inputs['sampler_name']
-                                    if 'scheduler' in inputs and isinstance(inputs['scheduler'], str):
-                                        metadata['scheduler'] = inputs['scheduler']
-                                    
+                                    if "sampler_name" in inputs and isinstance(
+                                        inputs["sampler_name"], str
+                                    ):
+                                        metadata["sampler"] = inputs["sampler_name"]
+                                    if "scheduler" in inputs and isinstance(
+                                        inputs["scheduler"], str
+                                    ):
+                                        metadata["scheduler"] = inputs["scheduler"]
+
                                     # Extract resolution from EmptyLatentImage or similar
-                                    if 'width' in inputs and 'height' in inputs:
-                                        w = inputs.get('width')
-                                        h = inputs.get('height')
-                                        if isinstance(w, (int, float)) and isinstance(h, (int, float)):
-                                            metadata['width'] = int(w)
-                                            metadata['height'] = int(h)
-                                    
+                                    if "width" in inputs and "height" in inputs:
+                                        w = inputs.get("width")
+                                        h = inputs.get("height")
+                                        if isinstance(w, (int, float)) and isinstance(
+                                            h, (int, float)
+                                        ):
+                                            metadata["width"] = int(w)
+                                            metadata["height"] = int(h)
+
                                     # Extract LoRA info
-                                    if 'LoraLoader' in class_type or 'lora' in class_type.lower():
-                                        lora_name = inputs.get('lora_name', '')
-                                        lora_strength = inputs.get('strength_model', inputs.get('strength', 1.0))
+                                    if (
+                                        "LoraLoader" in class_type
+                                        or "lora" in class_type.lower()
+                                    ):
+                                        lora_name = inputs.get("lora_name", "")
+                                        lora_strength = inputs.get(
+                                            "strength_model",
+                                            inputs.get("strength", 1.0),
+                                        )
                                         if lora_name:
-                                            loras_found.append({
-                                                'name': lora_name,
-                                                'strength': float(lora_strength) if isinstance(lora_strength, (int, float)) else 1.0
-                                            })
-                                    
+                                            loras_found.append(
+                                                {
+                                                    "name": lora_name,
+                                                    "strength": float(lora_strength)
+                                                    if isinstance(
+                                                        lora_strength, (int, float)
+                                                    )
+                                                    else 1.0,
+                                                }
+                                            )
+
                                     # Wan2.2 specific LoRA loader
-                                    if 'WanVideoLoraSelect' in class_type or 'lora_high' in inputs or 'lora_low' in inputs:
-                                        for key in ['lora_high', 'lora_low', 'lora_name']:
+                                    if (
+                                        "WanVideoLoraSelect" in class_type
+                                        or "lora_high" in inputs
+                                        or "lora_low" in inputs
+                                    ):
+                                        for key in [
+                                            "lora_high",
+                                            "lora_low",
+                                            "lora_name",
+                                        ]:
                                             if key in inputs and inputs[key]:
                                                 lora_name = inputs[key]
-                                                if isinstance(lora_name, str) and lora_name not in ['None', 'none', '']:
-                                                    strength = inputs.get('strength', inputs.get('lora_strength', 1.0))
-                                                    loras_found.append({
-                                                        'name': lora_name,
-                                                        'strength': float(strength) if isinstance(strength, (int, float)) else 1.0
-                                                    })
-                                    
+                                                if isinstance(
+                                                    lora_name, str
+                                                ) and lora_name not in [
+                                                    "None",
+                                                    "none",
+                                                    "",
+                                                ]:
+                                                    strength = inputs.get(
+                                                        "strength",
+                                                        inputs.get(
+                                                            "lora_strength", 1.0
+                                                        ),
+                                                    )
+                                                    loras_found.append(
+                                                        {
+                                                            "name": lora_name,
+                                                            "strength": float(strength)
+                                                            if isinstance(
+                                                                strength, (int, float)
+                                                            )
+                                                            else 1.0,
+                                                        }
+                                                    )
+
                                     # Extract model/checkpoint info
-                                    if 'ckpt_name' in inputs and isinstance(inputs['ckpt_name'], str):
-                                        metadata['model'] = inputs['ckpt_name']
-                                    if 'unet_name' in inputs and isinstance(inputs['unet_name'], str):
-                                        if not metadata.get('model'):
-                                            metadata['model'] = inputs['unet_name']
-                            
+                                    if "ckpt_name" in inputs and isinstance(
+                                        inputs["ckpt_name"], str
+                                    ):
+                                        metadata["model"] = inputs["ckpt_name"]
+                                    if "unet_name" in inputs and isinstance(
+                                        inputs["unet_name"], str
+                                    ):
+                                        if not metadata.get("model"):
+                                            metadata["model"] = inputs["unet_name"]
+
                             # Store unique LoRAs
                             if loras_found:
                                 # Deduplicate by name
                                 seen = set()
                                 unique_loras = []
                                 for lora in loras_found:
-                                    if lora['name'] not in seen:
-                                        seen.add(lora['name'])
+                                    if lora["name"] not in seen:
+                                        seen.add(lora["name"])
                                         unique_loras.append(lora)
-                                metadata['loras'] = unique_loras
-                            
+                                metadata["loras"] = unique_loras
+
                             # If no positive_prompt found, analyze CLIPTextEncode texts
-                            if not metadata.get('positive_prompt') and all_texts:
+                            if not metadata.get("positive_prompt") and all_texts:
                                 # Heuristics: negative prompts often contain these keywords
-                                negative_indicators = ['worst', 'bad', 'ugly', 'blurry', 'low quality', '低质量', '最差', 'deformed']
-                                
+                                negative_indicators = [
+                                    "worst",
+                                    "bad",
+                                    "ugly",
+                                    "blurry",
+                                    "low quality",
+                                    "低质量",
+                                    "最差",
+                                    "deformed",
+                                ]
+
                                 for item_text in all_texts:
-                                    text = item_text['text']
+                                    text = item_text["text"]
                                     text_lower = text.lower()
-                                    
+
                                     # Check if it looks like a negative prompt
-                                    is_negative = any(ind in text_lower for ind in negative_indicators)
-                                    
-                                    if is_negative and not metadata.get('negative_prompt'):
-                                        metadata['negative_prompt'] = text
-                                    elif not is_negative and not metadata.get('positive_prompt'):
-                                        metadata['positive_prompt'] = text
-                                
+                                    is_negative = any(
+                                        ind in text_lower for ind in negative_indicators
+                                    )
+
+                                    if is_negative and not metadata.get(
+                                        "negative_prompt"
+                                    ):
+                                        metadata["negative_prompt"] = text
+                                    elif not is_negative and not metadata.get(
+                                        "positive_prompt"
+                                    ):
+                                        metadata["positive_prompt"] = text
+
                                 # Fallback: if still no positive, use first text
-                                if not metadata.get('positive_prompt') and all_texts:
-                                    metadata['positive_prompt'] = all_texts[0]['text']
-                                    
+                                if not metadata.get("positive_prompt") and all_texts:
+                                    metadata["positive_prompt"] = all_texts[0]["text"]
+
                         except json.JSONDecodeError:
                             pass
-                    
+
                     # Oelala params format
-                    if 'oelala_params' in img.info:
+                    if "oelala_params" in img.info:
                         metadata["has_metadata"] = True
                         try:
-                            params = json.loads(img.info['oelala_params'])
-                            if params.get('prompt'):
-                                metadata['positive_prompt'] = params['prompt']
-                            if params.get('negative_prompt'):
-                                metadata['negative_prompt'] = params['negative_prompt']
-                            if params.get('steps'):
-                                metadata['steps'] = params['steps']
-                            if params.get('cfg'):
-                                metadata['cfg'] = params['cfg']
-                            if params.get('seed'):
-                                metadata['seed'] = params['seed']
+                            params = json.loads(img.info["oelala_params"])
+                            if params.get("prompt"):
+                                metadata["positive_prompt"] = params["prompt"]
+                            if params.get("negative_prompt"):
+                                metadata["negative_prompt"] = params["negative_prompt"]
+                            if params.get("steps"):
+                                metadata["steps"] = params["steps"]
+                            if params.get("cfg"):
+                                metadata["cfg"] = params["cfg"]
+                            if params.get("seed"):
+                                metadata["seed"] = params["seed"]
                         except json.JSONDecodeError:
                             pass
-                
+
                 img.close()
                 item["metadata"] = metadata
             except Exception as e:
                 item["metadata"] = {"has_metadata": False, "error": str(e)}
-        
+
         # For videos, try to find associated PNG with same timestamp or base name
-        if include_metadata and media_type == 'video':
+        if include_metadata and media_type == "video":
             import re
+
             metadata_found = False
-            
+
             def extract_metadata_from_png(png_path):
                 """Extract full metadata from PNG file including LoRAs, sampler, model etc."""
                 from PIL import Image
+
                 img = Image.open(png_path)
                 metadata = {"has_metadata": False}
-                
-                if hasattr(img, 'info') and 'prompt' in img.info:
+
+                if hasattr(img, "info") and "prompt" in img.info:
                     metadata["has_metadata"] = True
                     try:
-                        workflow = json.loads(img.info['prompt'])
+                        workflow = json.loads(img.info["prompt"])
                         all_texts = []
                         loras_found = []
-                        
+
                         for node_id, node in workflow.items():
                             if isinstance(node, dict):
-                                inputs = node.get('inputs', {})
-                                class_type = node.get('class_type', '')
-                                
+                                inputs = node.get("inputs", {})
+                                class_type = node.get("class_type", "")
+
                                 # Wan2.2 / standard positive_prompt
-                                if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
-                                    text = inputs['positive_prompt'].strip()
+                                if "positive_prompt" in inputs and isinstance(
+                                    inputs["positive_prompt"], str
+                                ):
+                                    text = inputs["positive_prompt"].strip()
                                     if len(text) > 20:
-                                        metadata['positive_prompt'] = text
-                                if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
-                                    text = inputs['negative_prompt'].strip()
+                                        metadata["positive_prompt"] = text
+                                if "negative_prompt" in inputs and isinstance(
+                                    inputs["negative_prompt"], str
+                                ):
+                                    text = inputs["negative_prompt"].strip()
                                     if text:
-                                        metadata['negative_prompt'] = text
-                                
+                                        metadata["negative_prompt"] = text
+
                                 # CLIPTextEncode text
-                                if 'text' in inputs and isinstance(inputs['text'], str):
-                                    text = inputs['text'].strip()
+                                if "text" in inputs and isinstance(inputs["text"], str):
+                                    text = inputs["text"].strip()
                                     if len(text) > 10:
-                                        all_texts.append({'text': text, 'class_type': class_type})
-                                
+                                        all_texts.append(
+                                            {"text": text, "class_type": class_type}
+                                        )
+
                                 # Generation params
-                                if 'steps' in inputs and isinstance(inputs['steps'], (int, float)):
-                                    metadata['steps'] = int(inputs['steps'])
-                                if 'cfg' in inputs and isinstance(inputs['cfg'], (int, float)):
-                                    metadata['cfg'] = float(inputs['cfg'])
-                                if 'seed' in inputs and isinstance(inputs['seed'], (int, float)):
-                                    metadata['seed'] = int(inputs['seed'])
-                                
+                                if "steps" in inputs and isinstance(
+                                    inputs["steps"], (int, float)
+                                ):
+                                    metadata["steps"] = int(inputs["steps"])
+                                if "cfg" in inputs and isinstance(
+                                    inputs["cfg"], (int, float)
+                                ):
+                                    metadata["cfg"] = float(inputs["cfg"])
+                                if "seed" in inputs and isinstance(
+                                    inputs["seed"], (int, float)
+                                ):
+                                    metadata["seed"] = int(inputs["seed"])
+
                                 # Sampler info
-                                if 'sampler_name' in inputs and isinstance(inputs['sampler_name'], str):
-                                    metadata['sampler'] = inputs['sampler_name']
-                                if 'scheduler' in inputs and isinstance(inputs['scheduler'], str):
-                                    metadata['scheduler'] = inputs['scheduler']
-                                
+                                if "sampler_name" in inputs and isinstance(
+                                    inputs["sampler_name"], str
+                                ):
+                                    metadata["sampler"] = inputs["sampler_name"]
+                                if "scheduler" in inputs and isinstance(
+                                    inputs["scheduler"], str
+                                ):
+                                    metadata["scheduler"] = inputs["scheduler"]
+
                                 # Resolution
-                                if 'width' in inputs and 'height' in inputs:
-                                    w, h = inputs.get('width'), inputs.get('height')
-                                    if isinstance(w, (int, float)) and isinstance(h, (int, float)):
-                                        metadata['width'] = int(w)
-                                        metadata['height'] = int(h)
-                                
+                                if "width" in inputs and "height" in inputs:
+                                    w, h = inputs.get("width"), inputs.get("height")
+                                    if isinstance(w, (int, float)) and isinstance(
+                                        h, (int, float)
+                                    ):
+                                        metadata["width"] = int(w)
+                                        metadata["height"] = int(h)
+
                                 # LoRA info
-                                if 'LoraLoader' in class_type or 'lora' in class_type.lower():
-                                    lora_name = inputs.get('lora_name', '')
-                                    lora_strength = inputs.get('strength_model', inputs.get('strength', 1.0))
+                                if (
+                                    "LoraLoader" in class_type
+                                    or "lora" in class_type.lower()
+                                ):
+                                    lora_name = inputs.get("lora_name", "")
+                                    lora_strength = inputs.get(
+                                        "strength_model", inputs.get("strength", 1.0)
+                                    )
                                     if lora_name:
-                                        loras_found.append({
-                                            'name': lora_name,
-                                            'strength': float(lora_strength) if isinstance(lora_strength, (int, float)) else 1.0
-                                        })
-                                
+                                        loras_found.append(
+                                            {
+                                                "name": lora_name,
+                                                "strength": float(lora_strength)
+                                                if isinstance(
+                                                    lora_strength, (int, float)
+                                                )
+                                                else 1.0,
+                                            }
+                                        )
+
                                 # Wan2.2 LoRA loader
-                                if 'WanVideoLoraSelect' in class_type or 'lora_high' in inputs or 'lora_low' in inputs:
-                                    for key in ['lora_high', 'lora_low', 'lora_name']:
+                                if (
+                                    "WanVideoLoraSelect" in class_type
+                                    or "lora_high" in inputs
+                                    or "lora_low" in inputs
+                                ):
+                                    for key in ["lora_high", "lora_low", "lora_name"]:
                                         if key in inputs and inputs[key]:
                                             lora_name = inputs[key]
-                                            if isinstance(lora_name, str) and lora_name not in ['None', 'none', '']:
-                                                strength = inputs.get('strength', inputs.get('lora_strength', 1.0))
-                                                loras_found.append({
-                                                    'name': lora_name,
-                                                    'strength': float(strength) if isinstance(strength, (int, float)) else 1.0
-                                                })
-                                
+                                            if isinstance(
+                                                lora_name, str
+                                            ) and lora_name not in ["None", "none", ""]:
+                                                strength = inputs.get(
+                                                    "strength",
+                                                    inputs.get("lora_strength", 1.0),
+                                                )
+                                                loras_found.append(
+                                                    {
+                                                        "name": lora_name,
+                                                        "strength": float(strength)
+                                                        if isinstance(
+                                                            strength, (int, float)
+                                                        )
+                                                        else 1.0,
+                                                    }
+                                                )
+
                                 # Model/checkpoint info
-                                if 'ckpt_name' in inputs and isinstance(inputs['ckpt_name'], str):
-                                    metadata['model'] = inputs['ckpt_name']
-                                if 'unet_name' in inputs and isinstance(inputs['unet_name'], str):
-                                    if not metadata.get('model'):
-                                        metadata['model'] = inputs['unet_name']
-                        
+                                if "ckpt_name" in inputs and isinstance(
+                                    inputs["ckpt_name"], str
+                                ):
+                                    metadata["model"] = inputs["ckpt_name"]
+                                if "unet_name" in inputs and isinstance(
+                                    inputs["unet_name"], str
+                                ):
+                                    if not metadata.get("model"):
+                                        metadata["model"] = inputs["unet_name"]
+
                         # Store unique LoRAs
                         if loras_found:
                             seen = set()
                             unique_loras = []
                             for lora in loras_found:
-                                if lora['name'] not in seen:
-                                    seen.add(lora['name'])
+                                if lora["name"] not in seen:
+                                    seen.add(lora["name"])
                                     unique_loras.append(lora)
-                            metadata['loras'] = unique_loras
-                        
+                            metadata["loras"] = unique_loras
+
                         # Analyze CLIPTextEncode texts if no positive_prompt found
-                        if not metadata.get('positive_prompt') and all_texts:
-                            negative_indicators = ['worst', 'bad', 'ugly', 'blurry', 'low quality', '低质量', '最差', 'deformed']
+                        if not metadata.get("positive_prompt") and all_texts:
+                            negative_indicators = [
+                                "worst",
+                                "bad",
+                                "ugly",
+                                "blurry",
+                                "low quality",
+                                "低质量",
+                                "最差",
+                                "deformed",
+                            ]
                             for item in all_texts:
-                                text = item['text']
+                                text = item["text"]
                                 text_lower = text.lower()
-                                is_negative = any(ind in text_lower for ind in negative_indicators)
-                                if is_negative and not metadata.get('negative_prompt'):
-                                    metadata['negative_prompt'] = text
-                                elif not is_negative and not metadata.get('positive_prompt'):
-                                    metadata['positive_prompt'] = text
-                            if not metadata.get('positive_prompt') and all_texts:
-                                metadata['positive_prompt'] = all_texts[0]['text']
-                                
+                                is_negative = any(
+                                    ind in text_lower for ind in negative_indicators
+                                )
+                                if is_negative and not metadata.get("negative_prompt"):
+                                    metadata["negative_prompt"] = text
+                                elif not is_negative and not metadata.get(
+                                    "positive_prompt"
+                                ):
+                                    metadata["positive_prompt"] = text
+                            if not metadata.get("positive_prompt") and all_texts:
+                                metadata["positive_prompt"] = all_texts[0]["text"]
+
                     except json.JSONDecodeError:
                         pass
-                
+
                 img.close()
                 return metadata
-            
+
             # Method 1: Look for PNG with same timestamp
-            match = re.search(r'(\d{8}_\d{6})', file_path.name)
+            match = re.search(r"(\d{8}_\d{6})", file_path.name)
             if match:
                 timestamp = match.group(1)
                 for png_file in comfyui_output.glob(f"*{timestamp}*.png"):
@@ -737,7 +923,7 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
                         break  # Use first matching PNG
                     except Exception:
                         pass
-            
+
             # Method 2: Look for PNG with same base name (video.mp4 -> video.png)
             if not metadata_found:
                 base_name = file_path.stem  # filename without extension
@@ -754,66 +940,61 @@ async def list_comfyui_media(type: str = "all", grouped: bool = False, include_m
                             break
                         except Exception:
                             pass
-            
+
             if not metadata_found:
                 item["metadata"] = {"has_metadata": False}
-        
+
         media.append(item)
-    
+
     # Sort by modified time descending
-    media.sort(key=lambda x: x['modified'], reverse=True)
-    
+    media.sort(key=lambda x: x["modified"], reverse=True)
+
     return {
         "media": media,
         "videos": video_count,
         "images": image_count,
         "audio": audio_count,
-        "stats": {
-            "videos": video_count,
-            "images": image_count,
-            "audio": audio_count
-        }
+        "stats": {"videos": video_count, "images": image_count, "audio": audio_count},
     }
+
 
 from pydantic import BaseModel
 
+
 class DeleteMediaRequest(BaseModel):
     filenames: List[str]
+
 
 @app.delete("/delete-comfyui-media")
 async def delete_comfyui_media(request: DeleteMediaRequest):
     """Delete media files from ComfyUI output directory"""
     comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
-    
+
     if not comfyui_output.exists():
         raise HTTPException(status_code=404, detail="Output directory not found")
-    
+
     deleted = []
     errors = []
-    
+
     for filename in request.filenames:
         file_path = comfyui_output / filename
-        
+
         # Security: prevent path traversal
         if not str(file_path.resolve()).startswith(str(comfyui_output.resolve())):
             errors.append({"filename": filename, "error": "Invalid path"})
             continue
-        
+
         if not file_path.exists():
             errors.append({"filename": filename, "error": "File not found"})
             continue
-        
+
         try:
             file_path.unlink()
             deleted.append(filename)
         except Exception as e:
             errors.append({"filename": filename, "error": str(e)})
-    
-    return {
-        "deleted": deleted,
-        "errors": errors,
-        "count": len(deleted)
-    }
+
+    return {"deleted": deleted, "errors": errors, "count": len(deleted)}
 
 
 @app.get("/loras")
@@ -824,31 +1005,107 @@ async def list_loras():
     Includes NSFW detection based on filename patterns.
     """
     loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
-    
+
     if not loras_dir.exists():
-        return {"loras": [], "high_noise": [], "low_noise": [], "general": [], "by_category": {}}
-    
+        return {
+            "loras": [],
+            "high_noise": [],
+            "low_noise": [],
+            "general": [],
+            "by_category": {},
+        }
+
     # NSFW keywords for detection
     NSFW_KEYWORDS = [
-        'nsfw', 'nude', 'naked', 'sex', 'porn', 'xxx', 'adult', 'erotic',
-        'cumshot', 'cum', 'anal', 'blowjob', 'bj', 'fuck', 'cock', 'dick', 
-        'pussy', 'boob', 'tit', 'nipple', 'ass', 'butt', 'penis', 'vagina',
-        'masturbat', 'orgasm', 'penetrat', 'bbc', 'creampie', 'gangbang',
-        'threesome', 'foursome', 'orgy', 'handjob', 'footjob', 'titjob',
-        'lesbian', 'gay', 'milf', 'teen', 'hentai', 'ahegao', 'ecchi',
-        'bounce', 'ride', 'cowgirl', 'doggy', 'missionary', 'facial',
-        'deepthroat', 'swallow', 'squirt', 'fetish', 'bdsm', 'bondage',
-        'dominat', 'submiss', 'slave', 'whip', 'spank', 'choke',
+        "nsfw",
+        "nude",
+        "naked",
+        "sex",
+        "porn",
+        "xxx",
+        "adult",
+        "erotic",
+        "cumshot",
+        "cum",
+        "anal",
+        "blowjob",
+        "bj",
+        "fuck",
+        "cock",
+        "dick",
+        "pussy",
+        "boob",
+        "tit",
+        "nipple",
+        "ass",
+        "butt",
+        "penis",
+        "vagina",
+        "masturbat",
+        "orgasm",
+        "penetrat",
+        "bbc",
+        "creampie",
+        "gangbang",
+        "threesome",
+        "foursome",
+        "orgy",
+        "handjob",
+        "footjob",
+        "titjob",
+        "lesbian",
+        "gay",
+        "milf",
+        "teen",
+        "hentai",
+        "ahegao",
+        "ecchi",
+        "bounce",
+        "ride",
+        "cowgirl",
+        "doggy",
+        "missionary",
+        "facial",
+        "deepthroat",
+        "swallow",
+        "squirt",
+        "fetish",
+        "bdsm",
+        "bondage",
+        "dominat",
+        "submiss",
+        "slave",
+        "whip",
+        "spank",
+        "choke",
     ]
-    
+
     # SFW keywords - if contains these AND no NSFW keywords, mark as SFW
     SFW_KEYWORDS = [
-        'add_details', 'body_weight', 'style', 'realistic', 'cinematic',
-        'lighting', 'color', 'texture', 'film', 'grain', 'vintage',
-        'anime', 'cartoon', 'sketch', 'painting', 'art', 'portrait',
-        'landscape', 'architecture', 'nature', 'animal', 'food',
+        "add_details",
+        "body_weight",
+        "style",
+        "realistic",
+        "cinematic",
+        "lighting",
+        "color",
+        "texture",
+        "film",
+        "grain",
+        "vintage",
+        "anime",
+        "cartoon",
+        "sketch",
+        "painting",
+        "art",
+        "portrait",
+        "landscape",
+        "architecture",
+        "nature",
+        "animal",
+        "food",
     ]
-    
+
     def is_nsfw(name: str, path: str) -> bool:
         """Check if a LoRA is NSFW based on name/path."""
         check_str = f"{name} {path}".lower()
@@ -857,67 +1114,77 @@ async def list_loras():
             if kw in check_str:
                 return True
         return False
-    
+
     all_loras = []
     high_noise = []
     low_noise = []
     general = []
     by_category = {}  # Group by subdirectory
-    
+
     for lora_path in loras_dir.rglob("*.safetensors"):
         # Get relative path from loras folder
         rel_path = str(lora_path.relative_to(loras_dir))
         name = lora_path.stem
-        
+
         # Get category (subdirectory name, or "root" for top-level files)
         parent = lora_path.parent.relative_to(loras_dir)
         category = str(parent) if str(parent) != "." else "root"
-        
+
         # Detect NSFW
         nsfw = is_nsfw(name, rel_path)
-        
+
         lora_info = {
             "path": rel_path,
             "name": name,
             "category": category,
             "size_mb": round(lora_path.stat().st_size / (1024 * 1024), 1),
-            "nsfw": nsfw
+            "nsfw": nsfw,
         }
         all_loras.append(lora_info)
-        
+
         # Group by category
         if category not in by_category:
             by_category[category] = []
         by_category[category].append(lora_info)
-        
+
         # Categorize by noise type
         lower_name = name.lower()
         lower_path = rel_path.lower()
-        
-        if "high" in lower_name or "high" in lower_path or "_h_" in lower_name or "-h-" in lower_name:
+
+        if (
+            "high" in lower_name
+            or "high" in lower_path
+            or "_h_" in lower_name
+            or "-h-" in lower_name
+        ):
             high_noise.append(lora_info)
-        elif "low" in lower_name or "low" in lower_path or "_l_" in lower_name or "-l-" in lower_name:
+        elif (
+            "low" in lower_name
+            or "low" in lower_path
+            or "_l_" in lower_name
+            or "-l-" in lower_name
+        ):
             low_noise.append(lora_info)
         else:
             general.append(lora_info)
-    
+
     # Sort by name
     all_loras.sort(key=lambda x: x["name"].lower())
     high_noise.sort(key=lambda x: x["name"].lower())
     low_noise.sort(key=lambda x: x["name"].lower())
     general.sort(key=lambda x: x["name"].lower())
-    
+
     # Sort each category
     for cat in by_category:
         by_category[cat].sort(key=lambda x: x["name"].lower())
-    
+
     return {
         "loras": all_loras,
         "high_noise": high_noise,
         "low_noise": low_noise,
         "general": general,
         "by_category": by_category,
-        "count": len(all_loras)
+        "count": len(all_loras),
     }
 
 
@@ -928,59 +1195,81 @@ async def list_unet_models():
     Returns pairs of high/low noise models.
     """
     unet_dir = Path("/home/flip/oelala/ComfyUI/models/unet")
-    
+
     if not unet_dir.exists():
         return {"models": [], "pairs": []}
-    
+
     all_models = []
     high_noise = []
     low_noise = []
-    
+
     for model_path in unet_dir.rglob("*.gguf"):
         rel_path = str(model_path.relative_to(unet_dir))
         name = model_path.stem
-        
+
         model_info = {
             "path": rel_path,
             "name": name,
-            "size_gb": round(model_path.stat().st_size / (1024 * 1024 * 1024), 2)
+            "size_gb": round(model_path.stat().st_size / (1024 * 1024 * 1024), 2),
         }
         all_models.append(model_info)
-        
+
         lower_name = name.lower()
         lower_path = rel_path.lower()
-        
+
         if "high" in lower_name or "high" in lower_path:
             high_noise.append(model_info)
         elif "low" in lower_name or "low" in lower_path:
             low_noise.append(model_info)
-    
+
     # Sort
     all_models.sort(key=lambda x: x["name"].lower())
     high_noise.sort(key=lambda x: x["name"].lower())
     low_noise.sort(key=lambda x: x["name"].lower())
-    
+
     # Try to match pairs by similar names
     pairs = []
     for h in high_noise:
-        h_base = h["name"].lower().replace("high", "").replace("_h_", "_").replace("-h-", "-")
+        h_base = (
+            h["name"]
+            .lower()
+            .replace("high", "")
+            .replace("_h_", "_")
+            .replace("-h-", "-")
+        )
         for l in low_noise:
-            l_base = l["name"].lower().replace("low", "").replace("_l_", "_").replace("-l-", "-")
+            l_base = (
+                l["name"]
+                .lower()
+                .replace("low", "")
+                .replace("_l_", "_")
+                .replace("-l-", "-")
+            )
             # Check similarity
-            if h_base == l_base or h_base.replace("noise", "") == l_base.replace("noise", ""):
-                pairs.append({
-                    "name": h["name"].replace("high", "").replace("High", "").replace("_H_", "_").replace("HIGH", "").strip("_- ") or h["name"],
-                    "high": h,
-                    "low": l
-                })
+            if h_base == l_base or h_base.replace("noise", "") == l_base.replace(
+                "noise", ""
+            ):
+                pairs.append(
+                    {
+                        "name": h["name"]
+                        .replace("high", "")
+                        .replace("High", "")
+                        .replace("_H_", "_")
+                        .replace("HIGH", "")
+                        .strip("_- ")
+                        or h["name"],
+                        "high": h,
+                        "low": l,
+                    }
+                )
                 break
-    
+
     return {
         "models": all_models,
         "high_noise": high_noise,
         "low_noise": low_noise,
         "pairs": pairs,
-        "count": len(all_models)
+        "count": len(all_models),
     }
 
 
@@ -1000,14 +1289,14 @@ async def get_comfyui_queue():
     Enriches with Oelala job metadata where available.
     """
     import requests
-    
+
     try:
         resp = requests.get("http://localhost:8188/queue", timeout=5)
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="ComfyUI not responding")
-        
+
         data = resp.json()
-        
+
         # Parse queue data
         running = []
         for item in data.get("queue_running", []):
@@ -1022,7 +1311,7 @@ async def get_comfyui_queue():
                 if prompt_id in active_jobs:
                     job_info.update(active_jobs[prompt_id])
                 running.append(job_info)
-        
+
         pending = []
         for idx, item in enumerate(data.get("queue_pending", [])):
             if len(item) >= 2:
@@ -1035,7 +1324,7 @@ async def get_comfyui_queue():
                 if prompt_id in active_jobs:
                     job_info.update(active_jobs[prompt_id])
                 pending.append(job_info)
-        
+
         return {
             "running": running,
             "pending": pending,
@@ -1044,7 +1333,9 @@ async def get_comfyui_queue():
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to get ComfyUI queue: {e}")
-        raise HTTPException(status_code=502, detail=f"ComfyUI connection failed: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"ComfyUI connection failed: {str(e)}"
+        )
 
 
 @app.get("/comfyui/job/{prompt_id}")
@@ -1054,19 +1345,21 @@ async def get_job_status(prompt_id: str):
     Returns status (queued/running/completed/failed) and output if available.
     """
     import requests
-    
+
     # Check in our active jobs store
     job_info = active_jobs.get(prompt_id, {})
-    
+
     # Check ComfyUI history for completion status
     try:
-        history_resp = requests.get(f"http://localhost:8188/history/{prompt_id}", timeout=5)
+        history_resp = requests.get(
+            f"http://localhost:8188/history/{prompt_id}", timeout=5
+        )
         if history_resp.status_code == 200:
             history = history_resp.json()
             if prompt_id in history:
                 job_data = history[prompt_id]
                 outputs = job_data.get("outputs", {})
-                
+
                 # Find video, image, or audio output
                 output_video = None
                 output_image = None
@@ -1090,34 +1383,32 @@ async def get_job_status(prompt_id: str):
                             if audio.get("type") == "output":
                                 output_audio = f"/comfyui/output/{audio['filename']}"
                                 break
-                
+
                 return {
                     "prompt_id": prompt_id,
                     "status": "completed",
                     "output_video": output_video,
                     "output_image": output_image,
                     "output_audio": output_audio,
-                    "url": output_image or output_video or output_audio,  # Convenience field
-                    **job_info
+                    "url": output_image
+                    or output_video
+                    or output_audio,  # Convenience field
+                    **job_info,
                 }
     except Exception as e:
         logger.warning(f"Error checking history for {prompt_id}: {e}")
-    
+
     # Check if it's in the queue
     try:
         queue_resp = requests.get("http://localhost:8188/queue", timeout=5)
         if queue_resp.status_code == 200:
             queue_data = queue_resp.json()
-            
+
             # Check running
             for item in queue_data.get("queue_running", []):
                 if len(item) >= 2 and item[1] == prompt_id:
-                    return {
-                        "prompt_id": prompt_id,
-                        "status": "running",
-                        **job_info
-                    }
-            
+                    return {"prompt_id": prompt_id, "status": "running", **job_info}
+
             # Check pending
             for idx, item in enumerate(queue_data.get("queue_pending", [])):
                 if len(item) >= 2 and item[1] == prompt_id:
@@ -1125,17 +1416,13 @@ async def get_job_status(prompt_id: str):
                         "prompt_id": prompt_id,
                         "status": "pending",
                         "queue_position": idx + 1,
-                        **job_info
+                        **job_info,
                     }
     except Exception as e:
         logger.warning(f"Error checking queue for {prompt_id}: {e}")
-    
+
     # Not found anywhere - might have failed or been cancelled
-    return {
-        "prompt_id": prompt_id,
-        "status": "unknown",
-        **job_info
-    }
+    return {"prompt_id": prompt_id, "status": "unknown", **job_info}
 
 
 @app.get("/comfyui/output/{filename}")
@@ -1151,26 +1438,22 @@ async def get_comfyui_output(filename: str):
 async def cancel_job(prompt_id: str):
     """Cancel a queued or running job"""
     import requests
-    
+
     try:
         # ComfyUI interrupt endpoint
         resp = requests.post(
-            "http://localhost:8188/interrupt",
-            json={"prompt_id": prompt_id},
-            timeout=5
+            "http://localhost:8188/interrupt", json={"prompt_id": prompt_id}, timeout=5
         )
-        
+
         # Also try to delete from queue
         delete_resp = requests.post(
-            "http://localhost:8188/queue",
-            json={"delete": [prompt_id]},
-            timeout=5
+            "http://localhost:8188/queue", json={"delete": [prompt_id]}, timeout=5
         )
-        
+
         # Remove from our tracking
         if prompt_id in active_jobs:
             del active_jobs[prompt_id]
-        
+
         return {"success": True, "prompt_id": prompt_id}
     except Exception as e:
         logger.error(f"Failed to cancel job {prompt_id}: {e}")
@@ -1181,124 +1464,138 @@ async def cancel_job(prompt_id: str):
 async def extract_metadata(file: UploadFile = File(...)):
     """
     Extract workflow/prompt metadata from uploaded PNG/image files.
-    
+
     Generated images from T2I or I2V have embedded metadata containing:
     - prompt: The positive prompt used
     - negative_prompt: The negative prompt
     - workflow: The ComfyUI workflow used
     - oelala_params: Additional generation parameters
-    
+
     Returns extracted metadata or empty dict if none found.
     """
     import tempfile
-    
+
     # Save uploaded file temporarily
-    suffix = Path(file.filename).suffix if file.filename else '.png'
+    suffix = Path(file.filename).suffix if file.filename else ".png"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
-    
+
     metadata = {}
     try:
         # Try to read PNG metadata
         img = Image.open(tmp_path)
-        
+
         # Check for various metadata formats
-        if hasattr(img, 'info'):
+        if hasattr(img, "info"):
             info = img.info
-            
+
             # Oelala params (our format)
-            if 'oelala_params' in info:
+            if "oelala_params" in info:
                 try:
-                    params = json.loads(info['oelala_params'])
-                    metadata['prompt'] = params.get('prompt', '')
-                    metadata['negative_prompt'] = params.get('negative_prompt', '')
-                    metadata['workflow'] = params.get('workflow', '')
-                    metadata['resolution'] = params.get('resolution', '')
-                    metadata['steps'] = params.get('steps', '')
-                    metadata['cfg'] = params.get('cfg', '')
-                    metadata['seed'] = params.get('seed', '')
-                    metadata['source'] = 'oelala'
+                    params = json.loads(info["oelala_params"])
+                    metadata["prompt"] = params.get("prompt", "")
+                    metadata["negative_prompt"] = params.get("negative_prompt", "")
+                    metadata["workflow"] = params.get("workflow", "")
+                    metadata["resolution"] = params.get("resolution", "")
+                    metadata["steps"] = params.get("steps", "")
+                    metadata["cfg"] = params.get("cfg", "")
+                    metadata["seed"] = params.get("seed", "")
+                    metadata["source"] = "oelala"
                     # Check for preserved original T2I prompt (longer, more descriptive)
-                    if params.get('original_t2i_prompt'):
-                        metadata['prompt'] = params['original_t2i_prompt']
-                        metadata['source'] = 'oelala_t2i'
+                    if params.get("original_t2i_prompt"):
+                        metadata["prompt"] = params["original_t2i_prompt"]
+                        metadata["source"] = "oelala_t2i"
                     # Store oelala prompt separately so we can compare later
-                    metadata['oelala_prompt'] = params.get('prompt', '')
+                    metadata["oelala_prompt"] = params.get("prompt", "")
                 except json.JSONDecodeError:
                     pass
-            
+
             # ComfyUI workflow format - extract longer prompts from workflow nodes
-            if 'prompt' in info:
+            if "prompt" in info:
                 try:
-                    workflow = json.loads(info['prompt'])
+                    workflow = json.loads(info["prompt"])
                     # Extract prompt from various node types
                     for node_id, node in workflow.items():
                         if isinstance(node, dict):
-                            inputs = node.get('inputs', {})
-                            class_type = node.get('class_type', '')
-                            
+                            inputs = node.get("inputs", {})
+                            class_type = node.get("class_type", "")
+
                             # WanVideo text encoder (our I2V workflow) - skip short motion prompts
-                            if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
-                                if len(inputs['positive_prompt']) > 50 and not metadata.get('prompt'):
-                                    metadata['prompt'] = inputs['positive_prompt']
-                                    metadata['source'] = 'comfyui_wan'
-                            if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
-                                if len(inputs['negative_prompt']) > 10 and not metadata.get('negative_prompt'):
-                                    metadata['negative_prompt'] = inputs['negative_prompt']
-                            
+                            if "positive_prompt" in inputs and isinstance(
+                                inputs["positive_prompt"], str
+                            ):
+                                if len(
+                                    inputs["positive_prompt"]
+                                ) > 50 and not metadata.get("prompt"):
+                                    metadata["prompt"] = inputs["positive_prompt"]
+                                    metadata["source"] = "comfyui_wan"
+                            if "negative_prompt" in inputs and isinstance(
+                                inputs["negative_prompt"], str
+                            ):
+                                if len(
+                                    inputs["negative_prompt"]
+                                ) > 10 and not metadata.get("negative_prompt"):
+                                    metadata["negative_prompt"] = inputs[
+                                        "negative_prompt"
+                                    ]
+
                             # CLIPTextEncode (standard ComfyUI T2I) - prefer longer prompts
-                            if 'text' in inputs and isinstance(inputs['text'], str):
-                                text = inputs['text']
+                            if "text" in inputs and isinstance(inputs["text"], str):
+                                text = inputs["text"]
                                 if len(text) > 20:
                                     # Check if it's a positive or negative prompt
-                                    if 'negative' in class_type.lower():
-                                        if not metadata.get('negative_prompt') or len(text) > len(metadata.get('negative_prompt', '')):
-                                            metadata['negative_prompt'] = text
+                                    if "negative" in class_type.lower():
+                                        if not metadata.get("negative_prompt") or len(
+                                            text
+                                        ) > len(metadata.get("negative_prompt", "")):
+                                            metadata["negative_prompt"] = text
                                     else:
                                         # Prefer longer prompts (T2I prompts are usually longer than I2V motion prompts)
-                                        current = metadata.get('prompt', '')
+                                        current = metadata.get("prompt", "")
                                         if len(text) > len(current):
-                                            metadata['prompt'] = text
-                                            metadata['source'] = 'comfyui'
+                                            metadata["prompt"] = text
+                                            metadata["source"] = "comfyui"
                 except json.JSONDecodeError:
                     pass
-            
+
             # A1111/Invoke AI format (parameters in 'parameters' key)
-            if 'parameters' in info and not metadata.get('prompt'):
-                params_text = info['parameters']
+            if "parameters" in info and not metadata.get("prompt"):
+                params_text = info["parameters"]
                 # Format: "prompt text\nNegative prompt: negative text\nSteps: X, ..."
-                lines = params_text.split('\n')
+                lines = params_text.split("\n")
                 if lines:
                     # First line(s) until "Negative prompt:" is the positive prompt
                     positive_lines = []
                     negative_started = False
                     for line in lines:
-                        if line.startswith('Negative prompt:'):
+                        if line.startswith("Negative prompt:"):
                             negative_started = True
-                            neg = line.replace('Negative prompt:', '').strip()
+                            neg = line.replace("Negative prompt:", "").strip()
                             if neg:
-                                metadata['negative_prompt'] = neg
-                        elif line.startswith('Steps:'):
+                                metadata["negative_prompt"] = neg
+                        elif line.startswith("Steps:"):
                             # Parse generation params
-                            parts = line.split(',')
+                            parts = line.split(",")
                             for part in parts:
-                                if ':' in part:
-                                    k, v = part.split(':', 1)
-                                    k = k.strip().lower().replace(' ', '_')
+                                if ":" in part:
+                                    k, v = part.split(":", 1)
+                                    k = k.strip().lower().replace(" ", "_")
                                     v = v.strip()
-                                    if k in ['steps', 'cfg', 'seed', 'sampler']:
+                                    if k in ["steps", "cfg", "seed", "sampler"]:
                                         metadata[k] = v
                         elif not negative_started:
                             positive_lines.append(line)
-                    
+
                     if positive_lines:
-                        metadata['prompt'] = '\n'.join(positive_lines).strip()
-                    metadata['source'] = 'a1111'
-        
-        logger.info(f"📋 Extracted metadata from {file.filename}: {list(metadata.keys())}")
-        
+                        metadata["prompt"] = "\n".join(positive_lines).strip()
+                    metadata["source"] = "a1111"
+
+        logger.info(
+            f"📋 Extracted metadata from {file.filename}: {list(metadata.keys())}"
+        )
+
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract metadata from {file.filename}: {e}")
     finally:
@@ -1307,7 +1604,7 @@ async def extract_metadata(file: UploadFile = File(...)):
             Path(tmp_path).unlink()
         except:
             pass
-    
+
     return metadata
 
 
@@ -1323,110 +1620,118 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
     """
     import tempfile
     import httpx
-    
+
     image_url = request.image_url
     metadata = {}
     tmp_path = None
-    
+
     try:
         # Download image from URL
         async with httpx.AsyncClient() as client:
             response = await client.get(image_url, timeout=30.0)
             response.raise_for_status()
             content = response.content
-        
+
         # Save to temp file
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
-        
+
         # Extract metadata (same logic as file upload)
         img = Image.open(tmp_path)
-        
-        if hasattr(img, 'info'):
+
+        if hasattr(img, "info"):
             info = img.info
-            
+
             # Oelala params (our format)
-            if 'oelala_params' in info:
+            if "oelala_params" in info:
                 try:
-                    params = json.loads(info['oelala_params'])
-                    metadata['positive_prompt'] = params.get('prompt', '')
-                    metadata['negative_prompt'] = params.get('negative_prompt', '')
-                    metadata['workflow'] = params.get('workflow', '')
-                    metadata['source'] = 'oelala'
+                    params = json.loads(info["oelala_params"])
+                    metadata["positive_prompt"] = params.get("prompt", "")
+                    metadata["negative_prompt"] = params.get("negative_prompt", "")
+                    metadata["workflow"] = params.get("workflow", "")
+                    metadata["source"] = "oelala"
                     # Check for preserved original T2I prompt
-                    if params.get('original_t2i_prompt'):
-                        metadata['positive_prompt'] = params['original_t2i_prompt']
-                        metadata['source'] = 'oelala_t2i'
+                    if params.get("original_t2i_prompt"):
+                        metadata["positive_prompt"] = params["original_t2i_prompt"]
+                        metadata["source"] = "oelala_t2i"
                 except json.JSONDecodeError:
                     pass
-            
+
             # ComfyUI workflow format
-            if 'prompt' in info and not metadata.get('positive_prompt'):
+            if "prompt" in info and not metadata.get("positive_prompt"):
                 try:
-                    workflow = json.loads(info['prompt'])
+                    workflow = json.loads(info["prompt"])
                     for node_id, node in workflow.items():
                         if isinstance(node, dict):
-                            inputs = node.get('inputs', {})
-                            class_type = node.get('class_type', '')
-                            
+                            inputs = node.get("inputs", {})
+                            class_type = node.get("class_type", "")
+
                             # Look for prompt inputs in various node types
                             # Wan nodes use positive_prompt/negative_prompt
-                            if 'positive_prompt' in inputs and isinstance(inputs['positive_prompt'], str):
-                                text = inputs['positive_prompt'].strip()
+                            if "positive_prompt" in inputs and isinstance(
+                                inputs["positive_prompt"], str
+                            ):
+                                text = inputs["positive_prompt"].strip()
                                 if text and len(text) > 5:
-                                    current = metadata.get('positive_prompt', '')
+                                    current = metadata.get("positive_prompt", "")
                                     if len(text) > len(current):
-                                        metadata['positive_prompt'] = text
-                                        metadata['source'] = 'comfyui_wan'
-                            
-                            if 'negative_prompt' in inputs and isinstance(inputs['negative_prompt'], str):
-                                text = inputs['negative_prompt'].strip()
+                                        metadata["positive_prompt"] = text
+                                        metadata["source"] = "comfyui_wan"
+
+                            if "negative_prompt" in inputs and isinstance(
+                                inputs["negative_prompt"], str
+                            ):
+                                text = inputs["negative_prompt"].strip()
                                 if text and len(text) > 3:
-                                    metadata['negative_prompt'] = text
-                            
+                                    metadata["negative_prompt"] = text
+
                             # CLIP/text nodes use 'text' key
-                            if 'text' in inputs and isinstance(inputs['text'], str):
-                                text = inputs['text'].strip()
+                            if "text" in inputs and isinstance(inputs["text"], str):
+                                text = inputs["text"].strip()
                                 if text and len(text) > 10:
-                                    if 'negative' in class_type.lower():
-                                        if not metadata.get('negative_prompt') or len(text) > len(metadata.get('negative_prompt', '')):
-                                            metadata['negative_prompt'] = text
+                                    if "negative" in class_type.lower():
+                                        if not metadata.get("negative_prompt") or len(
+                                            text
+                                        ) > len(metadata.get("negative_prompt", "")):
+                                            metadata["negative_prompt"] = text
                                     else:
-                                        current = metadata.get('positive_prompt', '')
+                                        current = metadata.get("positive_prompt", "")
                                         if len(text) > len(current):
-                                            metadata['positive_prompt'] = text
-                                            metadata['source'] = 'comfyui'
+                                            metadata["positive_prompt"] = text
+                                            metadata["source"] = "comfyui"
                 except json.JSONDecodeError:
                     pass
-            
+
             # A1111 format
-            if 'parameters' in info and not metadata.get('positive_prompt'):
-                params_text = info['parameters']
-                lines = params_text.split('\n')
+            if "parameters" in info and not metadata.get("positive_prompt"):
+                params_text = info["parameters"]
+                lines = params_text.split("\n")
                 positive_lines = []
                 for line in lines:
-                    if line.startswith('Negative prompt:'):
-                        metadata['negative_prompt'] = line.replace('Negative prompt:', '').strip()
+                    if line.startswith("Negative prompt:"):
+                        metadata["negative_prompt"] = line.replace(
+                            "Negative prompt:", ""
+                        ).strip()
                         break
-                    elif not line.startswith('Steps:'):
+                    elif not line.startswith("Steps:"):
                         positive_lines.append(line)
                 if positive_lines:
-                    metadata['positive_prompt'] = '\n'.join(positive_lines).strip()
-                    metadata['source'] = 'a1111'
-        
+                    metadata["positive_prompt"] = "\n".join(positive_lines).strip()
+                    metadata["source"] = "a1111"
+
         logger.info(f"📋 Extracted metadata from URL: {list(metadata.keys())}")
-        
+
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract metadata from URL: {e}")
-        metadata['error'] = str(e)
+        metadata["error"] = str(e)
     finally:
         if tmp_path:
             try:
                 Path(tmp_path).unlink()
             except:
                 pass
-    
+
     return metadata
 
 
@@ -1441,16 +1746,16 @@ async def health_check():
             comfyui_available = client.is_available() if client else False
         except:
             pass
-    
+
     # We're healthy if ComfyUI is available
     is_healthy = comfyui_available
-    
+
     return {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
         "comfyui_available": comfyui_available,
         "upload_dir": str(UPLOAD_DIR),
-        "output_dir": str(OUTPUT_DIR)
+        "output_dir": str(OUTPUT_DIR),
     }
 
 
@@ -1458,71 +1763,80 @@ async def health_check():
 # USER MEDIA API (Storage-backed, user-scoped)
 # =============================================================================
 
+
 @app.get("/user/media")
-async def list_user_media(
-    type: str = "all",
-    user: User = Depends(get_current_user)
-):
+async def list_user_media(type: str = "all", user: User = Depends(get_current_user)):
     """
     List media files for the authenticated user from oelala-storage.
-    
+
     Args:
         type: Filter by media type ('all', 'images', 'videos', 'audio')
-    
+
     Returns:
         List of user's media with metadata
     """
     try:
         storage = get_storage_client()
-        
+
         # Map frontend types to storage types
         media_type = None
         if type != "all":
             type_map = {"video": "videos", "image": "images", "audio": "audio"}
             media_type = type_map.get(type, type)
-        
+
         objects = storage.list_user_media(user.id, media_type)
-        
+
         # Transform to match existing frontend format
         media = []
         for obj in objects:
             key = obj.get("key", "")
             filename = obj.get("filename", key.split("/")[-1] if "/" in key else key)
             obj_type = obj.get("media_type", "")
-            
+
             # Determine type from media_type or content_type
-            if obj_type == "videos" or (obj.get("content_type", "").startswith("video/")):
+            if obj_type == "videos" or (
+                obj.get("content_type", "").startswith("video/")
+            ):
                 item_type = "video"
-            elif obj_type == "audio" or (obj.get("content_type", "").startswith("audio/")):
+            elif obj_type == "audio" or (
+                obj.get("content_type", "").startswith("audio/")
+            ):
                 item_type = "audio"
             else:
                 item_type = "image"
-            
-            media.append({
-                "name": filename,
-                "type": item_type,
-                "url": f"/user/media/{obj_type}/{filename}",
-                "size": obj.get("size", 0),
-                "modified": obj.get("modified_at", datetime.now()).isoformat() if isinstance(obj.get("modified_at"), datetime) else obj.get("modified_at", ""),
-                "mtime": obj.get("modified_at", datetime.now()).timestamp() if isinstance(obj.get("modified_at"), datetime) else 0,
-                "hash": obj.get("hash", ""),
-            })
-        
+
+            media.append(
+                {
+                    "name": filename,
+                    "type": item_type,
+                    "url": f"/user/media/{obj_type}/{filename}",
+                    "size": obj.get("size", 0),
+                    "modified": obj.get("modified_at", datetime.now()).isoformat()
+                    if isinstance(obj.get("modified_at"), datetime)
+                    else obj.get("modified_at", ""),
+                    "mtime": obj.get("modified_at", datetime.now()).timestamp()
+                    if isinstance(obj.get("modified_at"), datetime)
+                    else 0,
+                    "hash": obj.get("hash", ""),
+                }
+            )
+
         # Sort by modified (newest first)
         media.sort(key=lambda x: x.get("mtime", 0), reverse=True)
-        
+
         # Count stats
         stats = {
             "videos": sum(1 for m in media if m["type"] == "video"),
             "images": sum(1 for m in media if m["type"] == "image"),
             "audio": sum(1 for m in media if m["type"] == "audio"),
         }
-        
+
         return {"media": media, "stats": stats}
-        
+
     except Exception as e:
         # 404 means user has no storage yet - return empty list
         import httpx
+
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
             logger.info(f"User {user.id} has no storage bucket yet (404)")
             return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
@@ -1532,9 +1846,7 @@ async def list_user_media(
 
 @app.get("/user/media/{media_type}/{filename:path}")
 async def get_user_media(
-    media_type: str,
-    filename: str,
-    user: User = Depends(get_current_user)
+    media_type: str, filename: str, user: User = Depends(get_current_user)
 ):
     """
     Serve a user's media file from storage.
@@ -1542,7 +1854,7 @@ async def get_user_media(
     try:
         storage = get_storage_client()
         data = storage.get_user_media(user.id, media_type, filename)
-        
+
         # Determine content type
         ext = Path(filename).suffix.lower()
         content_types = {
@@ -1560,13 +1872,13 @@ async def get_user_media(
             ".ogg": "audio/ogg",
         }
         content_type = content_types.get(ext, "application/octet-stream")
-        
+
         return StreamingResponse(
             iter([data]),
             media_type=content_type,
-            headers={"Content-Disposition": f'inline; filename="{filename}"'}
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to get user media: {e}")
         raise HTTPException(status_code=404, detail="Media not found")
@@ -1576,41 +1888,37 @@ async def get_user_media(
 async def upload_user_media(
     media_type: str,
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
 ):
     """
     Upload media to user's storage.
-    
+
     Args:
         media_type: 'images', 'videos', or 'audio'
         file: The file to upload
     """
     if media_type not in ("images", "videos", "audio"):
         raise HTTPException(status_code=400, detail="Invalid media type")
-    
+
     try:
         storage = get_storage_client()
         data = await file.read()
-        
+
         # Generate unique filename if needed
         filename = file.filename or f"{uuid.uuid4()}{Path(file.filename or '').suffix}"
-        
+
         result = storage.put_user_media(
-            user.id,
-            media_type,
-            filename,
-            data,
-            file.content_type
+            user.id, media_type, filename, data, file.content_type
         )
-        
+
         return {
             "success": True,
             "filename": filename,
             "url": f"/user/media/{media_type}/{filename}",
             "size": len(data),
-            **result
+            **result,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to upload user media: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1618,9 +1926,7 @@ async def upload_user_media(
 
 @app.delete("/user/media/{media_type}/{filename:path}")
 async def delete_user_media(
-    media_type: str,
-    filename: str,
-    user: User = Depends(get_current_user)
+    media_type: str, filename: str, user: User = Depends(get_current_user)
 ):
     """
     Delete a user's media file.
@@ -1628,12 +1934,12 @@ async def delete_user_media(
     try:
         storage = get_storage_client()
         success = storage.delete_user_media(user.id, media_type, filename)
-        
+
         if not success:
             raise HTTPException(status_code=404, detail="Media not found")
-        
+
         return {"success": True, "deleted": filename}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1658,51 +1964,52 @@ async def get_user_profile(user: User = Depends(get_current_user)):
 # WORKFLOW PRESETS API
 # =============================================================================
 
+
 @app.get("/api/presets")
 async def get_presets(category: str = None):
     """Get available workflow presets from registry.json
-    
+
     Args:
         category: Optional filter by category (ImageToVideo, TextToImage, etc.)
-    
+
     Returns:
         List of presets with their parameters
     """
     registry_path = Path("/home/flip/oelala/workflows/registry.json")
-    
+
     if not registry_path.exists():
         logger.warning("Workflow registry not found")
         return {"presets": [], "error": "Registry not found"}
-    
+
     try:
         with open(registry_path, "r") as f:
             registry = json.load(f)
-        
+
         presets = []
         for workflow_id, workflow in registry.get("workflows", {}).items():
             # Skip if category filter doesn't match
             if category and workflow.get("category") != category:
                 continue
-            
+
             preset = {
                 "id": workflow_id,
                 "name": workflow.get("name", workflow_id),
                 "file": workflow.get("file"),
                 "category": workflow.get("category", "Unknown"),
                 "description": workflow.get("description", ""),
-                "parameters": workflow.get("parameters", {})
+                "parameters": workflow.get("parameters", {}),
             }
             presets.append(preset)
-        
+
         # Sort by category, then name
         presets.sort(key=lambda p: (p["category"], p["name"]))
-        
+
         return {
             "presets": presets,
             "total": len(presets),
-            "categories": list(set(p["category"] for p in presets))
+            "categories": list(set(p["category"] for p in presets)),
         }
-    
+
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse registry.json: {e}")
         return {"presets": [], "error": f"Invalid JSON: {str(e)}"}
@@ -1715,27 +2022,29 @@ async def get_presets(category: str = None):
 async def get_preset(preset_id: str):
     """Get a specific preset by ID"""
     registry_path = Path("/home/flip/oelala/workflows/registry.json")
-    
+
     if not registry_path.exists():
         raise HTTPException(status_code=404, detail="Registry not found")
-    
+
     try:
         with open(registry_path, "r") as f:
             registry = json.load(f)
-        
+
         workflow = registry.get("workflows", {}).get(preset_id)
         if not workflow:
-            raise HTTPException(status_code=404, detail=f"Preset '{preset_id}' not found")
-        
+            raise HTTPException(
+                status_code=404, detail=f"Preset '{preset_id}' not found"
+            )
+
         return {
             "id": preset_id,
             "name": workflow.get("name", preset_id),
             "file": workflow.get("file"),
             "category": workflow.get("category", "Unknown"),
             "description": workflow.get("description", ""),
-            "parameters": workflow.get("parameters", {})
+            "parameters": workflow.get("parameters", {}),
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1748,18 +2057,20 @@ async def restart_backend():
     """Restart the backend server (uvicorn --reload will handle this)"""
     import signal
     import os
-    
+
     logger.info("🔄 Backend restart requested via API")
-    
+
     # Send SIGHUP to trigger uvicorn reload
     def delayed_restart():
         import time
+
         time.sleep(0.5)
         os.kill(os.getpid(), signal.SIGHUP)
-    
+
     threading.Thread(target=delayed_restart, daemon=True).start()
-    
+
     return {"status": "restarting", "message": "Backend will restart shortly"}
+
 
 @app.get("/files/{filename}")
 async def get_file(filename: str):
@@ -1789,24 +2100,24 @@ async def client_log(payload: dict):
     Expected JSON payload: {"level": "error", "message": "...", "stack": "...", "url": "...", "userAgent": "...", "timestamp": "...", "meta": {...}}
     """
     try:
-        logs_dir = Path('/home/flip/oelala/logs')
+        logs_dir = Path("/home/flip/oelala/logs")
         logs_dir.mkdir(parents=True, exist_ok=True)
-        log_file = logs_dir / 'ui_client.log'
+        log_file = logs_dir / "ui_client.log"
 
-        entry = {
-            'received_at': datetime.now().isoformat(),
-            'payload': payload
-        }
+        entry = {"received_at": datetime.now().isoformat(), "payload": payload}
 
         # Append JSON line to log file
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-        logger.info(f"Received client log: {payload.get('level', 'info')} {payload.get('message', '')}")
+        logger.info(
+            f"Received client log: {payload.get('level', 'info')} {payload.get('message', '')}"
+        )
         return {"success": True}
     except Exception as e:
         logger.error(f"Error saving client log: {e}")
         raise HTTPException(status_code=500, detail="Failed to save client log")
+
 
 @app.post("/generate-image")
 async def generate_image_legacy(
@@ -1815,22 +2126,25 @@ async def generate_image_legacy(
     mode: str = Form("normal"),
     output_filename: str = Form(""),
     job_id: str = Form(None),
-    model: str = Form("sdxl")
+    model: str = Form("sdxl"),
 ):
     """
     Legacy endpoint - redirects to SDXL via ComfyUI.
     Use /generate-sdxl for direct SDXL generation.
     """
-    logger.info(f"🔄 Legacy generate-image request redirected to SDXL: {prompt[:50]}...")
-    
+    logger.info(
+        f"🔄 Legacy generate-image request redirected to SDXL: {prompt[:50]}..."
+    )
+
     # Build response using SDXL workflow
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     import random
+
     seed = random.randint(0, 2**32 - 1)
-    
+
     # Map aspect ratios to SDXL-optimal resolutions (1MP)
     resolutions = {
         "1:1": (1024, 1024),
@@ -1844,26 +2158,58 @@ async def generate_image_legacy(
         "9:21": (640, 1536),
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
-    
+
     # Build simple SDXL workflow
     workflow = {
-        "1": {"inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"}, "class_type": "CheckpointLoaderSimple"},
-        "2": {"inputs": {"text": prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
-        "3": {"inputs": {"text": "ugly, blurry, low quality", "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
-        "4": {"inputs": {"width": width, "height": height, "batch_size": 1}, "class_type": "EmptyLatentImage"},
-        "5": {"inputs": {"seed": seed, "steps": 25, "cfg": 7.5, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1, "model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["4", 0]}, "class_type": "KSampler"},
-        "6": {"inputs": {"samples": ["5", 0], "vae": ["1", 2]}, "class_type": "VAEDecode"},
-        "7": {"inputs": {"filename_prefix": "oelala_t2i", "images": ["6", 0]}, "class_type": "SaveImage"},
+        "1": {
+            "inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"},
+            "class_type": "CheckpointLoaderSimple",
+        },
+        "2": {
+            "inputs": {"text": prompt, "clip": ["1", 1]},
+            "class_type": "CLIPTextEncode",
+        },
+        "3": {
+            "inputs": {"text": "ugly, blurry, low quality", "clip": ["1", 1]},
+            "class_type": "CLIPTextEncode",
+        },
+        "4": {
+            "inputs": {"width": width, "height": height, "batch_size": 1},
+            "class_type": "EmptyLatentImage",
+        },
+        "5": {
+            "inputs": {
+                "seed": seed,
+                "steps": 25,
+                "cfg": 7.5,
+                "sampler_name": "dpmpp_2m",
+                "scheduler": "karras",
+                "denoise": 1,
+                "model": ["1", 0],
+                "positive": ["2", 0],
+                "negative": ["3", 0],
+                "latent_image": ["4", 0],
+            },
+            "class_type": "KSampler",
+        },
+        "6": {
+            "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
+            "class_type": "VAEDecode",
+        },
+        "7": {
+            "inputs": {"filename_prefix": "oelala_t2i", "images": ["6", 0]},
+            "class_type": "SaveImage",
+        },
     }
-    
+
     prompt_id = client.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
-    
+
     return {
         "status": "queued",
         "prompt_id": prompt_id,
-        "meta": {"prompt": prompt, "width": width, "height": height, "seed": seed}
+        "meta": {"prompt": prompt, "width": width, "height": height, "seed": seed},
     }
 
 
@@ -1884,15 +2230,19 @@ SDXL_CHECKPOINTS = [
     "waiIllustriousSDXL_v160.safetensors",
 ]
 
+
 @app.get("/sdxl/checkpoints")
 def list_sdxl_checkpoints():
     """List available SDXL checkpoints"""
     return {"checkpoints": SDXL_CHECKPOINTS}
 
+
 @app.post("/generate-sdxl")
 async def generate_sdxl_image(
     prompt: str = Form(...),
-    negative_prompt: str = Form("ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text"),
+    negative_prompt: str = Form(
+        "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text"
+    ),
     checkpoint: str = Form("CyberRealistic_Pony_v14.1_FP16.safetensors"),
     aspect_ratio: str = Form("1:1"),
     steps: int = Form(30),
@@ -1910,16 +2260,17 @@ async def generate_sdxl_image(
     """
     import json as json_lib
     import random
-    import copy
-    
-    logger.info(f"🎨 SDXL T2I request: {prompt[:50]}... (checkpoint={checkpoint}) [user={user.id}]")
-    
+
+    logger.info(
+        f"🎨 SDXL T2I request: {prompt[:50]}... (checkpoint={checkpoint}) [user={user.id}]"
+    )
+
     # Parse LoRA configs
     try:
         loras = json_lib.loads(lora_configs) if lora_configs else []
     except json_lib.JSONDecodeError:
         loras = []
-    
+
     # Map aspect ratios to SDXL-optimal resolutions (1MP)
     resolutions = {
         "1:1": (1024, 1024),
@@ -1933,23 +2284,23 @@ async def generate_sdxl_image(
         "9:21": (640, 1536),
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
-    
+
     # Calculate and check credits
     is_hd = width > 1024 or height > 1024
     credits_required = calculate_credits("generate_sdxl", width=width, height=height)
     logger.info(f"💰 SDXL generation costs {credits_required} credits")
     await check_credits(user, credits_required)
-    
+
     # Generate seed if random
     if seed == -1:
         seed = random.randint(0, 2**32 - 1)
-    
+
     # Generate a job ID for credit tracking
     job_id = str(uuid.uuid4())
-    
+
     try:
         client = get_comfyui_client()
-        
+
         # Build SDXL workflow inline (same as ComfyUIClient.generate_sdxl_image)
         workflow = {
             "1": {
@@ -1979,7 +2330,7 @@ async def generate_sdxl_image(
                     "model": ["9", 0],
                     "positive": ["2", 0],
                     "negative": ["3", 0],
-                    "latent_image": ["4", 0]
+                    "latent_image": ["4", 0],
                 },
                 "class_type": "KSampler",
             },
@@ -1993,38 +2344,40 @@ async def generate_sdxl_image(
             },
             "9": {
                 "inputs": {
-                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "PowerLoraLoaderHeaderWidget": {
+                        "type": "PowerLoraLoaderHeaderWidget"
+                    },
                     "lora_1": {"on": False, "lora": "None", "strength": 1},
                     "lora_2": {"on": False, "lora": "None", "strength": 1},
                     "lora_3": {"on": False, "lora": "None", "strength": 1},
                     "➕ Add Lora": "",
                     "model": ["1", 0],
-                    "clip": ["1", 1]
+                    "clip": ["1", 1],
                 },
                 "class_type": "Power Lora Loader (rgthree)",
-            }
+            },
         }
-        
+
         # Apply LoRA configs
         if loras:
             for i, lora_cfg in enumerate(loras[:3], 1):
-                if lora_cfg.get('name') and lora_cfg.get('name') != 'None':
+                if lora_cfg.get("name") and lora_cfg.get("name") != "None":
                     workflow["9"]["inputs"][f"lora_{i}"] = {
                         "on": True,
-                        "lora": lora_cfg['name'],
-                        "strength": lora_cfg.get('strength', 1.0)
+                        "lora": lora_cfg["name"],
+                        "strength": lora_cfg.get("strength", 1.0),
                     }
-        
+
         # Queue to ComfyUI (non-blocking)
         prompt_id = client.queue_prompt(workflow)
-        
+
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue workflow")
-        
+
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "SDXL T2I")
         logger.info(f"📋 SDXL queued: {prompt_id} (💰 -{credits_required} credits)")
-        
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
@@ -2041,9 +2394,9 @@ async def generate_sdxl_image(
                 "seed": seed,
                 "sampler_name": sampler_name,
                 "scheduler": scheduler,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2054,6 +2407,7 @@ async def generate_sdxl_image(
 # ─────────────────────────────────────────────────────────────────────────────
 # Flux Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.post("/generate-flux")
 async def generate_flux_image(
@@ -2071,15 +2425,15 @@ async def generate_flux_image(
     Requires authentication and credits.
     """
     import json as json_lib
-    
+
     logger.info(f"⚡ Flux T2I request: {prompt[:50]}... [user={user.id}]")
-    
+
     # Parse LoRA configs
     try:
         loras = json_lib.loads(lora_configs) if lora_configs else []
     except json_lib.JSONDecodeError:
         loras = []
-    
+
     # Map aspect ratios to Flux-optimal resolutions
     resolutions = {
         "1:1": (1024, 1024),
@@ -2093,16 +2447,16 @@ async def generate_flux_image(
         "9:21": (640, 1536),
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
-    
+
     # Calculate and check credits
     credits_required = calculate_credits("generate_flux", width=width, height=height)
     logger.info(f"💰 Flux generation costs {credits_required} credits")
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
-    
+
     try:
         client = get_comfyui_client()
-        
+
         output_path = client.generate_flux_image(
             prompt=prompt,
             output_dir=str(OUTPUT_DIR),
@@ -2113,16 +2467,16 @@ async def generate_flux_image(
             seed=seed,
             lora_configs=loras,
         )
-        
+
         if not output_path:
             raise HTTPException(status_code=500, detail="Flux generation failed")
-        
+
         # Deduct credits after successful generation
         await deduct_credits(user, credits_required, job_id, "Flux T2I")
         logger.info(f"⚡ Flux generated successfully (💰 -{credits_required} credits)")
-        
+
         filename = Path(output_path).name
-        
+
         return {
             "status": "success",
             "url": f"/files/{filename}",
@@ -2137,9 +2491,9 @@ async def generate_flux_image(
                 "steps": steps,
                 "guidance": guidance,
                 "seed": seed,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2151,10 +2505,13 @@ async def generate_flux_image(
 # SD 1.5 Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.post("/generate-sd15")
 async def generate_sd15_image(
     prompt: str = Form(...),
-    negative_prompt: str = Form("(deformed, blurry, bad anatomy, extra fingers, mutated hands, poorly drawn face, low quality:1.4)"),
+    negative_prompt: str = Form(
+        "(deformed, blurry, bad anatomy, extra fingers, mutated hands, poorly drawn face, low quality:1.4)"
+    ),
     aspect_ratio: str = Form("2:3"),
     steps: int = Form(25),
     cfg: float = Form(7.0),
@@ -2167,15 +2524,15 @@ async def generate_sd15_image(
     Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI.
     """
     import json as json_lib
-    
+
     logger.info(f"🖼️ SD1.5 T2I request: {prompt[:50]}...")
-    
+
     # Parse LoRA configs
     try:
         loras = json_lib.loads(lora_configs) if lora_configs else []
     except json_lib.JSONDecodeError:
         loras = []
-    
+
     # Map aspect ratios to SD1.5-optimal resolutions (512-768 range)
     resolutions = {
         "1:1": (512, 512),
@@ -2187,10 +2544,10 @@ async def generate_sd15_image(
         "3:2": (768, 512),
     }
     width, height = resolutions.get(aspect_ratio, (512, 768))
-    
+
     try:
         client = get_comfyui_client()
-        
+
         output_path = client.generate_sd15_image(
             prompt=prompt,
             output_dir=str(OUTPUT_DIR),
@@ -2204,12 +2561,12 @@ async def generate_sd15_image(
             scheduler=scheduler,
             lora_configs=loras,
         )
-        
+
         if not output_path:
             raise HTTPException(status_code=500, detail="SD1.5 generation failed")
-        
+
         filename = Path(output_path).name
-        
+
         return {
             "status": "success",
             "url": f"/files/{filename}",
@@ -2225,9 +2582,9 @@ async def generate_sd15_image(
                 "seed": seed,
                 "sampler_name": sampler_name,
                 "scheduler": scheduler,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2238,6 +2595,7 @@ async def generate_sd15_image(
 # ─────────────────────────────────────────────────────────────────────────────
 # Wan2.2 Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.post("/generate-wan22-t2i")
 async def generate_wan22_t2i(
@@ -2251,9 +2609,9 @@ async def generate_wan22_t2i(
     Uses DisTorch2 multi-GPU setup with high/low noise models.
     Very high quality but slower than other T2I models.
     """
-    
+
     logger.info(f"🎬 Wan2.2 T2I request: {prompt[:50]}...")
-    
+
     # Map aspect ratios to Wan2.2-compatible resolutions
     resolutions = {
         "1:1": (512, 512),
@@ -2265,10 +2623,10 @@ async def generate_wan22_t2i(
         "3:2": (768, 512),
     }
     width, height = resolutions.get(aspect_ratio, (512, 512))
-    
+
     try:
         client = get_comfyui_client()
-        
+
         output_path = client.generate_wan22_t2i(
             prompt=prompt,
             output_dir=str(OUTPUT_DIR),
@@ -2277,12 +2635,12 @@ async def generate_wan22_t2i(
             steps=steps,
             seed=seed,
         )
-        
+
         if not output_path:
             raise HTTPException(status_code=500, detail="Wan2.2 T2I generation failed")
-        
+
         filename = Path(output_path).name
-        
+
         return {
             "status": "success",
             "url": f"/files/{filename}",
@@ -2294,9 +2652,9 @@ async def generate_wan22_t2i(
                 "height": height,
                 "steps": steps,
                 "seed": seed,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2312,7 +2670,7 @@ async def generate_video(
     output_filename: str = Form("", description="Custom output filename"),
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio")
+    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
 ):
     """
     Generate video from uploaded image via ComfyUI.
@@ -2320,15 +2678,15 @@ async def generate_video(
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
+
     comfyui = get_comfyui_client()
-    
+
     if not comfyui.is_available():
         raise HTTPException(
             status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
-    
+
     # Validate file type
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -2355,8 +2713,9 @@ async def generate_video(
 
     # Build I2V workflow
     import random
+
     seed = random.randint(0, 2**32 - 1)
-    
+
     # Adjust num_frames to Wan2.2 format (4k+1)
     k = round((num_frames - 1) / 4)
     k = max(1, k)
@@ -2372,7 +2731,7 @@ async def generate_video(
         steps=6,
         cfg=1.0,
         seed=seed,
-        output_prefix=f"oelala_i2v_{timestamp}"
+        output_prefix=f"oelala_i2v_{timestamp}",
     )
 
     # Queue workflow
@@ -2381,7 +2740,7 @@ async def generate_video(
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
     logger.info(f"📋 I2V queued: {prompt_id}")
-    
+
     return {
         "status": "queued",
         "prompt_id": prompt_id,
@@ -2393,7 +2752,7 @@ async def generate_video(
             "num_frames": num_frames,
             "fps": fps,
             "seed": seed,
-        }
+        },
     }
 
 
@@ -2409,9 +2768,17 @@ async def generate_wan22_comfyui(
     steps: int = Form(6, description="Sampling steps"),
     cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
-    unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
-    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]"),
+    unet_high_noise: str = Form(
+        "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+        description="GGUF model for high noise pass",
+    ),
+    unet_low_noise: str = Form(
+        "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
+        description="GGUF model for low noise pass",
+    ),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
+    ),
     extend_mode: str = Form("false", description="Enable sequential clip extension"),
     clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
     user: User = Depends(get_current_user),  # Require authenticated user
@@ -2419,59 +2786,61 @@ async def generate_wan22_comfyui(
     """
     Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow.
     Requires authentication and credits.
-    
+
     This endpoint uses ComfyUI with:
     - Dual-Pass: High Noise model (steps 0-3) → Low Noise model (steps 3+)
     - DisTorch2 expert_mode_allocations for optimal memory scaling
     - CONVERTED T5: umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors
     - SageAttention (sageattn_qk_int8_pv_fp16_triton)
-    
+
     Note: num_frames will be adjusted to nearest valid Wan2.2 value (4k+1)
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
+
     comfyui = get_comfyui_client()
-    
+
     if not comfyui.is_available():
         raise HTTPException(
             status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
-    
+
     # Wan2.2 requires num_frames in format 4k+1 (5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, ...)
     # Round to nearest valid value
     k = round((num_frames - 1) / 4)
     k = max(1, k)  # Minimum k=1 gives 5 frames
     num_frames = 4 * k + 1
     logger.info(f"🎞️ Adjusted num_frames to Wan2.2 format: {num_frames} (4*{k}+1)")
-    
+
     # Calculate duration for credit calculation
     duration_seconds = num_frames / fps if fps > 0 else 3
     # Get resolution dimensions for credit calculation
     _comfyui_temp = get_comfyui_client()
     width, height = _comfyui_temp.get_resolution_dimensions(resolution, aspect_ratio)
-    
+
     # Calculate and check credits
     credits_required = calculate_credits(
-        "generate_wan22_comfyui", 
-        width=width, 
-        height=height, 
-        duration_seconds=int(duration_seconds)
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
     )
-    logger.info(f"💰 Wan2.2 I2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]")
+    logger.info(
+        f"💰 Wan2.2 I2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
-    
+
     # Validate file type
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
-    
+
     # Generate unique filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-    
+
     # Save uploaded file
     try:
         with open(input_path, "wb") as buffer:
@@ -2480,19 +2849,19 @@ async def generate_wan22_comfyui(
     except Exception as e:
         logger.error(f"Error saving file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-    
+
     # Generate output filename
     if not output_filename:
         output_filename = f"wan22_comfyui_{timestamp}.mp4"
     elif not output_filename.endswith(".mp4"):
         output_filename += ".mp4"
-    
+
     output_prefix = f"oelala_{timestamp}"
-    
+
     # Build workflow and inject metadata into input image
     comfyui = get_comfyui_client()
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    
+
     # Build the workflow that will be used
     workflow = comfyui.build_workflow(
         image_name=input_filename,
@@ -2506,7 +2875,7 @@ async def generate_wan22_comfyui(
         seed=seed if seed >= 0 else 42,
         output_prefix=output_prefix,
     )
-    
+
     # Inject workflow metadata into the input PNG
     # Parse lora_configs JSON
     parsed_lora_configs = []
@@ -2515,7 +2884,7 @@ async def generate_wan22_comfyui(
             parsed_lora_configs = json.loads(lora_configs)
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
-    
+
     prompt_params = {
         "prompt": prompt,
         "resolution": resolution,
@@ -2535,20 +2904,24 @@ async def generate_wan22_comfyui(
     # Check if sequential/extend mode is enabled
     is_extend_mode = extend_mode.lower() in ("true", "1", "yes")
     actual_clip_count = max(1, min(5, clip_count)) if is_extend_mode else 1
-    
+
     try:
         if is_extend_mode and actual_clip_count > 1:
             # Sequential generation mode
             total_frames = num_frames * actual_clip_count
-            logger.info(f"🎬 Starting Sequential Wan2.2 generation ({actual_clip_count} clips)")
+            logger.info(
+                f"🎬 Starting Sequential Wan2.2 generation ({actual_clip_count} clips)"
+            )
             logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-            logger.info(f"   🎞️ Frames per clip: {num_frames}, Total: {total_frames}, FPS: {fps}")
+            logger.info(
+                f"   🎞️ Frames per clip: {num_frames}, Total: {total_frames}, FPS: {fps}"
+            )
             logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
             logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
             if parsed_lora_configs:
                 logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
             logger.info(f"   📝 Prompt: {prompt[:100]}...")
-            
+
             # Generate sequential video via ComfyUI
             loop = asyncio.get_event_loop()
             result_path = await loop.run_in_executor(
@@ -2568,12 +2941,12 @@ async def generate_wan22_comfyui(
                     output_prefix=output_prefix,
                     unet_high_noise=unet_high_noise,
                     unet_low_noise=unet_low_noise,
-                    lora_configs=parsed_lora_configs
-                )
+                    lora_configs=parsed_lora_configs,
+                ),
             )
         else:
             # Standard single-clip generation
-            logger.info(f"🎬 Starting Wan2.2 ComfyUI generation")
+            logger.info("🎬 Starting Wan2.2 ComfyUI generation")
             logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
             logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
             logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
@@ -2581,9 +2954,11 @@ async def generate_wan22_comfyui(
             if parsed_lora_configs:
                 logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
                 for i, lc in enumerate(parsed_lora_configs):
-                    logger.info(f"      [{i+1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}")
+                    logger.info(
+                        f"      [{i+1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}"
+                    )
             logger.info(f"   📝 Prompt: {prompt[:100]}...")
-            
+
             # Generate video via ComfyUI in threadpool to avoid blocking event loop
             loop = asyncio.get_event_loop()
             result_path = await loop.run_in_executor(
@@ -2602,23 +2977,25 @@ async def generate_wan22_comfyui(
                     output_prefix=output_prefix,
                     unet_high_noise=unet_high_noise,
                     unet_low_noise=unet_low_noise,
-                    lora_configs=parsed_lora_configs
-                )
+                    lora_configs=parsed_lora_configs,
+                ),
             )
-        
+
         if result_path and Path(result_path).exists():
             # Copy to expected output path if different
             final_output = OUTPUT_DIR / output_filename
             if str(result_path) != str(final_output):
                 shutil.copy(result_path, final_output)
                 result_path = str(final_output)
-            
-            total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
-            
+
+            total_frames = (
+                num_frames * actual_clip_count if is_extend_mode else num_frames
+            )
+
             # Deduct credits after successful generation
             await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
             logger.info(f"🎬 Wan2.2 video generated (💰 -{credits_required} credits)")
-            
+
             return {
                 "success": True,
                 "message": f"Wan2.2 video generated via ComfyUI{' (sequential)' if actual_clip_count > 1 else ''}",
@@ -2644,13 +3021,17 @@ async def generate_wan22_comfyui(
                 "credits_used": credits_required,
             }
         else:
-            raise HTTPException(status_code=500, detail="ComfyUI video generation returned no output")
-    
+            raise HTTPException(
+                status_code=500, detail="ComfyUI video generation returned no output"
+            )
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ ComfyUI generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Wan2.2 ComfyUI generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Wan2.2 ComfyUI generation failed: {str(e)}"
+        )
 
 
 @app.post("/generate-wan22-async")
@@ -2659,15 +3040,25 @@ async def generate_wan22_async(
     prompt: str = Form("Motion, subject moving naturally"),
     num_frames: int = Form(41, description="Number of frames in video"),
     output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 576p, 720p, 1080p"),
+    resolution: str = Form(
+        "480p", description="Video resolution: 480p, 576p, 720p, 1080p"
+    ),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
     steps: int = Form(6, description="Sampling steps"),
     cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    unet_high_noise: str = Form("wan2.2_i2v_high_noise_14B_Q6_K.gguf", description="GGUF model for high noise pass"),
-    unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
-    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]"),
+    unet_high_noise: str = Form(
+        "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+        description="GGUF model for high noise pass",
+    ),
+    unet_low_noise: str = Form(
+        "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
+        description="GGUF model for low noise pass",
+    ),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
+    ),
     extend_mode: str = Form("false", description="Enable sequential clip extension"),
     clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
     user: User = Depends(get_current_user),  # Require authenticated user
@@ -2675,51 +3066,53 @@ async def generate_wan22_async(
     """
     Queue Wan2.2 I2V video generation and return immediately.
     Requires authentication and credits.
-    
+
     Unlike /generate-wan22-comfyui, this endpoint returns immediately with a prompt_id.
     Use /comfyui/job/{prompt_id} to poll for completion status.
-    
+
     This allows queueing multiple jobs without waiting.
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
+
     comfyui = get_comfyui_client()
-    
+
     if not comfyui.is_available():
         raise HTTPException(
             status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
-    
+
     # Wan2.2 requires num_frames in format 4k+1
     k = round((num_frames - 1) / 4)
     k = max(1, k)
     num_frames = 4 * k + 1
-    
+
     # Calculate and check credits
     _comfyui_temp = get_comfyui_client()
     width, height = _comfyui_temp.get_resolution_dimensions(resolution, aspect_ratio)
     duration_seconds = num_frames / fps if fps > 0 else 3
     credits_required = calculate_credits(
-        "generate_wan22_comfyui", 
-        width=width, 
-        height=height, 
-        duration_seconds=int(duration_seconds)
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
     )
-    logger.info(f"💰 Wan2.2 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]")
+    logger.info(
+        f"💰 Wan2.2 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
-    
+
     # Validate file type
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
-    
+
     # Generate unique filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-    
+
     # Save uploaded file
     try:
         with open(input_path, "wb") as buffer:
@@ -2728,12 +3121,12 @@ async def generate_wan22_async(
     except Exception as e:
         logger.error(f"Error saving file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-    
+
     # Upload to ComfyUI
     image_name = comfyui.upload_image(str(input_path))
     if not image_name:
         raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-    
+
     # Parse lora_configs
     parsed_lora_configs = []
     if lora_configs:
@@ -2741,27 +3134,31 @@ async def generate_wan22_async(
             parsed_lora_configs = json.loads(lora_configs)
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
-    
+
     # Generate output prefix
     if not output_filename:
         output_filename = f"wan22_async_{timestamp}.mp4"
     output_prefix = f"oelala_{timestamp}"
-    
+
     # Get actual seed
-    actual_seed = seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    
+    actual_seed = (
+        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    )
+
     # Map resolution to long_edge
     resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
     long_edge = resolution_map.get(resolution, 480)
-    
+
     # Check if sequential/extend mode is enabled
     is_extend_mode = extend_mode.lower() in ("true", "1", "yes")
     actual_clip_count = max(1, min(5, clip_count)) if is_extend_mode else 1
-    
+
     # Build workflow
     if is_extend_mode and actual_clip_count > 1:
         # Build sequential workflow for multiple clips
-        logger.info(f"🎬 Building sequential workflow: {actual_clip_count} clips × {num_frames} frames")
+        logger.info(
+            f"🎬 Building sequential workflow: {actual_clip_count} clips × {num_frames} frames"
+        )
         width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
         workflow = comfyui._build_sequential_workflow(
             image_name=image_name,
@@ -2796,13 +3193,15 @@ async def generate_wan22_async(
             unet_low_noise=unet_low_noise,
             lora_configs=parsed_lora_configs,
         )
-    
+
     # Queue the workflow (non-blocking)
     prompt_id = comfyui.queue_prompt(workflow)
-    
+
     if not prompt_id:
-        raise HTTPException(status_code=500, detail="Failed to queue workflow to ComfyUI")
-    
+        raise HTTPException(
+            status_code=500, detail="Failed to queue workflow to ComfyUI"
+        )
+
     # Store job info for tracking
     total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
     job_info = {
@@ -2823,18 +3222,20 @@ async def generate_wan22_async(
         "lora_count": len(parsed_lora_configs),
     }
     active_jobs[prompt_id] = job_info
-    
+
     if is_extend_mode and actual_clip_count > 1:
-        logger.info(f"🚀 Queued sequential job: {prompt_id} ({actual_clip_count} clips)")
+        logger.info(
+            f"🚀 Queued sequential job: {prompt_id} ({actual_clip_count} clips)"
+        )
     else:
         logger.info(f"🚀 Queued async job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
     logger.info(f"   📝 {prompt[:50]}...")
-    
+
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V (async)")
     logger.info(f"   💰 -{credits_required} credits")
-    
+
     return {
         "success": True,
         "prompt_id": prompt_id,
@@ -2842,7 +3243,7 @@ async def generate_wan22_async(
         "status": "queued",
         "credits_used": credits_required,
         "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
-        **job_info
+        **job_info,
     }
 
 
@@ -2851,13 +3252,14 @@ async def comfyui_status():
     """Check ComfyUI availability and GPU status"""
     if not get_comfyui_client:
         return {"available": False, "error": "ComfyUI client not imported"}
-    
+
     comfyui = get_comfyui_client()
     is_available = comfyui.is_available()
-    
+
     if is_available:
         try:
             import requests
+
             resp = requests.get(f"{comfyui.base_url}/system_stats", timeout=5)
             stats = resp.json() if resp.status_code == 200 else {}
             return {
@@ -2865,16 +3267,21 @@ async def comfyui_status():
                 "host": comfyui.host,
                 "port": comfyui.port,
                 "devices": stats.get("devices", []),
-                "model": "wan2.2_i2v_low_noise_14B_Q5_K_S.gguf"
+                "model": "wan2.2_i2v_low_noise_14B_Q5_K_S.gguf",
             }
         except Exception as e:
-            return {"available": True, "host": comfyui.host, "port": comfyui.port, "stats_error": str(e)}
+            return {
+                "available": True,
+                "host": comfyui.host,
+                "port": comfyui.port,
+                "stats_error": str(e),
+            }
     else:
         return {
             "available": False,
             "host": comfyui.host,
             "port": comfyui.port,
-            "suggestion": "Start ComfyUI: cd ~/oelala/ComfyUI && python main.py --listen"
+            "suggestion": "Start ComfyUI: cd ~/oelala/ComfyUI && python main.py --listen",
         }
 
 
@@ -2886,7 +3293,7 @@ async def generate_text_video(
     output_filename: str = Form("", description="Custom output filename"),
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio")
+    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
 ):
     """
     Generate video from text prompt via ComfyUI T2V workflow.
@@ -2894,13 +3301,13 @@ async def generate_text_video(
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
+
     comfyui = get_comfyui_client()
-    
+
     if not comfyui.is_available():
         raise HTTPException(
             status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
 
     if not prompt or len(prompt.strip()) == 0:
@@ -2911,6 +3318,7 @@ async def generate_text_video(
 
     # Generate unique timestamp
     import random
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     seed = random.randint(0, 2**32 - 1)
 
@@ -2929,7 +3337,7 @@ async def generate_text_video(
         steps=6,
         cfg=1.0,
         seed=seed,
-        output_prefix=f"oelala_t2v_{timestamp}"
+        output_prefix=f"oelala_t2v_{timestamp}",
     )
 
     # Queue workflow
@@ -2938,7 +3346,7 @@ async def generate_text_video(
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
     logger.info(f"📋 T2V queued: {prompt_id}")
-    
+
     return {
         "status": "queued",
         "prompt_id": prompt_id,
@@ -2949,15 +3357,16 @@ async def generate_text_video(
             "num_frames": num_frames,
             "fps": fps,
             "seed": seed,
-            "type": "text-to-video"
-        }
+            "type": "text-to-video",
+        },
     }
+
 
 @app.post("/generate-pose")
 async def generate_pose_video(
     file: UploadFile = File(...),
     num_frames: int = Form(41, description="Number of frames in video"),
-    output_filename: str = Form("", description="Custom output filename")
+    output_filename: str = Form("", description="Custom output filename"),
 ):
     """
     Generate pose-guided video from uploaded image.
@@ -2966,13 +3375,13 @@ async def generate_pose_video(
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
+
     comfyui = get_comfyui_client()
-    
+
     if not comfyui.is_available():
         raise HTTPException(
             status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen"
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
 
     # Validate file type
@@ -2998,8 +3407,9 @@ async def generate_pose_video(
 
     # Build I2V workflow (pose control not yet implemented in ComfyUI)
     import random
+
     seed = random.randint(0, 2**32 - 1)
-    
+
     k = round((num_frames - 1) / 4)
     k = max(1, k)
     num_frames = 4 * k + 1
@@ -3014,7 +3424,7 @@ async def generate_pose_video(
         steps=6,
         cfg=1.0,
         seed=seed,
-        output_prefix=f"oelala_pose_{timestamp}"
+        output_prefix=f"oelala_pose_{timestamp}",
     )
 
     prompt_id = comfyui.queue_prompt(workflow)
@@ -3022,17 +3432,13 @@ async def generate_pose_video(
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
     logger.info(f"📋 Pose video queued: {prompt_id}")
-    
+
     return {
         "status": "queued",
         "prompt_id": prompt_id,
         "input_image": input_filename,
         "note": "Using standard I2V workflow (pose control coming soon)",
-        "meta": {
-            "num_frames": num_frames,
-            "seed": seed,
-            "type": "pose-guided"
-        }
+        "meta": {"num_frames": num_frames, "seed": seed, "type": "pose-guided"},
     }
 
 
@@ -3040,11 +3446,12 @@ async def generate_pose_video(
 # PROMPT TOOLS ENDPOINTS
 # =============================================================================
 
+
 @app.post("/caption-image")
 async def caption_image(
     file: UploadFile = File(...),
     model: str = Form("florence2", description="Model: florence2, blip2, cogvlm"),
-    mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured")
+    mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured"),
 ):
     """
     Generate a caption/description for an uploaded image.
@@ -3077,7 +3484,7 @@ async def caption_image(
                     workflow = {
                         "1": {
                             "class_type": "LoadImage",
-                            "inputs": {"image": comfyui_image}
+                            "inputs": {"image": comfyui_image},
                         },
                         "2": {
                             "class_type": "Florence2Run",
@@ -3085,30 +3492,33 @@ async def caption_image(
                                 "image": ["1", 0],
                                 "florence2_model": ["3", 0],
                                 "text_input": "",
-                                "task": "detailed_caption" if mode == "detailed" else "caption",
+                                "task": "detailed_caption"
+                                if mode == "detailed"
+                                else "caption",
                                 "fill_mask": False,
                                 "keep_model_loaded": True,
                                 "max_new_tokens": 1024,
                                 "num_beams": 3,
                                 "do_sample": False,
-                                "output_mask_select": ""
-                            }
+                                "output_mask_select": "",
+                            },
                         },
                         "3": {
                             "class_type": "DownloadAndLoadFlorence2Model",
                             "inputs": {
                                 "model": "microsoft/Florence-2-large",
                                 "precision": "fp16",
-                                "attention": "sdpa"
-                            }
-                        }
+                                "attention": "sdpa",
+                            },
+                        },
                     }
-                    
+
                     # Queue and wait for result
                     prompt_id = comfyui.queue_prompt(workflow)
                     if prompt_id:
                         # Wait for completion (max 60s)
                         import time
+
                         for _ in range(60):
                             history = comfyui.get_history(prompt_id)
                             if history and prompt_id in history:
@@ -3119,7 +3529,11 @@ async def caption_image(
                                         caption = output["text"]
                                         if isinstance(caption, list):
                                             caption = caption[0] if caption else ""
-                                        return {"caption": caption, "model": "florence2", "mode": mode}
+                                        return {
+                                            "caption": caption,
+                                            "model": "florence2",
+                                            "mode": mode,
+                                        }
                                 break
                             time.sleep(1)
             except Exception as e:
@@ -3127,20 +3541,20 @@ async def caption_image(
 
     # Fallback: return placeholder (no vision model available)
     # In production, you'd integrate with local transformers or external API
-    logger.info(f"Using placeholder caption (no vision model available)")
-    
+    logger.info("Using placeholder caption (no vision model available)")
+
     placeholder_captions = {
         "brief": "An image uploaded by the user.",
         "detailed": "This is an uploaded image. To get accurate captions, install Florence2 in ComfyUI: ComfyUI-Florence2 custom node.",
         "tags": "image, uploaded, user content",
         "structured": "Subject: unknown, Style: photograph, Mood: neutral, Setting: unidentified",
     }
-    
+
     return {
         "caption": placeholder_captions.get(mode, placeholder_captions["detailed"]),
         "model": "placeholder",
         "mode": mode,
-        "note": "Install ComfyUI-Florence2 for real image captioning"
+        "note": "Install ComfyUI-Florence2 for real image captioning",
     }
 
 
@@ -3150,7 +3564,7 @@ async def generate_prompt(
     style: str = Form(None, description="Style preset"),
     mode: str = Form("expand", description="Mode: expand, refine, variations"),
     include_negative: bool = Form(True),
-    include_motion: bool = Form(False)
+    include_motion: bool = Form(False),
 ):
     """
     Generate enhanced prompts from basic input.
@@ -3160,7 +3574,7 @@ async def generate_prompt(
         raise HTTPException(status_code=400, detail="Input is required")
 
     base_input = input.strip()
-    
+
     # Style keywords mapping
     STYLE_KEYWORDS = {
         "cinematic": "cinematic lighting, film grain, dramatic shadows, professional photography, movie still",
@@ -3174,34 +3588,34 @@ async def generate_prompt(
         "horror": "dark atmosphere, eerie, horror, unsettling, creepy, moody lighting",
         "scifi": "science fiction, futuristic, space, advanced technology, sleek design",
     }
-    
+
     # Quality boosters
     quality_suffix = ", masterpiece, best quality, highly detailed"
-    
+
     # Build enhanced prompt
     style_part = STYLE_KEYWORDS.get(style, "") if style else ""
     if style_part:
         enhanced_prompt = f"{base_input}, {style_part}{quality_suffix}"
     else:
         enhanced_prompt = f"{base_input}{quality_suffix}"
-    
+
     # Generate negative prompt
     negative_prompt = ""
     if include_negative:
         negative_prompt = "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text, cropped, worst quality, low resolution, jpeg artifacts, duplicate, morbid, mutilated, out of frame, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck"
-    
+
     # Generate motion prompt for video
     motion_prompt = ""
     if include_motion:
         motion_keywords = [
             "smooth camera motion",
-            "cinematic movement", 
+            "cinematic movement",
             "fluid animation",
             "natural motion",
-            "gentle movement"
+            "gentle movement",
         ]
         motion_prompt = ", ".join(motion_keywords)
-    
+
     # Generate variations if requested
     variations = None
     if mode == "variations":
@@ -3212,7 +3626,7 @@ async def generate_prompt(
         ]
         if style_part:
             variations = [f"{v}, {style_part}" for v in variations]
-    
+
     return {
         "prompt": enhanced_prompt,
         "negative_prompt": negative_prompt,
@@ -3220,7 +3634,7 @@ async def generate_prompt(
         "variations": variations,
         "input": base_input,
         "style": style,
-        "mode": mode
+        "mode": mode,
     }
 
 
@@ -3228,13 +3642,16 @@ async def generate_prompt(
 # YouTube Video Import (yt-dlp)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class YouTubeInfoRequest(BaseModel):
     url: str
+
 
 class YouTubeDownloadRequest(BaseModel):
     url: str
     format: str = "video"  # video | audio
     quality: str = "720p"  # 360p, 480p, 720p, 1080p, best
+
 
 @app.post("/youtube/info")
 async def youtube_info(request: YouTubeInfoRequest):
@@ -3245,36 +3662,30 @@ async def youtube_info(request: YouTubeInfoRequest):
     import subprocess
     import json
     import shutil
-    
+
     url = request.url.strip()
     if not url:
         raise HTTPException(400, "URL is required")
-    
+
     logger.info(f"🎬 YouTube info request: {url}")
-    
+
     # Find yt-dlp binary
     yt_dlp_path = shutil.which("yt-dlp") or "/home/flip/venvs/torch-sm120/bin/yt-dlp"
-    
+
     try:
         # Use yt-dlp to extract info without downloading
         result = subprocess.run(
-            [
-                yt_dlp_path,
-                "--dump-json",
-                "--no-download",
-                "--no-warnings",
-                url
-            ],
+            [yt_dlp_path, "--dump-json", "--no-download", "--no-warnings", url],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
-        
+
         if result.returncode != 0:
             raise HTTPException(400, f"yt-dlp error: {result.stderr[:200]}")
-        
+
         info = json.loads(result.stdout)
-        
+
         return {
             "title": info.get("title"),
             "channel": info.get("channel") or info.get("uploader"),
@@ -3287,7 +3698,7 @@ async def youtube_info(request: YouTubeInfoRequest):
             "height": info.get("height"),
             "formats": len(info.get("formats", [])),
         }
-        
+
     except subprocess.TimeoutExpired:
         raise HTTPException(408, "Request timeout fetching video info")
     except json.JSONDecodeError as e:
@@ -3305,19 +3716,21 @@ async def youtube_download(request: YouTubeDownloadRequest):
     """
     import subprocess
     import shutil
-    
+
     url = request.url.strip()
     if not url:
         raise HTTPException(400, "URL is required")
-    
-    logger.info(f"🎬 YouTube download request: {url}, format={request.format}, quality={request.quality}")
-    
+
+    logger.info(
+        f"🎬 YouTube download request: {url}, format={request.format}, quality={request.quality}"
+    )
+
     # Find yt-dlp binary
     yt_dlp_path = shutil.which("yt-dlp") or "/home/flip/venvs/torch-sm120/bin/yt-dlp"
-    
+
     # Create output filename
     output_id = uuid.uuid4().hex[:8]
-    
+
     if request.format == "audio":
         output_filename = f"youtube_{output_id}.mp3"
         format_args = ["-x", "--audio-format", "mp3", "--audio-quality", "192K"]
@@ -3333,41 +3746,44 @@ async def youtube_download(request: YouTubeDownloadRequest):
         }
         format_selector = quality_map.get(request.quality, quality_map["720p"])
         format_args = ["-f", format_selector, "--merge-output-format", "mp4"]
-    
+
     output_path = UPLOAD_DIR / output_filename
-    
+
     try:
         # Download with yt-dlp
         cmd = [
             yt_dlp_path,
             *format_args,
-            "-o", str(output_path),
+            "-o",
+            str(output_path),
             "--no-warnings",
             "--no-playlist",  # Single video only
-            "--socket-timeout", "30",
-            url
+            "--socket-timeout",
+            "30",
+            url,
         ]
-        
+
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=300  # 5 min max
+            timeout=300,  # 5 min max
         )
-        
+
         if result.returncode != 0:
             raise HTTPException(400, f"Download failed: {result.stderr[:200]}")
-        
+
         if not output_path.exists():
             raise HTTPException(500, "Downloaded file not found")
-        
+
         # Get video info for duration/dimensions
         duration = None
         width = None
         height = None
-        
+
         if request.format == "video":
             import cv2
+
             cap = cv2.VideoCapture(str(output_path))
             if cap.isOpened():
                 fps = cap.get(cv2.CAP_PROP_FPS) or 24
@@ -3376,9 +3792,11 @@ async def youtube_download(request: YouTubeDownloadRequest):
                 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 cap.release()
-        
-        logger.info(f"✅ YouTube downloaded: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)")
-        
+
+        logger.info(
+            f"✅ YouTube downloaded: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)"
+        )
+
         return {
             "path": str(output_path),
             "filename": output_filename,
@@ -3388,7 +3806,7 @@ async def youtube_download(request: YouTubeDownloadRequest):
             "height": height,
             "size_mb": round(output_path.stat().st_size / 1024 / 1024, 2),
         }
-        
+
     except subprocess.TimeoutExpired:
         raise HTTPException(408, "Download timeout (max 5 minutes)")
     except HTTPException:
@@ -3402,6 +3820,7 @@ async def youtube_download(request: YouTubeDownloadRequest):
 # Video to Text (Video Captioning) via SmolVLM / local models
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.post("/caption-video")
 async def caption_video(
     file: UploadFile = File(None),
@@ -3414,7 +3833,7 @@ async def caption_video(
     """
     Generate captions/descriptions from video.
     Samples frames and uses vision-language model to describe content.
-    
+
     Args:
         file: Video file (upload)
         video_path: Path to existing video (e.g., from YouTube download)
@@ -3424,11 +3843,12 @@ async def caption_video(
         max_frames: Maximum frames to analyze
     """
     import cv2
-    import tempfile
     import base64
-    
-    logger.info(f"🎬 V2T request: model={model}, mode={mode}, frames={max_frames}, video_path={video_path}")
-    
+
+    logger.info(
+        f"🎬 V2T request: model={model}, mode={mode}, frames={max_frames}, video_path={video_path}"
+    )
+
     # Determine video source
     if video_path and Path(video_path).exists():
         # Use existing video (e.g., from YouTube download)
@@ -3438,25 +3858,25 @@ async def caption_video(
         # Save uploaded video
         upload_filename = f"v2t_input_{uuid.uuid4().hex[:8]}.mp4"
         upload_path = UPLOAD_DIR / upload_filename
-        
+
         with open(upload_path, "wb") as f:
             content = await file.read()
             f.write(content)
     else:
         raise HTTPException(400, "Either file upload or video_path is required")
-    
+
     try:
         # Extract frames using OpenCV
         cap = cv2.VideoCapture(str(upload_path))
         fps = cap.get(cv2.CAP_PROP_FPS) or 24
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = frame_count / fps
-        
+
         # Calculate frame indices to sample
         frame_step = int(fps * frame_interval)
         sampled_frames = []
         frame_times = []
-        
+
         frame_idx = 0
         while len(sampled_frames) < max_frames and frame_idx < frame_count:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -3468,21 +3888,23 @@ async def caption_video(
                 if max(h, w) > max_dim:
                     scale = max_dim / max(h, w)
                     frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
-                
+
                 # Convert to base64 for API
-                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                frame_b64 = base64.b64encode(buffer).decode('utf-8')
+                _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                frame_b64 = base64.b64encode(buffer).decode("utf-8")
                 sampled_frames.append(frame_b64)
                 frame_times.append(round(frame_idx / fps, 1))
-            
+
             frame_idx += frame_step
-        
+
         cap.release()
-        logger.info(f"📸 Extracted {len(sampled_frames)} frames from {duration:.1f}s video")
-        
+        logger.info(
+            f"📸 Extracted {len(sampled_frames)} frames from {duration:.1f}s video"
+        )
+
         # For now, use placeholder/template-based captioning
         # TODO: Integrate SmolVLM or other vision models via transformers or ComfyUI
-        
+
         # Template-based response
         if mode == "brief":
             caption = f"A video clip lasting {duration:.1f} seconds with {len(sampled_frames)} key frames analyzed."
@@ -3499,15 +3921,15 @@ This video appears to contain visual content that could be further analyzed with
             caption = f"cinematic video, {duration:.0f} second clip, dynamic motion, high quality footage"
         else:
             caption = f"Video with {len(sampled_frames)} analyzed frames over {duration:.1f}s duration"
-        
+
         # Timeline mode
         timeline = None
         if mode == "timeline":
             timeline = [
-                {"time": t, "description": f"Frame at {t}s - visual content"} 
+                {"time": t, "description": f"Frame at {t}s - visual content"}
                 for t in frame_times
             ]
-        
+
         return {
             "caption": caption,
             "description": caption,
@@ -3516,10 +3938,12 @@ This video appears to contain visual content that could be further analyzed with
             "duration": duration,
             "frames_analyzed": len(sampled_frames),
             "timeline": timeline,
-            "prompt": f"video footage, {duration:.0f}s duration, cinematic quality" if mode == "prompt" else None,
-            "note": "Install transformers with SmolVLM for AI-powered video captioning"
+            "prompt": f"video footage, {duration:.0f}s duration, cinematic quality"
+            if mode == "prompt"
+            else None,
+            "note": "Install transformers with SmolVLM for AI-powered video captioning",
         }
-        
+
     except Exception as e:
         logger.error(f"❌ V2T error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -3539,6 +3963,7 @@ VOICE_PRESETS = {
     "shimmer": {"language": "English", "exaggeration": 0.35, "temperature": 0.75},
 }
 
+
 @app.post("/generate-audio")
 async def generate_audio(
     text: str = Form(...),
@@ -3551,7 +3976,7 @@ async def generate_audio(
 ):
     """
     Generate audio from text (TTS, music, or SFX) via ComfyUI.
-    
+
     Args:
         text: Input text (speech text or music/sfx prompt)
         mode: tts, music, sfx
@@ -3562,16 +3987,17 @@ async def generate_audio(
         pitch: TTS pitch multiplier (not used with ChatterBox)
     """
     logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}...")
-    
+
     import random
+
     client = get_comfyui_client()
     output_id = uuid.uuid4().hex[:8]
-    
+
     try:
         if mode == "tts":
             # Use ChatterBox TTS via ComfyUI
             voice_settings = VOICE_PRESETS.get(voice, VOICE_PRESETS["nova"])
-            
+
             workflow = {
                 "1": {
                     "class_type": "ChatterBoxEngineNode",
@@ -3581,8 +4007,8 @@ async def generate_audio(
                         "exaggeration": voice_settings["exaggeration"],
                         "temperature": voice_settings["temperature"],
                         "cfg_weight": 0.5,
-                        "crash_protection_template": "hmm ,, {seg} hmm ,,"
-                    }
+                        "crash_protection_template": "hmm ,, {seg} hmm ,,",
+                    },
                 },
                 "2": {
                     "class_type": "UnifiedTTSTextNode",
@@ -3596,34 +4022,34 @@ async def generate_audio(
                         "chunk_combination_method": "auto",
                         "silence_between_chunks_ms": 100,
                         "enable_audio_cache": True,
-                        "batch_size": 0
-                    }
+                        "batch_size": 0,
+                    },
                 },
                 "3": {
                     "class_type": "SaveAudio",
                     "inputs": {
                         "audio": ["2", 0],
-                        "filename_prefix": f"tts_{output_id}"
-                    }
-                }
+                        "filename_prefix": f"tts_{output_id}",
+                    },
+                },
             }
-            
+
             logger.info(f"🎤 TTS workflow: voice={voice}, text_len={len(text)}")
             prompt_id = client.queue_prompt(workflow)
-            
+
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
                 "mode": "tts",
                 "voice": voice,
-                "text_preview": text[:100] + ("..." if len(text) > 100 else "")
+                "text_preview": text[:100] + ("..." if len(text) > 100 else ""),
             }
-            
+
         elif mode == "music":
             # Use MMAudio for text-to-audio music generation
             # Build prompt with style prefix
             music_prompt = f"{style} music, {text}"
-            
+
             # NOTE: MMAudio requires specific models to be downloaded
             # Models needed from: https://huggingface.co/Kijai/MMAudio_safetensors
             # These go in: ComfyUI/models/mmaudio/
@@ -3632,8 +4058,8 @@ async def generate_audio(
                     "class_type": "MMAudioModelLoader",
                     "inputs": {
                         "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
-                        "base_precision": "fp16"
-                    }
+                        "base_precision": "fp16",
+                    },
                 },
                 "2": {
                     "class_type": "MMAudioFeatureUtilsLoader",
@@ -3642,8 +4068,8 @@ async def generate_audio(
                         "vae_model": "mmaudio_vae_44k_fp16.safetensors",
                         "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
                         "mode": "44k",
-                        "precision": "fp16"
-                    }
+                        "precision": "fp16",
+                    },
                 },
                 "3": {
                     "class_type": "MMAudioSampler",
@@ -3657,41 +4083,41 @@ async def generate_audio(
                         "cfg": 4.5,
                         "seed": random.randint(0, 2**32 - 1),
                         "mask_away_clip": False,
-                        "force_offload": True
-                    }
+                        "force_offload": True,
+                    },
                 },
                 "4": {
                     "class_type": "SaveAudio",
                     "inputs": {
                         "audio": ["3", 0],
-                        "filename_prefix": f"music_{output_id}"
-                    }
-                }
+                        "filename_prefix": f"music_{output_id}",
+                    },
+                },
             }
-            
+
             logger.info(f"🎵 Music workflow: style={style}, duration={duration}s")
             prompt_id = client.queue_prompt(workflow)
-            
+
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
                 "mode": "music",
                 "style": style,
                 "duration": duration,
-                "prompt": music_prompt
+                "prompt": music_prompt,
             }
-            
+
         elif mode == "sfx":
             # Use MMAudio for sound effects (shorter duration)
             sfx_duration = min(duration, 10)
-            
+
             workflow = {
                 "1": {
                     "class_type": "MMAudioModelLoader",
                     "inputs": {
                         "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
-                        "base_precision": "fp16"
-                    }
+                        "base_precision": "fp16",
+                    },
                 },
                 "2": {
                     "class_type": "MMAudioFeatureUtilsLoader",
@@ -3700,8 +4126,8 @@ async def generate_audio(
                         "vae_model": "mmaudio_vae_44k_fp16.safetensors",
                         "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
                         "mode": "44k",
-                        "precision": "fp16"
-                    }
+                        "precision": "fp16",
+                    },
                 },
                 "3": {
                     "class_type": "MMAudioSampler",
@@ -3715,33 +4141,35 @@ async def generate_audio(
                         "cfg": 4.5,
                         "seed": random.randint(0, 2**32 - 1),
                         "mask_away_clip": False,
-                        "force_offload": True
-                    }
+                        "force_offload": True,
+                    },
                 },
                 "4": {
                     "class_type": "SaveAudio",
                     "inputs": {
                         "audio": ["3", 0],
-                        "filename_prefix": f"sfx_{output_id}"
-                    }
-                }
+                        "filename_prefix": f"sfx_{output_id}",
+                    },
+                },
             }
-            
-            logger.info(f"🔊 SFX workflow: prompt={text[:50]}, duration={sfx_duration}s")
+
+            logger.info(
+                f"🔊 SFX workflow: prompt={text[:50]}, duration={sfx_duration}s"
+            )
             prompt_id = client.queue_prompt(workflow)
-            
+
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
                 "mode": "sfx",
                 "duration": sfx_duration,
-                "prompt": text
+                "prompt": text,
             }
-            
+
     except Exception as e:
         logger.error(f"❌ Audio error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     return {"error": "Unknown audio mode"}
 
 
@@ -3749,17 +4177,19 @@ async def generate_audio(
 # Voice Cloning (F5-TTS) via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class VoiceCloneRequest(BaseModel):
     voice_sample_path: str
     text: str
     model: str = "F5v1"
     speed: float = 1.0
 
+
 @app.post("/voice-clone")
 async def voice_clone(request: VoiceCloneRequest):
     """
     Clone a voice using F5-TTS.
-    
+
     Args:
         voice_sample_path: Path to uploaded voice sample (5-30 seconds recommended)
         text: Text to speak in the cloned voice
@@ -3767,21 +4197,23 @@ async def voice_clone(request: VoiceCloneRequest):
         speed: Speed multiplier (>1.0 slower, <1.0 faster)
     """
     import random
-    
-    logger.info(f"🎤 Voice clone request: model={request.model}, text={request.text[:50]}...")
-    
+
+    logger.info(
+        f"🎤 Voice clone request: model={request.model}, text={request.text[:50]}..."
+    )
+
     client = get_comfyui_client()
     output_id = uuid.uuid4().hex[:8]
-    
+
     # Resolve voice sample path
     voice_path = request.voice_sample_path
-    if not voice_path.startswith('/'):
+    if not voice_path.startswith("/"):
         voice_path = str(UPLOAD_DIR / voice_path)
-    
+
     # Check if file exists
     if not Path(voice_path).exists():
         raise HTTPException(400, f"Voice sample not found: {voice_path}")
-    
+
     try:
         # Map model to model_type
         model_type_map = {
@@ -3796,7 +4228,7 @@ async def voice_clone(request: VoiceCloneRequest):
             "F5-HI": "F5TTS_Base",
             "E2": "E2TTS_Base",
         }
-        
+
         workflow = {
             "1": {
                 "class_type": "F5TTSAudio",
@@ -3807,28 +4239,26 @@ async def voice_clone(request: VoiceCloneRequest):
                     "model": request.model,
                     "vocoder": "auto",
                     "speed": request.speed,
-                    "model_type": model_type_map.get(request.model, "F5TTS_Base")
-                }
+                    "model_type": model_type_map.get(request.model, "F5TTS_Base"),
+                },
             },
             "2": {
                 "class_type": "SaveAudio",
-                "inputs": {
-                    "audio": ["1", 0],
-                    "filename_prefix": f"clone_{output_id}"
-                }
-            }
+                "inputs": {"audio": ["1", 0], "filename_prefix": f"clone_{output_id}"},
+            },
         }
-        
+
         logger.info(f"🎤 F5-TTS workflow: model={request.model}, sample={voice_path}")
         prompt_id = client.queue_prompt(workflow)
-        
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
             "model": request.model,
-            "text_preview": request.text[:100] + ("..." if len(request.text) > 100 else "")
+            "text_preview": request.text[:100]
+            + ("..." if len(request.text) > 100 else ""),
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Voice clone error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -3838,29 +4268,37 @@ async def voice_clone(request: VoiceCloneRequest):
 # Lip Sync (LatentSyncNode via ComfyUI)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class LipSyncRequest(BaseModel):
     video_path: str
-    audio_path: str  
+    audio_path: str
     lips_expression: float = 1.5
     inference_steps: int = 20
     seed: int = -1
+
 
 @app.post("/lip-sync")
 async def generate_lip_sync(request: LipSyncRequest):
     """Generate lip-synced video using LatentSyncNode via ComfyUI."""
     import random
-    
-    logger.info(f"🎬 Lip sync request: video={request.video_path}, audio={request.audio_path}")
-    
+
+    logger.info(
+        f"🎬 Lip sync request: video={request.video_path}, audio={request.audio_path}"
+    )
+
     # Verify files exist
     if not os.path.exists(request.video_path):
-        raise HTTPException(status_code=400, detail=f"Video file not found: {request.video_path}")
+        raise HTTPException(
+            status_code=400, detail=f"Video file not found: {request.video_path}"
+        )
     if not os.path.exists(request.audio_path):
-        raise HTTPException(status_code=400, detail=f"Audio file not found: {request.audio_path}")
-    
+        raise HTTPException(
+            status_code=400, detail=f"Audio file not found: {request.audio_path}"
+        )
+
     # Generate seed if not provided
     seed = request.seed if request.seed >= 0 else random.randint(0, 2147483647)
-    
+
     try:
         # Build ComfyUI workflow for lip sync
         workflow = {
@@ -3874,15 +4312,10 @@ async def generate_lip_sync(request: LipSyncRequest):
                     "custom_height": 512,
                     "frame_load_cap": 0,
                     "skip_first_frames": 0,
-                    "select_every_nth": 1
-                }
+                    "select_every_nth": 1,
+                },
             },
-            "2": {
-                "class_type": "LoadAudio",
-                "inputs": {
-                    "audio": request.audio_path
-                }
-            },
+            "2": {"class_type": "LoadAudio", "inputs": {"audio": request.audio_path}},
             "3": {
                 "class_type": "LatentSyncNode",
                 "inputs": {
@@ -3890,8 +4323,8 @@ async def generate_lip_sync(request: LipSyncRequest):
                     "audio": ["2", 0],
                     "seed": seed,
                     "lips_expression": request.lips_expression,
-                    "inference_steps": request.inference_steps
-                }
+                    "inference_steps": request.inference_steps,
+                },
             },
             "4": {
                 "class_type": "VHS_VideoCombine",
@@ -3903,25 +4336,25 @@ async def generate_lip_sync(request: LipSyncRequest):
                     "filename_prefix": "lip_sync",
                     "format": "video/h264-mp4",
                     "pingpong": False,
-                    "save_output": True
-                }
-            }
+                    "save_output": True,
+                },
+            },
         }
-        
+
         # Submit to ComfyUI
         comfyui = get_comfyui_client()
         prompt_id = comfyui.queue_prompt(workflow)
-        
+
         logger.info(f"✅ Lip sync job submitted: {prompt_id}")
-        
+
         return {
             "success": True,
             "prompt_id": prompt_id,
             "seed": seed,
             "lips_expression": request.lips_expression,
-            "inference_steps": request.inference_steps
+            "inference_steps": request.inference_steps,
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Lip sync error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -3931,11 +4364,14 @@ async def generate_lip_sync(request: LipSyncRequest):
 # Image-to-Image (I2I) via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.post("/generate-i2i")
 async def generate_i2i(
     file: UploadFile = File(...),
     prompt: str = Form(...),
-    negative_prompt: str = Form("ugly, deformed, blurry, low quality, bad anatomy, watermark"),
+    negative_prompt: str = Form(
+        "ugly, deformed, blurry, low quality, bad anatomy, watermark"
+    ),
     denoise: float = Form(0.7),
     checkpoint: str = Form("CyberRealistic_Pony_v14.1_FP16.safetensors"),
     steps: int = Form(25),
@@ -3947,7 +4383,7 @@ async def generate_i2i(
     """
     Image-to-Image generation via ComfyUI.
     Uploads source image, applies style transfer / modification.
-    
+
     Args:
         file: Source image file
         prompt: What to generate / how to modify
@@ -3956,40 +4392,59 @@ async def generate_i2i(
         checkpoint: SDXL checkpoint to use
     """
     import random
-    
-    logger.info(f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint})")
-    
+
+    logger.info(
+        f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint})"
+    )
+
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     # Generate seed
     if seed == -1:
         seed = random.randint(0, 2**32 - 1)
-    
+
     # Save uploaded file to temp location
     upload_filename = f"i2i_input_{uuid.uuid4().hex[:8]}.png"
     upload_path = UPLOAD_DIR / upload_filename
-    
+
     try:
         with open(upload_path, "wb") as f:
             content = await file.read()
             f.write(content)
-        
+
         # Upload to ComfyUI
         comfyui_filename = client.upload_image(str(upload_path))
         if not comfyui_filename:
-            raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to upload image to ComfyUI"
+            )
+
         logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
-        
+
         # Build I2I workflow
         workflow = {
-            "1": {"inputs": {"ckpt_name": checkpoint}, "class_type": "CheckpointLoaderSimple"},
-            "2": {"inputs": {"image": comfyui_filename, "upload": "image"}, "class_type": "LoadImage"},
-            "3": {"inputs": {"pixels": ["2", 0], "vae": ["1", 2]}, "class_type": "VAEEncode"},
-            "4": {"inputs": {"text": prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
-            "5": {"inputs": {"text": negative_prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+            "1": {
+                "inputs": {"ckpt_name": checkpoint},
+                "class_type": "CheckpointLoaderSimple",
+            },
+            "2": {
+                "inputs": {"image": comfyui_filename, "upload": "image"},
+                "class_type": "LoadImage",
+            },
+            "3": {
+                "inputs": {"pixels": ["2", 0], "vae": ["1", 2]},
+                "class_type": "VAEEncode",
+            },
+            "4": {
+                "inputs": {"text": prompt, "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            "5": {
+                "inputs": {"text": negative_prompt, "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
             "6": {
                 "inputs": {
                     "seed": seed,
@@ -4001,18 +4456,24 @@ async def generate_i2i(
                     "model": ["1", 0],
                     "positive": ["4", 0],
                     "negative": ["5", 0],
-                    "latent_image": ["3", 0]
+                    "latent_image": ["3", 0],
                 },
-                "class_type": "KSampler"
+                "class_type": "KSampler",
             },
-            "7": {"inputs": {"samples": ["6", 0], "vae": ["1", 2]}, "class_type": "VAEDecode"},
-            "8": {"inputs": {"filename_prefix": "oelala_i2i", "images": ["7", 0]}, "class_type": "SaveImage"},
+            "7": {
+                "inputs": {"samples": ["6", 0], "vae": ["1", 2]},
+                "class_type": "VAEDecode",
+            },
+            "8": {
+                "inputs": {"filename_prefix": "oelala_i2i", "images": ["7", 0]},
+                "class_type": "SaveImage",
+            },
         }
-        
+
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
-        
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
@@ -4021,10 +4482,10 @@ async def generate_i2i(
                 "denoise": denoise,
                 "checkpoint": checkpoint,
                 "seed": seed,
-                "source_image": comfyui_filename
-            }
+                "source_image": comfyui_filename,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"❌ I2I error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4042,6 +4503,7 @@ UPSCALE_MODELS = [
     "4x_NMKD-Siax_200k.pth",
 ]
 
+
 @app.get("/upscale/models")
 def list_upscale_models():
     """List available upscale models"""
@@ -4057,58 +4519,80 @@ async def upscale_image(
 ):
     """
     Upscale image using Real-ESRGAN via ComfyUI.
-    
+
     Args:
         file: Source image
         model: Upscale model (RealESRGAN variants)
         scale: Scale factor (2x or 4x)
         face_enhance: Apply GFPGAN face enhancement
     """
-    logger.info(f"🔍 Upscale request: model={model}, scale={scale}x, face_enhance={face_enhance}")
-    
+    logger.info(
+        f"🔍 Upscale request: model={model}, scale={scale}x, face_enhance={face_enhance}"
+    )
+
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     # Save uploaded file
     upload_filename = f"upscale_input_{uuid.uuid4().hex[:8]}.png"
     upload_path = UPLOAD_DIR / upload_filename
-    
+
     try:
         with open(upload_path, "wb") as f:
             content = await file.read()
             f.write(content)
-        
+
         # Upload to ComfyUI
         comfyui_filename = client.upload_image(str(upload_path))
         if not comfyui_filename:
-            raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to upload image to ComfyUI"
+            )
+
         logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
-        
+
         # Build upscale workflow
         # Uses UpscaleModelLoader + ImageUpscaleWithModel nodes
         workflow = {
-            "1": {"inputs": {"image": comfyui_filename, "upload": "image"}, "class_type": "LoadImage"},
+            "1": {
+                "inputs": {"image": comfyui_filename, "upload": "image"},
+                "class_type": "LoadImage",
+            },
             "2": {"inputs": {"model_name": model}, "class_type": "UpscaleModelLoader"},
-            "3": {"inputs": {"upscale_model": ["2", 0], "image": ["1", 0]}, "class_type": "ImageUpscaleWithModel"},
+            "3": {
+                "inputs": {"upscale_model": ["2", 0], "image": ["1", 0]},
+                "class_type": "ImageUpscaleWithModel",
+            },
         }
-        
+
         # Add face enhancement if requested (requires ComfyUI-GFPGAN extension)
         if face_enhance:
             # Try with GFPGAN - falls back gracefully if not installed
             workflow["4"] = {
-                "inputs": {"image": ["3", 0], "model_name": "GFPGANv1.4.pth", "strength": 0.8},
-                "class_type": "GFPGANFaceRestoration"
+                "inputs": {
+                    "image": ["3", 0],
+                    "model_name": "GFPGANv1.4.pth",
+                    "strength": 0.8,
+                },
+                "class_type": "GFPGANFaceRestoration",
             }
-            workflow["5"] = {"inputs": {"filename_prefix": "oelala_upscale", "images": ["4", 0]}, "class_type": "SaveImage"}
+            workflow["5"] = {
+                "inputs": {"filename_prefix": "oelala_upscale", "images": ["4", 0]},
+                "class_type": "SaveImage",
+            }
         else:
-            workflow["4"] = {"inputs": {"filename_prefix": "oelala_upscale", "images": ["3", 0]}, "class_type": "SaveImage"}
-        
+            workflow["4"] = {
+                "inputs": {"filename_prefix": "oelala_upscale", "images": ["3", 0]},
+                "class_type": "SaveImage",
+            }
+
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
-            raise HTTPException(status_code=500, detail="Failed to queue upscale workflow")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to queue upscale workflow"
+            )
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
@@ -4116,10 +4600,10 @@ async def upscale_image(
                 "model": model,
                 "scale": scale,
                 "face_enhance": face_enhance,
-                "source_image": comfyui_filename
-            }
+                "source_image": comfyui_filename,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Upscale error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4128,6 +4612,7 @@ async def upscale_image(
 # ─────────────────────────────────────────────────────────────────────────────
 # Video-to-Video Style Transfer via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.post("/generate-v2v")
 async def generate_v2v(
@@ -4144,7 +4629,7 @@ async def generate_v2v(
     """
     Video-to-Video style transfer via ComfyUI.
     Extracts frames, applies img2img to each, reassembles video.
-    
+
     Args:
         file: Source video file
         prompt: Style/transformation prompt
@@ -4153,35 +4638,35 @@ async def generate_v2v(
         max_frames: Maximum frames to process
     """
     import random
-    import subprocess
-    import tempfile
-    
-    logger.info(f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames})")
-    
+
+    logger.info(
+        f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames})"
+    )
+
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     # Generate seed
     if seed == -1:
         seed = random.randint(0, 2**32 - 1)
-    
+
     # Save uploaded video
     upload_filename = f"v2v_input_{uuid.uuid4().hex[:8]}.mp4"
     upload_path = UPLOAD_DIR / upload_filename
-    
+
     try:
         with open(upload_path, "wb") as f:
             content = await file.read()
             f.write(content)
-        
+
         # Upload video to ComfyUI input folder
         comfyui_input = Path("/home/flip/oelala/ComfyUI/input")
         video_dest = comfyui_input / upload_filename
         shutil.copy(str(upload_path), str(video_dest))
-        
+
         logger.info(f"📤 Video copied to ComfyUI: {upload_filename}")
-        
+
         # Build V2V workflow using AnimateDiff or frame-by-frame approach
         # Using VideoToFrames + img2img batch + FramesToVideo pattern
         workflow = {
@@ -4197,27 +4682,27 @@ async def generate_v2v(
                     "skip_first_frames": 0,
                     "select_every_nth": 1,
                 },
-                "class_type": "VHS_LoadVideo"
+                "class_type": "VHS_LoadVideo",
             },
             # Load checkpoint for img2img
             "2": {
                 "inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"},
-                "class_type": "CheckpointLoaderSimple"
+                "class_type": "CheckpointLoaderSimple",
             },
             # Positive prompt
             "3": {
                 "inputs": {"text": prompt, "clip": ["2", 1]},
-                "class_type": "CLIPTextEncode"
+                "class_type": "CLIPTextEncode",
             },
             # Negative prompt
             "4": {
                 "inputs": {"text": negative_prompt, "clip": ["2", 1]},
-                "class_type": "CLIPTextEncode"
+                "class_type": "CLIPTextEncode",
             },
             # VAE encode frames
             "5": {
                 "inputs": {"pixels": ["1", 0], "vae": ["2", 2]},
-                "class_type": "VAEEncode"
+                "class_type": "VAEEncode",
             },
             # KSampler batch - applies style to all frames
             "6": {
@@ -4231,14 +4716,14 @@ async def generate_v2v(
                     "model": ["2", 0],
                     "positive": ["3", 0],
                     "negative": ["4", 0],
-                    "latent_image": ["5", 0]
+                    "latent_image": ["5", 0],
                 },
-                "class_type": "KSampler"
+                "class_type": "KSampler",
             },
             # VAE decode
             "7": {
                 "inputs": {"samples": ["6", 0], "vae": ["2", 2]},
-                "class_type": "VAEDecode"
+                "class_type": "VAEDecode",
             },
             # Combine frames back to video
             "8": {
@@ -4251,14 +4736,14 @@ async def generate_v2v(
                     "save_output": True,
                     "images": ["7", 0],
                 },
-                "class_type": "VHS_VideoCombine"
-            }
+                "class_type": "VHS_VideoCombine",
+            },
         }
-        
+
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue V2V workflow")
-        
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
@@ -4268,10 +4753,10 @@ async def generate_v2v(
                 "fps": fps,
                 "max_frames": max_frames,
                 "seed": seed,
-                "source_video": upload_filename
-            }
+                "source_video": upload_filename,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"❌ V2V error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4285,11 +4770,8 @@ async def get_video(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
 
-    return FileResponse(
-        path=file_path,
-        media_type="video/mp4",
-        filename=filename
-    )
+    return FileResponse(path=file_path, media_type="video/mp4", filename=filename)
+
 
 @app.get("/images/{filename}")
 async def get_image(filename: str):
@@ -4299,11 +4781,8 @@ async def get_image(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image file not found")
 
-    return FileResponse(
-        path=file_path,
-        media_type="image/jpeg",
-        filename=filename
-    )
+    return FileResponse(path=file_path, media_type="image/jpeg", filename=filename)
+
 
 @app.get("/list-videos")
 async def list_videos():
@@ -4311,21 +4790,24 @@ async def list_videos():
     videos = []
     for file_path in OUTPUT_DIR.glob("*.mp4"):
         stat = file_path.stat()
-        videos.append({
-            "filename": file_path.name,
-            "size": stat.st_size,
-            "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-            "url": f"/videos/{file_path.name}"
-        })
+        videos.append(
+            {
+                "filename": file_path.name,
+                "size": stat.st_size,
+                "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "url": f"/videos/{file_path.name}",
+            }
+        )
 
     return {"videos": videos, "count": len(videos)}
+
 
 @app.post("/train-lora")
 async def train_lora_model(
     files: List[UploadFile] = File(...),
     model_name: str = Form("", description="Name for the trained model"),
     num_epochs: int = Form(10, description="Number of training epochs"),
-    learning_rate: float = Form(1e-4, description="Learning rate")
+    learning_rate: float = Form(1e-4, description="Learning rate"),
 ):
     """
     Train LoRA adapter on multiple uploaded images for consistent avatar generation.
@@ -4334,11 +4816,15 @@ async def train_lora_model(
     """
     # Validate files
     if len(files) < 2:
-        raise HTTPException(status_code=400, detail="At least 2 images required for LoRA training")
+        raise HTTPException(
+            status_code=400, detail="At least 2 images required for LoRA training"
+        )
 
     for file in files:
         if not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail=f"File {file.filename} must be an image")
+            raise HTTPException(
+                status_code=400, detail=f"File {file.filename} must be an image"
+            )
 
     # Generate unique training ID
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -4360,7 +4846,9 @@ async def train_lora_model(
             image_paths.append(str(input_path))
         except Exception as e:
             logger.error(f"Error saving file {file.filename}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to save {file.filename}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to save {file.filename}"
+            )
 
     # Generate output name
     if not model_name:
@@ -4378,13 +4866,15 @@ async def train_lora_model(
         "num_epochs": num_epochs,
         "learning_rate": learning_rate,
         "image_paths": image_paths,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
     placeholder_path = output_dir / "lora_config.json"
     with open(placeholder_path, "w") as fh:
         json.dump(placeholder, fh, indent=2)
 
-    logger.info(f"📋 LoRA training placeholder created: {training_id} with {len(image_paths)} images")
+    logger.info(
+        f"📋 LoRA training placeholder created: {training_id} with {len(image_paths)} images"
+    )
 
     return {
         "success": True,
@@ -4396,33 +4886,36 @@ async def train_lora_model(
         "learning_rate": learning_rate,
         "model_name": model_name,
         "status": "placeholder",
-        "timestamp": timestamp
+        "timestamp": timestamp,
     }
 
 
 @app.post("/train-lora-placeholder")
 async def train_lora_placeholder(
     files: List[UploadFile] = File(...),
-    model_name: str = Form("", description="Name for the trained model")
+    model_name: str = Form("", description="Name for the trained model"),
 ):
     """
     Create a LoRA placeholder artifact from uploaded images. This endpoint does not require the model stack.
     """
     # Validate files
     if len(files) < 1:
-        raise HTTPException(status_code=400, detail="At least 1 image required to create placeholder")
+        raise HTTPException(
+            status_code=400, detail="At least 1 image required to create placeholder"
+        )
 
-    import mimetypes
     for file in files:
-        ct = getattr(file, 'content_type', None)
+        ct = getattr(file, "content_type", None)
         logger.info(f"Placeholder upload file: {file.filename}, content_type={ct}")
-        if ct and ct.startswith('image/'):
+        if ct and ct.startswith("image/"):
             continue
         # If content_type missing, do a lightweight filename-based check
         ext = os.path.splitext(file.filename)[1].lower()
-        if ext in ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif']:
+        if ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"]:
             continue
-        raise HTTPException(status_code=400, detail=f"File {file.filename} must be an image")
+        raise HTTPException(
+            status_code=400, detail=f"File {file.filename} must be an image"
+        )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if not model_name:
@@ -4442,7 +4935,9 @@ async def train_lora_placeholder(
             image_paths.append(str(input_path))
         except Exception as e:
             logger.error(f"Error saving file {file.filename}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to save {file.filename}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to save {file.filename}"
+            )
 
     output_dir = OUTPUT_DIR / model_name
     os.makedirs(output_dir, exist_ok=True)
@@ -4452,19 +4947,24 @@ async def train_lora_placeholder(
         "training_id": training_id,
         "image_count": len(image_paths),
         "images": [os.path.basename(p) for p in image_paths],
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 
     placeholder_path = output_dir / "lora_placeholder.json"
     with open(placeholder_path, "w") as fh:
         json.dump(placeholder, fh, indent=2)
 
-    return {"success": True, "lora_path": str(placeholder_path), "training_id": training_id}
+    return {
+        "success": True,
+        "lora_path": str(placeholder_path),
+        "training_id": training_id,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Reframe / Outpainting via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.post("/reframe")
 async def reframe_image(
@@ -4481,7 +4981,7 @@ async def reframe_image(
 ):
     """
     Reframe/outpaint image to new aspect ratio using AI.
-    
+
     Args:
         image: Source image
         target_width: Desired output width
@@ -4494,69 +4994,86 @@ async def reframe_image(
     """
     import random
     from PIL import Image as PILImage
-    
-    logger.info(f"🖼️ Reframe: {target_width}x{target_height}, position={position}, prompt={prompt[:50]}...")
-    
+
+    logger.info(
+        f"🖼️ Reframe: {target_width}x{target_height}, position={position}, prompt={prompt[:50]}..."
+    )
+
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     seed = random.randint(0, 2**32 - 1)
-    
+
     # Save uploaded image
     upload_filename = f"reframe_input_{uuid.uuid4().hex[:8]}.png"
     upload_path = UPLOAD_DIR / upload_filename
-    
+
     try:
         content = await image.read()
         with open(upload_path, "wb") as f:
             f.write(content)
-        
+
         # Get original image dimensions
         with PILImage.open(upload_path) as img:
             orig_w, orig_h = img.size
-        
+
         # Calculate scale and position
         scale_w = target_width / orig_w
         scale_h = target_height / orig_h
         scale = min(scale_w, scale_h, 1.0)  # Don't upscale, only downscale if needed
-        
+
         scaled_w = int(orig_w * scale)
         scaled_h = int(orig_h * scale)
-        
+
         # Calculate offsets based on position
-        if 'left' in position:
+        if "left" in position:
             offset_x = 0
-        elif 'right' in position:
+        elif "right" in position:
             offset_x = target_width - scaled_w
         else:  # center
             offset_x = (target_width - scaled_w) // 2
-            
-        if 'top' in position:
+
+        if "top" in position:
             offset_y = 0
-        elif 'bottom' in position:
+        elif "bottom" in position:
             offset_y = target_height - scaled_h
         else:  # center
             offset_y = (target_height - scaled_h) // 2
-        
-        logger.info(f"📐 Original: {orig_w}x{orig_h}, Target: {target_width}x{target_height}, Offset: ({offset_x}, {offset_y})")
-        
+
+        logger.info(
+            f"📐 Original: {orig_w}x{orig_h}, Target: {target_width}x{target_height}, Offset: ({offset_x}, {offset_y})"
+        )
+
         # Upload to ComfyUI
         comfyui_filename = client.upload_image(str(upload_path))
         if not comfyui_filename:
-            raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to upload image to ComfyUI"
+            )
+
         # Build outpainting workflow
         # This uses InpaintModelConditioning + mask approach
         workflow = {
             # Load model
-            "1": {"inputs": {"ckpt_name": model}, "class_type": "CheckpointLoaderSimple"},
+            "1": {
+                "inputs": {"ckpt_name": model},
+                "class_type": "CheckpointLoaderSimple",
+            },
             # Load source image
-            "2": {"inputs": {"image": comfyui_filename, "upload": "image"}, "class_type": "LoadImage"},
+            "2": {
+                "inputs": {"image": comfyui_filename, "upload": "image"},
+                "class_type": "LoadImage",
+            },
             # Create empty canvas at target size
             "3": {
-                "inputs": {"width": target_width, "height": target_height, "batch_size": 1, "color": 0},
-                "class_type": "EmptyImage"
+                "inputs": {
+                    "width": target_width,
+                    "height": target_height,
+                    "batch_size": 1,
+                    "color": 0,
+                },
+                "class_type": "EmptyImage",
             },
             # Composite source onto canvas at position
             "4": {
@@ -4567,12 +5084,17 @@ async def reframe_image(
                     "y": offset_y,
                     "resize_source": True if scale < 1.0 else False,
                 },
-                "class_type": "ImageCompositeMasked"
+                "class_type": "ImageCompositeMasked",
             },
             # Create mask (white = inpaint area)
             "5": {
-                "inputs": {"width": target_width, "height": target_height, "batch_size": 1, "color": 16777215},  # White
-                "class_type": "EmptyImage"
+                "inputs": {
+                    "width": target_width,
+                    "height": target_height,
+                    "batch_size": 1,
+                    "color": 16777215,
+                },  # White
+                "class_type": "EmptyImage",
             },
             # Cut out original image area from mask (black = keep)
             "6": {
@@ -4583,27 +5105,43 @@ async def reframe_image(
                     "y": offset_y,
                     "resize_source": True if scale < 1.0 else False,
                 },
-                "class_type": "ImageCompositeMasked"
+                "class_type": "ImageCompositeMasked",
             },
             # Convert to mask
             "7": {
                 "inputs": {"image": ["6", 0], "method": "intensity"},
-                "class_type": "ImageToMask"
+                "class_type": "ImageToMask",
             },
             # Grow/feather mask for smooth blending
             "8": {
-                "inputs": {"mask": ["7", 0], "expand": feathering, "tapered_corners": True},
-                "class_type": "GrowMask"
+                "inputs": {
+                    "mask": ["7", 0],
+                    "expand": feathering,
+                    "tapered_corners": True,
+                },
+                "class_type": "GrowMask",
             },
             # Encode prompts
-            "9": {"inputs": {"text": prompt, "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
-            "10": {"inputs": {"text": "ugly, blurry, watermark, text, logo, artifacts", "clip": ["1", 1]}, "class_type": "CLIPTextEncode"},
+            "9": {
+                "inputs": {"text": prompt, "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            "10": {
+                "inputs": {
+                    "text": "ugly, blurry, watermark, text, logo, artifacts",
+                    "clip": ["1", 1],
+                },
+                "class_type": "CLIPTextEncode",
+            },
             # VAE encode composite
-            "11": {"inputs": {"pixels": ["4", 0], "vae": ["1", 2]}, "class_type": "VAEEncode"},
+            "11": {
+                "inputs": {"pixels": ["4", 0], "vae": ["1", 2]},
+                "class_type": "VAEEncode",
+            },
             # Set masked latent for inpainting
             "12": {
                 "inputs": {"samples": ["11", 0], "mask": ["8", 0]},
-                "class_type": "SetLatentNoiseMask"
+                "class_type": "SetLatentNoiseMask",
             },
             # KSampler
             "13": {
@@ -4617,20 +5155,28 @@ async def reframe_image(
                     "model": ["1", 0],
                     "positive": ["9", 0],
                     "negative": ["10", 0],
-                    "latent_image": ["12", 0]
+                    "latent_image": ["12", 0],
                 },
-                "class_type": "KSampler"
+                "class_type": "KSampler",
             },
             # VAE decode
-            "14": {"inputs": {"samples": ["13", 0], "vae": ["1", 2]}, "class_type": "VAEDecode"},
+            "14": {
+                "inputs": {"samples": ["13", 0], "vae": ["1", 2]},
+                "class_type": "VAEDecode",
+            },
             # Save
-            "15": {"inputs": {"filename_prefix": "oelala_reframe", "images": ["14", 0]}, "class_type": "SaveImage"},
+            "15": {
+                "inputs": {"filename_prefix": "oelala_reframe", "images": ["14", 0]},
+                "class_type": "SaveImage",
+            },
         }
-        
+
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
-            raise HTTPException(status_code=500, detail="Failed to queue reframe workflow")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to queue reframe workflow"
+            )
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
@@ -4639,10 +5185,10 @@ async def reframe_image(
                 "target_size": f"{target_width}x{target_height}",
                 "position": position,
                 "prompt": prompt,
-                "seed": seed
-            }
+                "seed": seed,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Reframe error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4652,6 +5198,7 @@ async def reframe_image(
 # Face Swap via ComfyUI (ReActor / InsightFace)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.post("/detect-faces")
 async def detect_faces(image: UploadFile = File(...)):
     """
@@ -4660,34 +5207,43 @@ async def detect_faces(image: UploadFile = File(...)):
     """
     import cv2
     import numpy as np
-    
+
     logger.info(f"👤 Detecting faces in {image.filename}...")
-    
+
     try:
         content = await image.read()
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         if img is None:
             raise HTTPException(status_code=400, detail="Could not decode image")
-        
+
         # Use OpenCV's built-in face detector
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-        
+
         face_list = []
         for i, (x, y, w, h) in enumerate(faces):
-            face_list.append({
-                "index": i,
-                "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)},
-                "confidence": 0.9  # OpenCV doesn't provide confidence, placeholder
-            })
-        
+            face_list.append(
+                {
+                    "index": i,
+                    "bbox": {
+                        "x": int(x),
+                        "y": int(y),
+                        "width": int(w),
+                        "height": int(h),
+                    },
+                    "confidence": 0.9,  # OpenCV doesn't provide confidence, placeholder
+                }
+            )
+
         logger.info(f"👤 Detected {len(face_list)} face(s)")
-        
+
         return {"faces": face_list, "total": len(face_list)}
-        
+
     except Exception as e:
         logger.error(f"❌ Face detection error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4705,7 +5261,7 @@ async def face_swap(
 ):
     """
     Face swap using ComfyUI ReActor node.
-    
+
     Args:
         target: Image/video with face(s) to replace
         source: Image with source face
@@ -4716,46 +5272,54 @@ async def face_swap(
         face_index: Which face to swap (-1 for all)
     """
     logger.info(f"👤 Face swap: model={model}, enhance={enhance}, strength={strength}")
-    
+
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     # Save files
     target_filename = f"faceswap_target_{uuid.uuid4().hex[:8]}"
     source_filename = f"faceswap_source_{uuid.uuid4().hex[:8]}.png"
-    
-    is_video = target.content_type and target.content_type.startswith('video/')
+
+    is_video = target.content_type and target.content_type.startswith("video/")
     target_filename += ".mp4" if is_video else ".png"
-    
+
     target_path = UPLOAD_DIR / target_filename
     source_path = UPLOAD_DIR / source_filename
-    
+
     try:
         # Save target
         content = await target.read()
         with open(target_path, "wb") as f:
             f.write(content)
-        
+
         # Save source
         content = await source.read()
         with open(source_path, "wb") as f:
             f.write(content)
-        
+
         # Upload images to ComfyUI
         target_comfy = client.upload_image(str(target_path))
         source_comfy = client.upload_image(str(source_path))
-        
+
         if not target_comfy or not source_comfy:
-            raise HTTPException(status_code=500, detail="Failed to upload images to ComfyUI")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to upload images to ComfyUI"
+            )
+
         # Build ReActor workflow
         # Requires ComfyUI-ReActor custom node: https://github.com/Gourieff/comfyui-reactor-node
         workflow = {
             # Load target image
-            "1": {"inputs": {"image": target_comfy, "upload": "image"}, "class_type": "LoadImage"},
+            "1": {
+                "inputs": {"image": target_comfy, "upload": "image"},
+                "class_type": "LoadImage",
+            },
             # Load source face
-            "2": {"inputs": {"image": source_comfy, "upload": "image"}, "class_type": "LoadImage"},
+            "2": {
+                "inputs": {"image": source_comfy, "upload": "image"},
+                "class_type": "LoadImage",
+            },
             # ReActor face swap
             "3": {
                 "inputs": {
@@ -4763,25 +5327,36 @@ async def face_swap(
                     "source_image": ["2", 0],
                     "swap_model": "inswapper_128.onnx",
                     "facedetection": "retinaface_resnet50",
-                    "face_restore_model": "GFPGANv1.4.pth" if enhance in ["gfpgan", "both"] else "none",
+                    "face_restore_model": "GFPGANv1.4.pth"
+                    if enhance in ["gfpgan", "both"]
+                    else "none",
                     "face_restore_visibility": blend,
-                    "codeformer_weight": 0.5 if enhance in ["codeformer", "both"] else 0,
+                    "codeformer_weight": 0.5
+                    if enhance in ["codeformer", "both"]
+                    else 0,
                     "console_log_level": 1,
                     "detect_gender_source": "no",
                     "detect_gender_input": "no",
                     "source_faces_index": "0",
-                    "input_faces_index": str(face_index) if face_index >= 0 else "0,1,2,3,4",
+                    "input_faces_index": str(face_index)
+                    if face_index >= 0
+                    else "0,1,2,3,4",
                 },
-                "class_type": "ReActorFaceSwap"
+                "class_type": "ReActorFaceSwap",
             },
             # Save result
-            "4": {"inputs": {"filename_prefix": "oelala_faceswap", "images": ["3", 0]}, "class_type": "SaveImage"},
+            "4": {
+                "inputs": {"filename_prefix": "oelala_faceswap", "images": ["3", 0]},
+                "class_type": "SaveImage",
+            },
         }
-        
+
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
-            raise HTTPException(status_code=500, detail="Failed to queue face swap workflow")
-        
+            raise HTTPException(
+                status_code=500, detail="Failed to queue face swap workflow"
+            )
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
@@ -4790,20 +5365,14 @@ async def face_swap(
                 "enhance": enhance,
                 "strength": strength,
                 "face_index": face_index,
-                "is_video": is_video
-            }
+                "is_video": is_video,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Face swap error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "app:app",
-        host="192.168.1.2",
-            port=7998,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("app:app", host="192.168.1.2", port=7998, reload=True, log_level="info")

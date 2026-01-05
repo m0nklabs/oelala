@@ -39,21 +39,21 @@ COMMENT ON COLUMN public.published_media.metadata IS 'Prompt, settings, model in
 -- ============================================================================
 -- Indexes for Performance
 -- ============================================================================
-CREATE INDEX IF NOT EXISTS idx_published_media_user 
+CREATE INDEX IF NOT EXISTS idx_published_media_user
     ON public.published_media(user_id);
-CREATE INDEX IF NOT EXISTS idx_published_media_nsfw 
+CREATE INDEX IF NOT EXISTS idx_published_media_nsfw
     ON public.published_media(is_nsfw);
-CREATE INDEX IF NOT EXISTS idx_published_media_created 
+CREATE INDEX IF NOT EXISTS idx_published_media_created
     ON public.published_media(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_published_media_type 
+CREATE INDEX IF NOT EXISTS idx_published_media_type
     ON public.published_media(media_type);
-CREATE INDEX IF NOT EXISTS idx_published_media_likes 
+CREATE INDEX IF NOT EXISTS idx_published_media_likes
     ON public.published_media(like_count DESC);
-CREATE INDEX IF NOT EXISTS idx_published_media_views 
+CREATE INDEX IF NOT EXISTS idx_published_media_views
     ON public.published_media(view_count DESC);
 
 -- Composite index for common query pattern (SFW + sorting)
-CREATE INDEX IF NOT EXISTS idx_published_media_sfw_created 
+CREATE INDEX IF NOT EXISTS idx_published_media_sfw_created
     ON public.published_media(is_nsfw, created_at DESC);
 
 -- ============================================================================
@@ -70,9 +70,9 @@ CREATE TABLE IF NOT EXISTS public.published_media_likes (
 
 COMMENT ON TABLE public.published_media_likes IS 'User likes on published media';
 
-CREATE INDEX IF NOT EXISTS idx_published_media_likes_media 
+CREATE INDEX IF NOT EXISTS idx_published_media_likes_media
     ON public.published_media_likes(media_id);
-CREATE INDEX IF NOT EXISTS idx_published_media_likes_user 
+CREATE INDEX IF NOT EXISTS idx_published_media_likes_user
     ON public.published_media_likes(user_id);
 
 -- ============================================================================
@@ -84,39 +84,39 @@ ALTER TABLE public.published_media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.published_media_likes ENABLE ROW LEVEL SECURITY;
 
 -- published_media: Anyone can view SFW content, authenticated users can see NSFW
-CREATE POLICY "Anyone can view SFW content" 
-    ON public.published_media FOR SELECT 
+CREATE POLICY "Anyone can view SFW content"
+    ON public.published_media FOR SELECT
     USING (is_nsfw = false);
 
-CREATE POLICY "Authenticated users can view NSFW content" 
-    ON public.published_media FOR SELECT 
+CREATE POLICY "Authenticated users can view NSFW content"
+    ON public.published_media FOR SELECT
     USING (is_nsfw = true AND auth.uid() IS NOT NULL);
 
 -- published_media: Users can only insert/update/delete their own content
-CREATE POLICY "Users can publish their own media" 
-    ON public.published_media FOR INSERT 
+CREATE POLICY "Users can publish their own media"
+    ON public.published_media FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own published media" 
-    ON public.published_media FOR UPDATE 
+CREATE POLICY "Users can update their own published media"
+    ON public.published_media FOR UPDATE
     USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete their own published media" 
-    ON public.published_media FOR DELETE 
+CREATE POLICY "Users can delete their own published media"
+    ON public.published_media FOR DELETE
     USING (auth.uid() = user_id);
 
 -- published_media_likes: Users can view all likes
-CREATE POLICY "Anyone can view likes" 
-    ON public.published_media_likes FOR SELECT 
+CREATE POLICY "Anyone can view likes"
+    ON public.published_media_likes FOR SELECT
     USING (true);
 
 -- published_media_likes: Users can only manage their own likes
-CREATE POLICY "Users can add their own likes" 
-    ON public.published_media_likes FOR INSERT 
+CREATE POLICY "Users can add their own likes"
+    ON public.published_media_likes FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can remove their own likes" 
-    ON public.published_media_likes FOR DELETE 
+CREATE POLICY "Users can remove their own likes"
+    ON public.published_media_likes FOR DELETE
     USING (auth.uid() = user_id);
 
 -- ============================================================================
@@ -163,16 +163,16 @@ DECLARE
 BEGIN
     -- Get the authenticated user ID from the session
     v_user_id := auth.uid();
-    
+
     -- Ensure user is authenticated
     IF v_user_id IS NULL THEN
         RAISE EXCEPTION 'Authentication required to like content';
     END IF;
-    
+
     -- Try to delete existing like (uses RLS policies to ensure user owns the like)
     DELETE FROM public.published_media_likes
     WHERE media_id = p_media_id AND user_id = v_user_id;
-    
+
     -- If nothing was deleted, insert new like
     IF NOT FOUND THEN
         INSERT INTO public.published_media_likes (media_id, user_id)
@@ -181,7 +181,7 @@ BEGIN
     ELSE
         v_liked := false;
     END IF;
-    
+
     -- Update like count
     UPDATE public.published_media
     SET like_count = (
@@ -190,7 +190,7 @@ BEGIN
     )
     WHERE id = p_media_id
     RETURNING like_count INTO v_count;
-    
+
     RETURN QUERY SELECT v_liked, v_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

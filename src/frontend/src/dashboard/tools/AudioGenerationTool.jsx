@@ -38,34 +38,34 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
   const [musicStyle, setMusicStyle] = useState('cinematic')
   const [duration, setDuration] = useState(10)
   const [showAdvanced, setShowAdvanced] = useState(false)
-  
+
   // Advanced TTS
   const [speed, setSpeed] = useState(1.0)
   const [pitch, setPitch] = useState(1.0)
-  
+
   const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
   const [result, setResult] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  
+
   const audioRef = useRef(null)
 
   const handleGenerate = async () => {
     if (!text.trim()) return
-    
+
     setSubmitting(true)
     setError(null)
     setLastQueued(null)
-    
+
     try {
       let endpoint = '/generate-audio'
-      
+
       // Build FormData - backend expects Form parameters
       const formData = new FormData()
       formData.append('text', text.trim())
       formData.append('mode', mode)
-      
+
       if (mode === 'tts') {
         formData.append('voice', voice)
         formData.append('speed', speed.toString())
@@ -76,19 +76,19 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
       } else if (mode === 'sfx') {
         formData.append('duration', Math.min(duration, 10).toString()) // SFX max 10s
       }
-      
+
       if (DEBUG) console.debug('🎵 Audio request:', { text: text.trim(), mode, voice, musicStyle, duration })
-      
+
       const res = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
-      
+
       if (!res.ok) {
         // Better error extraction
-        const errMsg = typeof res.data === 'object' 
-          ? (res.data?.detail || JSON.stringify(res.data)) 
+        const errMsg = typeof res.data === 'object'
+          ? (res.data?.detail || JSON.stringify(res.data))
           : (res.data || 'Audio generation failed')
         throw new Error(errMsg)
       }
-      
+
       // Job was queued - notify parent and show confirmation
       if (res.data?.prompt_id) {
         setLastQueued({
@@ -96,12 +96,12 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
           mode,
           text: text.substring(0, 50) + (text.length > 50 ? '...' : '')
         })
-        
+
         // Notify parent to refresh queue panel
         if (onJobSubmitted) {
           onJobSubmitted(res.data)
         }
-        
+
         // Output will appear in queue/history when done - don't wait
         if (DEBUG) console.debug('🎵 Job queued:', res.data.prompt_id)
       } else if (res.data?.url) {
@@ -109,7 +109,7 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
         const audioUrl = res.data.url
         const fullUrl = audioUrl.startsWith('http') ? audioUrl : `${BACKEND_BASE}${audioUrl}`
         setResult({ url: fullUrl, filename: audioUrl.split('/').pop() })
-        
+
         if (onOutput) {
           onOutput({
             kind: 'audio',
@@ -118,7 +118,7 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
           })
         }
       }
-      
+
     } catch (err) {
       console.error('Audio error:', err)
       setError(err.message)
@@ -170,7 +170,7 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={
-            mode === 'tts' 
+            mode === 'tts'
               ? 'Enter the text you want to convert to speech...'
               : mode === 'music'
               ? 'Describe the music you want to generate (e.g., "upbeat electronic dance track with heavy bass")'
@@ -258,22 +258,22 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
       {/* Advanced Settings */}
       {mode === 'tts' && (
         <div className="tool-section collapsible">
-          <h3 
+          <h3
             onClick={() => setShowAdvanced(!showAdvanced)}
             style={{ cursor: 'pointer' }}
           >
             <Settings size={16} />
             Advanced
-            <ChevronDown 
-              size={16} 
-              style={{ 
+            <ChevronDown
+              size={16}
+              style={{
                 marginLeft: 'auto',
                 transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
                 transition: 'transform 0.2s'
               }}
             />
           </h3>
-          
+
           {showAdvanced && (
             <div className="advanced-content">
               <div className="slider-row">
@@ -338,8 +338,8 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
         <div className="result-section">
           <h3>Result</h3>
           <div className="audio-player">
-            <audio 
-              ref={audioRef} 
+            <audio
+              ref={audioRef}
               src={result.url}
               onEnded={() => setIsPlaying(false)}
               onPlay={() => setIsPlaying(true)}

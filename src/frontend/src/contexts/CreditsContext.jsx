@@ -121,7 +121,7 @@ export function CreditsProvider({ children }) {
           package_id: packageId,
         }),
       })
-      
+
       if (res.ok) {
         const data = await res.json()
         return data.checkout_url
@@ -168,7 +168,7 @@ export function CreditsProvider({ children }) {
     packages,
     loading,
     error,
-    
+
     // Actions
     fetchBalance,
     estimateCost,

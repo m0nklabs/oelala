@@ -55,7 +55,7 @@ export default function LoginPage() {
           </button>
         </p>
       </div>
-      
+
       {legalType && (
         <LegalModal type={legalType} onClose={() => setLegalType(null)} />
       )}

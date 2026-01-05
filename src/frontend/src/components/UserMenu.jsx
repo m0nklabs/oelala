@@ -20,7 +20,7 @@ export default function UserMenu() {
 
   if (!user) {
     return (
-      <button 
+      <button
         className="login-btn"
         onClick={signInWithGoogle}
         title="Sign in with Google"
@@ -34,7 +34,7 @@ export default function UserMenu() {
   return (
     <div className="user-menu" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
       {/* Credits Display */}
-      <div 
+      <div
         className="credits-display"
         onClick={() => setShowPurchaseModal(true)}
         style={{
@@ -59,8 +59,8 @@ export default function UserMenu() {
       </div>
 
       {/* User Button */}
-      <button 
-        className="user-info-btn" 
+      <button
+        className="user-info-btn"
         onClick={() => setShowDropdown(!showDropdown)}
         title={user.email}
         style={{
@@ -78,9 +78,9 @@ export default function UserMenu() {
         }}
       >
         {user.user_metadata?.avatar_url ? (
-          <img 
-            src={user.user_metadata.avatar_url} 
-            alt="Avatar" 
+          <img
+            src={user.user_metadata.avatar_url}
+            alt="Avatar"
             className="user-avatar"
             style={{ width: 24, height: 24, borderRadius: '50%' }}
           />
@@ -92,9 +92,9 @@ export default function UserMenu() {
         </span>
         <ChevronDown size={14} style={{ opacity: 0.6 }} />
       </button>
-      
+
       {showDropdown && (
-        <div 
+        <div
           className="user-dropdown"
           style={{
             position: 'absolute',
@@ -119,7 +119,7 @@ export default function UserMenu() {
               {user.email}
             </div>
           </div>
-          
+
           {/* Credits Info */}
           <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-color)', background: 'rgba(124,58,237,0.05)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -154,9 +154,9 @@ export default function UserMenu() {
               Buy Credits
             </button>
           </div>
-          
+
           {/* Sign Out */}
-          <button 
+          <button
             onClick={() => { signOut(); setShowDropdown(false); }}
             style={{
               display: 'flex',
@@ -179,15 +179,15 @@ export default function UserMenu() {
           </button>
         </div>
       )}
-      
+
       {/* Click outside to close dropdown */}
       {showDropdown && (
-        <div 
+        <div
           style={{ position: 'fixed', inset: 0, zIndex: 999 }}
           onClick={() => setShowDropdown(false)}
         />
       )}
-      
+
       {/* Purchase Credits Modal */}
       {showPurchaseModal && (
         <PurchaseCreditsModal onClose={() => setShowPurchaseModal(false)} />

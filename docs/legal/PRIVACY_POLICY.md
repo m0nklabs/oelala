@@ -99,7 +99,7 @@ We may update this policy from time to time. We will notify you of significant c
 
 For privacy-related questions or to exercise your rights:
 
-**Email**: privacy@oelala.xyz  
+**Email**: privacy@oelala.xyz
 **Address**: [Your business address in Netherlands]
 
 ---

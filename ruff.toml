@@ -1,0 +1,15 @@
+# Ruff configuration for oelala
+# https://docs.astral.sh/ruff/
+
+# Only check src/ directory  
+include = ["src/**/*.py"]
+
+[lint]
+# Rules to ignore (legacy code exceptions)
+ignore = [
+    "E402",   # Module level import not at top of file (FastAPI pattern)
+    "E722",   # Bare except (legacy error handling)
+    "E741",   # Ambiguous variable name (loop counters)
+    "F841",   # Local variable assigned but never used (WIP code)
+    "F402",   # Import shadowed by loop variable
+]

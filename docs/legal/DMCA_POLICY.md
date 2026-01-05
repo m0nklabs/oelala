@@ -18,12 +18,12 @@ If you believe content on our platform infringes your copyright, please send a w
 
 ### Send DMCA Notices To:
 
-**Email**: dmca@oelala.xyz  
+**Email**: dmca@oelala.xyz
 **Subject Line**: DMCA Takedown Request
 
-**Mail**:  
-oelala.xyz DMCA Agent  
-[Your business address]  
+**Mail**:
+oelala.xyz DMCA Agent
+[Your business address]
 Netherlands
 
 ## 2. Our Response
@@ -44,7 +44,7 @@ If you believe your content was removed in error, you may submit a counter-notif
 5. **Signature**: Your physical or electronic signature
 
 ### Send Counter-Notifications To:
-**Email**: dmca@oelala.xyz  
+**Email**: dmca@oelala.xyz
 **Subject Line**: DMCA Counter-Notification
 
 ## 4. After Counter-Notification

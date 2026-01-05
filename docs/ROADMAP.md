@@ -1,6 +1,6 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-01-04  
+> **Last Updated**: 2026-01-04
 > **Version**: 0.2.0 (Alpha)
 
 ## Vision
@@ -55,7 +55,7 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 
 **Goal**: Monetization-ready storage backend (Go service)
 
-> **Repository**: [oelala-storage](https://github.com/m0nklabs/oelala-storage)  
+> **Repository**: [oelala-storage](https://github.com/m0nklabs/oelala-storage)
 > **Status**: Core server running (HTTP :7990, gRPC :7991, Metrics :7992)
 
 | Task | Status | Priority | Monetization Impact |

@@ -27,17 +27,17 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [enhanceMode, setEnhanceMode] = useState('expand')
   const [includeNegative, setIncludeNegative] = useState(true)
   const [includeMotion, setIncludeMotion] = useState(false)
-  
+
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const handleGenerate = async () => {
     if (!input.trim()) return
-    
+
     setLoading(true)
     setError(null)
-    
+
     try {
       const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
         method: 'POST',
@@ -50,15 +50,15 @@ export default function PromptGeneratorTool({ onSendToTool }) {
           include_motion: includeMotion,
         }),
       })
-      
+
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.detail || 'Generation failed')
       }
-      
+
       const data = await res.json()
       setResult(data)
-      
+
       if (DEBUG) console.log('✨ Prompt result:', data)
     } catch (err) {
       console.error('Prompt generation error:', err)
@@ -71,21 +71,21 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   // Quick template-based generation (no API needed)
   const handleQuickGenerate = () => {
     if (!input.trim()) return
-    
+
     const basePrompt = input.trim()
     const stylePreset = STYLE_PRESETS.find(s => s.id === style)
     const styleKeywords = stylePreset ? `, ${stylePreset.keywords}` : ''
-    
+
     const enhancedPrompt = `${basePrompt}${styleKeywords}, masterpiece, best quality, highly detailed`
-    
-    const negativePrompt = includeNegative 
+
+    const negativePrompt = includeNegative
       ? 'ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text, cropped, worst quality'
       : ''
-    
+
     const motionPrompt = includeMotion
       ? 'smooth camera motion, cinematic movement, fluid animation'
       : ''
-    
+
     setResult({
       prompt: enhancedPrompt,
       negative_prompt: negativePrompt,

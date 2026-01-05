@@ -144,8 +144,8 @@ VAE Decoder                  Dynamic       -
 - Higher resolutions/frames: May OOM
 
 ### Key Finding: GPU-Only Mode Distribution Issue
-When using pure GPU-only allocation (`cuda:0,12gb;cuda:1,16gb` without `cpu,*`), 
-DisTorch2 v2.5.9 tends to place 100% of model weights on cuda:0 instead of 
+When using pure GPU-only allocation (`cuda:0,12gb;cuda:1,16gb` without `cpu,*`),
+DisTorch2 v2.5.9 tends to place 100% of model weights on cuda:0 instead of
 distributing between both GPUs. This causes:
 - Slower generation (using only RTX 3060 instead of both GPUs)
 - Higher single-GPU VRAM pressure
