@@ -23,7 +23,7 @@ regexes = [
 # Ignore these specific strings (case-insensitive)
 stopwords = [
     "YOUR_JWT_TOKEN",
-    "YOUR_API_KEY", 
+    "YOUR_API_KEY",
     "YOUR_SECRET",
     "PLACEHOLDER",
     "example_token",
