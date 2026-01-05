@@ -2,9 +2,9 @@ name: Secret Scan
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
   schedule:
     # Full repo scan every Sunday at 00:00 UTC
     - cron: '0 0 * * 0'
