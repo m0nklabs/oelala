@@ -9,15 +9,15 @@ export default function Footer({ onShowLegal }) {
   return (
     <footer
       style={{
-        padding: '8px 16px',
-        borderTop: '1px solid rgba(255,255,255,0.05)',
+        padding: '4px 12px',
+        borderTop: '1px solid rgba(255,255,255,0.03)',
         background: 'transparent',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '8px',
-        fontSize: '11px',
-        color: '#4b5563',
+        gap: '6px',
+        fontSize: '9px',
+        color: '#3b4555',
       }}
     >
       <span>© {new Date().getFullYear()} oelala.xyz</span>
@@ -34,8 +34,8 @@ export default function Footer({ onShowLegal }) {
 const linkStyle = {
   background: 'transparent',
   border: 'none',
-  color: '#4b5563',
-  fontSize: '11px',
+  color: '#3b4555',
+  fontSize: '9px',
   cursor: 'pointer',
   padding: 0,
 }
