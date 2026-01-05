@@ -1,11 +1,15 @@
 name: Auto-assign Copilot to Priority Issues
 
 on:
-  # Run every 5 minutes when no Copilot PR is active
+  # Run every 30 minutes (reduced from 5 min to save CI minutes)
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'
   # Manual trigger
   workflow_dispatch:
+
+concurrency:
+  group: copilot-auto-assign
+  cancel-in-progress: true
   # Run when a PR is closed (to assign next issue)
   pull_request:
     types: [closed]
