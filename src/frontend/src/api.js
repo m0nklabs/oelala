@@ -248,3 +248,63 @@ export async function deleteUserMedia(mediaType, filename) {
 export async function getUserProfile() {
   return apiGet('/user/profile')
 }
+
+// ============================================================================
+// Gallery API helpers
+// ============================================================================
+
+/**
+ * Publish media to gallery
+ * @param {Object} data - Publication data (title, description, tags, etc.)
+ */
+export async function publishToGallery(data) {
+  return apiPost('/api/gallery/publish', data)
+}
+
+/**
+ * Unpublish media from gallery
+ * @param {string} mediaId - Published media ID
+ */
+export async function unpublishFromGallery(mediaId) {
+  return apiDelete(`/api/gallery/${mediaId}`)
+}
+
+/**
+ * List gallery items
+ * @param {Object} filters - Filter options (media_type, is_nsfw, sort_by, page, per_page)
+ */
+export async function listGallery(filters = {}) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      params.append(key, value.toString())
+    }
+  })
+  return apiGet(`/api/gallery?${params.toString()}`)
+}
+
+/**
+ * Get single gallery item details
+ * @param {string} mediaId - Published media ID
+ */
+export async function getGalleryItem(mediaId) {
+  return apiGet(`/api/gallery/${mediaId}`)
+}
+
+/**
+ * Toggle like on gallery item
+ * @param {string} mediaId - Published media ID
+ */
+export async function toggleGalleryLike(mediaId) {
+  return apiPost(`/api/gallery/${mediaId}/like`, {})
+}
+
+/**
+ * Get user's published items
+ * @param {string} userId - User ID
+ * @param {number} page - Page number
+ * @param {number} perPage - Items per page
+ */
+export async function getUserPublishedMedia(userId, page = 1, perPage = 30) {
+  return apiGet(`/api/gallery/user/${userId}?page=${page}&per_page=${perPage}`)
+}
