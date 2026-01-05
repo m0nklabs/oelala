@@ -1,0 +1,21 @@
+[Unit]
+Description=Oelala API Backend
+After=network.target
+
+[Service]
+Type=simple
+User=flip
+Group=flip
+WorkingDirectory=/home/flip/oelala/src/backend
+EnvironmentFile=/home/flip/oelala/.env
+ExecStart=/home/flip/venvs/gpu/bin/python -m uvicorn app:app --host 0.0.0.0 --port 7998 --workers 2
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=oelala-api
+
+[Install]
+WantedBy=multi-user.target

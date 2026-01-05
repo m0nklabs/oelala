@@ -1897,16 +1897,18 @@ async def generate_sdxl_image(
     sampler_name: str = Form("dpmpp_2m"),
     scheduler: str = Form("karras"),
     lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Queue SDXL image generation via ComfyUI.
     Returns immediately with prompt_id - use /comfyui/status/{prompt_id} to poll.
+    Requires authentication and credits.
     """
     import json as json_lib
     import random
     import copy
     
-    logger.info(f"🎨 SDXL T2I request: {prompt[:50]}... (checkpoint={checkpoint})")
+    logger.info(f"🎨 SDXL T2I request: {prompt[:50]}... (checkpoint={checkpoint}) [user={user.id}]")
     
     # Parse LoRA configs
     try:
@@ -1928,9 +1930,18 @@ async def generate_sdxl_image(
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
     
+    # Calculate and check credits
+    is_hd = width > 1024 or height > 1024
+    credits_required = calculate_credits("generate_sdxl", width=width, height=height)
+    logger.info(f"💰 SDXL generation costs {credits_required} credits")
+    await check_credits(user, credits_required)
+    
     # Generate seed if random
     if seed == -1:
         seed = random.randint(0, 2**32 - 1)
+    
+    # Generate a job ID for credit tracking
+    job_id = str(uuid.uuid4())
     
     try:
         client = get_comfyui_client()
@@ -2006,11 +2017,15 @@ async def generate_sdxl_image(
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue workflow")
         
-        logger.info(f"📋 SDXL queued: {prompt_id}")
+        # Deduct credits after successful queue
+        await deduct_credits(user, credits_required, prompt_id, "SDXL T2I")
+        logger.info(f"📋 SDXL queued: {prompt_id} (💰 -{credits_required} credits)")
         
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
@@ -2044,14 +2059,16 @@ async def generate_flux_image(
     guidance: float = Form(3.5),
     seed: int = Form(-1),
     lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate image using Flux Dev via ComfyUI.
     Flux doesn't use negative prompts - uses guidance instead.
+    Requires authentication and credits.
     """
     import json as json_lib
     
-    logger.info(f"⚡ Flux T2I request: {prompt[:50]}...")
+    logger.info(f"⚡ Flux T2I request: {prompt[:50]}... [user={user.id}]")
     
     # Parse LoRA configs
     try:
@@ -2073,6 +2090,12 @@ async def generate_flux_image(
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
     
+    # Calculate and check credits
+    credits_required = calculate_credits("generate_flux", width=width, height=height)
+    logger.info(f"💰 Flux generation costs {credits_required} credits")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
+    
     try:
         client = get_comfyui_client()
         
@@ -2090,12 +2113,18 @@ async def generate_flux_image(
         if not output_path:
             raise HTTPException(status_code=500, detail="Flux generation failed")
         
+        # Deduct credits after successful generation
+        await deduct_credits(user, credits_required, job_id, "Flux T2I")
+        logger.info(f"⚡ Flux generated successfully (💰 -{credits_required} credits)")
+        
         filename = Path(output_path).name
         
         return {
             "status": "success",
             "url": f"/files/{filename}",
             "filename": filename,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "model": "flux1-dev-fp8",
@@ -2380,10 +2409,12 @@ async def generate_wan22_comfyui(
     unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
     lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]"),
     extend_mode: str = Form("false", description="Enable sequential clip extension"),
-    clip_count: int = Form(1, description="Number of sequential clips (1-5)")
+    clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow.
+    Requires authentication and credits.
     
     This endpoint uses ComfyUI with:
     - Dual-Pass: High Noise model (steps 0-3) → Low Noise model (steps 3+)
@@ -2410,6 +2441,23 @@ async def generate_wan22_comfyui(
     k = max(1, k)  # Minimum k=1 gives 5 frames
     num_frames = 4 * k + 1
     logger.info(f"🎞️ Adjusted num_frames to Wan2.2 format: {num_frames} (4*{k}+1)")
+    
+    # Calculate duration for credit calculation
+    duration_seconds = num_frames / fps if fps > 0 else 3
+    # Get resolution dimensions for credit calculation
+    _comfyui_temp = get_comfyui_client()
+    width, height = _comfyui_temp.get_resolution_dimensions(resolution, aspect_ratio)
+    
+    # Calculate and check credits
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui", 
+        width=width, 
+        height=height, 
+        duration_seconds=int(duration_seconds)
+    )
+    logger.info(f"💰 Wan2.2 I2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
     
     # Validate file type
     if not file.content_type.startswith("image/"):
@@ -2563,6 +2611,10 @@ async def generate_wan22_comfyui(
             
             total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
             
+            # Deduct credits after successful generation
+            await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
+            logger.info(f"🎬 Wan2.2 video generated (💰 -{credits_required} credits)")
+            
             return {
                 "success": True,
                 "message": f"Wan2.2 video generated via ComfyUI{' (sequential)' if actual_clip_count > 1 else ''}",
@@ -2583,7 +2635,9 @@ async def generate_wan22_comfyui(
                 "seed": seed,
                 "timestamp": timestamp,
                 "backend": "comfyui",
-                "model": "wan2.2_i2v_14B_Q6"
+                "model": "wan2.2_i2v_14B_Q6",
+                "job_id": job_id,
+                "credits_used": credits_required,
             }
         else:
             raise HTTPException(status_code=500, detail="ComfyUI video generation returned no output")
@@ -2611,10 +2665,12 @@ async def generate_wan22_async(
     unet_low_noise: str = Form("wan2.2_i2v_low_noise_14B_Q6_K.gguf", description="GGUF model for low noise pass"),
     lora_configs: str = Form("", description="JSON array of LoRA configs [{high, low, strength}, ...]"),
     extend_mode: str = Form("false", description="Enable sequential clip extension"),
-    clip_count: int = Form(1, description="Number of sequential clips (1-5)")
+    clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Queue Wan2.2 I2V video generation and return immediately.
+    Requires authentication and credits.
     
     Unlike /generate-wan22-comfyui, this endpoint returns immediately with a prompt_id.
     Use /comfyui/job/{prompt_id} to poll for completion status.
@@ -2636,6 +2692,20 @@ async def generate_wan22_async(
     k = round((num_frames - 1) / 4)
     k = max(1, k)
     num_frames = 4 * k + 1
+    
+    # Calculate and check credits
+    _comfyui_temp = get_comfyui_client()
+    width, height = _comfyui_temp.get_resolution_dimensions(resolution, aspect_ratio)
+    duration_seconds = num_frames / fps if fps > 0 else 3
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui", 
+        width=width, 
+        height=height, 
+        duration_seconds=int(duration_seconds)
+    )
+    logger.info(f"💰 Wan2.2 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
     
     # Validate file type
     if not file.content_type.startswith("image/"):
@@ -2757,10 +2827,16 @@ async def generate_wan22_async(
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
     logger.info(f"   📝 {prompt[:50]}...")
     
+    # Deduct credits after successful queue
+    await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V (async)")
+    logger.info(f"   💰 -{credits_required} credits")
+    
     return {
         "success": True,
         "prompt_id": prompt_id,
+        "job_id": job_id,
         "status": "queued",
+        "credits_used": credits_required,
         "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
         **job_info
     }
