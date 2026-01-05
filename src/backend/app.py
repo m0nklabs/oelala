@@ -160,7 +160,9 @@ def inject_png_workflow_metadata(
                                 original_t2i_prompt = text
                                 break
             except json.JSONDecodeError as e:
-                logger.debug(f"🐛 Failed to decode existing prompt metadata as JSON: {e}")
+                logger.debug(
+                    f"🐛 Failed to decode existing prompt metadata as JSON: {e}"
+                )
 
         # Create PNG metadata
         metadata = PngInfo()
@@ -259,7 +261,9 @@ class StreamToBuffer:
                             )
                         except RuntimeError as exc:
                             # 🐛 Debug: ignore missing event loop when broadcasting logs
-                            logging.debug("🐛 Failed to schedule log broadcast task: %s", exc)
+                            logging.debug(
+                                "🐛 Failed to schedule log broadcast task: %s", exc
+                            )
         except Exception:
             # If writing to buffer fails, don't crash the app
             pass
@@ -1570,7 +1574,9 @@ async def extract_metadata(file: UploadFile = File(...)):
                                             metadata["prompt"] = text
                                             metadata["source"] = "comfyui"
                 except json.JSONDecodeError as exc:
-                    logger.debug("🐛 Failed to decode JSON from PNG 'prompt' metadata: %s", exc)
+                    logger.debug(
+                        "🐛 Failed to decode JSON from PNG 'prompt' metadata: %s", exc
+                    )
 
             # A1111/Invoke AI format (parameters in 'parameters' key)
             if "parameters" in info and not metadata.get("prompt"):
@@ -1615,7 +1621,9 @@ async def extract_metadata(file: UploadFile = File(...)):
         try:
             Path(tmp_path).unlink()
         except FileNotFoundError:
-            logger.debug(f"🐛 Temp file already removed or missing during cleanup: {tmp_path}")
+            logger.debug(
+                f"🐛 Temp file already removed or missing during cleanup: {tmp_path}"
+            )
         except OSError as e:
             logger.warning(f"⚠️ Failed to remove temp file {tmp_path}: {e}")
 
