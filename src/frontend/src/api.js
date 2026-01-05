@@ -86,13 +86,30 @@ export async function postForm(url, formData, headers = {}) {
   })
 
   const text = await res.text()
+  let data
   try {
-    const data = text ? JSON.parse(text) : null
-    return { ok: res.ok, status: res.status, data }
+    data = text ? JSON.parse(text) : null
   } catch (e) {
     // Fallback: return raw text when JSON parsing fails
-    return { ok: res.ok, status: res.status, data: text }
+    data = text
   }
+  
+  // Check for insufficient credits error (402)
+  if (res.status === 402 && data?.detail) {
+    // Data might have error info with packages
+    if (typeof data.detail === 'object' && data.detail.error === 'insufficient_credits') {
+      // Dispatch custom event that CreditsContext can listen to
+      window.dispatchEvent(new CustomEvent('insufficient-credits', {
+        detail: {
+          required: data.detail.required,
+          available: data.detail.available,
+          packages: data.detail.packages || []
+        }
+      }))
+    }
+  }
+  
+  return { ok: res.ok, status: res.status, data }
 }
 
 export async function getJson(url) {
