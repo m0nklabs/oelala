@@ -5,6 +5,8 @@ import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
 import QueueIndicator from './QueueIndicator'
 import UserMenu from '../components/UserMenu'
+import Footer from '../components/Footer'
+import LegalModal from '../components/LegalModal'
 import { useNSFW } from '../contexts/NSFWContext'
 import { useAuth } from '../contexts/AuthContext'
 import { TOOL_IDS } from './nav'
@@ -49,6 +51,9 @@ export default function Dashboard() {
   // For I2V creations picker mode
   const [i2vCreationsMode, setI2vCreationsMode] = useState(false)
   const [i2vOnSelectImage, setI2vOnSelectImage] = useState(null)
+  
+  // Legal modal state
+  const [legalType, setLegalType] = useState(null)
   
   // Ref to get current tool params for JSON export
   const toolParamsRef = useRef(null)
@@ -364,6 +369,10 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+      <Footer onShowLegal={setLegalType} />
+      {legalType && (
+        <LegalModal type={legalType} onClose={() => setLegalType(null)} />
+      )}
       <LogViewer />
     </div>
   )

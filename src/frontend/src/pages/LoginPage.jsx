@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import LegalModal from '../components/LegalModal'
 import './LoginPage.css'
 
 export default function LoginPage() {
   const { signInWithGoogle, signInWithGithub, loading } = useAuth()
+  const [legalType, setLegalType] = useState(null)
 
   if (loading) {
     return (
@@ -43,9 +45,20 @@ export default function LoginPage() {
         </div>
 
         <p className="login-footer">
-          By signing in, you agree to our Terms of Service
+          By signing in, you agree to our{' '}
+          <button className="login-link" onClick={() => setLegalType('terms')}>
+            Terms of Service
+          </button>{' '}
+          and{' '}
+          <button className="login-link" onClick={() => setLegalType('privacy')}>
+            Privacy Policy
+          </button>
         </p>
       </div>
+      
+      {legalType && (
+        <LegalModal type={legalType} onClose={() => setLegalType(null)} />
+      )}
     </div>
   )
 }
