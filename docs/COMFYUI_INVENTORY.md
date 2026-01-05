@@ -23,6 +23,67 @@ GPU-only mode, no CPU fallback for model weights.
 
 ---
 
+## 📊 VRAM Limits & Guidelines
+
+### DisTorch2 Multi-GPU Distribution
+DisTorch2 automatically distributes model layers across both GPUs. Use these nodes:
+- `UnetLoaderGGUFAdvancedDisTorch2MultiGPU`
+- `VAELoaderDisTorch2MultiGPU`
+- `CLIPLoaderDisTorch2MultiGPU`
+
+**All loader nodes MUST include `expert_mode_allocations: "cuda:0,12gb;cuda:1,16gb"`**
+
+### Video Generation (Wan 2.2 14B Q6_K)
+
+| Resolution | Max Frames | Duration (16fps) | VRAM Usage |
+|------------|------------|------------------|------------|
+| 480p (848x480) | 81 | ~5 sec | ~24GB |
+| 720p (1280x720) | 41 | ~2.5 sec | ~26GB |
+| 1080p (1920x1080) | 17-25 | ~1-1.5 sec | ~27GB |
+
+**Best Practice**: Start with 480p/41 frames for testing, scale up for production.
+
+### Image Generation (SDXL/Pony)
+
+| Task | Model | Max Resolution | VRAM Usage |
+|------|-------|----------------|------------|
+| T2I | SDXL Lightning | 1024x1024 | ~6GB |
+| T2I | SDXL (full) | 1024x1024 | ~8GB |
+| T2I | Flux FP8 | 1024x1024 | ~12GB |
+| I2I | SDXL | 1536x1536 | ~10GB |
+| Upscale | 4x | 2048x2048 max | ~8GB |
+
+**Note**: Image gen fits on single GPU. Use `cuda:1` (16GB) for headroom.
+
+### Audio Generation (MMAudio)
+
+| Task | Model | VRAM Usage |
+|------|-------|------------|
+| Video-to-Audio | MMAudio Large 44k | ~8GB |
+| Synchformer | Sync model | ~2GB |
+
+**Note**: Run on `cuda:0` to keep `cuda:1` free for concurrent image/video.
+
+### Text Encoding
+
+| Encoder | VRAM Usage | Notes |
+|---------|------------|-------|
+| CLIP-L | ~1GB | SDXL text encoder |
+| T5-XXL FP8 | ~8GB | Wan/Flux text encoder |
+| UMT5-XXL | ~10GB | Wan 2.2 multilingual |
+
+**Tip**: T5/UMT5 can be offloaded after encoding to free VRAM for generation.
+
+### Concurrent Operations
+
+With 28GB total VRAM, you can run:
+- ✅ Image gen + Audio gen (different GPUs)
+- ✅ Multiple image gens (batch on cuda:1)
+- ⚠️ Video gen + anything else (tight, may OOM)
+- ❌ Two video gens simultaneously
+
+---
+
 ## 📦 Checkpoints (SDXL/Pony/Flux)
 
 | Model | Category | Notes |
@@ -64,14 +125,6 @@ GPU-only mode, no CPU fallback for model weights.
 | `Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors` | T2V Low |
 | `wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors` | T2V High |
 | `wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors` | T2V Low |
-
-### Video Generation Limits
-
-| Resolution | Max Frames | Duration (16fps) |
-|------------|------------|------------------|
-| 480p (848x480) | 81 | ~5 sec |
-| 720p (1280x720) | 41 | ~2.5 sec |
-| 1080p | 17-25 | ~1-1.5 sec |
 
 ---
 
