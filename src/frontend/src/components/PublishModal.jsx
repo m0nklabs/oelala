@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { X, Upload, Tag, AlertCircle } from 'lucide-react'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'
+import { getMediaType } from '../utils/mediaUtils'
 
 export default function PublishModal({ mediaItem, onClose, onPublished }) {
   const [title, setTitle] = useState(mediaItem.metadata?.positive_prompt?.slice(0, 100) || '')
@@ -10,15 +11,6 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
   const [isNsfw, setIsNsfw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  // Determine media type from filename
-  const getMediaType = (filename) => {
-    const ext = filename.toLowerCase().split('.').pop()
-    if (['mp4', 'webm', 'mov', 'avi'].includes(ext)) return 'video'
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image'
-    if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return 'audio'
-    return 'image'
-  }
 
   // Build media URL for preview
   const getMediaUrl = () => {

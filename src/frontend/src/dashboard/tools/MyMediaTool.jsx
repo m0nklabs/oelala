@@ -4,6 +4,7 @@ import { BACKEND_BASE } from '../../config'
 import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
+import { getMediaType } from '../../utils/mediaUtils'
 
 // Format video duration as MM:SS
 const formatDuration = (seconds) => {
@@ -11,15 +12,6 @@ const formatDuration = (seconds) => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
-// Determine media type from filename
-const getMediaType = (filename) => {
-  const ext = filename.toLowerCase().split('.').pop()
-  if (['mp4', 'webm', 'mov', 'avi'].includes(ext)) return 'video'
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image'
-  if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return 'audio'
-  return 'image'
 }
 
 // LocalStorage key for favorites
