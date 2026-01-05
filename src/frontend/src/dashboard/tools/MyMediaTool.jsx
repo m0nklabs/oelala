@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
 import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import PublishModal from '../../components/PublishModal'
 
 // Format video duration as MM:SS
 const formatDuration = (seconds) => {
@@ -10,6 +11,15 @@ const formatDuration = (seconds) => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+// Determine media type from filename
+const getMediaType = (filename) => {
+  const ext = filename.toLowerCase().split('.').pop()
+  if (['mp4', 'webm', 'mov', 'avi'].includes(ext)) return 'video'
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image'
+  if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return 'audio'
+  return 'image'
 }
 
 // LocalStorage key for favorites
@@ -88,6 +98,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [searchQuery, setSearchQuery] = useState('') // Search by filename or prompt
   const [hideStartImages, setHideStartImages] = useState(true)  // Hide start images by default
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
+  const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
+  const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
   
   // Compute gridSize from profile
   const activeProfile = profile === 'auto' ? detectProfile() : profile
@@ -667,6 +679,33 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           opacity: 1;
           background: #ef4444;
           border-color: #ef4444;
+        }
+
+        /* ========== PUBLISH BUTTON ========== */
+        .publish-btn {
+          position: absolute;
+          top: 8px;
+          left: 70px;
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          background: rgba(0,0,0,0.7);
+          border: 2px solid rgba(255,255,255,0.8);
+          opacity: 0;
+          transition: opacity 0.15s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 20;
+        }
+        .thumb-card:hover .publish-btn {
+          opacity: 1;
+        }
+        .publish-btn.is-published {
+          opacity: 1;
+          background: #10b981;
+          border-color: #10b981;
         }
 
         /* ========== PROMPT BUBBLE BUTTON ========== */
@@ -1584,6 +1623,24 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   fill={favorites.has(item.filename) ? '#fff' : 'none'}
                 />
               </div>
+
+              {/* Publish button - only show for logged-in users on their own storage media */}
+              {user && item.source === 'storage' && (
+                <div 
+                  className={`publish-btn ${publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? 'is-published' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPublishModalItem(item)
+                  }}
+                  title={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? 'Published to gallery' : 'Publish to gallery'}
+                >
+                  <Upload 
+                    size={14} 
+                    color={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? '#fff' : 'rgba(255,255,255,0.7)'}
+                    fill={publishedItems.has(`${getMediaType(item.filename)}/${item.filename}`) ? '#fff' : 'none'}
+                  />
+                </div>
+              )}
               
               {/* Prompt bubble button - only show if item has a prompt */}
               {(item.metadata?.positive_prompt || item.metadata?.prompt) && (
@@ -2005,6 +2062,19 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             </div>
           </div>
         </div>
+      )}
+
+      {/* Publish Modal */}
+      {publishModalItem && (
+        <PublishModal
+          mediaItem={publishModalItem}
+          onClose={() => setPublishModalItem(null)}
+          onPublished={(published) => {
+            // Add to published items set
+            setPublishedItems(prev => new Set([...prev, published.storage_path]))
+            setPublishModalItem(null)
+          }}
+        />
       )}
     </div>
   )
