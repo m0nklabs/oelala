@@ -4626,23 +4626,32 @@ async def upscale_image(
 @app.post("/upscale-video")
 async def upscale_video(
     file: UploadFile = File(...),
-    model: str = Form("realesrgan-video"),
+    model: str = Form("lanczos"),
+    scale: float = Form(2.0),
 ):
     """
-    Upscale video using AI-enhanced upscaling (Real-ESRGAN Video).
+    Upscale video using various methods.
 
     Args:
         file: Source video
-        model: Upscale model (realesrgan-video, basic-lanczos)
+        model: Upscale method:
+            - lanczos: High-quality lanczos interpolation (fast, no AI)
+            - bicubic: Bicubic interpolation (fast, no AI)
+            - seedvr2: SeedVR2 AI upscaler (slow, requires GPU, best quality)
+        scale: Upscale factor (2.0 = double resolution)
     
-    Note: This endpoint currently uses a fixed workflow. Future enhancements will support:
-        - Custom resolution presets
-        - Quality vs speed settings
-        - Batch size configuration
+    Note: AI upscale models (realesrgan) are not currently installed.
+    Use 'lanczos' for reliable basic upscaling.
     """
-    logger.info(
-        f"🎬 Video upscale request: model={model}"
-    )
+    logger.info(f"🎬 Video upscale request: model={model}, scale={scale}x")
+
+    # Validate model
+    valid_models = ["lanczos", "bicubic", "bilinear", "nearest-exact", "area"]
+    if model not in valid_models and model != "seedvr2":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model '{model}'. Available: {valid_models + ['seedvr2']}"
+        )
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -4666,49 +4675,117 @@ async def upscale_video(
 
         logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
 
-        # Build video upscaling workflow matching the JSON template
-        # Uses VHS (Video Helper Suite) nodes for video I/O
-        workflow = {
-            "1": {
-                "inputs": {
-                    "video": comfyui_filename,
-                    "force_rate": 0,
-                    "force_size": "Disabled",
-                    "custom_width": 512,
-                    "custom_height": 512,
-                    "frame_load_cap": 0,
-                    "skip_first_frames": 0,
-                    "select_every_nth": 1
+        if model == "seedvr2":
+            # SeedVR2 AI video upscaler workflow
+            # Requires: SeedVR2LoadDiTModel, SeedVR2LoadVAEModel, SeedVR2VideoUpscaler
+            workflow = {
+                "1": {
+                    "inputs": {
+                        "video": comfyui_filename,
+                        "force_rate": 0,
+                        "force_size": "Disabled",
+                        "custom_width": 512,
+                        "custom_height": 512,
+                        "frame_load_cap": 0,
+                        "skip_first_frames": 0,
+                        "select_every_nth": 1
+                    },
+                    "class_type": "VHS_LoadVideo",
                 },
-                "class_type": "VHS_LoadVideo",
-            },
-            "2": {
-                "inputs": {"model_name": "RealESRGAN_x4plus.pth"},
-                "class_type": "UpscaleModelLoader"
-            },
-            "3": {
-                "inputs": {
-                    "upscale_model": ["2", 0],
-                    "image": ["1", 0],
+                "2": {
+                    "inputs": {
+                        "model": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
+                        "device": "cuda:1",  # RTX 5060 Ti has more VRAM
+                        "offload_device": "cuda:0",
+                        "attention_mode": "sdpa",
+                    },
+                    "class_type": "SeedVR2LoadDiTModel",
                 },
-                "class_type": "ImageUpscaleWithModel",
-            },
-            "4": {
-                "inputs": {
-                    "frame_rate": 30,
-                    "loop_count": 0,
-                    "filename_prefix": "oelala_upscale_video",
-                    "format": "video/h264-mp4",
-                    "pix_fmt": "yuv420p",
-                    "crf": 19,
-                    "save_metadata": True,
-                    "pingpong": False,
-                    "save_output": True,
-                    "images": ["3", 0],
+                "3": {
+                    "inputs": {
+                        "model": "seedvr2_ema_vae_fp32.safetensors",
+                        "device": "cuda:0",
+                    },
+                    "class_type": "SeedVR2LoadVAEModel",
                 },
-                "class_type": "VHS_VideoCombine",
-            },
-        }
+                "4": {
+                    "inputs": {
+                        "image": ["1", 0],
+                        "dit": ["2", 0],
+                        "vae": ["3", 0],
+                        "seed": 42,
+                        "resolution": int(1080 * scale / 2),  # Target resolution
+                        "max_resolution": 0,
+                        "batch_size": 5,
+                        "uniform_batch_size": False,
+                        "color_correction": "lab",
+                    },
+                    "class_type": "SeedVR2VideoUpscaler",
+                },
+                "5": {
+                    "inputs": {
+                        "frame_rate": 30,
+                        "loop_count": 0,
+                        "filename_prefix": "oelala_upscale_seedvr2",
+                        "format": "video/h264-mp4",
+                        "pix_fmt": "yuv420p",
+                        "crf": 19,
+                        "save_metadata": True,
+                        "pingpong": False,
+                        "save_output": True,
+                        "images": ["4", 0],
+                    },
+                    "class_type": "VHS_VideoCombine",
+                },
+            }
+        else:
+            # Basic upscaling with ImageScale (lanczos, bicubic, etc.)
+            # Note: ImageScale requires explicit width/height, not scale factor
+            # We'll use a reasonable output size based on scale
+            # Default input assumed ~480p, so 2x = ~960p
+            target_width = int(1920 * scale / 2)  # Scale from 960 base
+            target_height = int(1080 * scale / 2)  # Scale from 540 base
+            
+            workflow = {
+                "1": {
+                    "inputs": {
+                        "video": comfyui_filename,
+                        "force_rate": 0,
+                        "force_size": "Disabled",
+                        "custom_width": 512,
+                        "custom_height": 512,
+                        "frame_load_cap": 0,
+                        "skip_first_frames": 0,
+                        "select_every_nth": 1
+                    },
+                    "class_type": "VHS_LoadVideo",
+                },
+                "2": {
+                    "inputs": {
+                        "image": ["1", 0],
+                        "upscale_method": model,
+                        "width": target_width,
+                        "height": target_height,
+                        "crop": "disabled",
+                    },
+                    "class_type": "ImageScale",
+                },
+                "3": {
+                    "inputs": {
+                        "frame_rate": 30,
+                        "loop_count": 0,
+                        "filename_prefix": f"oelala_upscale_{model}",
+                        "format": "video/h264-mp4",
+                        "pix_fmt": "yuv420p",
+                        "crf": 19,
+                        "save_metadata": True,
+                        "pingpong": False,
+                        "save_output": True,
+                        "images": ["2", 0],
+                    },
+                    "class_type": "VHS_VideoCombine",
+                },
+            }
 
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
@@ -4721,6 +4798,7 @@ async def upscale_video(
             "prompt_id": prompt_id,
             "meta": {
                 "model": model,
+                "scale": scale,
                 "source_video": comfyui_filename,
             },
         }
@@ -4781,8 +4859,21 @@ async def interpolate_video(
 
         logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
 
-        # Build frame interpolation workflow matching the JSON template
-        # Uses VHS + RIFE nodes
+        # Build frame interpolation workflow
+        # Flow: VHS_LoadVideo → RIFE VFI → VHS_VideoCombine
+        # Note: RIFE VFI takes frames directly and returns interpolated frames
+        
+        # Select correct checkpoint based on model
+        if model == "rife":
+            ckpt_name = "rife47.pth"
+            class_type = "RIFE VFI"
+        elif model == "film":
+            ckpt_name = "film_net_fp32.pt"  # May not be installed
+            class_type = "FILM VFI"
+        else:
+            ckpt_name = "rife47.pth"
+            class_type = "RIFE VFI"
+        
         workflow = {
             "1": {
                 "inputs": {
@@ -4799,24 +4890,17 @@ async def interpolate_video(
             },
             "2": {
                 "inputs": {
-                    "ckpt_name": "rife47.pth" if model == "rife" else "film_net_fp32.pt",
+                    "ckpt_name": ckpt_name,
+                    "frames": ["1", 0],  # Connect to VHS_LoadVideo output
                     "clear_cache_after_n_frames": 10,
                     "multiplier": int(multiplier),
                     "fast_mode": True,
                     "ensemble": True,
                     "scale_factor": 1.0
                 },
-                "class_type": "RIFE VFI",
+                "class_type": class_type,
             },
             "3": {
-                "inputs": {
-                    "frames": ["1", 0],
-                    "interpolation": ["2", 0],
-                    "optional_interpolation_states": ["2", 1],
-                },
-                "class_type": "VFI",
-            },
-            "4": {
                 "inputs": {
                     "frame_rate": target_fps if mode == "fps" else 30,
                     "loop_count": 0,
@@ -4827,7 +4911,7 @@ async def interpolate_video(
                     "save_metadata": True,
                     "pingpong": False,
                     "save_output": True,
-                    "images": ["3", 0],
+                    "images": ["2", 0],  # Connect to RIFE VFI output
                 },
                 "class_type": "VHS_VideoCombine",
             },
