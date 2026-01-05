@@ -53,10 +53,8 @@ GPU-only mode, no CPU fallback for model weights.
 | `Wan22-I2V_A14B-Lightning-L-Q6_K.gguf` | I2V Low | **Lightning (fast)** |
 | `smoothMixWan22GGUF_highQ6K.gguf` | I2V High | Smooth motion |
 | `smoothMixWan22GGUF_lowQ6K.gguf` | I2V Low | Smooth motion |
-| `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH.gguf` | I2V High | NSFW + camera |
-| `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KL.gguf` | I2V Low | NSFW + camera |
-| `wan22EnhancedNSFW_V2_Q6K_HIGH.gguf` | I2V High | Enhanced NSFW |
-| `wan22EnhancedNSFW_V2_Q6K_LOW.gguf` | I2V Low | Enhanced NSFW |
+
+> **Note**: Additional specialized UNET variants available on the server.
 
 ### UNET Models (FP8 - for T2V)
 
@@ -79,52 +77,36 @@ GPU-only mode, no CPU fallback for model weights.
 
 ## 🎨 LoRAs
 
-### Wan 2.2 Video LoRAs (Dual High/Low Noise)
+### Wan 2.2 Video LoRAs
 
-#### Motion & Action
-| Name | High Noise | Low Noise |
-|------|------------|-----------|
-| Bounce | `BounceHighWan2_2.safetensors` | `BounceLowWan2_2.safetensors` |
-| Smooth XXX Animation | `SmoothXXXAnimation_High.safetensors` | `SmoothXXXAnimation_Low.safetensors` |
-| DR34MJOB | `DR34MJOB_I2V_14b_HighNoise.safetensors` | `DR34MJOB_I2V_14b_LowNoise.safetensors` |
-| DR34ML4Y | `DR34ML4Y_I2V_14B_HIGH.safetensors` | `DR34ML4Y_I2V_14B_LOW.safetensors` |
-| SF Behind | `sfbehind_v2.1_high_noise.safetensors` | `sfbehind_v2.1_low_noise.safetensors` |
+**90+ motion and action LoRAs available** in dual high/low noise variants.
 
-#### Specific Actions
-| Name | High Noise | Low Noise |
-|------|------------|-----------|
-| POV Cowgirl | `WAN-2.2-I2V-POV-Cowgirl-HIGH-v1.0-fixed.safetensors` | `WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors` |
-| Reverse Cowgirl | `wan22.r3v3rs3_c0wg1rl-14b-High-i2v_e70.safetensors` | `wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors` |
-| Titfuck/Paizuri | `WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors` | `WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors` |
-| Breast Play | `WAN-2.2-I2V-BreastPlay-HIGH-v2.safetensors` | `WAN-2.2-I2V-BreastPlay-LOW-v2.safetensors` |
-| Handjob/Blowjob Combo | `WAN-2.2-I2V-HandjobBlowjobCombo-HIGH-v1.safetensors` | `WAN-2.2-I2V-HandjobBlowjobCombo-LOW-v1.safetensors` |
-| Deepthroat | `wan22-ultimatedeepthroat-i2v-102epoc-high-k3nk.safetensors` | `wan22-ultimatedeepthroat-I2V-101epoc-low-k3nk.safetensors` |
-| Throat V3 | `Wan22_ThroatV3_High.safetensors` | `Wan22_ThroatV3_Low.safetensors` |
-| Facesplash | `wan22-f4c3spl4sh-100epoc-high-k3nk.safetensors` | `wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors` |
-| Cum V2 | `Wan22_CumV2_High.safetensors` | `Wan22_CumV2_Low.safetensors` |
-| BBC Ride | `bbcRide_wan22_I2V_high_e30.safetensors` | `bbcRide_wan22_I2V_low_e30.safetensors` |
-| Anal Insertion | `anal_insertion_HIGH_V01.safetensors` | `anal_insertion_LOW_V01.safetensors` |
-| Cowgirl Insertion | `W22_POV_Cowgirl_Insertion_i2v_HN_v1A.safetensors` | `W22_POV_Cowgirl_Insertion_i2v_LN_v1.safetensors` |
-| Cumshot Aesthetics | `23High noise-Cumshot Aesthetics.safetensors` | `56Low noise-Cumshot Aesthetics.safetensors` |
+All video LoRAs require BOTH versions loaded simultaneously:
+- High noise → affects early diffusion steps  
+- Low noise → affects late diffusion steps
 
-### SDXL/Pony LoRAs
+Available categories:
+- Motion & animation effects
+- Camera movements
+- Action sequences
+- Style transfers
+
+> **Note**: Full LoRA list available on the server filesystem at `/home/flip/oelala/ComfyUI/models/loras/`
+
+### SDXL/Pony LoRAs (SFW)
 
 | Name | File | Purpose |
 |------|------|---------|
 | Add Details | `Add_Details_v1.2.safetensors` | Detail enhancement |
-| Amateur Style | `amateur_style_v1_pony.safetensors` | Realistic amateur look |
 | IG Baddie | `igbaddie-PN.safetensors` | Instagram style |
 | Tattoo Girls | `tattoogirls-PN.safetensors` | Tattoo style |
 | Incase Style | `incase_style_v3-1_ponyxl_ilff.safetensors` | Artist style |
 | Real Skin | `RealSkin_xxXL_v1.safetensors` | Skin texture |
 | Shiny Skin | `ShinySkinSlider3.0_800steps.safetensors` | Slider |
-| Natural Breasts | `natural_breasts_v1.safetensors` | Body type |
 | Body Weight Slider | `body_weight_slider_v1.safetensors` | Slider |
 | Pony Realism | `Pony Realism Slider.safetensors` | Slider |
 | Dramatic Lighting | `Dramatic Lighting Slider.safetensors` | Slider |
 | Realism Yogi V2 | `Realism_Lora_By_Stable_Yogi_Pony_V2.safetensors` | Realism |
-| Real Cum V6 | `realcumv6.55.safetensors` | Effect |
-| Uncensored Pony | `Uncensored_PonyXL_cpt_v03.safetensors` | Uncensor |
 
 ---
 
