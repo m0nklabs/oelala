@@ -141,7 +141,7 @@ Samples: {len(self.data)}
 
 🎮 GPU 0 (cuda:0):
    Peak VRAM: {gpu0_peak:,} MB / {gpu0_total:,} MB ({100 * gpu0_peak / gpu0_total:.1f}%)
-   
+
 🎮 GPU 1 (cuda:1):
    Peak VRAM: {gpu1_peak:,} MB / {gpu1_total:,} MB ({100 * gpu1_peak / gpu1_total:.1f}%)
 

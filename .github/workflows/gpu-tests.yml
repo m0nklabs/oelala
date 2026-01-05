@@ -13,7 +13,7 @@ on:
           - smoke
           - full
           - workflow-validation
-  
+
   # Run on PRs that touch video/ComfyUI related code
   pull_request:
     paths:
@@ -36,16 +36,16 @@ jobs:
     name: GPU Integration Tests
     runs-on: [self-hosted, gpu, comfyui]
     timeout-minutes: 30
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Check GPU availability
         run: |
           echo "🎮 Checking GPU..."
           nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv
-          
+
       - name: Check ComfyUI status
         run: |
           echo "🖥️ Checking ComfyUI..."
@@ -54,46 +54,46 @@ jobs:
             vram_total_gb: (.devices[0].vram_total / 1073741824 | floor),
             vram_free_gb: (.devices[0].vram_free / 1073741824 | floor)
           }'
-          
+
       - name: Check Backend API
         run: |
           echo "🔧 Checking Backend API..."
           curl -s http://localhost:7998/health | jq .
-          
+
       - name: Setup Python
         run: |
           echo "🐍 Using system Python with GPU venv..."
           source /home/flip/venvs/gpu/bin/activate
           python --version
           pip show torch | grep -E "^(Name|Version)"
-          
+
       - name: Run smoke tests
         if: inputs.test_type == 'smoke' || inputs.test_type == ''
         run: |
           echo "💨 Running smoke tests..."
           source /home/flip/venvs/gpu/bin/activate
           cd src/backend
-          
+
           # Test 1: Backend responds
           curl -s http://localhost:7998/health | jq -e '.status == "healthy"'
           echo "✅ Backend healthy"
-          
-          # Test 2: ComfyUI responds  
+
+          # Test 2: ComfyUI responds
           curl -s http://localhost:8188/system_stats | jq -e '.devices[0].vram_total > 0'
           echo "✅ ComfyUI online with GPU"
-          
+
           # Test 3: Models available
           MODELS=$(curl -s http://localhost:7998/api/models/unet 2>/dev/null | jq -r '.models | length' || echo "0")
           echo "📦 Found $MODELS unet models"
-          
+
           echo "✅ All smoke tests passed!"
-          
+
       - name: Run workflow validation tests
         if: inputs.test_type == 'workflow-validation' || inputs.test_type == 'full'
         run: |
           echo "🔍 Validating ComfyUI workflows..."
           source /home/flip/venvs/gpu/bin/activate
-          
+
           # Validate workflow JSON files can be parsed
           for wf in workflows/*.json; do
             if [ -f "$wf" ]; then
@@ -101,7 +101,7 @@ jobs:
               python -c "import json; json.load(open('$wf'))" && echo "  ✅ Valid JSON"
             fi
           done
-          
+
           # Run pytest if gpu tests exist
           if [ -d "tests/gpu" ]; then
             cd /home/flip/oelala
@@ -116,7 +116,7 @@ jobs:
           echo "🧪 Running full GPU integration tests..."
           source /home/flip/venvs/gpu/bin/activate
           cd /home/flip/oelala
-          
+
           # Quick generation test (minimal frames/steps)
           echo "🎬 Testing minimal video generation..."
           RESULT=$(curl -s -X POST http://localhost:7998/generate-text \
@@ -124,14 +124,14 @@ jobs:
             -F "num_frames=5" \
             -F "resolution=480p" \
             --max-time 120)
-          
+
           echo "Response: $RESULT"
-          
+
           # Check if we got a valid response (not an error)
           echo "$RESULT" | jq -e '.error == null or .error == ""' || {
             echo "⚠️ Generation returned error (may be expected if models not loaded)"
           }
-          
+
           echo "✅ Full integration tests completed"
 
       - name: Summary
