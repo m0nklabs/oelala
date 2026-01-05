@@ -24,8 +24,9 @@ from credits import (
 
 logger = logging.getLogger(__name__)
 
-# Create router
+# Create routers
 router = APIRouter(prefix="/api/credits", tags=["credits"])
+stripe_router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 
 # Debug flag
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -276,9 +277,10 @@ async def initiate_purchase(
 
 # =============================================================================
 # Webhook for Stripe (no auth required)
+# Mounted at /api/stripe/webhook for Stripe compatibility
 # =============================================================================
 
-@router.post("/webhook/stripe")
+@stripe_router.post("/webhook")
 async def stripe_webhook(request: Request):
     """
     Handle Stripe webhook events.
