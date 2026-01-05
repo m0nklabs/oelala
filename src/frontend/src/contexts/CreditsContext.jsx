@@ -36,31 +36,6 @@ export function CreditsProvider({ children }) {
   // Purchase modal state
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
 
-  // Check URL parameters for Stripe redirect
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const success = params.get('success')
-    const cancelled = params.get('cancelled')
-    
-    if (success === 'true') {
-      setPurchaseSuccess(true)
-      // Refresh balance after successful purchase
-      fetchBalance()
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname)
-      // Auto-clear success message
-      setTimeout(() => setPurchaseSuccess(false), NOTIFICATION_TIMEOUT_MS)
-    }
-    
-    if (cancelled === 'true') {
-      setPurchaseCancelled(true)
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname)
-      // Auto-clear cancelled message
-      setTimeout(() => setPurchaseCancelled(false), NOTIFICATION_TIMEOUT_MS)
-    }
-  }, [fetchBalance])
-
   // Fetch balance when user changes
   const fetchBalance = useCallback(async () => {
     if (!user) {
@@ -93,6 +68,31 @@ export function CreditsProvider({ children }) {
       setLoading(false)
     }
   }, [user])
+
+  // Check URL parameters for Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const success = params.get('success')
+    const cancelled = params.get('cancelled')
+    
+    if (success === 'true') {
+      setPurchaseSuccess(true)
+      // Refresh balance after successful purchase
+      fetchBalance()
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+      // Auto-clear success message
+      setTimeout(() => setPurchaseSuccess(false), NOTIFICATION_TIMEOUT_MS)
+    }
+    
+    if (cancelled === 'true') {
+      setPurchaseCancelled(true)
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+      // Auto-clear cancelled message
+      setTimeout(() => setPurchaseCancelled(false), NOTIFICATION_TIMEOUT_MS)
+    }
+  }, [fetchBalance])
 
   // Fetch packages (public, no auth needed)
   const fetchPackages = useCallback(async () => {
