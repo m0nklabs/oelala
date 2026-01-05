@@ -42,6 +42,9 @@ jobs:
 
       - name: Commit and push fixes
         run: |
+          # Exclude workflow files - GitHub Apps can't push to them
+          git checkout -- .github/workflows/ 2>/dev/null || true
+          
           if git diff --quiet; then
             echo "No style fixes needed"
           else
