@@ -253,8 +253,11 @@ async def list_published_media(
         raise HTTPException(status_code=503, detail="Gallery service unavailable")
     
     try:
-        # Start query
-        query = supabase.table("published_media").select("*", count="exact")
+        # Start query - explicitly select only needed columns
+        query = supabase.table("published_media").select(
+            "id,user_id,storage_path,title,description,tags,is_nsfw,media_type,thumbnail_url,metadata,view_count,like_count,created_at,updated_at",
+            count="exact"
+        )
         
         # Filter by media type
         if media_type and media_type in ['video', 'image', 'audio']:
@@ -335,9 +338,9 @@ async def get_published_media(
         raise HTTPException(status_code=503, detail="Gallery service unavailable")
     
     try:
-        # Fetch media
+        # Fetch media - explicitly select only needed columns
         result = supabase.table("published_media")\
-            .select("*")\
+            .select("id,user_id,storage_path,title,description,tags,is_nsfw,media_type,thumbnail_url,metadata,view_count,like_count,created_at,updated_at")\
             .eq("id", media_id)\
             .execute()
         
@@ -419,7 +422,7 @@ async def get_user_published_media(
     
     try:
         query = supabase.table("published_media")\
-            .select("*", count="exact")\
+            .select("id,user_id,storage_path,title,description,tags,is_nsfw,media_type,thumbnail_url,metadata,view_count,like_count,created_at,updated_at", count="exact")\
             .eq("user_id", user_id)
         
         # Anonymous users can only see SFW

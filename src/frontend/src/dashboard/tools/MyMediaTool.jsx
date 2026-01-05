@@ -2066,6 +2066,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             setPublishedItems(prev => new Set([...prev, published.storage_path]))
             setPublishModalItem(null)
           }}
+          onUnpublished={(storagePath) => {
+            // Remove from published items set when unpublished
+            setPublishedItems(prev => {
+              const next = new Set(prev)
+              next.delete(storagePath)
+              return next
+            })
+          }}
         />
       )}
     </div>
