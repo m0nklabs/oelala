@@ -4,14 +4,14 @@
   --bg-sidebar: #121212;
   --bg-panel: #1a1a1a;
   --bg-input: #262626;
-  
+
   --text-primary: #ffffff;
   --text-secondary: #a3a3a3;
   --text-muted: #525252;
 
   --accent-color: #3b82f6; /* Blue accent */
   --accent-hover: #2563eb;
-  
+
   --border-color: #333333;
   --border-light: #404040;
 
@@ -86,10 +86,18 @@ body {
 }
 
 /* Dashboard Layout */
-.dashboard-container {
+.dashboard-wrapper {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
+  overflow: hidden;
+}
+
+.dashboard-container {
+  display: flex;
+  flex: 1;
+  width: 100%;
   overflow: hidden;
 }
 

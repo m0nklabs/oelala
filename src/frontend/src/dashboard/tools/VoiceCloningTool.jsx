@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
-import { 
-  Mic, Upload, Play, Pause, Download, Loader2, X, 
+import {
+  Mic, Upload, Play, Pause, Download, Loader2, X,
   FileAudio, Volume2, Trash2, Check
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
@@ -24,27 +24,27 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
   const [voiceSample, setVoiceSample] = useState(null)
   const [voiceSampleUrl, setVoiceSampleUrl] = useState(null)
   const [uploadedPath, setUploadedPath] = useState(null)
-  
+
   // Text input
   const [text, setText] = useState('')
-  
+
   // Model settings
   const [model, setModel] = useState('F5v1')
   const [speed, setSpeed] = useState(1.0)
-  
+
   // Recording state
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
   const timerRef = useRef(null)
-  
+
   // Playback
   const audioRef = useRef(null)
   const resultAudioRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isResultPlaying, setIsResultPlaying] = useState(false)
-  
+
   // Generation state
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -73,16 +73,16 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       })
-      
+
       chunksRef.current = []
       mediaRecorderRef.current = mediaRecorder
-      
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data)
         }
       }
-      
+
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         const file = new File([blob], 'recording.webm', { type: 'audio/webm' })
@@ -91,15 +91,15 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
         setUploadedPath(null)
         stream.getTracks().forEach(track => track.stop())
       }
-      
+
       mediaRecorder.start()
       setIsRecording(true)
       setRecordingTime(0)
-      
+
       timerRef.current = setInterval(() => {
         setRecordingTime(t => t + 1)
       }, 1000)
-      
+
     } catch (err) {
       setError('Failed to access microphone: ' + err.message)
     }
@@ -117,10 +117,10 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
   // Upload voice sample
   const uploadVoiceSample = async () => {
     if (!voiceSample) return null
-    
+
     const formData = new FormData()
     formData.append('file', voiceSample)
-    
+
     try {
       const res = await postForm(`${BACKEND_BASE}/upload`, formData)
       if (res.ok && res.data?.path) {
@@ -139,22 +139,22 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
       setError('Please provide both a voice sample and text to speak')
       return
     }
-    
+
     setSubmitting(true)
     setUploading(true)
     setError(null)
     setLastQueued(null)
     setResult(null)
-    
+
     try {
       // Upload voice sample if needed
       let audioPath = uploadedPath
       if (!audioPath) {
         audioPath = await uploadVoiceSample()
       }
-      
+
       setUploading(false)
-      
+
       // Request voice cloning via F5-TTS
       const res = await postJson(`${BACKEND_BASE}/voice-clone`, {
         voice_sample_path: audioPath,
@@ -162,26 +162,26 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
         model: model,
         speed: speed,
       })
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Voice cloning request failed')
       }
-      
+
       if (res.data?.prompt_id) {
         // Show queued confirmation
         setLastQueued({
           promptId: res.data.prompt_id,
           model: F5_MODELS.find(m => m.value === model)?.label || model
         })
-        
+
         // Notify queue indicator
         if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
-        
+
         if (DEBUG) console.debug('📋 Voice cloning queued:', res.data.prompt_id)
-        
+
         // Don't wait for completion - job will appear in queue/history when done
       }
-      
+
     } catch (err) {
       console.error('Voice cloning error:', err)
       setError(err.message)
@@ -242,7 +242,7 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           <FileAudio size={18} />
           Voice Sample (5-30 seconds recommended)
         </h3>
-        
+
         {!voiceSample ? (
           <div className="voice-input-options">
             {/* Upload Area */}
@@ -263,9 +263,9 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
                 style={{ display: 'none' }}
               />
             </div>
-            
+
             <div className="divider-text">or</div>
-            
+
             {/* Record Button */}
             <button
               className={`record-btn ${isRecording ? 'recording' : ''}`}
@@ -438,7 +438,7 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           flex-direction: column;
           gap: 16px;
         }
-        
+
         .drop-zone {
           border: 2px dashed #4a4a4a;
           border-radius: 12px;
@@ -447,28 +447,28 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
+
         .drop-zone:hover {
           border-color: #fbbf24;
           background: rgba(251, 191, 36, 0.05);
         }
-        
+
         .drop-zone p {
           margin: 12px 0 4px;
           color: #ccc;
         }
-        
+
         .supported-formats {
           font-size: 12px;
           color: #888;
         }
-        
+
         .divider-text {
           text-align: center;
           color: #666;
           font-size: 13px;
         }
-        
+
         .record-btn {
           display: flex;
           align-items: center;
@@ -483,17 +483,17 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
+
         .record-btn:hover {
           border-color: #ef4444;
           background: rgba(239, 68, 68, 0.1);
         }
-        
+
         .record-btn.recording {
           border-color: #ef4444;
           background: rgba(239, 68, 68, 0.2);
         }
-        
+
         .recording-indicator {
           width: 12px;
           height: 12px;
@@ -501,45 +501,45 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           background: #ef4444;
           animation: pulse 1s infinite;
         }
-        
+
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
-        
+
         .voice-preview {
           background: #1a1a1a;
           border-radius: 12px;
           padding: 16px;
         }
-        
+
         .voice-file-info {
           display: flex;
           align-items: center;
           gap: 12px;
         }
-        
+
         .file-details {
           flex: 1;
           display: flex;
           flex-direction: column;
         }
-        
+
         .filename {
           color: #fff;
           font-size: 14px;
         }
-        
+
         .filesize {
           color: #888;
           font-size: 12px;
         }
-        
+
         .voice-controls {
           display: flex;
           gap: 8px;
         }
-        
+
         .icon-btn {
           padding: 8px;
           border-radius: 8px;
@@ -549,16 +549,16 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
+
         .icon-btn:hover {
           background: #3a3a3a;
         }
-        
+
         .icon-btn.danger:hover {
           background: rgba(239, 68, 68, 0.2);
           color: #ef4444;
         }
-        
+
         .upload-status {
           display: flex;
           align-items: center;
@@ -567,20 +567,20 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           color: #22c55e;
           font-size: 12px;
         }
-        
+
         .char-count {
           text-align: right;
           font-size: 12px;
           color: #666;
           margin-top: 4px;
         }
-        
+
         .model-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
           gap: 8px;
         }
-        
+
         .model-btn {
           display: flex;
           flex-direction: column;
@@ -593,44 +593,44 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           cursor: pointer;
           transition: all 0.2s;
         }
-        
+
         .model-btn:hover {
           border-color: #4a4a4a;
         }
-        
+
         .model-btn.active {
           border-color: #fbbf24;
           background: rgba(251, 191, 36, 0.1);
         }
-        
+
         .model-name {
           font-size: 13px;
           font-weight: 500;
         }
-        
+
         .model-desc {
           font-size: 11px;
           color: #888;
           margin-top: 2px;
         }
-        
+
         .slider-row {
           display: flex;
           align-items: center;
           gap: 12px;
         }
-        
+
         .slider-row input[type="range"] {
           flex: 1;
         }
-        
+
         .slider-value {
           min-width: 50px;
           text-align: right;
           color: #fbbf24;
           font-weight: 500;
         }
-        
+
         .slider-hints {
           display: flex;
           justify-content: space-between;
@@ -638,24 +638,24 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           color: #666;
           margin-top: 4px;
         }
-        
+
         .result-section {
           background: rgba(34, 197, 94, 0.1);
           border: 1px solid rgba(34, 197, 94, 0.3);
           border-radius: 12px;
           padding: 16px;
         }
-        
+
         .audio-result {
           margin-top: 12px;
         }
-        
+
         .audio-controls {
           display: flex;
           align-items: center;
           gap: 12px;
         }
-        
+
         .play-btn {
           width: 48px;
           height: 48px;
@@ -669,12 +669,12 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           justify-content: center;
           transition: all 0.2s;
         }
-        
+
         .play-btn:hover {
           background: #f59e0b;
           transform: scale(1.05);
         }
-        
+
         .download-btn {
           margin-left: auto;
           padding: 8px 16px;
@@ -687,11 +687,11 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           gap: 6px;
           transition: all 0.2s;
         }
-        
+
         .download-btn:hover {
           background: #3a3a3a;
         }
-        
+
         .error-message {
           display: flex;
           align-items: center;
@@ -703,7 +703,7 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           color: #ef4444;
           font-size: 13px;
         }
-        
+
         .progress-bar {
           height: 4px;
           background: #2a2a2a;
@@ -711,17 +711,17 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
           margin-top: 12px;
           overflow: hidden;
         }
-        
+
         .progress-fill {
           height: 100%;
           background: linear-gradient(90deg, #fbbf24, #f59e0b);
           transition: width 0.3s;
         }
-        
+
         .spin {
           animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }

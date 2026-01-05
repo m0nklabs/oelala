@@ -101,7 +101,7 @@ export default function LoRATrainingTool({ onOutput }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{files.length} images selected</span>
-              <button 
+              <button
                 onClick={clearFiles}
                 className="upload-btn secondary"
                 style={{ padding: '4px 8px', fontSize: '0.8rem' }}
@@ -109,9 +109,9 @@ export default function LoRATrainingTool({ onOutput }) {
                 <X size={14} /> Clear
               </button>
             </div>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', 
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
               gap: '8px',
               maxHeight: '200px',
               overflowY: 'auto',
@@ -139,10 +139,10 @@ export default function LoRATrainingTool({ onOutput }) {
 
         <div className="form-group">
           <label className="grok-section-label">Model Name</label>
-          <input 
-            className="form-input" 
-            value={modelName} 
-            onChange={(e) => setModelName(e.target.value)} 
+          <input
+            className="form-input"
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
             placeholder="e.g. my-style-v1"
             style={{ backgroundColor: '#0f0f0f' }}
           />
@@ -150,12 +150,12 @@ export default function LoRATrainingTool({ onOutput }) {
 
         <div className="form-group">
           <label className="grok-section-label">Training Epochs ({numEpochs})</label>
-          <input 
-            type="range" 
-            min="5" 
-            max="50" 
-            step="5" 
-            value={numEpochs} 
+          <input
+            type="range"
+            min="5"
+            max="50"
+            step="5"
+            value={numEpochs}
             onChange={(e) => setNumEpochs(parseInt(e.target.value, 10))}
             style={{ width: '100%', accentColor: 'var(--text-primary)' }}
           />
@@ -179,11 +179,11 @@ export default function LoRATrainingTool({ onOutput }) {
       </div>
 
       {error && (
-        <div style={{ 
-          padding: '12px', 
-          backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-          border: '1px solid rgba(239, 68, 68, 0.2)', 
-          borderRadius: '8px', 
+        <div style={{
+          padding: '12px',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '8px',
           color: '#ef4444',
           marginBottom: '16px',
           fontSize: '0.9rem'
@@ -192,17 +192,17 @@ export default function LoRATrainingTool({ onOutput }) {
         </div>
       )}
 
-      <button 
-        className="primary-btn" 
-        disabled={!canSubmit} 
+      <button
+        className="primary-btn"
+        disabled={!canSubmit}
         onClick={handleSubmit}
-        style={{ 
-          height: '48px', 
-          fontSize: '1rem', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          gap: '8px' 
+        style={{
+          height: '48px',
+          fontSize: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
         }}
       >
         {busy ? (

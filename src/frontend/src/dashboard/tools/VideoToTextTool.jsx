@@ -26,25 +26,25 @@ export default function VideoToTextTool() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
-  
+
   // YouTube state
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [youtubeInfo, setYoutubeInfo] = useState(null)
   const [youtubeLoading, setYoutubeLoading] = useState(false)
   const [downloadedVideoPath, setDownloadedVideoPath] = useState(null)
-  
+
   const [model, setModel] = useState('smolvlm')
   const [mode, setMode] = useState('detailed')
   const [frameInterval, setFrameInterval] = useState(1) // seconds between sampled frames
   const [maxFrames, setMaxFrames] = useState(8)
   const [showAdvanced, setShowAdvanced] = useState(false)
-  
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [status, setStatus] = useState('')
   const [result, setResult] = useState(null)
   const [copied, setCopied] = useState(false)
-  
+
   const videoRef = useRef(null)
 
   const handleFileChange = useCallback((e) => {
@@ -55,7 +55,7 @@ export default function VideoToTextTool() {
       setPreview(url)
       setResult(null)
       setError(null)
-      
+
       const video = document.createElement('video')
       video.onloadedmetadata = () => {
         setVideoInfo({
@@ -78,7 +78,7 @@ export default function VideoToTextTool() {
       setResult(null)
       setError(null)
       setDownloadedVideoPath(null)
-      
+
       const video = document.createElement('video')
       video.onloadedmetadata = () => {
         setVideoInfo({
@@ -108,10 +108,10 @@ export default function VideoToTextTool() {
       setError('Please enter a valid YouTube URL')
       return
     }
-    
+
     setYoutubeLoading(true)
     setError(null)
-    
+
     try {
       const res = await postJson(`${BACKEND_BASE}/youtube/info`, { url: youtubeUrl })
       if (!res.ok) {
@@ -128,22 +128,22 @@ export default function VideoToTextTool() {
 
   const handleDownloadYoutube = async () => {
     if (!youtubeUrl) return
-    
+
     setYoutubeLoading(true)
     setError(null)
     setStatus('Downloading video from YouTube...')
-    
+
     try {
-      const res = await postJson(`${BACKEND_BASE}/youtube/download`, { 
+      const res = await postJson(`${BACKEND_BASE}/youtube/download`, {
         url: youtubeUrl,
         format: 'video',  // video | audio
         quality: '720p'
       })
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Failed to download video')
       }
-      
+
       setDownloadedVideoPath(res.data.path)
       setPreview(`${BACKEND_BASE}/file/${encodeURIComponent(res.data.path)}`)
       setVideoInfo({
@@ -152,9 +152,9 @@ export default function VideoToTextTool() {
         height: res.data.height || youtubeInfo?.height || 720,
         title: youtubeInfo?.title
       })
-      
+
       if (DEBUG) console.debug('🎬 YouTube downloaded:', res.data)
-      
+
     } catch (err) {
       setError(err.message)
     } finally {
@@ -165,38 +165,38 @@ export default function VideoToTextTool() {
 
   const handleAnalyze = async () => {
     if (!file && !downloadedVideoPath) return
-    
+
     setLoading(true)
     setError(null)
     setStatus('Uploading video...')
-    
+
     try {
       const formData = new FormData()
-      
+
       // If we have a YouTube downloaded video, pass the path instead of file
       if (downloadedVideoPath) {
         formData.append('video_path', downloadedVideoPath)
       } else {
         formData.append('file', file)
       }
-      
+
       formData.append('model', model)
       formData.append('mode', mode)
       formData.append('frame_interval', String(frameInterval))
       formData.append('max_frames', String(maxFrames))
-      
+
       if (DEBUG) console.debug('🎬 V2T request:', { model, mode, frameInterval, maxFrames, downloadedVideoPath })
-      
+
       setStatus('Analyzing video...')
-      
+
       const res = await postForm(`${BACKEND_BASE}/caption-video`, formData)
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Video analysis failed')
       }
-      
+
       setResult(res.data)
-      
+
     } catch (err) {
       console.error('V2T error:', err)
       setError(err.message)
@@ -219,7 +219,7 @@ export default function VideoToTextTool() {
           <Video size={18} />
           Source Video
         </h3>
-        
+
         {/* Source Tabs */}
         <div className="source-tabs">
           {SOURCE_TABS.map((tab) => (
@@ -236,7 +236,7 @@ export default function VideoToTextTool() {
             </button>
           ))}
         </div>
-        
+
         {/* Upload Tab */}
         {sourceTab === 'upload' && (
           <div
@@ -246,11 +246,11 @@ export default function VideoToTextTool() {
             onClick={() => document.getElementById('v2t-file-input').click()}
           >
             {preview && !downloadedVideoPath ? (
-              <video 
+              <video
                 ref={videoRef}
-                src={preview} 
-                className="upload-preview" 
-                controls 
+                src={preview}
+                className="upload-preview"
+                controls
                 muted
                 style={{ maxHeight: '200px' }}
               />
@@ -270,7 +270,7 @@ export default function VideoToTextTool() {
             />
           </div>
         )}
-        
+
         {/* YouTube Tab */}
         {sourceTab === 'youtube' && (
           <div className="youtube-section">
@@ -286,7 +286,7 @@ export default function VideoToTextTool() {
                   onKeyDown={(e) => e.key === 'Enter' && handleFetchYoutubeInfo()}
                 />
               </div>
-              <button 
+              <button
                 className="btn-secondary"
                 onClick={handleFetchYoutubeInfo}
                 disabled={youtubeLoading || !youtubeUrl}
@@ -294,12 +294,12 @@ export default function VideoToTextTool() {
                 {youtubeLoading ? <Loader2 size={16} className="spin" /> : 'Fetch'}
               </button>
             </div>
-            
+
             {youtubeInfo && (
               <div className="youtube-preview">
                 {youtubeInfo.thumbnail && (
-                  <img 
-                    src={youtubeInfo.thumbnail} 
+                  <img
+                    src={youtubeInfo.thumbnail}
                     alt="thumbnail"
                     className="youtube-thumbnail"
                   />
@@ -326,16 +326,16 @@ export default function VideoToTextTool() {
                 </button>
               </div>
             )}
-            
+
             {downloadedVideoPath && (
               <div className="youtube-downloaded">
                 <Check size={16} style={{ color: '#22c55e' }} />
                 <span>Video ready for analysis</span>
                 {preview && (
-                  <video 
-                    src={preview} 
-                    className="upload-preview" 
-                    controls 
+                  <video
+                    src={preview}
+                    className="upload-preview"
+                    controls
                     muted
                     style={{ maxHeight: '200px', marginTop: '12px', width: '100%' }}
                   />
@@ -344,7 +344,7 @@ export default function VideoToTextTool() {
             )}
           </div>
         )}
-        
+
         {videoInfo && (
           <div className="video-info">
             <span>📐 {videoInfo.width} × {videoInfo.height}</span>
@@ -392,22 +392,22 @@ export default function VideoToTextTool() {
 
       {/* Advanced Settings */}
       <div className="tool-section collapsible">
-        <h3 
+        <h3
           onClick={() => setShowAdvanced(!showAdvanced)}
           style={{ cursor: 'pointer' }}
         >
           <Settings size={16} />
           Advanced
-          <ChevronDown 
-            size={16} 
-            style={{ 
+          <ChevronDown
+            size={16}
+            style={{
               marginLeft: 'auto',
               transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s'
             }}
           />
         </h3>
-        
+
         {showAdvanced && (
           <div className="advanced-content">
             <div className="form-row">
@@ -457,7 +457,7 @@ export default function VideoToTextTool() {
         <div className="result-section">
           <div className="result-header">
             <h3>Description</h3>
-            <button 
+            <button
               className="copy-btn"
               onClick={() => handleCopy(result.caption || result.description)}
             >
@@ -465,11 +465,11 @@ export default function VideoToTextTool() {
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
-          
+
           <div className="result-text">
             {result.caption || result.description}
           </div>
-          
+
           {result.timeline && result.timeline.length > 0 && (
             <div className="timeline-section">
               <h4>Timeline</h4>
@@ -481,12 +481,12 @@ export default function VideoToTextTool() {
               ))}
             </div>
           )}
-          
+
           {result.prompt && (
             <div className="prompt-section">
               <div className="prompt-header">
                 <h4>AI Generation Prompt</h4>
-                <button 
+                <button
                   className="copy-btn small"
                   onClick={() => handleCopy(result.prompt)}
                 >

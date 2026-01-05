@@ -40,28 +40,28 @@ async function getAccessToken() {
  */
 export async function apiFetch(endpoint, options = {}) {
   const token = await getAccessToken()
-  
+
   const headers = {
     ...options.headers,
   }
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  
+
   // Don't set Content-Type for FormData (browser sets it with boundary)
   if (!(options.body instanceof FormData) && !headers['Content-Type']) {
     if (options.body) {
       headers['Content-Type'] = 'application/json'
     }
   }
-  
+
   const url = endpoint.startsWith('http') ? endpoint : `${BACKEND_BASE}${endpoint}`
-  
+
   if (DEBUG) {
     console.log(`🔐 API: ${options.method || 'GET'} ${endpoint}`, token ? '(authenticated)' : '(anonymous)')
   }
-  
+
   return fetch(url, {
     ...options,
     headers,
@@ -77,7 +77,7 @@ export async function apiFetch(endpoint, options = {}) {
 export async function postForm(url, formData, headers = {}) {
   const token = await getAccessToken()
   const authHeaders = token ? { ...headers, 'Authorization': `Bearer ${token}` } : headers
-  
+
   const res = await fetch(url, {
     method: 'POST',
     body: formData,
@@ -118,7 +118,7 @@ export async function postForm(url, formData, headers = {}) {
 export async function getJson(url) {
   const token = await getAccessToken()
   const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-  
+
   const res = await fetch(url, { method: 'GET', headers, credentials: 'same-origin' })
   const text = await res.text()
   try {
@@ -133,7 +133,7 @@ export async function postJson(url, body = {}) {
   const token = await getAccessToken()
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
-  
+
   const res = await fetch(url, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -218,18 +218,18 @@ export function getUserMediaUrl(mediaType, filename) {
  */
 export async function uploadUserMedia(mediaType, file, onProgress = null) {
   const token = await getAccessToken()
-  
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const formData = new FormData()
     formData.append('file', file)
-    
+
     xhr.open('POST', `${BACKEND_BASE}/user/media/${mediaType}`)
-    
+
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     }
-    
+
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
@@ -237,7 +237,7 @@ export async function uploadUserMedia(mediaType, file, onProgress = null) {
         }
       }
     }
-    
+
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
@@ -249,7 +249,7 @@ export async function uploadUserMedia(mediaType, file, onProgress = null) {
         reject(new Error(`Upload failed: ${xhr.status}`))
       }
     }
-    
+
     xhr.onerror = () => reject(new Error('Upload failed'))
     xhr.send(formData)
   })

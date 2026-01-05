@@ -122,15 +122,15 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
         onClose()
       }
     }}>
-      <div 
-        className="modal-content" 
+      <div
+        className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}
       >
         {/* Header */}
-        <div className="modal-header" style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
+        <div className="modal-header" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '16px',
           paddingBottom: '12px',
@@ -140,12 +140,12 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
             <Upload size={20} />
             Publish to Gallery
           </h3>
-          <button 
+          <button
             onClick={onClose}
-            style={{ 
-              background: 'none', 
-              border: 'none', 
-              color: '#ccc', 
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#ccc',
               cursor: 'pointer',
               padding: '4px',
               display: 'flex'
@@ -158,15 +158,15 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
         {/* Preview */}
         <div style={{ marginBottom: '16px', borderRadius: '8px', overflow: 'hidden', background: '#000' }}>
           {mediaType === 'video' ? (
-            <video 
-              src={mediaUrl} 
-              controls 
+            <video
+              src={mediaUrl}
+              controls
               style={{ width: '100%', maxHeight: '300px', objectFit: 'contain' }}
             />
           ) : (
-            <img 
-              src={mediaUrl} 
-              alt="Preview" 
+            <img
+              src={mediaUrl}
+              alt="Preview"
               style={{ width: '100%', maxHeight: '300px', objectFit: 'contain' }}
             />
           )}
@@ -275,9 +275,9 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
             border: '1px solid #333',
             borderRadius: '6px',
           }}>
-            <label style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
               gap: '12px',
               cursor: 'pointer',
               fontSize: '14px',
@@ -286,8 +286,8 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
                 type="checkbox"
                 checked={isNsfw}
                 onChange={(e) => setIsNsfw(e.target.checked)}
-                style={{ 
-                  width: '18px', 
+                style={{
+                  width: '18px',
                   height: '18px',
                   cursor: 'pointer',
                 }}
@@ -303,9 +303,9 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
         </div>
 
         {/* Actions */}
-        <div style={{ 
-          display: 'flex', 
-          gap: '12px', 
+        <div style={{
+          display: 'flex',
+          gap: '12px',
           marginTop: '24px',
           paddingTop: '16px',
           borderTop: '1px solid #333'

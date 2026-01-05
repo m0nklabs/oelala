@@ -58,7 +58,7 @@ export default function ReframeTool({ onJobSubmitted }) {
       setResult(null)
       setError(null)
       setLastQueued(null)
-      
+
       // Get original dimensions
       const url = URL.createObjectURL(dropped)
       const img = new Image()
@@ -77,12 +77,12 @@ export default function ReframeTool({ onJobSubmitted }) {
       setError('Please upload an image first')
       return
     }
-    
+
     setIsLoading(true)
     setError(null)
     setResult(null)
     setLastQueued(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('image', file)
@@ -95,35 +95,35 @@ export default function ReframeTool({ onJobSubmitted }) {
       formData.append('cfg', cfg)
       formData.append('denoise', denoise)
       formData.append('feathering', feathering)
-      
+
       if (DEBUG) console.log('🖼️ Reframe request:', {
         target: `${aspectRatio.width}x${aspectRatio.height}`,
         position, model: model.id
       })
-      
+
       const res = await postForm(`${BACKEND_BASE}/reframe`, formData)
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Reframe request failed')
       }
-      
+
       if (res.data?.prompt_id) {
         // Show queued confirmation
         setLastQueued({
           promptId: res.data.prompt_id,
           aspectRatio: aspectRatio.label
         })
-        
+
         // Notify queue indicator
         if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
-        
+
         if (DEBUG) console.debug('📋 Reframe queued:', res.data.prompt_id)
-        
+
         // Don't wait for completion - job will appear in queue/history when done
       } else if (res.data?.url) {
         setResult({ url: res.data.url })
       }
-      
+
     } catch (err) {
       console.error('❌ Reframe error:', err)
       setError(err.message)
@@ -142,31 +142,31 @@ export default function ReframeTool({ onJobSubmitted }) {
 
   const calculatePreview = () => {
     if (!originalSize.width || !originalSize.height) return null
-    
+
     const targetW = aspectRatio.width
     const targetH = aspectRatio.height
     const origW = originalSize.width
     const origH = originalSize.height
-    
+
     // Scale to fit within target while maintaining aspect
     const scaleW = targetW / origW
     const scaleH = targetH / origH
     const scale = Math.min(scaleW, scaleH)
-    
+
     const scaledW = Math.round(origW * scale)
     const scaledH = Math.round(origH * scale)
-    
+
     // Calculate position offsets
     let offsetX = 0, offsetY = 0
-    
+
     if (position.includes('left')) offsetX = 0
     else if (position.includes('right')) offsetX = targetW - scaledW
     else offsetX = (targetW - scaledW) / 2
-    
+
     if (position.includes('top')) offsetY = 0
     else if (position.includes('bottom')) offsetY = targetH - scaledH
     else offsetY = (targetH - scaledH) / 2
-    
+
     return { scaledW, scaledH, offsetX, offsetY, targetW, targetH }
   }
 
@@ -258,7 +258,7 @@ export default function ReframeTool({ onJobSubmitted }) {
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Layout Preview
           </label>
-          <div 
+          <div
             className="relative mx-auto border border-gray-600 bg-gray-900"
             style={{
               width: Math.min(300, previewLayout.targetW / 3),
@@ -268,7 +268,7 @@ export default function ReframeTool({ onJobSubmitted }) {
           >
             {/* Outpaint area (striped) */}
             <div className="absolute inset-0 bg-stripes opacity-30" />
-            
+
             {/* Original image position */}
             <div
               className="absolute bg-purple-600/50 border-2 border-purple-400 flex items-center justify-center text-xs"
@@ -333,7 +333,7 @@ export default function ReframeTool({ onJobSubmitted }) {
           <span className="text-sm font-medium">Advanced Settings</span>
           <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
         </button>
-        
+
         {showAdvanced && (
           <div className="p-4 space-y-4 bg-gray-850">
             {/* Steps */}

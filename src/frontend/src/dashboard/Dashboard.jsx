@@ -5,6 +5,8 @@ import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
 import QueueIndicator from './QueueIndicator'
 import UserMenu from '../components/UserMenu'
+import Footer from '../components/Footer'
+import LegalModal from '../components/LegalModal'
 import { useNSFW } from '../contexts/NSFWContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useCredits } from '../contexts/CreditsContext'
@@ -51,14 +53,17 @@ export default function Dashboard() {
 
   const [output, setOutput] = useState(null)
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0)
-  
+
   // Queue refresh token - incremented when a job is submitted
   const [queueRefreshToken, setQueueRefreshToken] = useState(0)
-  
+
   // For I2V creations picker mode
   const [i2vCreationsMode, setI2vCreationsMode] = useState(false)
   const [i2vOnSelectImage, setI2vOnSelectImage] = useState(null)
-  
+
+  // Legal modal state
+  const [legalType, setLegalType] = useState(null)
+
   // Ref to get current tool params for JSON export
   const toolParamsRef = useRef(null)
 
@@ -83,7 +88,7 @@ export default function Dashboard() {
   const handleRestartBackend = async () => {
     if (restarting) return
     if (!window.confirm('Backend herstarten? Lopende jobs worden afgebroken.')) return
-    
+
     setRestarting(true)
     try {
       await fetch(`${BACKEND_BASE}/restart`, { method: 'POST' })
@@ -167,18 +172,18 @@ export default function Dashboard() {
 
   const renderControls = () => {
     const onRefreshHistory = () => setHistoryRefreshToken((n) => n + 1)
-    
+
     // Callback for I2V to enter/exit creations picker mode
     const onCreationsModeChange = (enabled, onSelect) => {
       setI2vCreationsMode(enabled)
       setI2vOnSelectImage(() => onSelect)
     }
-    
+
     // Callback for tools to expose their params
     const onParamsChange = (params) => {
       toolParamsRef.current = params
     }
-    
+
     // Callback for async job submission - refresh queue
     const onJobSubmitted = () => {
       setQueueRefreshToken((n) => n + 1)
@@ -232,7 +237,7 @@ export default function Dashboard() {
 
       case TOOL_IDS.VOICE_CLONING:
         return <VoiceCloningTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
-      
+
       case TOOL_IDS.LIP_SYNC:
         return <LipSyncTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
 
@@ -253,13 +258,14 @@ export default function Dashboard() {
   const { user, isAdult } = useAuth()
 
   return (
-    <div className="dashboard-container">
-        <Sidebar
-          activeToolId={activeToolId}
-          onSelectTool={setActiveToolId}
-          collapsed={sidebarCollapsed}
-          onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
-        />
+    <div className="dashboard-wrapper">
+      <div className="dashboard-container">
+          <Sidebar
+            activeToolId={activeToolId}
+            onSelectTool={setActiveToolId}
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+          />
 
       <main className="main-content">
         <div className="top-bar">
@@ -276,7 +282,7 @@ export default function Dashboard() {
               </button>
             )}
             {/* Queue indicator with popup */}
-            <QueueIndicator 
+            <QueueIndicator
               refreshToken={queueRefreshToken}
               onJobComplete={(job) => {
                 setHistoryRefreshToken((n) => n + 1)
@@ -379,8 +385,8 @@ export default function Dashboard() {
         )}
 
         {/* Full-width layout for My Media tools and Gallery */}
-        {(activeToolId === TOOL_IDS.MY_MEDIA_ALL || 
-          activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS || 
+        {(activeToolId === TOOL_IDS.MY_MEDIA_ALL ||
+          activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS ||
           activeToolId === TOOL_IDS.MY_MEDIA_IMAGES ||
           activeToolId === TOOL_IDS.MY_MEDIA_AUDIO ||
           activeToolId === TOOL_IDS.MY_MEDIA_PROMPTS ||
@@ -416,8 +422,8 @@ export default function Dashboard() {
             ) : (
               <section className="output-panel" style={{ display: 'flex', flexDirection: 'column' }}>
                 {i2vCreationsMode && (
-                  <div style={{ 
-                    padding: '12px 16px', 
+                  <div style={{
+                    padding: '12px 16px',
                     borderBottom: '1px solid var(--border-color)',
                     backgroundColor: 'var(--bg-secondary)',
                     display: 'flex',
@@ -433,9 +439,9 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <MyMediaTool 
-                    filter="all" 
-                    selectionMode={i2vCreationsMode} 
+                  <MyMediaTool
+                    filter="all"
+                    selectionMode={i2vCreationsMode}
                     onSelectItem={i2vOnSelectImage}
                   />
                 </div>
@@ -444,6 +450,11 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+      </div>
+      <Footer onShowLegal={setLegalType} />
+      {legalType && (
+        <LegalModal type={legalType} onClose={() => setLegalType(null)} />
+      )}
       <LogViewer />
     </div>
   )

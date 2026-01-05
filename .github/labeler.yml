@@ -1,0 +1,48 @@
+# Configuration for actions/labeler
+# Labels PRs based on changed files
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: 'src/frontend/**'
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/backend/**'
+          - 'core/**'
+          - 'api/**'
+
+comfyui:
+  - changed-files:
+      - any-glob-to-any-file: 'ComfyUI/**'
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '**/*.md'
+          - '!CHANGELOG.md'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'deploy/**'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'pyproject.toml'
+          - 'requirements*.txt'
+          - '.pre-commit-config.yaml'
+          - 'package.json'
+          - 'tsconfig.json'
+          - 'vite.config.*'
+
+workflows:
+  - changed-files:
+      - any-glob-to-any-file: 'workflows/**'

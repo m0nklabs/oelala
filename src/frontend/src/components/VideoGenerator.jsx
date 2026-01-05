@@ -247,7 +247,7 @@ function VideoGenerator() {
             <span className="checkmark"></span>
             🎬 Extend Duration (Sequential Clips)
           </label>
-          
+
           {extendMode && (
             <div className="extend-slider-container">
               <label htmlFor="clipCount">

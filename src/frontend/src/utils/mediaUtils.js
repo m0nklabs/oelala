@@ -10,26 +10,26 @@
  */
 export function getMediaType(filename) {
   if (!filename) return 'image'
-  
+
   const ext = filename.toLowerCase().split('.').pop()
-  
+
   // Handle edge case where filename has no extension or ends with a dot
   if (!ext || ext === filename.toLowerCase()) {
     return 'image'
   }
-  
+
   if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv'].includes(ext)) {
     return 'video'
   }
-  
+
   if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
     return 'image'
   }
-  
+
   if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) {
     return 'audio'
   }
-  
+
   // Default to image for unknown types
   return 'image'
 }
@@ -41,15 +41,15 @@ export function getMediaType(filename) {
  */
 export function getFileExtension(filename) {
   if (!filename) return ''
-  
+
   const lowerFilename = filename.toLowerCase()
   const ext = lowerFilename.split('.').pop()
-  
+
   // Handle edge case where filename has no extension or ends with a dot
   if (!ext || ext === lowerFilename) {
     return ''
   }
-  
+
   return ext
 }
 

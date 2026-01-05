@@ -146,14 +146,14 @@
 2025-12-28T11:30:58.161700 - sageattention package is not installed, sageattention will not be available
 2025-12-28T11:30:59.261057 - WanVideoWrapper WARNING: FantasyPortrait nodes not available: No module named 'onnx'
 2025-12-28T11:30:59.275417 - ComfyUI-GGUF: Allowing full torch compile
-2025-12-28T11:30:59.277519 - 
+2025-12-28T11:30:59.277519 -
 Import times for custom nodes:
 2025-12-28T11:30:59.277610 -    0.0 seconds: /home/flip/oelala/ComfyUI/custom_nodes/websocket_image_save.py
 2025-12-28T11:30:59.277657 -    0.0 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-GGUF
 2025-12-28T11:30:59.277695 -    0.0 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-MultiGPU
 2025-12-28T11:30:59.277746 -    0.4 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite
 2025-12-28T11:30:59.277783 -    1.3 seconds: /home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-WanVideoWrapper
-2025-12-28T11:30:59.277815 - 
+2025-12-28T11:30:59.277815 -
 2025-12-28T11:30:59.881423 - Context impl SQLiteImpl.
 2025-12-28T11:30:59.881552 - Will assume non-transactional DDL.
 2025-12-28T11:30:59.882700 - No target revision found.
@@ -165,7 +165,7 @@ Import times for custom nodes:
 2025-12-28T11:35:39.967087 - Using pytorch attention in VAE
 2025-12-28T11:35:39.972101 - Using pytorch attention in VAE
 2025-12-28T11:35:40.700532 - VAE load device: cuda:0, offload device: cpu, dtype: torch.bfloat16
-2025-12-28T11:35:40.711760 - [MultiGPU DisTorch V2] Full allocation string: 
+2025-12-28T11:35:40.711760 - [MultiGPU DisTorch V2] Full allocation string:
 2025-12-28T11:35:40.733598 - Found quantization metadata version 1
 2025-12-28T11:35:40.734355 - [MultiGPU Core Patching] text_encoder_device_patched returning device: cuda:0 (current_text_encoder_device=cuda:0)
 2025-12-28T11:35:40.736250 - Using MixedPrecisionOps for text encoder

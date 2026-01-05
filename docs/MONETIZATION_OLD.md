@@ -1,6 +1,6 @@
 # Oelala Monetization Plan
 
-> **Last Updated**: 2026-01-03  
+> **Last Updated**: 2026-01-03
 > **Status**: Planning Phase
 
 ## Business Model: Freemium SaaS
@@ -276,7 +276,7 @@ Visitors → Sign-ups → Active → Paying → Retained
 Example:
 10,000 visitors/month
 → 1,000 sign-ups
-→ 300 active users  
+→ 300 active users
 → 15 paying customers
 → 12 retained next month
 ```

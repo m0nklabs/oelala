@@ -7,13 +7,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useAuth } from './AuthContext'
 import { apiFetch } from '../api'
 import { DEBUG } from '../config'
-import InsufficientCreditsModal from '../components/InsufficientCreditsModal'
-import PurchaseCreditsModal from '../components/PurchaseCreditsModal'
 
 const CreditsContext = createContext(null)
-
-// Constants
-const NOTIFICATION_TIMEOUT_MS = 5000  // Auto-clear notifications after 5 seconds
 
 /**
  * Credits Provider - wraps app to provide credit state
@@ -26,15 +21,6 @@ export function CreditsProvider({ children }) {
   const [packages, setPackages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [purchaseSuccess, setPurchaseSuccess] = useState(false)
-  const [purchaseCancelled, setPurchaseCancelled] = useState(false)
-  
-  // Insufficient credits modal state
-  const [showInsufficientModal, setShowInsufficientModal] = useState(false)
-  const [insufficientData, setInsufficientData] = useState(null)
-  
-  // Purchase modal state
-  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
 
   // Fetch balance when user changes
   const fetchBalance = useCallback(async () => {
@@ -68,31 +54,6 @@ export function CreditsProvider({ children }) {
       setLoading(false)
     }
   }, [user])
-
-  // Check URL parameters for Stripe redirect
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const success = params.get('success')
-    const cancelled = params.get('cancelled')
-    
-    if (success === 'true') {
-      setPurchaseSuccess(true)
-      // Refresh balance after successful purchase
-      fetchBalance()
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname)
-      // Auto-clear success message
-      setTimeout(() => setPurchaseSuccess(false), NOTIFICATION_TIMEOUT_MS)
-    }
-    
-    if (cancelled === 'true') {
-      setPurchaseCancelled(true)
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname)
-      // Auto-clear cancelled message
-      setTimeout(() => setPurchaseCancelled(false), NOTIFICATION_TIMEOUT_MS)
-    }
-  }, [fetchBalance])
 
   // Fetch packages (public, no auth needed)
   const fetchPackages = useCallback(async () => {
@@ -160,7 +121,7 @@ export function CreditsProvider({ children }) {
           package_id: packageId,
         }),
       })
-      
+
       if (res.ok) {
         const data = await res.json()
         return data.checkout_url
@@ -199,37 +160,6 @@ export function CreditsProvider({ children }) {
     setLifetimeUsed(prev => Math.max(0, prev - amount))
   }, [])
 
-  /**
-   * Show insufficient credits modal
-   * Call this when API returns 402 Payment Required
-   */
-  const showInsufficientCredits = useCallback((required, available, availablePackages = []) => {
-    setInsufficientData({
-      required,
-      available,
-      packages: availablePackages.length > 0 ? availablePackages : packages
-    })
-    setShowInsufficientModal(true)
-  }, [packages])
-  
-  // Listen for insufficient credits events from API calls
-  useEffect(() => {
-    const handleInsufficientCredits = (event) => {
-      const { required, available, packages: pkgs } = event.detail
-      showInsufficientCredits(required, available, pkgs)
-    }
-    
-    window.addEventListener('insufficient-credits', handleInsufficientCredits)
-    return () => window.removeEventListener('insufficient-credits', handleInsufficientCredits)
-  }, [showInsufficientCredits])
-
-  /**
-   * Open purchase modal
-   */
-  const openPurchaseModal = useCallback(() => {
-    setShowPurchaseModal(true)
-  }, [])
-
   const value = {
     // State
     balance,
@@ -238,9 +168,7 @@ export function CreditsProvider({ children }) {
     packages,
     loading,
     error,
-    purchaseSuccess,
-    purchaseCancelled,
-    
+
     // Actions
     fetchBalance,
     estimateCost,
@@ -249,45 +177,11 @@ export function CreditsProvider({ children }) {
     deductCredits,
     refundCredits,
     clearError: () => setError(null),
-    clearPurchaseSuccess: () => setPurchaseSuccess(false),
-    clearPurchaseCancelled: () => setPurchaseCancelled(false),
-    showInsufficientCredits,
-    openPurchaseModal,
   }
 
   return (
     <CreditsContext.Provider value={value}>
       {children}
-      
-      {/* Insufficient Credits Modal */}
-      {showInsufficientModal &&
-        insufficientData &&
-        Array.isArray(insufficientData.packages) &&
-        insufficientData.packages.length > 0 && (
-          <InsufficientCreditsModal
-            required={insufficientData.required}
-            available={insufficientData.available}
-            packages={insufficientData.packages}
-            onClose={() => setShowInsufficientModal(false)}
-            onPurchase={(pkg) => {
-              setShowInsufficientModal(false)
-              if (pkg) {
-                // Direct purchase of specific package
-                purchaseCredits(pkg.id).then(url => {
-                  if (url) window.location.href = url
-                })
-              } else {
-                // Show all packages
-                setShowPurchaseModal(true)
-              }
-            }}
-          />
-        )}
-      
-      {/* Purchase Credits Modal */}
-      {showPurchaseModal && (
-        <PurchaseCreditsModal onClose={() => setShowPurchaseModal(false)} />
-      )}
     </CreditsContext.Provider>
   )
 }

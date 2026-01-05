@@ -3,7 +3,7 @@
 const isProduction = window.location.hostname === 'oelala.xyz'
 
 // Set the backend base URL based on environment
-const BACKEND_BASE = isProduction 
+const BACKEND_BASE = isProduction
   ? 'https://api.oelala.xyz'
   : 'http://192.168.1.2:7998'
 

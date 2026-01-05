@@ -27,7 +27,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [resolution, setResolution] = useState('480p')
   const [fps, setFps] = useState(16)
   const [cameraMotion, setCameraMotion] = useState('')
-  
+
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [steps, setSteps] = useState(6)
@@ -76,9 +76,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
     try {
       if (DEBUG) console.debug('🎬 T2V request:', { prompt, numFrames, resolution, fps })
-      
+
       const result = await postForm(`${BACKEND_BASE}/generate-text`, formData)
-      
+
       if (!result.ok) {
         throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
       }
@@ -89,18 +89,18 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       }
 
       if (DEBUG) console.debug('📋 T2V queued:', promptId)
-      
+
       // Show queued confirmation
       setLastQueued({
         promptId,
         prompt: prompt.substring(0, 40) + (prompt.length > 40 ? '...' : '')
       })
-      
+
       // Notify queue indicator - job will be tracked in queue panel
       if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-      
+
       // Don't wait for completion - job will appear in queue/history when done
-      
+
     } catch (e) {
       const message = e?.message || 'Failed to generate video'
       setError(message)
@@ -141,7 +141,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           placeholder="Describe the video you want to generate... (e.g., 'a cat walking through a field of flowers, cinematic')"
         />
         <div className="char-count">{prompt.length} characters</div>
-        
+
         {/* Camera Motion Selector */}
         <CameraMotionSelector value={cameraMotion} onChange={setCameraMotion} style={{ marginTop: '12px' }} />
       </div>
@@ -149,7 +149,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       {/* Quick Settings */}
       <div className="tool-section">
         <h3>Settings</h3>
-        
+
         {/* Resolution */}
         <div className="form-group">
           <label>Resolution</label>
@@ -204,7 +204,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         {/* Duration */}
         <div className="form-group">
           <label>
-            Duration 
+            Duration
             <span className="label-value">{(numFrames / fps).toFixed(1)}s ({numFrames} frames)</span>
           </label>
           <input
@@ -224,7 +224,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
       {/* Advanced Settings */}
       <div className="tool-section collapsible">
-        <button 
+        <button
           className="section-toggle"
           onClick={() => setShowAdvanced(!showAdvanced)}
         >
@@ -232,7 +232,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           Advanced Settings
           <ChevronDown size={16} className={showAdvanced ? 'rotated' : ''} />
         </button>
-        
+
         {showAdvanced && (
           <div className="advanced-content">
             <div className="form-row">
@@ -258,7 +258,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                 />
               </div>
             </div>
-            
+
             <div className="form-row">
               <div className="form-group half">
                 <label>T2I Steps</label>
@@ -316,9 +316,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
       {/* Time estimate indicator */}
       {!submitting && canSubmit && (
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           gap: '6px',
           marginBottom: '8px',
@@ -330,10 +330,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         </div>
       )}
 
-      <button 
-        className="btn-primary btn-large" 
-        type="button" 
-        disabled={!canSubmit} 
+      <button
+        className="btn-primary btn-large"
+        type="button"
+        disabled={!canSubmit}
         onClick={handleSubmit}
       >
         {submitting ? (

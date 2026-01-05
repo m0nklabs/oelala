@@ -1,0 +1,30 @@
+# Gitleaks configuration for oelala
+# Extends default rules with custom allowlists
+
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[allowlist]
+# Ignore documentation files with placeholder tokens
+paths = [
+    '''docs/.*\.md$''',
+    '''\.example$''',
+    '''examples/.*''',
+]
+
+# Ignore specific placeholder patterns
+regexes = [
+    '''YOUR_[A-Z_]+''',
+    '''<YOUR_.*>''',
+    '''\$\{[A-Z_]+\}''',
+]
+
+# Ignore these specific strings (case-insensitive)
+stopwords = [
+    "YOUR_JWT_TOKEN",
+    "YOUR_API_KEY",
+    "YOUR_SECRET",
+    "PLACEHOLDER",
+    "example_token",
+]

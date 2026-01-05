@@ -19,7 +19,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark')
   const [denoise, setDenoise] = useState(0.6)
   const [checkpoint, setCheckpoint] = useState('CyberRealistic_Pony_v14.1_FP16.safetensors')
-  
+
   // Advanced
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [steps, setSteps] = useState(25)
@@ -58,11 +58,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
 
   const handleGenerate = async () => {
     if (!file) return
-    
+
     setSubmitting(true)
     setError(null)
     setLastQueued(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -75,33 +75,33 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
       formData.append('seed', String(seed))
       formData.append('sampler_name', sampler)
       formData.append('scheduler', scheduler)
-      
+
       if (DEBUG) console.debug('🖼️ I2I request:', { denoise, checkpoint, steps })
-      
+
       const res = await postForm(`${BACKEND_BASE}/generate-i2i`, formData)
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Generation failed')
       }
-      
+
       const promptId = res.data?.prompt_id
       if (!promptId) {
         throw new Error('No prompt_id returned')
       }
-      
+
       // Show queued confirmation
       setLastQueued({
         promptId,
         checkpoint: CHECKPOINTS.find(c => c.value === checkpoint)?.label || checkpoint
       })
-      
+
       // Notify queue indicator
       if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-      
+
       if (DEBUG) console.debug('📋 I2I queued:', promptId)
-      
+
       // Don't wait for completion - job will appear in queue/history when done
-      
+
     } catch (err) {
       console.error('I2I error:', err)
       setError(err.message)
@@ -117,7 +117,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
           <ImageIcon size={18} />
           Source Image
         </h3>
-        
+
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
           onDrop={handleDrop}
@@ -147,7 +147,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
           <Wand2 size={18} />
           Transformation
         </h3>
-        
+
         <div className="form-group">
           <label>Prompt (describe desired changes)</label>
           <textarea
@@ -196,7 +196,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
 
       {/* Advanced Settings */}
       <div className="tool-section collapsible">
-        <button 
+        <button
           className="section-toggle"
           onClick={() => setShowAdvanced(!showAdvanced)}
         >
@@ -204,7 +204,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
           Advanced Settings
           <ChevronDown size={16} className={showAdvanced ? 'rotated' : ''} />
         </button>
-        
+
         {showAdvanced && (
           <div className="advanced-content">
             <div className="form-group">

@@ -20,7 +20,7 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
   const [model, setModel] = useState('RealESRGAN_x4plus.pth')
   const [scale, setScale] = useState(4)
   const [faceEnhance, setFaceEnhance] = useState(false)
-  
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
@@ -35,7 +35,7 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
       setResult(null)
       setError(null)
       setLastQueued(null)
-      
+
       // Get image dimensions
       const img = new Image()
       img.onload = () => {
@@ -55,7 +55,7 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
       setResult(null)
       setError(null)
       setLastQueued(null)
-      
+
       const img = new Image()
       img.onload = () => {
         setImageInfo({ width: img.width, height: img.height })
@@ -66,45 +66,45 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
 
   const handleUpscale = async () => {
     if (!file) return
-    
+
     setSubmitting(true)
     setError(null)
     setLastQueued(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('model', model)
       formData.append('scale', String(scale))
       formData.append('face_enhance', String(faceEnhance))
-      
+
       if (DEBUG) console.debug('🔍 Upscale request:', { model, scale, faceEnhance })
-      
+
       const res = await postForm(`${BACKEND_BASE}/upscale`, formData)
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Upscaling failed')
       }
-      
+
       const promptId = res.data?.prompt_id
       if (!promptId) {
         throw new Error('No prompt_id returned')
       }
-      
+
       // Show queued confirmation
       setLastQueued({
         promptId,
         model: UPSCALE_MODELS.find(m => m.value === model)?.label || model,
         scale
       })
-      
+
       // Notify queue indicator
       if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-      
+
       if (DEBUG) console.debug('📋 Upscale queued:', promptId)
-      
+
       // Don't wait for completion - job will appear in queue/history when done
-      
+
     } catch (err) {
       console.error('Upscale error:', err)
       setError(err.message)
@@ -124,7 +124,7 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
           <ImageIcon size={18} />
           Source Image
         </h3>
-        
+
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
           onDrop={handleDrop}
@@ -147,7 +147,7 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
             style={{ display: 'none' }}
           />
         </div>
-        
+
         {imageInfo && (
           <div className="image-info">
             <span>📐 {imageInfo.width} × {imageInfo.height}px</span>
@@ -162,7 +162,7 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
           <ZoomIn size={18} />
           Upscale Settings
         </h3>
-        
+
         <div className="form-group">
           <label>Scale Factor</label>
           <div className="button-group">
@@ -236,9 +236,9 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
           <div className="result-image">
             <img src={result} alt="Upscaled" />
           </div>
-          <a 
-            href={result} 
-            download 
+          <a
+            href={result}
+            download
             className="btn-secondary"
             style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >

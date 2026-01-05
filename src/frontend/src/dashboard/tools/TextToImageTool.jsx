@@ -43,7 +43,7 @@ const getModelType = (model) => {
 
 export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const { nsfwEnabled } = useNSFW()
-  
+
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text')
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -54,7 +54,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [error, setError] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
-  
+
   // LoRA settings
   const [availableLoras, setAvailableLoras] = useState([])
   const [selectedLoras, setSelectedLoras] = useState([
@@ -62,7 +62,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
     { name: 'None', strength: 1.0 },
     { name: 'None', strength: 1.0 },
   ])
-  
+
   // Advanced settings
   const [steps, setSteps] = useState(30)
   const [cfg, setCfg] = useState(7.5)
@@ -70,7 +70,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [seed, setSeed] = useState(-1)
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
-  
+
   // Fetch available LoRAs on mount
   useEffect(() => {
     const fetchLoras = async () => {
@@ -86,13 +86,13 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
     }
     fetchLoras()
   }, [])
-  
+
   // Filter LoRAs based on NSFW setting
   const filteredLoras = useMemo(() => {
     if (nsfwEnabled) return availableLoras
     return availableLoras.filter(l => !l.nsfw)
   }, [availableLoras, nsfwEnabled])
-  
+
   // Update LoRA selection
   const updateLora = (index, field, value) => {
     setSelectedLoras(prev => {
@@ -110,17 +110,17 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
 
     try {
       const queuedJobs = []
-      
+
       for (let i = 0; i < batchCount; i++) {
         const jobId = `t2i-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         const formData = new FormData()
         formData.append('prompt', prompt)
         formData.append('aspect_ratio', aspectRatio)
-        
+
         // Determine endpoint based on model type
         const modelType = getModelType(model)
         let endpoint = '/generate-image'
-        
+
         if (modelType === 'wan22') {
           endpoint = '/generate-wan22-t2i'
           formData.append('steps', steps)
@@ -158,32 +158,32 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
           formData.append('model', model)
           formData.append('job_id', jobId)
         }
-        
+
         if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType })
-        
+
         const result = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
         if (!result.ok) {
           throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
         }
 
         if (DEBUG) console.log(`📋 Batch ${i+1}/${batchCount} queued:`, result.data)
-        
+
         // Track queued job
         if (result.data?.prompt_id) {
           queuedJobs.push(result.data.prompt_id)
         }
-        
+
         // Notify queue indicator
         if (onJobSubmitted) onJobSubmitted({ prompt_id: result.data?.prompt_id })
       }
-      
+
       // Show queued confirmation
       setLastQueued({
         count: batchCount,
         model: getModelLabel(),
         promptIds: queuedJobs
       })
-      
+
     } catch (e) {
       console.error('Generation error:', e)
       setError(e.message || 'Failed to generate image')
@@ -191,7 +191,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
       setIsGenerating(false)
     }
   }
-  
+
   // Get model display label
   const getModelLabel = () => {
     const allModels = [
@@ -232,7 +232,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
              <button className="icon-btn" style={{ width: '24px', height: '24px', fontSize: '10px' }}>✨</button>
           </div>
         </div>
-        
+
         <div style={{ position: 'relative' }}>
           <textarea
             className="form-textarea"
@@ -240,9 +240,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             onChange={(e) => setPrompt(e.target.value)}
             rows={4}
             placeholder="A attractive blonde woman with cup f, tattoos, looking at me defiantly."
-            style={{ 
-              backgroundColor: '#0f0f0f', 
-              border: 'none', 
+            style={{
+              backgroundColor: '#0f0f0f',
+              border: 'none',
               resize: 'none',
               paddingBottom: '24px'
             }}
@@ -258,7 +258,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             {getModelType(model).toUpperCase()}
           </span>
         </div>
-        
+
         {/* Flux Models */}
         <div style={{ marginBottom: '12px' }}>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
@@ -270,8 +270,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 key={option.value}
                 className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
                 onClick={() => setModel(option.value)}
-                style={{ 
-                  fontSize: '0.75rem', 
+                style={{
+                  fontSize: '0.75rem',
                   padding: '6px 10px',
                   minWidth: 'auto'
                 }}
@@ -281,7 +281,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             ))}
           </div>
         </div>
-        
+
         {/* SDXL Models (ComfyUI) */}
         <div style={{ marginBottom: '12px' }}>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
@@ -293,8 +293,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 key={option.value}
                 className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
                 onClick={() => setModel(option.value)}
-                style={{ 
-                  fontSize: '0.75rem', 
+                style={{
+                  fontSize: '0.75rem',
                   padding: '6px 10px',
                   minWidth: 'auto'
                 }}
@@ -305,7 +305,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             ))}
           </div>
         </div>
-        
+
         {/* SD 1.5 Models */}
         <div style={{ marginBottom: '12px' }}>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
@@ -317,8 +317,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 key={option.value}
                 className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
                 onClick={() => setModel(option.value)}
-                style={{ 
-                  fontSize: '0.75rem', 
+                style={{
+                  fontSize: '0.75rem',
                   padding: '6px 10px',
                   minWidth: 'auto'
                 }}
@@ -328,7 +328,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             ))}
           </div>
         </div>
-        
+
         {/* Wan2.2 Models (Video Model T2I) */}
         <div style={{ marginBottom: '12px' }}>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
@@ -340,8 +340,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 key={option.value}
                 className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
                 onClick={() => setModel(option.value)}
-                style={{ 
-                  fontSize: '0.75rem', 
+                style={{
+                  fontSize: '0.75rem',
                   padding: '6px 10px',
                   minWidth: 'auto'
                 }}
@@ -351,7 +351,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             ))}
           </div>
         </div>
-        
+
         {/* Diffusers Models */}
         <div>
           <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
@@ -363,8 +363,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 key={option.value}
                 className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
                 onClick={() => setModel(option.value)}
-                style={{ 
-                  fontSize: '0.75rem', 
+                style={{
+                  fontSize: '0.75rem',
                   padding: '6px 10px',
                   minWidth: 'auto'
                 }}
@@ -388,9 +388,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             onChange={(e) => setNegativePrompt(e.target.value)}
             rows={2}
             placeholder="ugly, deformed, blurry..."
-            style={{ 
-              backgroundColor: '#0f0f0f', 
-              border: 'none', 
+            style={{
+              backgroundColor: '#0f0f0f',
+              border: 'none',
               resize: 'none',
               fontSize: '0.85rem'
             }}
@@ -434,22 +434,22 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
 
       {/* Advanced Settings */}
       <div className="grok-card">
-        <div 
-          className="grok-card-header" 
+        <div
+          className="grok-card-header"
           style={{ cursor: 'pointer' }}
           onClick={() => setShowAdvanced(!showAdvanced)}
         >
           <div className="grok-card-title">Advanced Settings</div>
-          <ChevronDown 
-            size={16} 
-            className="text-muted" 
-            style={{ 
+          <ChevronDown
+            size={16}
+            className="text-muted"
+            style={{
               transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s'
             }}
           />
         </div>
-        
+
         {showAdvanced && (
           <>
             {/* Batch Count */}
@@ -467,7 +467,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 ))}
               </div>
             </div>
-            
+
             {/* Flux-specific settings */}
             {getModelType(model) === 'flux' && (
               <>
@@ -485,7 +485,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     className="form-range"
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <label className="grok-section-label">Guidance</label>
@@ -501,7 +501,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     className="form-range"
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="grok-section-label">Seed (-1 = random)</label>
                   <input
@@ -509,7 +509,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     value={seed}
                     onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
                     className="form-input"
-                    style={{ 
+                    style={{
                       backgroundColor: '#0f0f0f',
                       border: '1px solid #333',
                       borderRadius: '6px',
@@ -520,7 +520,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 </div>
               </>
             )}
-            
+
             {/* Wan2.2 T2I settings */}
             {getModelType(model) === 'wan22' && (
               <>
@@ -541,7 +541,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     Multi-GPU workflow (DisTorch2) - 2-stage denoising
                   </div>
                 </div>
-                
+
                 <div className="form-group">
                   <label className="grok-section-label">Seed (-1 = random)</label>
                   <input
@@ -549,7 +549,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     value={seed}
                     onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
                     className="form-input"
-                    style={{ 
+                    style={{
                       backgroundColor: '#0f0f0f',
                       border: '1px solid #333',
                       borderRadius: '6px',
@@ -560,7 +560,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                 </div>
               </>
             )}
-            
+
             {/* SDXL and SD1.5 settings */}
             {(getModelType(model) === 'sdxl' || getModelType(model) === 'sd15') && (
               <>
@@ -578,7 +578,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     className="form-range"
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <label className="grok-section-label">CFG Scale</label>
@@ -594,7 +594,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     className="form-range"
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="grok-section-label">Sampler</label>
                   <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px' }}>
@@ -610,7 +610,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     ))}
                   </div>
                 </div>
-                
+
                 <div className="form-group">
                   <label className="grok-section-label">Scheduler</label>
                   <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px' }}>
@@ -626,7 +626,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     ))}
                   </div>
                 </div>
-                
+
                 <div className="form-group">
                   <label className="grok-section-label">Seed (-1 = random)</label>
                   <input
@@ -634,7 +634,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     value={seed}
                     onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
                     className="form-input"
-                    style={{ 
+                    style={{
                       backgroundColor: '#0f0f0f',
                       border: '1px solid #333',
                       borderRadius: '6px',
@@ -643,7 +643,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                     }}
                   />
                 </div>
-                
+
                 {/* LoRA Settings (SDXL only) */}
                 {getModelType(model) === 'sdxl' && filteredLoras.length > 0 && (
                   <div className="form-group">
@@ -655,9 +655,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
                       )}
                     </label>
                     {selectedLoras.map((lora, idx) => (
-                      <div key={idx} style={{ 
-                        display: 'flex', 
-                        gap: '8px', 
+                      <div key={idx} style={{
+                        display: 'flex',
+                        gap: '8px',
                         marginBottom: '8px',
                         alignItems: 'center'
                       }}>
@@ -713,16 +713,16 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
         </div>
       )}
 
-      <button 
-        className="primary-btn" 
+      <button
+        className="primary-btn"
         onClick={handleGenerate}
         disabled={isGenerating || !prompt.trim()}
-        style={{ 
-          height: '48px', 
-          fontSize: '1rem', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
+        style={{
+          height: '48px',
+          fontSize: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           gap: '8px',
           backgroundColor: 'white',
           color: 'black'
@@ -740,9 +740,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
 
       {/* Queued confirmation */}
       {lastQueued && (
-        <div style={{ 
-          padding: '12px 16px', 
-          backgroundColor: 'rgba(34, 197, 94, 0.2)', 
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: 'rgba(34, 197, 94, 0.2)',
           border: '1px solid rgba(34, 197, 94, 0.5)',
           borderRadius: '8px',
           color: '#86efac',
@@ -754,9 +754,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
       )}
 
       {error && (
-        <div style={{ 
-          padding: '12px 16px', 
-          backgroundColor: 'rgba(239, 68, 68, 0.2)', 
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: 'rgba(239, 68, 68, 0.2)',
           border: '1px solid rgba(239, 68, 68, 0.5)',
           borderRadius: '8px',
           color: '#fca5a5',

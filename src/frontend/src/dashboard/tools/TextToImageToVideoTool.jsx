@@ -17,7 +17,7 @@ export default function TextToImageToVideoTool({ onOutput }) {
   const handleGenerateImage = async () => {
     if (!t2iPrompt.trim()) return
     setIsGeneratingImage(true)
-    
+
     // TODO: Implement actual T2I backend call
     // For now, simulate a delay and use a placeholder or fail
     setTimeout(() => {
@@ -79,8 +79,8 @@ export default function TextToImageToVideoTool({ onOutput }) {
           </div>
         </div>
 
-        <button 
-          className="primary-btn" 
+        <button
+          className="primary-btn"
           onClick={handleGenerateImage}
           disabled={isGeneratingImage || !t2iPrompt.trim()}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -98,10 +98,10 @@ export default function TextToImageToVideoTool({ onOutput }) {
 
         {generatedImage ? (
           <div className="form-group">
-            <img 
-              src={generatedImage} 
-              alt="Generated" 
-              style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px' }} 
+            <img
+              src={generatedImage}
+              alt="Generated"
+              style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px' }}
             />
           </div>
         ) : (
@@ -137,8 +137,8 @@ export default function TextToImageToVideoTool({ onOutput }) {
           />
         </div>
 
-        <button 
-          className="primary-btn" 
+        <button
+          className="primary-btn"
           onClick={handleGenerateVideo}
           disabled={!generatedImage || isGeneratingVideo}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}

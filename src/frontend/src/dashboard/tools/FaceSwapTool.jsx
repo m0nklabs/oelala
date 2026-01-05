@@ -32,7 +32,7 @@ export default function FaceSwapTool({ onJobSubmitted }) {
   const [detectedFaces, setDetectedFaces] = useState(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
-  
+
   const targetInputRef = useRef(null)
   const sourceInputRef = useRef(null)
 
@@ -67,16 +67,16 @@ export default function FaceSwapTool({ onJobSubmitted }) {
 
   const detectFaces = async () => {
     if (!targetFile) return
-    
+
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('image', targetFile)
-      
+
       const res = await postForm(`${BACKEND_BASE}/detect-faces`, formData)
-      
+
       if (res.ok && res.data?.faces) {
         setDetectedFaces(res.data.faces)
         if (DEBUG) console.log('👤 Detected faces:', res.data.faces.length)
@@ -96,12 +96,12 @@ export default function FaceSwapTool({ onJobSubmitted }) {
       setError('Please upload both target and source face images')
       return
     }
-    
+
     setIsLoading(true)
     setError(null)
     setResult(null)
     setLastQueued(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('target', targetFile)
@@ -111,34 +111,34 @@ export default function FaceSwapTool({ onJobSubmitted }) {
       formData.append('strength', strength)
       formData.append('blend', blendAmount)
       formData.append('face_index', swapAllFaces ? -1 : faceIndex)
-      
+
       if (DEBUG) console.log('👤 FaceSwap request:', {
         model: model.id, enhance, strength, faceIndex
       })
-      
+
       const res = await postForm(`${BACKEND_BASE}/face-swap`, formData)
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'Face swap request failed')
       }
-      
+
       if (res.data?.prompt_id) {
         // Show queued confirmation
         setLastQueued({
           promptId: res.data.prompt_id,
           model: model.label
         })
-        
+
         // Notify queue indicator
         if (onJobSubmitted) onJobSubmitted({ prompt_id: res.data.prompt_id })
-        
+
         if (DEBUG) console.debug('📋 FaceSwap queued:', res.data.prompt_id)
-        
+
         // Don't wait for completion - job will appear in queue/history when done
       } else if (res.data?.url) {
         setResult({ url: res.data.url })
       }
-      
+
     } catch (err) {
       console.error('❌ FaceSwap error:', err)
       setError(err.message)
@@ -356,7 +356,7 @@ export default function FaceSwapTool({ onJobSubmitted }) {
           <span className="text-sm font-medium">Advanced Settings</span>
           <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
         </button>
-        
+
         {showAdvanced && (
           <div className="p-4 space-y-4 bg-gray-850">
             {/* Strength */}
@@ -400,7 +400,7 @@ export default function FaceSwapTool({ onJobSubmitted }) {
       <div className="flex items-start gap-2 p-3 bg-yellow-900/30 border border-yellow-700/50 rounded-lg">
         <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-yellow-200">
-          <strong>Ethical Use:</strong> Only use face swap with consent of all parties involved. 
+          <strong>Ethical Use:</strong> Only use face swap with consent of all parties involved.
           Creating non-consensual deepfakes is illegal in many jurisdictions.
         </div>
       </div>

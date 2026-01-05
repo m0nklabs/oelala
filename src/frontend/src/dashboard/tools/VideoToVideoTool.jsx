@@ -31,24 +31,24 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
-  
+
   const [style, setStyle] = useState('none')
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, watermark')
   const [denoise, setDenoise] = useState(0.5)
   const [fps, setFps] = useState(8)
   const [maxFrames, setMaxFrames] = useState(32)
-  
+
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [steps, setSteps] = useState(20)
   const [cfg, setCfg] = useState(7.5)
   const [seed, setSeed] = useState(-1)
-  
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
-  
+
   const videoRef = useRef(null)
 
   const handleFileChange = useCallback((e) => {
@@ -60,7 +60,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
       setResult(null)
       setError(null)
       setLastQueued(null)
-      
+
       // Get video info
       const video = document.createElement('video')
       video.onloadedmetadata = () => {
@@ -84,7 +84,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
       setResult(null)
       setError(null)
       setLastQueued(null)
-      
+
       const video = document.createElement('video')
       video.onloadedmetadata = () => {
         setVideoInfo({
@@ -99,21 +99,21 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
   const handleTransform = async () => {
     if (!file) return
-    
+
     // Determine final prompt
-    const finalPrompt = style !== 'none' 
+    const finalPrompt = style !== 'none'
       ? STYLE_PROMPTS[style] + (prompt ? ', ' + prompt : '')
       : prompt
-    
+
     if (!finalPrompt.trim()) {
       setError('Please select a style or enter a prompt')
       return
     }
-    
+
     setSubmitting(true)
     setError(null)
     setLastQueued(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -125,33 +125,33 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
       formData.append('steps', String(steps))
       formData.append('cfg', String(cfg))
       formData.append('seed', String(seed))
-      
+
       if (DEBUG) console.debug('🎬 V2V request:', { style, denoise, fps, maxFrames })
-      
+
       const res = await postForm(`${BACKEND_BASE}/generate-v2v`, formData)
-      
+
       if (!res.ok) {
         throw new Error(res.data?.detail || 'V2V transform failed')
       }
-      
+
       const promptId = res.data?.prompt_id
       if (!promptId) {
         throw new Error('No prompt_id returned')
       }
-      
+
       // Show queued confirmation
       setLastQueued({
         promptId,
         style: style !== 'none' ? style : 'custom'
       })
-      
+
       // Notify queue indicator
       if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-      
+
       if (DEBUG) console.debug('📋 V2V queued:', promptId)
-      
+
       // Don't wait for completion - job will appear in queue/history when done
-      
+
     } catch (err) {
       console.error('V2V error:', err)
       setError(err.message)
@@ -167,7 +167,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
           <Video size={18} />
           Source Video
         </h3>
-        
+
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
           onDrop={handleDrop}
@@ -175,12 +175,12 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
           onClick={() => document.getElementById('v2v-file-input').click()}
         >
           {preview ? (
-            <video 
+            <video
               ref={videoRef}
-              src={preview} 
-              className="upload-preview" 
-              controls 
-              muted 
+              src={preview}
+              className="upload-preview"
+              controls
+              muted
               loop
               style={{ maxHeight: '250px' }}
             />
@@ -199,7 +199,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
             style={{ display: 'none' }}
           />
         </div>
-        
+
         {videoInfo && (
           <div className="video-info">
             <span>📐 {videoInfo.width} × {videoInfo.height}px</span>
@@ -214,7 +214,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
           <Wand2 size={18} />
           Style Transform
         </h3>
-        
+
         <div className="style-grid">
           {STYLE_PRESETS.map((preset) => (
             <button
@@ -235,7 +235,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={style !== 'none' 
+          placeholder={style !== 'none'
             ? 'Add extra details to the style...'
             : 'Describe the desired look...'}
           rows={3}
@@ -265,22 +265,22 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
       {/* Advanced */}
       <div className="tool-section collapsible">
-        <h3 
+        <h3
           onClick={() => setShowAdvanced(!showAdvanced)}
           style={{ cursor: 'pointer' }}
         >
           <Settings size={16} />
           Advanced Settings
-          <ChevronDown 
-            size={16} 
-            style={{ 
+          <ChevronDown
+            size={16}
+            style={{
               marginLeft: 'auto',
               transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s'
             }}
           />
         </h3>
-        
+
         {showAdvanced && (
           <div className="advanced-content">
             <div className="form-row">
@@ -292,7 +292,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 <option value={24}>24 fps</option>
               </select>
             </div>
-            
+
             <div className="form-row">
               <label>Max Frames</label>
               <select value={maxFrames} onChange={(e) => setMaxFrames(parseInt(e.target.value))}>
@@ -302,7 +302,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 <option value={64}>64 frames (~8s @8fps)</option>
               </select>
             </div>
-            
+
             <div className="form-row">
               <label>Steps</label>
               <input
@@ -313,7 +313,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 onChange={(e) => setSteps(parseInt(e.target.value))}
               />
             </div>
-            
+
             <div className="form-row">
               <label>CFG Scale</label>
               <input
@@ -325,7 +325,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 onChange={(e) => setCfg(parseFloat(e.target.value))}
               />
             </div>
-            
+
             <div className="form-row">
               <label>Seed (-1 = random)</label>
               <input
@@ -334,7 +334,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
               />
             </div>
-            
+
             <div className="form-row">
               <label>Negative Prompt</label>
               <textarea
@@ -381,9 +381,9 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         <div className="result-section">
           <h3>Result</h3>
           <video src={result} controls className="result-video" />
-          <a 
-            href={result} 
-            download 
+          <a
+            href={result}
+            download
             className="btn-secondary"
             style={{ marginTop: 12 }}
           >

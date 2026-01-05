@@ -36,7 +36,7 @@ export function getCameraMotionPrefix(motionValue) {
  */
 export default function CameraMotionSelector({ value, onChange, style = {} }) {
   const selectedMotion = CAMERA_MOTIONS.find(m => m.value === value)
-  
+
   return (
     <div style={{ marginBottom: '12px', ...style }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>

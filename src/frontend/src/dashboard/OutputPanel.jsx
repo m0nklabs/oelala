@@ -31,16 +31,16 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
     if (output.kind === 'video') {
       return (
         <div className="media-container">
-          <div 
+          <div
             className="video-wrapper"
             onMouseEnter={() => setShowDuration(true)}
             onMouseLeave={() => setShowDuration(false)}
           >
-            <video 
-              className="media-preview" 
-              controls 
-              src={output.url} 
-              autoPlay 
+            <video
+              className="media-preview"
+              controls
+              src={output.url}
+              autoPlay
               loop
               onLoadedMetadata={(e) => setVideoDuration(e.target.duration)}
             />
@@ -76,10 +76,10 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
     if (output.kind === 'image') {
       return (
         <div className="media-container">
-          <img 
-            className="media-preview" 
-            src={output.url} 
-            alt="Generated" 
+          <img
+            className="media-preview"
+            src={output.url}
+            alt="Generated"
             onError={(e) => {
               console.error('Image load failed:', output.url)
               e.target.style.display = 'none'
@@ -125,16 +125,16 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
   return (
     <section className="output-panel">
       <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', gap: '8px' }}>
-        <button 
-          className="icon-btn" 
+        <button
+          className="icon-btn"
           onClick={() => setHistoryOpen(!historyOpen)}
           title="History"
         >
           <History size={20} />
         </button>
         {onClose && (
-          <button 
-            className="icon-btn" 
+          <button
+            className="icon-btn"
             onClick={onClose}
             title="Close & show My Media"
           >
@@ -171,7 +171,7 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
                     filename: vid.filename,
                   })
                   // Optional: close history on select
-                  // setHistoryOpen(false) 
+                  // setHistoryOpen(false)
                 }}
               >
                 <div className="history-item-title">{vid.filename}</div>

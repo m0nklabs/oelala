@@ -1,0 +1,17 @@
+# Gitleaks ignore file
+# These are false positives - placeholder tokens in documentation examples
+
+# Documentation placeholder tokens (YOUR_JWT_TOKEN, YOUR_API_KEY, etc.)
+# Use fingerprints from gitleaks output for precise ignores
+7e545320684c939ea0f4a301789a90778de361e8:docs/IMPLEMENTATION_SUMMARY.md:curl-auth-header:235
+a5e85e5bb521c89da982475f6d5033085fbead4f:docs/GALLERY_SETUP.md:curl-auth-header:127
+a5e85e5bb521c89da982475f6d5033085fbead4f:docs/GALLERY_SETUP.md:curl-auth-header:140
+
+# Legacy fingerprints (wildcard patterns)
+docs/CREDITS_SETUP.md:curl-auth-header
+docs/GALLERY_SETUP.md:curl-auth-header
+docs/IMPLEMENTATION_SUMMARY.md:curl-auth-header
+
+# Example/template files with placeholder secrets
+*.example:*
+.env.example:*

@@ -1,6 +1,6 @@
 /**
  * Estimate generation time based on parameters.
- * 
+ *
  * These are rough estimates based on typical GPU performance.
  * Actual times vary based on GPU load and specific settings.
  */
@@ -24,30 +24,30 @@ const DURATION_PER_SECOND = 15 // Additional seconds per video second
  * @param {object} params - Generation parameters
  * @returns {object} - { seconds, formatted, range }
  */
-export function estimateI2VTime({ 
-  resolution = '480p', 
+export function estimateI2VTime({
+  resolution = '480p',
   duration = 6,
   steps = 6,
 }) {
   // Base calculation
   let seconds = BASE_TIME_SECONDS
-  
+
   // Adjust for resolution
   const resMult = RESOLUTION_MULTIPLIER[resolution] || 1.0
   seconds *= resMult
-  
+
   // Adjust for duration (more frames = more time)
   seconds += (duration - 6) * DURATION_PER_SECOND
-  
+
   // Adjust for steps (DisTorch uses fewer steps)
   if (steps > 6) {
     seconds *= (steps / 6)
   }
-  
+
   // Add variance for range
   const min = Math.round(seconds * 0.8)
   const max = Math.round(seconds * 1.3)
-  
+
   return {
     seconds: Math.round(seconds),
     min,
@@ -61,24 +61,24 @@ export function estimateI2VTime({
  * Estimate generation time for Text-to-Video
  * (Slightly longer due to T2I step)
  */
-export function estimateT2VTime({ 
-  resolution = '480p', 
+export function estimateT2VTime({
+  resolution = '480p',
   numFrames = 41,
   steps = 6,
   t2iSteps = 20,
 }) {
   const duration = numFrames / 16 // Approximate seconds
-  
+
   // T2V includes T2I step
   const t2iTime = t2iSteps * 1.5 // ~1.5 seconds per step for T2I
-  
+
   let estimate = estimateI2VTime({ resolution, duration, steps })
   estimate.seconds += t2iTime
   estimate.min += t2iTime * 0.8
   estimate.max += t2iTime * 1.2
   estimate.formatted = formatTime(estimate.seconds)
   estimate.range = `${formatTime(estimate.min)} - ${formatTime(estimate.max)}`
-  
+
   return estimate
 }
 

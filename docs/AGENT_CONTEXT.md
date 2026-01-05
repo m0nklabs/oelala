@@ -198,7 +198,7 @@ journalctl -u oelala-backend -f
 // Every tool follows this pattern:
 export default function SomeTool({ onOutput, onJobSubmitted }) {
   const [submitting, setSubmitting] = useState(false)
-  
+
   const handleGenerate = async () => {
     setSubmitting(true)
     try {
@@ -210,7 +210,7 @@ export default function SomeTool({ onOutput, onJobSubmitted }) {
       setSubmitting(false)
     }
   }
-  
+
   return (
     <div className="tool-container">
       {/* Tool sections */}

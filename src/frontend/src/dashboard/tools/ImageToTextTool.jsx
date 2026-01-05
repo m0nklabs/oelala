@@ -47,29 +47,29 @@ export default function ImageToTextTool({ onSendToPrompt }) {
 
   const handleCaption = async () => {
     if (!file) return
-    
+
     setLoading(true)
     setError(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('model', model)
       formData.append('mode', mode)
-      
+
       const res = await fetch(`${BACKEND_BASE}/caption-image`, {
         method: 'POST',
         body: formData,
       })
-      
+
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.detail || 'Caption failed')
       }
-      
+
       const data = await res.json()
       setCaption(data.caption || '')
-      
+
       if (DEBUG) console.log('🖼️ Caption result:', data)
     } catch (err) {
       console.error('Caption error:', err)
@@ -98,7 +98,7 @@ export default function ImageToTextTool({ onSendToPrompt }) {
           <ImageIcon size={18} />
           Upload Image
         </h3>
-        
+
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
           onDrop={handleDrop}
@@ -128,7 +128,7 @@ export default function ImageToTextTool({ onSendToPrompt }) {
           <Wand2 size={18} />
           Caption Settings
         </h3>
-        
+
         <div className="form-group">
           <label>Model</label>
           <select value={model} onChange={(e) => setModel(e.target.value)}>

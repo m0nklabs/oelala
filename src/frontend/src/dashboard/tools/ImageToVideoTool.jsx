@@ -19,8 +19,8 @@ const MODEL_MODES = [
 
 // Resolution presets with dimensions per aspect ratio
 const RESOLUTION_PRESETS = {
-  '480p': { 
-    label: '480p', 
+  '480p': {
+    label: '480p',
     dimensions: {
       '16:9': '848×480',
       '9:16': '480×848',
@@ -29,8 +29,8 @@ const RESOLUTION_PRESETS = {
       '3:4': '480×640',
     }
   },
-  '576p': { 
-    label: '576p', 
+  '576p': {
+    label: '576p',
     dimensions: {
       '16:9': '1024×576',
       '9:16': '576×1024',
@@ -39,8 +39,8 @@ const RESOLUTION_PRESETS = {
       '3:4': '576×768',
     }
   },
-  '720p': { 
-    label: '720p', 
+  '720p': {
+    label: '720p',
     dimensions: {
       '16:9': '1280×720',
       '9:16': '720×1280',
@@ -80,31 +80,31 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [cfg, setCfg] = useState(1.0)
   const [seed, setSeed] = useState(-1)
   const [showAdvanced, setShowAdvanced] = useState(false)  // Sampling settings collapsed by default
-  
+
   // Camera motion preset
   const [cameraMotion, setCameraMotion] = useState('')
-  
+
   // LoRA state - now supports multiple LoRAs with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
   // Array of {high: string, low: string, strength: number}
   const [loraConfigs, setLoraConfigs] = useState([])
   const [showLoraPanel, setShowLoraPanel] = useState(false)
-  
+
   // Unet model state
   const [availableUnets, setAvailableUnets] = useState({ high_noise: [], low_noise: [], pairs: [] })
   const [unetHighNoise, setUnetHighNoise] = useState('wan2.2_i2v_high_noise_14B_Q6_K.gguf')
   const [unetLowNoise, setUnetLowNoise] = useState('wan2.2_i2v_low_noise_14B_Q6_K.gguf')
   const [showUnetPanel, setShowUnetPanel] = useState(false)
-  
+
   // Extend Duration - Sequential clip generation
   const [extendMode, setExtendMode] = useState(false)
   const [clipCount, setClipCount] = useState(1)
-  
+
   // Preset mode
   const [usePresets, setUsePresets] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState(null)
   const [presetParameters, setPresetParameters] = useState({})
-  
+
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -138,10 +138,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   // Filter LoRAs based on NSFW setting
   const filteredLoras = useMemo(() => {
     if (nsfwEnabled) return availableLoras
-    
+
     // Filter each category
     const filterList = (list) => (list || []).filter(l => !l.nsfw)
-    
+
     // Filter by_category object
     const filteredByCategory = {}
     if (availableLoras.by_category) {
@@ -152,7 +152,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         }
       })
     }
-    
+
     return {
       high_noise: filterList(availableLoras.high_noise),
       low_noise: filterList(availableLoras.low_noise),
@@ -214,7 +214,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const selectCreation = useCallback(async (item) => {
     setSelectedCreation(item)
     setError('')
-    
+
     try {
       // Fetch the image and convert to File object
       const imageUrl = `${BACKEND_BASE}${item.url}`
@@ -222,11 +222,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       const blob = await response.blob()
       const filename = item.filename || item.url.split('/').pop()
       const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-      
+
       setFile(fileObj)
       setPreviewUrl(imageUrl)
       setUploadTab('file') // Switch back to file tab to show the selection
-      
+
       // Show in output panel
       onOutput({
         kind: 'image',
@@ -235,7 +235,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         filename: filename,
         meta: { source: 'my-creations', originalItem: item },
       })
-      
+
       if (DEBUG) console.debug('🐛 selected creation:', filename)
     } catch (e) {
       setError('Failed to load selected image')
@@ -310,7 +310,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     formData.append('resolution', resolution)
     formData.append('fps', String(fps))
     formData.append('aspect_ratio', aspectRatio)
-    
+
     // Build prompt with camera motion prefix
     if (!usePose) {
       const motionPrefix = getCameraMotionPrefix(cameraMotion)
@@ -321,7 +321,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     // Choose endpoint
     let endpoint
     let useAsync = true  // Default to async mode for non-blocking generation
-    
+
     if (usePose) {
       endpoint = `${BACKEND_BASE}/generate-pose`
       useAsync = false  // Pose generation is not async yet
@@ -407,7 +407,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         <div className="grok-card-header">
           <div className="grok-card-title">Model Selection</div>
         </div>
-        
+
         <div className="form-group">
           <label className="grok-section-label">Generation Mode</label>
           <div style={{ position: 'relative' }}>
@@ -435,8 +435,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               }}
             >
               {MODEL_MODES.map((mode) => (
-                <option 
-                  key={mode.value} 
+                <option
+                  key={mode.value}
                   value={mode.value}
                   style={{ backgroundColor: '#1a1a1a', color: '#fff' }}
                 >
@@ -444,16 +444,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 </option>
               ))}
             </select>
-            <ChevronDown 
-              size={20} 
-              style={{ 
-                position: 'absolute', 
-                right: '12px', 
-                top: '50%', 
-                transform: 'translateY(-50%)', 
+            <ChevronDown
+              size={20}
+              style={{
+                position: 'absolute',
+                right: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
                 pointerEvents: 'none',
                 color: 'var(--text-muted)'
-              }} 
+              }}
             />
           </div>
           <div className="info-badge" style={{ marginTop: '8px' }}>
@@ -466,11 +466,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Unet Model Selection - Collapsible */}
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
-          <div 
+          <div
             onClick={() => setShowUnetPanel(!showUnetPanel)}
-            style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
               cursor: 'pointer',
               padding: '4px 0'
@@ -485,7 +485,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
             <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showUnetPanel ? '▼' : '▶'}</span>
           </div>
-          
+
           {showUnetPanel && (
             <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* Model Pair Selector - Easy mode */}
@@ -550,7 +550,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                       ))}
                     </select>
                   </div>
-                  
+
                   {/* Low Noise Model */}
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -589,8 +589,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             Positive Prompt <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.85rem' }}>(Describe the motion)</span>
             <div style={{ position: 'relative', display: 'inline-block' }}>
-              <button 
-                className="icon-btn" 
+              <button
+                className="icon-btn"
                 style={{ width: '20px', height: '20px', border: 'none', background: 'transparent', padding: 0, fontSize: '14px' }}
                 onClick={() => setShowPromptTips(!showPromptTips)}
                 title="Prompt tips"
@@ -627,8 +627,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button 
-              className="icon-btn" 
+            <button
+              className="icon-btn"
               style={{ width: '24px', height: '24px', fontSize: '14px' }}
               onClick={async () => {
                 if (!previewUrl) return
@@ -651,8 +651,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               🔍
             </button>
             <button className="icon-btn" style={{ width: '24px', height: '24px', fontSize: '12px' }} title="Show prompt tips">📝</button>
-            <button 
-              className="icon-btn" 
+            <button
+              className="icon-btn"
               style={{ width: '24px', height: '24px', fontSize: '14px' }}
               onClick={() => setPrompt(getRandomPrompt(nsfwEnabled))}
               title="Generate random creative prompt"
@@ -661,10 +661,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </button>
           </div>
         </div>
-        
+
         {/* Camera Motion Selector */}
         <CameraMotionSelector value={cameraMotion} onChange={setCameraMotion} />
-        
+
         <div style={{ position: 'relative' }}>
           <textarea
             className="form-textarea"
@@ -672,8 +672,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             onChange={(e) => setPrompt(e.target.value)}
             rows={4}
             placeholder="Describe how you want the image to move or animate... (Optional for image-to-video)"
-            style={{ 
-              backgroundColor: '#0f0f0f', 
+            style={{
+              backgroundColor: '#0f0f0f',
               border: '1px solid var(--border-color)',
               borderRadius: '8px',
               resize: 'vertical',
@@ -691,11 +691,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Negative Prompt - Collapsible */}
         <div style={{ marginTop: '12px' }}>
-          <div 
+          <div
             onClick={() => setShowNegativePrompt(!showNegativePrompt)}
-            style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
               cursor: 'pointer',
               padding: '8px 0'
@@ -706,7 +706,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </span>
             <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showNegativePrompt ? '▼' : '▶'}</span>
           </div>
-          
+
           {showNegativePrompt && (
             <div style={{ position: 'relative' }}>
               <textarea
@@ -715,8 +715,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 onChange={(e) => setNegativePrompt(e.target.value)}
                 rows={3}
                 placeholder="Things to avoid in the generation..."
-                style={{ 
-                  backgroundColor: '#0f0f0f', 
+                style={{
+                  backgroundColor: '#0f0f0f',
                   border: '1px solid var(--border-color)',
                   borderRadius: '8px',
                   resize: 'vertical',
@@ -743,19 +743,19 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         </div>
 
         <div className="grok-tabs">
-          <button 
+          <button
             className={`grok-tab ${uploadTab === 'file' ? 'active' : ''}`}
             onClick={() => setUploadTab('file')}
           >
             <Upload size={14} /> Upload File
           </button>
-          <button 
+          <button
             className={`grok-tab ${uploadTab === 'url' ? 'active' : ''}`}
             onClick={() => setUploadTab('url')}
           >
             <Link size={14} /> From URL
           </button>
-          <button 
+          <button
             className={`grok-tab ${uploadTab === 'creations' ? 'active' : ''}`}
             onClick={() => setUploadTab('creations')}
           >
@@ -793,7 +793,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
               Enter image URL:
             </div>
-            <input 
+            <input
               type="url"
               placeholder="https://example.com/image.jpg"
               style={{
@@ -827,8 +827,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Tab Content: My Creations - show instruction, picker is in output panel */}
         {uploadTab === 'creations' && !file && (
-          <div style={{ 
-            padding: '24px 16px', 
+          <div style={{
+            padding: '24px 16px',
             textAlign: 'center',
             color: 'var(--text-muted)',
             backgroundColor: 'var(--bg-secondary)',
@@ -848,18 +848,18 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         {/* Preview when file is selected (any tab) */}
         {file && (
           <div className="relative" style={{ position: 'relative' }}>
-            <img 
-              src={previewUrl} 
-              alt="Preview" 
-              style={{ 
-                width: '100%', 
-                maxHeight: '400px', 
-                objectFit: 'contain', 
+            <img
+              src={previewUrl}
+              alt="Preview"
+              style={{
+                width: '100%',
+                maxHeight: '400px',
+                objectFit: 'contain',
                 borderRadius: '8px',
                 border: '1px solid var(--border-color)'
-              }} 
+              }}
             />
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); clearFile(); }}
               style={{
                 position: 'absolute',
@@ -888,14 +888,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       <div className="grok-card">
         <div className="form-group">
           <label className="grok-section-label">
-            Resolution 
+            Resolution
             <span className="text-muted" style={{ fontWeight: 400 }}>
               {' (Higher = Better Quality, more VRAM)'}
             </span>
           </label>
           <div className="grok-toggle-group">
             {Object.entries(RESOLUTION_PRESETS).map(([key, preset]) => (
-              <button 
+              <button
                 key={key}
                 className={`grok-toggle-btn ${resolution === key ? 'active' : ''}`}
                 onClick={() => setResolution(key)}
@@ -914,7 +914,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           <label className="grok-section-label">Aspect Ratio</label>
           <div className="grok-toggle-group">
             {ASPECT_RATIOS.map((ar) => (
-              <button 
+              <button
                 key={ar}
                 className={`grok-toggle-btn ${aspectRatio === ar ? 'active' : ''}`}
                 onClick={() => setAspectRatio(ar)}
@@ -940,31 +940,31 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               onChange={(e) => setDuration(parseInt(e.target.value, 10))}
               style={{ width: '100%', opacity: 0, position: 'absolute', zIndex: 2, cursor: 'pointer' }}
             />
-            <div style={{ 
-              position: 'absolute', 
-              top: '10px', 
-              left: 0, 
-              right: 0, 
-              height: '4px', 
-              backgroundColor: '#333', 
-              borderRadius: '2px' 
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              left: 0,
+              right: 0,
+              height: '4px',
+              backgroundColor: '#333',
+              borderRadius: '2px'
             }}>
-              <div style={{ 
-                width: `${((duration - 3) / (15 - 3)) * 100}%`, 
-                height: '100%', 
-                backgroundColor: 'var(--accent-color, #a855f7)', 
-                borderRadius: '2px' 
+              <div style={{
+                width: `${((duration - 3) / (15 - 3)) * 100}%`,
+                height: '100%',
+                backgroundColor: 'var(--accent-color, #a855f7)',
+                borderRadius: '2px'
               }} />
             </div>
-            <div style={{ 
-              position: 'absolute', 
-              top: '2px', 
-              left: `calc(${((duration - 3) / (15 - 3)) * 100}% - 10px)`, 
-              width: '20px', 
-              height: '20px', 
-              backgroundColor: 'white', 
-              borderRadius: '50%', 
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)' 
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              left: `calc(${((duration - 3) / (15 - 3)) * 100}% - 10px)`,
+              width: '20px',
+              height: '20px',
+              backgroundColor: 'white',
+              borderRadius: '50%',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
             }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -1002,13 +1002,13 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           <div className="form-group">
             <label className="grok-section-label">Model Version</label>
             <div className="grok-toggle-group">
-              <button 
+              <button
                 className={`grok-toggle-btn ${modelVersion === 'v1' ? 'active' : ''}`}
                 onClick={() => setModelVersion('v1')}
               >
                 V1
               </button>
-              <button 
+              <button
                 className={`grok-toggle-btn ${modelVersion === 'v2' ? 'active' : ''}`}
                 onClick={() => setModelVersion('v2')}
               >
@@ -1023,15 +1023,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Workflow Presets - Quick configuration */}
         {modelMode === 'wan2.2' && (
-          <div style={{ 
-            backgroundColor: 'var(--bg-tertiary)', 
-            padding: '16px', 
+          <div style={{
+            backgroundColor: 'var(--bg-tertiary)',
+            padding: '16px',
             borderRadius: '8px',
             marginTop: '8px'
           }}>
-            <div 
+            <div
               onClick={() => setUsePresets(!usePresets)}
-              style={{ 
+              style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -1042,11 +1042,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 <Sliders size={16} />
                 <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Workflow Presets</span>
                 {selectedPreset && (
-                  <span style={{ 
-                    fontSize: '0.7rem', 
-                    backgroundColor: 'var(--accent-color)', 
+                  <span style={{
+                    fontSize: '0.7rem',
+                    backgroundColor: 'var(--accent-color)',
                     color: 'white',
-                    padding: '2px 6px', 
+                    padding: '2px 6px',
                     borderRadius: '4px',
                     marginLeft: '4px'
                   }}>
@@ -1056,10 +1056,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </div>
               <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{usePresets ? '▼' : '▶'}</span>
             </div>
-            
+
             {usePresets && (
               <div style={{ marginTop: '12px' }}>
-                <PresetSelector 
+                <PresetSelector
                   onPresetChange={(preset) => {
                     setSelectedPreset(preset)
                     // Apply preset parameters to local state
@@ -1088,31 +1088,31 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Advanced Settings for Wan2.2 - Always visible, collapsible */}
         {modelMode === 'wan2.2' && (
-          <div style={{ 
-            backgroundColor: 'var(--bg-tertiary)', 
-            padding: '16px', 
+          <div style={{
+            backgroundColor: 'var(--bg-tertiary)',
+            padding: '16px',
             borderRadius: '8px',
             marginTop: '8px'
           }}>
-            <div 
+            <div
               onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{ 
+              style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 cursor: 'pointer'
               }}
             >
-              <div style={{ 
-                fontSize: '0.9rem', 
-                fontWeight: 600, 
+              <div style={{
+                fontSize: '0.9rem',
+                fontWeight: 600,
                 color: 'var(--text-primary)'
               }}>
                 ⚙️ Sampling Settings
               </div>
               <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
             </div>
-            
+
             {showAdvanced && (
               <div style={{ marginTop: '12px' }}>
                 {/* Steps */}
@@ -1136,7 +1136,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                     <span>20 (quality)</span>
                   </div>
                 </div>
-                
+
                 {/* CFG */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -1158,7 +1158,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                     <span>10.0</span>
                   </div>
                 </div>
-                
+
                 {/* Seed */}
                 <div className="form-group">
                   <label className="grok-section-label">Seed</label>
@@ -1194,16 +1194,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             )}
 
             {/* LoRA Settings */}
-            <div style={{ 
-              marginTop: '16px', 
-              paddingTop: '16px', 
-              borderTop: '1px solid var(--border-color)' 
+            <div style={{
+              marginTop: '16px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--border-color)'
             }}>
-              <div 
+              <div
                 onClick={() => setShowLoraPanel(!showLoraPanel)}
-                style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   cursor: 'pointer',
                   marginBottom: showLoraPanel ? '12px' : 0
@@ -1213,9 +1213,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   <Layers size={16} />
                   <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>LoRA Models</span>
                   {loraConfigs.length > 0 && (
-                    <span style={{ 
-                      fontSize: '0.7rem', 
-                      backgroundColor: 'var(--accent-color)', 
+                    <span style={{
+                      fontSize: '0.7rem',
+                      backgroundColor: 'var(--accent-color)',
                       color: 'white',
                       padding: '2px 6px',
                       borderRadius: '4px'
@@ -1231,9 +1231,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {/* Existing LoRAs */}
                   {loraConfigs.map((config, idx) => (
-                    <div key={idx} style={{ 
-                      backgroundColor: 'var(--bg-input)', 
-                      borderRadius: '8px', 
+                    <div key={idx} style={{
+                      backgroundColor: 'var(--bg-input)',
+                      borderRadius: '8px',
                       padding: '12px',
                       border: '1px solid var(--border-color)'
                     }}>
@@ -1253,7 +1253,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                           ✕ Remove
                         </button>
                       </div>
-                      
+
                       {/* High Noise LoRA */}
                       <div style={{ marginBottom: '8px' }}>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -1405,8 +1405,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Chain multiple clips sequentially</div>
           </div>
           <label className="grok-switch">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={extendMode}
               onChange={(e) => {
                 setExtendMode(e.target.checked)
@@ -1419,7 +1419,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Clip Count Slider - Only visible when extendMode is on */}
         {extendMode && (
-          <div className="form-group" style={{ 
+          <div className="form-group" style={{
             background: 'linear-gradient(135deg, rgba(233, 69, 96, 0.1) 0%, rgba(233, 69, 96, 0.05) 100%)',
             borderRadius: '8px',
             padding: '12px',
@@ -1428,8 +1428,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <div className="grok-section-label">Number of Clips: {clipCount}</div>
-              <div style={{ 
-                fontSize: '0.75rem', 
+              <div style={{
+                fontSize: '0.75rem',
                 color: '#e94560',
                 background: 'rgba(233, 69, 96, 0.15)',
                 padding: '2px 8px',
@@ -1445,7 +1445,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               max="5"
               value={clipCount}
               onChange={(e) => setClipCount(parseInt(e.target.value))}
-              style={{ 
+              style={{
                 width: '100%',
                 accentColor: '#e94560'
               }}
@@ -1495,11 +1495,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       </div>
 
       {error && (
-        <div style={{ 
-          padding: '12px', 
-          backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-          border: '1px solid rgba(239, 68, 68, 0.2)', 
-          borderRadius: '8px', 
+        <div style={{
+          padding: '12px',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '8px',
           color: '#ef4444',
           marginBottom: '16px',
           fontSize: '0.9rem'
@@ -1510,9 +1510,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
       {/* Time estimate indicator */}
       {!busy && canSubmit && (
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           gap: '6px',
           marginBottom: '8px',
@@ -1524,16 +1524,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         </div>
       )}
 
-      <button 
-        className="primary-btn" 
-        disabled={!canSubmit} 
+      <button
+        className="primary-btn"
+        disabled={!canSubmit}
         onClick={handleSubmit}
-        style={{ 
-          height: '48px', 
-          fontSize: '1rem', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
+        style={{
+          height: '48px',
+          fontSize: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           gap: '8px',
           backgroundColor: '#e5e5e5',
           color: 'black'

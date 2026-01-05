@@ -54,7 +54,7 @@ export default function LogViewer() {
     ws.onclose = () => {
       setIsConnected(false)
       reconnectAttempts.current++
-      
+
       if (reconnectAttempts.current < maxReconnectAttempts) {
         // Exponential backoff: 3s, 6s, 12s, 24s, 48s
         const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts.current - 1)
@@ -99,7 +99,7 @@ export default function LogViewer() {
 
   if (!isOpen) {
     return (
-      <button 
+      <button
         onClick={() => setIsOpen(true)}
         style={{
           position: 'fixed',
@@ -159,13 +159,13 @@ export default function LogViewer() {
           )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button 
+          <button
             onClick={() => setIsExpanded(!isExpanded)}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
           >
             {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
-          <button 
+          <button
             onClick={() => setIsOpen(false)}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
           >
@@ -173,7 +173,7 @@ export default function LogViewer() {
           </button>
         </div>
       </div>
-      
+
       <div style={{
         flex: 1,
         overflowY: 'auto',
@@ -186,9 +186,9 @@ export default function LogViewer() {
         {logs.map((log, i) => (
           <div key={i} style={{ marginBottom: '4px', display: 'flex', gap: '8px' }}>
             <span style={{ color: '#525252', flexShrink: 0 }}>{log.timestamp?.split('T')[1]?.split('.')[0] || ''}</span>
-            <span style={{ 
-              color: log.level === 'ERROR' ? '#ef4444' : 
-                     log.level === 'WARNING' ? '#eab308' : '#a3a3a3' 
+            <span style={{
+              color: log.level === 'ERROR' ? '#ef4444' :
+                     log.level === 'WARNING' ? '#eab308' : '#a3a3a3'
             }}>
               {log.message}
             </span>

@@ -10,7 +10,7 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -20,7 +20,7 @@
             justify-content: center;
             padding: 20px;
         }
-        
+
         .container {
             background: white;
             border-radius: 20px;
@@ -29,23 +29,23 @@
             max-width: 900px;
             width: 100%;
         }
-        
+
         h1 {
             color: #333;
             margin-bottom: 10px;
             font-size: 28px;
         }
-        
+
         .subtitle {
             color: #666;
             margin-bottom: 30px;
             font-size: 14px;
         }
-        
+
         .video-section {
             margin-bottom: 30px;
         }
-        
+
         .video-wrapper {
             background: #000;
             border-radius: 12px;
@@ -53,19 +53,19 @@
             margin-bottom: 20px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
-        
+
         video {
             width: 100%;
             height: auto;
             display: block;
         }
-        
+
         .controls {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
         }
-        
+
         button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -78,16 +78,16 @@
             transition: all 0.3s ease;
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
-        
+
         button:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
         }
-        
+
         button:active {
             transform: translateY(0);
         }
-        
+
         .info {
             background: #f8f9fa;
             border-left: 4px solid #667eea;
@@ -95,20 +95,20 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
-        
+
         .info h3 {
             color: #333;
             margin-bottom: 8px;
             font-size: 16px;
         }
-        
+
         .info p {
             color: #666;
             font-size: 14px;
             line-height: 1.6;
             margin: 0;
         }
-        
+
         .status {
             padding: 10px 15px;
             border-radius: 8px;
@@ -116,28 +116,28 @@
             font-size: 14px;
             display: none;
         }
-        
+
         .status.success {
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
             display: block;
         }
-        
+
         .status.error {
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
             display: block;
         }
-        
+
         .status.info {
             background: #d1ecf1;
             color: #0c5460;
             border: 1px solid #bee5eb;
             display: block;
         }
-        
+
         .video-url {
             background: #f8f9fa;
             padding: 10px;
@@ -154,7 +154,7 @@
     <div class="container">
         <h1>🎬 WAN2.2 Video Playback Test</h1>
         <p class="subtitle">Test H.264 video encoding en browser compatibiliteit</p>
-        
+
         <div class="info">
             <h3>📋 Test Details</h3>
             <p>
@@ -165,23 +165,23 @@
                 <strong>Frame Rate:</strong> 8 fps
             </p>
         </div>
-        
+
         <div class="video-section">
             <h3 style="color: #333; margin-bottom: 15px;">Video Generator</h3>
-            
+
             <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
                     📝 Video Prompt:
                 </label>
-                <input type="text" id="promptInput" 
-                       placeholder="Bijvoorbeeld: a cat running in a garden" 
+                <input type="text" id="promptInput"
+                       placeholder="Bijvoorbeeld: a cat running in a garden"
                        value="a cat running in a garden"
                        style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 15px;">
-                
+
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                     <div style="flex: 1;">
                         <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #666;">Frames:</label>
-                        <input type="number" id="numFrames" value="16" min="8" max="32" 
+                        <input type="number" id="numFrames" value="16" min="8" max="32"
                                style="width: 100%; padding: 8px; border: 2px solid #ddd; border-radius: 6px;">
                     </div>
                     <div style="flex: 1;">
@@ -192,19 +192,19 @@
                         </select>
                     </div>
                 </div>
-                
+
                 <button onclick="generateVideo()" style="width: 100%; padding: 15px; font-size: 16px;">
                     🎬 Genereer Video
                 </button>
             </div>
-            
+
             <div class="video-wrapper">
                 <video id="testVideo" controls preload="metadata">
                     <source id="videoSource" src="http://192.168.1.2:7995/files/20251128_214806_text_video.mp4" type="video/mp4">
                     Je browser ondersteunt geen HTML5 video.
                 </video>
             </div>
-            
+
             <div class="controls">
                 <button onclick="playVideo()">▶️ Afspelen</button>
                 <button onclick="pauseVideo()">⏸️ Pauzeren</button>
@@ -212,14 +212,14 @@
                 <button onclick="checkVideoInfo()">ℹ️ Video Info</button>
                 <button onclick="testDirectLink()">🔗 Open Direct</button>
             </div>
-            
+
             <div id="status" class="status"></div>
-            
+
             <div class="video-url" id="videoUrl">
                 <strong>URL:</strong> http://192.168.1.2:7995/files/20251128_214806_text_video.mp4
             </div>
         </div>
-        
+
         <div class="info">
             <h3>✅ Wat Te Controleren</h3>
             <p>
@@ -231,11 +231,11 @@
             </p>
         </div>
     </div>
-    
+
     <script>
         const video = document.getElementById('testVideo');
         const statusDiv = document.getElementById('status');
-        
+
         function showStatus(message, type = 'info') {
             statusDiv.textContent = message;
             statusDiv.className = 'status ' + type;
@@ -243,23 +243,23 @@
                 statusDiv.className = 'status';
             }, 5000);
         }
-        
+
         function playVideo() {
             video.play()
                 .then(() => showStatus('✅ Video wordt afgespeeld', 'success'))
                 .catch(err => showStatus('❌ Fout bij afspelen: ' + err.message, 'error'));
         }
-        
+
         function pauseVideo() {
             video.pause();
             showStatus('⏸️ Video gepauzeerd', 'info');
         }
-        
+
         function reloadVideo() {
             video.load();
             showStatus('🔄 Video opnieuw geladen', 'info');
         }
-        
+
         function checkVideoInfo() {
             const info = `
 📊 Video Informatie:
@@ -271,7 +271,7 @@
 • Ready state: ${video.readyState}
 • Network state: ${video.networkState}
             `.trim();
-            
+
             showStatus(info, 'info');
             console.log('Video Info:', {
                 duration: video.duration,
@@ -283,53 +283,53 @@
                 networkState: video.networkState
             });
         }
-        
+
         function testDirectLink() {
             const videoSrc = document.getElementById('videoSource').src;
             window.open(videoSrc, '_blank');
             showStatus('🔗 Video geopend in nieuw tabblad', 'info');
         }
-        
+
         async function generateVideo() {
             const prompt = document.getElementById('promptInput').value.trim();
             const numFrames = parseInt(document.getElementById('numFrames').value);
             const modelType = document.getElementById('modelType').value;
-            
+
             if (!prompt) {
                 showStatus('❌ Vul een prompt in!', 'error');
                 return;
             }
-            
+
             showStatus('🎬 Video genereren... dit kan 30-60 seconden duren', 'info');
-            
+
             const formData = new FormData();
             formData.append('prompt', prompt);
             formData.append('num_frames', numFrames);
             formData.append('model_type', modelType);
-            
+
             try {
                 const response = await fetch('http://192.168.1.2:7995/generate-text', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const result = await response.json();
-                
+
                 if (result.success) {
                     showStatus('✅ Video gegenereerd! Laden...', 'success');
-                    
+
                     // Update video source
                     const videoUrl = `http://192.168.1.2:7995${result.video_url}`;
                     document.getElementById('videoSource').src = videoUrl;
                     document.getElementById('videoUrl').innerHTML = `<strong>URL:</strong> ${videoUrl}`;
-                    
+
                     // Reload video
                     video.load();
-                    
+
                     console.log('Video generated:', result);
                 } else {
                     showStatus('❌ Video genereren mislukt', 'error');
@@ -339,13 +339,13 @@
                 showStatus('❌ Fout: ' + error.message, 'error');
             }
         }
-        
+
         // Event listeners voor debugging
         video.addEventListener('loadstart', () => {
             console.log('📥 Video: loadstart');
             showStatus('📥 Video laden gestart...', 'info');
         });
-        
+
         video.addEventListener('loadedmetadata', () => {
             console.log('📋 Video: metadata geladen', {
                 duration: video.duration,
@@ -353,16 +353,16 @@
             });
             showStatus(`✅ Metadata geladen: ${video.videoWidth}x${video.videoHeight}, ${video.duration.toFixed(2)}s`, 'success');
         });
-        
+
         video.addEventListener('loadeddata', () => {
             console.log('✅ Video: data geladen');
         });
-        
+
         video.addEventListener('canplay', () => {
             console.log('▶️ Video: kan afspelen');
             showStatus('▶️ Video klaar om af te spelen!', 'success');
         });
-        
+
         video.addEventListener('error', (e) => {
             console.error('❌ Video error:', e);
             const errorMessages = {
@@ -374,15 +374,15 @@
             const errorMsg = errorMessages[video.error.code] || 'Onbekende fout';
             showStatus('❌ ' + errorMsg, 'error');
         });
-        
+
         video.addEventListener('playing', () => {
             console.log('▶️ Video: playing');
         });
-        
+
         video.addEventListener('pause', () => {
             console.log('⏸️ Video: paused');
         });
-        
+
         // Automatische status update bij laden
         window.addEventListener('load', () => {
             showStatus('🎬 Testpagina geladen - klik op ▶️ Afspelen om te testen', 'info');
