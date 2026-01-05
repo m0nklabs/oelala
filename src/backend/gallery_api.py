@@ -6,8 +6,8 @@ Handles publishing/unpublishing media and fetching gallery content
 
 import os
 import logging
+import re
 from typing import Optional, List
-from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
@@ -29,6 +29,19 @@ class PublishRequest(BaseModel):
     media_type: str = Field(..., description="Type of media: video, image, or audio")
     thumbnail_url: Optional[str] = Field(None, description="URL to thumbnail")
     metadata: dict = Field(default={}, description="Additional metadata (prompt, settings, etc.)")
+    
+    @validator('storage_path')
+    def validate_storage_path(cls, v):
+        # Validate storage path format to prevent path traversal
+        # Expected format: "video/filename.mp4", "image/filename.png", etc.
+        if not v or '..' in v or v.startswith('/') or '\\' in v:
+            raise ValueError('Invalid storage path format')
+        
+        # Must match pattern: media_type/filename
+        if not re.match(r'^(video|image|audio)/[^/]+\.[a-zA-Z0-9]+$', v):
+            raise ValueError('Storage path must be in format: media_type/filename.ext')
+        
+        return v
     
     @validator('media_type')
     def validate_media_type(cls, v):
@@ -470,6 +483,7 @@ async def toggle_like(
     Toggle like on a media item.
     If user hasn't liked it, adds a like.
     If user has already liked it, removes the like.
+    Uses auth.uid() internally for security.
     """
     debug_log(f"Toggling like on media {media_id} for user {user.id}")
     
@@ -478,10 +492,9 @@ async def toggle_like(
         raise HTTPException(status_code=503, detail="Gallery service unavailable")
     
     try:
-        # Call the toggle_like function
+        # Call the toggle_like function (now only requires media_id, uses auth.uid() internally)
         result = supabase.rpc("toggle_like", {
-            "p_media_id": media_id,
-            "p_user_id": user.id
+            "p_media_id": media_id
         }).execute()
         
         if not result.data:

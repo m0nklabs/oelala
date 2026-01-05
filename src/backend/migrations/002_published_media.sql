@@ -121,6 +121,14 @@ CREATE POLICY "Users can remove their own likes"
 -- ============================================================================
 -- Auto-update timestamp trigger
 -- ============================================================================
+CREATE OR REPLACE FUNCTION public.update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER update_published_media_updated_at
     BEFORE UPDATE ON public.published_media
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
@@ -139,10 +147,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
 -- Function: Toggle like (add if not exists, remove if exists)
+-- SECURITY: Uses auth.uid() to ensure users can only like as themselves
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.toggle_like(
-    p_media_id UUID,
-    p_user_id UUID
+    p_media_id UUID
 ) RETURNS TABLE (
     liked BOOLEAN,
     like_count INTEGER
@@ -150,15 +158,24 @@ CREATE OR REPLACE FUNCTION public.toggle_like(
 DECLARE
     v_liked BOOLEAN;
     v_count INTEGER;
+    v_user_id UUID;
 BEGIN
-    -- Try to delete existing like
+    -- Get the authenticated user ID from the session
+    v_user_id := auth.uid();
+    
+    -- Ensure user is authenticated
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Authentication required to like content';
+    END IF;
+    
+    -- Try to delete existing like (uses RLS policies to ensure user owns the like)
     DELETE FROM public.published_media_likes
-    WHERE media_id = p_media_id AND user_id = p_user_id;
+    WHERE media_id = p_media_id AND user_id = v_user_id;
     
     -- If nothing was deleted, insert new like
     IF NOT FOUND THEN
         INSERT INTO public.published_media_likes (media_id, user_id)
-        VALUES (p_media_id, p_user_id);
+        VALUES (p_media_id, v_user_id);
         v_liked := true;
     ELSE
         v_liked := false;

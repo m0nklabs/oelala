@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Filter, ArrowUpDown, Image as ImageIcon, Video, Music, RefreshCw, Eye, Heart } from 'lucide-react'
+import { Filter, Image as ImageIcon, Video, RefreshCw, Eye, Heart } from 'lucide-react'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'
 import { useAuth } from '../contexts/AuthContext'
@@ -89,7 +89,7 @@ export default function Gallery() {
     if (page > 1) {
       fetchGallery(false)
     }
-  }, [page])
+  }, [page, fetchGallery])
 
   // Get media URL for display
   const getMediaUrl = (item) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check } from 'lucide-react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,6 +10,7 @@ export default function MediaDetailModal({ item, onClose }) {
   const [likeCount, setLikeCount] = useState(item.like_count || 0)
   const [copying, setCopying] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [likeError, setLikeError] = useState('')
 
   // Get media URL
   const getMediaUrl = () => {
@@ -19,11 +20,13 @@ export default function MediaDetailModal({ item, onClose }) {
   // Toggle like
   const handleLike = async () => {
     if (!user) {
-      alert('Please log in to like items')
+      setLikeError('Please log in to like items')
+      setTimeout(() => setLikeError(''), 3000)
       return
     }
 
     try {
+      setLikeError('')
       const response = await apiFetch(`/api/gallery/${item.id}/like`, {
         method: 'POST',
       })
@@ -37,7 +40,8 @@ export default function MediaDetailModal({ item, onClose }) {
       setLikeCount(data.like_count)
     } catch (err) {
       console.error('❌ Like error:', err)
-      alert('Failed to update like status')
+      setLikeError('Failed to update like status')
+      setTimeout(() => setLikeError(''), 3000)
     }
   }
 
@@ -385,62 +389,84 @@ export default function MediaDetailModal({ item, onClose }) {
             padding: '16px 20px',
             borderTop: '1px solid #333',
             display: 'flex',
+            flexDirection: 'column',
             gap: '12px'
           }}>
-            <button
-              onClick={handleLike}
-              disabled={!user}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                background: liked ? '#ef4444' : '#2a2a2a',
-                border: '1px solid #444',
-                borderRadius: '8px',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: user ? 'pointer' : 'not-allowed',
+            {/* Error message */}
+            {likeError && (
+              <div style={{
+                padding: '10px 12px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                color: '#ef4444',
+                fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                opacity: user ? 1 : 0.5
-              }}
-            >
-              <Heart size={16} fill={liked ? '#fff' : 'none'} />
-              {liked ? 'Unlike' : 'Like'}
-            </button>
-
-            <button
-              onClick={handleShare}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                background: copied ? '#10b981' : '#2a2a2a',
-                border: '1px solid #444',
-                borderRadius: '8px',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 gap: '8px'
-              }}
-            >
-              {copied ? (
-                <>
-                  <Check size={16} />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Share2 size={16} />
-                  Share
-                </>
-              )}
-            </button>
+              }}>
+                <AlertCircle size={16} />
+                {likeError}
+              </div>
+            )}
+            
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={handleLike}
+                disabled={!user}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  background: liked ? '#ef4444' : '#2a2a2a',
+                  border: '1px solid #444',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: user ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  opacity: user ? 1 : 0.5
+                }}
+              >
+                <Heart size={16} fill={liked ? '#fff' : 'none'} />
+                {liked ? 'Unlike' : 'Like'}
+              </button>
+
+              <button
+                onClick={handleShare}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  background: copied ? '#10b981' : '#2a2a2a',
+                  border: '1px solid #444',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {copied ? (
+                  <>
+                    <Check size={16} />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Share2 size={16} />
+                    Share
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -5,7 +5,10 @@ import { BACKEND_BASE } from '../config'
 import { getMediaType } from '../utils/mediaUtils'
 
 export default function PublishModal({ mediaItem, onClose, onPublished }) {
-  const [title, setTitle] = useState(mediaItem.metadata?.positive_prompt?.slice(0, 100) || '')
+  const initialTitle = mediaItem.metadata?.positive_prompt
+    ? mediaItem.metadata.positive_prompt.slice(0, 100)
+    : 'Untitled Creation'
+  const [title, setTitle] = useState(initialTitle)
   const [description, setDescription] = useState('')
   const [tags, setTags] = useState('')
   const [isNsfw, setIsNsfw] = useState(false)
@@ -74,8 +77,25 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to publish')
+        let message = 'Failed to publish'
+        try {
+          const errorData = await response.json()
+          if (errorData?.detail) {
+            message = errorData.detail
+          } else if (errorData?.message) {
+            message = errorData.message
+          }
+        } catch (_parseErr) {
+          try {
+            const text = await response.text()
+            if (text && text.trim()) {
+              message = text
+            }
+          } catch (_textErr) {
+            // Use default message
+          }
+        }
+        throw new Error(message)
       }
 
       const published = await response.json()
@@ -98,7 +118,12 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
   const mediaType = getMediaType(mediaItem.filename)
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={(e) => {
+      if (e.target === e.currentTarget) {
+        // Only close if clicking directly on overlay, not its children
+        onClose()
+      }
+    }}>
       <div 
         className="modal-content" 
         onClick={(e) => e.stopPropagation()}
@@ -224,7 +249,7 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
 
           {/* Tags */}
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#ccc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label style={{ marginBottom: '6px', fontSize: '13px', color: '#ccc', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Tag size={14} />
               Tags (comma-separated, max 10)
             </label>
