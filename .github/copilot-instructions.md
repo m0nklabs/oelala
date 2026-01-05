@@ -135,6 +135,42 @@ This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct acce
    Do NOT use `realvisxlV50_v50Bakedvae.safetensors` (removed).
 5. **Python environment** - Use `/home/flip/venvs/gpu` for GPU-enabled Python.
 
+## Multi-GPU & DisTorch2 Configuration
+
+The server uses **DisTorch2** for multi-GPU model distribution across both GPUs:
+
+### Hardware
+| GPU | VRAM | CUDA Device |
+|-----|------|-------------|
+| RTX 5060 Ti | 16GB | `cuda:1` |
+| RTX 3060 | 12GB | `cuda:0` |
+| **Total** | **28GB** | |
+
+### DisTorch2 Allocation String
+```
+cuda:0,12gb;cuda:1,16gb
+```
+- GPU-only mode (no CPU fallback for model weights)
+- Used in UnetLoaderGGUFAdvancedDisTorch2MultiGPU, VAELoaderDisTorch2MultiGPU, CLIPLoaderDisTorch2MultiGPU
+
+### Video Generation Limits (WAN 2.2 14B Q6_K)
+| Resolution | Max Frames | Notes |
+|------------|------------|-------|
+| 480p (848x480) | 81 | Standard quality |
+| 720p (1280x720) | 41 | High quality |
+| 1080p | 17-25 | May need lower frames |
+
+### Key Files
+- `docs/MULTI_GPU_SETUP.md` - Full multi-GPU configuration guide
+- `ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py` - DisTorch2 with local fixes
+- `workflows/ImageToVideo/wan22_i2v_distorch2_api.json` - DisTorch2 API workflow
+
+### When modifying video workflows:
+1. Always use DisTorch2 loader nodes for Wan2.2
+2. Include `expert_mode_allocations` on ALL loader nodes
+3. Test with both low (17 frames) and high (81 frames) settings
+4. Check ComfyUI logs for distribution: `[MultiGPU DisTorch V2]`
+
 ## Debug Code Requirements
 
 When implementing any feature or component:
