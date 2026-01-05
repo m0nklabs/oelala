@@ -103,6 +103,26 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [videoDurations, setVideoDurations] = useState({}) // filename -> duration in seconds
   const containerRef = useRef(null)
 
+  // Fetch user's published items to show published state correctly
+  useEffect(() => {
+    const fetchPublishedItems = async () => {
+      if (!user) return
+      
+      try {
+        const response = await apiFetch(`/api/gallery/users/${user.id}?per_page=1000`)
+        if (response.ok) {
+          const data = await response.json()
+          const publishedPaths = new Set(data.items.map(item => item.storage_path))
+          setPublishedItems(publishedPaths)
+        }
+      } catch (err) {
+        console.error('Failed to fetch published items:', err)
+      }
+    }
+    
+    fetchPublishedItems()
+  }, [user])
+
   // Calculate thumb height based on actual grid cell width (9:16 ratio)
   useEffect(() => {
     const calculateHeight = () => {
@@ -2065,14 +2085,6 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             // Add to published items set
             setPublishedItems(prev => new Set([...prev, published.storage_path]))
             setPublishModalItem(null)
-          }}
-          onUnpublished={(storagePath) => {
-            // Remove from published items set when unpublished
-            setPublishedItems(prev => {
-              const next = new Set(prev)
-              next.delete(storagePath)
-              return next
-            })
           }}
         />
       )}

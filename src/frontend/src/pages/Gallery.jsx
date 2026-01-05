@@ -89,7 +89,8 @@ export default function Gallery() {
     if (page > 1) {
       fetchGallery(false)
     }
-  }, [page, fetchGallery])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   // Get media URL for display
   const getMediaUrl = (item) => {

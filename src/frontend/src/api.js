@@ -306,5 +306,5 @@ export async function toggleGalleryLike(mediaId) {
  * @param {number} perPage - Items per page
  */
 export async function getUserPublishedMedia(userId, page = 1, perPage = 30) {
-  return apiGet(`/api/gallery/user/${userId}?page=${page}&per_page=${perPage}`)
+  return apiGet(`/api/gallery/users/${userId}?page=${page}&per_page=${perPage}`)
 }

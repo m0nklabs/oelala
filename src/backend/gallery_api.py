@@ -44,9 +44,18 @@ class PublishRequest(BaseModel):
         return v
     
     @validator('media_type')
-    def validate_media_type(cls, v):
+    def validate_media_type(cls, v, values):
+        # Ensure media_type is one of the supported types
         if v not in ['video', 'image', 'audio']:
             raise ValueError('media_type must be one of: video, image, audio')
+
+        # Ensure media_type matches the leading segment of storage_path
+        storage_path = values.get('storage_path')
+        if storage_path:
+            path_media_type = storage_path.split('/', 1)[0]
+            if path_media_type != v:
+                raise ValueError(f'media_type "{v}" must match the media_type segment in storage_path "{storage_path}"')
+        
         return v
     
     @validator('tags')
@@ -129,15 +138,31 @@ async def publish_media(
     try:
         # Check if already published (same storage_path)
         existing = supabase.table("published_media")\
-            .select("id")\
+            .select("id,user_id,storage_path,title,description,tags,is_nsfw,media_type,thumbnail_url,metadata,view_count,like_count,created_at,updated_at")\
             .eq("user_id", user.id)\
             .eq("storage_path", request.storage_path)\
             .execute()
         
         if existing.data:
-            raise HTTPException(
-                status_code=400,
-                detail="This media item is already published"
+            # Return existing published item instead of error
+            existing_media = existing.data[0]
+            debug_log(f"Media already published with id {existing_media['id']}, returning existing item")
+            return PublishedMediaResponse(
+                id=existing_media["id"],
+                user_id=existing_media["user_id"],
+                storage_path=existing_media["storage_path"],
+                title=existing_media["title"],
+                description=existing_media.get("description"),
+                tags=existing_media.get("tags", []),
+                is_nsfw=existing_media["is_nsfw"],
+                media_type=existing_media["media_type"],
+                thumbnail_url=existing_media.get("thumbnail_url"),
+                metadata=existing_media.get("metadata", {}),
+                view_count=existing_media.get("view_count", 0),
+                like_count=existing_media.get("like_count", 0),
+                created_at=existing_media["created_at"],
+                updated_at=existing_media["updated_at"],
+                user_email=user.email,
             )
         
         # Insert new published media
@@ -403,7 +428,7 @@ async def get_published_media(
 # ============================================================================
 # Endpoint: Get user's published media
 # ============================================================================
-@router.get("/user/{user_id}")
+@router.get("/users/{user_id}")
 async def get_user_published_media(
     user_id: str,
     page: int = Query(1, ge=1),
@@ -495,6 +520,15 @@ async def toggle_like(
         raise HTTPException(status_code=503, detail="Gallery service unavailable")
     
     try:
+        # First verify the media exists
+        media_check = supabase.table("published_media")\
+            .select("id")\
+            .eq("id", media_id)\
+            .execute()
+        
+        if not media_check.data:
+            raise HTTPException(status_code=404, detail="Media not found")
+        
         # Call the toggle_like function (now only requires media_id, uses auth.uid() internally)
         result = supabase.rpc("toggle_like", {
             "p_media_id": media_id
