@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { Upload, Zap, Loader2, Video, Settings, ChevronDown } from 'lucide-react'
+import { Upload, Zap, Loader2, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 
@@ -34,8 +34,6 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
   const [mode, setMode] = useState('fps') // 'fps' or 'slowmo'
   const [fpsPreset, setFpsPreset] = useState('30fps → 60fps (2x)')
   const [slowMoPreset, setSlowMoPreset] = useState('2x')
-  const [showFlowViz, setShowFlowViz] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -111,10 +109,8 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
         const preset = SLOW_MOTION_PRESETS.find(p => p.value === slowMoPreset)
         formData.append('multiplier', String(preset?.multiplier || 2))
       }
-      
-      formData.append('show_flow_viz', String(showFlowViz))
 
-      if (DEBUG) console.debug('🔍 Interpolation request:', { model, mode, fpsPreset, slowMoPreset, showFlowViz })
+      if (DEBUG) console.debug('🔍 Interpolation request:', { model, mode, fpsPreset, slowMoPreset })
 
       const res = await postForm(`${BACKEND_BASE}/interpolate-video`, formData)
 
@@ -338,53 +334,6 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
             </div>
           </div>
         )}
-
-        {/* Advanced Settings */}
-        <div>
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            type="button"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 0',
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-            }}
-          >
-            <Settings size={14} />
-            Advanced Settings
-            <ChevronDown
-              size={14}
-              style={{
-                transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s',
-              }}
-            />
-          </button>
-          {showAdvanced && (
-            <div style={{ marginTop: '12px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={showFlowViz}
-                  onChange={(e) => setShowFlowViz(e.target.checked)}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Show optical flow visualization
-                </span>
-              </label>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px', marginLeft: '24px' }}>
-                Generates a side-by-side view showing motion vectors (for debugging)
-              </p>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Error Display */}

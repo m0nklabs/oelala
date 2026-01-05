@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { Upload, ZoomIn, Loader2, Video, Settings, ChevronDown } from 'lucide-react'
+import { Upload, ZoomIn, Loader2, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 
@@ -31,10 +31,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   const [videoInfo, setVideoInfo] = useState(null)
 
   const [model, setModel] = useState('realesrgan-video')
-  const [resolutionPreset, setResolutionPreset] = useState('480p → 720p')
-  const [qualityPreset, setQualityPreset] = useState('balanced')
-  const [batchSize, setBatchSize] = useState(16)
-  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -98,11 +94,8 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('model', model)
-      formData.append('resolution_preset', resolutionPreset)
-      formData.append('quality_preset', qualityPreset)
-      formData.append('batch_size', String(batchSize))
 
-      if (DEBUG) console.debug('🔍 Video upscale request:', { model, resolutionPreset, qualityPreset, batchSize })
+      if (DEBUG) console.debug('🔍 Video upscale request:', { model })
 
       const res = await postForm(`${BACKEND_BASE}/upscale-video`, formData)
 
@@ -119,7 +112,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       setLastQueued({
         promptId,
         model: UPSCALE_MODELS.find(m => m.value === model)?.label || model,
-        preset: resolutionPreset
       })
 
       if (DEBUG) console.debug('📋 Video upscale queued:', promptId)
@@ -211,121 +203,9 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Resolution Preset */}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            Resolution
-          </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {RESOLUTION_PRESETS.map(preset => (
-              <button
-                key={preset.label}
-                onClick={() => setResolutionPreset(preset.label)}
-                type="button"
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '6px',
-                  border: resolutionPreset === preset.label ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                  background: resolutionPreset === preset.label ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                  color: resolutionPreset === preset.label ? 'var(--accent-color)' : 'var(--text-secondary)',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quality Preset */}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            Quality vs Speed
-          </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {QUALITY_PRESETS.map(preset => (
-              <button
-                key={preset.value}
-                onClick={() => setQualityPreset(preset.value)}
-                type="button"
-                style={{
-                  flex: 1,
-                  padding: '10px',
-                  borderRadius: '6px',
-                  border: qualityPreset === preset.value ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                  background: qualityPreset === preset.value ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                  color: qualityPreset === preset.value ? 'var(--accent-color)' : 'var(--text-secondary)',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-                title={preset.desc}
-              >
-                <div style={{ fontWeight: 600 }}>{preset.label}</div>
-                <div style={{ fontSize: '0.7rem', marginTop: '2px', opacity: 0.8 }}>{preset.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Advanced Settings */}
-        <div>
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            type="button"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 0',
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-            }}
-          >
-            <Settings size={14} />
-            Advanced Settings
-            <ChevronDown
-              size={14}
-              style={{
-                transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s',
-              }}
-            />
-          </button>
-          {showAdvanced && (
-            <div style={{ marginTop: '12px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                Batch Size (frames processed together)
-              </label>
-              <input
-                type="number"
-                min="4"
-                max="64"
-                step="4"
-                value={batchSize}
-                onChange={(e) => setBatchSize(parseInt(e.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '6px 10px',
-                  borderRadius: '4px',
-                  border: '1px solid var(--border-color)',
-                  background: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.9rem',
-                }}
-              />
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Higher = faster but more VRAM. Lower = slower but works on smaller GPUs.
-              </p>
-            </div>
-          )}
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Note: Currently uses fixed 4x upscaling with RealESRGAN. Custom resolution and quality settings coming soon.
+          </p>
         </div>
       </div>
 

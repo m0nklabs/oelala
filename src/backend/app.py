@@ -4627,9 +4627,6 @@ async def upscale_image(
 async def upscale_video(
     file: UploadFile = File(...),
     model: str = Form("realesrgan-video"),
-    resolution_preset: str = Form("480p → 720p"),
-    quality_preset: str = Form("balanced"),
-    batch_size: int = Form(16),
 ):
     """
     Upscale video using AI-enhanced upscaling (Real-ESRGAN Video).
@@ -4637,12 +4634,14 @@ async def upscale_video(
     Args:
         file: Source video
         model: Upscale model (realesrgan-video, basic-lanczos)
-        resolution_preset: Target resolution (e.g., "480p → 720p")
-        quality_preset: Quality vs speed (fast, balanced, quality)
-        batch_size: Frames processed together (higher = faster, more VRAM)
+    
+    Note: This endpoint currently uses a fixed workflow. Future enhancements will support:
+        - Custom resolution presets
+        - Quality vs speed settings
+        - Batch size configuration
     """
     logger.info(
-        f"🎬 Video upscale request: model={model}, preset={resolution_preset}, quality={quality_preset}, batch={batch_size}"
+        f"🎬 Video upscale request: model={model}"
     )
 
     client = get_comfyui_client()
@@ -4666,10 +4665,6 @@ async def upscale_video(
             )
 
         logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
-
-        # Parse quality preset for denoise strength
-        denoise_map = {"fast": 0.3, "balanced": 0.5, "quality": 0.7}
-        denoise = denoise_map.get(quality_preset, 0.5)
 
         # Build video upscaling workflow matching the JSON template
         # Uses VHS (Video Helper Suite) nodes for video I/O
@@ -4750,7 +4745,6 @@ async def interpolate_video(
     mode: str = Form("fps"),
     target_fps: int = Form(60),
     multiplier: float = Form(2.0),
-    show_flow_viz: bool = Form(False),
 ):
     """
     Frame interpolation for smooth video (RIFE/FILM).
@@ -4761,7 +4755,8 @@ async def interpolate_video(
         mode: fps (increase framerate) or slowmo (slow motion)
         target_fps: Target FPS for fps mode
         multiplier: Frame multiplier (2x, 4x, etc.)
-        show_flow_viz: Show optical flow visualization
+    
+    Note: Optical flow visualization is not yet implemented.
     """
     logger.info(
         f"⚡ Frame interpolation request: model={model}, mode={mode}, target_fps={target_fps}, multiplier={multiplier}x"

@@ -169,7 +169,7 @@ Download these models to `ComfyUI/models/`:
 - rife47.pth (RIFE)
 - film_net_fp32.pt (FILM)
 
-**Video Models** (`unet/` - already have):
+**Video Models** (`unet/` - already installed):
 - wan2.2_i2v_high_noise_14B_Q6_K.gguf
 - wan2.2_i2v_low_noise_14B_Q6_K.gguf
 
