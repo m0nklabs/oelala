@@ -100,7 +100,7 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
       formData.append('file', file)
       formData.append('model', model)
       formData.append('mode', mode)
-      
+
       if (mode === 'fps') {
         const preset = FPS_PRESETS.find(p => p.label === fpsPreset)
         formData.append('target_fps', String(preset?.to || 60))
@@ -392,8 +392,8 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
       {result && (
         <div>
           <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>
-            Result ({mode === 'fps' 
-              ? FPS_PRESETS.find(p => p.label === fpsPreset)?.label 
+            Result ({mode === 'fps'
+              ? FPS_PRESETS.find(p => p.label === fpsPreset)?.label
               : SLOW_MOTION_PRESETS.find(p => p.value === slowMoPreset)?.label})
           </h3>
           <div style={{ borderRadius: '8px', overflow: 'hidden' }}>

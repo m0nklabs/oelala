@@ -135,7 +135,7 @@ With 28GB total VRAM, you can run:
 **90+ motion and action LoRAs available** in dual high/low noise variants.
 
 All video LoRAs require BOTH versions loaded simultaneously:
-- High noise → affects early diffusion steps  
+- High noise → affects early diffusion steps
 - Low noise → affects late diffusion steps
 
 Available categories:

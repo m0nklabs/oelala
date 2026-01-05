@@ -84,7 +84,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
   - `VAELoaderDisTorch2MultiGPU` - VAE loading with GPU distribution
   - `CLIPLoaderDisTorch2MultiGPU` - T5 text encoder loading with GPU distribution
 - **SageAttention**: Always use `PathchSageAttentionKJ` node to reduce VRAM by 15-20%
-- **VRAM Limits**: 
+- **VRAM Limits**:
   - 576×1024 @ 81 frames: ~24GB (GPU-only, safe)
   - 720×1280 @ 81 frames: ~27GB (CPU offload required)
   - 720×400 @ 241 frames: ~22GB (GPU-only, 15s video)
@@ -129,7 +129,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct access to:
 - ComfyUI API at `localhost:8188`
-- Backend API at `localhost:7998`  
+- Backend API at `localhost:7998`
 - GPU (RTX 5060 Ti 16GB + RTX 3060 12GB)
 - All installed models in `/home/flip/oelala/ComfyUI/models/`
 
