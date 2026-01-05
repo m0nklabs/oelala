@@ -38,8 +38,11 @@ ComfyUI/input/
 generated/
 uploads/
 logs/
-data/
+/data/
 build/
+
+# Keep frontend data folder
+!src/frontend/src/data/
 
 # ======================
 # PYTHON CACHE
