@@ -1,33 +1,47 @@
 # User System - Supabase Auth Integration
 
-> **Status**: Planning
-> **Last Updated**: 2026-01-04
+> **Status**: ✅ Implemented
+> **Last Updated**: 2026-01-06
 
 ---
 
 ## Overview
 
-User authentication via Supabase Auth met OAuth providers en passkeys.
+User authentication via Supabase Auth met OAuth providers.
 
 ### Waarom Supabase?
 - Self-hostable (Docker) voor productie
 - Cloud gratis tier (50k MAU) voor development
-- Native passkeys support
-- OAuth: Google, GitHub, Discord, Apple, etc.
+- Native passkeys support (future)
+- OAuth: Google, GitHub
 - JWT tokens → compatible met oelala-storage
 - Python + JS SDKs
 
 ---
 
-## Architecture
+## Current Implementation
+
+### What's Working ✅
+- **Google OAuth** - Primary login method
+- **GitHub OAuth** - Secondary login method
+- **JWT validation** - Backend validates Supabase tokens
+- **User-scoped storage** - Each user has own bucket
+- **Credit system** - Per-user credits with Stripe payments
+- **NSFW toggle** - Requires login, forced off for guests
+- **Guest access** - Dashboard viewable without login
+- **Login modal** - On-demand auth for protected actions
+- **Admin whitelist** - `mark.op.mobiel@gmail.com` for dev features
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  Frontend (React)                        │
 │  ┌─────────────────────────────────────────────────┐    │
 │  │  AuthContext.jsx - Global auth state            │    │
-│  │  LoginPage.jsx - OAuth buttons + passkey        │    │
+│  │  LoginModal.jsx - On-demand login popup         │    │
 │  │  useAuth() hook - Access user/session           │    │
+│  │  requestLogin() - Trigger login modal           │    │
 │  └─────────────────────────────────────────────────┘    │
 └─────────────────────┬───────────────────────────────────┘
                       │ JWT in Authorization header
@@ -37,6 +51,7 @@ User authentication via Supabase Auth met OAuth providers en passkeys.
 │  ┌─────────────────────────────────────────────────┐    │
 │  │  auth.py - JWT validation middleware            │    │
 │  │  get_current_user() dependency                  │    │
+│  │  get_optional_user() for public endpoints       │    │
 │  │  Protected endpoints require valid JWT          │    │
 │  └─────────────────────────────────────────────────┘    │
 └─────────────────────┬───────────────────────────────────┘
@@ -47,56 +62,70 @@ User authentication via Supabase Auth met OAuth providers en passkeys.
 │  ┌─────────────────────────────────────────────────┐    │
 │  │  User management, sessions, OAuth               │    │
 │  │  JWT signing & verification                     │    │
-│  │  Passkey (WebAuthn) support                     │    │
+│  │  Cloud: nsbjwhxdkxnyggtuxjjp.supabase.co       │    │
 │  └─────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## User Model
+## User Access Levels
 
-```python
-# Supabase provides auth.users, we extend with profiles
-class UserProfile:
-    id: UUID           # Supabase user ID
-    email: str
-    display_name: str
-    avatar_url: str | None
-    is_adult: bool     # Age verification for NSFW
-    tier: str          # 'free' | 'pro' | 'enterprise'
-    created_at: datetime
+| Feature | Guest | Logged In | Admin |
+|---------|-------|-----------|-------|
+| View Dashboard | ✅ | ✅ | ✅ |
+| View Gallery (SFW) | ✅ | ✅ | ✅ |
+| View Gallery (NSFW) | ❌ | ✅ | ✅ |
+| Generate Content | ❌ | ✅ | ✅ |
+| My Media | ❌ | ✅ | ✅ |
+| Publish to Gallery | ❌ | ✅ | ✅ |
+| NSFW Toggle | ❌ | ✅ | ✅ |
+| LogViewer | ❌ | ❌ | ✅ |
+| ComfyUI Dev Content | ❌ | ❌ | ✅ |
 
-    # Preferences
-    nsfw_enabled: bool      # User's NSFW toggle preference
-    default_model: str      # Preferred generation model
-    theme: str              # UI theme
+**Admin emails**: `mark.op.mobiel@gmail.com`
+
+---
+
+## OAuth Providers
+
+| Provider | Status | Notes |
+|----------|--------|-------|
+| Google | ✅ Active | Primary login |
+| GitHub | ✅ Active | Developer audience |
+| Discord | ⏳ Future | Gaming/creator community |
+| Passkey | ⏳ Future | Modern, passwordless |
+
+---
+
+## Frontend Components
+
+### AuthContext.jsx
+```javascript
+// Provides:
+- user          // Current user or null
+- session       // Supabase session
+- loading       // Auth loading state
+- signInWithGoogle()
+- signInWithGithub()
+- signOut()
+- isAdult       // true if logged in (for NSFW)
+- showLoginModal
+- requestLogin(message)  // Trigger login popup
+- closeLoginModal()
 ```
 
----
+### LoginModal.jsx
+On-demand login popup shown when guest tries to:
+- Generate content
+- View My Media
+- Enable NSFW toggle
+- Publish to gallery
 
-## OAuth Providers (Priority Order)
-
-| Provider | Priority | Notes |
-|----------|----------|-------|
-| Google | 🔴 High | Most users have Google |
-| GitHub | 🔴 High | Developer audience |
-| Discord | 🟡 Medium | Gaming/creator community |
-| Passkey | 🟡 Medium | Modern, passwordless |
-| Apple | 🟢 Low | iOS users (we don't support iOS) |
-| Email/Password | 🟢 Low | Fallback only |
-
----
-
-## Implementation Plan
-
-### Phase 1: Basic Auth (MVP)
-- [ ] Supabase project setup (cloud for now)
-- [ ] Frontend: AuthContext + LoginPage
-- [ ] Backend: JWT middleware
-- [ ] Google OAuth working
-- [ ] Protected routes (My Media)
-- [ ] NSFW toggle gated to logged-in users
+### NSFWContext.jsx
+- NSFW state persisted in localStorage
+- `effectiveNsfwEnabled` always false for guests
+- Prevents enabling NSFW without login
 
 ### Phase 2: Enhanced Auth
 - [ ] GitHub OAuth

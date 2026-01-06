@@ -89,65 +89,54 @@ wrapper.emplaceAndPop(datumVector)
 keypoints = datum.poseKeypoints
 ```
 
-### 🔄 Current Status
+### 🔄 Current Status (January 2026)
 
 #### Dashboard UI
 - **Status**: Fully functional with sidebar navigation
 - **Tools Available**:
-  - ✅ Image to Video (ComfyUI DisTorch2)
-  - ✅ My Media (All, Images, Videos, Favorites, Prompts)
-  - ⏳ Text to Video (planned)
-  - ⏳ Text to Image (planned)
-  - ⏳ LoRA Training (placeholder)
+  - ✅ Image to Video (Wan2.2 14B DisTorch2)
+  - ✅ Text to Video (Wan2.2)
+  - ✅ Text to Image (SDXL, Flux)
+  - ✅ Video to Video (style transfer)
+  - ✅ Image Upscaler (RealESRGAN)
+  - ✅ Video Upscaler
+  - ✅ Frame Interpolation (RIFE)
+  - ✅ Face Swap (InSwapper)
+  - ✅ Lip Sync (LatentSync)
+  - ✅ Voice Cloning (F5-TTS)
+  - ✅ Speech to Video (TTS + Lip Sync)
+  - ✅ My Media (gallery with filters)
+  - ✅ Public Gallery (community content)
+  - ✅ LoRA Training (placeholder)
+
+#### User System
+- **Status**: Fully implemented
+- **Auth**: Supabase (Google, GitHub OAuth)
+- **Credits**: Stripe payments, per-generation costs
+- **Access Levels**: Guest, User, Admin
+
+#### Storage System
+- **Status**: oelala-storage running (Go service)
+- **User Buckets**: Each user has isolated storage
+- **Quota**: Planned (not yet enforced)
 
 #### ComfyUI Integration
-- **Status**: Fully integrated with WebSocket progress monitoring
-- **Workflow**: DisTorch2 dual-pass sampling (high/low noise)
-- **Models**: GGUF Q6_K models loaded via DisTorch2 nodes
-- **LoRAs**: Category-organized with separate high/low noise selection
+- **Status**: Fully integrated with WebSocket progress
+- **Workflow**: DisTorch2 dual-pass sampling
+- **Multi-GPU**: RTX 5060 Ti (16GB) + RTX 3060 (12GB)
+- **Models**: GGUF Q6_K quantized (14B parameters)
+- **LoRAs**: 50+ organized by category
 
-#### Metadata System
-- **Status**: Full extraction from PNG workflow JSON
-- **Fields**: Prompts, steps, CFG, seed, sampler, scheduler, LoRAs, model, resolution
-- **Video Matching**: By timestamp pattern or base filename
-- **Error Handling**: Graceful fallback and user-friendly error messages
+#### Gallery & Publishing
+- **Status**: Fully implemented
+- **Features**: Publish, like, view counts
+- **NSFW Control**: SFW-only for guests
 
-#### Web Interface
-- **backend**: FastAPI server running on port 7999
-- **frontend**: React application running on port 3000
-- **Features**: Drag-and-drop upload, real-time generation, video download
-- **API**: RESTful endpoints with automatic documentation
-- **Status**: Production-ready with comprehensive error handling
-- **testing**: All components validated and working
+### 📋 Next Priority Tasks
 
-#### Demo Scripts
-- `demo_openpose.py`: OpenPose pose estimation demo
-- `test_real_image.py`: Real image testing with OpenPose
-- `test_openpose.py`: Comprehensive OpenPose validation
-- `wan2_generator.py`: Wan2.2 video generation class
-- `demo_wan2.py`: Wan2.2 demo with placeholder image
-- `test_wan2_setup.py`: Wan2.2 environment validation
-- `test_web_interface.py`: Complete web interface testing
-
-### 📋 Planned Tasks
-
-#### 5. Pose-Video Integration
-- 🔄 Combine OpenPose keypoints with Wan2.2 video generation (basis ready)
-- 🔄 Implement pose-guided animation for more realistic movements (pending)
-- 🔄 test avatar consistency across video frames (pending)
-- 🔄 Develop joint pose estimation and video generation pipeline (pending)
-
-#### 6. LoRA Fine-tuning
-- 🔄 Implement LoRA (Low-Rank Adaptation) for model customization (placeholder aanwezig)
-- 🔄 Create consistent avatar styles and characteristics (pending)
-- 🔄 Fine-tune Wan2.2 for specific use cases (pending)
-- 🔄 Optimize model performance and memory usage (pending)
-
-#### 7. Advanced Pipeline Features
-- ❌ Batch processing for multiple images simultaneously (pending)
-- ❌ Real-time pose estimation with webcam input (pending)
-- 🔄 Quality optimization and performance improvements (lopend)
-- ❌ Advanced video post-processing and effects (pending)
+1. **Auto-Upload** (#7, #15): Generated content → user storage
+2. **Storage Quota** (#33): Track and display usage
+3. **Retention Policy** (#71): 30-day free tier cleanup
 
 #### 8. Production Enhancements
 - ❌ User authentication and session Management (pending)

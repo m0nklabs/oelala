@@ -1,7 +1,7 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-01-04
-> **Version**: 0.2.0 (Alpha)
+> **Last Updated**: 2026-01-06
+> **Version**: 0.3.0 (Alpha)
 
 ## Vision
 
@@ -9,95 +9,85 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 
 ---
 
-## Current Status: Alpha (v0.2.x)
+## Current Status: Alpha (v0.3.x)
 
 ### ✅ Completed Features
 
 #### Core Generation Pipeline
-- [x] Text-to-Image (T2I) via ComfyUI/Flux
-- [x] Image-to-Video (I2V) via Wan2.2
+- [x] Text-to-Image (T2I) via ComfyUI/Flux/SDXL
+- [x] Image-to-Video (I2V) via Wan2.2 14B DisTorch2
 - [x] Text-to-Video (T2V) via Wan2.2
 - [x] Video-to-Video style transfer
-- [x] Image upscaling (multiple models)
+- [x] Image upscaling (RealESRGAN, 4x-UltraSharp)
+- [x] Video upscaling
 - [x] Video reframing/aspect ratio conversion
+- [x] Frame interpolation (RIFE)
 
-#### Audio Pipeline (Phase 3) - January 2026
+#### Audio Pipeline (Phase 3) ✅ COMPLETE
 - [x] YouTube import (yt-dlp integration)
 - [x] Text-to-Speech (ChatterBox TTS)
 - [x] Voice Cloning (F5-TTS with multi-language support)
 - [x] Lip Sync (LatentSyncNode)
+- [x] Speech to Video (combined TTS + Lip Sync)
+
+#### User System (Phase 4) ✅ COMPLETE
+- [x] Supabase Auth integration (Google, GitHub OAuth)
+- [x] User-scoped storage buckets
+- [x] Credit system with Stripe payments
+- [x] Welcome bonus (100 credits on signup)
+- [x] Credit costs per generation type
+- [x] NSFW toggle (login required)
+- [x] Guest access (view-only, no NSFW)
+- [x] Login modal for auth-required actions
+- [x] Admin-only features (LogViewer, dev content)
+
+#### Gallery & Publishing (Phase 5) ✅ COMPLETE
+- [x] Publish to Gallery system
+- [x] SFW/NSFW content tagging
+- [x] Public gallery page with filters
+- [x] Like system
+- [x] View count tracking
+- [x] Media detail modal with prompts
+- [x] Unpublish option
 
 #### Infrastructure
 - [x] React/Vite frontend with tool-based UI
 - [x] FastAPI backend with ComfyUI integration
 - [x] WebSocket progress streaming
-- [x] Multi-GPU support (basic)
+- [x] Multi-GPU support (DisTorch2)
 - [x] Workflow metadata embedding in outputs
+- [x] oelala-storage Go service (HTTP :7990)
+- [x] Systemd services for all components
 
 ---
 
 ## Short-Term Roadmap (Q1 2026)
 
-### Phase 4: Media Management ✅ DONE
+### Phase 6: Auto-Upload & Storage Polish 🔄 In Progress
 
-**Goal**: Unified media storage and improved developer experience
+**Goal**: Generated content auto-saves to user storage
 
-| Task | Status | Priority |
-|------|--------|----------|
-| Unify storage locations (generated + ComfyUI/output) | ✅ Done | High |
-| ComfyUI symlink integration | ✅ Done | High |
-| Improved My Media browser | ✅ Done | Medium |
-| Search by filename and prompt | ✅ Done | Medium |
-| Media metadata indexing | ⏳ Todo | Medium |
-| Batch operations (delete, download, share) | ⏳ Todo | Low |
+| Task | Status | Priority | Issue |
+|------|--------|----------|-------|
+| Auto-upload after generation | ⏳ Todo | Critical | #7, #15 |
+| Storage quota tracking | ⏳ Todo | High | #33 |
+| Quota display in user menu | ⏳ Todo | High | #33 |
+| Retention policies (30d free) | ⏳ Todo | Medium | #71 |
+| Warning when approaching limit | ⏳ Todo | Medium | #33 |
 
-### Phase 4.5: oelala-storage Integration 🔄 In Progress
-
-**Goal**: Monetization-ready storage backend (Go service)
-
-> **Repository**: [oelala-storage](https://github.com/m0nklabs/oelala-storage)
-> **Status**: Core server running (HTTP :7990, gRPC :7991, Metrics :7992)
-
-| Task | Status | Priority | Monetization Impact |
-|------|--------|----------|---------------------|
-| Core HTTP/gRPC server | ✅ Done | Critical | Foundation |
-| Metrics endpoint (Prometheus) | ✅ Done | High | Observability |
-| TLS support | ✅ Done | High | Security |
-| Systemd service | ✅ Done | High | Reliability |
-| Python client (storage_client.py) | ✅ Done | High | Integration |
-| User/tenant isolation | ⏳ Todo | Critical | Enables multi-user |
-| Storage quota tracking | ⏳ Todo | Critical | Upsell trigger |
-| Usage metering (bytes, bandwidth) | ⏳ Todo | Critical | Billing foundation |
-| Tier-based limits enforcement | ⏳ Todo | High | Plan differentiation |
-| Retention policies (30d free) | ⏳ Todo | High | Free tier cleanup |
-| Signed URL generation | ⏳ Todo | Medium | Premium sharing |
-| Watermark injection hook | ⏳ Todo | Medium | Conversion driver |
-| Content deduplication | ⏳ Todo | Low | Cost optimization |
-
-**Why separate service?**
-- Go = single binary, no Python venv issues
-- Better I/O performance (goroutines vs GIL)
-- Can run on edge devices (Android, low-resource servers)
-- S3-compatible = easy integration with existing tools
-
-### Phase 5: Advanced Generation
+### Phase 7: Advanced Generation
 
 **Goal**: More control over generation process
 
 | Task | Status | Priority |
 |------|--------|----------|
 | ControlNet integration (pose, depth, canny) | ⏳ Todo | High |
-| LoRA model browser and loading | ⏳ Todo | High |
+| LoRA model browser and loading | ✅ Done | High |
 | Custom LoRA training interface | ⏳ Todo | Medium |
 | Inpainting/outpainting tools | ⏳ Todo | Medium |
-| Frame interpolation (FI) | ⏳ Todo | Low |
+| Face swap (InSwapper) | ✅ Done | Medium |
 
-### Phase 5.5: Content Filtering
-
-**Goal**: NSFW content management for monetization compliance
-
-| Task | Status | Priority |
-|------|--------|----------|
+### Phase 8: Content Filtering & Moderation
 | Global NSFW toggle in header | ✅ Done | High |
 | Keyword-based NSFW detection | ✅ Done | High |
 | LoRA filtering by NSFW flag | ✅ Done | High |

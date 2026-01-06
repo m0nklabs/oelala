@@ -1,3 +1,41 @@
+2026-01-06
+Agent: Claude Opus 4.5
+AgentTag: CLAU
+ModelTag: GUEST-ACCESS
+Details:
+- **Guest Access**: Dashboard viewable without login
+  - Removed login wall - App.jsx shows Dashboard for everyone
+  - LoginModal component for on-demand auth prompts
+  - Login is optional, triggered when needed
+- **NSFW Protection for Guests**:
+  - NSFW toggle forced off for non-logged-in users (NSFWContext)
+  - MyMediaTool shows nothing to guests (no dev content)
+  - Gallery already filters NSFW for anonymous users
+- **Generation Tools Auth**:
+  - All 15+ generation tools require login before submit
+  - Shows LoginModal with "Log in om te genereren" message
+- **Admin-Only Features**:
+  - LogViewer restricted to mark.op.mobiel@gmail.com
+  - Dev/ComfyUI content only visible to admin
+- **Cleanup**:
+  - Closed duplicate PRs #74, #75 (duplicates of merged #77)
+  - Removed duplicate src/backend/requirements.txt
+- **Docs Updated**: All major docs refreshed with current status
+FilesChanged:
+- src/frontend/src/App.jsx
+- src/frontend/src/contexts/AuthContext.jsx
+- src/frontend/src/contexts/NSFWContext.jsx
+- src/frontend/src/components/LoginModal.jsx (NEW)
+- src/frontend/src/components/LoginModal.css (NEW)
+- src/frontend/src/dashboard/Dashboard.jsx
+- src/frontend/src/dashboard/tools/MyMediaTool.jsx
+- src/frontend/src/dashboard/tools/*.jsx (15+ files - auth check)
+- docs/ROADMAP.md
+- docs/TODO_LIST.md
+- docs/USER_SYSTEM.md
+- docs/MEDIA_STORAGE.md
+- docs/PROJECT_OVERVIEW.md
+
 2026-01-04
 Agent: Claude Opus 4.5
 AgentTag: CLAU
