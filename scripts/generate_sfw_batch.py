@@ -205,7 +205,7 @@ def create_t2i_workflow(prompt: str, seed: int, prefix: str) -> dict:
         },
         "4": {
             "class_type": "EmptyLatentImage",
-            "inputs": {"width": 1024, "height": 1024, "batch_size": 1}
+            "inputs": {"width": 576, "height": 1024, "batch_size": 1}
         },
         "5": {
             "class_type": "KSampler",
@@ -234,131 +234,22 @@ def create_t2i_workflow(prompt: str, seed: int, prefix: str) -> dict:
 
 
 def create_i2v_workflow(image_filename: str, animation_prompt: str, seed: int, prefix: str) -> dict:
-    """Create I2V workflow using DisTorch2 multi-GPU."""
-    return {
-        "1": {
-            "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
-            "inputs": {
-                "unet_name": "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
-                "dequant_dtype": "default", "patch_dtype": "default",
-                "patch_on_device": False, "compute_device": "cuda:0",
-                "virtual_vram_gb": 16, "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
-                "eject_models": True
-            }
-        },
-        "2": {
-            "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
-            "inputs": {
-                "unet_name": "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-                "dequant_dtype": "default", "patch_dtype": "default",
-                "patch_on_device": False, "compute_device": "cuda:0",
-                "virtual_vram_gb": 16, "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
-                "eject_models": True
-            }
-        },
-        "3": {
-            "class_type": "VAELoaderDisTorch2MultiGPU",
-            "inputs": {
-                "vae_name": "wan_2.1_vae.safetensors",
-                "compute_device": "cuda:0", "virtual_vram_gb": 4,
-                "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
-                "eject_models": True
-            }
-        },
-        "4": {
-            "class_type": "CLIPLoaderDisTorch2MultiGPU",
-            "inputs": {
-                "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
-                "type": "wan", "device": "cuda:0", "virtual_vram_gb": 4,
-                "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
-                "eject_models": True
-            }
-        },
-        "5": {
-            "class_type": "PathchSageAttentionKJ",
-            "inputs": {
-                "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
-                "allow_compile": False, "model": ["14", 0]
-            }
-        },
-        "6": {
-            "class_type": "PathchSageAttentionKJ",
-            "inputs": {
-                "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
-                "allow_compile": False, "model": ["15", 0]
-            }
-        },
-        "7": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"text": animation_prompt, "clip": ["4", 0]}
-        },
-        "8": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": "low quality, blurry, unstable, artifacts, distortion, flickering, jitter, glitches, nsfw, nude",
-                "clip": ["4", 0]
-            }
-        },
-        "10": {
-            "class_type": "KSamplerAdvanced",
-            "inputs": {
-                "add_noise": "enable", "noise_seed": seed, "steps": 6,
-                "cfg": 1, "sampler_name": "uni_pc", "scheduler": "normal",
-                "start_at_step": 0, "end_at_step": 3,
-                "return_with_leftover_noise": "enable",
-                "model": ["5", 0], "positive": ["16", 0],
-                "negative": ["16", 1], "latent_image": ["16", 2]
-            }
-        },
-        "11": {
-            "class_type": "KSamplerAdvanced",
-            "inputs": {
-                "add_noise": "disable", "noise_seed": seed, "steps": 6,
-                "cfg": 1, "sampler_name": "uni_pc", "scheduler": "normal",
-                "start_at_step": 3, "end_at_step": 10000,
-                "return_with_leftover_noise": "disable",
-                "model": ["6", 0], "positive": ["16", 0],
-                "negative": ["16", 1], "latent_image": ["10", 0]
-            }
-        },
-        "12": {
-            "class_type": "VAEDecode",
-            "inputs": {"samples": ["11", 0], "vae": ["3", 0]}
-        },
-        "13": {
-            "class_type": "VHS_VideoCombine",
-            "inputs": {
-                "frame_rate": 16, "loop_count": 0, "filename_prefix": prefix,
-                "format": "video/h264-mp4", "pix_fmt": "yuv420p", "crf": 19,
-                "save_metadata": True, "trim_to_audio": False,
-                "pingpong": False, "save_output": True, "images": ["12", 0]
-            }
-        },
-        "14": {
-            "class_type": "ModelSamplingSD3",
-            "inputs": {"shift": 8, "model": ["1", 0]}
-        },
-        "15": {
-            "class_type": "ModelSamplingSD3",
-            "inputs": {"shift": 8, "model": ["2", 0]}
-        },
-        "16": {
-            "class_type": "WanImageToVideo",
-            "inputs": {
-                "width": 480, "height": 480, "length": 41, "batch_size": 1,
-                "positive": ["7", 0], "negative": ["8", 0],
-                "vae": ["3", 0], "start_image": ["18", 0]
-            }
-        },
-        "18": {
-            "class_type": "LoadImage",
-            "inputs": {"image": image_filename}
-        }
-    }
+    """Load and customize the working I2V workflow with DisTorch2 + LoRAs."""
+    import copy
+    
+    # Load the working workflow template
+    workflow_path = Path("/home/flip/oelala/workflows/ImageToVideo/sfw_i2v_distorch2_api.json")
+    with open(workflow_path) as f:
+        workflow = json.load(f)
+    
+    # Customize for this generation
+    workflow["7"]["inputs"]["text"] = animation_prompt  # Positive prompt
+    workflow["10"]["inputs"]["noise_seed"] = seed  # Sampler 1 seed
+    workflow["11"]["inputs"]["noise_seed"] = seed  # Sampler 2 seed
+    workflow["13"]["inputs"]["filename_prefix"] = prefix  # Output filename
+    workflow["18"]["inputs"]["image"] = image_filename  # Input image
+    
+    return workflow
 
 
 def queue_and_wait(workflow: dict, timeout: int = 600) -> tuple[bool, Optional[str], list]:
@@ -443,7 +334,7 @@ def generate_single(index: int, dry_run: bool = False) -> dict:
     print(f"  🎬 I2V: animating...", end=" ", flush=True)
     i2v_start = time.time()
     i2v_workflow = create_i2v_workflow(files[0], animation, seed, f"{prefix}_i2v")
-    success, _, files = queue_and_wait(i2v_workflow, timeout=300)
+    success, _, files = queue_and_wait(i2v_workflow, timeout=600)
     
     if not success or not files:
         print("❌")

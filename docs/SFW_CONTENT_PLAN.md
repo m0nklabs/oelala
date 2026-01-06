@@ -96,14 +96,14 @@ Motion types: panning, zooming, floating, flowing, drifting, swaying
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | T2I Model | DreamShaper XL Lightning | Fast, 8 steps |
-| T2I Resolution | 1024x1024 | Source for I2V |
-| I2V Resolution | 480x480 | Good quality, fast |
-| I2V Frames | 41 | ~2.5 sec @ 16fps |
+| T2I Resolution | 576x1024 (9:16) | Matches video aspect |
+| I2V Resolution | 576x1024 (9:16) | Mobile-friendly |
+| I2V Frames | 81 | 5 sec @ 16fps |
 | I2V Steps | 6 | Fast cascade |
-| Total Time | ~3 min | Per video |
+| Total Time | ~8 min | Per video |
 
 ### Batch Estimate
-- 100 videos × 3 min = 300 min = **5 hours**
+- 100 videos × 8 min = 800 min = **13.3 hours**
 - Can run overnight
 
 ---
