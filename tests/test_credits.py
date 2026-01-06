@@ -100,7 +100,7 @@ class TestCreditCalculation:
         cost_generate_image = calculate_credits("generate_image")
         cost_sdxl = calculate_credits("generate_sdxl")
         cost_flux = calculate_credits("generate_flux")
-        
+
         # All should return reasonable costs
         assert cost_generate_image >= 1
         assert cost_sdxl >= 1

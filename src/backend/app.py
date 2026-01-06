@@ -2171,14 +2171,16 @@ async def generate_image_legacy(
         "9:21": (640, 1536),
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
-    
+
     # Calculate and check credits
     credits_required = calculate_credits(
         "generate_sdxl",
         width=width,
         height=height,
     )
-    logger.info(f"💰 SDXL generation costs {credits_required} credits ({width}x{height}) [user={user.id}]")
+    logger.info(
+        f"💰 SDXL generation costs {credits_required} credits ({width}x{height}) [user={user.id}]"
+    )
     await check_credits(user, credits_required)
     if not job_id:
         job_id = str(uuid.uuid4())
@@ -2229,7 +2231,7 @@ async def generate_image_legacy(
     prompt_id = client.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
-    
+
     # Deduct credits immediately after successful queue (async generation)
     # Credits are deducted on queue, not on completion, to prevent abuse
     await deduct_credits(user, credits_required, job_id, "SDXL Image")
@@ -2576,10 +2578,14 @@ async def generate_sd15_image(
         "3:2": (768, 512),
     }
     width, height = resolutions.get(aspect_ratio, (512, 768))
-    
+
     # Calculate and check credits
-    credits_required = calculate_credits("sd15", width=width, height=height, steps=steps)
-    logger.info(f"💰 SD1.5 generation costs {credits_required} credits ({width}x{height})")
+    credits_required = calculate_credits(
+        "sd15", width=width, height=height, steps=steps
+    )
+    logger.info(
+        f"💰 SD1.5 generation costs {credits_required} credits ({width}x{height})"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
 
@@ -2602,7 +2608,7 @@ async def generate_sd15_image(
 
         if not output_path:
             raise HTTPException(status_code=500, detail="SD1.5 generation failed")
-        
+
         # Deduct credits after successful generation
         await deduct_credits(user, credits_required, job_id, "SD1.5 T2I")
         logger.info(f"🖼️ SD1.5 generated successfully (💰 -{credits_required} credits)")
@@ -2669,10 +2675,14 @@ async def generate_wan22_t2i(
         "3:2": (768, 512),
     }
     width, height = resolutions.get(aspect_ratio, (512, 512))
-    
+
     # Calculate and check credits
-    credits_required = calculate_credits("wan22_t2i", width=width, height=height, steps=steps)
-    logger.info(f"💰 Wan2.2 T2I generation costs {credits_required} credits ({width}x{height})")
+    credits_required = calculate_credits(
+        "wan22_t2i", width=width, height=height, steps=steps
+    )
+    logger.info(
+        f"💰 Wan2.2 T2I generation costs {credits_required} credits ({width}x{height})"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
 
@@ -2690,10 +2700,12 @@ async def generate_wan22_t2i(
 
         if not output_path:
             raise HTTPException(status_code=500, detail="Wan2.2 T2I generation failed")
-        
+
         # Deduct credits after successful generation
         await deduct_credits(user, credits_required, job_id, "Wan2.2 T2I")
-        logger.info(f"🎬 Wan2.2 T2I generated successfully (💰 -{credits_required} credits)")
+        logger.info(
+            f"🎬 Wan2.2 T2I generated successfully (💰 -{credits_required} credits)"
+        )
 
         filename = Path(output_path).name
 
@@ -2770,12 +2782,12 @@ async def generate_video(
 
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    
+
     # Adjust num_frames to Wan2.2 format (4k+1)
     k = round((num_frames - 1) / 4)
     k = max(1, k)
     num_frames = 4 * k + 1
-    
+
     # Calculate duration and credits
     duration_seconds = num_frames / fps if fps > 0 else 3
     credits_required = calculate_credits(
@@ -3395,12 +3407,12 @@ async def generate_text_video(
 
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    
+
     # Adjust num_frames to Wan2.2 format (4k+1)
     k = round((num_frames - 1) / 4)
     k = max(1, k)
     num_frames = 4 * k + 1
-    
+
     # Calculate and check credits (T2V is more expensive - image + video)
     duration_seconds = num_frames / fps if fps > 0 else 3
     credits_required = calculate_credits(
@@ -3438,7 +3450,7 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
-    
+
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, job_id, "Wan2.2 T2V")
     logger.info(f"📋 T2V queued: {prompt_id} (💰 -{credits_required} credits)")
@@ -4091,18 +4103,22 @@ async def generate_audio(
         pitch: TTS pitch multiplier (not used with ChatterBox)
     """
     logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}... [user={user.id}]")
-    
+
     # Calculate credits based on mode and duration
     if mode == "tts":
         # Estimate duration based on text length (roughly 150 words per minute)
         words = len(text.split())
         estimated_duration = max(3, words / TTS_WORDS_PER_SECOND)
-        generation_type = "mmaudio_short" if estimated_duration <= 10 else "mmaudio_long"
+        generation_type = (
+            "mmaudio_short" if estimated_duration <= 10 else "mmaudio_long"
+        )
     else:
         generation_type = "mmaudio_short" if duration <= 10 else "mmaudio_long"
-    
+
     credits_required = calculate_credits(generation_type, duration_seconds=duration)
-    logger.info(f"💰 Audio generation costs {credits_required} credits (mode={mode}, duration~{duration}s)")
+    logger.info(
+        f"💰 Audio generation costs {credits_required} credits (mode={mode}, duration~{duration}s)"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
 
@@ -4154,7 +4170,7 @@ async def generate_audio(
 
             logger.info(f"🎤 TTS workflow: voice={voice}, text_len={len(text)}")
             prompt_id = client.queue_prompt(workflow)
-            
+
             # Deduct credits after successful queue
             await deduct_credits(user, credits_required, job_id, "TTS Audio")
             logger.info(f"🎤 TTS audio queued (💰 -{credits_required} credits)")
@@ -4221,7 +4237,7 @@ async def generate_audio(
 
             logger.info(f"🎵 Music workflow: style={style}, duration={duration}s")
             prompt_id = client.queue_prompt(workflow)
-            
+
             # Deduct credits after successful queue
             await deduct_credits(user, credits_required, job_id, "Music Generation")
             logger.info(f"🎵 Music queued (💰 -{credits_required} credits)")
@@ -4287,7 +4303,7 @@ async def generate_audio(
                 f"🔊 SFX workflow: prompt={text[:50]}, duration={sfx_duration}s"
             )
             prompt_id = client.queue_prompt(workflow)
-            
+
             # Deduct credits after successful queue
             await deduct_credits(user, credits_required, job_id, "SFX Generation")
             logger.info(f"🔊 SFX queued (💰 -{credits_required} credits)")
@@ -4547,21 +4563,28 @@ async def generate_i2i(
     # Save uploaded file to temp location
     upload_filename = f"i2i_input_{uuid.uuid4().hex[:8]}.png"
     upload_path = UPLOAD_DIR / upload_filename
-    
+
     # Calculate credits (I2I is cheaper than T2I because it starts from an image)
     # Get image dimensions for credit calculation
     content = await file.read()
     try:
         from io import BytesIO
+
         img = Image.open(BytesIO(content))
         width, height = img.size
         img.close()
     except:
         width, height = 1024, 1024  # Default if we can't read dimensions
-    
-    credits_required = calculate_credits("sdxl", width=width, height=height, steps=steps)
-    credits_required = max(1, int(credits_required * I2I_CREDIT_DISCOUNT))  # I2I discount
-    logger.info(f"💰 I2I generation costs {credits_required} credits ({width}x{height})")
+
+    credits_required = calculate_credits(
+        "sdxl", width=width, height=height, steps=steps
+    )
+    credits_required = max(
+        1, int(credits_required * I2I_CREDIT_DISCOUNT)
+    )  # I2I discount
+    logger.info(
+        f"💰 I2I generation costs {credits_required} credits ({width}x{height})"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
 
@@ -4629,7 +4652,7 @@ async def generate_i2i(
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
-        
+
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, job_id, "I2I Generation")
         logger.info(f"🎨 I2I queued (💰 -{credits_required} credits)")
@@ -5136,7 +5159,7 @@ async def generate_v2v(
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-    
+
     # Calculate credits (V2V is more expensive - processes multiple frames)
     duration_seconds = max_frames / fps if fps > 0 else 4
     credits_required = calculate_credits(
@@ -5146,7 +5169,9 @@ async def generate_v2v(
         duration_seconds=int(duration_seconds),
     )
     credits_required = max(2, int(credits_required * V2V_CREDIT_MARKUP))  # V2V markup
-    logger.info(f"💰 V2V generation costs {credits_required} credits ({max_frames} frames @ {fps}fps)")
+    logger.info(
+        f"💰 V2V generation costs {credits_required} credits ({max_frames} frames @ {fps}fps)"
+    )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
 
@@ -5246,7 +5271,7 @@ async def generate_v2v(
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue V2V workflow")
-        
+
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, job_id, "V2V Generation")
         logger.info(f"🎬 V2V queued (💰 -{credits_required} credits)")

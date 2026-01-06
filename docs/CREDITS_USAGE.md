@@ -157,7 +157,7 @@ The error includes available packages to purchase.
 Credits are automatically refunded if a generation fails:
 
 - **Queue failure**: Full refund
-- **Generation error**: Full refund  
+- **Generation error**: Full refund
 - **Partial completion**: No refund (credits consumed)
 
 Refunds appear in your transaction history as `type: "refund"`.
