@@ -6,6 +6,15 @@
 
 Fixes #<!-- issue number -->
 
+## Changelog Entry
+
+<!-- REQUIRED: Copy this to CHANGELOG.md under [Unreleased] -->
+
+```markdown
+### Added/Changed/Fixed
+- Your change description here
+```
+
 ## Type of Change
 
 - [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
@@ -23,6 +32,7 @@ Fixes #<!-- issue number -->
 - [ ] All new and existing tests pass (`pytest`)
 - [ ] Linting passes (`ruff check .`)
 - [ ] I have updated documentation if needed
+- [ ] **CHANGELOG.md is updated** (required - CI will fail without this!)
 
 ### Trading-Specific (if applicable)
 - [ ] Paper trading is the default (`dry_run=True` or `paper_mode=True`)

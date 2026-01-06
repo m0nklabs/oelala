@@ -1,0 +1,55 @@
+name: Changelog Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-changelog:
+    name: Check CHANGELOG.md updated
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for CHANGELOG changes
+        id: changelog
+        run: |
+          # Get list of changed files in this PR
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if CHANGELOG.md is in the list
+          if echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
+            echo "✅ CHANGELOG.md has been updated"
+            echo "updated=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ CHANGELOG.md has NOT been updated"
+            echo "updated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fail if CHANGELOG not updated
+        if: steps.changelog.outputs.updated == 'false'
+        run: |
+          echo "::error::CHANGELOG.md must be updated with this PR!"
+          echo ""
+          echo "Please add an entry to CHANGELOG.md describing your changes."
+          echo "Follow the Keep a Changelog format: https://keepachangelog.com/"
+          echo ""
+          echo "Example entry:"
+          echo "## [Unreleased]"
+          echo "### Added"
+          echo "- New feature description"
+          echo ""
+          exit 1
+
+      - name: Success message
+        if: steps.changelog.outputs.updated == 'true'
+        run: |
+          echo "✅ CHANGELOG.md is updated - good job!"
