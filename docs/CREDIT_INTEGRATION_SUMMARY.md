@@ -16,7 +16,7 @@ Integrate a complete pay-as-you-go credit system with Stripe payments across all
 #### 2. Generation Endpoint Integration (Added to 13 endpoints)
 All generation endpoints now have complete credit integration:
 
-**Image Generation (7 endpoints):**
+**Image Generation (6 endpoints):**
 - `/generate-sdxl` - SDXL Text-to-Image (1-2 credits)
 - `/generate-flux` - Flux Text-to-Image (2-3 credits)
 - `/generate-sd15` - SD 1.5 Text-to-Image (1 credit)
@@ -24,7 +24,7 @@ All generation endpoints now have complete credit integration:
 - `/generate-image` - Legacy endpoint (1-2 credits)
 - `/generate-i2i` - Image-to-Image transformation (1-2 credits)
 
-**Video Generation (5 endpoints):**
+**Video Generation (6 endpoints):**
 - `/generate` - Image-to-Video (5-8 credits)
 - `/generate-wan22-comfyui` - Wan2.2 I2V Dual-Pass (5-15 credits)
 - `/generate-wan22-async` - Wan2.2 I2V Async (5-15 credits)

@@ -2173,7 +2173,7 @@ async def generate_image_legacy(
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
 
     # Calculate and check credits
-    credits_required = calculate_credits("sdxl", width=width, height=height)
+    credits_required = calculate_credits("generate_sdxl", width=width, height=height)
     logger.info(
         f"💰 Legacy T2I generation costs {credits_required} credits ({width}x{height}) [user={user.id}]"
     )
@@ -3493,6 +3493,11 @@ async def generate_pose_video(
             detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
 
+    # Adjust num_frames to Wan2.2 format (4k+1) before credit calculation
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+
     # Calculate duration for credit calculation
     fps = 16
     duration_seconds = num_frames / fps
@@ -3536,10 +3541,6 @@ async def generate_pose_video(
     import random
 
     seed = random.randint(0, 2**32 - 1)
-
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
 
     workflow = comfyui.build_api_workflow(
         image_name=comfyui_image_name,
@@ -5174,6 +5175,7 @@ async def generate_v2v(
         width=512,
         height=512,
         duration_seconds=int(duration_seconds),
+        steps=steps,
     )
     # V2V is more expensive due to frame processing overhead
     credits_required = int(credits_required * V2V_COST_MULTIPLIER)
