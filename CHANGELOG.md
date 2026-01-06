@@ -1,4 +1,11 @@
-2026-01-06
+## [Unreleased]
+
+### Security
+- Upgraded vite 5.4.21 → 7.3.0 (fixes esbuild CORS vulnerability - Dependabot #14)
+
+---
+
+## 2026-01-06
 Agent: Claude Opus 4.5
 AgentTag: CLAU
 ModelTag: GUEST-ACCESS
