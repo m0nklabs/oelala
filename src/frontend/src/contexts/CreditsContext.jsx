@@ -21,6 +21,8 @@ export function CreditsProvider({ children }) {
   const [packages, setPackages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false)
+  const [purchaseCancelled, setPurchaseCancelled] = useState(false)
 
   // Fetch balance when user changes
   const fetchBalance = useCallback(async () => {
@@ -74,6 +76,36 @@ export function CreditsProvider({ children }) {
     fetchBalance()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]) // Only refetch when user.id actually changes
+
+  // Handle Stripe return (success or cancel)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const success = urlParams.get('success')
+    const cancelled = urlParams.get('cancelled')
+    
+    if (success === 'true') {
+      // Purchase successful - refresh balance
+      if (DEBUG) console.log('💰 Purchase successful, refreshing balance...')
+      setPurchaseSuccess(true)
+      fetchBalance()
+      
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
+      
+      // Auto-hide success message after 5 seconds
+      setTimeout(() => setPurchaseSuccess(false), 5000)
+    } else if (cancelled === 'true') {
+      if (DEBUG) console.log('❌ Purchase cancelled')
+      setPurchaseCancelled(true)
+      
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
+      
+      // Auto-hide cancelled message after 3 seconds
+      setTimeout(() => setPurchaseCancelled(false), 3000)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount
 
   // Fetch packages once on mount (they don't depend on user)
   useEffect(() => {
@@ -168,6 +200,8 @@ export function CreditsProvider({ children }) {
     packages,
     loading,
     error,
+    purchaseSuccess,
+    purchaseCancelled,
 
     // Actions
     fetchBalance,
@@ -177,6 +211,8 @@ export function CreditsProvider({ children }) {
     deductCredits,
     refundCredits,
     clearError: () => setError(null),
+    clearPurchaseSuccess: () => setPurchaseSuccess(false),
+    clearPurchaseCancelled: () => setPurchaseCancelled(false),
   }
 
   return (
