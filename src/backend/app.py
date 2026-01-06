@@ -2549,13 +2549,15 @@ async def generate_sd15_image(
     sampler_name: str = Form("dpmpp_sde"),
     scheduler: str = Form("karras"),
     lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
+    user: User = Depends(get_current_user),
 ):
     """
     Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI.
+    Requires authentication and credits.
     """
     import json as json_lib
 
-    logger.info(f"🖼️ SD1.5 T2I request: {prompt[:50]}...")
+    logger.info(f"🖼️ SD1.5 T2I request: {prompt[:50]}... [user={user.id}]")
 
     # Parse LoRA configs
     try:
@@ -2574,6 +2576,12 @@ async def generate_sd15_image(
         "3:2": (768, 512),
     }
     width, height = resolutions.get(aspect_ratio, (512, 768))
+    
+    # Calculate and check credits
+    credits_required = calculate_credits("sd15", width=width, height=height, steps=steps)
+    logger.info(f"💰 SD1.5 generation costs {credits_required} credits ({width}x{height})")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     try:
         client = get_comfyui_client()
@@ -2594,6 +2602,10 @@ async def generate_sd15_image(
 
         if not output_path:
             raise HTTPException(status_code=500, detail="SD1.5 generation failed")
+        
+        # Deduct credits after successful generation
+        await deduct_credits(user, credits_required, job_id, "SD1.5 T2I")
+        logger.info(f"🖼️ SD1.5 generated successfully (💰 -{credits_required} credits)")
 
         filename = Path(output_path).name
 
@@ -2601,6 +2613,8 @@ async def generate_sd15_image(
             "status": "success",
             "url": f"/files/{filename}",
             "filename": filename,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
@@ -2633,14 +2647,16 @@ async def generate_wan22_t2i(
     aspect_ratio: str = Form("1:1"),
     steps: int = Form(8),
     seed: int = Form(-1),
+    user: User = Depends(get_current_user),
 ):
     """
     Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
     Uses DisTorch2 multi-GPU setup with high/low noise models.
     Very high quality but slower than other T2I models.
+    Requires authentication and credits.
     """
 
-    logger.info(f"🎬 Wan2.2 T2I request: {prompt[:50]}...")
+    logger.info(f"🎬 Wan2.2 T2I request: {prompt[:50]}... [user={user.id}]")
 
     # Map aspect ratios to Wan2.2-compatible resolutions
     resolutions = {
@@ -2653,6 +2669,12 @@ async def generate_wan22_t2i(
         "3:2": (768, 512),
     }
     width, height = resolutions.get(aspect_ratio, (512, 512))
+    
+    # Calculate and check credits
+    credits_required = calculate_credits("wan22_t2i", width=width, height=height, steps=steps)
+    logger.info(f"💰 Wan2.2 T2I generation costs {credits_required} credits ({width}x{height})")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     try:
         client = get_comfyui_client()
@@ -2668,6 +2690,10 @@ async def generate_wan22_t2i(
 
         if not output_path:
             raise HTTPException(status_code=500, detail="Wan2.2 T2I generation failed")
+        
+        # Deduct credits after successful generation
+        await deduct_credits(user, credits_required, job_id, "Wan2.2 T2I")
+        logger.info(f"🎬 Wan2.2 T2I generated successfully (💰 -{credits_required} credits)")
 
         filename = Path(output_path).name
 
@@ -2675,6 +2701,8 @@ async def generate_wan22_t2i(
             "status": "success",
             "url": f"/files/{filename}",
             "filename": filename,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "model": "wan2.2-t2i-distorch2",
@@ -3344,10 +3372,12 @@ async def generate_text_video(
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
+    user: User = Depends(get_current_user),
 ):
     """
     Generate video from text prompt via ComfyUI T2V workflow.
     Note: Text-to-Video first generates an image, then animates it.
+    Requires authentication and credits.
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
@@ -3365,17 +3395,31 @@ async def generate_text_video(
 
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    
+    # Adjust num_frames to Wan2.2 format (4k+1)
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+    
+    # Calculate and check credits (T2V is more expensive - image + video)
+    duration_seconds = num_frames / fps if fps > 0 else 3
+    credits_required = calculate_credits(
+        "wan22_t2v",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 Wan2.2 T2V costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     # Generate unique timestamp
     import random
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     seed = random.randint(0, 2**32 - 1)
-
-    # Adjust num_frames to Wan2.2 format (4k+1)
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
 
     # Build T2V workflow (using T2I + I2V)
     workflow = comfyui.build_t2v_workflow(
@@ -3394,12 +3438,16 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    logger.info(f"📋 T2V queued: {prompt_id}")
+    
+    # Deduct credits after successful queue
+    await deduct_credits(user, credits_required, job_id, "Wan2.2 T2V")
+    logger.info(f"📋 T2V queued: {prompt_id} (💰 -{credits_required} credits)")
 
     return {
         "status": "queued",
         "prompt_id": prompt_id,
+        "job_id": job_id,
+        "credits_used": credits_required,
         "meta": {
             "prompt": prompt,
             "width": width,
@@ -4462,10 +4510,12 @@ async def generate_i2i(
     seed: int = Form(-1),
     sampler_name: str = Form("dpmpp_2m"),
     scheduler: str = Form("karras"),
+    user: User = Depends(get_current_user),
 ):
     """
     Image-to-Image generation via ComfyUI.
     Uploads source image, applies style transfer / modification.
+    Requires authentication and credits.
 
     Args:
         file: Source image file
@@ -4475,9 +4525,10 @@ async def generate_i2i(
         checkpoint: SDXL checkpoint to use
     """
     import random
+    from PIL import Image
 
     logger.info(
-        f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint})"
+        f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint}) [user={user.id}]"
     )
 
     client = get_comfyui_client()
@@ -4491,6 +4542,23 @@ async def generate_i2i(
     # Save uploaded file to temp location
     upload_filename = f"i2i_input_{uuid.uuid4().hex[:8]}.png"
     upload_path = UPLOAD_DIR / upload_filename
+    
+    # Calculate credits (I2I is cheaper than T2I because it starts from an image)
+    # Get image dimensions for credit calculation
+    content = await file.read()
+    try:
+        from io import BytesIO
+        img = Image.open(BytesIO(content))
+        width, height = img.size
+        img.close()
+    except:
+        width, height = 1024, 1024  # Default if we can't read dimensions
+    
+    credits_required = calculate_credits("sdxl", width=width, height=height, steps=steps)
+    credits_required = max(1, int(credits_required * 0.7))  # I2I is 30% cheaper
+    logger.info(f"💰 I2I generation costs {credits_required} credits ({width}x{height})")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     try:
         with open(upload_path, "wb") as f:
@@ -4556,10 +4624,16 @@ async def generate_i2i(
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
+        
+        # Deduct credits after successful queue
+        await deduct_credits(user, credits_required, job_id, "I2I Generation")
+        logger.info(f"🎨 I2I queued (💰 -{credits_required} credits)")
 
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "denoise": denoise,
@@ -5034,10 +5108,12 @@ async def generate_v2v(
     steps: int = Form(20),
     cfg: float = Form(7.5),
     seed: int = Form(-1),
+    user: User = Depends(get_current_user),
 ):
     """
     Video-to-Video style transfer via ComfyUI.
     Extracts frames, applies img2img to each, reassembles video.
+    Requires authentication and credits.
 
     Args:
         file: Source video file
@@ -5049,12 +5125,25 @@ async def generate_v2v(
     import random
 
     logger.info(
-        f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames})"
+        f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames}) [user={user.id}]"
     )
 
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+    
+    # Calculate credits (V2V is more expensive - processes multiple frames)
+    duration_seconds = max_frames / fps if fps > 0 else 4
+    credits_required = calculate_credits(
+        "wan22_i2v",  # Use I2V pricing as base
+        width=512,
+        height=512,
+        duration_seconds=int(duration_seconds),
+    )
+    credits_required = max(2, int(credits_required * 1.2))  # V2V is 20% more expensive
+    logger.info(f"💰 V2V generation costs {credits_required} credits ({max_frames} frames @ {fps}fps)")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     # Generate seed
     if seed == -1:
@@ -5152,10 +5241,16 @@ async def generate_v2v(
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue V2V workflow")
+        
+        # Deduct credits after successful queue
+        await deduct_credits(user, credits_required, job_id, "V2V Generation")
+        logger.info(f"🎬 V2V queued (💰 -{credits_required} credits)")
 
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "denoise": denoise,
