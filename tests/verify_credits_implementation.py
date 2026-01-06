@@ -89,19 +89,19 @@ def test_credit_calculations():
     from credits import calculate_credits
     
     test_cases = [
-        # (type, params, expected_min, expected_max)
-        ("sdxl", {"width": 1024, "height": 1024}, 1, 2),
-        ("flux", {"width": 1024, "height": 1024}, 2, 3),
-        ("wan22_i2v", {"width": 720, "height": 720, "duration_seconds": 3}, 5, 8),
-        ("wan22_t2v", {"width": 720, "height": 720, "duration_seconds": 3}, 8, 12),
+        # (type, params, expected_credits)
+        ("sdxl", {"width": 1024, "height": 1024}, 1),
+        ("flux", {"width": 1024, "height": 1024}, 3),  # HD by default
+        ("wan22_i2v", {"width": 720, "height": 720, "duration_seconds": 3}, 5),
+        ("wan22_t2v", {"width": 720, "height": 720, "duration_seconds": 3}, 8),
     ]
     
-    for gen_type, params, min_cost, max_cost in test_cases:
+    for gen_type, params, expected in test_cases:
         cost = calculate_credits(gen_type, **params)
-        if min_cost <= cost <= max_cost:
-            print(f"  ✅ {gen_type}: {cost} credits (expected {min_cost}-{max_cost})")
+        if cost == expected:
+            print(f"  ✅ {gen_type}: {cost} credits (expected {expected})")
         else:
-            print(f"  ❌ {gen_type}: {cost} credits (expected {min_cost}-{max_cost})")
+            print(f"  ❌ {gen_type}: {cost} credits (expected {expected})")
             return False
     
     return True
