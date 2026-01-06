@@ -472,7 +472,7 @@ export default function Dashboard() {
           onClose={closeLoginModal}
         />
       )}
-      <LogViewer />
+      {user?.email === 'mark.op.mobiel@gmail.com' && <LogViewer />}
     </div>
   )
 }
