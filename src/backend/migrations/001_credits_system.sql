@@ -147,17 +147,22 @@ CREATE TRIGGER on_auth_user_created_credits
 -- ============================================================================
 -- Insert default credit packages
 -- ============================================================================
-INSERT INTO public.credit_packages (id, name, credits, price_cents, currency, sort_order, description, badge) VALUES
-    ('starter', 'Starter', 100, 500, 'EUR', 1, 'Perfect for trying out Oelala', NULL),
-    ('basic', 'Basic', 500, 2000, 'EUR', 2, 'Great for regular creators', NULL),
-    ('pro', 'Pro', 1500, 5000, 'EUR', 3, 'Best value for serious creators', 'POPULAR'),
-    ('studio', 'Studio', 5000, 15000, 'EUR', 4, 'For power users and teams', 'BEST VALUE'),
-    ('enterprise', 'Enterprise', 20000, 50000, 'EUR', 5, 'Maximum volume discount', NULL)
+-- IMPORTANT: Replace 'price_xxx' with your actual Stripe Price IDs
+-- Get Price IDs from: https://dashboard.stripe.com/test/products
+-- Or create via CLI: stripe prices create --product=prod_xxx --unit-amount=500 --currency=eur
+
+INSERT INTO public.credit_packages (id, name, credits, price_cents, currency, stripe_price_id, sort_order, description, badge) VALUES
+    ('starter', 'Starter', 100, 500, 'EUR', 'price_xxx', 1, 'Perfect for trying out Oelala', NULL),
+    ('basic', 'Basic', 500, 2000, 'EUR', 'price_xxx', 2, 'Great for regular creators', NULL),
+    ('pro', 'Pro', 1500, 5000, 'EUR', 'price_xxx', 3, 'Best value for serious creators', 'POPULAR'),
+    ('studio', 'Studio', 5000, 15000, 'EUR', 'price_xxx', 4, 'For power users and teams', 'BEST VALUE'),
+    ('enterprise', 'Enterprise', 20000, 50000, 'EUR', 'price_xxx', 5, 'Maximum volume discount', NULL)
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     credits = EXCLUDED.credits,
     price_cents = EXCLUDED.price_cents,
     currency = EXCLUDED.currency,
+    stripe_price_id = EXCLUDED.stripe_price_id,
     sort_order = EXCLUDED.sort_order,
     description = EXCLUDED.description,
     badge = EXCLUDED.badge;

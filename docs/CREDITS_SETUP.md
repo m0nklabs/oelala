@@ -115,7 +115,34 @@ echo "Enterprise: $PRICE_ENTERPRISE"
 
 ### Update Database with Stripe Price IDs
 
-Once you have the Price IDs, update the database:
+**Important**: After creating products in Stripe, you need to update the migration SQL with the actual Price IDs.
+
+#### Option 1: Update SQL Migration Before Running
+
+Edit `src/backend/migrations/001_credits_system.sql` at line 150-156 and replace the `stripe_price_id` placeholders with your actual Stripe Price IDs:
+
+```sql
+-- Insert default credit packages (UPDATE WITH YOUR STRIPE PRICE IDs)
+INSERT INTO public.credit_packages (id, name, credits, price_cents, currency, stripe_price_id, sort_order, description, badge) VALUES
+    ('starter', 'Starter', 100, 500, 'EUR', 'price_YOUR_STARTER_PRICE_ID', 1, 'Perfect for trying out Oelala', NULL),
+    ('basic', 'Basic', 500, 2000, 'EUR', 'price_YOUR_BASIC_PRICE_ID', 2, 'Great for regular creators', NULL),
+    ('pro', 'Pro', 1500, 5000, 'EUR', 'price_YOUR_PRO_PRICE_ID', 3, 'Best value for serious creators', 'POPULAR'),
+    ('studio', 'Studio', 5000, 15000, 'EUR', 'price_YOUR_STUDIO_PRICE_ID', 4, 'For power users and teams', 'BEST VALUE'),
+    ('enterprise', 'Enterprise', 20000, 50000, 'EUR', 'price_YOUR_ENTERPRISE_PRICE_ID', 5, 'Maximum volume discount', NULL)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    credits = EXCLUDED.credits,
+    price_cents = EXCLUDED.price_cents,
+    currency = EXCLUDED.currency,
+    stripe_price_id = EXCLUDED.stripe_price_id,
+    sort_order = EXCLUDED.sort_order,
+    description = EXCLUDED.description,
+    badge = EXCLUDED.badge;
+```
+
+#### Option 2: Update After Migration
+
+If you already ran the migration, update the packages with SQL:
 
 ```sql
 -- Update packages with Stripe Price IDs
@@ -126,7 +153,7 @@ UPDATE public.credit_packages SET stripe_price_id = 'price_xxx' WHERE id = 'stud
 UPDATE public.credit_packages SET stripe_price_id = 'price_xxx' WHERE id = 'enterprise';
 ```
 
-Replace `price_xxx` with your actual Price IDs.
+Replace `price_xxx` with your actual Price IDs from Stripe.
 
 ### Get API Keys
 
@@ -303,6 +330,110 @@ Complete the checkout and verify:
 1. Webhook received (check backend logs)
 2. Credits added (check `/api/credits` endpoint)
 3. Transaction logged (check `credit_transactions` table)
+
+---
+
+## Step 7: Testing the Integration
+
+### Test Credit Balance
+
+```bash
+# With authentication token
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:7998/api/credits
+```
+
+Expected response:
+```json
+{
+  "balance": 25,
+  "lifetime_purchased": 0,
+  "lifetime_used": 0
+}
+```
+
+### Test Package Listing
+
+```bash
+curl http://localhost:7998/api/credits/packages
+```
+
+Expected response:
+```json
+[
+  {
+    "id": "starter",
+    "name": "Starter",
+    "credits": 100,
+    "price_cents": 500,
+    "currency": "EUR"
+  },
+  ...
+]
+```
+
+### Test Stripe Checkout
+
+```bash
+# Initiate checkout (requires auth)
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"package_id": "starter"}' \
+  http://localhost:7998/api/credits/purchase
+```
+
+Expected response:
+```json
+{
+  "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "session_id": "cs_test_..."
+}
+```
+
+### Test Stripe Test Cards
+
+When testing checkout, use these test card numbers:
+
+| Card Number | Description |
+|-------------|-------------|
+| `4242 4242 4242 4242` | Successful payment |
+| `4000 0025 0000 3155` | Requires authentication (3D Secure) |
+| `4000 0000 0000 9995` | Declined card |
+| `4000 0000 0000 0002` | Charge declined (generic) |
+
+- Use any future expiry date (e.g., `12/34`)
+- Use any 3-digit CVC (e.g., `123`)
+- Use any billing ZIP code
+
+### Test Webhook Locally
+
+1. Start Stripe CLI listener:
+   ```bash
+   stripe listen --forward-to http://localhost:7998/api/stripe/webhook
+   ```
+
+2. Trigger a test webhook:
+   ```bash
+   stripe trigger checkout.session.completed
+   ```
+
+3. Check backend logs for:
+   ```
+   ✅ Added {credits} credits to user {user_id} (payment: pi_xxx)
+   ```
+
+### Run Unit Tests
+
+```bash
+cd /path/to/oelala
+python -m pytest tests/test_credits_system.py tests/test_credits_api.py -v
+```
+
+All tests should pass:
+```
+============================== 24 passed in 0.5s ===============================
+```
 
 ---
 
