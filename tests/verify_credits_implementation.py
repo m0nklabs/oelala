@@ -10,7 +10,6 @@ Usage:
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add backend to path
@@ -43,41 +42,34 @@ def test_classes_and_functions():
     """Test that key classes and functions exist."""
     print("\n🔍 Testing classes and functions...")
 
-    import credits
-    import credits_api
+    from credits import (
+        CreditManager,
+        calculate_credits,
+        GenerationType,
+        CreditBalance,
+        CreditPackage,
+        DEFAULT_PACKAGES,
+    )
+    from credits_api import (
+        router,
+        stripe_router,
+        check_credits,
+        deduct_credits,
+        refund_credits,
+    )
 
-    # Test credits.py exports
-    required_from_credits = [
-        'CreditManager',
-        'calculate_credits',
-        'GenerationType',
-        'CreditBalance',
-        'CreditPackage',
-        'DEFAULT_PACKAGES',
-    ]
-
-    for item in required_from_credits:
-        if hasattr(credits, item):
-            print(f"  ✅ credits.{item} exists")
-        else:
-            print(f"  ❌ credits.{item} missing")
-            return False
-
-    # Test credits_api.py exports
-    required_from_api = [
-        'router',
-        'stripe_router',
-        'check_credits',
-        'deduct_credits',
-        'refund_credits',
-    ]
-
-    for item in required_from_api:
-        if hasattr(credits_api, item):
-            print(f"  ✅ credits_api.{item} exists")
-        else:
-            print(f"  ❌ credits_api.{item} missing")
-            return False
+    # Test that imported items are valid
+    print(f"  ✅ credits.CreditManager exists")
+    print(f"  ✅ credits.calculate_credits exists")
+    print(f"  ✅ credits.GenerationType exists")
+    print(f"  ✅ credits.CreditBalance exists")
+    print(f"  ✅ credits.CreditPackage exists")
+    print(f"  ✅ credits.DEFAULT_PACKAGES exists")
+    print(f"  ✅ credits_api.router exists")
+    print(f"  ✅ credits_api.stripe_router exists")
+    print(f"  ✅ credits_api.check_credits exists")
+    print(f"  ✅ credits_api.deduct_credits exists")
+    print(f"  ✅ credits_api.refund_credits exists")
 
     return True
 

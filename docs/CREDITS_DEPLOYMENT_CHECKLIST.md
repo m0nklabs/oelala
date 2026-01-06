@@ -203,7 +203,7 @@ stripe listen --forward-to http://localhost:7998/api/stripe/webhook
 | **Images** | | | |
 | SDXL 1024x1024 | Standard | 1 | €0.05 |
 | SDXL 2048x2048 | HD | 2 | €0.10 |
-| Flux 1024x1024 | Standard | 2 | €0.10 |
+| Flux 1024x1024 | Standard | 3 | €0.15 |
 | Flux 2048x2048 | HD | 3 | €0.15 |
 | SD1.5 512x768 | Fast | 1 | €0.05 |
 | **Videos** | | | |

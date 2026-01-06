@@ -175,7 +175,7 @@ stripe listen --forward-to http://localhost:7998/api/stripe/webhook
 
 **Time:** ~10-15 minutes
 
-**Total Deployment Time:** ~30 minutes
+**Total Estimated Deployment Time (including buffer):** 1–2 hours
 
 ---
 
@@ -187,7 +187,7 @@ stripe listen --forward-to http://localhost:7998/api/stripe/webhook
 |------|------------|----------|---------|----------|
 | SDXL Image | 1024x1024 | - | 1 | €0.05 |
 | SDXL Image HD | 2048x2048 | - | 2 | €0.10 |
-| Flux Image | 1024x1024 | - | 2 | €0.10 |
+| Flux Image | 1024x1024 | - | 3 | €0.15 |
 | Flux Image HD | 2048x2048 | - | 3 | €0.15 |
 | Wan2.2 Video | 720p | 3s | 5 | €0.25 |
 | Wan2.2 Video | 720p | 5s | 8 | €0.40 |
