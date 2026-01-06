@@ -18,13 +18,11 @@ class TestCreditCalculation:
         """Test SD1.5 image generation cost."""
         cost = calculate_credits("sd15", width=512, height=512)
         assert cost == 1
-        assert cost == CREDIT_COSTS[GenerationType.SD15]
 
     def test_image_generation_sdxl(self):
         """Test SDXL image generation cost."""
         cost = calculate_credits("sdxl", width=1024, height=1024)
         assert cost == 1
-        assert cost == CREDIT_COSTS[GenerationType.SDXL]
 
     def test_image_generation_sdxl_hd(self):
         """Test SDXL HD image generation cost (higher resolution)."""

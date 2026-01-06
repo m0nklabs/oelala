@@ -4050,6 +4050,11 @@ This video appears to contain visual content that could be further analyzed with
 # Audio Generation (TTS, Music, SFX) via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Credit calculation constants
+TTS_WORDS_PER_SECOND = 2.5  # ~150 words per minute = 2.5 words per second
+I2I_CREDIT_DISCOUNT = 0.7  # 30% discount for I2I (reuses source image)
+V2V_CREDIT_MARKUP = 1.2  # 20% markup for V2V (processes multiple frames)
+
 # Voice presets mapping to ChatterBox settings
 VOICE_PRESETS = {
     "alloy": {"language": "English", "exaggeration": 0.4, "temperature": 0.7},
@@ -4091,7 +4096,7 @@ async def generate_audio(
     if mode == "tts":
         # Estimate duration based on text length (roughly 150 words per minute)
         words = len(text.split())
-        estimated_duration = max(3, words / 2.5)  # ~150 wpm
+        estimated_duration = max(3, words / TTS_WORDS_PER_SECOND)
         generation_type = "mmaudio_short" if estimated_duration <= 10 else "mmaudio_long"
     else:
         generation_type = "mmaudio_short" if duration <= 10 else "mmaudio_long"
@@ -4555,7 +4560,7 @@ async def generate_i2i(
         width, height = 1024, 1024  # Default if we can't read dimensions
     
     credits_required = calculate_credits("sdxl", width=width, height=height, steps=steps)
-    credits_required = max(1, int(credits_required * 0.7))  # I2I is 30% cheaper
+    credits_required = max(1, int(credits_required * I2I_CREDIT_DISCOUNT))  # I2I discount
     logger.info(f"💰 I2I generation costs {credits_required} credits ({width}x{height})")
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
@@ -5140,7 +5145,7 @@ async def generate_v2v(
         height=512,
         duration_seconds=int(duration_seconds),
     )
-    credits_required = max(2, int(credits_required * 1.2))  # V2V is 20% more expensive
+    credits_required = max(2, int(credits_required * V2V_CREDIT_MARKUP))  # V2V markup
     logger.info(f"💰 V2V generation costs {credits_required} credits ({max_frames} frames @ {fps}fps)")
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
