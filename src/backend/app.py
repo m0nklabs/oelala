@@ -3377,10 +3377,12 @@ async def generate_text_video(
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate video from text prompt via ComfyUI T2V workflow.
     Note: Text-to-Video first generates an image, then animates it.
+    Requires authentication and credits.
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
@@ -3398,6 +3400,22 @@ async def generate_text_video(
 
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+
+    # Calculate duration for credit calculation
+    duration_seconds = num_frames / fps if fps > 0 else 3
+
+    # Calculate and check credits
+    credits_required = calculate_credits(
+        "wan22_t2v",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 T2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     # Generate unique timestamp
     import random
@@ -3428,11 +3446,15 @@ async def generate_text_video(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
-    logger.info(f"📋 T2V queued: {prompt_id}")
+    # Deduct credits after successful queue
+    await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
+    logger.info(f"📋 T2V queued: {prompt_id} (💰 -{credits_required} credits)")
 
     return {
         "status": "queued",
         "prompt_id": prompt_id,
+        "job_id": job_id,
+        "credits_used": credits_required,
         "meta": {
             "prompt": prompt,
             "width": width,
@@ -3450,11 +3472,13 @@ async def generate_pose_video(
     file: UploadFile = File(...),
     num_frames: int = Form(41, description="Number of frames in video"),
     output_filename: str = Form("", description="Custom output filename"),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate pose-guided video from uploaded image.
     Note: Pose-guided generation is not yet implemented in ComfyUI workflows.
     This endpoint will use the standard I2V workflow for now.
+    Requires authentication and credits.
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
@@ -3466,6 +3490,24 @@ async def generate_pose_video(
             status_code=503,
             detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
+
+    # Calculate duration for credit calculation
+    fps = 16
+    duration_seconds = num_frames / fps
+    width, height = 480, 480
+
+    # Calculate and check credits
+    credits_required = calculate_credits(
+        "wan22_i2v",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 Pose-guided generation costs {credits_required} credits ({width}x{height}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     # Validate file type
     if not file.content_type.startswith("image/"):
@@ -3500,10 +3542,10 @@ async def generate_pose_video(
     workflow = comfyui.build_api_workflow(
         image_name=comfyui_image_name,
         prompt="smooth motion, natural movement",
-        width=480,
-        height=480,
+        width=width,
+        height=height,
         num_frames=num_frames,
-        fps=16,
+        fps=fps,
         steps=6,
         cfg=1.0,
         seed=seed,
@@ -3514,11 +3556,15 @@ async def generate_pose_video(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
-    logger.info(f"📋 Pose video queued: {prompt_id}")
+    # Deduct credits after successful queue
+    await deduct_credits(user, credits_required, prompt_id, "Pose-guided I2V")
+    logger.info(f"📋 Pose video queued: {prompt_id} (💰 -{credits_required} credits)")
 
     return {
         "status": "queued",
         "prompt_id": prompt_id,
+        "job_id": job_id,
+        "credits_used": credits_required,
         "input_image": input_filename,
         "note": "Using standard I2V workflow (pose control coming soon)",
         "meta": {"num_frames": num_frames, "seed": seed, "type": "pose-guided"},
@@ -4055,9 +4101,11 @@ async def generate_audio(
     duration: int = Form(10),
     speed: float = Form(1.0),
     pitch: float = Form(1.0),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate audio from text (TTS, music, or SFX) via ComfyUI.
+    Requires authentication and credits.
 
     Args:
         text: Input text (speech text or music/sfx prompt)
@@ -4069,6 +4117,26 @@ async def generate_audio(
         pitch: TTS pitch multiplier (not used with ChatterBox)
     """
     logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}...")
+
+    # Calculate and check credits based on mode
+    if mode == "tts":
+        # TTS is cheaper, just text length matters
+        credits_required = calculate_credits("mmaudio", duration_seconds=min(10, duration))
+    elif mode == "music":
+        credits_required = calculate_credits(
+            "mmaudio_long" if duration > 10 else "mmaudio_short",
+            duration_seconds=duration,
+        )
+    elif mode == "sfx":
+        credits_required = calculate_credits("mmaudio_short", duration_seconds=min(10, duration))
+    else:
+        credits_required = 3  # Default
+
+    logger.info(
+        f"💰 Audio generation costs {credits_required} credits (mode={mode}, duration={duration}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     import random
 
@@ -4119,9 +4187,15 @@ async def generate_audio(
             logger.info(f"🎤 TTS workflow: voice={voice}, text_len={len(text)}")
             prompt_id = client.queue_prompt(workflow)
 
+            # Deduct credits after successful queue
+            await deduct_credits(user, credits_required, prompt_id, "TTS Audio")
+            logger.info(f"🎤 TTS queued: {prompt_id} (💰 -{credits_required} credits)")
+
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
+                "job_id": job_id,
+                "credits_used": credits_required,
                 "mode": "tts",
                 "voice": voice,
                 "text_preview": text[:100] + ("..." if len(text) > 100 else ""),
@@ -4180,9 +4254,15 @@ async def generate_audio(
             logger.info(f"🎵 Music workflow: style={style}, duration={duration}s")
             prompt_id = client.queue_prompt(workflow)
 
+            # Deduct credits after successful queue
+            await deduct_credits(user, credits_required, prompt_id, "Music Generation")
+            logger.info(f"🎵 Music queued: {prompt_id} (💰 -{credits_required} credits)")
+
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
+                "job_id": job_id,
+                "credits_used": credits_required,
                 "mode": "music",
                 "style": style,
                 "duration": duration,
@@ -4240,9 +4320,15 @@ async def generate_audio(
             )
             prompt_id = client.queue_prompt(workflow)
 
+            # Deduct credits after successful queue
+            await deduct_credits(user, credits_required, prompt_id, "SFX Generation")
+            logger.info(f"🔊 SFX queued: {prompt_id} (💰 -{credits_required} credits)")
+
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
+                "job_id": job_id,
+                "credits_used": credits_required,
                 "mode": "sfx",
                 "duration": sfx_duration,
                 "prompt": text,
@@ -4461,10 +4547,12 @@ async def generate_i2i(
     seed: int = Form(-1),
     sampler_name: str = Form("dpmpp_2m"),
     scheduler: str = Form("karras"),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Image-to-Image generation via ComfyUI.
     Uploads source image, applies style transfer / modification.
+    Requires authentication and credits.
 
     Args:
         file: Source image file
@@ -4478,6 +4566,14 @@ async def generate_i2i(
     logger.info(
         f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint})"
     )
+
+    # Calculate and check credits (image-to-image is similar to T2I)
+    credits_required = calculate_credits("sdxl", width=1024, height=1024, steps=steps)
+    logger.info(
+        f"💰 I2I generation costs {credits_required} credits (denoise={denoise}) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -4556,9 +4652,15 @@ async def generate_i2i(
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
 
+        # Deduct credits after successful queue
+        await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
+        logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits)")
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "denoise": denoise,
@@ -5033,10 +5135,12 @@ async def generate_v2v(
     steps: int = Form(20),
     cfg: float = Form(7.5),
     seed: int = Form(-1),
+    user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Video-to-Video style transfer via ComfyUI.
     Extracts frames, applies img2img to each, reassembles video.
+    Requires authentication and credits.
 
     Args:
         file: Source video file
@@ -5050,6 +5154,23 @@ async def generate_v2v(
     logger.info(
         f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames})"
     )
+
+    # Calculate duration and credits (V2V is expensive - frame by frame processing)
+    duration_seconds = max_frames / fps
+    credits_required = calculate_credits(
+        "wan22_i2v",  # Similar cost to video generation
+        width=512,
+        height=512,
+        duration_seconds=int(duration_seconds),
+    )
+    # V2V is more expensive due to frame processing
+    credits_required = int(credits_required * 1.5)
+    
+    logger.info(
+        f"💰 V2V generation costs {credits_required} credits ({max_frames} frames, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -5152,9 +5273,15 @@ async def generate_v2v(
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue V2V workflow")
 
+        # Deduct credits after successful queue
+        await deduct_credits(user, credits_required, prompt_id, "V2V Style Transfer")
+        logger.info(f"🎬 V2V queued: {prompt_id} (💰 -{credits_required} credits)")
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "job_id": job_id,
+            "credits_used": credits_required,
             "meta": {
                 "prompt": prompt,
                 "denoise": denoise,
