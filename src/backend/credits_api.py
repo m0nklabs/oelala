@@ -391,7 +391,7 @@ async def check_credits(user: User, required: int) -> bool:
                 "error": "insufficient_credits",
                 "required": required,
                 "available": balance.balance,
-                "packages": [p.dict() for p in packages],
+                "packages": [p.model_dump() for p in packages],
             },
         )
 
