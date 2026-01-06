@@ -91,7 +91,7 @@ def test_credit_calculations():
     test_cases = [
         # (type, params, expected_credits)
         ("sdxl", {"width": 1024, "height": 1024}, 1),
-        ("flux", {"width": 1024, "height": 1024}, 3),  # HD by default
+        ("flux", {"width": 1024, "height": 1024}, 3),  # HD because height > 720
         ("wan22_i2v", {"width": 720, "height": 720, "duration_seconds": 3}, 5),
         ("wan22_t2v", {"width": 720, "height": 720, "duration_seconds": 3}, 8),
     ]
