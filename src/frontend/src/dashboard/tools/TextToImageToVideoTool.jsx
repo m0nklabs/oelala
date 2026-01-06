@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
 import { Type, Image as ImageIcon, Film, ArrowRight, Sparkles } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function TextToImageToVideoTool({ onOutput }) {
+  const { user, requestLogin } = useAuth()
+
   // Step 1: Text to Image
   const [t2iPrompt, setT2iPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState('16:9')
@@ -15,6 +18,12 @@ export default function TextToImageToVideoTool({ onOutput }) {
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
 
   const handleGenerateImage = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!t2iPrompt.trim()) return
     setIsGeneratingImage(true)
 

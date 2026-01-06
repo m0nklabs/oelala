@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const SUPPORTED_VIDEO_FORMATS = ['video/mp4', 'video/webm', 'video/quicktime']
 
@@ -26,6 +27,8 @@ const VOICE_PRESETS = [
 ]
 
 export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   // Video state
   const [videoFile, setVideoFile] = useState(null)
   const [videoUrl, setVideoUrl] = useState(null)
@@ -103,6 +106,12 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   // 1. Generate TTS audio
   // 2. Apply lip sync to video with generated audio
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!videoFile || !text.trim()) {
       setError('Please upload a video and enter text')
       return

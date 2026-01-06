@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { Volume2, Music, Mic, Loader2, Play, Pause, Download, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const TTS_VOICES = [
   // Female voices
@@ -32,6 +33,8 @@ const MUSIC_STYLES = [
 ]
 
 export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [mode, setMode] = useState('tts')
   const [text, setText] = useState('')
   const [voice, setVoice] = useState('nova')
@@ -52,6 +55,12 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
   const audioRef = useRef(null)
 
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!text.trim()) return
 
     setSubmitting(true)

@@ -1,0 +1,110 @@
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.login-modal {
+  position: relative;
+  background: linear-gradient(145deg, #1a1a2e, #16162a);
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.login-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.login-modal-close:hover {
+  color: #fff;
+  background: #333;
+}
+
+.login-modal-content {
+  text-align: center;
+}
+
+.login-modal-logo h2 {
+  font-size: 1.8rem;
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.login-modal-message {
+  color: #ccc;
+  margin: 0 0 1.5rem 0;
+  font-size: 1rem;
+}
+
+.login-modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.login-modal .login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.login-modal .login-btn.google {
+  background: #fff;
+  color: #333;
+}
+
+.login-modal .login-btn.google:hover {
+  background: #f5f5f5;
+  transform: translateY(-1px);
+}
+
+.login-modal .login-btn.github {
+  background: #333;
+  color: #fff;
+}
+
+.login-modal .login-btn.github:hover {
+  background: #444;
+  transform: translateY(-1px);
+}
+
+.login-modal-note {
+  color: #666;
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.4;
+}

@@ -7,6 +7,7 @@ import QueueIndicator from './QueueIndicator'
 import UserMenu from '../components/UserMenu'
 import Footer from '../components/Footer'
 import LegalModal from '../components/LegalModal'
+import LoginModal from '../components/LoginModal'
 import { useNSFW } from '../contexts/NSFWContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useCredits } from '../contexts/CreditsContext'
@@ -265,7 +266,7 @@ export default function Dashboard() {
   }
 
   const { nsfwEnabled, setNsfwEnabled } = useNSFW()
-  const { user, isAdult } = useAuth()
+  const { user, isAdult, showLoginModal, loginModalMessage, closeLoginModal } = useAuth()
 
   return (
     <div className="dashboard-wrapper">
@@ -464,6 +465,12 @@ export default function Dashboard() {
       <Footer onShowLegal={setLegalType} />
       {legalType && (
         <LegalModal type={legalType} onClose={() => setLegalType(null)} />
+      )}
+      {showLoginModal && (
+        <LoginModal
+          message={loginModalMessage}
+          onClose={closeLoginModal}
+        />
       )}
       <LogViewer />
     </div>

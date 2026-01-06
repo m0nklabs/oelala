@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4']
 
@@ -13,6 +14,8 @@ const CHECKPOINTS = [
 ]
 
 export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [prompt, setPrompt] = useState('')
@@ -57,6 +60,12 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
   }, [])
 
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!file) return
 
     setSubmitting(true)

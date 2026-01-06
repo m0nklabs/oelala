@@ -3,6 +3,7 @@ import { Sparkles, Settings2, Image as ImageIcon, Info, ChevronDown } from 'luci
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 // Model categories
 const MODEL_CATEGORIES = {
@@ -42,6 +43,7 @@ const getModelType = (model) => {
 
 export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const { nsfwEnabled } = useNSFW()
+  const { user, requestLogin } = useAuth()
 
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text')
@@ -102,6 +104,12 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   }
 
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!prompt.trim()) return
     setIsGenerating(true)
     setError('')

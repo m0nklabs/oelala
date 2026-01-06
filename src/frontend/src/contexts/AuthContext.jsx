@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase, isAuthEnabled } from '../lib/supabase'
 
 const AuthContext = createContext({
@@ -9,12 +9,18 @@ const AuthContext = createContext({
   signInWithGithub: async () => {},
   signOut: async () => {},
   isAdult: false,
+  showLoginModal: false,
+  loginModalMessage: null,
+  requestLogin: () => {},
+  closeLoginModal: () => {},
 })
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [loginModalMessage, setLoginModalMessage] = useState(null)
 
   useEffect(() => {
     if (!isAuthEnabled()) {
@@ -76,6 +82,18 @@ export function AuthProvider({ children }) {
     if (error) console.error('Sign-out error:', error)
   }
 
+  // Request login - shows login modal with optional message
+  const requestLogin = useCallback((message = null) => {
+    setLoginModalMessage(message)
+    setShowLoginModal(true)
+  }, [])
+
+  // Close login modal
+  const closeLoginModal = useCallback(() => {
+    setShowLoginModal(false)
+    setLoginModalMessage(null)
+  }, [])
+
   // Check if user has verified adult status
   // For now, all logged-in users are considered adults
   // TODO: Add proper age verification
@@ -89,6 +107,10 @@ export function AuthProvider({ children }) {
     signInWithGithub,
     signOut,
     isAdult,
+    showLoginModal,
+    loginModalMessage,
+    requestLogin,
+    closeLoginModal,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

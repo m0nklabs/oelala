@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const SUPPORTED_AUDIO_FORMATS = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/flac', 'audio/ogg', 'audio/webm']
 
@@ -20,6 +21,8 @@ const F5_MODELS = [
 ]
 
 export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   // Voice sample state
   const [voiceSample, setVoiceSample] = useState(null)
   const [voiceSampleUrl, setVoiceSampleUrl] = useState(null)
@@ -135,6 +138,12 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
 
   // Generate cloned voice
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!voiceSample || !text.trim()) {
       setError('Please provide both a voice sample and text to speak')
       return
