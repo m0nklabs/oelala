@@ -70,7 +70,7 @@ jobs:
 
       - name: Post status check
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           SHA="${{ github.sha }}"
 

@@ -1,0 +1,202 @@
+{
+  "1": {
+    "inputs": {
+      "video": "input_video.mp4",
+      "force_rate": 0,
+      "force_size": "Disabled",
+      "custom_width": 512,
+      "custom_height": 512,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Source Video"
+    }
+  },
+  "2": {
+    "inputs": {
+      "images": [
+        "1",
+        0
+      ],
+      "frame_index": -1
+    },
+    "class_type": "GetFrameFromVideo",
+    "_meta": {
+      "title": "Extract Last Frame"
+    }
+  },
+  "3": {
+    "inputs": {
+      "text": "smooth camera motion, continuation of the scene",
+      "clip": [
+        "10",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "low quality, blurry, flickering, artifacts",
+      "clip": [
+        "10",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "5": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
+      "dequant_dtype": "default",
+      "patch_dtype": "default",
+      "patch_on_device": false,
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "_meta": {
+      "title": "GGUF High Noise (DisTorch2)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 4,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "VAE (DisTorch2)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "clip_name": "umt5-xxl-enc-bf16.safetensors",
+      "type": "wan",
+      "device": "cuda:0",
+      "virtual_vram_gb": 4,
+      "donor_device": "cuda:1",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "CLIPLoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "T5-XXL (DisTorch2)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+      "allow_compile": false,
+      "model": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "PathchSageAttentionKJ",
+    "_meta": {
+      "title": "SageAttn (VRAM optimization)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "unet": [
+        "8",
+        0
+      ],
+      "clip": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingDiscreteDistilled",
+    "_meta": {
+      "title": "Model + CLIP"
+    }
+  },
+  "11": {
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "model": [
+        "10",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "cfg": 1.0,
+      "steps": 6,
+      "seed": 12345,
+      "frames": 81
+    },
+    "class_type": "WanVideoSampler",
+    "_meta": {
+      "title": "Generate Extension"
+    }
+  },
+  "12": {
+    "inputs": {
+      "video1": [
+        "1",
+        0
+      ],
+      "video2": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "ConcatenateVideos",
+    "_meta": {
+      "title": "Merge Original + Extension"
+    }
+  },
+  "13": {
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "oelala_extended",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Save Extended Video"
+    }
+  }
+}

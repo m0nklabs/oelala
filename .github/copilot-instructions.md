@@ -74,6 +74,21 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Do not create per-project GPU venvs**: Avoid new heavyweight `.venv` folders for GPU stacks inside projects; prefer the canonical venv.
 - **Archiving old venvs**: When deprecating GPU venvs, move them to `/home/flip/venvs/_archive/YYYY-MM-DD/` and replace the original path with a symlink so scripts keep working.
 
+## GPU Configuration & DisTorch2
+
+- **Hardware**: RTX 5060 Ti 16GB (cuda:1) + RTX 3060 12GB (cuda:0) = 28GB total VRAM
+- **DisTorch2 Allocation**: `cuda:0,11gb;cuda:1,15gb;cpu,2gb` (recommended for all video workflows)
+- **Model Inventory**: See `docs/COMFYUI_INVENTORY.md` for complete list of available models and VRAM limits
+- **DisTorch2 Nodes** for multi-GPU video generation:
+  - `UnetLoaderGGUFAdvancedDisTorch2MultiGPU` - GGUF model loading with GPU distribution
+  - `VAELoaderDisTorch2MultiGPU` - VAE loading with GPU distribution
+  - `CLIPLoaderDisTorch2MultiGPU` - T5 text encoder loading with GPU distribution
+- **SageAttention**: Always use `PathchSageAttentionKJ` node to reduce VRAM by 15-20%
+- **VRAM Limits**:
+  - 576×1024 @ 81 frames: ~24GB (GPU-only, safe)
+  - 720×1280 @ 81 frames: ~27GB (CPU offload required)
+  - 720×400 @ 241 frames: ~22GB (GPU-only, 15s video)
+
 ## Ports
 
 - Prefer the server-wide port inventory in `/home/flip/caramba/docs/PORTS.md` to avoid conflicts.
@@ -114,7 +129,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct access to:
 - ComfyUI API at `localhost:8188`
-- Backend API at `localhost:7998`  
+- Backend API at `localhost:7998`
 - GPU (RTX 5060 Ti 16GB + RTX 3060 12GB)
 - All installed models in `/home/flip/oelala/ComfyUI/models/`
 

@@ -846,6 +846,85 @@ class ComfyUIClient:
             logger.error(f"Upload error: {e}")
             return None
 
+    def upload_video(self, video_path: str, subfolder: str = "") -> Optional[str]:
+        """Upload video to ComfyUI input folder.
+
+        ComfyUI's /upload/image endpoint accepts any file type,
+        despite the 'image' field name.
+        """
+        try:
+            path = Path(video_path)
+            if not path.exists():
+                logger.error(f"🎬 Video not found: {video_path}")
+                return None
+
+            # Determine content type based on extension
+            ext = path.suffix.lower()
+            content_types = {
+                ".mp4": "video/mp4",
+                ".webm": "video/webm",
+                ".mov": "video/quicktime",
+                ".avi": "video/x-msvideo",
+                ".mkv": "video/x-matroska",
+                ".gif": "image/gif",
+            }
+            content_type = content_types.get(ext, "application/octet-stream")
+
+            with open(path, "rb") as f:
+                # ComfyUI uses 'image' field name but accepts any file
+                files = {"image": (path.name, f, content_type)}
+                data = {"subfolder": subfolder, "overwrite": "true"}
+                resp = requests.post(
+                    f"{self.base_url}/upload/image", files=files, data=data
+                )
+
+            if resp.status_code == 200:
+                result = resp.json()
+                logger.info(f"🎬 Video uploaded: {result.get('name')}")
+                return result.get("name")
+            else:
+                logger.error(
+                    f"🎬 Video upload failed: {resp.status_code} - {resp.text}"
+                )
+                return None
+        except Exception as e:
+            logger.error(f"🎬 Video upload error: {e}")
+            return None
+
+    def upload_video_from_bytes(
+        self, video_bytes: bytes, filename: str = "input_video.mp4"
+    ) -> Optional[str]:
+        """Upload video from bytes to ComfyUI"""
+        try:
+            # Determine content type based on extension
+            ext = Path(filename).suffix.lower()
+            content_types = {
+                ".mp4": "video/mp4",
+                ".webm": "video/webm",
+                ".mov": "video/quicktime",
+                ".avi": "video/x-msvideo",
+                ".mkv": "video/x-matroska",
+                ".gif": "image/gif",
+            }
+            content_type = content_types.get(ext, "video/mp4")
+
+            files = {"image": (filename, io.BytesIO(video_bytes), content_type)}
+            data = {"subfolder": "", "overwrite": "true"}
+            resp = requests.post(
+                f"{self.base_url}/upload/image", files=files, data=data
+            )
+
+            if resp.status_code == 200:
+                result = resp.json()
+                logger.info(f"🎬 Video uploaded from bytes: {result.get('name')}")
+                return result.get("name")
+            else:
+                logger.error(f"🎬 Video upload failed: {resp.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"🎬 Video upload error: {e}")
+            return None
+
     def get_resolution_dimensions(
         self, resolution: str, aspect_ratio: str
     ) -> Tuple[int, int]:
