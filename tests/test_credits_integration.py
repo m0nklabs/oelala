@@ -36,7 +36,7 @@ class TestCreditIntegration:
     def test_credit_flow_pattern(self):
         """
         Document expected credit flow for generation endpoints:
-        
+
         1. User authentication: user: User = Depends(get_current_user)
         2. Calculate credits: credits_required = calculate_credits(...)
         3. Check balance: await check_credits(user, credits_required)
@@ -58,7 +58,7 @@ class TestCreditIntegration:
     def test_credit_costs_documented(self):
         """
         Document credit costs from credits.py:
-        
+
         Images (cheap):
         - SDXL: 1 credit
         - SDXL HD: 2 credits
@@ -66,7 +66,7 @@ class TestCreditIntegration:
         - Flux HD: 3 credits
         - SD1.5: 1 credit
         - Wan2.2 T2I: 2 credits
-        
+
         Videos (expensive):
         - Wan2.2 I2V Short (3s 720p): 5 credits
         - Wan2.2 I2V Medium (5s 720p): 8 credits
@@ -74,7 +74,7 @@ class TestCreditIntegration:
         - Wan2.2 I2V HD Medium (5s 1080p): 15 credits
         - Wan2.2 T2V Short: 8 credits
         - Wan2.2 T2V Medium: 12 credits
-        
+
         Audio:
         - MMAudio Short (<10s): 3 credits
         - MMAudio Long (10-30s): 5 credits
@@ -84,7 +84,7 @@ class TestCreditIntegration:
         image_costs = {"sdxl": 1, "flux": 2, "sd15": 1}
         video_costs = {"i2v_short": 5, "i2v_medium": 8}
         audio_costs = {"tts": 3, "music": 5}
-        
+
         assert image_costs["sdxl"] == 1
         assert video_costs["i2v_short"] == 5
         assert audio_costs["tts"] == 3
@@ -121,7 +121,7 @@ class TestStripeIntegration:
     def test_webhook_flow_documented(self):
         """
         Document Stripe webhook flow:
-        
+
         1. User clicks purchase in frontend
         2. Frontend calls /api/credits/purchase
         3. Backend creates Stripe Checkout session

@@ -51,17 +51,17 @@ async def generate_endpoint(
         duration_seconds=None,
         steps=30
     )
-    
+
     # ✅ Check user has enough credits (raises 402 if not)
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
-    
+
     # ✅ Execute generation
     result = await generate(...)
-    
+
     # ✅ Deduct credits after success
     await deduct_credits(user, credits_required, job_id, "Generation Type")
-    
+
     # ✅ Return with credits_used field
     return {
         "status": "success",

@@ -2575,7 +2575,9 @@ async def generate_sd15_image(
     width, height = resolutions.get(aspect_ratio, (512, 768))
 
     # Calculate and check credits
-    credits_required = calculate_credits("sd15", width=width, height=height, steps=steps)
+    credits_required = calculate_credits(
+        "sd15", width=width, height=height, steps=steps
+    )
     logger.info(
         f"💰 SD1.5 generation costs {credits_required} credits ({width}x{height}) [user={user.id}]"
     )
@@ -4121,14 +4123,18 @@ async def generate_audio(
     # Calculate and check credits based on mode
     if mode == "tts":
         # TTS is cheaper, just text length matters
-        credits_required = calculate_credits("mmaudio_short", duration_seconds=min(10, duration))
+        credits_required = calculate_credits(
+            "mmaudio_short", duration_seconds=min(10, duration)
+        )
     elif mode == "music":
         credits_required = calculate_credits(
             "mmaudio_long" if duration > 10 else "mmaudio_short",
             duration_seconds=duration,
         )
     elif mode == "sfx":
-        credits_required = calculate_credits("mmaudio_short", duration_seconds=min(10, duration))
+        credits_required = calculate_credits(
+            "mmaudio_short", duration_seconds=min(10, duration)
+        )
     else:
         credits_required = 3  # Default
 
@@ -4256,7 +4262,9 @@ async def generate_audio(
 
             # Deduct credits after successful queue
             await deduct_credits(user, credits_required, prompt_id, "Music Generation")
-            logger.info(f"🎵 Music queued: {prompt_id} (💰 -{credits_required} credits)")
+            logger.info(
+                f"🎵 Music queued: {prompt_id} (💰 -{credits_required} credits)"
+            )
 
             return {
                 "status": "queued",
@@ -5157,10 +5165,10 @@ async def generate_v2v(
 
     # Calculate duration and credits (V2V is expensive - frame by frame processing)
     duration_seconds = max_frames / fps
-    
+
     # V2V multiplier for frame-by-frame processing overhead
     V2V_COST_MULTIPLIER = 1.5
-    
+
     credits_required = calculate_credits(
         "wan22_i2v",  # Similar cost to video generation
         width=512,
@@ -5169,7 +5177,7 @@ async def generate_v2v(
     )
     # V2V is more expensive due to frame processing overhead
     credits_required = int(credits_required * V2V_COST_MULTIPLIER)
-    
+
     logger.info(
         f"💰 V2V generation costs {credits_required} credits ({max_frames} frames, {duration_seconds:.1f}s) [user={user.id}]"
     )
