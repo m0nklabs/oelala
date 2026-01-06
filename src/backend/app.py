@@ -2138,13 +2138,15 @@ async def generate_image_legacy(
     output_filename: str = Form(""),
     job_id: str = Form(None),
     model: str = Form("sdxl"),
+    user: User = Depends(get_current_user),
 ):
     """
     Legacy endpoint - redirects to SDXL via ComfyUI.
     Use /generate-sdxl for direct SDXL generation.
+    Requires authentication and credits.
     """
     logger.info(
-        f"🔄 Legacy generate-image request redirected to SDXL: {prompt[:50]}..."
+        f"🔄 Legacy generate-image request redirected to SDXL: {prompt[:50]}... [user={user.id}]"
     )
 
     # Build response using SDXL workflow
@@ -2169,6 +2171,17 @@ async def generate_image_legacy(
         "9:21": (640, 1536),
     }
     width, height = resolutions.get(aspect_ratio, (1024, 1024))
+    
+    # Calculate and check credits
+    credits_required = calculate_credits(
+        "generate_sdxl",
+        width=width,
+        height=height,
+    )
+    logger.info(f"💰 SDXL generation costs {credits_required} credits ({width}x{height}) [user={user.id}]")
+    await check_credits(user, credits_required)
+    if not job_id:
+        job_id = str(uuid.uuid4())
 
     # Build simple SDXL workflow
     workflow = {
@@ -2216,11 +2229,18 @@ async def generate_image_legacy(
     prompt_id = client.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
+    
+    # Deduct credits immediately after successful queue (async generation)
+    # Credits are deducted on queue, not on completion, to prevent abuse
+    await deduct_credits(user, credits_required, job_id, "SDXL Image")
+    logger.info(f"🎨 SDXL image queued (💰 -{credits_required} credits)")
 
     return {
         "status": "queued",
         "prompt_id": prompt_id,
         "meta": {"prompt": prompt, "width": width, "height": height, "seed": seed},
+        "job_id": job_id,
+        "credits_used": credits_required,
     }
 
 
@@ -2681,10 +2701,12 @@ async def generate_video(
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
+    user: User = Depends(get_current_user),
 ):
     """
     Generate video from uploaded image via ComfyUI.
     This endpoint wraps the ComfyUI Wan2.2 I2V workflow.
+    Requires authentication and credits.
     """
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
@@ -2720,16 +2742,30 @@ async def generate_video(
 
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    
+    # Adjust num_frames to Wan2.2 format (4k+1)
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+    
+    # Calculate duration and credits
+    duration_seconds = num_frames / fps if fps > 0 else 3
+    credits_required = calculate_credits(
+        "wan22_i2v",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 Wan2.2 I2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     # Build I2V workflow
     import random
 
     seed = random.randint(0, 2**32 - 1)
-
-    # Adjust num_frames to Wan2.2 format (4k+1)
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
 
     workflow = comfyui.build_api_workflow(
         image_name=comfyui_image_name,
@@ -2749,11 +2785,15 @@ async def generate_video(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
-    logger.info(f"📋 I2V queued: {prompt_id}")
+    # Deduct credits after successful queue
+    await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
+    logger.info(f"📋 I2V queued: {prompt_id} (💰 -{credits_required} credits)")
 
     return {
         "status": "queued",
         "prompt_id": prompt_id,
+        "job_id": job_id,
+        "credits_used": credits_required,
         "input_image": input_filename,
         "meta": {
             "prompt": prompt,
@@ -3982,9 +4022,11 @@ async def generate_audio(
     duration: int = Form(10),
     speed: float = Form(1.0),
     pitch: float = Form(1.0),
+    user: User = Depends(get_current_user),
 ):
     """
     Generate audio from text (TTS, music, or SFX) via ComfyUI.
+    Requires authentication and credits.
 
     Args:
         text: Input text (speech text or music/sfx prompt)
@@ -3995,7 +4037,21 @@ async def generate_audio(
         speed: TTS speed multiplier (not used with ChatterBox)
         pitch: TTS pitch multiplier (not used with ChatterBox)
     """
-    logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}...")
+    logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}... [user={user.id}]")
+    
+    # Calculate credits based on mode and duration
+    if mode == "tts":
+        # Estimate duration based on text length (roughly 150 words per minute)
+        words = len(text.split())
+        estimated_duration = max(3, words / 2.5)  # ~150 wpm
+        generation_type = "mmaudio_short" if estimated_duration <= 10 else "mmaudio_long"
+    else:
+        generation_type = "mmaudio_short" if duration <= 10 else "mmaudio_long"
+    
+    credits_required = calculate_credits(generation_type, duration_seconds=duration)
+    logger.info(f"💰 Audio generation costs {credits_required} credits (mode={mode}, duration~{duration}s)")
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
 
     import random
 
@@ -4045,10 +4101,16 @@ async def generate_audio(
 
             logger.info(f"🎤 TTS workflow: voice={voice}, text_len={len(text)}")
             prompt_id = client.queue_prompt(workflow)
+            
+            # Deduct credits after successful queue
+            await deduct_credits(user, credits_required, job_id, "TTS Audio")
+            logger.info(f"🎤 TTS audio queued (💰 -{credits_required} credits)")
 
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
+                "job_id": job_id,
+                "credits_used": credits_required,
                 "mode": "tts",
                 "voice": voice,
                 "text_preview": text[:100] + ("..." if len(text) > 100 else ""),
@@ -4106,10 +4168,16 @@ async def generate_audio(
 
             logger.info(f"🎵 Music workflow: style={style}, duration={duration}s")
             prompt_id = client.queue_prompt(workflow)
+            
+            # Deduct credits after successful queue
+            await deduct_credits(user, credits_required, job_id, "Music Generation")
+            logger.info(f"🎵 Music queued (💰 -{credits_required} credits)")
 
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
+                "job_id": job_id,
+                "credits_used": credits_required,
                 "mode": "music",
                 "style": style,
                 "duration": duration,
@@ -4166,10 +4234,16 @@ async def generate_audio(
                 f"🔊 SFX workflow: prompt={text[:50]}, duration={sfx_duration}s"
             )
             prompt_id = client.queue_prompt(workflow)
+            
+            # Deduct credits after successful queue
+            await deduct_credits(user, credits_required, job_id, "SFX Generation")
+            logger.info(f"🔊 SFX queued (💰 -{credits_required} credits)")
 
             return {
                 "status": "queued",
                 "prompt_id": prompt_id,
+                "job_id": job_id,
+                "credits_used": credits_required,
                 "mode": "sfx",
                 "duration": sfx_duration,
                 "prompt": text,
