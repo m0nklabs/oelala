@@ -264,14 +264,8 @@ class TestStripeWebhook:
             "STRIPE_SECRET_KEY": "sk_test_123",
             "STRIPE_WEBHOOK_SECRET": "whsec_123",
         }):
-            # Patch at the module level where it's imported
-            import sys
-            stripe_module = sys.modules.get('stripe')
-            if not stripe_module:
-                import stripe
-                stripe_module = stripe
-            
-            with patch.object(stripe_module.Webhook, 'construct_event', return_value=mock_event):
+            # Patch stripe.Webhook.construct_event directly
+            with patch('stripe.Webhook.construct_event', return_value=mock_event):
                 with patch('credits_api.get_credit_manager', return_value=mock_manager):
                     result = await stripe_webhook(mock_request)
                     

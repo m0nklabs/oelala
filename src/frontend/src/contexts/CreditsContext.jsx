@@ -83,6 +83,9 @@ export function CreditsProvider({ children }) {
     const success = urlParams.get('success')
     const cancelled = urlParams.get('cancelled')
     
+    let successTimeout
+    let cancelTimeout
+    
     if (success === 'true') {
       // Purchase successful - refresh balance
       if (DEBUG) console.log('💰 Purchase successful, refreshing balance...')
@@ -93,7 +96,7 @@ export function CreditsProvider({ children }) {
       window.history.replaceState({}, '', window.location.pathname)
       
       // Auto-hide success message after 5 seconds
-      setTimeout(() => setPurchaseSuccess(false), 5000)
+      successTimeout = setTimeout(() => setPurchaseSuccess(false), 5000)
     } else if (cancelled === 'true') {
       if (DEBUG) console.log('❌ Purchase cancelled')
       setPurchaseCancelled(true)
@@ -102,7 +105,13 @@ export function CreditsProvider({ children }) {
       window.history.replaceState({}, '', window.location.pathname)
       
       // Auto-hide cancelled message after 3 seconds
-      setTimeout(() => setPurchaseCancelled(false), 3000)
+      cancelTimeout = setTimeout(() => setPurchaseCancelled(false), 3000)
+    }
+    
+    // Cleanup timeouts on unmount
+    return () => {
+      if (successTimeout) clearTimeout(successTimeout)
+      if (cancelTimeout) clearTimeout(cancelTimeout)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Run once on mount
