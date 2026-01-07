@@ -1640,9 +1640,13 @@ class ComfyUIClient:
         logger.info(f"📝 Registered job {prompt_id} for user {user_id}")
 
     def get_job_metadata(self, prompt_id: str) -> Optional[Dict[str, Any]]:
-        """Get job metadata for a prompt ID."""
+        """Get job metadata for a prompt ID.
+
+        Returns a shallow copy to prevent external mutation of internal state.
+        """
         with self._metadata_lock:
-            return self.job_metadata.get(prompt_id)
+            metadata = self.job_metadata.get(prompt_id)
+            return metadata.copy() if metadata is not None else None
 
     def clear_job_metadata(self, prompt_id: str):
         """Clear job metadata after completion."""
@@ -2376,13 +2380,16 @@ class ComfyUIClient:
 
         logger.info(f"🖼️ SD1.5 T2I: {prompt[:50]}... ({width}x{height}, {checkpoint})")
 
-        # Register job for auto-upload tracking BEFORE queueing
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue SD1.5 workflow")
+            return None
+
+        # Register job for auto-upload tracking
         if user_id:
-            # Generate a temporary prompt_id for registration
-            # We'll update it with the real one after queueing
-            temp_prompt_id = str(uuid.uuid4())
             self.register_job(
-                prompt_id=temp_prompt_id,
+                prompt_id=prompt_id,
                 user_id=user_id,
                 prompt=prompt,
                 settings={
@@ -2396,22 +2403,6 @@ class ComfyUIClient:
                     "scheduler": scheduler,
                 },
             )
-
-        # Queue and wait for completion
-        prompt_id = self.queue_prompt(workflow)
-        if not prompt_id:
-            logger.error("Failed to queue SD1.5 workflow")
-            # Clean up temp registration
-            if user_id:
-                self.clear_job_metadata(temp_prompt_id)
-            return None
-
-        # Update registration with real prompt_id
-        if user_id:
-            with self._metadata_lock:
-                metadata = self.job_metadata.pop(temp_prompt_id, None)
-                if metadata:
-                    self.job_metadata[prompt_id] = metadata
 
         # Wait for completion with timeout
         output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=180)
@@ -2602,12 +2593,16 @@ class ComfyUIClient:
             f"🎬 Wan2.2 T2I: {prompt[:50]}... ({width}x{height}, {steps} steps)"
         )
 
-        # Register job for auto-upload tracking BEFORE queueing
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue Wan2.2 T2I workflow")
+            return None
+
+        # Register job for auto-upload tracking
         if user_id:
-            # Generate a temporary prompt_id for registration
-            temp_prompt_id = str(uuid.uuid4())
             self.register_job(
-                prompt_id=temp_prompt_id,
+                prompt_id=prompt_id,
                 user_id=user_id,
                 prompt=prompt,
                 settings={
@@ -2617,22 +2612,6 @@ class ComfyUIClient:
                     "seed": seed,
                 },
             )
-
-        # Queue and wait for completion
-        prompt_id = self.queue_prompt(workflow)
-        if not prompt_id:
-            logger.error("Failed to queue Wan2.2 T2I workflow")
-            # Clean up temp registration
-            if user_id:
-                self.clear_job_metadata(temp_prompt_id)
-            return None
-
-        # Update registration with real prompt_id
-        if user_id:
-            with self._metadata_lock:
-                metadata = self.job_metadata.pop(temp_prompt_id, None)
-                if metadata:
-                    self.job_metadata[prompt_id] = metadata
 
         # Wait for completion with timeout (Wan2.2 is slower)
         output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)

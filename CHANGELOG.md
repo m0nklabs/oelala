@@ -1,12 +1,12 @@
 ## [Unreleased]
 
 ### Added
-- **Auto-Upload to User Storage**: Generated content (videos/images) is now automatically uploaded to user's private storage bucket after ComfyUI job completion
-  - Videos saved to `users/{user_id}/videos/{timestamp}_{filename}`
+- **Auto-Upload to User Storage**: Generated content from synchronous endpoints is now automatically uploaded to user's private storage bucket after ComfyUI job completion
   - Images saved to `users/{user_id}/images/{timestamp}_{filename}`
   - Job tracking system with user_id association
-  - Automatic upload after successful generation (with error fallback)
-  - Updated all major generation endpoints: I2V, T2V, SD1.5, Wan2.2 T2I
+  - Automatic upload after successful generation (with error fallback) for synchronous endpoints (SD1.5, Wan2.2 T2I)
+  - Async endpoints (I2V, T2V, sequential) now register jobs for tracking; auto-upload will be added in future update via background tasks
+  - Videos path: `users/{user_id}/videos/{timestamp}_{filename}` (ready for async endpoint support)
 
 ### Documentation
 - **Docs Cleanup**: Consolidated 39 → 28 docs, reduced 9719 → 6412 lines (-34%)
