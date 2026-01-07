@@ -69,13 +69,18 @@ HEAD   /{bucket}/{key}        → Get file metadata
 - Other users only see their user storage
 
 ### Production (Current)
-- ✅ **Auto-upload implemented**: All generated content automatically uploads to user storage
-- Video generation (I2V, T2V, Sequential) → `users/{user_id}/videos/`
-- Image generation (SD1.5, Wan2.2 T2I) → `users/{user_id}/images/`
+- ✅ **Auto-upload implemented**: Generated content automatically uploads to user storage for synchronous endpoints
+- **Synchronous endpoints with auto-upload**:
+  - Image generation (SD1.5, Wan2.2 T2I) → `users/{user_id}/images/`
+  - These endpoints wait for ComfyUI completion before returning
+- **Async endpoints (queued, no auto-upload yet)**:
+  - Video generation (I2V, T2V, Sequential) - queued but return immediately
+  - Auto-upload not implemented for async workflows (files remain in ComfyUI output)
 - ComfyUI output remains as fallback if upload fails
 - Job tracking associates user_id with each generation
 
 ### Future Enhancements
+- **Background auto-upload for async endpoints**: Implement background tasks to upload after async job completion
 - Storage quota tracking and enforcement
 - Automatic cleanup of old ComfyUI output files
 - Retention policies (auto-delete after X days)
@@ -87,16 +92,23 @@ HEAD   /{bucket}/{key}        → Get file metadata
 1. **Job Submission**: When user queues a generation job, backend stores user_id with the job
 2. **Job Completion**: After ComfyUI finishes, the generated file is downloaded
 3. **Auto-Upload**: File is automatically uploaded to user's storage bucket
-   - Videos: `users/{user_id}/videos/{timestamp}_{filename}`
    - Images: `users/{user_id}/images/{timestamp}_{filename}`
+   - Videos: `users/{user_id}/videos/{timestamp}_{filename}` (synchronous endpoints only)
 4. **Metadata Cleanup**: Job tracking data is cleared after successful upload
 
-### Endpoints Updated
-- `/generate-video` - I2V generation
-- `/generate-text-video` - T2V generation
-- `/generate-wan22-comfyui` - Main video generation with LoRAs
+### Endpoints with Auto-Upload
+
+**✅ Synchronous (auto-upload working)**
 - `/generate-sd15` - SD 1.5 image generation
 - `/generate-wan22-t2i` - Wan2.2 text-to-image
+
+**⏳ Async (queued, no auto-upload)**
+- `/generate-video` - I2V generation (returns immediately after queueing)
+- `/generate-text-video` - T2V generation (returns immediately after queueing)
+- `/generate-wan22-comfyui` - Main video generation with LoRAs (returns immediately after queueing)
+
+> **Note**: Async endpoints queue jobs and return immediately. Files remain in ComfyUI output directory. 
+> Background auto-upload for async endpoints will be implemented in a future update.
 
 ### Error Handling
 - Failed uploads are logged but don't block user flow

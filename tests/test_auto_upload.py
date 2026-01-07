@@ -5,7 +5,7 @@ Tests job tracking and upload completion hooks.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from pathlib import Path
 import sys
 
@@ -65,7 +65,7 @@ class TestJobTracking:
 class TestAutoUpload:
     """Test auto-upload on job completion."""
 
-    @patch('comfyui_client.get_client')
+    @patch('storage_client.get_client')
     def test_on_job_complete_video(self, mock_get_storage_client):
         """Test auto-upload of video file."""
         client = ComfyUIClient()
@@ -108,7 +108,7 @@ class TestAutoUpload:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
 
-    @patch('comfyui_client.get_client')
+    @patch('storage_client.get_client')
     def test_on_job_complete_image(self, mock_get_storage_client):
         """Test auto-upload of image file."""
         client = ComfyUIClient()
@@ -143,11 +143,14 @@ class TestAutoUpload:
             # Verify storage path returned
             assert storage_path is not None
             assert storage_path.startswith("images/")
+            
+            # Verify job metadata was cleared
+            assert client.get_job_metadata(prompt_id) is None
         finally:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
 
-    @patch('comfyui_client.get_client')
+    @patch('storage_client.get_client')
     def test_on_job_complete_no_metadata(self, mock_get_storage_client):
         """Test that upload is skipped when no job metadata exists."""
         client = ComfyUIClient()
@@ -162,7 +165,7 @@ class TestAutoUpload:
         assert storage_path is None
         mock_get_storage_client.assert_not_called()
 
-    @patch('comfyui_client.get_client')
+    @patch('storage_client.get_client')
     def test_on_job_complete_upload_failure(self, mock_get_storage_client):
         """Test that failures don't raise exceptions."""
         client = ComfyUIClient()
@@ -189,6 +192,9 @@ class TestAutoUpload:
 
             # Verify it returns None on failure
             assert storage_path is None
+            
+            # Verify job metadata is NOT cleared on failure
+            assert client.get_job_metadata(prompt_id) is not None
         finally:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
