@@ -22,14 +22,14 @@ def test_imports():
     print("🔍 Testing imports...")
 
     try:
-        import credits
+        from credits import CreditManager
         print("  ✅ credits.py imports successfully")
     except ImportError as e:
         print(f"  ❌ Failed to import credits.py: {e}")
         return False
 
     try:
-        import credits_api
+        from credits_api import router
         print("  ✅ credits_api.py imports successfully")
     except ImportError as e:
         print(f"  ❌ Failed to import credits_api.py: {e}")
