@@ -1660,7 +1660,6 @@ class ComfyUIClient:
             Storage path if upload succeeded, None otherwise
         """
         from storage_client import get_client as get_storage_client
-        from datetime import datetime
         
         # Get job metadata
         metadata = self.get_job_metadata(prompt_id)
@@ -1679,7 +1678,7 @@ class ComfyUIClient:
                 file_data = f.read()
             
             # Generate storage filename with timestamp
-            timestamp = int(time.time())
+            timestamp = int(datetime.now().timestamp())
             original_filename = Path(output_path).name
             storage_filename = f"{timestamp}_{original_filename}"
             
