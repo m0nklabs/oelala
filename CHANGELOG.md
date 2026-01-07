@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Added
+- **Auto-Upload to User Storage**: Generated content (videos/images) is now automatically uploaded to user's private storage bucket after ComfyUI job completion
+  - Videos saved to `users/{user_id}/videos/{timestamp}_{filename}`
+  - Images saved to `users/{user_id}/images/{timestamp}_{filename}`
+  - Job tracking system with user_id association
+  - Automatic upload after successful generation (with error fallback)
+  - Updated all major generation endpoints: I2V, T2V, SD1.5, Wan2.2 T2I
+
 ### Documentation
 - **Docs Cleanup**: Consolidated 39 → 28 docs, reduced 9719 → 6412 lines (-34%)
   - Merged: ADVANCED_VIDEO_*.md → ADVANCED_VIDEO.md

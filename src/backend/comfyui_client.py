@@ -2255,6 +2255,7 @@ class ComfyUIClient:
         sampler_name: str = "dpmpp_sde",
         scheduler: str = "karras",
         lora_configs: Optional[List[Dict[str, Any]]] = None,
+        user_id: Optional[str] = None,
     ) -> Optional[str]:
         """
         Generate image using SD 1.5 checkpoint via ComfyUI.
@@ -2366,6 +2367,24 @@ class ComfyUIClient:
             logger.error("Failed to queue SD1.5 workflow")
             return None
 
+        # Register job for auto-upload tracking
+        if user_id:
+            self.register_job(
+                prompt_id=prompt_id,
+                user_id=user_id,
+                prompt=prompt,
+                settings={
+                    "checkpoint": checkpoint,
+                    "width": width,
+                    "height": height,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "seed": seed,
+                    "sampler": sampler_name,
+                    "scheduler": scheduler,
+                }
+            )
+
         # Wait for completion with timeout
         output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=180)
 
@@ -2388,6 +2407,7 @@ class ComfyUIClient:
         height: int = 512,
         steps: int = 8,
         seed: int = -1,
+        user_id: Optional[str] = None,
     ) -> Optional[str]:
         """
         Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
@@ -2559,6 +2579,20 @@ class ComfyUIClient:
         if not prompt_id:
             logger.error("Failed to queue Wan2.2 T2I workflow")
             return None
+
+        # Register job for auto-upload tracking
+        if user_id:
+            self.register_job(
+                prompt_id=prompt_id,
+                user_id=user_id,
+                prompt=prompt,
+                settings={
+                    "width": width,
+                    "height": height,
+                    "steps": steps,
+                    "seed": seed,
+                }
+            )
 
         # Wait for completion with timeout (Wan2.2 is slower)
         output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)

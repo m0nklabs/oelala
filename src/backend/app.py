@@ -2599,6 +2599,7 @@ async def generate_sd15_image(
             sampler_name=sampler_name,
             scheduler=scheduler,
             lora_configs=loras,
+            user_id=user.id,
         )
 
         if not output_path:
@@ -2689,6 +2690,7 @@ async def generate_wan22_t2i(
             height=height,
             steps=steps,
             seed=seed,
+            user_id=user.id,
         )
 
         if not output_path:
