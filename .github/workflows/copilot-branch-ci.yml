@@ -54,7 +54,7 @@ jobs:
       - name: Run tests
         id: tests
         run: |
-          pytest tests/ -v --tb=short || true
+          pytest tests/ -v --tb=short -m "not gpu" || true
         continue-on-error: true
 
       - name: Determine result
