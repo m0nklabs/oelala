@@ -68,16 +68,46 @@ HEAD   /{bucket}/{key}        → Get file metadata
 - Admin can view ComfyUI output in MyMedia
 - Other users only see their user storage
 
-### Production (Planned)
-- All generated content auto-uploads to user storage
-- ComfyUI output is temporary only
-- Content is cleaned up after upload
+### Production (Current)
+- ✅ **Auto-upload implemented**: All generated content automatically uploads to user storage
+- Video generation (I2V, T2V, Sequential) → `users/{user_id}/videos/`
+- Image generation (SD1.5, Wan2.2 T2I) → `users/{user_id}/images/`
+- ComfyUI output remains as fallback if upload fails
+- Job tracking associates user_id with each generation
+
+### Future Enhancements
+- Storage quota tracking and enforcement
+- Automatic cleanup of old ComfyUI output files
+- Retention policies (auto-delete after X days)
+
+## Auto-Upload Feature
+
+### How It Works
+
+1. **Job Submission**: When user queues a generation job, backend stores user_id with the job
+2. **Job Completion**: After ComfyUI finishes, the generated file is downloaded
+3. **Auto-Upload**: File is automatically uploaded to user's storage bucket
+   - Videos: `users/{user_id}/videos/{timestamp}_{filename}`
+   - Images: `users/{user_id}/images/{timestamp}_{filename}`
+4. **Metadata Cleanup**: Job tracking data is cleared after successful upload
+
+### Endpoints Updated
+- `/generate-video` - I2V generation
+- `/generate-text-video` - T2V generation  
+- `/generate-wan22-comfyui` - Main video generation with LoRAs
+- `/generate-sd15` - SD 1.5 image generation
+- `/generate-wan22-t2i` - Wan2.2 text-to-image
+
+### Error Handling
+- Failed uploads are logged but don't block user flow
+- Original file remains in ComfyUI output as fallback
+- Users can still access content via `/files/{filename}` endpoint
 
 ## Known Issues / TODO
 
 | Issue | Status | Priority |
 |-------|--------|----------|
-| Auto-upload after generation | ⏳ Todo | Critical (#7, #15) |
+| Auto-upload after generation | ✅ Complete | ~~Critical~~ |
 | Storage quota tracking | ⏳ Todo | High (#33) |
 | Retention policies | ⏳ Todo | Medium (#71) |
 | Signed URL generation | ⏳ Todo | Low |
