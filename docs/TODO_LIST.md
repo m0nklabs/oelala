@@ -1,10 +1,27 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-01-06
+> Active development tasks. Updated: 2026-01-07
 
 ---
 
 ## ✅ Recently Completed
+
+### CHANGELOG Enforcement & SFW Content (2026-01-07)
+- [x] GitHub Action for CHANGELOG enforcement on PRs
+- [x] MEGA issue template with P0/P1/P2 requirements
+- [x] PR template updated with CHANGELOG section
+- [x] copilot-instructions.md CHANGELOG requirement
+- [x] Vite 7.3.0 upgrade (Dependabot #14 security fix)
+- [x] SFW content generation plan documented
+- [x] SFW batch generator script (100 videos)
+- [x] Rick & Morty agents for Copilot
+
+### Credit System Docs (2026-01-07) - PR #79 Merged
+- [x] Verification script (9 automated checks)
+- [x] Deployment checklist document
+- [x] Final summary document
+- [x] pytest.ini configuration
+- [x] GPU test markers for CI
 
 ### Guest Access & NSFW Protection (2026-01-06)
 - [x] Dashboard accessible without login (view-only)
@@ -42,15 +59,29 @@
 
 | Task | Status | Priority | Issue |
 |------|--------|----------|-------|
-| Hook into ComfyUI job completion | ⏳ Todo | Critical | #15 |
-| Upload to user storage bucket | ⏳ Todo | Critical | #7 |
-| Store metadata (prompt, settings) | ⏳ Todo | High | #7 |
+| Hook into ComfyUI job completion | 🚧 In PR #81 | Critical | #7 |
+| Upload to user storage bucket | 🚧 In PR #81 | Critical | #7 |
+| Store metadata (prompt, settings) | 🚧 In PR #81 | High | #7 |
 | Frontend refresh after upload | ⏳ Todo | High | #14 |
 | Retry logic for failed uploads | ⏳ Todo | Medium | #15 |
 
 ---
 
-## 🔄 In Progress: Storage Quota
+## 🎬 In Progress: SFW Content Generation
+
+**Goal**: 100 diverse SFW videos for frontpage gallery
+
+| Task | Status | Notes |
+|------|--------|-------|
+| T2I + I2V workflow | ✅ Done | DisTorch2 multi-GPU |
+| Batch script | ✅ Done | 100 prompts, 10 categories |
+| Video generation | 🔄 Running | ~6 videos done, ~8 min each |
+
+**Categories**: nature, animals, urban, abstract, space, weather, water, fire/light, plants, technology
+
+---
+
+## 🔄 Backlog: Storage Quota
 
 | Task | Status | Priority | Issue |
 |------|--------|----------|-------|
