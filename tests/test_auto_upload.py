@@ -143,7 +143,7 @@ class TestAutoUpload:
             # Verify storage path returned
             assert storage_path is not None
             assert storage_path.startswith("images/")
-            
+
             # Verify job metadata was cleared
             assert client.get_job_metadata(prompt_id) is None
         finally:
@@ -192,7 +192,7 @@ class TestAutoUpload:
 
             # Verify it returns None on failure
             assert storage_path is None
-            
+
             # Verify job metadata is NOT cleared on failure
             assert client.get_job_metadata(prompt_id) is not None
         finally:

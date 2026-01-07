@@ -107,7 +107,7 @@ HEAD   /{bucket}/{key}        → Get file metadata
 - `/generate-text-video` - T2V generation (returns immediately after queueing)
 - `/generate-wan22-comfyui` - Main video generation with LoRAs (returns immediately after queueing)
 
-> **Note**: Async endpoints queue jobs and return immediately. Files remain in ComfyUI output directory. 
+> **Note**: Async endpoints queue jobs and return immediately. Files remain in ComfyUI output directory.
 > Background auto-upload for async endpoints will be implemented in a future update.
 
 ### Error Handling
