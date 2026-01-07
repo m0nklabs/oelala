@@ -2820,6 +2820,22 @@ async def generate_video(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
+    # Register job for auto-upload tracking
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt or "smooth motion, cinematic",
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "seed": seed,
+        }
+    )
+
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V")
     logger.info(f"📋 I2V queued: {prompt_id} (💰 -{credits_required} credits)")
@@ -3287,8 +3303,27 @@ async def generate_wan22_async(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
         )
 
-    # Store job info for tracking
+    # Register job for auto-upload tracking
     total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": total_frames,
+            "frames_per_clip": num_frames,
+            "clip_count": actual_clip_count,
+            "extend_mode": is_extend_mode,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "lora_count": len(parsed_lora_configs),
+        }
+    )
+
+    # Store job info for tracking
     job_info = {
         "prompt": prompt[:100],
         "resolution": resolution,
@@ -3447,6 +3482,23 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
+
+    # Register job for auto-upload tracking
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "seed": seed,
+            "type": "text-to-video",
+        }
+    )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
