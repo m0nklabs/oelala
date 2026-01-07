@@ -45,8 +45,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Focus**: Keep changes focused; do not reformat unrelated files.
 - **Documentation**: Don’t delete or prune documentation files/directories unless the user explicitly requests it.
 - **Scratchpad**: Treat directories like `research/` or `scratch/` as local-only scratch space and keep them out of git via `.gitignore`.
-- **Canonical Requirements**: Canonical requirements must be written into `docs/*`.
-
+- **Canonical Requirements**: Canonical requirements must be written into `docs/*`.- **CHANGELOG Required**: Every PR MUST update `CHANGELOG.md` under the `[Unreleased]` section. PRs without CHANGELOG updates will be blocked by CI.
 ## Project Directory Boundaries & Structure
 
 - **External Projects**: Never commit or push inside external projects (e.g. submodules, cloned dependencies); only within first-party projects.
