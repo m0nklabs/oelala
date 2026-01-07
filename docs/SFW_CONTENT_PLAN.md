@@ -63,7 +63,7 @@ Use categories to ensure variety:
 
 ### SFW Prompt Template
 ```
-[subject] in [setting], [lighting], [style], 
+[subject] in [setting], [lighting], [style],
 cinematic quality, detailed, vibrant colors,
 professional photography, safe for work
 ```

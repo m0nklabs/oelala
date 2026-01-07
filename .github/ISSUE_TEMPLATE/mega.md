@@ -15,15 +15,15 @@ assignees: ''
 <!-- REQUIRED: List ALL functional requirements. Be specific! -->
 
 ### Must Have (P0)
-- [ ] 
-- [ ] 
+- [ ]
+- [ ]
 
 ### Should Have (P1)
-- [ ] 
-- [ ] 
+- [ ]
+- [ ]
 
 ### Nice to Have (P2)
-- [ ] 
+- [ ]
 
 ## 🏗️ Technical Requirements
 
@@ -37,12 +37,12 @@ assignees: ''
 ## 📐 Scope
 
 ### In Scope
-- 
-- 
+-
+-
 
 ### Out of Scope
-- 
-- 
+-
+-
 
 ## 📊 Sub-Issues
 
