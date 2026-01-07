@@ -266,10 +266,9 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
         }
       } else {
-        // Not logged in: show ComfyUI shared output (legacy/demo mode)
-        comfyRes = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
-          .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
-          .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
+        // Not logged in: show nothing (users must log in to see their media)
+        // Dev/NSFW content is never shown to guests
+        comfyRes = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
       }
 
       // Mark user storage items with source flag

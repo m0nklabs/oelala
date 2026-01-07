@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import { Upload, Video, Loader2, Settings, ChevronDown, Wand2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 // Style presets for V2V
 const STYLE_PRESETS = [
@@ -28,6 +29,8 @@ const STYLE_PROMPTS = {
 }
 
 export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
@@ -98,6 +101,12 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
   }, [])
 
   const handleTransform = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!file) return
 
     // Determine final prompt

@@ -3,8 +3,10 @@ import { Upload, Layers, Settings, Zap, X } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function LoRATrainingTool({ onOutput }) {
+  const { user, requestLogin } = useAuth()
   const fileInputRef = useRef(null)
 
   const [files, setFiles] = useState([])
@@ -29,6 +31,12 @@ export default function LoRATrainingTool({ onOutput }) {
   }
 
   const handleSubmit = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (files.length === 0) {
       setError('At least one image is required')
       return

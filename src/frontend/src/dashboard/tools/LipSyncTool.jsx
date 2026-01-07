@@ -5,11 +5,14 @@ import {
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const SUPPORTED_VIDEO_FORMATS = ['video/mp4', 'video/webm', 'video/quicktime']
 const SUPPORTED_AUDIO_FORMATS = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/flac', 'audio/ogg', 'audio/webm']
 
 export default function LipSyncTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   // Video state
   const [videoFile, setVideoFile] = useState(null)
   const [videoUrl, setVideoUrl] = useState(null)
@@ -85,6 +88,12 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
 
   // Generate lip synced video
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!videoFile || !audioFile) {
       setError('Please provide both a video and audio file')
       return

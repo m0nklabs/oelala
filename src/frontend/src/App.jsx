@@ -1,28 +1,15 @@
 import React from 'react'
 import Dashboard from './dashboard/Dashboard'
-import LoginPage from './pages/LoginPage'
 import { NSFWProvider } from './contexts/NSFWContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CreditsProvider } from './contexts/CreditsContext'
-import { isAuthEnabled } from './lib/supabase'
 import './App.css'
 import './components/ProgressBar.css'
 
 function AppContent() {
-  const { user, loading } = useAuth()
+  const { loading } = useAuth()
 
-  // If auth is not configured, show dashboard directly (dev mode)
-  if (!isAuthEnabled()) {
-    return (
-      <CreditsProvider>
-        <NSFWProvider>
-          <Dashboard />
-        </NSFWProvider>
-      </CreditsProvider>
-    )
-  }
-
-  // Loading state
+  // Loading state (only while checking auth)
   if (loading) {
     return (
       <div className="app-loading">
@@ -31,12 +18,9 @@ function AppContent() {
     )
   }
 
-  // Not logged in - show login page
-  if (!user) {
-    return <LoginPage />
-  }
-
-  // Logged in - show dashboard with credits
+  // Show dashboard for everyone (logged in or not)
+  // Login is optional and can be done via UserMenu
+  // Credits are only available for logged-in users
   return (
     <CreditsProvider>
       <NSFWProvider>

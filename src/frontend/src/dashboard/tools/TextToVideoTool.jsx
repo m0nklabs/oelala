@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 import { sendClientLog } from '../../logging'
 import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock } from 'lucide-react'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
@@ -17,6 +18,8 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [prompt, setPrompt] = useState(() => {
     const saved = localStorage.getItem('t2v_prompt')
     return saved && saved.trim() ? saved : getDefaultPrompt(false)
@@ -54,6 +57,12 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   }, [resolution, numFrames, steps, t2iSteps])
 
   const handleSubmit = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!prompt.trim()) {
       setError('Prompt is required')
       return

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import { Frame, Upload, Loader2, Download, Copy, Move, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, getJson } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ASPECT_RATIOS = [
   { id: '1:1', label: '1:1 (Square)', width: 1024, height: 1024 },
@@ -32,6 +33,8 @@ const MODELS = [
 ]
 
 export default function ReframeTool({ onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
@@ -73,6 +76,12 @@ export default function ReframeTool({ onJobSubmitted }) {
   const handleDragOver = (e) => e.preventDefault()
 
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!file) {
       setError('Please upload an image first')
       return

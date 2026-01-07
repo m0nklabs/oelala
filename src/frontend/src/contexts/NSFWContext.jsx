@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import { useAuth } from './AuthContext'
 
 const NSFWContext = createContext({
   nsfwEnabled: false,
@@ -8,8 +9,10 @@ const NSFWContext = createContext({
 const STORAGE_KEY = 'oelala_nsfw_enabled'
 
 export function NSFWProvider({ children }) {
+  const { user } = useAuth()
+
   // Initialize from localStorage, default to false (SFW mode)
-  const [nsfwEnabled, setNsfwEnabled] = useState(() => {
+  const [nsfwEnabled, setNsfwEnabledInternal] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       return stored === 'true'
@@ -18,17 +21,39 @@ export function NSFWProvider({ children }) {
     }
   })
 
-  // Persist to localStorage on change
+  // NSFW can only be enabled if user is logged in
+  // Force disable when user logs out
+  useEffect(() => {
+    if (!user && nsfwEnabled) {
+      setNsfwEnabledInternal(false)
+    }
+  }, [user, nsfwEnabled])
+
+  // Wrapper that prevents enabling NSFW for guests
+  const setNsfwEnabled = (value) => {
+    if (value && !user) {
+      // Can't enable NSFW without being logged in
+      return
+    }
+    setNsfwEnabledInternal(value)
+  }
+
+  // Persist to localStorage on change (only if logged in)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, nsfwEnabled.toString())
+      if (user) {
+        localStorage.setItem(STORAGE_KEY, nsfwEnabled.toString())
+      }
     } catch {
       // localStorage not available
     }
-  }, [nsfwEnabled])
+  }, [nsfwEnabled, user])
+
+  // Effective NSFW state: always false for guests
+  const effectiveNsfwEnabled = user ? nsfwEnabled : false
 
   return (
-    <NSFWContext.Provider value={{ nsfwEnabled, setNsfwEnabled }}>
+    <NSFWContext.Provider value={{ nsfwEnabled: effectiveNsfwEnabled, setNsfwEnabled }}>
       {children}
     </NSFWContext.Provider>
   )

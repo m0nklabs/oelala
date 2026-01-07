@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Upload, Zap, Loader2, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 // Frame interpolation models
 const INTERPOLATION_MODELS = [
@@ -26,6 +27,8 @@ const SLOW_MOTION_PRESETS = [
 ]
 
 export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
@@ -89,6 +92,12 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
   }, [])
 
   const handleInterpolate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!file) return
 
     setSubmitting(true)

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Upload, ZoomIn, Loader2, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 // Video upscaling models
 const UPSCALE_MODELS = [
@@ -10,6 +11,8 @@ const UPSCALE_MODELS = [
 ]
 
 export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
@@ -66,6 +69,12 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   }, [])
 
   const handleUpscale = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!file) return
 
     setSubmitting(true)

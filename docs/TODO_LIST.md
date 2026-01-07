@@ -1,86 +1,64 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-01-04
+> Active development tasks. Updated: 2026-01-06
 
 ---
 
-## 🔥 Priority: New User Experience (NUX)
+## ✅ Recently Completed
 
-**Goal**: First-time visitor clicks one button and sees AI magic within 60 seconds
+### Guest Access & NSFW Protection (2026-01-06)
+- [x] Dashboard accessible without login (view-only)
+- [x] LoginModal component for on-demand auth
+- [x] All generation tools require login
+- [x] NSFW forced off for guests (context-level)
+- [x] MyMediaTool hidden from guests
+- [x] Gallery filters NSFW for non-authenticated
+- [x] LogViewer admin-only (mark.op.mobiel@gmail.com)
+- [x] Duplicate requirements.txt removed
 
-### Authentication & Content Control
-| Task | Status | Priority | Notes |
-|------|--------|----------|-------|
-| Google OAuth login | ✅ Done | Critical | Supabase integration |
-| User-scoped storage | ✅ Done | Critical | `/users/{user_id}/media/` |
-| Logout dropdown menu | ✅ Done | High | Click avatar → dropdown |
-| NSFW toggle requires login | ✅ Done | High | `isAdult` check in AuthContext |
-| Age verification on first NSFW | ⏳ Todo | Medium | "I am 18+" checkbox modal |
+### Credit System (2026-01-05) - PR #77 Merged
+- [x] Supabase credit tables and RLS policies
+- [x] Stripe checkout integration
+- [x] Credit packages (€5-€500)
+- [x] Welcome bonus (100 credits)
+- [x] Credit costs per generation type
+- [x] CreditsContext in frontend
+- [x] Purchase success/cancel handling
 
-### Default Settings & Auto-Prompt
-| Task | Status | Priority | Notes |
-|------|--------|----------|-------|
-| AI-generated default prompt | ✅ Done | Critical | Random creative prompt on load |
-| SFW default prompt pool | ✅ Done | Critical | 25+ safe, interesting prompts |
-| NSFW default prompt pool | ⏳ Todo | High | Only shown when logged in + toggle |
-| Optimal default parameters | ✅ Done | High | 480p, 6s, 16fps, 6 steps |
-| One-click "Create" experience | ✅ Done | Critical | Prompt pre-filled, just upload image |
-| ✨ Random prompt button | ✅ Done | Medium | Sparkles icon in prompt header |
-
-### Queue & Wait Time UX
-| Task | Status | Priority | Notes |
-|------|--------|----------|-------|
-| Estimated wait time display | ✅ Done | High | "~1m 30s" shown before Create |
-| Queue position indicator | ⏳ Todo | Medium | "You're #3 in queue" |
-| Progress bar with ETA | ⏳ Todo | Medium | Real-time during generation |
-| Email notification on complete | ⏳ Todo | Low | Optional for long jobs |
-
----
-
-## 🔄 In Progress: Storage Integration
-
-| Task | Status | Priority | Notes |
-|------|--------|----------|-------|
-| oelala-storage running | ✅ Done | Critical | Port 7990 |
-| Backend auth (JWT) | ✅ Done | Critical | Supabase tokens |
-| User storage endpoints | ✅ Done | High | `/user/media` CRUD |
-| Admin sees ComfyUI output | ✅ Done | Medium | Whitelist by email |
-| Handle empty bucket (404) | ✅ Done | High | Return empty list |
-| Upload generated content | ⏳ Todo | Critical | Auto-save to user storage |
-| Storage quota tracking | ⏳ Todo | High | Free tier limits |
+### Gallery System (2026-01-05) - PR #78 Merged
+- [x] Publish to Gallery from MyMedia
+- [x] PublishModal with title/description/tags
+- [x] SFW/NSFW tagging
+- [x] Public gallery page
+- [x] Like system
+- [x] View count tracking
+- [x] MediaDetailModal
 
 ---
 
-## 🌟 Publish System (Community Gallery)
+## 🔥 Priority: Auto-Upload to User Storage
 
-**Goal**: Users publish their best work → SFW content feeds the frontpage
+**Goal**: Generated content automatically saves to user's storage bucket
 
-### Core Publish Flow
-| Task | Status | Priority | Notes |
+| Task | Status | Priority | Issue |
 |------|--------|----------|-------|
-| "Publish" button on media items | ⏳ Todo | High | Like favorites, but public |
-| Publish modal with details | ⏳ Todo | High | Title, description, tags |
-| SFW/NSFW flag on publish | ⏳ Todo | Critical | Auto-detect + manual override |
-| Published media metadata | ⏳ Todo | High | Store in DB with user_id |
-| Unpublish option | ⏳ Todo | Medium | Remove from gallery |
+| Hook into ComfyUI job completion | ⏳ Todo | Critical | #15 |
+| Upload to user storage bucket | ⏳ Todo | Critical | #7 |
+| Store metadata (prompt, settings) | ⏳ Todo | High | #7 |
+| Frontend refresh after upload | ⏳ Todo | High | #14 |
+| Retry logic for failed uploads | ⏳ Todo | Medium | #15 |
 
-### Frontpage Gallery
-| Task | Status | Priority | Notes |
-|------|--------|----------|-------|
-| Public gallery page | ⏳ Todo | Critical | `/gallery` or frontpage |
-| SFW-only for anonymous | ⏳ Todo | Critical | Filter NSFW unless logged in |
-| Reuse MyMedia gallery component | ⏳ Todo | High | Same grid, different source |
-| Pagination/infinite scroll | ⏳ Todo | Medium | Performance |
-| Sort by: newest, popular, random | ⏳ Todo | Medium | Discovery |
+---
 
-### Media Details Page
-| Task | Status | Priority | Notes |
+## 🔄 In Progress: Storage Quota
+
+| Task | Status | Priority | Issue |
 |------|--------|----------|-------|
-| `/media/{id}` detail page | ⏳ Todo | High | Full-size view |
-| Show prompt/settings used | ⏳ Todo | Medium | Educational for users |
-| Creator attribution | ⏳ Todo | Medium | Username/avatar |
-| Like/reaction system | ⏳ Todo | Low | Social engagement |
-| "Remix" button | ⏳ Todo | Low | Copy settings to generator |
+| Calculate storage used per user | ⏳ Todo | High | #33 |
+| API endpoint for quota info | ⏳ Todo | High | #33 |
+| Storage usage bar in user menu | ⏳ Todo | Medium | #33 |
+| Warning when approaching limit | ⏳ Todo | Medium | #33 |
+| Tier-based limits (free: 1GB) | ⏳ Todo | Medium | #71 |
 
 ---
 
@@ -91,13 +69,16 @@
 - [ ] Share link generation
 - [ ] Favorites sync to storage
 
-### Generation
-- [ ] LoRA browser with thumbnails
+### Generation Improvements
 - [ ] ControlNet integration
 - [ ] Inpainting tools
+- [ ] Queue position indicator
+- [ ] Email notification on complete
 
-### Advanced Video Workflows
-- [x] **Video Upscaling** (2026-01-05)
+### UX Polish
+- [ ] Age verification modal on first NSFW
+- [ ] NSFW prompt pool (logged in only)
+- [ ] "Remix" button on gallery items
   - VideoUpscalerTool.jsx component
   - `/upscale-video` backend endpoint
   - Resolution presets: 480p → 720p → 1080p → 4K

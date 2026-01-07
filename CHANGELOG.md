@@ -1,4 +1,11 @@
-2026-01-07
+## [Unreleased]
+
+### Security
+- Upgraded vite 5.4.21 → 7.3.0 (fixes esbuild CORS vulnerability - Dependabot #14)
+
+---
+
+## 2026-01-07
 Agent: Claude Opus 4.5
 AgentTag: CLAU
 ModelTag: CREDITS-DOCS
@@ -31,12 +38,11 @@ FollowUp:
 - Ready for deployment after environment configuration (see CREDITS_DEPLOYMENT_CHECKLIST.md)
 - Verification script available: python tests/verify_credits_implementation.py
 
-2026-01-04
+## 2026-01-06
 Agent: Claude Opus 4.5
 AgentTag: CLAU
-ModelTag: NSFW-TOGGLE
+ModelTag: GUEST-ACCESS
 Details:
-- **Global NSFW Toggle**: Header switch to show/hide NSFW content
   - Toggle button in top-bar (🛡️ SFW / 🔞 NSFW)
   - NSFWContext.jsx - React context for global state
   - localStorage persistence (oelala_nsfw_enabled)

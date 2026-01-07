@@ -1,6 +1,6 @@
 # Media Storage Architecture
 
-> **Last Updated**: 2026-01-03
+> **Last Updated**: 2026-01-06
 > **Related Project**: [oelala-storage](https://github.com/m0nklabs/oelala-storage) (separate repo)
 
 ## Overview
@@ -9,95 +9,78 @@ Storage is split into two components:
 1. **oelala** - Main application (this repo) - handles generation, UI, business logic
 2. **oelala-storage** - Standalone storage service (separate repo) - handles files, sync, caching
 
-## Current Storage Locations (Development)
+## Current Status ✅
 
-| Directory | Purpose | Served Via | Persistence |
-|-----------|---------|------------|-------------|
-| `/home/flip/oelala/uploads/` | User uploads (images, videos, audio) | `/uploads/` endpoint | Session-based |
-| `/home/flip/oelala/generated/` | Oelala backend generated files | `/files/` endpoint | Persistent |
-| `/home/flip/oelala/ComfyUI/output/` | ComfyUI workflow outputs | `/comfyui/output/` endpoint | Persistent |
-| `/home/flip/oelala/ComfyUI/input/` | ComfyUI workflow inputs | Internal use | Temporary |
+### oelala-storage Service
+- **Port**: 7990 (HTTP), 7991 (gRPC), 7992 (Metrics)
+- **Status**: Running as systemd service
+- **Storage Path**: `/home/flip/oelala/media/`
 
-### File Flow Diagram
-
+### User-Scoped Storage
+Each user gets their own bucket (directory) based on Supabase user ID:
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  User Upload    │────▶│  /uploads/       │────▶│  ComfyUI/input/ │
-│  (Frontend)     │     │  (Oelala)        │     │  (Processing)   │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                                                          │
-                                                          ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  My Media       │◀────│  /generated/     │◀────│  ComfyUI/output │
-│  (Frontend)     │     │  (Oelala)        │     │  (Results)      │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
+/home/flip/oelala/media/
+├── {user-uuid-1}/           ← User 1's bucket
+│   ├── videos/
+│   ├── images/
+│   └── audio/
+├── {user-uuid-2}/           ← User 2's bucket
+│   ├── videos/
+│   └── images/
+└── ...
 ```
 
-## Known Issues
+Buckets are automatically created on first upload.
 
-### Inconsistency Problem (Current State)
+## API Endpoints
 
-1. **Dual Output Locations**: Generated files end up in either:
-   - `generated/` - When Oelala backend processes directly
-   - `ComfyUI/output/` - When ComfyUI workflows generate output
-
-2. **Developer Experience**: Testing in ComfyUI doesn't automatically show in Oelala "My Media"
-
-3. **File Discovery**: Frontend needs to check multiple locations
-
-### Temporary Solution (Development)
-
-The backend currently serves both directories:
-- `/files/{filename}` → `generated/`
-- `/comfyui/output/{filename}` → `ComfyUI/output/`
-
-## Proposed Architecture
-
-### Phase 1: Unified Media Layer (Near-term)
-
-```python
-# Unified media directories
-MEDIA_ROOT = Path("/home/flip/oelala/media")
-MEDIA_UPLOADS = MEDIA_ROOT / "uploads"      # User uploads
-MEDIA_GENERATED = MEDIA_ROOT / "generated"  # All generated content
-MEDIA_TEMP = MEDIA_ROOT / "temp"            # Processing intermediates
-
-# ComfyUI symlink integration
-# ComfyUI/output -> ../media/generated (symlink)
-# ComfyUI/input -> ../media/uploads (symlink)
+### Backend (FastAPI) - User Media
+```
+GET  /user/media              → List user's media files
+GET  /user/media/{type}/{file} → Get specific file
+POST /user/media/upload       → Upload file to user storage
+DELETE /user/media/{type}/{file} → Delete file
 ```
 
-**Benefits**:
-- Single source of truth for all media
-- ComfyUI and Oelala share the same directories
-- Simplified file discovery in frontend
+All endpoints require JWT authentication (`Authorization: Bearer <token>`).
 
-### Phase 2: User-Scoped Storage (Future)
-
+### oelala-storage (Go) - S3-compatible
 ```
-/media/
-├── public/                    # Shared/example content
-├── users/
-│   ├── {user_id}/
-│   │   ├── uploads/           # User's uploaded files
-│   │   ├── generated/         # User's generated content
-│   │   ├── projects/          # Organized by project
-│   │   └── metadata.json      # Usage stats, quotas
-│   └── ...
-└── temp/                      # Processing workspace
+PUT    /{bucket}/{key}        → Upload file
+GET    /{bucket}/{key}        → Download file
+DELETE /{bucket}/{key}        → Delete file
+GET    /{bucket}              → List bucket contents
+HEAD   /{bucket}/{key}        → Get file metadata
 ```
 
-### Phase 3: oelala-storage (Separate Repository)
+## Access Control
 
-> **Repository**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)
-> **Language**: Go
-> **Platforms**: Windows, Linux (no macOS support planned)
+| User Type | Can See | Notes |
+|-----------|---------|-------|
+| Guest | Nothing | Empty media list |
+| Logged In | Own media only | User-scoped bucket |
+| Admin | Own + ComfyUI output | Whitelist: `mark.op.mobiel@gmail.com` |
 
-**Why Go?**
-- Single binary (~10-15MB), no runtime dependencies
-- Excellent I/O performance and concurrency (goroutines)
-- Native cross-compilation for Windows/Linux
-- Battle-tested for storage systems (MinIO, rclone, Syncthing)
+## Development vs Production
+
+### Development (Current)
+- ComfyUI outputs to `/home/flip/oelala/ComfyUI/output/`
+- Admin can view ComfyUI output in MyMedia
+- Other users only see their user storage
+
+### Production (Planned)
+- All generated content auto-uploads to user storage
+- ComfyUI output is temporary only
+- Content is cleaned up after upload
+
+## Known Issues / TODO
+
+| Issue | Status | Priority |
+|-------|--------|----------|
+| Auto-upload after generation | ⏳ Todo | Critical (#7, #15) |
+| Storage quota tracking | ⏳ Todo | High (#33) |
+| Retention policies | ⏳ Todo | Medium (#71) |
+| Signed URL generation | ⏳ Todo | Low |
 - Long-term maintainability for one-man team
 
 **Philosophy**: Local-first, self-hosted nodes that sync P2P.

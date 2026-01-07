@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import { User, Upload, Loader2, Download, AlertCircle, ChevronDown, Smile, RefreshCw } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, getJson } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const FACE_MODELS = [
   { id: 'inswapper', label: 'InSwapper (Best Quality)', description: 'High quality, slower' },
@@ -16,6 +17,8 @@ const ENHANCE_OPTIONS = [
 ]
 
 export default function FaceSwapTool({ onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [targetFile, setTargetFile] = useState(null)
   const [targetPreview, setTargetPreview] = useState(null)
   const [sourceFile, setSourceFile] = useState(null)
@@ -92,6 +95,12 @@ export default function FaceSwapTool({ onJobSubmitted }) {
   }
 
   const handleGenerate = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!targetFile || !sourceFile) {
       setError('Please upload both target and source face images')
       return

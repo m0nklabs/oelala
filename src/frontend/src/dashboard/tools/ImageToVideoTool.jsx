@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateI2VTime } from '../../utils/timeEstimates'
 import PresetSelector from '../../components/PresetSelector'
@@ -56,6 +57,7 @@ const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted }) {
   const { nsfwEnabled } = useNSFW()
+  const { user, requestLogin } = useAuth()
   const fileInputRef = useRef(null)
 
   const [file, setFile] = useState(null)
@@ -295,6 +297,12 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   }
 
   const handleSubmit = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om video\'s te genereren')
+      return
+    }
+
     if (!file) {
       setError('Image is required')
       return

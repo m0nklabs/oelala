@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Upload, ZoomIn, Loader2, Image as ImageIcon, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
+import { useAuth } from '../../contexts/AuthContext'
 
 const UPSCALE_MODELS = [
   { value: 'RealESRGAN_x4plus.pth', label: 'RealESRGAN 4x (General)', scale: 4 },
@@ -14,6 +15,8 @@ const UPSCALE_MODELS = [
 const SCALE_OPTIONS = [2, 4]
 
 export default function UpscalerTool({ onOutput, onJobSubmitted }) {
+  const { user, requestLogin } = useAuth()
+
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [imageInfo, setImageInfo] = useState(null)
@@ -65,6 +68,12 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
   }, [])
 
   const handleUpscale = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om te genereren')
+      return
+    }
+
     if (!file) return
 
     setSubmitting(true)
