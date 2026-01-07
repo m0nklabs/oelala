@@ -322,7 +322,7 @@ The credit system integration is **fully implemented and ready for production**.
 3. Configure Stripe webhook (5 min)
 4. Test with test card (10 min)
 
-**Total:** ~30 minutes to go live
+**Total:** 1–2 hours to go live (including buffer for troubleshooting)
 
 ### Recommendation
 1. ✅ **Merge this PR** - Adds verification and deployment tools

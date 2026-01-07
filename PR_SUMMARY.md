@@ -36,7 +36,7 @@ Complete guide including:
 Comprehensive overview covering:
 - What was implemented in PR #77
 - What this PR adds
-- Deployment requirements and timeline (~30 min)
+- Deployment requirements and timeline (1-2 hours)
 - Detailed credit pricing tables
 - Security features
 - Sub-issue status and recommendations
@@ -105,7 +105,7 @@ Total: 9/9 checks passed
 **Code:** 100% Complete ✅
 **Testing:** All Verified ✅
 **Documentation:** Comprehensive ✅
-**Deployment:** Ready (~30 min setup)
+**Deployment:** Ready (1-2 hours setup)
 
 ### Deployment Steps
 
@@ -121,7 +121,7 @@ Total: 9/9 checks passed
 4. **Testing** (10-15 min)
    - Test with Stripe test card
 
-**Total:** ~30 minutes
+**Total:** 1–2 hours (including buffer for troubleshooting)
 
 ## 📋 Issues Resolved
 
