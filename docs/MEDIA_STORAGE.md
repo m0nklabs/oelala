@@ -93,7 +93,7 @@ HEAD   /{bucket}/{key}        → Get file metadata
 
 ### Endpoints Updated
 - `/generate-video` - I2V generation
-- `/generate-text-video` - T2V generation  
+- `/generate-text-video` - T2V generation
 - `/generate-wan22-comfyui` - Main video generation with LoRAs
 - `/generate-sd15` - SD 1.5 image generation
 - `/generate-wan22-t2i` - Wan2.2 text-to-image

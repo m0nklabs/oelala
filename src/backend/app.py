@@ -2835,7 +2835,7 @@ async def generate_video(
             "width": width,
             "height": height,
             "seed": seed,
-        }
+        },
     )
 
     # Deduct credits after successful queue
@@ -3322,7 +3322,7 @@ async def generate_wan22_async(
             "steps": steps,
             "seed": actual_seed,
             "lora_count": len(parsed_lora_configs),
-        }
+        },
     )
 
     # Store job info for tracking
@@ -3499,7 +3499,7 @@ async def generate_text_video(
             "height": height,
             "seed": seed,
             "type": "text-to-video",
-        }
+        },
     )
 
     # Deduct credits after successful queue

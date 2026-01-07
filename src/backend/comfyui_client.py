@@ -1620,7 +1620,7 @@ class ComfyUIClient:
         settings: Optional[Dict[str, Any]] = None,
     ):
         """Register job metadata for tracking and auto-upload on completion.
-        
+
         Args:
             prompt_id: ComfyUI prompt ID
             user_id: User ID from JWT token
@@ -1650,46 +1650,48 @@ class ComfyUIClient:
         output_type: str = "video",
     ) -> Optional[str]:
         """Auto-upload generated content to user storage on job completion.
-        
+
         Args:
             prompt_id: ComfyUI prompt ID
             output_path: Local path to generated file
             output_type: Type of output ('video', 'image', 'audio')
-            
+
         Returns:
             Storage path if upload succeeded, None otherwise
         """
         from storage_client import get_client as get_storage_client
-        
+
         # Get job metadata
         metadata = self.get_job_metadata(prompt_id)
         if not metadata:
-            logger.warning(f"⚠️ No job metadata found for {prompt_id}, skipping auto-upload")
+            logger.warning(
+                f"⚠️ No job metadata found for {prompt_id}, skipping auto-upload"
+            )
             return None
-        
+
         user_id = metadata.get("user_id")
         if not user_id:
             logger.warning(f"⚠️ No user_id in job metadata for {prompt_id}")
             return None
-        
+
         try:
             # Read file content
             with open(output_path, "rb") as f:
                 file_data = f.read()
-            
+
             # Generate storage filename with timestamp
             timestamp = int(datetime.now().timestamp())
             original_filename = Path(output_path).name
             storage_filename = f"{timestamp}_{original_filename}"
-            
+
             # Determine media type folder
             media_type_map = {
                 "video": "videos",
-                "image": "images", 
+                "image": "images",
                 "audio": "audio",
             }
             media_type = media_type_map.get(output_type, "generated")
-            
+
             # Determine content type
             ext = Path(output_path).suffix.lower()
             content_type_map = {
@@ -1703,11 +1705,13 @@ class ComfyUIClient:
                 ".wav": "audio/wav",
             }
             content_type = content_type_map.get(ext, "application/octet-stream")
-            
+
             # Upload to user storage
             storage_client = get_storage_client()
-            logger.info(f"📤 Uploading {output_type} to user storage: {user_id}/{media_type}/{storage_filename}")
-            
+            logger.info(
+                f"📤 Uploading {output_type} to user storage: {user_id}/{media_type}/{storage_filename}"
+            )
+
             result = storage_client.put_user_media(
                 user_id=user_id,
                 media_type=media_type,
@@ -1715,15 +1719,17 @@ class ComfyUIClient:
                 data=file_data,
                 content_type=content_type,
             )
-            
+
             storage_path = f"{media_type}/{storage_filename}"
-            logger.info(f"✅ Auto-uploaded to storage: {storage_path} ({len(file_data)} bytes)")
-            
+            logger.info(
+                f"✅ Auto-uploaded to storage: {storage_path} ({len(file_data)} bytes)"
+            )
+
             # Clear job metadata after successful upload
             self.clear_job_metadata(prompt_id)
-            
+
             return storage_path
-            
+
         except Exception as e:
             logger.error(f"❌ Auto-upload failed for {prompt_id}: {e}")
             # Don't raise - we don't want to break the user flow if upload fails
@@ -1826,12 +1832,12 @@ class ComfyUIClient:
         self, history: Dict[str, Any], output_dir: str, prompt_id: Optional[str] = None
     ) -> Optional[str]:
         """Extract output video path from history and auto-upload to user storage.
-        
+
         Args:
             history: ComfyUI execution history
             output_dir: Local directory to save video
             prompt_id: Optional prompt ID for auto-upload tracking
-            
+
         Returns:
             Local path to downloaded video
         """
@@ -1858,17 +1864,19 @@ class ComfyUIClient:
                             with open(output_path, "wb") as f:
                                 f.write(resp.content)
                             logger.info(f"📥 Video downloaded: {output_path}")
-                            
+
                             # Auto-upload to user storage if prompt_id is provided
                             if prompt_id:
                                 storage_path = self.on_job_complete(
                                     prompt_id=prompt_id,
                                     output_path=str(output_path),
-                                    output_type="video"
+                                    output_type="video",
                                 )
                                 if storage_path:
-                                    logger.info(f"📤 Auto-uploaded video to: {storage_path}")
-                            
+                                    logger.info(
+                                        f"📤 Auto-uploaded video to: {storage_path}"
+                                    )
+
                             return str(output_path)
 
             logger.warning("No video output found in history")
@@ -1882,12 +1890,12 @@ class ComfyUIClient:
         self, history: Dict[str, Any], output_dir: str, prompt_id: Optional[str] = None
     ) -> Optional[str]:
         """Extract output image path from history and auto-upload to user storage.
-        
+
         Args:
             history: ComfyUI execution history
             output_dir: Local directory to save image
             prompt_id: Optional prompt ID for auto-upload tracking
-            
+
         Returns:
             Local path to downloaded image
         """
@@ -1915,17 +1923,19 @@ class ComfyUIClient:
                             with open(output_path, "wb") as f:
                                 f.write(resp.content)
                             logger.info(f"📥 Image downloaded: {output_path}")
-                            
+
                             # Auto-upload to user storage if prompt_id is provided
                             if prompt_id:
                                 storage_path = self.on_job_complete(
                                     prompt_id=prompt_id,
                                     output_path=str(output_path),
-                                    output_type="image"
+                                    output_type="image",
                                 )
                                 if storage_path:
-                                    logger.info(f"📤 Auto-uploaded image to: {storage_path}")
-                            
+                                    logger.info(
+                                        f"📤 Auto-uploaded image to: {storage_path}"
+                                    )
+
                             return str(output_path)
 
             logger.warning("No image output found in history")
@@ -2381,7 +2391,7 @@ class ComfyUIClient:
                     "seed": seed,
                     "sampler": sampler_name,
                     "scheduler": scheduler,
-                }
+                },
             )
 
         # Wait for completion with timeout
@@ -2590,7 +2600,7 @@ class ComfyUIClient:
                     "height": height,
                     "steps": steps,
                     "seed": seed,
-                }
+                },
             )
 
         # Wait for completion with timeout (Wan2.2 is slower)
