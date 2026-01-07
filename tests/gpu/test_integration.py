@@ -16,6 +16,7 @@ BACKEND_URL = "http://localhost:7998"
 COMFYUI_URL = "http://localhost:8188"
 
 
+@pytest.mark.gpu
 class TestGPUSmoke:
     """Basic smoke tests to verify GPU environment is working."""
 
@@ -48,6 +49,7 @@ class TestGPUSmoke:
         assert vram_gb >= 8, f"Need at least 8GB VRAM, got {vram_gb:.1f}GB"
 
 
+@pytest.mark.gpu
 class TestWorkflowValidation:
     """Test that workflow JSON files are valid and can be loaded."""
 
@@ -80,6 +82,7 @@ class TestWorkflowValidation:
         assert "CheckpointLoaderSimple" in data
 
 
+@pytest.mark.gpu
 class TestModelsAvailable:
     """Test that required models are available."""
 
@@ -102,6 +105,7 @@ class TestModelsAvailable:
         assert len(safetensor_files) > 0, "No .safetensors checkpoint models found"
 
 
+@pytest.mark.gpu
 @pytest.mark.slow
 class TestVideoGeneration:
     """
@@ -129,6 +133,7 @@ class TestVideoGeneration:
         assert resp.status_code in [200, 503]  # 503 if model not loaded
 
 
+@pytest.mark.gpu
 class TestAdvancedVideoEndpoints:
     """Test new advanced video processing endpoints."""
 
