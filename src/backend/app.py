@@ -77,6 +77,10 @@ ticker_store = {}  # job_id -> threading.Event to stop ticker
 # WebSocket connections for live log streaming
 log_subscribers: set[WebSocket] = set()
 
+# WebSocket and job queue management
+from websocket_handler import ws_manager
+from job_queue import job_queue_manager
+
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
 
@@ -381,6 +385,44 @@ async def websocket_logs(websocket: WebSocket):
         )
 
 
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket, user_id: str = None):
+    """
+    WebSocket endpoint for real-time job progress and queue updates.
+    
+    Clients receive:
+    - queue_update: Position changes and ETA
+    - progress: Generation progress (0-100%)
+    - job_complete: Job finished successfully
+    - job_failed: Job failed with error
+    
+    Query params:
+    - user_id: Optional user ID for filtering (defaults to anonymous)
+    """
+    await ws_manager.connect(websocket, user_id)
+    logger.info(f"📡 Progress WebSocket connected for user {user_id or 'anonymous'}")
+    try:
+        # Keep connection alive and handle client messages
+        while True:
+            try:
+                # Wait for pings/close from client
+                message = await websocket.receive_text()
+                # Could handle client requests here (e.g., request status update)
+                if message:
+                    data = json.loads(message)
+                    if data.get("type") == "ping":
+                        await websocket.send_text(json.dumps({"type": "pong"}))
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.warning(f"WebSocket message error: {e}")
+    finally:
+        ws_manager.disconnect(websocket, user_id)
+        logger.info(
+            f"📡 Progress WebSocket disconnected for user {user_id or 'anonymous'}"
+        )
+
+
 @app.get("/progress/{job_id}")
 async def get_progress(job_id: str):
     data = progress_store.get(job_id, None)
@@ -400,12 +442,22 @@ async def serve_video_test():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup status"""
+    """Log startup status and start queue polling"""
     client = get_comfyui_client()
     if client and client.is_available():
         logger.info("✅ ComfyUI backend available and ready!")
+        # Start queue polling for real-time updates
+        await job_queue_manager.start_polling(ws_manager, interval=2.0)
+        logger.info("🔄 Queue polling started (2s interval)")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean shutdown"""
+    await job_queue_manager.stop_polling()
+    logger.info("👋 Server shutting down")
 
 
 @app.get("/")
@@ -4661,6 +4713,21 @@ async def generate_i2i(
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
 
+        # Register job for queue tracking and WebSocket updates
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="i2i",
+            metadata={
+                "prompt": prompt,
+                "denoise": denoise,
+                "checkpoint": checkpoint,
+                "seed": seed,
+                "source_image": comfyui_filename,
+            },
+        )
+        ws_manager.register_job(prompt_id, user.id)
+        
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
         logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits)")

@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""
+WebSocket Event Handler for Real-time Progress Updates
+Manages client connections and broadcasts queue/progress events
+"""
+
+import asyncio
+import json
+import logging
+from datetime import datetime
+from typing import Dict, Set, Any, Optional
+from fastapi import WebSocket
+from collections import defaultdict
+
+logger = logging.getLogger(__name__)
+
+DEBUG_ENABLED = False  # Set to True for verbose logging
+
+
+def debug_log(message: str):
+    """Emit debug logs when DEBUG_ENABLED is true."""
+    if DEBUG_ENABLED:
+        logger.info(f"🐛 {message}")
+
+
+class WebSocketManager:
+    """
+    Manages WebSocket connections for real-time progress updates.
+    Supports multiple clients per user and broadcasts queue/progress events.
+    """
+
+    def __init__(self):
+        # WebSocket connections grouped by user_id
+        self.connections: Dict[str, Set[WebSocket]] = defaultdict(set)
+        # Track job ownership: job_id -> user_id
+        self.job_ownership: Dict[str, str] = {}
+        # Last broadcast timestamps to avoid spam
+        self.last_broadcast: Dict[str, float] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None):
+        """Register a new WebSocket connection"""
+        await websocket.accept()
+        user_key = user_id or "anonymous"
+        self.connections[user_key].add(websocket)
+        logger.info(
+            f"📡 WebSocket connected for user {user_key} (total: {len(self.connections[user_key])})"
+        )
+        debug_log(f"Active users: {list(self.connections.keys())}")
+
+    def disconnect(self, websocket: WebSocket, user_id: Optional[str] = None):
+        """Unregister a WebSocket connection"""
+        user_key = user_id or "anonymous"
+        if websocket in self.connections[user_key]:
+            self.connections[user_key].discard(websocket)
+            logger.info(
+                f"📡 WebSocket disconnected for user {user_key} (remaining: {len(self.connections[user_key])})"
+            )
+            # Clean up empty user sets
+            if not self.connections[user_key]:
+                del self.connections[user_key]
+                debug_log(f"Removed empty connection set for user {user_key}")
+
+    def register_job(self, job_id: str, user_id: Optional[str] = None):
+        """Register a job for a specific user"""
+        user_key = user_id or "anonymous"
+        self.job_ownership[job_id] = user_key
+        debug_log(f"Registered job {job_id} for user {user_key}")
+
+    def unregister_job(self, job_id: str):
+        """Unregister a completed/failed job"""
+        if job_id in self.job_ownership:
+            user_id = self.job_ownership.pop(job_id)
+            debug_log(f"Unregistered job {job_id} for user {user_id}")
+
+    async def broadcast_to_user(
+        self, user_id: Optional[str], event_type: str, data: Dict[str, Any]
+    ):
+        """
+        Broadcast an event to all connections for a specific user.
+        
+        Args:
+            user_id: User ID (None for anonymous)
+            event_type: Event type ('queue_update', 'progress', 'job_complete', 'job_failed')
+            data: Event payload
+        """
+        user_key = user_id or "anonymous"
+        if user_key not in self.connections:
+            debug_log(f"No connections for user {user_key}, skipping broadcast")
+            return
+
+        # Rate limiting: avoid spamming updates faster than 100ms
+        now = asyncio.get_event_loop().time()
+        cache_key = f"{user_key}:{event_type}:{data.get('job_id', 'unknown')}"
+        last_time = self.last_broadcast.get(cache_key, 0)
+        if now - last_time < 0.1 and event_type == "progress":
+            debug_log(f"Rate limiting: skipping duplicate event {cache_key}")
+            return
+        self.last_broadcast[cache_key] = now
+
+        message = json.dumps(
+            {
+                "type": event_type,
+                "timestamp": datetime.now().isoformat(),
+                "data": data,
+            }
+        )
+
+        disconnected = set()
+        for ws in self.connections[user_key]:
+            try:
+                await ws.send_text(message)
+                debug_log(f"Sent {event_type} to user {user_key}")
+            except Exception as e:
+                logger.warning(f"Failed to send to websocket: {e}")
+                disconnected.add(ws)
+
+        # Clean up disconnected clients
+        if disconnected:
+            self.connections[user_key].difference_update(disconnected)
+            logger.info(
+                f"📡 Removed {len(disconnected)} dead connections for user {user_key}"
+            )
+
+    async def broadcast_queue_update(
+        self, job_id: str, queue_position: int, total_pending: int, eta_seconds: Optional[int] = None
+    ):
+        """
+        Broadcast queue position update to job owner.
+        
+        Args:
+            job_id: Job/prompt ID
+            queue_position: Current position in queue (0 = running)
+            total_pending: Total number of pending jobs
+            eta_seconds: Estimated time to start (optional)
+        """
+        user_id = self.job_ownership.get(job_id)
+        if not user_id:
+            debug_log(f"Job {job_id} not registered, cannot broadcast queue update")
+            return
+
+        data = {
+            "job_id": job_id,
+            "queue_position": queue_position,
+            "total_pending": total_pending,
+            "status": "running" if queue_position == 0 else "queued",
+        }
+        if eta_seconds is not None:
+            data["eta_seconds"] = eta_seconds
+            data["eta_human"] = self._format_eta(eta_seconds)
+
+        await self.broadcast_to_user(user_id, "queue_update", data)
+        logger.info(
+            f"📊 Queue update: job {job_id} at position {queue_position}/{total_pending}"
+        )
+
+    async def broadcast_progress(
+        self,
+        job_id: str,
+        progress: int,
+        message: Optional[str] = None,
+        node_name: Optional[str] = None,
+    ):
+        """
+        Broadcast generation progress update to job owner.
+        
+        Args:
+            job_id: Job/prompt ID
+            progress: Progress percentage (0-100)
+            message: Optional status message
+            node_name: Optional current processing node name
+        """
+        user_id = self.job_ownership.get(job_id)
+        if not user_id:
+            debug_log(f"Job {job_id} not registered, cannot broadcast progress")
+            return
+
+        data = {
+            "job_id": job_id,
+            "progress": min(100, max(0, progress)),
+            "status": "running",
+        }
+        if message:
+            data["message"] = message
+        if node_name:
+            data["node_name"] = node_name
+
+        await self.broadcast_to_user(user_id, "progress", data)
+        debug_log(f"Progress: job {job_id} at {progress}% ({node_name or 'unknown'})")
+
+    async def broadcast_job_complete(
+        self, job_id: str, output_url: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Broadcast job completion to job owner.
+        
+        Args:
+            job_id: Job/prompt ID
+            output_url: URL to generated output
+            metadata: Additional job metadata
+        """
+        user_id = self.job_ownership.get(job_id)
+        if not user_id:
+            debug_log(f"Job {job_id} not registered, cannot broadcast completion")
+            return
+
+        data = {
+            "job_id": job_id,
+            "status": "completed",
+            "progress": 100,
+        }
+        if output_url:
+            data["output_url"] = output_url
+        if metadata:
+            data["metadata"] = metadata
+
+        await self.broadcast_to_user(user_id, "job_complete", data)
+        logger.info(f"✅ Job complete: {job_id}")
+        self.unregister_job(job_id)
+
+    async def broadcast_job_failed(
+        self, job_id: str, error: str, metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Broadcast job failure to job owner.
+        
+        Args:
+            job_id: Job/prompt ID
+            error: Error message
+            metadata: Additional job metadata
+        """
+        user_id = self.job_ownership.get(job_id)
+        if not user_id:
+            debug_log(f"Job {job_id} not registered, cannot broadcast failure")
+            return
+
+        data = {
+            "job_id": job_id,
+            "status": "failed",
+            "error": error,
+        }
+        if metadata:
+            data["metadata"] = metadata
+
+        await self.broadcast_to_user(user_id, "job_failed", data)
+        logger.error(f"❌ Job failed: {job_id} - {error}")
+        self.unregister_job(job_id)
+
+    @staticmethod
+    def _format_eta(seconds: int) -> str:
+        """Format ETA seconds as human-readable string"""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            return f"{seconds // 60}m {seconds % 60}s"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            return f"{hours}h {minutes}m"
+
+
+# Global WebSocket manager instance
+ws_manager = WebSocketManager()
