@@ -80,6 +80,7 @@ log_subscribers: set[WebSocket] = set()
 # WebSocket and job queue management
 from websocket_handler import ws_manager
 from job_queue import job_queue_manager
+from comfyui_progress_monitor import progress_monitor
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -449,6 +450,9 @@ async def startup_event():
         # Start queue polling for real-time updates
         await job_queue_manager.start_polling(ws_manager, interval=2.0)
         logger.info("🔄 Queue polling started (2s interval)")
+        # Start ComfyUI progress monitor
+        progress_monitor.start()
+        logger.info("🔄 ComfyUI progress monitor started")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
 
@@ -457,6 +461,7 @@ async def startup_event():
 async def shutdown_event():
     """Clean shutdown"""
     await job_queue_manager.stop_polling()
+    progress_monitor.stop()
     logger.info("👋 Server shutting down")
 
 
@@ -4727,6 +4732,18 @@ async def generate_i2i(
             },
         )
         ws_manager.register_job(prompt_id, user.id)
+        
+        # Register progress callback for real-time updates
+        async def progress_callback(progress: int, node_name: str):
+            """Relay ComfyUI progress to WebSocket clients"""
+            await ws_manager.broadcast_progress(
+                job_id=prompt_id,
+                progress=progress,
+                message=f"Processing: {node_name}",
+                node_name=node_name,
+            )
+        
+        progress_monitor.register_callback(prompt_id, progress_callback)
         
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
