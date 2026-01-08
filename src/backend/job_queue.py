@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from collections import deque
-import requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +128,13 @@ class JobQueueManager:
     async def get_comfyui_queue(self) -> Optional[Dict[str, Any]]:
         """Fetch current queue state from ComfyUI"""
         try:
-            resp = requests.get(f"{self.comfyui_url}/queue", timeout=5)
-            if resp.status_code == 200:
-                return resp.json()
-            else:
-                logger.warning(f"ComfyUI queue request failed: {resp.status_code}")
-                return None
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{self.comfyui_url}/queue", timeout=5)
+                if resp.status_code == 200:
+                    return resp.json()
+                else:
+                    logger.warning(f"ComfyUI queue request failed: {resp.status_code}")
+                    return None
         except Exception as e:
             logger.warning(f"Failed to get ComfyUI queue: {e}")
             return None
@@ -215,32 +216,35 @@ class JobQueueManager:
     async def _check_job_completion(self, prompt_id: str, ws_manager):
         """Check if a job completed successfully via ComfyUI history"""
         try:
-            resp = requests.get(f"{self.comfyui_url}/history/{prompt_id}", timeout=5)
-            if resp.status_code == 200:
-                history = resp.json().get(prompt_id, {})
-                if history:
-                    # Job completed successfully
-                    self.complete_job(prompt_id)
-                    
-                    # Extract output URL if available
-                    output_url = self._extract_output_url(history)
-                    
-                    await ws_manager.broadcast_job_complete(
-                        job_id=prompt_id,
-                        output_url=output_url,
-                        metadata={"history": history},
-                    )
-                    # Clean up job after completion
-                    if prompt_id in self.jobs:
-                        del self.jobs[prompt_id]
-                else:
-                    # Job failed or cancelled
-                    self.fail_job(prompt_id, "Job cancelled or failed")
-                    await ws_manager.broadcast_job_failed(
-                        job_id=prompt_id, error="Job cancelled or not found in history"
-                    )
-                    if prompt_id in self.jobs:
-                        del self.jobs[prompt_id]
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.comfyui_url}/history/{prompt_id}", timeout=5
+                )
+                if resp.status_code == 200:
+                    history = resp.json().get(prompt_id, {})
+                    if history:
+                        # Job completed successfully
+                        self.complete_job(prompt_id)
+                        
+                        # Extract output URL if available
+                        output_url = self._extract_output_url(history)
+                        
+                        await ws_manager.broadcast_job_complete(
+                            job_id=prompt_id,
+                            output_url=output_url,
+                            metadata={"history": history},
+                        )
+                        # Clean up job after completion
+                        if prompt_id in self.jobs:
+                            del self.jobs[prompt_id]
+                    else:
+                        # Job failed or cancelled
+                        self.fail_job(prompt_id, "Job cancelled or failed")
+                        await ws_manager.broadcast_job_failed(
+                            job_id=prompt_id, error="Job cancelled or not found in history"
+                        )
+                        if prompt_id in self.jobs:
+                            del self.jobs[prompt_id]
         except Exception as e:
             logger.warning(f"Failed to check job completion for {prompt_id}: {e}")
 

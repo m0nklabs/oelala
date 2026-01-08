@@ -9,11 +9,13 @@ import json
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
 
-# Import modules to test
+# Import modules to test - use relative imports when possible
 import sys
-import os
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src/backend"))
+# Add backend directory to path for testing
+backend_path = Path(__file__).parent.parent / "src" / "backend"
+sys.path.insert(0, str(backend_path))
 
 from websocket_handler import WebSocketManager
 from job_queue import JobQueueManager

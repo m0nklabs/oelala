@@ -98,15 +98,14 @@ class ComfyUIProgressMonitor:
                 self._ws.close()
                 
             except Exception as e:
-                logger.warning(
-                    f"ComfyUI WebSocket connection failed: {e}. Retrying in {retry_delay}s..."
-                )
+                logger.warning(f"ComfyUI WebSocket connection failed: {e}. Retrying in {retry_delay}s...")
                 if self._running:
-                    # Wait before retry, but check _running flag periodically
+                    # Wait before retry using a reusable event
+                    wait_event = threading.Event()
                     for _ in range(retry_delay * 2):
                         if not self._running:
                             break
-                        threading.Event().wait(0.5)
+                        wait_event.wait(0.5)
                     retry_delay = min(retry_delay * 2, 60)  # Exponential backoff, max 60s
         
         logger.info("🛑 ComfyUI progress monitor stopped")
@@ -152,13 +151,14 @@ class ComfyUIProgressMonitor:
                 callback = self.progress_callbacks[prompt_id]
                 # Schedule async callback in event loop
                 try:
-                    # Get the running event loop or create new one
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
+                    # Get the running event loop
+                    try:
+                        loop = asyncio.get_running_loop()
                         asyncio.run_coroutine_threadsafe(
                             callback(progress, node_name), loop
                         )
-                    else:
+                    except RuntimeError:
+                        # No running event loop
                         debug_log("No running event loop, skipping callback")
                 except Exception as e:
                     logger.warning(f"Failed to call progress callback: {e}")
