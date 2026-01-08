@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Added
+- **WebSocket Progress Events**: Real-time job progress and queue position tracking
+  - New `/ws/progress` WebSocket endpoint for live updates
+  - Queue position tracking with ETA estimation
+  - Progress events during generation (0-100%)
+  - Support for multiple clients per user
+  - Event types: `queue_update`, `progress`, `job_complete`, `job_failed`
+  - Background polling of ComfyUI queue (2s interval)
+  - Historical job completion time tracking for accurate ETAs
+- **Job Queue Management**: Centralized job tracking and state management
+  - `src/backend/job_queue.py` - Queue position tracking and ETA calculation
+  - `src/backend/websocket_handler.py` - WebSocket event broadcasting
+  - Automatic job lifecycle management (queued → running → completed/failed)
+- **Tests**: Comprehensive test suite for WebSocket and queue functionality
+  - 15 unit tests for WebSocket manager and job queue manager
+  - Tests for queue position updates, progress broadcasting, ETA estimation
+
 ### Documentation
 - **Docs Cleanup**: Consolidated 39 → 28 docs, reduced 9719 → 6412 lines (-34%)
   - Merged: ADVANCED_VIDEO_*.md → ADVANCED_VIDEO.md
