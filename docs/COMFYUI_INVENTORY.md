@@ -248,6 +248,10 @@ Available categories:
 
 ### ControlNet & Preprocessing
 - `comfyui_controlnet_aux` - ControlNet preprocessors
+  - **OpenPose Preprocessor** - Pose detection (classic)
+  - **DWPose Preprocessor** - Pose detection (recommended, better accuracy)
+  - **Pose Keypoint Postprocess** - Keypoint processing
+  - Canny, Depth, Lineart, etc.
 - `ComfyUI-Addoor` - Addoor nodes
 
 ### Prompt & Text
