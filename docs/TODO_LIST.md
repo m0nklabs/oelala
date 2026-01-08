@@ -93,6 +93,30 @@
 
 ---
 
+## 🎵 Backlog: Audio Generation
+
+**MEGA Issue**: #41
+
+| Task | Status | Priority | Issue |
+|------|--------|----------|-------|
+| MMAudio model integration | ⏳ Todo | Medium | #48 |
+| Audio generation API endpoints | ⏳ Todo | Medium | #47 |
+| Audio generation UI component | ⏳ Todo | Medium | #49 |
+| Audio sync with video | ⏳ Todo | Low | #41 |
+
+---
+
+## 🔄 Backlog: Advanced Video
+
+**MEGA Issue**: #42
+
+| Task | Status | Priority | Issue |
+|------|--------|----------|-------|
+| Video-to-Video style transfer | ⏳ Todo | Medium | #50 |
+| Video extension (loop/extend) | ⏳ Todo | Low | - |
+
+---
+
 ## 📋 Backlog
 
 ### Media Management
@@ -101,9 +125,9 @@
 - [ ] Favorites sync to storage
 
 ### Generation Improvements
-- [ ] ControlNet integration
+- [ ] ControlNet integration (#53 I2V enhancements)
 - [ ] Inpainting tools
-- [ ] Queue position indicator
+- [ ] Queue position indicator (#8, #16, #17)
 - [ ] Email notification on complete
 
 ### UX Polish
