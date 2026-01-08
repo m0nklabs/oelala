@@ -206,6 +206,7 @@ When implementing any feature or component:
 - **Claim First**: Before starting work on any GitHub issue or pull request, ALWAYS claim it first (self-assign, add comment).
 - **Copilot Agent**: To activate the Copilot Coding Agent on an issue or PR, you **must** mention `@copilot` in a comment.
 - **Workflow Approval**: DO NOT suggest changing GitHub Actions settings for first-time contributor approval.
+- **TODO Checkbox Updates**: When completing PR work, ALWAYS check off completed items in the issue's TODO checklist. This is a priority action.
 
 ## Task Management with Todo Lists
 
