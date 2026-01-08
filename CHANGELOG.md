@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Features
+- **Frontend: Real-time Progress Tracker**: Added `ProgressTracker.jsx` component for real-time job progress indication
+  - Queue position display with animated updates
+  - Progress bar with percentage and smooth animations
+  - ETA countdown timer based on elapsed time
+  - Support for preview thumbnails during generation
+  - Integrated into `QueueIndicator.jsx` for running jobs
+  - Clickable job rows to expand/collapse detailed progress
+
 ### Documentation
 - **Docs Cleanup**: Consolidated 39 → 28 docs, reduced 9719 → 6412 lines (-34%)
   - Merged: ADVANCED_VIDEO_*.md → ADVANCED_VIDEO.md
