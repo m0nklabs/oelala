@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Documentation
+- **Docs Cleanup**: Consolidated 39 → 28 docs, reduced 9719 → 6412 lines (-34%)
+  - Merged: ADVANCED_VIDEO_*.md → ADVANCED_VIDEO.md
+  - Merged: GALLERY_*.md → GALLERY.md
+  - Merged: WAN2_*.md → WAN2.md
+  - Merged: OELALA_WORKFLOWS_*.md → WORKFLOWS.md
+  - Deleted outdated: MONETIZATION_OLD.md, CREDITS_FINAL_SUMMARY.md, CREDITS_DEPLOYMENT_CHECKLIST.md, CREDIT_INTEGRATION_SUMMARY.md, IMPLEMENTATION_SUMMARY.md, DOCS_CHANGELOG.md, OPENPOSE_TECHNICAL_GUIDE.md (empty)
+
 ### Security
 - Upgraded vite 5.4.21 → 7.3.0 (fixes esbuild CORS vulnerability - Dependabot #14)
 

@@ -141,6 +141,46 @@ cuda:1      16.0       19.2       57%
 | GPU-Only | ~17GB | ~24GB | Fast |
 | CPU Fallback | ~20GB | ~53GB | Slower |
 
+## Benchmark Results (January 2026)
+
+Tested with DisTorch2 on RTX 5060 Ti (16GB) + RTX 3060 (12GB).
+
+### Successful Configurations
+
+| Resolution | Frames | Video Length | CPU Offload | Gen Time |
+|------------|--------|--------------|-------------|----------|
+| 576×1024 | 81 | 5.1s | 2GB | 9.2 min |
+| 576×1024 | 121 | 7.6s | 2GB | 25.5 min |
+| 576×1024 | 161 | 10.1s | 4GB | 17.1 min |
+| 720×1280 | 81 | 5.1s | 6GB | **12.1 min** ⭐ |
+| 1080×1920 | 41 | 2.6s | 6GB | 15.9 min |
+
+### Failed Configurations (OOM)
+
+| Resolution | Frames | Video Length | CPU Offload | Error |
+|------------|--------|--------------|-------------|-------|
+| 576×1024 | 241 | 15s | 6GB | OOM |
+| 1080×1920 | 81 | 5s | 8GB | OOM |
+| 480×848 | 321 | 20s | 4GB | OOM |
+| 480×848 | 481 | 30s | 6GB | OOM |
+
+### Key Findings
+
+1. **Frame limit ~160**: Regardless of resolution, >160 frames causes OOM
+2. **Optimal config**: 720p @ 81f with 6GB CPU offload (12 min, best throughput)
+3. **1080p limit**: Max 41 frames (~2.5 sec video)
+4. **CPU offload sweet spot**: 6GB gives best balance of speed and capacity
+
+### Recommended Defaults
+
+```
+# Production settings
+Resolution: 720×1280 (portrait) or 1280×720 (landscape)
+Frames: 81 (5 sec @ 16fps)
+CPU Offload: 6GB
+Allocation: cuda:0,11gb;cuda:1,15gb;cpu,6gb
+```
+
 ## References
 - [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)
 - [WAN 2.2 Model](https://huggingface.co/Wan-AI)

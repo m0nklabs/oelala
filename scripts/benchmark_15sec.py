@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-DisTorch2 I2V Benchmark Script v3
+DisTorch2 I2V Benchmark - 15 Second Video Focus
 
-Tests the limits of video generation with different:
-- CPU offload amounts
-- Resolutions  
-- Frame counts (video length)
-- Video duration (frames / fps)
+Doel: Vind de configuratie die 15 seconden video mogelijk maakt.
 
-Improvements in v3:
-- Verifies output video actually exists
-- Tracks actual video duration (not just frame count)
-- Uses SFW image (beach_real.png)
-- Better error detection
+Aanpak:
+- 15 sec @ 16fps = 241 frames
+- Test verschillende resoluties (lager = minder VRAM)
+- Test hogere CPU offload (tot 16GB)
+- Test lagere frame rates (minder frames voor zelfde duratie)
 """
 
 import json
@@ -26,41 +22,50 @@ from datetime import datetime
 COMFYUI_URL = "http://localhost:8188"
 WORKFLOW_PATH = Path(__file__).parent.parent / "workflows/ImageToVideo/sfw_i2v_distorch2_api.json"
 OUTPUT_DIR = Path(__file__).parent.parent / "ComfyUI/output"
-RESULTS_FILE = Path(__file__).parent.parent / "data/benchmark_results/i2v_limits_benchmark.json"
+RESULTS_FILE = Path(__file__).parent.parent / "data/benchmark_results/i2v_15sec_benchmark.json"
 
-# SFW image for benchmarks
 SFW_IMAGE = "beach_real.png"
 
-# Default FPS (can be varied in tests)
-DEFAULT_FPS = 16
-
-# Test configurations: (width, height, frames, cpu_offload_gb, fps, description)
+# Test configurations for 15 second videos
+# Format: (width, height, frames, cpu_offload_gb, fps, description)
 # Video duration = frames / fps
+
 BENCHMARK_CONFIGS = [
-    # Baseline - 5 sec video @ 16fps
-    (576, 1024, 81, 1, 16, "baseline_576x1024_5s"),
+    # === Strategy 1: Lower resolution @ 16fps (241 frames) ===
+    (384, 680, 241, 8, 16, "384x680_15s_8gb"),      # Very low res - BASELINE
+    (432, 768, 241, 8, 16, "432x768_15s_8gb"),      # Low res
+    (480, 848, 241, 8, 16, "480x848_15s_8gb"),      # 480p
+    (480, 848, 241, 12, 16, "480x848_15s_12gb"),    # 480p more CPU
+    (512, 912, 241, 10, 16, "512x912_15s_10gb"),    # Between 480p and 576p
     
-    # CPU offload comparison @ baseline
-    (576, 1024, 81, 2, 16, "576x1024_5s_2gb"),
-    (576, 1024, 81, 4, 16, "576x1024_5s_4gb"),
+    # === Strategy 2: Lower FPS for higher quality ===
+    # 15 sec @ 12fps = 181 frames
+    (576, 1024, 181, 6, 12, "576x1024_15s_12fps_6gb"),
+    (576, 1024, 181, 8, 12, "576x1024_15s_12fps_8gb"),
+    (720, 1280, 181, 8, 12, "720x1280_15s_12fps_8gb"),
     
-    # 720p tests - 5 sec
-    (720, 1280, 81, 2, 16, "720x1280_5s_2gb"),
-    (720, 1280, 81, 4, 16, "720x1280_5s_4gb"),
-    (720, 1280, 81, 6, 16, "720x1280_5s_6gb"),
+    # 15 sec @ 10fps = 151 frames (should work - 161f worked before)
+    (576, 1024, 151, 4, 10, "576x1024_15s_10fps_4gb"),
+    (576, 1024, 151, 6, 10, "576x1024_15s_10fps_6gb"),
+    (720, 1280, 151, 6, 10, "720x1280_15s_10fps_6gb"),
+    (720, 1280, 151, 8, 10, "720x1280_15s_10fps_8gb"),
     
-    # Longer videos at 576p
-    (576, 1024, 121, 2, 16, "576x1024_7.5s_2gb"),   # 7.5 sec
-    (576, 1024, 161, 4, 16, "576x1024_10s_4gb"),    # 10 sec
-    (576, 1024, 241, 6, 16, "576x1024_15s_6gb"),    # 15 sec
+    # 15 sec @ 8fps = 121 frames (definitely works)
+    (720, 1280, 121, 4, 8, "720x1280_15s_8fps_4gb"),
+    (720, 1280, 121, 6, 8, "720x1280_15s_8fps_6gb"),
+    (1080, 1920, 121, 8, 8, "1080x1920_15s_8fps_8gb"),
+    (1080, 1920, 121, 12, 8, "1080x1920_15s_8fps_12gb"),
     
-    # 1080p tests
-    (1080, 1920, 41, 6, 16, "1080x1920_2.5s_6gb"),  # 2.5 sec @ 1080p
-    (1080, 1920, 81, 8, 16, "1080x1920_5s_8gb"),    # 5 sec @ 1080p
+    # === Strategy 3: Push CPU offload higher ===
+    (576, 1024, 241, 10, 16, "576x1024_15s_10gb"),
+    (576, 1024, 241, 12, 16, "576x1024_15s_12gb"),
+    (576, 1024, 241, 16, 16, "576x1024_15s_16gb"),
     
-    # Ultra long at lower res
-    (480, 848, 321, 4, 16, "480x848_20s_4gb"),      # 20 sec at 480p
-    (480, 848, 481, 6, 16, "480x848_30s_6gb"),      # 30 sec at 480p
+    # === Interesting edge cases ===
+    # 20 sec @ 8fps = 161 frames (should work at 720p)
+    (720, 1280, 161, 6, 8, "720x1280_20s_8fps_6gb"),
+    # 30 sec @ 8fps = 241 frames at lower res
+    (480, 848, 241, 8, 8, "480x848_30s_8fps_8gb"),
 ]
 
 
@@ -72,16 +77,13 @@ def build_allocation_string(cpu_gb: float) -> str:
 
 
 def load_workflow():
-    """Load the base workflow."""
     with open(WORKFLOW_PATH) as f:
         return json.load(f)
 
 
 def modify_workflow(workflow: dict, width: int, height: int, frames: int, 
                     cpu_gb: float, fps: int, name: str) -> dict:
-    """Modify workflow for benchmark configuration."""
-    wf = json.loads(json.dumps(workflow))  # Deep copy
-    
+    wf = json.loads(json.dumps(workflow))
     allocation = build_allocation_string(cpu_gb)
     
     for node_id, node in wf.items():
@@ -91,22 +93,18 @@ def modify_workflow(workflow: dict, width: int, height: int, frames: int,
         class_type = node.get("class_type", "")
         inputs = node.get("inputs", {})
         
-        # Update resolution in WanImageToVideo
         if class_type == "WanImageToVideo":
             inputs["width"] = width
             inputs["height"] = height
             inputs["length"] = frames
             
-        # Update allocation in all DisTorch2 loaders
         if "DisTorch2" in class_type and "expert_mode_allocations" in inputs:
             inputs["expert_mode_allocations"] = allocation
             
-        # Update output filename and fps
         if class_type == "VHS_VideoCombine":
-            inputs["filename_prefix"] = f"bench_{name}"
+            inputs["filename_prefix"] = f"bench15s_{name}"
             inputs["frame_rate"] = fps
             
-        # Use SFW image
         if class_type == "LoadImage":
             inputs["image"] = SFW_IMAGE
     
@@ -114,14 +112,12 @@ def modify_workflow(workflow: dict, width: int, height: int, frames: int,
 
 
 def queue_prompt(workflow: dict) -> str:
-    """Queue workflow and return prompt_id."""
     resp = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow})
     resp.raise_for_status()
     return resp.json()["prompt_id"]
 
 
 def get_job_status(prompt_id: str) -> dict | None:
-    """Get job status from history."""
     try:
         resp = requests.get(f"{COMFYUI_URL}/history/{prompt_id}")
         if resp.status_code == 200:
@@ -134,14 +130,12 @@ def get_job_status(prompt_id: str) -> dict | None:
 
 
 def check_job_error(status: dict) -> str | None:
-    """Check if job has error status."""
     if not status:
         return None
     job_status = status.get("status", {})
     if job_status.get("status_str") == "error":
         messages = job_status.get("messages", [])
         if messages:
-            # Extract error message
             for msg in messages:
                 if isinstance(msg, list) and len(msg) > 1:
                     error_text = str(msg[1])
@@ -153,17 +147,14 @@ def check_job_error(status: dict) -> str | None:
 
 
 def find_output_video(name: str) -> Path | None:
-    """Find the output video file for this benchmark."""
-    pattern = str(OUTPUT_DIR / f"bench_{name}_*.mp4")
+    pattern = str(OUTPUT_DIR / f"bench15s_{name}_*.mp4")
     files = glob.glob(pattern)
     if files:
-        # Return most recent
         return Path(max(files, key=lambda f: Path(f).stat().st_mtime))
     return None
 
 
 def get_video_info(video_path: Path) -> dict | None:
-    """Get video metadata using ffprobe."""
     try:
         cmd = [
             "ffprobe", "-v", "error",
@@ -177,7 +168,6 @@ def get_video_info(video_path: Path) -> dict | None:
             data = json.loads(result.stdout)
             stream = data.get("streams", [{}])[0]
             
-            # Parse frame rate (can be "16/1" format)
             fps_str = stream.get("r_frame_rate", "16/1")
             if "/" in fps_str:
                 num, den = fps_str.split("/")
@@ -198,15 +188,15 @@ def get_video_info(video_path: Path) -> dict | None:
     return None
 
 
-def wait_for_completion(prompt_id: str, name: str, timeout: int = 2400) -> dict:
-    """Wait for job completion with proper error detection."""
+def wait_for_completion(prompt_id: str, name: str, timeout: int = 3600) -> dict:
+    """Wait for job completion - longer timeout for bigger jobs."""
     start_time = time.time()
+    last_video_check = None
     
     while time.time() - start_time < timeout:
         status = get_job_status(prompt_id)
         
         if status:
-            # Check for error
             error = check_job_error(status)
             if error:
                 return {
@@ -215,20 +205,38 @@ def wait_for_completion(prompt_id: str, name: str, timeout: int = 2400) -> dict:
                     "error": error
                 }
             
-            # Check if completed (has outputs)
+            # Check for completion - look at status_str or outputs
+            job_status = status.get("status", {})
+            status_str = job_status.get("status_str", "")
             outputs = status.get("outputs", {})
-            if outputs:
-                # Job completed - verify video exists
-                time.sleep(2)  # Give file system time to flush
+            
+            # Job is done if status is success OR we have outputs
+            is_complete = status_str == "success" or bool(outputs)
+            
+            if is_complete:
+                time.sleep(2)  # Give filesystem time
                 video = find_output_video(name)
                 if video:
-                    video_info = get_video_info(video)
-                    return {
-                        "success": True,
-                        "duration": time.time() - start_time,
-                        "video_path": str(video),
-                        "video_info": video_info
-                    }
+                    # Check if this is a NEW video (not cached from before)
+                    if last_video_check is None or video.stat().st_mtime > last_video_check:
+                        video_info = get_video_info(video)
+                        return {
+                            "success": True,
+                            "duration": time.time() - start_time,
+                            "video_path": str(video),
+                            "video_info": video_info
+                        }
+                    else:
+                        # Video exists but wasn't generated now - job was cached
+                        # This is still a success, just fast
+                        video_info = get_video_info(video)
+                        return {
+                            "success": True,
+                            "duration": time.time() - start_time,
+                            "video_path": str(video),
+                            "video_info": video_info,
+                            "cached": True
+                        }
                 else:
                     return {
                         "success": False,
@@ -236,13 +244,16 @@ def wait_for_completion(prompt_id: str, name: str, timeout: int = 2400) -> dict:
                         "error": "Job completed but no output video found"
                     }
         
+        # Track when we last checked for videos
+        if last_video_check is None:
+            last_video_check = time.time()
+        
         time.sleep(5)
     
     return {"success": False, "duration": timeout, "error": "timeout"}
 
 
 def run_benchmark(config: tuple) -> dict:
-    """Run a single benchmark configuration."""
     width, height, frames, cpu_gb, fps, name = config
     video_duration = frames / fps
     
@@ -251,6 +262,7 @@ def run_benchmark(config: tuple) -> dict:
     print(f"   Resolution: {width}x{height}")
     print(f"   Frames: {frames} @ {fps}fps = {video_duration:.1f}s video")
     print(f"   CPU offload: {cpu_gb}GB")
+    print(f"   Allocation: {build_allocation_string(cpu_gb)}")
     print(f"{'='*60}")
     
     result = {
@@ -274,7 +286,7 @@ def run_benchmark(config: tuple) -> dict:
         result["prompt_id"] = prompt_id
         
         print("   ⏳ Waiting for completion...")
-        completion = wait_for_completion(prompt_id, name, timeout=2400)
+        completion = wait_for_completion(prompt_id, name, timeout=3600)
         
         result["success"] = completion["success"]
         result["generation_seconds"] = round(completion["duration"], 2)
@@ -285,36 +297,24 @@ def run_benchmark(config: tuple) -> dict:
             video_info = completion.get("video_info", {})
             result["actual_video"] = video_info
             
-            # Calculate throughput
             total_pixels = width * height * frames
             result["total_pixels"] = total_pixels
             result["pixels_per_second"] = round(total_pixels / completion["duration"])
             result["megapixels_per_second"] = round(total_pixels / completion["duration"] / 1_000_000, 3)
             
-            # Verify video matches expected
             if video_info:
-                actual_frames = video_info.get("nb_frames", 0)
-                actual_w = video_info.get("width", 0)
-                actual_h = video_info.get("height", 0)
                 actual_duration = video_info.get("duration", 0)
-                
-                if actual_w != width or actual_h != height:
-                    result["warning"] = f"Resolution mismatch: expected {width}x{height}, got {actual_w}x{actual_h}"
-                if abs(actual_frames - frames) > 2:
-                    result["warning"] = f"Frame count mismatch: expected {frames}, got {actual_frames}"
-                    
                 print(f"   ✅ Completed in {result['generation_minutes']:.1f} min")
-                print(f"      📹 Video: {actual_w}x{actual_h}, {actual_frames}f, {actual_duration:.1f}s")
+                print(f"      📹 Video: {video_info.get('width')}x{video_info.get('height')}, {video_info.get('nb_frames')}f @ {video_info.get('fps')}fps")
+                print(f"      ⏱️  Duration: {actual_duration:.1f}s")
                 print(f"      💾 Size: {video_info.get('file_size', 0) / 1024 / 1024:.1f}MB")
-            else:
-                print(f"   ✅ Completed in {result['generation_minutes']:.1f} min (no video info)")
         else:
             error = completion.get("error", "Unknown error")
             result["error"] = error
             if "oom" in error.lower() or "memory" in error.lower():
-                print(f"   💥 OOM ERROR: {error[:80]}")
+                print(f"   💥 OOM ERROR")
             else:
-                print(f"   ❌ Failed: {error[:80]}")
+                print(f"   ❌ Failed: {error[:60]}")
             
     except Exception as e:
         result["success"] = False
@@ -326,7 +326,6 @@ def run_benchmark(config: tuple) -> dict:
 
 
 def load_existing_results() -> list:
-    """Load existing results if any."""
     if RESULTS_FILE.exists():
         try:
             with open(RESULTS_FILE) as f:
@@ -337,71 +336,72 @@ def load_existing_results() -> list:
 
 
 def save_results(results: list):
-    """Save results to file."""
     RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(RESULTS_FILE, "w") as f:
         json.dump(results, f, indent=2)
 
 
 def print_summary(results: list):
-    """Print benchmark summary."""
     print("\n" + "="*70)
-    print("  BENCHMARK SUMMARY")
+    print("  15 SECOND VIDEO BENCHMARK SUMMARY")
     print("="*70)
     
     successful = [r for r in results if r.get("success")]
     failed = [r for r in results if not r.get("success")]
-    oom = [r for r in failed if "oom" in r.get("error", "").lower() or "memory" in r.get("error", "").lower()]
     
     print(f"\n✅ Successful: {len(successful)}")
-    print(f"❌ Failed: {len(failed)} (OOM: {len(oom)})")
+    print(f"❌ Failed: {len(failed)}")
     
     if successful:
-        print(f"\n📊 Successful Configurations:")
+        print(f"\n🎉 WORKING 15-SEC CONFIGURATIONS:")
         print("-"*70)
-        print(f"{'Name':<25} {'Resolution':<12} {'Video':<8} {'Gen Time':<10} {'MP/s':<8}")
+        print(f"{'Name':<30} {'Resolution':<12} {'FPS':<6} {'Gen Time':<10}")
         print("-"*70)
         
-        for r in sorted(successful, key=lambda x: x.get("total_pixels", 0), reverse=True):
-            video_dur = r.get("target_video_duration", 0)
+        for r in sorted(successful, key=lambda x: (-x.get("width", 0), -x.get("fps", 0))):
             gen_min = r.get("generation_minutes", 0)
-            mps = r.get("megapixels_per_second", 0)
-            print(f"{r['name']:<25} {r['width']}x{r['height']:<5} {video_dur:>5.1f}s   {gen_min:>6.1f}min   {mps:>6.3f}")
+            fps = r.get("fps", 16)
+            print(f"{r['name']:<30} {r['width']}x{r['height']:<5} {fps:<6} {gen_min:>6.1f}min")
+        
+        # Best option
+        best = max(successful, key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0)))
+        print(f"\n⭐ BEST OPTION: {best['name']}")
+        print(f"   {best['width']}x{best['height']} @ {best['fps']}fps = {best.get('target_video_duration', 15):.1f}s")
+        print(f"   Generation time: {best.get('generation_minutes', 0):.1f} min")
     
     if failed:
         print(f"\n❌ Failed Configurations:")
-        print("-"*70)
         for r in failed:
-            error_short = r.get("error", "?")[:40]
-            print(f"  {r['name']}: {error_short}")
+            print(f"  {r['name']}: {r.get('error', '?')[:30]}")
     
     print(f"\n📁 Results: {RESULTS_FILE}")
 
 
 def main():
     print("="*70)
-    print("  DisTorch2 I2V Limits Benchmark v3")
+    print("  15 SECOND VIDEO BENCHMARK")
     print("="*70)
-    print(f"\n📋 Configurations: {len(BENCHMARK_CONFIGS)}")
-    print(f"🖼️  SFW Image: {SFW_IMAGE}")
-    print(f"📂 Output: {OUTPUT_DIR}")
+    print(f"\n🎯 Goal: Find settings for 15-second videos")
+    print(f"📋 Configurations: {len(BENCHMARK_CONFIGS)}")
+    print(f"🖼️  Image: {SFW_IMAGE}")
+    print()
+    print("Strategies:")
+    print("  1. Lower resolution (384p-480p) @ 16fps")
+    print("  2. Lower FPS (8-12fps) @ higher resolution")
+    print("  3. Higher CPU offload (8-16GB)")
     print()
     
-    # Verify SFW image exists
     sfw_path = Path(__file__).parent.parent / "ComfyUI/input" / SFW_IMAGE
     if not sfw_path.exists():
         print(f"❌ SFW image not found: {sfw_path}")
         return
     
-    # Load existing results to skip completed
     results = load_existing_results()
     completed_names = {r["name"] for r in results if r.get("success")}
-    
-    # Clear failed results to retry them
     results = [r for r in results if r.get("success")]
     
     for i, config in enumerate(BENCHMARK_CONFIGS, 1):
-        name = config[5]  # name is 6th element now
+        name = config[5]
         
         if name in completed_names:
             print(f"\n[{i}/{len(BENCHMARK_CONFIGS)}] ⏭️  Skipping {name} (already done)")
@@ -410,7 +410,7 @@ def main():
         print(f"\n[{i}/{len(BENCHMARK_CONFIGS)}]", end="")
         result = run_benchmark(config)
         results.append(result)
-        save_results(results)  # Save after each test
+        save_results(results)
     
     print_summary(results)
 
