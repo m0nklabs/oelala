@@ -55,6 +55,27 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 
 **Note**: Image gen fits on single GPU. Use `cuda:1` (16GB) for headroom.
 
+### LTX-2 Video Generation (⚠️ Experimental)
+
+| Model | Size | Text Encoder | Total VRAM |
+|-------|------|--------------|------------|
+| `ltx-2-19b-distilled-fp8.safetensors` | 26GB | UMT5 FP8 (5.6GB) | ~32GB |
+| `ltx-2-19b-distilled-fp8.safetensors` | 26GB | Gemma 3 12B (23GB) | ~49GB ❌ |
+
+**Current Status**: LTX-2 requires ~32GB VRAM minimum with UMT5, or ~49GB with Gemma 3 12B.
+With 28GB total VRAM, LTX-2 is **not yet practical** on this setup.
+
+**Blockers**:
+1. Native ComfyUI loaders expect `spiece_model` tensor embedded in safetensors
+2. HuggingFace Gemma 3 format uses separate `tokenizer.model` file
+3. ComfyUI-LTXVideo custom nodes work but conflict with ComfyUI memory management when using `device_map="auto"`
+
+**Future Options**:
+- Wait for smaller quantized LTX-2 models (FP4)
+- Use diffusers directly instead of ComfyUI nodes
+- Use UMT5 with manual memory management
+- Upgrade to 32GB+ GPU
+
 ### Audio Generation (MMAudio)
 
 | Task | Model | VRAM Usage |

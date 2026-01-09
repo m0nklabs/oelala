@@ -1,5 +1,25 @@
 ## [Unreleased]
 
+### Added
+- **ComfyUI-LTXVideo**: Reinstalled custom nodes for LTX-2 video generation
+  - Cloned from `https://github.com/Lightricks/ComfyUI-LTXVideo.git`
+  - Provides `LTXVGemmaCLIPModelLoader`, `GemmaLoader`, `GemmaTextEncode` nodes
+  - Required for proper HuggingFace Gemma 3 model loading
+
+### Documentation
+- **COMFYUI_INVENTORY.md**: Added LTX-2 status and VRAM requirements
+  - LTX-2 19B FP8 + Gemma 3 12B = ~49GB (exceeds 28GB available)
+  - Documented tokenizer incompatibility between native loaders and HuggingFace format
+  - Listed future options: smaller models, diffusers direct, UMT5
+
+### Known Issues
+- **LTX-2 + Gemma 3 12B**: Not practical with 28GB VRAM
+  - Native ComfyUI loaders expect `spiece_model` tensor in safetensors
+  - HuggingFace Gemma uses separate `tokenizer.model` file
+  - device_map="auto" conflicts with ComfyUI memory management
+
+---
+
 ### Documentation
 - **Docs Cleanup**: Consolidated 39 → 28 docs, reduced 9719 → 6412 lines (-34%)
   - Merged: ADVANCED_VIDEO_*.md → ADVANCED_VIDEO.md
