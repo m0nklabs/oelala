@@ -1,41 +1,35 @@
 # LTX-2 Video Generation Status
 
 **Last Updated**: 2026-01-09  
-**Status**: ❌ Not Practical (VRAM constraints)
+**Status**: ✅ GGUF Setup Ready! (via Kijai's GGUF quantizations)
 
 ---
 
 ## Summary
 
-LTX-2 is Lightricks' latest video generation model. On our 28GB multi-GPU setup (RTX 3060 12GB + RTX 5060 Ti 16GB), it is **not currently practical** due to VRAM requirements.
+LTX-2 is Lightricks' latest audio-video generation model. Thanks to **Kijai's GGUF quantizations** released Jan 9, 2026, LTX-2 now fits on our 28GB multi-GPU setup!
 
-## VRAM Requirements
+## VRAM Requirements (Updated with GGUF)
 
-| Configuration | Model | Text Encoder | Total VRAM |
-|---------------|-------|--------------|------------|
-| Recommended | LTX-2 19B FP8 (26GB) | Gemma 3 12B (23GB) | **~49GB** ❌ |
-| Minimal | LTX-2 19B FP8 (26GB) | UMT5 FP8 (5.6GB) | **~32GB** ❌ |
-| Future | LTX-2 19B FP4 (20GB) | UMT5 FP8 (5.6GB) | **~26GB** ⚠️ |
+| Configuration | Model | Text Encoder | Total VRAM | Status |
+|---------------|-------|--------------|------------|--------|
+| ❌ Original | LTX-2 FP8 (26GB) | Gemma 3 BF16 (23GB) | ~49GB | Too large |
+| ✅ **GGUF Q4** | LTX-2 Q4_K_M (12.7GB) | Gemma FP4 (7.8GB) | **~25GB** | **Works!** |
+| ⚠️ GGUF Q6 | LTX-2 Q6_K (15.9GB) | Gemma FP4 (7.8GB) | ~28GB | Borderline |
 
 **Available VRAM**: 28GB (12GB + 16GB)
 
-## Technical Blockers
+## Installed Components (GGUF Ready)
 
-### 1. Tokenizer Format Mismatch
-- **Native ComfyUI loaders** (`LTXAVTextEncoderLoader`) expect `spiece_model` tensor embedded in safetensors
-- **HuggingFace Gemma 3** uses separate `tokenizer.model` file
-- Error: `ValueError: invalid tokenizer`
-
-### 2. device_map Conflicts
-- HuggingFace `device_map="auto"` distributes model across GPUs/CPU
-- ComfyUI's `model_patcher` calls `model.to(device)` which breaks distributed models
-- Error: `NotImplementedError: Cannot copy out of meta tensor`
-
-### 3. Pure VRAM Size
-- Even with perfect memory management, 49GB doesn't fit in 28GB
-- CPU offloading via accelerate works for loading but OOMs during inference
-
-## Installed Components
+### ComfyUI-GGUF (PR #399 Branch)
+```
+/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-GGUF/
+Branch: pr-399 (LTX-2 support)
+```
+Provides nodes:
+- `LoaderGGUF` - Load GGUF diffusion models including LTX-2
+- `LoaderGGUFAdvanced` - Advanced GGUF loading options
+- `UnetLoaderGGUFAdvancedDisTorch2MultiGPU` - Multi-GPU GGUF loading
 
 ### ComfyUI-LTXVideo (Working)
 ```
@@ -44,61 +38,42 @@ LTX-2 is Lightricks' latest video generation model. On our 28GB multi-GPU setup 
 Provides nodes:
 - `LTXVGemmaCLIPModelLoader` - Loads Gemma 3 via HuggingFace
 - `LTXVGemmaEnhancePrompt` - Prompt enhancement
-- `GemmaLoader`, `GemmaTextEncode` - Direct Gemma access
+- Various LTX-2 specific nodes
 
-### Models Available
+### Models Installed
 | File | Location | Size |
 |------|----------|------|
-| `ltx-2-19b-distilled-fp8.safetensors` | checkpoints/ | 26GB |
-| `gemma-3-12b-it-qat-q4_0-unquantized/` | text_encoders/ | 23GB |
-| `umt5_xxl_fp8_e4m3fn.safetensors` | text_encoders/ | 5.6GB |
+| **`ltx-2-19b-distilled_Q4_K_M.gguf`** | diffusion_models/ | **12 GB** ✅ |
+| **`gemma_3_12B_it_nvfp4.safetensors`** | text_encoders/ | **7.8 GB** ✅ |
+| **`ltx-2-19b-embeddings_connector_bf16.safetensors`** | text_encoders/ | **2.7 GB** ✅ |
+| **`LTX2_video_vae_bf16.safetensors`** | vae/ | **2.4 GB** ✅ |
+| `ltx-2-19b-distilled-fp8.safetensors` | checkpoints/ | 26GB (legacy) |
 
-## Future Options
+## Workflow
 
-### Option 1: Smaller Model (Recommended)
-Download `ltx-2-19b-dev-fp4.safetensors` (20GB) from Hugging Face:
-```bash
-huggingface-cli download Lightricks/LTX-2 ltx-2-19b-dev-fp4.safetensors \
-  --local-dir /home/flip/oelala/ComfyUI/models/checkpoints
-```
-Combined with UMT5 FP8 (5.6GB) = ~26GB, might fit with aggressive offloading.
+Use Kijai's workflow for GGUF LTX-2:
+- Workflow file: `/home/flip/oelala/workflows/ltx2_gguf_kijai.json`
+- Source: https://huggingface.co/Kijai/LTXV2_comfy/discussions/2
 
-### Option 2: Use Diffusers Directly
-Bypass ComfyUI memory management conflicts:
-```python
-from diffusers import LTX2Pipeline
-pipe = LTX2Pipeline.from_pretrained(
-    "Lightricks/LTX-2",
-    torch_dtype=torch.bfloat16,
-    device_map="balanced"
-)
-```
+### Key Nodes Setup
+1. `LoaderGGUFAdvanced` → Load `ltx-2-19b-distilled_Q4_K_M.gguf`
+2. Text encoder → Load `gemma_3_12B_it_nvfp4.safetensors` + embeddings connector
+3. VAE → Load `LTX2_video_vae_bf16.safetensors`
 
-### Option 3: Wait for Smaller Models
-Lightricks may release:
-- Smaller distilled versions
-- Better quantized models
-- Optimized text encoders
+## Resources
 
-### Option 4: Hardware Upgrade
-- Single 48GB GPU (RTX 6000 Ada, A6000)
-- Or 2x 24GB GPUs (RTX 4090)
+- **Kijai GGUF Models**: https://huggingface.co/Kijai/LTXV2_comfy
+- **Gemma FP4**: https://huggingface.co/GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn
+- **ComfyUI-GGUF PR#399**: https://github.com/city96/ComfyUI-GGUF/pull/399
+- **Reddit Thread**: https://reddit.com/r/StableDiffusion/comments/1q8590s
 
-## Current Recommendation
+## Legacy Technical Blockers (Solved)
 
-**Use Wan 2.2 14B** for video generation. It works reliably with DisTorch2 multi-GPU:
+These issues existed with the original full-precision models but are bypassed with GGUF:
 
-| Resolution | Max Frames | VRAM Usage |
-|------------|------------|------------|
-| 480p | 81 frames | ~24GB ✅ |
-| 720p | 41 frames | ~26GB ✅ |
-| 1080p | 17-25 frames | ~27GB ⚠️ |
-
-See [COMFYUI_INVENTORY.md](COMFYUI_INVENTORY.md) for full details.
-
-## Test Script
-
-A test script is available at `scripts/test_ltx2_umt5.py` for future testing when smaller models become available.
+1. **Tokenizer Format Mismatch** - GGUF workflow uses direct safetensors loading
+2. **device_map Conflicts** - GGUF doesn't need HuggingFace accelerate
+3. **VRAM Size** - Q4 quantization reduces 49GB to 25GB
 
 ---
 
@@ -107,3 +82,4 @@ A test script is available at `scripts/test_ltx2_umt5.py` for future testing whe
 - [Lightricks/LTX-2](https://huggingface.co/Lightricks/LTX-2) - Official HuggingFace repo
 - [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) - Custom nodes
 - [LTX-2 Paper](https://arxiv.org/abs/2601.03233) - Technical details
+- [Kijai GGUF Release (Jan 9, 2026)](https://reddit.com/r/StableDiffusion/comments/1q8590s)
