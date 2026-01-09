@@ -18,6 +18,9 @@ import logging
 import io
 import copy
 
+# Import for auto-upload functionality
+from storage_client import get_client as get_storage_client
+
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1634,7 +1637,7 @@ class ComfyUIClient:
             self.job_metadata[prompt_id] = {
                 "user_id": user_id,
                 "prompt": prompt,
-                "settings": settings or {},
+                "settings": (settings or {}).copy(),
                 "started_at": datetime.now().isoformat(),
             }
         logger.info(f"📝 Registered job {prompt_id} for user {user_id}")
@@ -1642,11 +1645,12 @@ class ComfyUIClient:
     def get_job_metadata(self, prompt_id: str) -> Optional[Dict[str, Any]]:
         """Get job metadata for a prompt ID.
 
-        Returns a shallow copy to prevent external mutation of internal state.
+        Returns a deep copy to prevent external mutation of internal state,
+        including nested structures such as the `settings` dictionary.
         """
         with self._metadata_lock:
             metadata = self.job_metadata.get(prompt_id)
-            return metadata.copy() if metadata is not None else None
+            return copy.deepcopy(metadata) if metadata is not None else None
 
     def clear_job_metadata(self, prompt_id: str):
         """Clear job metadata after completion."""
@@ -1667,10 +1671,9 @@ class ComfyUIClient:
             output_type: Type of output ('video', 'image', 'audio')
 
         Returns:
-            Storage path if upload succeeded, None otherwise
+            Storage path if upload succeeded in the format "{media_type}/{filename}",
+            for example "images/1234567890_output.png", or None if the upload failed.
         """
-        from storage_client import get_client as get_storage_client
-
         # Get job metadata
         metadata = self.get_job_metadata(prompt_id)
         if not metadata:
@@ -1684,13 +1687,20 @@ class ComfyUIClient:
             logger.warning(f"⚠️ No user_id in job metadata for {prompt_id}")
             return None
 
+        file_data = None
         try:
             # Read file content
-            with open(output_path, "rb") as f:
-                file_data = f.read()
+            try:
+                with open(output_path, "rb") as f:
+                    file_data = f.read()
+            except (IOError, OSError) as e:
+                logger.error(f"❌ Failed to read file {output_path}: {e}")
+                # Clear metadata on file read failure to prevent memory leak
+                self.clear_job_metadata(prompt_id)
+                return None
 
-            # Generate storage filename with timestamp
-            timestamp = int(datetime.now().timestamp())
+            # Generate storage filename with high-precision timestamp (ms) to avoid collisions
+            timestamp = int(datetime.now().timestamp() * 1000)
             original_filename = Path(output_path).name
             storage_filename = f"{timestamp}_{original_filename}"
 
@@ -1722,13 +1732,18 @@ class ComfyUIClient:
                 f"📤 Uploading {output_type} to user storage: {user_id}/{media_type}/{storage_filename}"
             )
 
-            storage_client.put_user_media(
-                user_id=user_id,
-                media_type=media_type,
-                filename=storage_filename,
-                data=file_data,
-                content_type=content_type,
-            )
+            try:
+                storage_client.put_user_media(
+                    user_id=user_id,
+                    media_type=media_type,
+                    filename=storage_filename,
+                    data=file_data,
+                    content_type=content_type,
+                )
+            except Exception as e:
+                logger.error(f"❌ Storage upload failed for {prompt_id}: {e}")
+                # Don't clear metadata on upload failure - allows retry
+                return None
 
             storage_path = f"{media_type}/{storage_filename}"
             logger.info(
@@ -1741,7 +1756,7 @@ class ComfyUIClient:
             return storage_path
 
         except Exception as e:
-            logger.error(f"❌ Auto-upload failed for {prompt_id}: {e}")
+            logger.error(f"❌ Unexpected error during auto-upload for {prompt_id}: {e}")
             # Don't raise - we don't want to break the user flow if upload fails
             return None
 

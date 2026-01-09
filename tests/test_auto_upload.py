@@ -65,7 +65,7 @@ class TestJobTracking:
 class TestAutoUpload:
     """Test auto-upload on job completion."""
 
-    @patch('storage_client.get_client')
+    @patch('comfyui_client.get_storage_client')
     def test_on_job_complete_video(self, mock_get_storage_client):
         """Test auto-upload of video file."""
         client = ComfyUIClient()
@@ -92,11 +92,11 @@ class TestAutoUpload:
 
             # Verify storage client was called
             assert mock_storage.put_user_media.called
-            call_args = mock_storage.put_user_media.call_args
-            assert call_args.kwargs["user_id"] == user_id
-            assert call_args.kwargs["media_type"] == "videos"
-            assert call_args.kwargs["content_type"] == "video/mp4"
-            assert call_args.kwargs["data"] == b"fake video content"
+            _, kwargs = mock_storage.put_user_media.call_args
+            assert kwargs["user_id"] == user_id
+            assert kwargs["media_type"] == "videos"
+            assert kwargs["content_type"] == "video/mp4"
+            assert kwargs["data"] == b"fake video content"
 
             # Verify storage path returned
             assert storage_path is not None
@@ -108,7 +108,7 @@ class TestAutoUpload:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
 
-    @patch('storage_client.get_client')
+    @patch('comfyui_client.get_storage_client')
     def test_on_job_complete_image(self, mock_get_storage_client):
         """Test auto-upload of image file."""
         client = ComfyUIClient()
@@ -135,10 +135,10 @@ class TestAutoUpload:
 
             # Verify storage client was called
             assert mock_storage.put_user_media.called
-            call_args = mock_storage.put_user_media.call_args
-            assert call_args.kwargs["user_id"] == user_id
-            assert call_args.kwargs["media_type"] == "images"
-            assert call_args.kwargs["content_type"] == "image/png"
+            _, kwargs = mock_storage.put_user_media.call_args
+            assert kwargs["user_id"] == user_id
+            assert kwargs["media_type"] == "images"
+            assert kwargs["content_type"] == "image/png"
 
             # Verify storage path returned
             assert storage_path is not None
@@ -150,7 +150,7 @@ class TestAutoUpload:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
 
-    @patch('storage_client.get_client')
+    @patch('comfyui_client.get_storage_client')
     def test_on_job_complete_no_metadata(self, mock_get_storage_client):
         """Test that upload is skipped when no job metadata exists."""
         client = ComfyUIClient()
@@ -165,7 +165,7 @@ class TestAutoUpload:
         assert storage_path is None
         mock_get_storage_client.assert_not_called()
 
-    @patch('storage_client.get_client')
+    @patch('comfyui_client.get_storage_client')
     def test_on_job_complete_upload_failure(self, mock_get_storage_client):
         """Test that failures don't raise exceptions."""
         client = ComfyUIClient()
