@@ -40,3 +40,7 @@ dynamicprompts==0.31.0
 
 # Audio (for TTS nodes)
 pyogg==0.6.14a1
+
+# WebSocket and HTTP clients
+httpx==0.28.1
+websocket-client==1.8.0

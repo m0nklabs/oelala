@@ -39,6 +39,9 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
 from auth import get_current_user, User
+from fastapi.security import HTTPBearer
+
+security = HTTPBearer(auto_error=False)
 
 # Storage client for user media
 from storage_client import get_client as get_storage_client
@@ -76,6 +79,11 @@ ticker_store = {}  # job_id -> threading.Event to stop ticker
 
 # WebSocket connections for live log streaming
 log_subscribers: set[WebSocket] = set()
+
+# WebSocket and job queue management
+from websocket_handler import ws_manager
+from job_queue import job_queue_manager
+from comfyui_progress_monitor import progress_monitor
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -381,6 +389,116 @@ async def websocket_logs(websocket: WebSocket):
         )
 
 
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time job progress and queue updates.
+    Requires authentication via JWT token sent in first message.
+
+    Clients receive:
+    - queue_update: Position changes and ETA
+    - progress: Generation progress (0-100%)
+    - job_complete: Job finished successfully
+    - job_failed: Job failed with error
+
+    Authentication:
+    - After connecting, send {"type": "auth", "token": "your_jwt_token"} as first message
+    - User ID is derived from authenticated session
+    - Connection will be closed if authentication fails or is not provided within 5 seconds
+    """
+    await websocket.accept()
+
+    # Wait for authentication message
+    try:
+        # Give client 5 seconds to authenticate
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+
+        try:
+            auth_data = json.loads(auth_message)
+        except json.JSONDecodeError:
+            logger.warning("📡 WebSocket rejected: Invalid JSON in auth message")
+            await websocket.close(code=1008, reason="Invalid authentication message")
+            return
+
+        if auth_data.get("type") != "auth":
+            logger.warning("📡 WebSocket rejected: First message must be auth")
+            await websocket.close(code=1008, reason="Authentication required")
+            return
+
+        token = auth_data.get("token")
+        if not token:
+            logger.warning("📡 WebSocket rejected: No token provided")
+            await websocket.close(code=1008, reason="Token required")
+            return
+
+        # Validate JWT token
+        from auth import decode_jwt_with_secret, decode_jwt_with_jwks
+
+        # Security: Use cryptographically verified JWT decoding only
+        # Try secret-based verification first (faster), then JWKS
+        payload = decode_jwt_with_secret(token)
+        if not payload:
+            payload = decode_jwt_with_jwks(token)
+
+        if not payload:
+            logger.warning("📡 WebSocket rejected: Invalid or unverifiable token")
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+
+        user_id = payload.get("sub")
+        if not user_id:
+            logger.warning("📡 WebSocket rejected: No user_id in token")
+            await websocket.close(code=1008, reason="Invalid token payload")
+            return
+
+    except asyncio.TimeoutError:
+        logger.warning("📡 WebSocket rejected: Authentication timeout")
+        await websocket.close(code=1008, reason="Authentication timeout")
+        return
+    except Exception as e:
+        logger.warning(f"📡 WebSocket authentication failed: {e}")
+        await websocket.close(code=1008, reason="Authentication failed")
+        return
+
+    # Authentication successful
+    await ws_manager.connect(websocket, user_id)
+    logger.info(f"📡 Progress WebSocket connected for user {user_id}")
+
+    # Send authentication success confirmation
+    try:
+        await websocket.send_text(
+            json.dumps({"type": "auth_success", "user_id": user_id})
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send auth confirmation: {e}")
+
+    try:
+        # Keep connection alive and handle client messages
+        while True:
+            try:
+                # Wait for pings/close from client
+                message = await websocket.receive_text()
+                # Could handle client requests here (e.g., request status update)
+                if message:
+                    try:
+                        data = json.loads(message)
+                        if data.get("type") == "ping":
+                            await websocket.send_text(json.dumps({"type": "pong"}))
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ Invalid JSON in WebSocket message: {e}")
+                        # Skip processing this malformed message but keep the connection open
+                        continue
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.warning(f"WebSocket message error: {e}")
+    finally:
+        ws_manager.disconnect(websocket, user_id)
+        logger.info(
+            f"📡 Progress WebSocket disconnected for user {user_id or 'anonymous'}"
+        )
+
+
 @app.get("/progress/{job_id}")
 async def get_progress(job_id: str):
     data = progress_store.get(job_id, None)
@@ -400,12 +518,26 @@ async def serve_video_test():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup status"""
+    """Log startup status and start queue polling"""
     client = get_comfyui_client()
     if client and client.is_available():
         logger.info("✅ ComfyUI backend available and ready!")
+        # Start queue polling for real-time updates
+        await job_queue_manager.start_polling(ws_manager, interval=2.0)
+        logger.info("🔄 Queue polling started (2s interval)")
+        # Start ComfyUI progress monitor
+        progress_monitor.start()
+        logger.info("🔄 ComfyUI progress monitor started")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean shutdown"""
+    await job_queue_manager.stop_polling()
+    progress_monitor.stop()
+    logger.info("👋 Server shutting down")
 
 
 @app.get("/")
@@ -4714,6 +4846,33 @@ async def generate_i2i(
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
+
+        # Register job for queue tracking and WebSocket updates
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="i2i",
+            metadata={
+                "prompt": prompt,
+                "denoise": denoise,
+                "checkpoint": checkpoint,
+                "seed": seed,
+                "source_image": comfyui_filename,
+            },
+        )
+        ws_manager.register_job(prompt_id, user.id)
+
+        # Register progress callback for real-time updates
+        async def progress_callback(progress: int, node_name: str):
+            """Relay ComfyUI progress to WebSocket clients"""
+            await ws_manager.broadcast_progress(
+                job_id=prompt_id,
+                progress=progress,
+                message=f"Processing: {node_name}",
+                node_name=node_name,
+            )
+
+        progress_monitor.register_callback(prompt_id, progress_callback)
 
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")

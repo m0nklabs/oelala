@@ -17,13 +17,13 @@ jobs:
       github.event.review.user.login == 'copilot-pull-request-reviewer[bot]' &&
       github.event.review.state == 'COMMENTED' &&
       github.event.pull_request.user.login == 'copilot-swe-agent[bot]'
-    
+
     runs-on: ubuntu-latest
-    
+
     permissions:
       pull-requests: write
       contents: read
-    
+
     steps:
       - name: Check if already auto-applied once
         id: check
@@ -32,19 +32,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = context.payload.pull_request.number;
-            
+
             // Check for any previous auto-apply comment on this PR
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
             });
-            
-            const hasAutoApplied = comments.data.some(c => 
-              c.body.includes('<!-- auto-apply-copilot-review -->') && 
+
+            const hasAutoApplied = comments.data.some(c =>
+              c.body.includes('<!-- auto-apply-copilot-review -->') &&
               c.user.login === 'github-actions[bot]'
             );
-            
+
             if (hasAutoApplied) {
               console.log('Already auto-applied once on this PR, skipping to save Copilot minutes');
               core.setOutput('skip', 'true');
@@ -60,12 +60,12 @@ jobs:
           script: |
             const prNumber = context.payload.pull_request.number;
             const reviewUrl = context.payload.review.html_url;
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
               body: `@copilot apply the changes based on the review comments in ${reviewUrl}\n\n<!-- auto-apply-copilot-review -->`
             });
-            
+
             console.log('Posted auto-apply comment (first and only time for this PR)');
