@@ -3802,6 +3802,51 @@ async def generate_text_video(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
+    # Register job with ComfyUI client for auto-upload on completion
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "width": width,
+            "height": height,
+        },
+    )
+
+    # Register job with WebSocket manager for progress tracking
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="wan22_t2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+            },
+        )
+
+        # Register progress callback to broadcast real-time progress
+        if progress_monitor:
+
+            async def progress_callback(progress: int, node_name: str):
+                """Broadcast progress to user's WebSocket connections"""
+                await ws_manager.broadcast_progress(
+                    job_id=prompt_id,
+                    progress=progress,
+                    node_name=node_name,
+                    message=f"Processing {node_name}",
+                )
+
+            progress_monitor.register_callback(prompt_id, progress_callback)
+
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
     logger.info(f"📋 T2V queued: {prompt_id} (💰 -{credits_required} credits)")
