@@ -8,6 +8,7 @@ const AuthContext = createContext({
   signInWithGoogle: async () => {},
   signInWithGithub: async () => {},
   signOut: async () => {},
+  switchAccount: async () => {},
   isAdult: false,
   showLoginModal: false,
   loginModalMessage: null,
@@ -82,6 +83,29 @@ export function AuthProvider({ children }) {
     if (error) console.error('Sign-out error:', error)
   }
 
+  // Switch account - signs out and forces account picker on next OAuth
+  const switchAccount = async (provider = 'google') => {
+    if (!isAuthEnabled()) {
+      console.warn('Auth not enabled')
+      return
+    }
+    
+    // First sign out
+    await supabase.auth.signOut()
+    
+    // Then immediately trigger OAuth with account selection prompt
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: {
+          prompt: 'select_account',  // Forces account picker on Google
+        },
+      },
+    })
+    if (error) console.error('Switch account error:', error)
+  }
+
   // Request login - shows login modal with optional message
   const requestLogin = useCallback((message = null) => {
     setLoginModalMessage(message)
@@ -106,6 +130,7 @@ export function AuthProvider({ children }) {
     signInWithGoogle,
     signInWithGithub,
     signOut,
+    switchAccount,
     isAdult,
     showLoginModal,
     loginModalMessage,

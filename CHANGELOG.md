@@ -1,12 +1,42 @@
 ## [Unreleased]
 
 ### Added
+- **Switch Account**: Account switching via UserMenu dropdown
+  - New `switchAccount()` function in AuthContext
+  - Uses `prompt: 'select_account'` to force Google account picker
+  - RefreshCw icon button in user dropdown before Sign Out
+
+### Fixed
+- **Video History**: `/list-videos` now scans both output directories
+  - Scans `generated/` AND `ComfyUI/output/` for mp4 files
+  - Returns correct URL path (`/outputs/` vs `/comfyui-outputs/`)
+  - Sorted by mtime (newest first)
+  - Frontend uses URL from API response
+- **Video Duration Defaults**: Increased for longer videos
+  - TextToVideoTool: 41 → 81 frames (~3.2 sec @ 25fps)
+  - ImageToVideoTool: 6 → 8 seconds (128 frames @ 16fps)
+
+- **LTX-2 GGUF CPU Gemma Encoding**: Working solution for LTX-2 video generation with 28GB VRAM
+  - New nodes: `LTXVCPUGemmaEncode`, `LTXVCPUGemmaNegativeEncode`
+  - Gemma-3 12B runs entirely on CPU (~24GB RAM), freeing GPU VRAM for UNET
+  - Audio embeddings connector support for LTX-2 AV models
+  - Output shape: [1, 256, 7680] (video + audio embeddings concatenated)
+  - Performance: ~55 sec/encode, ~2.5 min total for 17-frame video
 - **ComfyUI-LTXVideo**: Reinstalled custom nodes for LTX-2 video generation
   - Cloned from `https://github.com/Lightricks/ComfyUI-LTXVideo.git`
   - Provides `LTXVGemmaCLIPModelLoader`, `GemmaLoader`, `GemmaTextEncode` nodes
   - Required for proper HuggingFace Gemma 3 model loading
 
+### Fixed
+- **cpu_gemma_encoder.py**: Multiple fixes for CPU-only Gemma encoding
+  - Folder path resolution when `get_full_path()` returns None
+  - Tokenizer left padding with `model_max_length` and `pad_token`
+  - Max length padding (`padding="max_length"`)
+  - Audio embeddings connector for LTX-2 AV model compatibility
+  - Attention mask handling in conditioning output
+
 ### Documentation
+- **LTX2_HANDOVER.md**: Updated with working solution and performance metrics
 - **COMFYUI_INVENTORY.md**: Added LTX-2 status and VRAM requirements
   - LTX-2 19B FP8 + Gemma 3 12B = ~49GB (exceeds 28GB available)
   - Documented tokenizer incompatibility between native loaders and HuggingFace format

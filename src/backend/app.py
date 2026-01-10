@@ -5335,8 +5335,10 @@ async def get_image(filename: str):
 
 @app.get("/list-videos")
 async def list_videos():
-    """List all generated videos"""
+    """List all generated videos from both output directories"""
     videos = []
+    
+    # Scan OUTPUT_DIR (generated/)
     for file_path in OUTPUT_DIR.glob("*.mp4"):
         stat = file_path.stat()
         videos.append(
@@ -5344,9 +5346,27 @@ async def list_videos():
                 "filename": file_path.name,
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "mtime": stat.st_mtime,
                 "url": f"/videos/{file_path.name}",
             }
         )
+    
+    # Also scan COMFYUI_OUTPUT_DIR
+    if COMFYUI_OUTPUT_DIR.exists():
+        for file_path in COMFYUI_OUTPUT_DIR.glob("*.mp4"):
+            stat = file_path.stat()
+            videos.append(
+                {
+                    "filename": file_path.name,
+                    "size": stat.st_size,
+                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "mtime": stat.st_mtime,
+                    "url": f"/comfyui-outputs/{file_path.name}",
+                }
+            )
+    
+    # Sort by mtime (newest first)
+    videos.sort(key=lambda v: v.get("mtime", 0), reverse=True)
 
     return {"videos": videos, "count": len(videos)}
 
