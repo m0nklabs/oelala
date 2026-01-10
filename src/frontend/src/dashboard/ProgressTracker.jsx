@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Clock, Loader2, TrendingUp } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 
@@ -13,6 +13,19 @@ export default function ProgressTracker({ promptId, onComplete }) {
   const [eta, setEta] = useState(null)
   const [startTime, setStartTime] = useState(Date.now())
   const [currentNode, setCurrentNode] = useState('')
+  const onCompleteRef = useRef(onComplete)
+  
+  // Keep onComplete ref up to date
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+  }, [onComplete])
+  
+  // Reset start time whenever we start tracking a new prompt
+  useEffect(() => {
+    if (!promptId) return
+    setStartTime(Date.now())
+    setProgress(0)
+  }, [promptId])
 
   // Fetch job status
   const fetchJobStatus = useCallback(async () => {
@@ -24,14 +37,19 @@ export default function ProgressTracker({ promptId, onComplete }) {
       const data = await res.json()
       setJobStatus(data)
 
+      // Update current node if available
+      if (data.current_node) {
+        setCurrentNode(data.current_node)
+      }
+
       // Check if job completed
       if (data.status === 'completed' || data.status === 'failed') {
-        if (onComplete) onComplete(data)
+        if (onCompleteRef.current) onCompleteRef.current(data)
       }
     } catch (e) {
       if (DEBUG) console.debug('⚠️ Job status fetch failed:', e)
     }
-  }, [promptId, onComplete])
+  }, [promptId])
 
   // Fetch queue position
   const fetchQueue = useCallback(async () => {
@@ -73,9 +91,14 @@ export default function ProgressTracker({ promptId, onComplete }) {
     }
   }, [progress, startTime])
 
-  // Poll for updates
+  // Poll for updates - stops when job completes
   useEffect(() => {
     if (!promptId) return
+    
+    // Check if job is already in terminal state
+    if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
+      return
+    }
 
     // Initial fetch
     fetchJobStatus()
@@ -89,7 +112,7 @@ export default function ProgressTracker({ promptId, onComplete }) {
       clearInterval(statusInterval)
       clearInterval(queueInterval)
     }
-  }, [promptId, fetchJobStatus, fetchQueue])
+  }, [promptId, fetchJobStatus, fetchQueue, jobStatus])
 
   // Update progress based on job status
   useEffect(() => {
@@ -98,9 +121,27 @@ export default function ProgressTracker({ promptId, onComplete }) {
     if (jobStatus.status === 'completed') {
       setProgress(100)
     } else if (jobStatus.status === 'running') {
-      // Estimate progress based on typical workflow stages
-      // This is a rough estimate - real progress tracking would come from WebSocket
-      setProgress(prev => Math.min(95, prev + 5))
+      // Prefer real progress from backend when available
+      const { progress: rawProgress, current_step, total_steps } = jobStatus
+
+      if (typeof rawProgress === 'number' && !Number.isNaN(rawProgress)) {
+        // Support both 0–1 (fraction) and 0–100 (percentage) ranges
+        const normalized =
+          rawProgress <= 1 ? rawProgress * 100 : rawProgress
+        setProgress(Math.max(0, Math.min(100, Math.round(normalized))))
+      } else if (
+        typeof current_step === 'number' &&
+        typeof total_steps === 'number' &&
+        total_steps > 0
+      ) {
+        const ratio = current_step / total_steps
+        const normalized = Math.max(0, Math.min(1, ratio)) * 100
+        setProgress(Math.round(normalized))
+      } else {
+        // No reliable progress data; avoid misleading time-based increments.
+        // Only bump once from 0 to a small "started" value.
+        setProgress(prev => (prev === 0 ? 5 : prev))
+      }
     } else if (jobStatus.status === 'queued') {
       setProgress(0)
     }

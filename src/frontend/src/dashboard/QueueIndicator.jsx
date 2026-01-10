@@ -173,7 +173,13 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
                   Running
                 </div>
                 {queue.running.map((job) => (
-                  <JobRow key={job.prompt_id} job={job} status="running" onCancel={cancelJob} />
+                  <JobRow 
+                    key={job.prompt_id} 
+                    job={job} 
+                    status="running" 
+                    onCancel={cancelJob}
+                    onJobComplete={fetchQueue}
+                  />
                 ))}
               </div>
             )}
@@ -215,7 +221,7 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   )
 }
 
-function JobRow({ job, status, onCancel }) {
+function JobRow({ job, status, onCancel, onJobComplete }) {
   const [showDetails, setShowDetails] = useState(status === 'running')
   const colors = { running: '#22c55e', pending: '#fbbf24', completed: '#3b82f6' }
   const Icon = { running: Loader2, pending: Clock, completed: CheckCircle }[status]
@@ -278,7 +284,10 @@ function JobRow({ job, status, onCancel }) {
       {/* Detailed progress tracker for running jobs */}
       {status === 'running' && showDetails && (
         <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
-          <ProgressTracker promptId={job.prompt_id} />
+          <ProgressTracker 
+            promptId={job.prompt_id}
+            onComplete={onJobComplete}
+          />
         </div>
       )}
     </div>
