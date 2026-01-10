@@ -69,12 +69,12 @@ class CreditAdjustment(BaseModel):
     )
 
     @validator("amount")
-    def validate_amount(self, v):
-        if abs(v) > 100000:
+    def validate_amount(cls, value):
+        if abs(value) > 100000:
             raise ValueError("Amount must be between -100,000 and 100,000")
-        if v == 0:
+        if value == 0:
             raise ValueError("Amount cannot be zero")
-        return v
+        return value
 
 
 class TierUpdate(BaseModel):
