@@ -1,0 +1,119 @@
+{
+  "1": {
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "inputs": {
+      "unet_name": "ltx-2-19b-distilled_Q4_K_M.gguf",
+      "dequant_dtype": "bfloat16",
+      "patch_dtype": "bfloat16",
+      "patch_on_device": false,
+      "compute_device": "cuda:1",
+      "virtual_vram_gb": 14.0,
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "",
+      "eject_models": true
+    }
+  },
+  "2": {
+    "class_type": "LTXVGemmaCLIPModelLoader",
+    "_comment": "This loads the large sharded Gemma - need CPU offloading",
+    "inputs": {
+      "gemma_path": "gemma-3-12b-it-qat-q4_0-unquantized/model-00001-of-00005.safetensors",
+      "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
+      "max_length": 256
+    }
+  },
+  "3": {
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "inputs": {
+      "vae_name": "LTX2_video_vae_bf16.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 3.0,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "",
+      "eject_models": false
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "A cat walking on the beach at sunset, cinematic lighting, 4k quality",
+      "clip": ["2", 0]
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode", 
+    "inputs": {
+      "text": "blurry, low quality, distorted, watermark",
+      "clip": ["2", 0]
+    }
+  },
+  "6": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "frame_rate": 25.0
+    }
+  },
+  "7": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 768,
+      "height": 512,
+      "length": 25,
+      "batch_size": 1
+    }
+  },
+  "8": {
+    "class_type": "LTXVScheduler",
+    "inputs": {
+      "steps": 8,
+      "max_shift": 2.05,
+      "base_shift": 0.95,
+      "stretch": true,
+      "terminal": 0.1
+    }
+  },
+  "9": {
+    "class_type": "SamplerCustom",
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 42,
+      "cfg": 1.0,
+      "model": ["1", 0],
+      "positive": ["6", 0],
+      "negative": ["6", 1],
+      "sampler": ["10", 0],
+      "sigmas": ["8", 0],
+      "latent_image": ["7", 0]
+    }
+  },
+  "10": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "11": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["9", 0],
+      "vae": ["3", 0]
+    }
+  },
+  "12": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["11", 0],
+      "frame_rate": 25,
+      "loop_count": 0,
+      "filename_prefix": "ltx2_distorch2",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "audio": null,
+      "meta_batch": null,
+      "vae": null
+    }
+  }
+}

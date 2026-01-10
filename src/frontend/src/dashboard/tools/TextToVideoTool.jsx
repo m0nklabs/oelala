@@ -25,7 +25,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     return saved && saved.trim() ? saved : getDefaultPrompt(false)
   })
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, ugly')
-  const [numFrames, setNumFrames] = useState(41)
+  const [numFrames, setNumFrames] = useState(81)
   const [aspectRatio, setAspectRatio] = useState('1:1')
   const [resolution, setResolution] = useState('480p')
   const [fps, setFps] = useState(16)

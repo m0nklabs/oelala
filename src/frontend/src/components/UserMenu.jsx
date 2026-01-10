@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCredits } from '../contexts/CreditsContext'
-import { LogIn, User, LogOut, Loader2, ChevronDown, Coins, Plus } from 'lucide-react'
+import { LogIn, User, LogOut, Loader2, ChevronDown, Coins, Plus, RefreshCw } from 'lucide-react'
 import PurchaseCreditsModal from './PurchaseCreditsModal'
 
 export default function UserMenu() {
-  const { user, loading, signInWithGoogle, signOut } = useAuth()
+  const { user, loading, signInWithGoogle, signOut, switchAccount } = useAuth()
   const { balance, loading: creditsLoading } = useCredits()
   const [showDropdown, setShowDropdown] = useState(false)
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
@@ -154,6 +154,30 @@ export default function UserMenu() {
               Buy Credits
             </button>
           </div>
+
+          {/* Switch Account */}
+          <button
+            onClick={() => { switchAccount('google'); setShowDropdown(false); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '10px 14px',
+              border: 'none',
+              borderBottom: '1px solid var(--border-color)',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => e.target.style.background = 'rgba(124,58,237,0.1)'}
+            onMouseLeave={(e) => e.target.style.background = 'transparent'}
+          >
+            <RefreshCw size={16} />
+            Switch account
+          </button>
 
           {/* Sign Out */}
           <button
