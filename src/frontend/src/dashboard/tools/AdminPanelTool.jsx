@@ -174,25 +174,23 @@ export default function AdminPanel() {
         return
       }
 
-      if (response.ok) {
-        // Refresh user list
-        const params = new URLSearchParams({ page: page.toString(), per_page: '20' })
-        if (filterTier) params.append('tier', filterTier)
+      // Refresh user list
+      const params = new URLSearchParams({ page: page.toString(), per_page: '20' })
+      if (filterTier) params.append('tier', filterTier)
 
-        const refreshResponse = await fetch(
-          `${BACKEND_BASE}/api/admin/users?${params}`,
-          { headers: { Authorization: `Bearer ${session.access_token}` } }
-        )
+      const refreshResponse = await fetch(
+        `${BACKEND_BASE}/api/admin/users?${params}`,
+        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      )
 
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json()
-          setUsers(refreshData.users)
-        }
-
-        setShowCreditModal(false)
-        setCreditAdjustUser(null)
-        setCreditLoading(false)
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json()
+        setUsers(refreshData.users)
       }
+
+      setShowCreditModal(false)
+      setCreditAdjustUser(null)
+      setCreditLoading(false)
     } catch (error) {
       console.error('Failed to adjust credits:', error)
       setCreditError('Network error: Failed to adjust credits')
@@ -221,12 +219,10 @@ export default function AdminPanel() {
         return
       }
 
-      if (response.ok) {
-        // Update local state
-        setUsers(users.map(u =>
-          u.user_id === userId ? { ...u, tier: newTier } : u
-        ))
-      }
+      // Update local state
+      setUsers(users.map(u =>
+        u.user_id === userId ? { ...u, tier: newTier } : u
+      ))
     } catch (error) {
       console.error('Failed to update tier:', error)
       alert('Network error: Failed to update tier')
@@ -254,12 +250,10 @@ export default function AdminPanel() {
         return
       }
 
-      if (response.ok) {
-        // Update local state
-        setUsers(users.map(u =>
-          u.user_id === userId ? { ...u, [field]: !currentValue } : u
-        ))
-      }
+      // Update local state
+      setUsers(users.map(u =>
+        u.user_id === userId ? { ...u, [field]: !currentValue } : u
+      ))
     } catch (error) {
       console.error('Failed to toggle status:', error)
       alert('Network error: Failed to toggle status')

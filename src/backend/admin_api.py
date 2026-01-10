@@ -69,7 +69,7 @@ class CreditAdjustment(BaseModel):
     )
 
     @validator("amount")
-    def validate_amount(cls, v):
+    def validate_amount(self, v):
         if abs(v) > 100000:
             raise ValueError("Amount must be between -100,000 and 100,000")
         if v == 0:
@@ -526,20 +526,7 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
         }
 
-        # Use PostgreSQL aggregation for efficiency
-        query = """
-            SELECT
-                COUNT(*) as total_users,
-                SUM(lifetime_purchased) as total_purchased,
-                SUM(lifetime_used) as total_used,
-                COUNT(*) FILTER (WHERE is_admin = true) as admin_count,
-                COUNT(*) FILTER (WHERE is_vip = true) as vip_count,
-                COUNT(*) FILTER (WHERE tier = 'free') as free_count,
-                COUNT(*) FILTER (WHERE tier = 'pro') as pro_count,
-                COUNT(*) FILTER (WHERE tier = 'vip') as vip_tier_count
-            FROM user_credits
-        """
-
+        # Use PostgreSQL aggregation via Supabase RPC for efficiency
         response = await client.post(
             f"{SUPABASE_URL}/rest/v1/rpc/get_admin_stats",
             headers=headers,

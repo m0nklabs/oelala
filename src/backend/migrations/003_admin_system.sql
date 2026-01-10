@@ -190,7 +190,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Function to toggle admin status (super admin only - must be called via service role)
+-- Function to toggle admin status
+-- SECURITY: This function has NO authorization check and MUST only be called
+-- via service role (backend with SUPABASE_SERVICE_KEY) to prevent privilege escalation.
+-- Regular admins should NOT have direct access to toggle admin status.
 CREATE OR REPLACE FUNCTION public.admin_toggle_status(
     p_user_id UUID,
     p_is_admin BOOLEAN DEFAULT NULL,
@@ -201,6 +204,8 @@ CREATE OR REPLACE FUNCTION public.admin_toggle_status(
 ) AS $$
 BEGIN
     -- Update admin/vip status (only fields that are not NULL)
+    -- NOTE: This function deliberately has no authorization check.
+    -- It must be called via service role only to maintain security.
     UPDATE public.user_credits
     SET
         is_admin = COALESCE(p_is_admin, is_admin),
