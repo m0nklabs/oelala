@@ -4,23 +4,35 @@
 
 The Oelala backend provides real-time job progress and queue position updates via WebSocket. This allows frontend clients to display live progress bars, queue positions, and ETAs without polling.
 
+**Authentication Required**: This endpoint requires JWT authentication via the Authorization header.
+
 ## WebSocket Endpoint
 
 ```
-ws://localhost:7998/ws/progress?user_id=<user_id>
+ws://localhost:7998/ws/progress
 ```
 
-### Query Parameters
+### Authentication
 
-- `user_id` (optional): User identifier for filtering events. Defaults to "anonymous" if not provided.
+The endpoint requires a valid JWT token sent in the Authorization header. The user ID is derived from the authenticated session token, not from query parameters.
 
 ## Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:7998/ws/progress?user_id=user123');
+// Get JWT token from your auth system
+const token = localStorage.getItem('auth_token'); // or from your auth state
 
+const ws = new WebSocket('ws://localhost:7998/ws/progress');
+
+// Note: WebSocket API doesn't support custom headers directly in browser
+// You need to send the token in the first message or use subprotocol
+// For production, consider using a WebSocket library that supports headers
+
+// Alternative: Send token after connection
 ws.onopen = () => {
   console.log('✅ Connected to progress WebSocket');
+  // If using token-based auth, send it in first message
+  ws.send(JSON.stringify({ type: 'auth', token: token }));
 };
 
 ws.onmessage = (event) => {
@@ -36,6 +48,13 @@ ws.onclose = () => {
   console.log('🔌 Disconnected from progress WebSocket');
 };
 ```
+
+**Note**: The current implementation expects the JWT token in the HTTP Authorization header during the WebSocket handshake. Browser WebSocket API has limited support for custom headers. For production use, consider one of these approaches:
+
+1. Use a WebSocket library that supports custom headers (e.g., `socket.io-client`, `ws` in Node.js)
+2. Send token as a subprotocol during handshake
+3. Use a cookie-based session authentication instead of header-based JWT
+4. Send token in the first WebSocket message after connection (requires additional backend handling)
 
 ## Event Types
 
@@ -374,27 +393,36 @@ Expected response:
 
 ## Security Considerations
 
-1. **Authentication**: Current implementation uses optional `user_id` query parameter
-   - ⚠️ **SECURITY WARNING**: The current implementation allows clients to specify arbitrary `user_id` values, which means an attacker who knows or guesses another user's ID can subscribe to their job events (including output URLs and metadata)
-   - **Production requirement**: The WebSocket endpoint MUST be modified to derive the `user_id` from a verified session token (e.g., JWT, session cookie) or other server-side authentication mechanism before deployment
-   - Example fix:
+1. **Authentication**: ✅ **IMPLEMENTED** - WebSocket endpoint now requires JWT authentication
+   - The endpoint validates JWT tokens from the Authorization header during WebSocket handshake
+   - User ID is derived from the authenticated token payload, not from client-supplied parameters
+   - Unauthorized clients receive a 1008 close code with "Authentication required" reason
+   - Implementation:
      ```python
      @app.websocket("/ws/progress")
-     async def websocket_progress(websocket: WebSocket, user: User = Depends(get_current_user)):
-         # Derive user_id from authenticated session
-         await ws_manager.connect(websocket, user_id=user.id)
+     async def websocket_progress(
+         websocket: WebSocket,
+         credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+     ):
+         # Validates token and extracts user_id from JWT payload
+         payload = decode_token(credentials.credentials)
+         user_id = payload.get("sub")
      ```
-   - Consider rate limiting connections per authenticated user
+   - **Browser Limitation**: Standard WebSocket API doesn't support custom headers. Consider:
+     - Using a WebSocket library with header support
+     - Cookie-based authentication
+     - Token in subprotocol or first message (requires backend modification)
 
 2. **Authorization**: Events are only sent to job owners
-   - Users cannot see other users' job progress (when properly authenticated)
-   - Job ownership is tracked via `user_id`
-   - **This protection is ineffective without proper authentication** (see warning above)
+   - Users can only see their own job progress
+   - Job ownership is tracked via authenticated `user_id` from JWT
+   - Each user receives events only for jobs they submitted
 
 3. **DoS Protection**:
    - Rate limiting prevents event spam (100ms minimum between duplicate events)
    - Connection limits should be enforced at nginx/load balancer level
    - Consider implementing per-user connection limits
+   - Rate limit cache is automatically cleaned up when jobs complete
 
 ## Migration from Polling
 

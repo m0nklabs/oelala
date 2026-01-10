@@ -39,6 +39,9 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
 from auth import get_current_user, User
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer(auto_error=False)
 
 # Storage client for user media
 from storage_client import get_client as get_storage_client
@@ -387,21 +390,49 @@ async def websocket_logs(websocket: WebSocket):
 
 
 @app.websocket("/ws/progress")
-async def websocket_progress(websocket: WebSocket, user_id: str = None):
+async def websocket_progress(
+    websocket: WebSocket,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
     """
     WebSocket endpoint for real-time job progress and queue updates.
+    Requires authentication via JWT token in Authorization header.
 
     Clients receive:
     - queue_update: Position changes and ETA
     - progress: Generation progress (0-100%)
     - job_complete: Job finished successfully
     - job_failed: Job failed with error
-
-    Query params:
-    - user_id: Optional user ID for filtering (defaults to anonymous)
+    
+    Authentication:
+    - Send Authorization header with Bearer token
+    - User ID is derived from authenticated session
     """
+    # Authenticate user from JWT token
+    try:
+        from auth import decode_token
+        
+        if not credentials:
+            logger.warning("📡 WebSocket connection rejected: No credentials")
+            await websocket.close(code=1008, reason="Authentication required")
+            return
+        
+        # Decode and validate JWT token
+        payload = decode_token(credentials.credentials)
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            logger.warning("📡 WebSocket connection rejected: Invalid token")
+            await websocket.close(code=1008, reason="Invalid authentication token")
+            return
+            
+    except Exception as e:
+        logger.warning(f"📡 WebSocket authentication failed: {e}")
+        await websocket.close(code=1008, reason="Authentication failed")
+        return
+    
     await ws_manager.connect(websocket, user_id)
-    logger.info(f"📡 Progress WebSocket connected for user {user_id or 'anonymous'}")
+    logger.info(f"📡 Progress WebSocket connected for user {user_id}")
     try:
         # Keep connection alive and handle client messages
         while True:
@@ -410,9 +441,14 @@ async def websocket_progress(websocket: WebSocket, user_id: str = None):
                 message = await websocket.receive_text()
                 # Could handle client requests here (e.g., request status update)
                 if message:
-                    data = json.loads(message)
-                    if data.get("type") == "ping":
-                        await websocket.send_text(json.dumps({"type": "pong"}))
+                    try:
+                        data = json.loads(message)
+                        if data.get("type") == "ping":
+                            await websocket.send_text(json.dumps({"type": "pong"}))
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ Invalid JSON in WebSocket message: {e}")
+                        # Skip processing this malformed message but keep the connection open
+                        continue
             except WebSocketDisconnect:
                 break
             except Exception as e:
