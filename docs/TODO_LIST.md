@@ -1,6 +1,55 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-01-07
+> Active development tasks. Updated: 2026-01-10
+
+---
+
+## 🔥 Priority: Admin Panel & User Management
+
+**MEGA Issue**: #84 (Admin Panel)
+
+**Goal**: Full admin dashboard for user/credits/content management
+
+### P0 - Critical (Admin Access)
+| Task | Status | Priority |
+|------|--------|----------|
+| Admin route protection (isAdmin check) | ⏳ Todo | Critical |
+| Admin panel page (`/admin`) | ⏳ Todo | Critical |
+| Admin navigation in sidebar | ⏳ Todo | Critical |
+
+### P1 - User Management
+| Task | Status | Priority |
+|------|--------|----------|
+| Users list with search/filter | ⏳ Todo | High |
+| View user details (email, created, last login) | ⏳ Todo | High |
+| Edit user credits (add/remove) | ⏳ Todo | High |
+| Set user tier (free/pro/vip) | ⏳ Todo | High |
+| Set admin/VIP status flags | ⏳ Todo | High |
+| Ban/suspend user | ⏳ Todo | Medium |
+| User activity log | ⏳ Todo | Low |
+
+### P2 - Credits Administration
+| Task | Status | Priority |
+|------|--------|----------|
+| Credits overview (total in system) | ⏳ Todo | Medium |
+| Grant bonus credits to user | ⏳ Todo | Medium |
+| View credit transactions | ⏳ Todo | Medium |
+| Bulk credit operations | ⏳ Todo | Low |
+
+### P3 - Content Moderation
+| Task | Status | Priority |
+|------|--------|----------|
+| Review flagged content | ⏳ Todo | Medium |
+| Remove published gallery items | ⏳ Todo | Medium |
+| NSFW override controls | ⏳ Todo | Low |
+
+### Infrastructure Required
+| Task | Status | Notes |
+|------|--------|-------|
+| Supabase `user_credits` table | ❌ Missing | Causes 404 errors |
+| Supabase `published_media` table | ❌ Missing | Gallery broken |
+| Supabase `credit_transactions` table | ❌ Missing | For audit log |
+| Backend admin API endpoints | ⏳ Todo | `/api/admin/*` |
 
 ---
 

@@ -461,6 +461,108 @@ async def get_published_media(
 
 
 # ============================================================================
+# Endpoint: Get workflow from published media
+# ============================================================================
+@router.get("/{media_id}/workflow")
+async def get_published_media_workflow(media_id: str):
+    """
+    Extract and return the ComfyUI workflow JSON from a published media item.
+    """
+    import subprocess
+    import tempfile
+    from pathlib import Path as PathLib
+    
+    debug_log(f"Extracting workflow from media {media_id}")
+
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Gallery service unavailable")
+
+    try:
+        # Fetch media to get storage_path and user_id
+        result = (
+            supabase.table("published_media")
+            .select("user_id,storage_path,media_type")
+            .eq("id", media_id)
+            .execute()
+        )
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        item = result.data[0]
+        user_id = item["user_id"]
+        storage_path = item["storage_path"]
+        media_type = item["media_type"]
+        
+        # Get the actual file from storage
+        from storage_client import get_storage_client
+        storage = get_storage_client()
+        
+        # storage_path is like "video/filename.mp4"
+        parts = storage_path.split("/", 1)
+        if len(parts) != 2:
+            raise HTTPException(status_code=400, detail="Invalid storage path")
+        
+        media_type_dir, filename = parts
+        data = storage.get_user_media(user_id, media_type_dir, filename)
+        
+        ext = PathLib(filename).suffix.lower()
+        
+        # Write to temp file for analysis
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        
+        workflow_json = None
+        
+        try:
+            if ext in [".mp4", ".webm", ".mov"]:
+                # Extract from video metadata using ffprobe
+                result = subprocess.run(
+                    ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", tmp_path],
+                    capture_output=True, text=True, timeout=10
+                )
+                if result.returncode == 0:
+                    import json
+                    probe_data = json.loads(result.stdout)
+                    comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                    if comment and comment.startswith("{"):
+                        workflow_data = json.loads(comment)
+                        prompt = workflow_data.get("prompt", workflow_data)
+                        # Handle double-encoded JSON
+                        if isinstance(prompt, str):
+                            workflow_json = json.loads(prompt)
+                        else:
+                            workflow_json = prompt
+            
+            elif ext in [".png"]:
+                # Extract from PNG metadata
+                from PIL import Image
+                import json
+                img = Image.open(tmp_path)
+                if hasattr(img, 'text'):
+                    if 'prompt' in img.text:
+                        workflow_json = json.loads(img.text['prompt'])
+                    elif 'workflow' in img.text:
+                        workflow_json = json.loads(img.text['workflow'])
+        finally:
+            import os
+            os.unlink(tmp_path)
+        
+        if workflow_json:
+            return {"workflow": workflow_json}
+        else:
+            raise HTTPException(status_code=404, detail="No workflow found in media file")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error extracting workflow")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # Endpoint: Get user's published media
 # ============================================================================
 @router.get("/users/{user_id}")

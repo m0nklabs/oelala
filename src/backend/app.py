@@ -6,6 +6,12 @@ FastAPI application for AI Video Generation Pipeline
 
 import os
 import sys
+
+# Load environment variables from .env file BEFORE any other imports
+# This must happen early so other modules get the env vars
+from dotenv import load_dotenv
+load_dotenv(dotenv_path="/home/flip/oelala/.env")
+
 import uvicorn
 import threading
 import asyncio
@@ -39,9 +45,6 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
 from auth import get_current_user, User
-from fastapi.security import HTTPBearer
-
-security = HTTPBearer(auto_error=False)
 
 # Storage client for user media
 from storage_client import get_client as get_storage_client
@@ -79,11 +82,6 @@ ticker_store = {}  # job_id -> threading.Event to stop ticker
 
 # WebSocket connections for live log streaming
 log_subscribers: set[WebSocket] = set()
-
-# WebSocket and job queue management
-from websocket_handler import ws_manager
-from job_queue import job_queue_manager
-from comfyui_progress_monitor import progress_monitor
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -389,116 +387,6 @@ async def websocket_logs(websocket: WebSocket):
         )
 
 
-@app.websocket("/ws/progress")
-async def websocket_progress(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time job progress and queue updates.
-    Requires authentication via JWT token sent in first message.
-
-    Clients receive:
-    - queue_update: Position changes and ETA
-    - progress: Generation progress (0-100%)
-    - job_complete: Job finished successfully
-    - job_failed: Job failed with error
-
-    Authentication:
-    - After connecting, send {"type": "auth", "token": "your_jwt_token"} as first message
-    - User ID is derived from authenticated session
-    - Connection will be closed if authentication fails or is not provided within 5 seconds
-    """
-    await websocket.accept()
-
-    # Wait for authentication message
-    try:
-        # Give client 5 seconds to authenticate
-        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-
-        try:
-            auth_data = json.loads(auth_message)
-        except json.JSONDecodeError:
-            logger.warning("📡 WebSocket rejected: Invalid JSON in auth message")
-            await websocket.close(code=1008, reason="Invalid authentication message")
-            return
-
-        if auth_data.get("type") != "auth":
-            logger.warning("📡 WebSocket rejected: First message must be auth")
-            await websocket.close(code=1008, reason="Authentication required")
-            return
-
-        token = auth_data.get("token")
-        if not token:
-            logger.warning("📡 WebSocket rejected: No token provided")
-            await websocket.close(code=1008, reason="Token required")
-            return
-
-        # Validate JWT token
-        from auth import decode_jwt_with_secret, decode_jwt_with_jwks
-
-        # Security: Use cryptographically verified JWT decoding only
-        # Try secret-based verification first (faster), then JWKS
-        payload = decode_jwt_with_secret(token)
-        if not payload:
-            payload = decode_jwt_with_jwks(token)
-
-        if not payload:
-            logger.warning("📡 WebSocket rejected: Invalid or unverifiable token")
-            await websocket.close(code=1008, reason="Invalid token")
-            return
-
-        user_id = payload.get("sub")
-        if not user_id:
-            logger.warning("📡 WebSocket rejected: No user_id in token")
-            await websocket.close(code=1008, reason="Invalid token payload")
-            return
-
-    except asyncio.TimeoutError:
-        logger.warning("📡 WebSocket rejected: Authentication timeout")
-        await websocket.close(code=1008, reason="Authentication timeout")
-        return
-    except Exception as e:
-        logger.warning(f"📡 WebSocket authentication failed: {e}")
-        await websocket.close(code=1008, reason="Authentication failed")
-        return
-
-    # Authentication successful
-    await ws_manager.connect(websocket, user_id)
-    logger.info(f"📡 Progress WebSocket connected for user {user_id}")
-
-    # Send authentication success confirmation
-    try:
-        await websocket.send_text(
-            json.dumps({"type": "auth_success", "user_id": user_id})
-        )
-    except Exception as e:
-        logger.warning(f"Failed to send auth confirmation: {e}")
-
-    try:
-        # Keep connection alive and handle client messages
-        while True:
-            try:
-                # Wait for pings/close from client
-                message = await websocket.receive_text()
-                # Could handle client requests here (e.g., request status update)
-                if message:
-                    try:
-                        data = json.loads(message)
-                        if data.get("type") == "ping":
-                            await websocket.send_text(json.dumps({"type": "pong"}))
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"⚠️ Invalid JSON in WebSocket message: {e}")
-                        # Skip processing this malformed message but keep the connection open
-                        continue
-            except WebSocketDisconnect:
-                break
-            except Exception as e:
-                logger.warning(f"WebSocket message error: {e}")
-    finally:
-        ws_manager.disconnect(websocket, user_id)
-        logger.info(
-            f"📡 Progress WebSocket disconnected for user {user_id or 'anonymous'}"
-        )
-
-
 @app.get("/progress/{job_id}")
 async def get_progress(job_id: str):
     data = progress_store.get(job_id, None)
@@ -518,26 +406,12 @@ async def serve_video_test():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup status and start queue polling"""
+    """Log startup status"""
     client = get_comfyui_client()
     if client and client.is_available():
         logger.info("✅ ComfyUI backend available and ready!")
-        # Start queue polling for real-time updates
-        await job_queue_manager.start_polling(ws_manager, interval=2.0)
-        logger.info("🔄 Queue polling started (2s interval)")
-        # Start ComfyUI progress monitor
-        progress_monitor.start()
-        logger.info("🔄 ComfyUI progress monitor started")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean shutdown"""
-    await job_queue_manager.stop_polling()
-    progress_monitor.stop()
-    logger.info("👋 Server shutting down")
 
 
 @app.get("/")
@@ -1560,6 +1434,62 @@ async def get_comfyui_output(filename: str):
     return FileResponse(output_path)
 
 
+@app.get("/comfyui-metadata/{filename}")
+async def get_comfyui_metadata(filename: str):
+    """
+    Extract and return the ComfyUI workflow/metadata from an output file.
+    Works with videos (mp4, webm, mov) and images (png).
+    """
+    import subprocess
+    
+    output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="Output file not found")
+    
+    ext = output_path.suffix.lower()
+    metadata = None
+    
+    try:
+        if ext in [".mp4", ".webm", ".mov"]:
+            # Extract from video metadata using ffprobe
+            result = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(output_path)],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                probe_data = json.loads(result.stdout)
+                comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                if comment and comment.startswith("{"):
+                    workflow_data = json.loads(comment)
+                    prompt = workflow_data.get("prompt", workflow_data)
+                    # Handle double-encoded JSON
+                    if isinstance(prompt, str):
+                        metadata = json.loads(prompt)
+                    else:
+                        metadata = prompt
+        
+        elif ext in [".png"]:
+            # Extract from PNG metadata
+            from PIL import Image
+            img = Image.open(str(output_path))
+            if hasattr(img, 'text'):
+                if 'prompt' in img.text:
+                    metadata = json.loads(img.text['prompt'])
+                elif 'workflow' in img.text:
+                    metadata = json.loads(img.text['workflow'])
+        
+        if metadata:
+            return {"metadata": metadata, "filename": filename}
+        else:
+            raise HTTPException(status_code=404, detail="No metadata found in file")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to extract metadata from {filename}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/comfyui/queue/{prompt_id}")
 async def cancel_job(prompt_id: str):
     """Cancel a queued or running job"""
@@ -2025,6 +1955,80 @@ async def get_user_media(
     except Exception as e:
         logger.error(f"Failed to get user media: {e}")
         raise HTTPException(status_code=404, detail="Media not found")
+
+
+@app.get("/user/media/{media_type}/{filename:path}/workflow")
+async def get_user_media_workflow(
+    media_type: str, filename: str, user: User = Depends(get_current_user)
+):
+    """
+    Extract and return the ComfyUI workflow JSON embedded in a media file.
+    ComfyUI stores workflow data in the 'comment' metadata tag for videos
+    and in PNG tEXt chunks for images.
+    """
+    import subprocess
+    import tempfile
+    
+    try:
+        storage = get_storage_client()
+        data = storage.get_user_media(user.id, media_type, filename)
+        
+        ext = Path(filename).suffix.lower()
+        
+        # Write to temp file for ffprobe/exiftool analysis
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        
+        workflow_json = None
+        
+        try:
+            if ext in [".mp4", ".webm", ".mov"]:
+                # Extract from video metadata using ffprobe
+                result = subprocess.run(
+                    ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", tmp_path],
+                    capture_output=True, text=True, timeout=10
+                )
+                if result.returncode == 0:
+                    import json as json_module
+                    probe_data = json_module.loads(result.stdout)
+                    comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                    if comment and comment.startswith("{"):
+                        # ComfyUI stores {"prompt": "..."} where prompt is a JSON string
+                        workflow_data = json_module.loads(comment)
+                        prompt = workflow_data.get("prompt", workflow_data)
+                        # Handle double-encoded JSON (prompt might be a string)
+                        if isinstance(prompt, str):
+                            workflow_json = json_module.loads(prompt)
+                        else:
+                            workflow_json = prompt
+            
+            elif ext in [".png"]:
+                # Extract from PNG metadata
+                from PIL import Image
+                from PIL.PngImagePlugin import PngInfo
+                img = Image.open(tmp_path)
+                if hasattr(img, 'text'):
+                    import json as json_module
+                    # ComfyUI stores in 'prompt' or 'workflow' text chunk
+                    if 'prompt' in img.text:
+                        workflow_json = json_module.loads(img.text['prompt'])
+                    elif 'workflow' in img.text:
+                        workflow_json = json_module.loads(img.text['workflow'])
+        finally:
+            import os
+            os.unlink(tmp_path)
+        
+        if workflow_json:
+            return {"workflow": workflow_json}
+        else:
+            raise HTTPException(status_code=404, detail="No workflow found in media file")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to extract workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/user/media/{media_type}")
@@ -2731,7 +2735,6 @@ async def generate_sd15_image(
             sampler_name=sampler_name,
             scheduler=scheduler,
             lora_configs=loras,
-            user_id=user.id,
         )
 
         if not output_path:
@@ -2822,7 +2825,6 @@ async def generate_wan22_t2i(
             height=height,
             steps=steps,
             seed=seed,
-            user_id=user.id,
         )
 
         if not output_path:
@@ -2953,22 +2955,6 @@ async def generate_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    # Register job for auto-upload tracking
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt or "smooth motion, cinematic",
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "width": width,
-            "height": height,
-            "seed": seed,
-        },
-    )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V")
@@ -3437,27 +3423,8 @@ async def generate_wan22_async(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
         )
 
-    # Register job for auto-upload tracking
-    total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": total_frames,
-            "frames_per_clip": num_frames,
-            "clip_count": actual_clip_count,
-            "extend_mode": is_extend_mode,
-            "fps": fps,
-            "steps": steps,
-            "seed": actual_seed,
-            "lora_count": len(parsed_lora_configs),
-        },
-    )
-
     # Store job info for tracking
+    total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
     job_info = {
         "prompt": prompt[:100],
         "resolution": resolution,
@@ -3616,23 +3583,6 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    # Register job for auto-upload tracking
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "width": width,
-            "height": height,
-            "seed": seed,
-            "type": "text-to-video",
-        },
-    )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
@@ -4847,33 +4797,6 @@ async def generate_i2i(
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
 
-        # Register job for queue tracking and WebSocket updates
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type="i2i",
-            metadata={
-                "prompt": prompt,
-                "denoise": denoise,
-                "checkpoint": checkpoint,
-                "seed": seed,
-                "source_image": comfyui_filename,
-            },
-        )
-        ws_manager.register_job(prompt_id, user.id)
-
-        # Register progress callback for real-time updates
-        async def progress_callback(progress: int, node_name: str):
-            """Relay ComfyUI progress to WebSocket clients"""
-            await ws_manager.broadcast_progress(
-                job_id=prompt_id,
-                progress=progress,
-                message=f"Processing: {node_name}",
-                node_name=node_name,
-            )
-
-        progress_monitor.register_callback(prompt_id, progress_callback)
-
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
         logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits)")
@@ -5550,7 +5473,7 @@ async def get_image(filename: str):
 async def list_videos():
     """List all generated videos from both output directories"""
     videos = []
-
+    
     # Scan OUTPUT_DIR (generated/)
     for file_path in OUTPUT_DIR.glob("*.mp4"):
         stat = file_path.stat()
@@ -5563,7 +5486,7 @@ async def list_videos():
                 "url": f"/videos/{file_path.name}",
             }
         )
-
+    
     # Also scan COMFYUI_OUTPUT_DIR
     if COMFYUI_OUTPUT_DIR.exists():
         for file_path in COMFYUI_OUTPUT_DIR.glob("*.mp4"):
@@ -5577,7 +5500,7 @@ async def list_videos():
                     "url": f"/comfyui-outputs/{file_path.name}",
                 }
             )
-
+    
     # Sort by mtime (newest first)
     videos.sort(key=lambda v: v.get("mtime", 0), reverse=True)
 

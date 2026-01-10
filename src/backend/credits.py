@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 # Debug flag
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
 
+# Credits system toggle - set to "0" to disable credits checking
+CREDITS_ENABLED = os.getenv("CREDITS_ENABLED", "1") == "1"
+
 
 def debug_log(msg: str):
     if DEBUG:
@@ -329,6 +332,15 @@ class CreditManager:
 
         Creates record with welcome bonus if user doesn't exist.
         """
+        # Return unlimited credits if system is disabled
+        if not CREDITS_ENABLED:
+            debug_log(f"Credits disabled - returning unlimited balance for {user_id}")
+            return CreditBalance(
+                balance=999999,
+                lifetime_purchased=0,
+                lifetime_used=0,
+            )
+
         client = await self.get_client()
 
         # Try to get existing balance
@@ -349,7 +361,7 @@ class CreditManager:
         debug_log(f"Creating credit record for new user {user_id}")
         return await self._create_user_credits(user_id)
 
-    async def _create_user_credits(self, user_id: str) -> CreditBalance:
+    async def _create_user_credits(self, user_id: str, _retry: bool = False) -> CreditBalance:
         """Create credit record for new user with welcome bonus."""
         client = await self.get_client()
 
@@ -365,8 +377,26 @@ class CreditManager:
         )
 
         if response.status_code not in (200, 201):
-            # Might already exist (race condition)
-            return await self.get_balance(user_id)
+            # Might already exist (race condition) - but don't recurse infinitely
+            if _retry:
+                debug_log(f"Failed to create/get credits for {user_id}: {response.status_code} {response.text}")
+                raise ValueError(f"Failed to create user credits: {response.status_code}")
+            # Try to get existing record once more
+            client2 = await self.get_client()
+            get_response = await client2.get(
+                "/user_credits",
+                params={"user_id": f"eq.{user_id}", "select": "*"},
+            )
+            if get_response.status_code == 200 and get_response.json():
+                data = get_response.json()[0]
+                return CreditBalance(
+                    balance=data["balance"],
+                    lifetime_purchased=data["lifetime_purchased"],
+                    lifetime_used=data["lifetime_used"],
+                )
+            # Still nothing? Error out instead of infinite loop
+            debug_log(f"Cannot create or find credits for {user_id}: POST={response.status_code}, GET={get_response.status_code}")
+            raise ValueError(f"Failed to create or retrieve user credits for {user_id}")
 
         # Log welcome bonus transaction
         await self._log_transaction(
@@ -393,6 +423,11 @@ class CreditManager:
         Uses Supabase RPC for atomic operation.
         Returns True if reserved, raises InsufficientCreditsError if not.
         """
+        # Bypass credits if disabled
+        if not CREDITS_ENABLED:
+            debug_log(f"Credits disabled - bypassing check for {user_id}")
+            return True
+
         if amount <= 0:
             return True
 

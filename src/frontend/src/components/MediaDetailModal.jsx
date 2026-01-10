@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check, AlertCircle } from 'lucide-react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
@@ -11,6 +11,52 @@ export default function MediaDetailModal({ item, onClose }) {
   const [copying, setCopying] = useState(false)
   const [copied, setCopied] = useState(false)
   const [likeError, setLikeError] = useState('')
+  const [downloadingWorkflow, setDownloadingWorkflow] = useState(false)
+  const [workflowError, setWorkflowError] = useState('')
+
+  // Download workflow JSON from media file via backend API
+  const handleDownloadWorkflow = async () => {
+    console.log('🔧 handleDownloadWorkflow called, item.id:', item.id)
+    setDownloadingWorkflow(true)
+    setWorkflowError('')
+    try {
+      // Call gallery API to extract workflow from published media
+      const url = `/api/gallery/${item.id}/workflow`
+      console.log('🔧 Fetching workflow from:', url)
+      const response = await apiFetch(url)
+      console.log('🔧 Response status:', response.status)
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to extract workflow')
+      }
+      
+      const data = await response.json()
+      console.log('🔧 Workflow data keys:', Object.keys(data))
+      const workflow = data.workflow
+      
+      if (workflow) {
+        const workflowJson = JSON.stringify(workflow, null, 2)
+        const workflowBlob = new Blob([workflowJson], { type: 'application/json' })
+        const url = URL.createObjectURL(workflowBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${item.title?.replace(/[^a-z0-9]/gi, '_') || 'workflow'}_workflow.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } else {
+        setWorkflowError('No workflow found')
+      }
+    } catch (err) {
+      console.error('Failed to download workflow:', err)
+      setWorkflowError(err.message || 'Download failed')
+      setTimeout(() => setWorkflowError(''), 3000)
+    } finally {
+      setDownloadingWorkflow(false)
+    }
+  }
 
   // Get media URL
   const getMediaUrl = () => {
@@ -395,7 +441,7 @@ export default function MediaDetailModal({ item, onClose }) {
             gap: '12px'
           }}>
             {/* Error message */}
-            {likeError && (
+            {(likeError || workflowError) && (
               <div style={{
                 padding: '10px 12px',
                 background: 'rgba(239, 68, 68, 0.1)',
@@ -408,7 +454,7 @@ export default function MediaDetailModal({ item, onClose }) {
                 gap: '8px'
               }}>
                 <AlertCircle size={16} />
-                {likeError}
+                {likeError || workflowError}
               </div>
             )}
 
@@ -468,6 +514,33 @@ export default function MediaDetailModal({ item, onClose }) {
                   </>
                 )}
               </button>
+
+              {/* Workflow Download Button */}
+              {item.metadata && (
+                <button
+                  onClick={handleDownloadWorkflow}
+                  disabled={downloadingWorkflow}
+                  title="Download ComfyUI workflow JSON"
+                  style={{
+                    padding: '10px 16px',
+                    background: '#2a2a2a',
+                    border: '1px solid #444',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: downloadingWorkflow ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    opacity: downloadingWorkflow ? 0.7 : 1
+                  }}
+                >
+                  <FileJson size={16} />
+                  WF
+                </button>
+              )}
             </div>
           </div>
         </div>
