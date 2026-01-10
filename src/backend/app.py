@@ -2732,6 +2732,7 @@ async def generate_sd15_image(
             sampler_name=sampler_name,
             scheduler=scheduler,
             lora_configs=loras,
+            user_id=user.id,
         )
 
         if not output_path:
@@ -2822,6 +2823,7 @@ async def generate_wan22_t2i(
             height=height,
             steps=steps,
             seed=seed,
+            user_id=user.id,
         )
 
         if not output_path:
@@ -2952,6 +2954,22 @@ async def generate_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
+
+    # Register job for auto-upload tracking
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt or "smooth motion, cinematic",
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "seed": seed,
+        },
+    )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V")
@@ -3420,8 +3438,27 @@ async def generate_wan22_async(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
         )
 
-    # Store job info for tracking
+    # Register job for auto-upload tracking
     total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": total_frames,
+            "frames_per_clip": num_frames,
+            "clip_count": actual_clip_count,
+            "extend_mode": is_extend_mode,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "lora_count": len(parsed_lora_configs),
+        },
+    )
+
+    # Store job info for tracking
     job_info = {
         "prompt": prompt[:100],
         "resolution": resolution,
@@ -3580,6 +3617,23 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
+
+    # Register job for auto-upload tracking
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "seed": seed,
+            "type": "text-to-video",
+        },
+    )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
@@ -5495,8 +5549,10 @@ async def get_image(filename: str):
 
 @app.get("/list-videos")
 async def list_videos():
-    """List all generated videos"""
+    """List all generated videos from both output directories"""
     videos = []
+
+    # Scan OUTPUT_DIR (generated/)
     for file_path in OUTPUT_DIR.glob("*.mp4"):
         stat = file_path.stat()
         videos.append(
@@ -5504,9 +5560,27 @@ async def list_videos():
                 "filename": file_path.name,
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "mtime": stat.st_mtime,
                 "url": f"/videos/{file_path.name}",
             }
         )
+
+    # Also scan COMFYUI_OUTPUT_DIR
+    if COMFYUI_OUTPUT_DIR.exists():
+        for file_path in COMFYUI_OUTPUT_DIR.glob("*.mp4"):
+            stat = file_path.stat()
+            videos.append(
+                {
+                    "filename": file_path.name,
+                    "size": stat.st_size,
+                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "mtime": stat.st_mtime,
+                    "url": f"/comfyui-outputs/{file_path.name}",
+                }
+            )
+
+    # Sort by mtime (newest first)
+    videos.sort(key=lambda v: v.get("mtime", 0), reverse=True)
 
     return {"videos": videos, "count": len(videos)}
 

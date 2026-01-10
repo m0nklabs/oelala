@@ -71,7 +71,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [negativePrompt, setNegativePrompt] = useState('low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches')
   const [showNegativePrompt, setShowNegativePrompt] = useState(false)
   const [showPromptTips, setShowPromptTips] = useState(false)
-  const [duration, setDuration] = useState(6) // seconds, 3-15 range
+  const [duration, setDuration] = useState(8) // seconds, 3-15 range
   const [resolution, setResolution] = useState('480p')
   const [modelMode, setModelMode] = useState('wan2.2')  // default to Wan2.2 for quality
   const [modelVersion, setModelVersion] = useState('v2')

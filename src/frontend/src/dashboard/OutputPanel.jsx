@@ -164,10 +164,12 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
                 key={vid.filename}
                 className="history-item"
                 onClick={() => {
+                  // Use the URL from API response (supports both /outputs/ and /comfyui-outputs/)
+                  const videoUrl = vid.url ? `${BACKEND_BASE}${vid.url}` : `${BACKEND_BASE}/outputs/${vid.filename}`
                   onSelectHistoryVideo({
                     kind: 'video',
-                    url: `${BACKEND_BASE}/outputs/${vid.filename}`,
-                    backendUrl: `${BACKEND_BASE}/outputs/${vid.filename}`,
+                    url: videoUrl,
+                    backendUrl: videoUrl,
                     filename: vid.filename,
                   })
                   // Optional: close history on select
