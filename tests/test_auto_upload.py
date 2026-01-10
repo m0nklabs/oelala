@@ -5,12 +5,15 @@ Tests job tracking and upload completion hooks.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 from pathlib import Path
 import sys
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "backend"))
+
+# Mock storage_client before importing comfyui_client
+sys.modules["storage_client"] = Mock()
 
 from comfyui_client import ComfyUIClient
 
@@ -65,7 +68,7 @@ class TestJobTracking:
 class TestAutoUpload:
     """Test auto-upload on job completion."""
 
-    @patch('comfyui_client.get_storage_client')
+    @patch("comfyui_client.get_storage_client")
     def test_on_job_complete_video(self, mock_get_storage_client):
         """Test auto-upload of video file."""
         client = ComfyUIClient()
@@ -82,7 +85,8 @@ class TestAutoUpload:
 
         # Create a temporary test file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.mp4', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=False) as f:
             f.write(b"fake video content")
             test_file = f.name
 
@@ -108,7 +112,7 @@ class TestAutoUpload:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
 
-    @patch('comfyui_client.get_storage_client')
+    @patch("comfyui_client.get_storage_client")
     def test_on_job_complete_image(self, mock_get_storage_client):
         """Test auto-upload of image file."""
         client = ComfyUIClient()
@@ -125,7 +129,8 @@ class TestAutoUpload:
 
         # Create a temporary test file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.png', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".png", delete=False) as f:
             f.write(b"fake image content")
             test_file = f.name
 
@@ -150,7 +155,7 @@ class TestAutoUpload:
             # Cleanup
             Path(test_file).unlink(missing_ok=True)
 
-    @patch('comfyui_client.get_storage_client')
+    @patch("comfyui_client.get_storage_client")
     def test_on_job_complete_no_metadata(self, mock_get_storage_client):
         """Test that upload is skipped when no job metadata exists."""
         client = ComfyUIClient()
@@ -165,7 +170,7 @@ class TestAutoUpload:
         assert storage_path is None
         mock_get_storage_client.assert_not_called()
 
-    @patch('comfyui_client.get_storage_client')
+    @patch("comfyui_client.get_storage_client")
     def test_on_job_complete_upload_failure(self, mock_get_storage_client):
         """Test that failures don't raise exceptions."""
         client = ComfyUIClient()
@@ -182,7 +187,8 @@ class TestAutoUpload:
 
         # Create a temporary test file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.mp4', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=False) as f:
             f.write(b"content")
             test_file = f.name
 
