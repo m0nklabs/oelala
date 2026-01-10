@@ -1,6 +1,6 @@
 # LTX-2 GGUF Performance Report
 
-**Last Updated:** January 2026  
+**Last Updated:** January 2026
 **Hardware:** RTX 5060 Ti (16GB) + RTX 3060 (12GB) = 28GB total VRAM
 
 ## Model Variants

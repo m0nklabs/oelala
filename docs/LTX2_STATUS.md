@@ -1,6 +1,6 @@
 # LTX-2 Video Generation Status
 
-**Last Updated**: 2026-01-09  
+**Last Updated**: 2026-01-09
 **Status**: ✅ GGUF Setup Ready! (via Kijai's GGUF quantizations)
 
 ---
