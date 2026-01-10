@@ -45,7 +45,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
-from auth import get_current_user, User
+from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with_jwks
 
 # Storage client for user media
 from storage_client import get_client as get_storage_client
@@ -102,6 +102,10 @@ log_subscribers: set[WebSocket] = set()
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
+
+# WebSocket and polling configuration
+WEBSOCKET_AUTH_TIMEOUT = 5.0  # seconds - timeout for WebSocket authentication
+QUEUE_POLLING_INTERVAL = 2.0  # seconds - interval for ComfyUI queue polling
 
 
 def debug_log(message: str):
@@ -453,8 +457,10 @@ async def websocket_progress(websocket: WebSocket):
     user_id = None
 
     try:
-        # Wait for authentication message (5 second timeout)
-        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        # Wait for authentication message
+        auth_message = await asyncio.wait_for(
+            websocket.receive_text(), timeout=WEBSOCKET_AUTH_TIMEOUT
+        )
         auth_data = json.loads(auth_message)
 
         if auth_data.get("type") != "auth":
@@ -467,9 +473,7 @@ async def websocket_progress(websocket: WebSocket):
             await websocket.close(code=1008, reason="Missing token")
             return
 
-        # Try to decode JWT (from auth.py)
-        from auth import decode_jwt_with_secret, decode_jwt_with_jwks
-
+        # Try to decode JWT (imported at top of file)
         payload = decode_jwt_with_secret(token)
         if not payload:
             payload = decode_jwt_with_jwks(token)
@@ -539,7 +543,7 @@ async def startup_event():
     if ws_manager and job_queue_manager and progress_monitor:
         logger.info("🔄 Starting WebSocket progress monitoring...")
         # Start background queue polling
-        await job_queue_manager.start_polling(ws_manager, interval=2.0)
+        await job_queue_manager.start_polling(ws_manager, interval=QUEUE_POLLING_INTERVAL)
         # Start ComfyUI progress monitor
         progress_monitor.start()
         logger.info("✅ WebSocket progress monitoring started!")
