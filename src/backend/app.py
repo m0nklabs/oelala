@@ -543,7 +543,9 @@ async def startup_event():
     if ws_manager and job_queue_manager and progress_monitor:
         logger.info("🔄 Starting WebSocket progress monitoring...")
         # Start background queue polling
-        await job_queue_manager.start_polling(ws_manager, interval=QUEUE_POLLING_INTERVAL)
+        await job_queue_manager.start_polling(
+            ws_manager, interval=QUEUE_POLLING_INTERVAL
+        )
         # Start ComfyUI progress monitor
         progress_monitor.start()
         logger.info("✅ WebSocket progress monitoring started!")

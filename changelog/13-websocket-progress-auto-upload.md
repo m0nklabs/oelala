@@ -10,7 +10,7 @@
   - Frontend `ProgressTracker.jsx` component with animated progress bar and ETA countdown
   - Frontend `QueueIndicator.jsx` in header showing running/pending job counts
   - Integrated into async endpoints: `/generate-wan22-async`, `/generate-text`
-  
+
 - **Auto-Upload to User Storage (#15)**: Generated content automatically uploaded after completion
   - Job registration with user_id association in `ComfyUIClient`
   - `on_job_complete` hook in `/comfyui/job/{prompt_id}` endpoint
