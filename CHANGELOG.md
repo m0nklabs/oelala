@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Features
+- **Frontend: Real-time Progress Tracker**: Added `ProgressTracker.jsx` component for real-time job progress indication
+  - Queue position display with animated updates
+  - Progress bar with percentage and smooth animations
+  - ETA countdown timer based on elapsed time
+  - Support for preview thumbnails during generation
+  - Integrated into `QueueIndicator.jsx` for running jobs
+  - Clickable job rows to expand/collapse detailed progress
 ### Added
 - **Auto-Upload to User Storage**: Generated content from synchronous endpoints is now automatically uploaded to user's private storage bucket after ComfyUI job completion
   - Images saved to `users/{user_id}/images/{timestamp}_{filename}`

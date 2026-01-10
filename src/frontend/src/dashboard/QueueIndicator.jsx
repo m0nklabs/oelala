@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Clock, Play, Loader2, X, CheckCircle, RefreshCw } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
+import ProgressTracker from './ProgressTracker'
 
 /**
  * QueueIndicator - Compact header indicator for ComfyUI queue
@@ -172,7 +173,13 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
                   Running
                 </div>
                 {queue.running.map((job) => (
-                  <JobRow key={job.prompt_id} job={job} status="running" onCancel={cancelJob} />
+                  <JobRow
+                    key={job.prompt_id}
+                    job={job}
+                    status="running"
+                    onCancel={cancelJob}
+                    onJobComplete={fetchQueue}
+                  />
                 ))}
               </div>
             )}
@@ -214,52 +221,74 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   )
 }
 
-function JobRow({ job, status, onCancel }) {
+function JobRow({ job, status, onCancel, onJobComplete }) {
+  const [showDetails, setShowDetails] = useState(status === 'running')
   const colors = { running: '#22c55e', pending: '#fbbf24', completed: '#3b82f6' }
   const Icon = { running: Loader2, pending: Clock, completed: CheckCircle }[status]
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '6px 8px',
-      backgroundColor: 'var(--bg-input)',
-      borderRadius: '4px',
-      marginBottom: '4px',
-      fontSize: '0.8rem',
-    }}>
-      <Icon size={12} color={colors[status]} className={status === 'running' ? 'spin' : ''} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          fontWeight: 500,
-        }}>
-          {job.prompt || job.prompt_id.slice(0, 8)}
+    <div style={{ marginBottom: '4px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 8px',
+          backgroundColor: 'var(--bg-input)',
+          borderRadius: '4px',
+          fontSize: '0.8rem',
+          cursor: status === 'running' ? 'pointer' : 'default',
+        }}
+        onClick={() => status === 'running' && setShowDetails(!showDetails)}
+      >
+        <Icon size={12} color={colors[status]} className={status === 'running' ? 'spin' : ''} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              fontWeight: 500,
+            }}
+          >
+            {job.prompt || job.prompt_id.slice(0, 8)}
+          </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+            {job.resolution} {job.aspect_ratio} {job.num_frames && `• ${job.num_frames}f`}
+          </div>
         </div>
-        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-          {job.resolution} {job.aspect_ratio} {job.num_frames && `• ${job.num_frames}f`}
-        </div>
+        {status !== 'completed' && onCancel && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onCancel(job.prompt_id)
+            }}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}
+          >
+            <X size={12} color="var(--text-muted)" />
+          </button>
+        )}
+        {status === 'completed' && job.output_video && (
+          <a
+            href={`${BACKEND_BASE}${job.output_video}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#3b82f6', fontSize: '0.7rem' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            View
+          </a>
+        )}
       </div>
-      {status !== 'completed' && onCancel && (
-        <button
-          onClick={() => onCancel(job.prompt_id)}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}
-        >
-          <X size={12} color="var(--text-muted)" />
-        </button>
-      )}
-      {status === 'completed' && job.output_video && (
-        <a
-          href={`${BACKEND_BASE}${job.output_video}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: '#3b82f6', fontSize: '0.7rem' }}
-        >
-          View
-        </a>
+
+      {/* Detailed progress tracker for running jobs */}
+      {status === 'running' && showDetails && (
+        <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
+          <ProgressTracker
+            promptId={job.prompt_id}
+            onComplete={onJobComplete}
+          />
+        </div>
       )}
     </div>
   )
