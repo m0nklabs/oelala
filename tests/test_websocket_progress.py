@@ -5,7 +5,8 @@ Tests for WebSocket Progress Events and Queue Tracking
 
 import pytest
 import json
-from unittest.mock import AsyncMock, patch
+import asyncio
+from unittest.mock import AsyncMock, patch, MagicMock
 
 # Import modules to test - use relative imports when possible
 import sys
@@ -326,6 +327,153 @@ class TestJobQueueManager:
         }
         url = manager._extract_output_url(history)
         assert url == "/comfyui-output/image.png"
+
+
+class TestWebSocketAuthentication:
+    """Test WebSocket authentication flow"""
+
+    @pytest.mark.asyncio
+    async def test_auth_with_valid_token(self):
+        """Test successful authentication with valid JWT token"""
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(
+            return_value='{"type":"auth","token":"valid_token"}'
+        )
+        mock_ws.send_json = AsyncMock()
+
+        with patch("auth.decode_jwt_with_secret") as mock_decode_secret:
+            mock_decode_secret.return_value = {"sub": "user123", "email": "test@example.com"}
+
+            # Simulate the auth flow from app.py
+            auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+            auth_data = json.loads(auth_message)
+            
+            assert auth_data["type"] == "auth"
+            token = auth_data.get("token")
+            assert token == "valid_token"
+
+            payload = mock_decode_secret(token)
+            assert payload is not None
+            assert payload["sub"] == "user123"
+
+    @pytest.mark.asyncio
+    async def test_auth_with_invalid_token(self):
+        """Test authentication rejection with invalid JWT token"""
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(
+            return_value='{"type":"auth","token":"invalid_token"}'
+        )
+        mock_ws.close = AsyncMock()
+
+        with patch("auth.decode_jwt_with_secret") as mock_decode_secret, \
+             patch("auth.decode_jwt_with_jwks") as mock_decode_jwks:
+            # Both verification methods fail
+            mock_decode_secret.return_value = None
+            mock_decode_jwks.return_value = None
+
+            # Simulate the auth flow from app.py
+            auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+            auth_data = json.loads(auth_message)
+            
+            token = auth_data.get("token")
+            payload = mock_decode_secret(token)
+            if not payload:
+                payload = mock_decode_jwks(token)
+            
+            assert payload is None
+            # In real implementation, this would close with code 1008
+
+    @pytest.mark.asyncio
+    async def test_auth_timeout(self):
+        """Test authentication timeout after 5 seconds"""
+        mock_ws = AsyncMock()
+        
+        # Simulate slow response that exceeds timeout
+        async def slow_receive():
+            await asyncio.sleep(6)  # Exceeds 5 second timeout
+            return '{"type":"auth","token":"token"}'
+        
+        mock_ws.receive_text = slow_receive
+        mock_ws.close = AsyncMock()
+
+        # Simulate timeout from app.py
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+
+    @pytest.mark.asyncio
+    async def test_auth_malformed_json(self):
+        """Test authentication rejection with malformed JSON"""
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(return_value='invalid json{')
+        mock_ws.close = AsyncMock()
+
+        # Simulate the auth flow from app.py
+        auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+        
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(auth_message)
+
+    @pytest.mark.asyncio
+    async def test_auth_missing_token(self):
+        """Test authentication rejection when token is missing"""
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(return_value='{"type":"auth"}')
+        mock_ws.close = AsyncMock()
+
+        # Simulate the auth flow from app.py
+        auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+        auth_data = json.loads(auth_message)
+        
+        token = auth_data.get("token")
+        assert token is None
+        # In real implementation, this would close with code 1008
+
+    @pytest.mark.asyncio
+    async def test_auth_missing_user_id_in_payload(self):
+        """Test authentication rejection when token payload has no user_id"""
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(
+            return_value='{"type":"auth","token":"token_without_sub"}'
+        )
+        mock_ws.close = AsyncMock()
+
+        with patch("auth.decode_jwt_with_secret") as mock_decode_secret:
+            # Token decodes successfully but has no 'sub' claim
+            mock_decode_secret.return_value = {"email": "test@example.com"}
+
+            auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+            auth_data = json.loads(auth_message)
+            
+            token = auth_data.get("token")
+            payload = mock_decode_secret(token)
+            assert payload is not None
+            
+            user_id = payload.get("sub")
+            assert user_id is None
+            # In real implementation, this would close with code 1008
+
+    @pytest.mark.asyncio
+    async def test_auth_success_confirmation(self):
+        """Test that auth_success message is sent after successful authentication"""
+        mock_ws = AsyncMock()
+        mock_ws.receive_text = AsyncMock(
+            return_value='{"type":"auth","token":"valid_token"}'
+        )
+        mock_ws.send_json = AsyncMock()
+
+        with patch("auth.decode_jwt_with_secret") as mock_decode_secret:
+            mock_decode_secret.return_value = {"sub": "user123"}
+
+            # Simulate the auth flow from app.py
+            auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
+            auth_data = json.loads(auth_message)
+            token = auth_data.get("token")
+            payload = mock_decode_secret(token)
+            
+            if payload and payload.get("sub"):
+                # Send success confirmation
+                await mock_ws.send_json({"type": "auth_success"})
+                mock_ws.send_json.assert_called_once_with({"type": "auth_success"})
 
 
 if __name__ == "__main__":

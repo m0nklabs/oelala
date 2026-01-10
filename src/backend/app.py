@@ -432,11 +432,16 @@ async def websocket_progress(websocket: WebSocket):
             return
 
         # Validate JWT token
-        from auth import decode_supabase_jwt
+        from auth import decode_jwt_with_secret, decode_jwt_with_jwks
 
-        payload = decode_supabase_jwt(token)
+        # Security: Use cryptographically verified JWT decoding only
+        # Try secret-based verification first (faster), then JWKS
+        payload = decode_jwt_with_secret(token)
         if not payload:
-            logger.warning("📡 WebSocket rejected: Invalid token")
+            payload = decode_jwt_with_jwks(token)
+        
+        if not payload:
+            logger.warning("📡 WebSocket rejected: Invalid or unverifiable token")
             await websocket.close(code=1008, reason="Invalid token")
             return
 
@@ -445,12 +450,6 @@ async def websocket_progress(websocket: WebSocket):
             logger.warning("📡 WebSocket rejected: No user_id in token")
             await websocket.close(code=1008, reason="Invalid token payload")
             return
-
-        # Security note: decode_supabase_jwt may use unverified decode as fallback.
-        # In production with untrusted clients, consider requiring verified decode:
-        # - Ensure SUPABASE_JWT_SECRET is set in environment
-        # - Or use decode_jwt_with_secret/decode_jwt_with_jwks directly
-        # - And reject tokens that can't be cryptographically verified
 
     except asyncio.TimeoutError:
         logger.warning("📡 WebSocket rejected: Authentication timeout")
