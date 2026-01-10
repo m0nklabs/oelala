@@ -356,8 +356,12 @@ app.add_middleware(
 # API v1 router (programmatic access)
 from api_v1 import router as api_v1_router
 
+# API keys management router
+from api_keys_management import router as api_keys_router
+
 # Include API routers
 app.include_router(api_v1_router)  # REST API v1 at /api/v1/*
+app.include_router(api_keys_router)  # API key management at /api/keys/*
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
