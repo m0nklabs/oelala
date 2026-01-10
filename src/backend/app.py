@@ -439,7 +439,7 @@ async def websocket_progress(websocket: WebSocket):
         payload = decode_jwt_with_secret(token)
         if not payload:
             payload = decode_jwt_with_jwks(token)
-        
+
         if not payload:
             logger.warning("📡 WebSocket rejected: Invalid or unverifiable token")
             await websocket.close(code=1008, reason="Invalid token")

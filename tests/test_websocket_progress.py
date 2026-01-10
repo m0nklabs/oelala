@@ -347,7 +347,7 @@ class TestWebSocketAuthentication:
             # Simulate the auth flow from app.py
             auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
             auth_data = json.loads(auth_message)
-            
+
             assert auth_data["type"] == "auth"
             token = auth_data.get("token")
             assert token == "valid_token"
@@ -374,12 +374,12 @@ class TestWebSocketAuthentication:
             # Simulate the auth flow from app.py
             auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
             auth_data = json.loads(auth_message)
-            
+
             token = auth_data.get("token")
             payload = mock_decode_secret(token)
             if not payload:
                 payload = mock_decode_jwks(token)
-            
+
             assert payload is None
             # In real implementation, this would close with code 1008
 
@@ -387,12 +387,12 @@ class TestWebSocketAuthentication:
     async def test_auth_timeout(self):
         """Test authentication timeout after 5 seconds"""
         mock_ws = AsyncMock()
-        
+
         # Simulate slow response that exceeds timeout
         async def slow_receive():
             await asyncio.sleep(6)  # Exceeds 5 second timeout
             return '{"type":"auth","token":"token"}'
-        
+
         mock_ws.receive_text = slow_receive
         mock_ws.close = AsyncMock()
 
@@ -409,7 +409,7 @@ class TestWebSocketAuthentication:
 
         # Simulate the auth flow from app.py
         auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
-        
+
         with pytest.raises(json.JSONDecodeError):
             json.loads(auth_message)
 
@@ -423,7 +423,7 @@ class TestWebSocketAuthentication:
         # Simulate the auth flow from app.py
         auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
         auth_data = json.loads(auth_message)
-        
+
         token = auth_data.get("token")
         assert token is None
         # In real implementation, this would close with code 1008
@@ -443,11 +443,11 @@ class TestWebSocketAuthentication:
 
             auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
             auth_data = json.loads(auth_message)
-            
+
             token = auth_data.get("token")
             payload = mock_decode_secret(token)
             assert payload is not None
-            
+
             user_id = payload.get("sub")
             assert user_id is None
             # In real implementation, this would close with code 1008
@@ -469,7 +469,7 @@ class TestWebSocketAuthentication:
             auth_data = json.loads(auth_message)
             token = auth_data.get("token")
             payload = mock_decode_secret(token)
-            
+
             if payload and payload.get("sub"):
                 # Send success confirmation
                 await mock_ws.send_json({"type": "auth_success"})
