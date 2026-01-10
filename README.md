@@ -2,6 +2,12 @@
 
 A modern web platform for AI-powered image and video generation. Create, customize, and publish your media content with state-of-the-art AI models.
 
+## 📺 Repository Activity
+
+https://github.com/user-attachments/assets/oelala-gource-latest.mp4
+
+<sub>*Auto-generated with [Gource](https://gource.io) • Updated weekly*</sub>
+
 ## ✨ Features
 
 ### 🎨 Media Creation
