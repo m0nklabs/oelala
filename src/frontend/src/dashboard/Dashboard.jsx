@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
-import { Download, CheckCircle, XCircle } from 'lucide-react'
+import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
@@ -42,6 +42,12 @@ import { sendClientLog } from '../logging'
 export default function Dashboard() {
   const [activeToolId, setActiveToolId] = useState(TOOL_IDS.IMAGE_TO_VIDEO)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  
+  // Mobile parameters panel state
+  const [mobileParamsOpen, setMobileParamsOpen] = useState(false)
+  
+  // Mobile navigation menu state
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // Credits context
   const {
@@ -271,15 +277,34 @@ export default function Dashboard() {
   return (
     <div className="dashboard-wrapper">
       <div className="dashboard-container">
-          <Sidebar
-            activeToolId={activeToolId}
-            onSelectTool={setActiveToolId}
-            collapsed={sidebarCollapsed}
-            onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+          {/* Mobile nav overlay */}
+          <div 
+            className={`mobile-nav-overlay ${mobileNavOpen ? 'visible' : ''}`}
+            onClick={() => setMobileNavOpen(false)}
           />
+          
+          {/* Sidebar - also opens on mobile when nav is open */}
+          <div className={`sidebar-wrapper ${mobileNavOpen ? 'mobile-open' : ''}`}>
+            <Sidebar
+              activeToolId={activeToolId}
+              onSelectTool={(id) => {
+                setActiveToolId(id)
+                setMobileNavOpen(false) // Close nav after selection
+              }}
+              collapsed={sidebarCollapsed}
+              onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+            />
+          </div>
 
       <main className="main-content">
         <div className="top-bar">
+          {/* Mobile menu button */}
+          <button 
+            className="mobile-menu-btn"
+            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+          >
+            {mobileNavOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
           <h1>{toolTitle}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* NSFW Toggle - only for logged-in adults */}
@@ -407,19 +432,45 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="workspace">
-            <section className="controls-panel">
+            {/* Mobile overlay */}
+            <div 
+              className={`mobile-params-overlay ${mobileParamsOpen ? 'visible' : ''}`}
+              onClick={() => setMobileParamsOpen(false)}
+            />
+            
+            {/* Mobile toggle button */}
+            <button 
+              className={`mobile-params-toggle ${mobileParamsOpen ? 'open' : ''}`}
+              onClick={() => setMobileParamsOpen(!mobileParamsOpen)}
+            >
+              <Settings2 size={18} />
+              {mobileParamsOpen ? 'Hide Parameters' : 'Show Parameters'}
+              <ChevronUp size={18} />
+            </button>
+            
+            <section className={`controls-panel ${mobileParamsOpen ? 'mobile-open' : 'mobile-collapsed'}`}>
               <div className="panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>
-                <button
-                  className="icon-btn"
-                  onClick={handleDownloadParams}
-                  title="Download parameters als JSON"
-                  style={{ padding: '4px' }}
-                >
-                  <Download size={16} />
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="icon-btn"
+                    onClick={handleDownloadParams}
+                    title="Download parameters als JSON"
+                    style={{ padding: '4px' }}
+                  >
+                    <Download size={16} />
+                  </button>
+                </div>
               </div>
               <div className="panel-body">{renderControls()}</div>
+              {/* Mobile close button at bottom */}
+              <button 
+                className="mobile-close-params"
+                onClick={() => setMobileParamsOpen(false)}
+              >
+                <ChevronUp size={18} />
+                Close Parameters
+              </button>
             </section>
 
             {/* Show OutputPanel only when there's active output, otherwise show MyMediaTool */}
