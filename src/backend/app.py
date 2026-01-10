@@ -61,6 +61,9 @@ from credits_api import (
 # Gallery system
 from gallery_api import router as gallery_router
 
+# Admin system
+from admin_api import router as admin_router
+
 # ComfyUI Client for all image/video generation
 try:
     from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
@@ -336,6 +339,7 @@ app.add_middleware(
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
+app.include_router(admin_router)  # Admin panel at /api/admin/*
 
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")

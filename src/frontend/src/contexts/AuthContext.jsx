@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase, isAuthEnabled } from '../lib/supabase'
+import { BACKEND_BASE } from '../config'
 
 const AuthContext = createContext({
   user: null,
   session: null,
   loading: true,
+  isAdmin: false,
   signInWithGoogle: async () => {},
   signInWithGithub: async () => {},
   signOut: async () => {},
@@ -20,8 +22,39 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginModalMessage, setLoginModalMessage] = useState(null)
+
+  // Check admin status when user changes
+  useEffect(() => {
+    if (!user || !session) {
+      setIsAdmin(false)
+      return
+    }
+
+    const checkAdminStatus = async () => {
+      try {
+        const response = await fetch(`${BACKEND_BASE}/api/admin/check`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setIsAdmin(data.is_admin || false)
+        } else {
+          setIsAdmin(false)
+        }
+      } catch (error) {
+        console.error('Failed to check admin status:', error)
+        setIsAdmin(false)
+      }
+    }
+
+    checkAdminStatus()
+  }, [user, session])
 
   useEffect(() => {
     if (!isAuthEnabled()) {
@@ -127,6 +160,7 @@ export function AuthProvider({ children }) {
     user,
     session,
     loading,
+    isAdmin,
     signInWithGoogle,
     signInWithGithub,
     signOut,

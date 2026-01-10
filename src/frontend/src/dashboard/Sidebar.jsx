@@ -1,6 +1,7 @@
 import React from 'react'
 import { NAV_GROUPS } from './nav'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 // Emoji icons for reliable cross-browser display
 const ICONS = {
@@ -33,9 +34,13 @@ const ICONS = {
   'my-media-images': '🖼️',
   'my-media-audio': '🎵',
   'my-media-prompts': '📝',
+  // Admin
+  'admin-panel': '👑',
 }
 
 export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggleCollapsed }) {
+  const { isAdmin } = useAuth()
+  
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
@@ -43,31 +48,38 @@ export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggl
       </div>
 
       <nav className="sidebar-nav">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.id} className="sidebar-group">
-            <div className="sidebar-group-title">{group.title}</div>
+        {NAV_GROUPS.map((group) => {
+          // Skip admin-only groups if user is not admin
+          if (group.adminOnly && !isAdmin) {
+            return null
+          }
 
-            {group.items.map((item) => {
-              const isActive = activeToolId === item.id
-              const icon = ICONS[item.id] || '🔧'
+          return (
+            <div key={group.id} className="sidebar-group">
+              <div className="sidebar-group-title">{group.title}</div>
 
-              return (
-                <button
-                  key={item.id}
-                  className={`nav-item${isActive ? ' active' : ''}`}
-                  onClick={() => onSelectTool(item.id)}
-                  type="button"
-                >
-                  <span className="nav-icon" style={{ fontSize: '16px' }}>
-                    {icon}
-                  </span>
-                  <span className="nav-label">{item.label}</span>
-                  {item.status === 'new' && <span className="nav-badge">new</span>}
-                </button>
-              )
-            })}
-          </div>
-        ))}
+              {group.items.map((item) => {
+                const isActive = activeToolId === item.id
+                const icon = ICONS[item.id] || '🔧'
+
+                return (
+                  <button
+                    key={item.id}
+                    className={`nav-item${isActive ? ' active' : ''}`}
+                    onClick={() => onSelectTool(item.id)}
+                    type="button"
+                  >
+                    <span className="nav-icon" style={{ fontSize: '16px' }}>
+                      {icon}
+                    </span>
+                    <span className="nav-label">{item.label}</span>
+                    {item.status === 'new' && <span className="nav-badge">new</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
       </nav>
 
       <div className="sidebar-footer">
