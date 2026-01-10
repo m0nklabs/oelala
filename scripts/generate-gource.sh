@@ -42,10 +42,10 @@ ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i - \
 echo "✅ Generated: $OUTPUT_MP4"
 echo "📊 Size: $(du -h "$OUTPUT_MP4" | cut -f1)"
 
-# Generate GIF preview for GitHub README (first 40 seconds, optimized)
+# Generate GIF preview for GitHub README (full video at 2x slowmo)
 echo "🎞️ Generating GIF preview..."
-ffmpeg -y -ss 0 -t 40 -i "$OUTPUT_MP4" \
-    -vf "fps=8,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
+ffmpeg -y -i "$OUTPUT_MP4" \
+    -vf "setpts=2*PTS,fps=8,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer" \
     -loop 0 "$OUTPUT_GIF" \
     2>/dev/null
 
