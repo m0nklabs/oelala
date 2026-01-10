@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- **LTX-2 Native Audio+Video Generation**: Complete workflow for generating video with synchronized audio
+  - Downloaded `ltx-2-19b-dev-Q4_K_M.gguf` (12 GB) with 2229 audio tensors
+  - Created combined audio VAE checkpoint `ltx2_audio_vae.safetensors` (208 MB)
+  - Audio VAE + Vocoder combined with ComfyUI-compatible metadata structure
+  - Workflow pattern: EmptyVideo + EmptyAudio → ConcatAVLatent → SamplerCustomAdvanced → SeparateAVLatent → Decode
+  - First successful test: 768x512, 97 frames (3.88s), H.264 + AAC 24kHz stereo
+  - Example output: `examples/ltx2_audio_00001-audio.mp4`
+  - Test script: `ComfyUI/ltx2_audio_test.py`
 - **Switch Account**: Account switching via UserMenu dropdown
   - New `switchAccount()` function in AuthContext
   - Uses `prompt: 'select_account'` to force Google account picker
@@ -36,6 +44,11 @@
   - Attention mask handling in conditioning output
 
 ### Documentation
+- **LTX2_PERFORMANCE.md**: Updated with audio+video workflow documentation
+  - Added LTX-2 Dev model variant with native audio support
+  - Audio workflow architecture diagram
+  - Audio VAE preparation instructions
+  - Updated benchmark tables for both model variants
 - **LTX2_HANDOVER.md**: Updated with working solution and performance metrics
 - **COMFYUI_INVENTORY.md**: Added LTX-2 status and VRAM requirements
   - LTX-2 19B FP8 + Gemma 3 12B = ~49GB (exceeds 28GB available)
