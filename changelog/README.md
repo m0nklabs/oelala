@@ -13,7 +13,7 @@ By using fragments, each PR adds its own file, and conflicts are impossible.
    ```
    {PR_NUMBER}-{short-description}.md
    ```
-   
+
    Examples:
    - `82-progress-tracker-component.md`
    - `83-websocket-progress-events.md`
