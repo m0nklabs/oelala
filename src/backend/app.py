@@ -75,6 +75,19 @@ except ImportError as e:
     ComfyUIClient = None
     get_comfyui_client = None
 
+# WebSocket progress tracking
+try:
+    from websocket_handler import ws_manager
+    from job_queue import job_queue_manager
+    from comfyui_progress_monitor import progress_monitor
+
+    print("✅ WebSocket progress modules imported successfully")
+except ImportError as e:
+    print(f"❌ Failed to import WebSocket progress modules: {e}")
+    ws_manager = None
+    job_queue_manager = None
+    progress_monitor = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -392,6 +405,75 @@ async def websocket_logs(websocket: WebSocket):
         )
 
 
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time job progress updates.
+    Requires JWT authentication via initial message.
+    """
+    if not ws_manager:
+        await websocket.close(code=1011, reason="WebSocket progress not available")
+        return
+
+    await websocket.accept()
+    user_id = None
+
+    try:
+        # Wait for authentication message (5 second timeout)
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        auth_data = json.loads(auth_message)
+
+        if auth_data.get("type") != "auth":
+            await websocket.close(code=1008, reason="Expected auth message")
+            return
+
+        # Verify JWT token
+        token = auth_data.get("token")
+        if not token:
+            await websocket.close(code=1008, reason="Missing token")
+            return
+
+        # Try to decode JWT (from auth.py)
+        from auth import decode_jwt_with_secret, decode_jwt_with_jwks
+
+        payload = decode_jwt_with_secret(token)
+        if not payload:
+            payload = decode_jwt_with_jwks(token)
+
+        if not payload:
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=1008, reason="Missing user_id in token")
+            return
+
+        # Authentication successful
+        await ws_manager.connect(websocket, user_id=user_id)
+        await websocket.send_json({"type": "auth_success"})
+        logger.info(f"📡 Progress WebSocket authenticated for user {user_id}")
+
+        # Keep connection alive and listen for close
+        while True:
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+
+    except asyncio.TimeoutError:
+        await websocket.close(code=1008, reason="Authentication timeout")
+    except json.JSONDecodeError:
+        await websocket.close(code=1008, reason="Invalid JSON")
+    except Exception as e:
+        logger.error(f"WebSocket progress error: {e}")
+        await websocket.close(code=1011, reason="Internal error")
+    finally:
+        if user_id and ws_manager:
+            ws_manager.disconnect(websocket, user_id=user_id)
+        logger.info(f"📡 Progress WebSocket disconnected for user {user_id}")
+
+
 @app.get("/progress/{job_id}")
 async def get_progress(job_id: str):
     data = progress_store.get(job_id, None)
@@ -411,12 +493,40 @@ async def serve_video_test():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup status"""
+    """Initialize services on startup"""
+    # Check ComfyUI availability
     client = get_comfyui_client()
     if client and client.is_available():
         logger.info("✅ ComfyUI backend available and ready!")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
+
+    # Start WebSocket progress monitoring
+    if ws_manager and job_queue_manager and progress_monitor:
+        logger.info("🔄 Starting WebSocket progress monitoring...")
+        # Start background queue polling
+        await job_queue_manager.start_polling(ws_manager, interval=2.0)
+        # Start ComfyUI progress monitor
+        progress_monitor.start()
+        logger.info("✅ WebSocket progress monitoring started!")
+    else:
+        logger.warning(
+            "⚠️ WebSocket progress modules not available - real-time updates disabled"
+        )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up on shutdown"""
+    if job_queue_manager:
+        logger.info("🛑 Stopping queue polling...")
+        await job_queue_manager.stop_polling()
+
+    if progress_monitor:
+        logger.info("🛑 Stopping progress monitor...")
+        progress_monitor.stop()
+
+    logger.info("✅ Shutdown complete")
 
 
 @app.get("/")
@@ -3456,6 +3566,22 @@ async def generate_wan22_async(
     if not prompt_id:
         raise HTTPException(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
+        )
+
+    # Register job with WebSocket manager for progress tracking
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="wan22_i2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": total_frames if is_extend_mode else num_frames,
+                "fps": fps,
+            },
         )
 
     # Store job info for tracking
