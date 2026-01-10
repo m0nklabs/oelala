@@ -306,7 +306,8 @@ class JobQueueManager:
             try:
                 await self._poll_task
             except asyncio.CancelledError:
-                pass
+                # Normal during shutdown when the polling task is cancelled
+                debug_log("Polling task cancellation acknowledged during stop_polling")
             self._poll_task = None
         logger.info("🛑 Stopped queue polling")
 

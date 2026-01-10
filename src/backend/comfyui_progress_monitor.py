@@ -40,6 +40,9 @@ class ComfyUIProgressMonitor:
         self._running = False
         self._monitor_thread: Optional[threading.Thread] = None
         self._ws: Optional[websocket.WebSocket] = None
+        
+        # Event loop reference - set when start() is called from async context
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
 
     def register_callback(self, prompt_id: str, callback: Callable):
         """
@@ -148,19 +151,16 @@ class ComfyUIProgressMonitor:
             # Call registered callback if any
             if prompt_id and prompt_id in self.progress_callbacks:
                 callback = self.progress_callbacks[prompt_id]
-                # Schedule async callback in event loop
-                try:
-                    # Get the running event loop
+                # Schedule async callback in event loop (captured at start time)
+                if self._event_loop and not self._event_loop.is_closed():
                     try:
-                        loop = asyncio.get_running_loop()
                         asyncio.run_coroutine_threadsafe(
-                            callback(progress, node_name), loop
+                            callback(progress, node_name), self._event_loop
                         )
-                    except RuntimeError:
-                        # No running event loop
-                        debug_log("No running event loop, skipping callback")
-                except Exception as e:
-                    logger.warning(f"Failed to call progress callback: {e}")
+                    except Exception as e:
+                        logger.warning(f"Failed to call progress callback: {e}")
+                else:
+                    debug_log("No event loop available, skipping callback")
 
         elif msg_type == "executing":
             # Node execution start/end
@@ -189,6 +189,17 @@ class ComfyUIProgressMonitor:
             logger.warning("Progress monitor already running")
             return
 
+        # Capture the current event loop if we're in an async context
+        try:
+            self._event_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Not in an async context - try to get the default loop
+            try:
+                self._event_loop = asyncio.get_event_loop()
+            except RuntimeError:
+                logger.warning("No event loop available - progress callbacks will not work")
+                self._event_loop = None
+
         self._running = True
         self._monitor_thread = threading.Thread(
             target=self._monitor_loop, daemon=True, name="ComfyUIProgressMonitor"
@@ -207,8 +218,9 @@ class ComfyUIProgressMonitor:
         if self._ws:
             try:
                 self._ws.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Ignore close errors during shutdown, but log them when debug is enabled
+                debug_log(f"Failed to close ComfyUI WebSocket cleanly: {exc}")
 
         # Wait for thread to finish
         if self._monitor_thread:

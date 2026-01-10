@@ -375,16 +375,26 @@ Expected response:
 ## Security Considerations
 
 1. **Authentication**: Current implementation uses optional `user_id` query parameter
-   - Production deployments should integrate with session/JWT auth
-   - Consider rate limiting connections per user
+   - ⚠️ **SECURITY WARNING**: The current implementation allows clients to specify arbitrary `user_id` values, which means an attacker who knows or guesses another user's ID can subscribe to their job events (including output URLs and metadata)
+   - **Production requirement**: The WebSocket endpoint MUST be modified to derive the `user_id` from a verified session token (e.g., JWT, session cookie) or other server-side authentication mechanism before deployment
+   - Example fix:
+     ```python
+     @app.websocket("/ws/progress")
+     async def websocket_progress(websocket: WebSocket, user: User = Depends(get_current_user)):
+         # Derive user_id from authenticated session
+         await ws_manager.connect(websocket, user_id=user.id)
+     ```
+   - Consider rate limiting connections per authenticated user
 
 2. **Authorization**: Events are only sent to job owners
-   - Users cannot see other users' job progress
+   - Users cannot see other users' job progress (when properly authenticated)
    - Job ownership is tracked via `user_id`
+   - **This protection is ineffective without proper authentication** (see warning above)
 
 3. **DoS Protection**:
    - Rate limiting prevents event spam (100ms minimum between duplicate events)
    - Connection limits should be enforced at nginx/load balancer level
+   - Consider implementing per-user connection limits
 
 ## Migration from Polling
 

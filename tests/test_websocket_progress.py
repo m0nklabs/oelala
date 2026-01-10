@@ -4,10 +4,8 @@ Tests for WebSocket Progress Events and Queue Tracking
 """
 
 import pytest
-import asyncio
 import json
-from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 # Import modules to test - use relative imports when possible
 import sys
