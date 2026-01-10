@@ -449,11 +449,12 @@ async def websocket_progress(websocket: WebSocket):
     WebSocket endpoint for real-time job progress updates.
     Requires JWT authentication via initial message.
     """
+    await websocket.accept()
+
     if not ws_manager:
         await websocket.close(code=1011, reason="WebSocket progress not available")
         return
 
-    await websocket.accept()
     user_id = None
 
     try:
@@ -3634,6 +3635,9 @@ async def generate_wan22_async(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
         )
 
+    # Calculate total frames for tracking
+    total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
+
     # Register job with ComfyUI client for auto-upload on completion
     comfyui.register_job(
         prompt_id=prompt_id,
@@ -3660,7 +3664,7 @@ async def generate_wan22_async(
                 "prompt": prompt[:100],
                 "resolution": resolution,
                 "aspect_ratio": aspect_ratio,
-                "num_frames": total_frames if is_extend_mode else num_frames,
+                "num_frames": total_frames,
                 "fps": fps,
             },
         )
@@ -3672,7 +3676,6 @@ async def generate_wan22_async(
             )
 
     # Store job info for tracking
-    total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
     job_info = {
         "prompt": prompt[:100],
         "resolution": resolution,
