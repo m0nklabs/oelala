@@ -115,5 +115,5 @@ journalctl -u comfyui -f
 | Flexibility | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
 | Speed | ⭐⭐⭐⭐ | ⭐⭐⭐ |
 
-**Use Oelala** for quick results and user-facing apps.  
+**Use Oelala** for quick results and user-facing apps.
 **Use ComfyUI** for custom workflows and experimentation.

@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- **Auto-Upload to User Storage**: Generated content from synchronous endpoints is now automatically uploaded to user's private storage bucket after ComfyUI job completion
+  - Images saved to `users/{user_id}/images/{timestamp}_{filename}`
+  - Job tracking system with user_id association
+  - Automatic upload after successful generation (with error fallback) for synchronous endpoints (SD1.5, Wan2.2 T2I)
+  - Async endpoints (I2V, T2V, sequential) now register jobs for tracking; auto-upload will be added in future update via background tasks
+  - Videos path: `users/{user_id}/videos/{timestamp}_{filename}` (ready for async endpoint support)
 - **LTX-2 Native Audio+Video Generation**: Complete workflow for generating video with synchronized audio
   - Downloaded `ltx-2-19b-dev-Q4_K_M.gguf` (12 GB) with 2229 audio tensors
   - Created combined audio VAE checkpoint `ltx2_audio_vae.safetensors` (208 MB)

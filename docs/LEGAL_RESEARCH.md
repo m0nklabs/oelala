@@ -1,6 +1,6 @@
 # Legal Research: Content Policy & Licensing
 
-> Status: **RESEARCH NEEDED**  
+> Status: **RESEARCH NEEDED**
 > Priority: HIGH - Must resolve before commercial launch
 
 ---

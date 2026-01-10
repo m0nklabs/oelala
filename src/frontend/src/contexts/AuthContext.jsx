@@ -89,10 +89,10 @@ export function AuthProvider({ children }) {
       console.warn('Auth not enabled')
       return
     }
-    
+
     // First sign out
     await supabase.auth.signOut()
-    
+
     // Then immediately trigger OAuth with account selection prompt
     const { error } = await supabase.auth.signInWithOAuth({
       provider,

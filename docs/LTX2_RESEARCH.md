@@ -1,6 +1,6 @@
 # LTX-2 Research: Audio + Video Generation
 
-> Research date: January 2026  
+> Research date: January 2026
 > Status: **Very Promising** - Native audio+video in one model!
 
 ## NSFW Status: ✅ NOT EXPLICITLY RESTRICTED
@@ -96,7 +96,7 @@ LTX-2 is Lightricks' next-generation video foundation model with **native synchr
 
 ### Our Hardware: RTX 5060 Ti (16GB) + RTX 3060 (12GB) = 28GB
 
-**Assessment**: 
+**Assessment**:
 - ⚠️ FP8 distilled model (~24GB) is **borderline**
 - ✅ Would need CPU offload similar to WAN 2.2
 - ⚠️ May need smaller resolutions than 4K
