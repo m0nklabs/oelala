@@ -236,7 +236,6 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 |---------|-------------|
 | Plugin/extension system | Third-party integrations |
 | Public API | Developer access |
-| Mobile apps | iOS/Android clients |
 | Desktop app | Electron-based client |
 | Browser extension | Quick generation from any page |
 | Zapier/n8n integration | Workflow automation |

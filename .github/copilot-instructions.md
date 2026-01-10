@@ -62,10 +62,10 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 ## Platform Support Policy
 
-- **Supported Platforms**: Windows, Linux, and Android.
-- **macOS/iOS**: NOT supported. Do not suggest, implement, or test Apple-specific code. Do not mention macOS or iOS in documentation.
-- **Cross-platform code**: When writing cross-platform code, only consider Windows, Linux, and Android. Use appropriate platform checks.
-- **Go builds**: Cross-compile for `GOOS=windows`, `GOOS=linux`, and `GOOS=android` only.
+- **Supported Platforms**: Windows and Linux only.
+- **macOS/iOS/Android**: NOT supported. Do not suggest, implement, or test platform-specific code for these. Do not mention macOS, iOS, or Android in documentation.
+- **Cross-platform code**: When writing cross-platform code, only consider Windows and Linux. Use appropriate platform checks.
+- **Go builds**: Cross-compile for `GOOS=windows` and `GOOS=linux` only.
 
 ## Related Repositories
 
