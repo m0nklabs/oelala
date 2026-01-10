@@ -45,7 +45,12 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Focus**: Keep changes focused; do not reformat unrelated files.
 - **Documentation**: Don’t delete or prune documentation files/directories unless the user explicitly requests it.
 - **Scratchpad**: Treat directories like `research/` or `scratch/` as local-only scratch space and keep them out of git via `.gitignore`.
-- **Canonical Requirements**: Canonical requirements must be written into `docs/*`.- **CHANGELOG Required**: Every PR MUST update `CHANGELOG.md` under the `[Unreleased]` section. PRs without CHANGELOG updates will be blocked by CI.
+- **Canonical Requirements**: Canonical requirements must be written into `docs/*`.
+- **CHANGELOG Required**: Every PR MUST add a changelog fragment file in `changelog/` directory (NOT direct CHANGELOG.md edits). This prevents merge conflicts.
+  - File naming: `changelog/{PR_NUMBER}-{short-description}.md` (e.g., `changelog/83-websocket-progress.md`)
+  - Use sections: `### Added`, `### Fixed`, `### Changed`, etc.
+  - Fragments are auto-merged into CHANGELOG.md on release via `scripts/merge_changelog.py`
+
 ## Project Directory Boundaries & Structure
 
 - **External Projects**: Never commit or push inside external projects (e.g. submodules, cloned dependencies); only within first-party projects.

@@ -2,7 +2,7 @@ name: Copilot CI Feedback
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI", "Copilot Branch CI"]
     types: [completed]
 
 permissions:

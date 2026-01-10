@@ -10,11 +10,16 @@ import time
 import requests
 import websocket
 import random
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
+from datetime import datetime
 import logging
 import io
 import copy
+
+# Import for auto-upload functionality
+from storage_client import get_client as get_storage_client
 
 logger = logging.getLogger(__name__)
 
@@ -789,6 +794,10 @@ class ComfyUIClient:
         self.port = port
         self.base_url = f"http://{host}:{port}"
         self.client_id = str(uuid.uuid4())
+        # Job tracking: prompt_id -> {user_id, prompt, settings, started_at}
+        self.job_metadata = {}
+        # Thread-safe lock for job_metadata access
+        self._metadata_lock = threading.Lock()
 
     def is_available(self) -> bool:
         """Check if ComfyUI is running and accessible"""
@@ -1609,6 +1618,148 @@ class ComfyUIClient:
 
         return api_format
 
+    def register_job(
+        self,
+        prompt_id: str,
+        user_id: str,
+        prompt: str = "",
+        settings: Optional[Dict[str, Any]] = None,
+    ):
+        """Register job metadata for tracking and auto-upload on completion.
+
+        Args:
+            prompt_id: ComfyUI prompt ID
+            user_id: User ID from JWT token
+            prompt: Generation prompt
+            settings: Additional settings (resolution, frames, etc.)
+        """
+        with self._metadata_lock:
+            self.job_metadata[prompt_id] = {
+                "user_id": user_id,
+                "prompt": prompt,
+                "settings": (settings or {}).copy(),
+                "started_at": datetime.now().isoformat(),
+            }
+        logger.info(f"📝 Registered job {prompt_id} for user {user_id}")
+
+    def get_job_metadata(self, prompt_id: str) -> Optional[Dict[str, Any]]:
+        """Get job metadata for a prompt ID.
+
+        Returns a deep copy to prevent external mutation of internal state,
+        including nested structures such as the `settings` dictionary.
+        """
+        with self._metadata_lock:
+            metadata = self.job_metadata.get(prompt_id)
+            return copy.deepcopy(metadata) if metadata is not None else None
+
+    def clear_job_metadata(self, prompt_id: str):
+        """Clear job metadata after completion."""
+        with self._metadata_lock:
+            self.job_metadata.pop(prompt_id, None)
+
+    def on_job_complete(
+        self,
+        prompt_id: str,
+        output_path: str,
+        output_type: str = "video",
+    ) -> Optional[str]:
+        """Auto-upload generated content to user storage on job completion.
+
+        Args:
+            prompt_id: ComfyUI prompt ID
+            output_path: Local path to generated file
+            output_type: Type of output ('video', 'image', 'audio')
+
+        Returns:
+            Storage path if upload succeeded in the format "{media_type}/{filename}",
+            for example "images/1234567890_output.png", or None if the upload failed.
+        """
+        # Get job metadata
+        metadata = self.get_job_metadata(prompt_id)
+        if not metadata:
+            logger.warning(
+                f"⚠️ No job metadata found for {prompt_id}, skipping auto-upload"
+            )
+            return None
+
+        user_id = metadata.get("user_id")
+        if not user_id:
+            logger.warning(f"⚠️ No user_id in job metadata for {prompt_id}")
+            return None
+
+        file_data = None
+        try:
+            # Read file content
+            try:
+                with open(output_path, "rb") as f:
+                    file_data = f.read()
+            except (IOError, OSError) as e:
+                logger.error(f"❌ Failed to read file {output_path}: {e}")
+                # Clear metadata on file read failure to prevent memory leak
+                self.clear_job_metadata(prompt_id)
+                return None
+
+            # Generate storage filename with high-precision timestamp (ms) to avoid collisions
+            timestamp = int(datetime.now().timestamp() * 1000)
+            original_filename = Path(output_path).name
+            storage_filename = f"{timestamp}_{original_filename}"
+
+            # Determine media type folder
+            media_type_map = {
+                "video": "videos",
+                "image": "images",
+                "audio": "audio",
+            }
+            media_type = media_type_map.get(output_type, "generated")
+
+            # Determine content type
+            ext = Path(output_path).suffix.lower()
+            content_type_map = {
+                ".mp4": "video/mp4",
+                ".webm": "video/webm",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+                ".mp3": "audio/mpeg",
+                ".wav": "audio/wav",
+            }
+            content_type = content_type_map.get(ext, "application/octet-stream")
+
+            # Upload to user storage
+            storage_client = get_storage_client()
+            logger.info(
+                f"📤 Uploading {output_type} to user storage: {user_id}/{media_type}/{storage_filename}"
+            )
+
+            try:
+                storage_client.put_user_media(
+                    user_id=user_id,
+                    media_type=media_type,
+                    filename=storage_filename,
+                    data=file_data,
+                    content_type=content_type,
+                )
+            except Exception as e:
+                logger.error(f"❌ Storage upload failed for {prompt_id}: {e}")
+                # Don't clear metadata on upload failure - allows retry
+                return None
+
+            storage_path = f"{media_type}/{storage_filename}"
+            logger.info(
+                f"✅ Auto-uploaded to storage: {storage_path} ({len(file_data)} bytes)"
+            )
+
+            # Clear job metadata after successful upload
+            self.clear_job_metadata(prompt_id)
+
+            return storage_path
+
+        except Exception as e:
+            logger.error(f"❌ Unexpected error during auto-upload for {prompt_id}: {e}")
+            # Don't raise - we don't want to break the user flow if upload fails
+            return None
+
     def wait_for_completion(
         self,
         prompt_id: str,
@@ -1703,9 +1854,18 @@ class ComfyUIClient:
             return None
 
     def get_output_video(
-        self, history: Dict[str, Any], output_dir: str
+        self, history: Dict[str, Any], output_dir: str, prompt_id: Optional[str] = None
     ) -> Optional[str]:
-        """Extract output video path from history"""
+        """Extract output video path from history and auto-upload to user storage.
+
+        Args:
+            history: ComfyUI execution history
+            output_dir: Local directory to save video
+            prompt_id: Optional prompt ID for auto-upload tracking
+
+        Returns:
+            Local path to downloaded video
+        """
         try:
             outputs = history.get("outputs", {})
 
@@ -1729,6 +1889,19 @@ class ComfyUIClient:
                             with open(output_path, "wb") as f:
                                 f.write(resp.content)
                             logger.info(f"📥 Video downloaded: {output_path}")
+
+                            # Auto-upload to user storage if prompt_id is provided
+                            if prompt_id:
+                                storage_path = self.on_job_complete(
+                                    prompt_id=prompt_id,
+                                    output_path=str(output_path),
+                                    output_type="video",
+                                )
+                                if storage_path:
+                                    logger.info(
+                                        f"📤 Auto-uploaded video to: {storage_path}"
+                                    )
+
                             return str(output_path)
 
             logger.warning("No video output found in history")
@@ -1739,9 +1912,18 @@ class ComfyUIClient:
             return None
 
     def get_output_image(
-        self, history: Dict[str, Any], output_dir: str
+        self, history: Dict[str, Any], output_dir: str, prompt_id: Optional[str] = None
     ) -> Optional[str]:
-        """Extract output image path from history (SaveImage node output)"""
+        """Extract output image path from history and auto-upload to user storage.
+
+        Args:
+            history: ComfyUI execution history
+            output_dir: Local directory to save image
+            prompt_id: Optional prompt ID for auto-upload tracking
+
+        Returns:
+            Local path to downloaded image
+        """
         try:
             outputs = history.get("outputs", {})
 
@@ -1766,6 +1948,19 @@ class ComfyUIClient:
                             with open(output_path, "wb") as f:
                                 f.write(resp.content)
                             logger.info(f"📥 Image downloaded: {output_path}")
+
+                            # Auto-upload to user storage if prompt_id is provided
+                            if prompt_id:
+                                storage_path = self.on_job_complete(
+                                    prompt_id=prompt_id,
+                                    output_path=str(output_path),
+                                    output_type="image",
+                                )
+                                if storage_path:
+                                    logger.info(
+                                        f"📤 Auto-uploaded image to: {storage_path}"
+                                    )
+
                             return str(output_path)
 
             logger.warning("No image output found in history")
@@ -1796,7 +1991,7 @@ class ComfyUIClient:
         history = self.wait_for_completion(prompt_id, timeout, progress_callback)
         if not history:
             return None
-        return self.get_output_image(history, output_dir)
+        return self.get_output_image(history, output_dir, prompt_id)
 
     # ─────────────────────────────────────────────────────────────────────────
     # SDXL Text-to-Image Generation
@@ -2094,6 +2289,7 @@ class ComfyUIClient:
         sampler_name: str = "dpmpp_sde",
         scheduler: str = "karras",
         lora_configs: Optional[List[Dict[str, Any]]] = None,
+        user_id: Optional[str] = None,
     ) -> Optional[str]:
         """
         Generate image using SD 1.5 checkpoint via ComfyUI.
@@ -2205,6 +2401,24 @@ class ComfyUIClient:
             logger.error("Failed to queue SD1.5 workflow")
             return None
 
+        # Register job for auto-upload tracking
+        if user_id:
+            self.register_job(
+                prompt_id=prompt_id,
+                user_id=user_id,
+                prompt=prompt,
+                settings={
+                    "checkpoint": checkpoint,
+                    "width": width,
+                    "height": height,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "seed": seed,
+                    "sampler": sampler_name,
+                    "scheduler": scheduler,
+                },
+            )
+
         # Wait for completion with timeout
         output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=180)
 
@@ -2227,6 +2441,7 @@ class ComfyUIClient:
         height: int = 512,
         steps: int = 8,
         seed: int = -1,
+        user_id: Optional[str] = None,
     ) -> Optional[str]:
         """
         Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
@@ -2399,6 +2614,20 @@ class ComfyUIClient:
             logger.error("Failed to queue Wan2.2 T2I workflow")
             return None
 
+        # Register job for auto-upload tracking
+        if user_id:
+            self.register_job(
+                prompt_id=prompt_id,
+                user_id=user_id,
+                prompt=prompt,
+                settings={
+                    "width": width,
+                    "height": height,
+                    "steps": steps,
+                    "seed": seed,
+                },
+            )
+
         # Wait for completion with timeout (Wan2.2 is slower)
         output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)
 
@@ -2554,7 +2783,7 @@ class ComfyUIClient:
             return None
 
         # 6. Get output video
-        return self.get_output_video(history, output_dir)
+        return self.get_output_video(history, output_dir, prompt_id)
 
     def generate_enhanced_video(
         self,
@@ -2622,7 +2851,7 @@ class ComfyUIClient:
             return None
 
         # 6. Get output video
-        return self.get_output_video(history, output_dir)
+        return self.get_output_video(history, output_dir, prompt_id)
 
     def generate_sequential_video(
         self,
@@ -2723,7 +2952,7 @@ class ComfyUIClient:
             return None
 
         # 5. Get output video (the combined one)
-        return self.get_output_video(history, output_dir)
+        return self.get_output_video(history, output_dir, prompt_id)
 
     def _build_sequential_workflow(
         self,
@@ -3361,7 +3590,7 @@ class ComfyUIClient:
             return None
 
         # 6. Get output video
-        return self.get_output_video(history, output_dir)
+        return self.get_output_video(history, output_dir, prompt_id)
 
 
 # WAN 2.2 I2V DisTorch2 Dual-Noise Workflow (Q6_K 14B models)
