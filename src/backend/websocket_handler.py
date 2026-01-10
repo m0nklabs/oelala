@@ -70,13 +70,15 @@ class WebSocketManager:
         if job_id in self.job_ownership:
             user_id = self.job_ownership.pop(job_id)
             debug_log(f"Unregistered job {job_id} for user {user_id}")
-            
+
             # Clean up rate limiting cache for this job to prevent memory leak
             keys_to_remove = [k for k in self.last_broadcast.keys() if job_id in k]
             for key in keys_to_remove:
                 del self.last_broadcast[key]
             if keys_to_remove:
-                debug_log(f"Cleaned up {len(keys_to_remove)} rate limit entries for job {job_id}")
+                debug_log(
+                    f"Cleaned up {len(keys_to_remove)} rate limit entries for job {job_id}"
+                )
 
     async def broadcast_to_user(
         self, user_id: Optional[str], event_type: str, data: Dict[str, Any]

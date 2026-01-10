@@ -400,60 +400,58 @@ async def websocket_progress(websocket: WebSocket):
     - progress: Generation progress (0-100%)
     - job_complete: Job finished successfully
     - job_failed: Job failed with error
-    
+
     Authentication:
     - After connecting, send {"type": "auth", "token": "your_jwt_token"} as first message
     - User ID is derived from authenticated session
     - Connection will be closed if authentication fails or is not provided within 5 seconds
     """
     await websocket.accept()
-    
+
     # Wait for authentication message
     try:
         # Give client 5 seconds to authenticate
-        auth_message = await asyncio.wait_for(
-            websocket.receive_text(), timeout=5.0
-        )
-        
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+
         try:
             auth_data = json.loads(auth_message)
         except json.JSONDecodeError:
             logger.warning("📡 WebSocket rejected: Invalid JSON in auth message")
             await websocket.close(code=1008, reason="Invalid authentication message")
             return
-        
+
         if auth_data.get("type") != "auth":
             logger.warning("📡 WebSocket rejected: First message must be auth")
             await websocket.close(code=1008, reason="Authentication required")
             return
-        
+
         token = auth_data.get("token")
         if not token:
             logger.warning("📡 WebSocket rejected: No token provided")
             await websocket.close(code=1008, reason="Token required")
             return
-        
+
         # Validate JWT token
         from auth import decode_supabase_jwt
-        
+
         payload = decode_supabase_jwt(token)
         if not payload:
             logger.warning("📡 WebSocket rejected: Invalid token")
             await websocket.close(code=1008, reason="Invalid token")
             return
-        
+
         user_id = payload.get("sub")
         if not user_id:
             logger.warning("📡 WebSocket rejected: No user_id in token")
             await websocket.close(code=1008, reason="Invalid token payload")
             return
-        
+
         # Security note: decode_supabase_jwt may use unverified decode as fallback.
         # In production with untrusted clients, consider requiring verified decode:
         # - Ensure SUPABASE_JWT_SECRET is set in environment
         # - Or use decode_jwt_with_secret/decode_jwt_with_jwks directly
         # - And reject tokens that can't be cryptographically verified
-            
+
     except asyncio.TimeoutError:
         logger.warning("📡 WebSocket rejected: Authentication timeout")
         await websocket.close(code=1008, reason="Authentication timeout")
@@ -462,17 +460,19 @@ async def websocket_progress(websocket: WebSocket):
         logger.warning(f"📡 WebSocket authentication failed: {e}")
         await websocket.close(code=1008, reason="Authentication failed")
         return
-    
+
     # Authentication successful
     await ws_manager.connect(websocket, user_id)
     logger.info(f"📡 Progress WebSocket connected for user {user_id}")
-    
+
     # Send authentication success confirmation
     try:
-        await websocket.send_text(json.dumps({"type": "auth_success", "user_id": user_id}))
+        await websocket.send_text(
+            json.dumps({"type": "auth_success", "user_id": user_id})
+        )
     except Exception as e:
         logger.warning(f"Failed to send auth confirmation: {e}")
-    
+
     try:
         # Keep connection alive and handle client messages
         while True:

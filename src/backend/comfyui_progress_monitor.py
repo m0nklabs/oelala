@@ -40,7 +40,7 @@ class ComfyUIProgressMonitor:
         self._running = False
         self._monitor_thread: Optional[threading.Thread] = None
         self._ws: Optional[websocket.WebSocket] = None
-        
+
         # Event loop reference - set when start() is called from async context
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
 
