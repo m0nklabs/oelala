@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase, isAuthEnabled } from '../lib/supabase'
+import { BACKEND_BASE } from '../config'
 
 const AuthContext = createContext({
   user: null,
   session: null,
   loading: true,
+  isAdmin: false,
   signInWithGoogle: async () => {},
   signInWithGithub: async () => {},
   signOut: async () => {},
@@ -20,8 +22,49 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginModalMessage, setLoginModalMessage] = useState(null)
+
+  // Check admin status when user changes
+  useEffect(() => {
+    if (!user || !session) {
+      setIsAdmin(false)
+      return
+    }
+
+    const checkAdminStatus = async (retryCount = 0) => {
+      try {
+        const response = await fetch(`${BACKEND_BASE}/api/admin/check`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setIsAdmin(data.is_admin || false)
+        } else if (response.status >= 500 && retryCount < 2) {
+          // Retry on server errors
+          setTimeout(() => checkAdminStatus(retryCount + 1), 1000 * (retryCount + 1))
+        } else {
+          // On client errors or final retry, default to false
+          setIsAdmin(false)
+        }
+      } catch (error) {
+        console.error('Failed to check admin status:', error)
+        // Retry on network errors
+        if (retryCount < 2) {
+          setTimeout(() => checkAdminStatus(retryCount + 1), 1000 * (retryCount + 1))
+        } else {
+          // Final fallback: don't change admin status on persistent network errors
+          console.warn('Admin status check failed after retries, keeping current state')
+        }
+      }
+    }
+
+    checkAdminStatus()
+  }, [user, session])
 
   useEffect(() => {
     if (!isAuthEnabled()) {
@@ -127,6 +170,7 @@ export function AuthProvider({ children }) {
     user,
     session,
     loading,
+    isAdmin,
     signInWithGoogle,
     signInWithGithub,
     signOut,

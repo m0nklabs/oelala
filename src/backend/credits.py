@@ -361,7 +361,9 @@ class CreditManager:
         debug_log(f"Creating credit record for new user {user_id}")
         return await self._create_user_credits(user_id)
 
-    async def _create_user_credits(self, user_id: str, _retry: bool = False) -> CreditBalance:
+    async def _create_user_credits(
+        self, user_id: str, _retry: bool = False
+    ) -> CreditBalance:
         """Create credit record for new user with welcome bonus."""
         client = await self.get_client()
 
@@ -379,8 +381,12 @@ class CreditManager:
         if response.status_code not in (200, 201):
             # Might already exist (race condition) - but don't recurse infinitely
             if _retry:
-                debug_log(f"Failed to create/get credits for {user_id}: {response.status_code} {response.text}")
-                raise ValueError(f"Failed to create user credits: {response.status_code}")
+                debug_log(
+                    f"Failed to create/get credits for {user_id}: {response.status_code} {response.text}"
+                )
+                raise ValueError(
+                    f"Failed to create user credits: {response.status_code}"
+                )
             # Try to get existing record once more
             client2 = await self.get_client()
             get_response = await client2.get(
@@ -395,7 +401,9 @@ class CreditManager:
                     lifetime_used=data["lifetime_used"],
                 )
             # Still nothing? Error out instead of infinite loop
-            debug_log(f"Cannot create or find credits for {user_id}: POST={response.status_code}, GET={get_response.status_code}")
+            debug_log(
+                f"Cannot create or find credits for {user_id}: POST={response.status_code}, GET={get_response.status_code}"
+            )
             raise ValueError(f"Failed to create or retrieve user credits for {user_id}")
 
         # Log welcome bonus transaction

@@ -10,6 +10,7 @@ import sys
 # Load environment variables from .env file BEFORE any other imports
 # This must happen early so other modules get the env vars
 from dotenv import load_dotenv
+
 load_dotenv(dotenv_path="/home/flip/oelala/.env")
 
 import uvicorn
@@ -60,6 +61,9 @@ from credits_api import (
 
 # Gallery system
 from gallery_api import router as gallery_router
+
+# Admin system
+from admin_api import router as admin_router
 
 # ComfyUI Client for all image/video generation
 try:
@@ -336,6 +340,7 @@ app.add_middleware(
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
+app.include_router(admin_router)  # Admin panel at /api/admin/*
 
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")
@@ -1441,24 +1446,36 @@ async def get_comfyui_metadata(filename: str):
     Works with videos (mp4, webm, mov) and images (png).
     """
     import subprocess
-    
+
     output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Output file not found")
-    
+
     ext = output_path.suffix.lower()
     metadata = None
-    
+
     try:
         if ext in [".mp4", ".webm", ".mov"]:
             # Extract from video metadata using ffprobe
             result = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(output_path)],
-                capture_output=True, text=True, timeout=10
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    str(output_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode == 0:
                 probe_data = json.loads(result.stdout)
-                comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                comment = (
+                    probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                )
                 if comment and comment.startswith("{"):
                     workflow_data = json.loads(comment)
                     prompt = workflow_data.get("prompt", workflow_data)
@@ -1467,22 +1484,23 @@ async def get_comfyui_metadata(filename: str):
                         metadata = json.loads(prompt)
                     else:
                         metadata = prompt
-        
+
         elif ext in [".png"]:
             # Extract from PNG metadata
             from PIL import Image
+
             img = Image.open(str(output_path))
-            if hasattr(img, 'text'):
-                if 'prompt' in img.text:
-                    metadata = json.loads(img.text['prompt'])
-                elif 'workflow' in img.text:
-                    metadata = json.loads(img.text['workflow'])
-        
+            if hasattr(img, "text"):
+                if "prompt" in img.text:
+                    metadata = json.loads(img.text["prompt"])
+                elif "workflow" in img.text:
+                    metadata = json.loads(img.text["workflow"])
+
         if metadata:
             return {"metadata": metadata, "filename": filename}
         else:
             raise HTTPException(status_code=404, detail="No metadata found in file")
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1968,31 +1986,44 @@ async def get_user_media_workflow(
     """
     import subprocess
     import tempfile
-    
+
     try:
         storage = get_storage_client()
         data = storage.get_user_media(user.id, media_type, filename)
-        
+
         ext = Path(filename).suffix.lower()
-        
+
         # Write to temp file for ffprobe/exiftool analysis
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        
+
         workflow_json = None
-        
+
         try:
             if ext in [".mp4", ".webm", ".mov"]:
                 # Extract from video metadata using ffprobe
                 result = subprocess.run(
-                    ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", tmp_path],
-                    capture_output=True, text=True, timeout=10
+                    [
+                        "ffprobe",
+                        "-v",
+                        "quiet",
+                        "-print_format",
+                        "json",
+                        "-show_format",
+                        tmp_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
                 if result.returncode == 0:
                     import json as json_module
+
                     probe_data = json_module.loads(result.stdout)
-                    comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                    comment = (
+                        probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                    )
                     if comment and comment.startswith("{"):
                         # ComfyUI stores {"prompt": "..."} where prompt is a JSON string
                         workflow_data = json_module.loads(comment)
@@ -2002,28 +2033,32 @@ async def get_user_media_workflow(
                             workflow_json = json_module.loads(prompt)
                         else:
                             workflow_json = prompt
-            
+
             elif ext in [".png"]:
                 # Extract from PNG metadata
                 from PIL import Image
-                from PIL.PngImagePlugin import PngInfo
+
                 img = Image.open(tmp_path)
-                if hasattr(img, 'text'):
+                if hasattr(img, "text"):
                     import json as json_module
+
                     # ComfyUI stores in 'prompt' or 'workflow' text chunk
-                    if 'prompt' in img.text:
-                        workflow_json = json_module.loads(img.text['prompt'])
-                    elif 'workflow' in img.text:
-                        workflow_json = json_module.loads(img.text['workflow'])
+                    if "prompt" in img.text:
+                        workflow_json = json_module.loads(img.text["prompt"])
+                    elif "workflow" in img.text:
+                        workflow_json = json_module.loads(img.text["workflow"])
         finally:
             import os
+
             os.unlink(tmp_path)
-        
+
         if workflow_json:
             return {"workflow": workflow_json}
         else:
-            raise HTTPException(status_code=404, detail="No workflow found in media file")
-            
+            raise HTTPException(
+                status_code=404, detail="No workflow found in media file"
+            )
+
     except HTTPException:
         raise
     except Exception as e:
@@ -5473,7 +5508,7 @@ async def get_image(filename: str):
 async def list_videos():
     """List all generated videos from both output directories"""
     videos = []
-    
+
     # Scan OUTPUT_DIR (generated/)
     for file_path in OUTPUT_DIR.glob("*.mp4"):
         stat = file_path.stat()
@@ -5486,7 +5521,7 @@ async def list_videos():
                 "url": f"/videos/{file_path.name}",
             }
         )
-    
+
     # Also scan COMFYUI_OUTPUT_DIR
     if COMFYUI_OUTPUT_DIR.exists():
         for file_path in COMFYUI_OUTPUT_DIR.glob("*.mp4"):
@@ -5500,7 +5535,7 @@ async def list_videos():
                     "url": f"/comfyui-outputs/{file_path.name}",
                 }
             )
-    
+
     # Sort by mtime (newest first)
     videos.sort(key=lambda v: v.get("mtime", 0), reverse=True)
 

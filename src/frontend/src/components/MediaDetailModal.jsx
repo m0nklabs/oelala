@@ -25,16 +25,16 @@ export default function MediaDetailModal({ item, onClose }) {
       console.log('🔧 Fetching workflow from:', url)
       const response = await apiFetch(url)
       console.log('🔧 Response status:', response.status)
-      
+
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.detail || 'Failed to extract workflow')
       }
-      
+
       const data = await response.json()
       console.log('🔧 Workflow data keys:', Object.keys(data))
       const workflow = data.workflow
-      
+
       if (workflow) {
         const workflowJson = JSON.stringify(workflow, null, 2)
         const workflowBlob = new Blob([workflowJson], { type: 'application/json' })

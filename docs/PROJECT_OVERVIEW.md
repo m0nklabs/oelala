@@ -1,6 +1,6 @@
 # Oelala Project Overview
 
-> **Last Updated**: January 2026  
+> **Last Updated**: January 2026
 > **Version**: 0.4.x (Alpha)
 
 ---

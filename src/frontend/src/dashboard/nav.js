@@ -32,6 +32,8 @@ export const TOOL_IDS = {
   MY_MEDIA_IMAGES: 'my-media-images',
   MY_MEDIA_AUDIO: 'my-media-audio',
   MY_MEDIA_PROMPTS: 'my-media-prompts',
+  // Admin
+  ADMIN_PANEL: 'admin-panel',
 }
 
 export const NAV_GROUPS = [
@@ -101,6 +103,14 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.MY_MEDIA_IMAGES, label: 'Images', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_AUDIO, label: 'Audio', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_PROMPTS, label: 'Prompts', status: 'ready' },
+    ],
+  },
+  {
+    id: 'admin',
+    title: 'Admin',
+    adminOnly: true,
+    items: [
+      { id: TOOL_IDS.ADMIN_PANEL, label: 'Admin Panel', status: 'new' },
     ],
   },
 ]

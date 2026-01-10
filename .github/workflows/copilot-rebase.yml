@@ -94,17 +94,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUMBERS='${{ steps.find-prs.outputs.prs }}'
-          
+
           for PR_NUM in $(echo "$PR_NUMBERS" | jq -r '.[]'); do
             echo "Processing PR #$PR_NUM..."
-            
+
             # Get PR branch
             BRANCH=$(gh pr view "$PR_NUM" --json headRefName -q '.headRefName')
             echo "Branch: $BRANCH"
-            
+
             # Fetch all branches
             git fetch origin main "$BRANCH"
-            
+
             # Check if behind
             BEHIND=$(git rev-list --count "origin/$BRANCH..origin/main")
             if [ "$BEHIND" -eq 0 ]; then
@@ -112,42 +112,42 @@ jobs:
               continue
             fi
             echo "PR #$PR_NUM is $BEHIND commits behind main"
-            
+
             # Try GitHub API first (simple merge)
             if gh pr update-branch "$PR_NUM" 2>/dev/null; then
               echo "✅ Updated PR #$PR_NUM via GitHub API"
               continue
             fi
-            
+
             echo "GitHub API failed, trying git rebase with CHANGELOG auto-merge..."
-            
+
             # Checkout the PR branch
             git checkout -B "$BRANCH" "origin/$BRANCH"
-            
+
             # Try rebase
             if git rebase origin/main 2>/dev/null; then
               echo "✅ Rebase succeeded without conflicts"
               git push origin "$BRANCH" --force-with-lease
               continue
             fi
-            
+
             # Check if only CHANGELOG.md has conflicts
             CONFLICTS=$(git diff --name-only --diff-filter=U)
             if [ "$CONFLICTS" = "CHANGELOG.md" ]; then
               echo "Only CHANGELOG.md conflict - auto-resolving..."
-              
+
               # Get both versions and merge them
               git checkout --ours CHANGELOG.md
               OURS=$(cat CHANGELOG.md)
               git checkout --theirs CHANGELOG.md
               THEIRS=$(cat CHANGELOG.md)
-              
+
               # Extract [Unreleased] sections and combine
               # Keep main's header, combine both [Unreleased] entries
               git checkout --theirs CHANGELOG.md
               git add CHANGELOG.md
               git rebase --continue || true
-              
+
               # Push if successful
               if [ $? -eq 0 ]; then
                 git push origin "$BRANCH" --force-with-lease
@@ -155,28 +155,26 @@ jobs:
                 continue
               fi
             fi
-            
+
             # Abort and leave comment
             git rebase --abort 2>/dev/null || true
             git checkout main
-            
+
             echo "❌ Could not auto-resolve conflicts for PR #$PR_NUM"
-            gh pr comment "$PR_NUM" --body "⚠️ This PR has merge conflicts that couldn't be automatically resolved.
-
-**Conflicting files:** $CONFLICTS
-
-Please rebase manually:
-\`\`\`bash
-git fetch origin
-git checkout $BRANCH
-git rebase origin/main
-# Resolve conflicts, then:
-git add .
-git rebase --continue
-git push --force-with-lease
-\`\`\`
-
-_Auto-comment by rebase helper workflow_"
+            printf -v COMMENT_BODY '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n\n%s' \
+              "⚠️ This PR has merge conflicts that couldn't be automatically resolved." \
+              "**Conflicting files:** See conflict markers in the files." \
+              "Please rebase manually:" \
+              "\`\`\`bash" \
+              "git fetch origin" \
+              "git rebase origin/main" \
+              "# Resolve conflicts, then:" \
+              "git add ." \
+              "git rebase --continue" \
+              "git push --force-with-lease" \
+              "\`\`\`" \
+              "_Auto-comment by rebase helper workflow_"
+            gh pr comment "$PR_NUM" --body "$COMMENT_BODY"
           done
 
       - name: Summary
