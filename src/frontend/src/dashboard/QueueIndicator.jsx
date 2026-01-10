@@ -173,10 +173,10 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
                   Running
                 </div>
                 {queue.running.map((job) => (
-                  <JobRow 
-                    key={job.prompt_id} 
-                    job={job} 
-                    status="running" 
+                  <JobRow
+                    key={job.prompt_id}
+                    job={job}
+                    status="running"
                     onCancel={cancelJob}
                     onJobComplete={fetchQueue}
                   />
@@ -284,7 +284,7 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
       {/* Detailed progress tracker for running jobs */}
       {status === 'running' && showDetails && (
         <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
-          <ProgressTracker 
+          <ProgressTracker
             promptId={job.prompt_id}
             onComplete={onJobComplete}
           />

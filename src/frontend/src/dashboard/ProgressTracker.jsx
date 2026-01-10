@@ -14,12 +14,12 @@ export default function ProgressTracker({ promptId, onComplete }) {
   const [startTime, setStartTime] = useState(Date.now())
   const [currentNode, setCurrentNode] = useState('')
   const onCompleteRef = useRef(onComplete)
-  
+
   // Keep onComplete ref up to date
   useEffect(() => {
     onCompleteRef.current = onComplete
   }, [onComplete])
-  
+
   // Reset start time whenever we start tracking a new prompt
   useEffect(() => {
     if (!promptId) return
@@ -94,7 +94,7 @@ export default function ProgressTracker({ promptId, onComplete }) {
   // Poll for updates - stops when job completes
   useEffect(() => {
     if (!promptId) return
-    
+
     // Check if job is already in terminal state
     if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
       return
