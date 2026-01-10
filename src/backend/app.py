@@ -375,6 +375,40 @@ if COMFYUI_OUTPUT_DIR.exists():
     )
 
 
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def create_progress_callback(prompt_id: str):
+    """
+    Create a progress callback function for broadcasting WebSocket updates.
+
+    Args:
+        prompt_id: The job/prompt ID to broadcast progress for
+
+    Returns:
+        Async callback function that broadcasts progress updates
+    """
+
+    async def progress_callback(progress: int, node_name: str):
+        """Broadcast progress to user's WebSocket connections"""
+        if ws_manager:
+            await ws_manager.broadcast_progress(
+                job_id=prompt_id,
+                progress=progress,
+                node_name=node_name,
+                message=f"Processing {node_name}",
+            )
+
+    return progress_callback
+
+
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
+
 @app.get("/logs")
 async def get_logs():
     """Get recent server logs"""
@@ -1513,9 +1547,7 @@ async def get_job_status(prompt_id: str):
                         output_type = "audio"
                         output_filename = output_audio.split("/")[-1]
 
-                    output_path = (
-                        Path("/home/flip/oelala/ComfyUI/output") / output_filename
-                    )
+                    output_path = COMFYUI_OUTPUT_DIR / output_filename
 
                     # Trigger auto-upload (will only happen if job is registered)
                     if output_path.exists():
@@ -3629,17 +3661,9 @@ async def generate_wan22_async(
 
         # Register progress callback to broadcast real-time progress
         if progress_monitor:
-
-            async def progress_callback(progress: int, node_name: str):
-                """Broadcast progress to user's WebSocket connections"""
-                await ws_manager.broadcast_progress(
-                    job_id=prompt_id,
-                    progress=progress,
-                    node_name=node_name,
-                    message=f"Processing {node_name}",
-                )
-
-            progress_monitor.register_callback(prompt_id, progress_callback)
+            progress_monitor.register_callback(
+                prompt_id, create_progress_callback(prompt_id)
+            )
 
     # Store job info for tracking
     total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
@@ -3835,17 +3859,9 @@ async def generate_text_video(
 
         # Register progress callback to broadcast real-time progress
         if progress_monitor:
-
-            async def progress_callback(progress: int, node_name: str):
-                """Broadcast progress to user's WebSocket connections"""
-                await ws_manager.broadcast_progress(
-                    job_id=prompt_id,
-                    progress=progress,
-                    node_name=node_name,
-                    message=f"Processing {node_name}",
-                )
-
-            progress_monitor.register_callback(prompt_id, progress_callback)
+            progress_monitor.register_callback(
+                prompt_id, create_progress_callback(prompt_id)
+            )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
