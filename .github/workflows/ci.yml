@@ -13,7 +13,7 @@ permissions:
 jobs:
   autofix:
     name: Auto-fix style (PRs only)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     if: github.event_name == 'pull_request'
     permissions:
       contents: write
@@ -58,7 +58,7 @@ jobs:
 
   pre-commit:
     name: Pre-commit checks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     needs: [autofix]
     if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
     steps:
@@ -75,24 +75,12 @@ jobs:
 
   backend:
     name: Backend (ruff + pytest)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     needs: [autofix]
     if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: cryptotrader_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # Note: Uses locally running postgres container (cryptotrader-postgres)
+    # instead of GitHub Actions services (not supported on self-hosted)
 
     env:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/cryptotrader_test
@@ -101,12 +89,9 @@ jobs:
       PAPER_TRADING: "true"
 
     steps:
-      - name: Free disk space
+      - name: Check postgres
         run: |
-          # Remove large pre-installed packages we don't need
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt-get clean
-          df -h
+          pg_isready -h localhost -p 5432 || echo "Warning: postgres not running"
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -151,7 +136,7 @@ jobs:
 
   frontend:
     name: Frontend (build)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     needs: [autofix]
     if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
 
