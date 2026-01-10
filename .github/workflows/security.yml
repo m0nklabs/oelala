@@ -16,7 +16,7 @@ permissions:
 jobs:
   security:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     steps:
       - uses: actions/checkout@v4
 

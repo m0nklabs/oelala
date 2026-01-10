@@ -6,7 +6,7 @@ on:
 
 jobs:
   cleanup:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     permissions:
       pull-requests: write
 

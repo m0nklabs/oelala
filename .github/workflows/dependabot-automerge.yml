@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   automerge:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ci]
     if: github.actor == 'dependabot[bot]'
     steps:
       - name: Dependabot metadata

@@ -7,49 +7,57 @@ on:
 
 jobs:
   check-changelog:
-    name: Check CHANGELOG.md updated
-    runs-on: ubuntu-latest
+    name: Check changelog fragment exists
+    runs-on: [self-hosted, Linux, ci]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Check for CHANGELOG changes
+      - name: Check for changelog fragment
         id: changelog
         run: |
+          # Get PR number
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          
           # Get list of changed files in this PR
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
 
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          # Check if CHANGELOG.md is in the list
-          if echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
-            echo "✅ CHANGELOG.md has been updated"
+          # Check for changelog fragment file matching PR number
+          if echo "$CHANGED_FILES" | grep -qE "^changelog/${PR_NUMBER}-.*\.md$"; then
+            echo "✅ Changelog fragment for PR #${PR_NUMBER} found"
+            echo "updated=true" >> $GITHUB_OUTPUT
+          # Also accept any new file in changelog/ directory
+          elif echo "$CHANGED_FILES" | grep -qE "^changelog/.*\.md$"; then
+            echo "✅ Changelog fragment found"
             echo "updated=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ CHANGELOG.md has NOT been updated"
+            echo "❌ No changelog fragment found"
             echo "updated=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Fail if CHANGELOG not updated
+      - name: Fail if no changelog fragment
         if: steps.changelog.outputs.updated == 'false'
         run: |
-          echo "::error::CHANGELOG.md must be updated with this PR!"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "::error::Changelog fragment required for this PR!"
           echo ""
-          echo "Please add an entry to CHANGELOG.md describing your changes."
-          echo "Follow the Keep a Changelog format: https://keepachangelog.com/"
+          echo "Please create a changelog fragment file:"
+          echo "  changelog/${PR_NUMBER}-short-description.md"
           echo ""
-          echo "Example entry:"
-          echo "## [Unreleased]"
+          echo "Example content:"
           echo "### Added"
           echo "- New feature description"
           echo ""
+          echo "See changelog/README.md for details."
           exit 1
 
       - name: Success message
         if: steps.changelog.outputs.updated == 'true'
         run: |
-          echo "✅ CHANGELOG.md is updated - good job!"
+          echo "✅ Changelog fragment found - good job!"
