@@ -43,10 +43,10 @@ import { sendClientLog } from '../logging'
 export default function Dashboard() {
   const [activeToolId, setActiveToolId] = useState(TOOL_IDS.IMAGE_TO_VIDEO)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  
+
   // Mobile parameters panel state
   const [mobileParamsOpen, setMobileParamsOpen] = useState(false)
-  
+
   // Mobile navigation menu state
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -284,11 +284,11 @@ export default function Dashboard() {
     <div className="dashboard-wrapper">
       <div className="dashboard-container">
           {/* Mobile nav overlay */}
-          <div 
+          <div
             className={`mobile-nav-overlay ${mobileNavOpen ? 'visible' : ''}`}
             onClick={() => setMobileNavOpen(false)}
           />
-          
+
           {/* Sidebar - also opens on mobile when nav is open */}
           <div className={`sidebar-wrapper ${mobileNavOpen ? 'mobile-open' : ''}`}>
             <Sidebar
@@ -305,7 +305,7 @@ export default function Dashboard() {
       <main className="main-content">
         <div className="top-bar">
           {/* Mobile menu button */}
-          <button 
+          <button
             className="mobile-menu-btn"
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
           >
@@ -439,13 +439,13 @@ export default function Dashboard() {
         ) : (
           <div className="workspace">
             {/* Mobile overlay */}
-            <div 
+            <div
               className={`mobile-params-overlay ${mobileParamsOpen ? 'visible' : ''}`}
               onClick={() => setMobileParamsOpen(false)}
             />
-            
+
             {/* Mobile toggle button */}
-            <button 
+            <button
               className={`mobile-params-toggle ${mobileParamsOpen ? 'open' : ''}`}
               onClick={() => setMobileParamsOpen(!mobileParamsOpen)}
             >
@@ -453,7 +453,7 @@ export default function Dashboard() {
               {mobileParamsOpen ? 'Hide Parameters' : 'Show Parameters'}
               <ChevronUp size={18} />
             </button>
-            
+
             <section className={`controls-panel ${mobileParamsOpen ? 'mobile-open' : 'mobile-collapsed'}`}>
               <div className="panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>
@@ -470,7 +470,7 @@ export default function Dashboard() {
               </div>
               <div className="panel-body">{renderControls()}</div>
               {/* Mobile close button at bottom */}
-              <button 
+              <button
                 className="mobile-close-params"
                 onClick={() => setMobileParamsOpen(false)}
               >

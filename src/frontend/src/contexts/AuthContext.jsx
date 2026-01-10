@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
             Authorization: `Bearer ${session.access_token}`,
           },
         })
-        
+
         if (response.ok) {
           const data = await response.json()
           setIsAdmin(data.is_admin || false)

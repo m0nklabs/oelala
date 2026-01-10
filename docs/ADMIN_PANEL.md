@@ -330,9 +330,9 @@ Tests document:
 
 1. Check transaction log:
    ```sql
-   SELECT * FROM credit_transactions 
-   WHERE user_id = 'target-user-uuid' 
-   ORDER BY created_at DESC 
+   SELECT * FROM credit_transactions
+   WHERE user_id = 'target-user-uuid'
+   ORDER BY created_at DESC
    LIMIT 5;
    ```
 

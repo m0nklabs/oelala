@@ -177,7 +177,7 @@ class TestAdminSecurity:
         All /api/admin/* endpoints require:
         1. Valid JWT token (Authorization: Bearer <token>)
         2. is_admin=true in user_credits table
-        
+
         Without authentication: 401 Unauthorized
         Without admin flag: 403 Forbidden
         """
@@ -212,11 +212,11 @@ class TestAdminSecurity:
     def test_admin_toggle_requires_service_role(self):
         """
         The admin_toggle_status function requires service role for security.
-        
+
         This prevents:
         - Admins from promoting themselves to super-admin
         - Privilege escalation attacks
-        
+
         Only service role (backend with SUPABASE_SERVICE_KEY) can toggle admin status.
         Regular admins can toggle VIP but not admin status.
         """

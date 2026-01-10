@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
-import { 
-  Users, Search, Coins, Award, Shield, Crown, 
+import {
+  Users, Search, Coins, Award, Shield, Crown,
   ChevronDown, ChevronUp, Edit2, Trash2, Plus, Minus,
   TrendingUp, Activity
 } from 'lucide-react'
@@ -29,7 +29,7 @@ export default function AdminPanel() {
   // Fetch stats
   useEffect(() => {
     if (!isAdmin || !session) return
-    
+
     const fetchStats = async () => {
       try {
         const response = await fetch(`${BACKEND_BASE}/api/admin/stats`, {
@@ -37,7 +37,7 @@ export default function AdminPanel() {
             Authorization: `Bearer ${session.access_token}`,
           },
         })
-        
+
         if (response.ok) {
           const data = await response.json()
           setStats(data)
@@ -46,14 +46,14 @@ export default function AdminPanel() {
         console.error('Failed to fetch stats:', error)
       }
     }
-    
+
     fetchStats()
   }, [isAdmin, session])
 
   // Fetch users
   useEffect(() => {
     if (!isAdmin || !session) return
-    
+
     const fetchUsers = async () => {
       setLoading(true)
       try {
@@ -61,11 +61,11 @@ export default function AdminPanel() {
           page: page.toString(),
           per_page: '20',
         })
-        
+
         if (filterTier) {
           params.append('tier', filterTier)
         }
-        
+
         const response = await fetch(
           `${BACKEND_BASE}/api/admin/users?${params}`,
           {
@@ -74,7 +74,7 @@ export default function AdminPanel() {
             },
           }
         )
-        
+
         if (response.ok) {
           const data = await response.json()
           setUsers(data.users)
@@ -86,7 +86,7 @@ export default function AdminPanel() {
         setLoading(false)
       }
     }
-    
+
     fetchUsers()
   }, [isAdmin, session, page, filterTier])
 
@@ -101,7 +101,7 @@ export default function AdminPanel() {
           },
         }
       )
-      
+
       if (response.ok) {
         const data = await response.json()
         setTransactions(data)
@@ -130,7 +130,7 @@ export default function AdminPanel() {
 
   const handleCreditAdjust = async () => {
     if (!creditAmount || !creditReason || !creditAdjustUser) return
-    
+
     try {
       const response = await fetch(`${BACKEND_BASE}/api/admin/credits/adjust`, {
         method: 'POST',
@@ -144,22 +144,22 @@ export default function AdminPanel() {
           reason: creditReason,
         }),
       })
-      
+
       if (response.ok) {
         // Refresh user list
         const params = new URLSearchParams({ page: page.toString(), per_page: '20' })
         if (filterTier) params.append('tier', filterTier)
-        
+
         const refreshResponse = await fetch(
           `${BACKEND_BASE}/api/admin/users?${params}`,
           { headers: { Authorization: `Bearer ${session.access_token}` } }
         )
-        
+
         if (refreshResponse.ok) {
           const data = await refreshResponse.json()
           setUsers(data.users)
         }
-        
+
         setShowCreditModal(false)
         setCreditAdjustUser(null)
       }
@@ -182,10 +182,10 @@ export default function AdminPanel() {
           tier: newTier,
         }),
       })
-      
+
       if (response.ok) {
         // Refresh users
-        setUsers(users.map(u => 
+        setUsers(users.map(u =>
           u.user_id === userId ? { ...u, tier: newTier } : u
         ))
       }
@@ -207,10 +207,10 @@ export default function AdminPanel() {
           [field]: !currentValue,
         }),
       })
-      
+
       if (response.ok) {
         // Refresh users
-        setUsers(users.map(u => 
+        setUsers(users.map(u =>
           u.user_id === userId ? { ...u, [field]: !currentValue } : u
         ))
       }
@@ -261,8 +261,8 @@ export default function AdminPanel() {
       )}
 
       {/* Filters */}
-      <div style={{ 
-        background: 'var(--bg-card)', 
+      <div style={{
+        background: 'var(--bg-card)',
         border: '1px solid var(--border-color)',
         borderRadius: '8px',
         padding: '1rem',
@@ -290,7 +290,7 @@ export default function AdminPanel() {
             }}
           />
         </div>
-        
+
         <select
           value={filterTier}
           onChange={(e) => { setFilterTier(e.target.value); setPage(1); }}
@@ -406,7 +406,7 @@ export default function AdminPanel() {
             <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
               User: {creditAdjustUser?.email}
             </p>
-            
+
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Amount (positive to add, negative to subtract)
@@ -427,7 +427,7 @@ export default function AdminPanel() {
                 }}
               />
             </div>
-            
+
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Reason
@@ -448,7 +448,7 @@ export default function AdminPanel() {
                 }}
               />
             </div>
-            
+
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
                 onClick={handleCreditAdjust}
@@ -516,7 +516,7 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
   }
 
   return (
-    <div style={{ 
+    <div style={{
       borderBottom: '1px solid var(--border-color)',
       transition: 'background 0.15s',
     }}>
@@ -541,12 +541,12 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
             {user.user_id.slice(0, 8)}...
           </div>
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Coins size={14} style={{ color: '#a78bfa' }} />
           <span style={{ fontWeight: 600 }}>{user.balance}</span>
         </div>
-        
+
         <div>
           <span style={{
             padding: '0.25rem 0.6rem',
@@ -559,12 +559,12 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
             {user.tier.toUpperCase()}
           </span>
         </div>
-        
+
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {user.is_admin && <Shield size={16} style={{ color: '#ef4444' }} title="Admin" />}
           {user.is_vip && <Crown size={16} style={{ color: '#f59e0b' }} title="VIP" />}
         </div>
-        
+
         <div style={{ textAlign: 'right' }}>
           {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </div>
@@ -593,7 +593,7 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
               <Coins size={14} />
               Adjust Credits
             </button>
-            
+
             <select
               value={user.tier}
               onChange={(e) => { e.stopPropagation(); onTierChange(e.target.value); }}
@@ -612,7 +612,7 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
               <option value="pro">Pro Tier</option>
               <option value="vip">VIP Tier</option>
             </select>
-            
+
             <button
               onClick={(e) => { e.stopPropagation(); onToggleVIP(); }}
               style={{
@@ -631,7 +631,7 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
               <Crown size={14} />
               {user.is_vip ? 'Remove VIP' : 'Grant VIP'}
             </button>
-            
+
             <button
               onClick={(e) => { e.stopPropagation(); onToggleAdmin(); }}
               style={{
@@ -653,9 +653,9 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
           </div>
 
           {/* Stats */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
             gap: '0.75rem',
             marginBottom: '1rem'
           }}>
@@ -684,7 +684,7 @@ function UserRow({ user, expanded, onToggle, onCreditAdjust, onTierChange, onTog
                     }}
                   >
                     <div>
-                      <span style={{ 
+                      <span style={{
                         color: tx.amount > 0 ? '#10b981' : '#ef4444',
                         fontWeight: 600,
                         marginRight: '0.5rem'

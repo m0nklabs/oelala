@@ -59,7 +59,7 @@ Use this checklist when deploying the admin panel to production.
 - [ ] **Filter**: Test tier filter (free/pro/vip)
 - [ ] **Pagination**: Navigate through user pages
 - [ ] **Expand Details**: Click user row to expand
-- [ ] **Credit Adjustment**: 
+- [ ] **Credit Adjustment**:
   - Click "Adjust Credits"
   - Add 10 credits with reason "Test"
   - Verify balance updates
@@ -145,4 +145,3 @@ Then redeploy previous backend/frontend versions.
 _Add any deployment notes, issues encountered, or deviations from the plan:_
 
 ---
-

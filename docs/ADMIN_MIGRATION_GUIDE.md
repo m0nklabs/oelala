@@ -157,8 +157,8 @@ Look for:
 
 **Solution 3:** Verify RLS policies
 ```sql
-SELECT * FROM pg_policies 
-WHERE tablename = 'user_credits' 
+SELECT * FROM pg_policies
+WHERE tablename = 'user_credits'
 AND policyname LIKE '%Admin%';
 ```
 
@@ -192,16 +192,16 @@ Expected: `{"is_admin": true}`
 
 **Solution 1:** Check transaction log
 ```sql
-SELECT * FROM credit_transactions 
-WHERE user_id = 'TARGET_USER_ID' 
-ORDER BY created_at DESC 
+SELECT * FROM credit_transactions
+WHERE user_id = 'TARGET_USER_ID'
+ORDER BY created_at DESC
 LIMIT 5;
 ```
 
 **Solution 2:** Verify function exists
 ```sql
-SELECT routine_name 
-FROM information_schema.routines 
+SELECT routine_name
+FROM information_schema.routines
 WHERE routine_name LIKE 'admin_%';
 ```
 
@@ -273,7 +273,7 @@ curl -X GET https://your-backend/api/admin/users \
 Keep a record of admin users:
 
 ```sql
-SELECT 
+SELECT
   uc.user_id,
   au.email,
   uc.created_at as user_since,
@@ -290,7 +290,7 @@ Monitor admin actions:
 
 ```sql
 -- Admin credit adjustments in last 7 days
-SELECT 
+SELECT
   ct.created_at,
   ct.user_id,
   ct.amount,

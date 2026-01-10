@@ -143,9 +143,7 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
     is_admin = await check_admin(user)
     if not is_admin:
         debug_log(f"User {user.id} is not an admin")
-        raise HTTPException(
-            status_code=403, detail="Admin access required"
-        )
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     debug_log(f"Admin user {user.id} authenticated")
     return user
@@ -205,15 +203,13 @@ async def list_users(
         )
 
         if response.status_code != 200:
-            raise HTTPException(
-                status_code=500, detail="Failed to fetch users"
-            )
+            raise HTTPException(status_code=500, detail="Failed to fetch users")
 
         credits_data = response.json()
 
         # Get auth.users data for emails
         user_ids = [u["user_id"] for u in credits_data]
-        
+
         # Fetch emails from auth.users
         email_map = {}
         if user_ids:
@@ -224,7 +220,7 @@ async def list_users(
                     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                 },
             )
-            
+
             if auth_response.status_code == 200:
                 auth_users = auth_response.json().get("users", [])
                 email_map = {u["id"]: u.get("email") for u in auth_users}
@@ -235,7 +231,7 @@ async def list_users(
             headers={**headers, "Prefer": "count=exact"},
             params={"select": "user_id"},
         )
-        
+
         total = 0
         if count_response.status_code == 200:
             content_range = count_response.headers.get("Content-Range", "")
@@ -351,9 +347,7 @@ async def adjust_credits(
 
         if response.status_code != 200:
             logger.error(f"Failed to adjust credits: {response.text}")
-            raise HTTPException(
-                status_code=500, detail="Failed to adjust credits"
-            )
+            raise HTTPException(status_code=500, detail="Failed to adjust credits")
 
         result = response.json()
         if isinstance(result, list) and result:
@@ -417,14 +411,14 @@ async def update_tier(tier_update: TierUpdate, admin: User = Depends(get_admin_u
 
 
 @router.post("/status/toggle")
-async def toggle_status(
-    status: StatusToggle, admin: User = Depends(get_admin_user)
-):
+async def toggle_status(status: StatusToggle, admin: User = Depends(get_admin_user)):
     """
     Toggle admin or VIP status for a user.
     Admin only (service role for admin status).
     """
-    debug_log(f"Toggling status for {status.user_id}: admin={status.is_admin}, vip={status.is_vip}")
+    debug_log(
+        f"Toggling status for {status.user_id}: admin={status.is_admin}, vip={status.is_vip}"
+    )
 
     async with httpx.AsyncClient() as client:
         headers = {
@@ -490,9 +484,7 @@ async def get_user_transactions(
         )
 
         if response.status_code != 200:
-            raise HTTPException(
-                status_code=500, detail="Failed to fetch transactions"
-            )
+            raise HTTPException(status_code=500, detail="Failed to fetch transactions")
 
         transactions = [
             TransactionInfo(
@@ -535,7 +527,7 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
             raise HTTPException(status_code=500, detail="Failed to fetch stats")
 
         users = response.json()
-        
+
         tier_counts = {"free": 0, "pro": 0, "vip": 0}
         total_purchased = 0
         total_used = 0

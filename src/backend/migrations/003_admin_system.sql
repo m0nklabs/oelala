@@ -102,10 +102,10 @@ DECLARE
 BEGIN
     -- Get the authenticated user ID
     v_admin_id := COALESCE(p_admin_id, auth.uid());
-    
+
     -- Check if caller is admin
     IF NOT EXISTS (
-        SELECT 1 FROM public.user_credits 
+        SELECT 1 FROM public.user_credits
         WHERE user_id = v_admin_id AND is_admin = true
     ) THEN
         RETURN QUERY SELECT false, 0, 'Unauthorized: Admin access required'::TEXT;
@@ -127,9 +127,9 @@ BEGIN
     -- Log transaction
     INSERT INTO public.credit_transactions (user_id, amount, type, description, reference_id, metadata)
     VALUES (
-        p_user_id, 
-        p_amount, 
-        'admin', 
+        p_user_id,
+        p_amount,
+        'admin',
         COALESCE(p_description, 'Admin credit adjustment'),
         v_admin_id::TEXT,
         jsonb_build_object('admin_id', v_admin_id)
@@ -153,10 +153,10 @@ DECLARE
 BEGIN
     -- Get the authenticated user ID
     v_admin_id := COALESCE(p_admin_id, auth.uid());
-    
+
     -- Check if caller is admin
     IF NOT EXISTS (
-        SELECT 1 FROM public.user_credits 
+        SELECT 1 FROM public.user_credits
         WHERE user_id = v_admin_id AND is_admin = true
     ) THEN
         RETURN QUERY SELECT false, 'Unauthorized: Admin access required'::TEXT;
@@ -196,7 +196,7 @@ CREATE OR REPLACE FUNCTION public.admin_toggle_status(
 BEGIN
     -- Update admin/vip status (only fields that are not NULL)
     UPDATE public.user_credits
-    SET 
+    SET
         is_admin = COALESCE(p_is_admin, is_admin),
         is_vip = COALESCE(p_is_vip, is_vip),
         updated_at = NOW()

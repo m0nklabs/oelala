@@ -40,7 +40,7 @@ const ICONS = {
 
 export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggleCollapsed }) {
   const { isAdmin } = useAuth()
-  
+
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">

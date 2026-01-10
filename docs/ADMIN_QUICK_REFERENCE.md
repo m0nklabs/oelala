@@ -117,7 +117,7 @@ WHERE au.email ILIKE '%search@example.com%';
 
 ### View Recent Admin Actions
 ```sql
-SELECT 
+SELECT
   created_at,
   user_id,
   amount,
