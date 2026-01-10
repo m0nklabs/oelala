@@ -1499,6 +1499,34 @@ async def get_job_status(prompt_id: str):
                                 output_audio = f"/comfyui/output/{audio['filename']}"
                                 break
 
+                # Auto-upload to user storage if this is a registered job
+                comfyui = get_comfyui_client()
+                if comfyui and (output_video or output_image or output_audio):
+                    # Determine output type and path
+                    if output_video:
+                        output_type = "video"
+                        output_filename = output_video.split("/")[-1]
+                    elif output_image:
+                        output_type = "image"
+                        output_filename = output_image.split("/")[-1]
+                    else:
+                        output_type = "audio"
+                        output_filename = output_audio.split("/")[-1]
+
+                    output_path = (
+                        Path("/home/flip/oelala/ComfyUI/output") / output_filename
+                    )
+
+                    # Trigger auto-upload (will only happen if job is registered)
+                    if output_path.exists():
+                        storage_path = comfyui.on_job_complete(
+                            prompt_id, str(output_path), output_type
+                        )
+                        if storage_path:
+                            logger.info(
+                                f"✅ Auto-uploaded {output_type} for job {prompt_id}: {storage_path}"
+                            )
+
                 return {
                     "prompt_id": prompt_id,
                     "status": "completed",
@@ -3568,6 +3596,21 @@ async def generate_wan22_async(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
         )
 
+    # Register job with ComfyUI client for auto-upload on completion
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "extend_mode": is_extend_mode,
+            "clip_count": actual_clip_count if is_extend_mode else 1,
+        },
+    )
+
     # Register job with WebSocket manager for progress tracking
     if ws_manager and job_queue_manager:
         ws_manager.register_job(prompt_id, user_id=user.id)
@@ -3583,6 +3626,20 @@ async def generate_wan22_async(
                 "fps": fps,
             },
         )
+
+        # Register progress callback to broadcast real-time progress
+        if progress_monitor:
+
+            async def progress_callback(progress: int, node_name: str):
+                """Broadcast progress to user's WebSocket connections"""
+                await ws_manager.broadcast_progress(
+                    job_id=prompt_id,
+                    progress=progress,
+                    node_name=node_name,
+                    message=f"Processing {node_name}",
+                )
+
+            progress_monitor.register_callback(prompt_id, progress_callback)
 
     # Store job info for tracking
     total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
