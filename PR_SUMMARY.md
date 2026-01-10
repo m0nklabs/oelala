@@ -93,18 +93,18 @@ const ws = new WebSocket('ws://localhost:7998/ws/progress?user_id=user123');
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
-  
+
   switch (msg.type) {
     case 'queue_update':
       console.log(`Queue position: ${msg.data.queue_position}`);
       console.log(`ETA: ${msg.data.eta_human}`);
       break;
-      
+
     case 'progress':
       console.log(`Progress: ${msg.data.progress}%`);
       console.log(`Node: ${msg.data.node_name}`);
       break;
-      
+
     case 'job_complete':
       console.log(`Output: ${msg.data.output_url}`);
       break;
@@ -186,7 +186,7 @@ ws.onmessage = (e) => handleProgress(JSON.parse(e.data));
 This implementation provides a robust, scalable foundation for real-time job progress tracking. All acceptance criteria met:
 
 ✅ Queue position tracking with ETA estimation
-✅ Progress events during generation (0-100%)  
+✅ Progress events during generation (0-100%)
 ✅ Support for multiple clients per user
 ✅ Events delivered within 500ms
 ✅ Progress updates at least every 2 seconds

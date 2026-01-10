@@ -77,7 +77,7 @@ class WebSocketManager:
     ):
         """
         Broadcast an event to all connections for a specific user.
-        
+
         Args:
             user_id: User ID (None for anonymous)
             event_type: Event type ('queue_update', 'progress', 'job_complete', 'job_failed')
@@ -122,11 +122,15 @@ class WebSocketManager:
             )
 
     async def broadcast_queue_update(
-        self, job_id: str, queue_position: int, total_pending: int, eta_seconds: Optional[int] = None
+        self,
+        job_id: str,
+        queue_position: int,
+        total_pending: int,
+        eta_seconds: Optional[int] = None,
     ):
         """
         Broadcast queue position update to job owner.
-        
+
         Args:
             job_id: Job/prompt ID
             queue_position: Current position in queue (0 = running)
@@ -162,7 +166,7 @@ class WebSocketManager:
     ):
         """
         Broadcast generation progress update to job owner.
-        
+
         Args:
             job_id: Job/prompt ID
             progress: Progress percentage (0-100)
@@ -188,11 +192,14 @@ class WebSocketManager:
         debug_log(f"Progress: job {job_id} at {progress}% ({node_name or 'unknown'})")
 
     async def broadcast_job_complete(
-        self, job_id: str, output_url: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None
+        self,
+        job_id: str,
+        output_url: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """
         Broadcast job completion to job owner.
-        
+
         Args:
             job_id: Job/prompt ID
             output_url: URL to generated output
@@ -222,7 +229,7 @@ class WebSocketManager:
     ):
         """
         Broadcast job failure to job owner.
-        
+
         Args:
             job_id: Job/prompt ID
             error: Error message

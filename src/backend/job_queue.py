@@ -7,8 +7,7 @@ Integrates with ComfyUI queue and broadcasts real-time updates
 import asyncio
 import logging
 import time
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from collections import deque
 import httpx
 
@@ -50,7 +49,7 @@ class JobQueueManager:
     ):
         """
         Register a new job in the queue.
-        
+
         Args:
             prompt_id: ComfyUI prompt ID
             user_id: User who submitted the job
@@ -112,10 +111,10 @@ class JobQueueManager:
     def estimate_eta(self, queue_position: int) -> int:
         """
         Estimate time until job starts based on queue position and historical data.
-        
+
         Args:
             queue_position: Position in queue (1-based)
-            
+
         Returns:
             Estimated seconds until job starts
         """
@@ -143,7 +142,7 @@ class JobQueueManager:
         """
         Poll ComfyUI queue and broadcast position updates.
         Should be called periodically (every 1-2 seconds).
-        
+
         Args:
             ws_manager: WebSocketManager instance for broadcasting
         """
@@ -160,7 +159,7 @@ class JobQueueManager:
             if len(item) >= 2:
                 prompt_id = item[1]
                 current_state[prompt_id] = 0
-                
+
                 # Update job status if we're tracking it
                 if prompt_id in self.jobs:
                     job = self.jobs[prompt_id]
@@ -225,10 +224,10 @@ class JobQueueManager:
                     if history:
                         # Job completed successfully
                         self.complete_job(prompt_id)
-                        
+
                         # Extract output URL if available
                         output_url = self._extract_output_url(history)
-                        
+
                         await ws_manager.broadcast_job_complete(
                             job_id=prompt_id,
                             output_url=output_url,
@@ -241,7 +240,8 @@ class JobQueueManager:
                         # Job failed or cancelled
                         self.fail_job(prompt_id, "Job cancelled or failed")
                         await ws_manager.broadcast_job_failed(
-                            job_id=prompt_id, error="Job cancelled or not found in history"
+                            job_id=prompt_id,
+                            error="Job cancelled or not found in history",
                         )
                         if prompt_id in self.jobs:
                             del self.jobs[prompt_id]
@@ -276,7 +276,7 @@ class JobQueueManager:
     async def start_polling(self, ws_manager, interval: float = 2.0):
         """
         Start background polling task.
-        
+
         Args:
             ws_manager: WebSocketManager instance
             interval: Polling interval in seconds (default 2s)

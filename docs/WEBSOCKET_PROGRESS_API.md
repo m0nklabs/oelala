@@ -184,7 +184,7 @@ export function useJobProgress(jobId: string, userId?: string) {
 
     ws.onmessage = (event) => {
       const message: ProgressEvent = JSON.parse(event.data);
-      
+
       // Only process events for our job
       if (message.data.job_id !== jobId) return;
 
@@ -193,19 +193,19 @@ export function useJobProgress(jobId: string, userId?: string) {
           setQueuePosition(message.data.queue_position);
           setStatus(message.data.status);
           break;
-          
+
         case 'progress':
           setProgress(message.data.progress);
           setStatus('running');
           setQueuePosition(null); // Clear queue position once running
           break;
-          
+
         case 'job_complete':
           setProgress(100);
           setStatus('completed');
           setOutputUrl(message.data.output_url);
           break;
-          
+
         case 'job_failed':
           setStatus('failed');
           setError(message.data.error);
@@ -231,7 +231,7 @@ export function useJobProgress(jobId: string, userId?: string) {
   const status = ref<'queued' | 'running' | 'completed' | 'failed'>('queued');
   const error = ref<string | null>(null);
   const outputUrl = ref<string | null>(null);
-  
+
   let ws: WebSocket | null = null;
 
   onMounted(() => {
@@ -240,7 +240,7 @@ export function useJobProgress(jobId: string, userId?: string) {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      
+
       if (message.data.job_id !== jobId) return;
 
       switch (message.type) {
@@ -248,19 +248,19 @@ export function useJobProgress(jobId: string, userId?: string) {
           queuePosition.value = message.data.queue_position;
           status.value = message.data.status;
           break;
-          
+
         case 'progress':
           progress.value = message.data.progress;
           status.value = 'running';
           queuePosition.value = null;
           break;
-          
+
         case 'job_complete':
           progress.value = 100;
           status.value = 'completed';
           outputUrl.value = message.data.output_url;
           break;
-          
+
         case 'job_failed':
           status.value = 'failed';
           error.value = message.data.error;
@@ -301,20 +301,20 @@ export function useJobProgress(jobId: string, userId?: string) {
 ```
 1. Job Queued
    └─> queue_update (position N)
-   
+
 2. Queue Advances
    └─> queue_update (position N-1, N-2, ...)
-   
+
 3. Job Starts Running
    └─> queue_update (position 0)
-   
+
 4. Processing
    ├─> progress (10%, node: Load Image)
    ├─> progress (25%, node: VAE Encode)
    ├─> progress (50%, node: Sampler)
    ├─> progress (75%, node: VAE Decode)
    └─> progress (95%, node: Video Combine)
-   
+
 5. Completion
    └─> job_complete (output_url)
 ```
@@ -341,16 +341,16 @@ let reconnectDelay = 1000;
 
 function connect() {
   const ws = new WebSocket('ws://localhost:7998/ws/progress');
-  
+
   ws.onopen = () => {
     reconnectDelay = 1000; // Reset on success
   };
-  
+
   ws.onclose = () => {
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 30000); // Max 30s
   };
-  
+
   return ws;
 }
 ```
@@ -382,7 +382,7 @@ Expected response:
    - Users cannot see other users' job progress
    - Job ownership is tracked via `user_id`
 
-3. **DoS Protection**: 
+3. **DoS Protection**:
    - Rate limiting prevents event spam (100ms minimum between duplicate events)
    - Connection limits should be enforced at nginx/load balancer level
 

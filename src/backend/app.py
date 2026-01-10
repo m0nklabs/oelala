@@ -390,13 +390,13 @@ async def websocket_logs(websocket: WebSocket):
 async def websocket_progress(websocket: WebSocket, user_id: str = None):
     """
     WebSocket endpoint for real-time job progress and queue updates.
-    
+
     Clients receive:
     - queue_update: Position changes and ETA
     - progress: Generation progress (0-100%)
     - job_complete: Job finished successfully
     - job_failed: Job failed with error
-    
+
     Query params:
     - user_id: Optional user ID for filtering (defaults to anonymous)
     """
@@ -4732,7 +4732,7 @@ async def generate_i2i(
             },
         )
         ws_manager.register_job(prompt_id, user.id)
-        
+
         # Register progress callback for real-time updates
         async def progress_callback(progress: int, node_name: str):
             """Relay ComfyUI progress to WebSocket clients"""
@@ -4742,9 +4742,9 @@ async def generate_i2i(
                 message=f"Processing: {node_name}",
                 node_name=node_name,
             )
-        
+
         progress_monitor.register_callback(prompt_id, progress_callback)
-        
+
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
         logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits)")
