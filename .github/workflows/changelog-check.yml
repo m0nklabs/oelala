@@ -21,7 +21,7 @@ jobs:
         run: |
           # Get PR number
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          
+
           # Get list of changed files in this PR
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
 
