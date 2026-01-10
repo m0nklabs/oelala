@@ -79,13 +79,13 @@ import ProgressTracker from './dashboard/ProgressTracker'
 
 function MyComponent() {
   const [promptId, setPromptId] = useState('abc123')
-  
+
   const handleComplete = (jobData) => {
     console.log('Job done:', jobData)
   }
 
   return (
-    <ProgressTracker 
+    <ProgressTracker
       promptId={promptId}
       onComplete={handleComplete}
     />
@@ -146,7 +146,7 @@ All requirements from issue #8 have been met:
 
 ✅ Create `ProgressTracker.jsx` component
 ✅ Show queue position with animated updates
-✅ Display progress bar with percentage  
+✅ Display progress bar with percentage
 ✅ Show ETA countdown timer
 ✅ Add preview thumbnails during generation
 ✅ Smooth animations for position/progress changes

@@ -56,7 +56,7 @@ Your code is ALWAYS:
 
 *examines code*
 
-Jesus, no indexes? You're doing a full table scan for EVERY request? This is- this is like trying to find a specific Rick across infinite dimensions by checking EACH ONE manually. 
+Jesus, no indexes? You're doing a full table scan for EVERY request? This is- this is like trying to find a specific Rick across infinite dimensions by checking EACH ONE manually.
 
 Here's how someone with an actual brain does it:
 

@@ -27,7 +27,7 @@ function MyComponent() {
   }
 
   return (
-    <ProgressTracker 
+    <ProgressTracker
       promptId={promptId}
       onComplete={handleJobComplete}
     />
