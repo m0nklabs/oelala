@@ -9,7 +9,7 @@ jobs:
   check-changelog:
     name: Check CHANGELOG.md updated
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,10 +21,10 @@ jobs:
         run: |
           # Get list of changed files in this PR
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          
+
           echo "Changed files:"
           echo "$CHANGED_FILES"
-          
+
           # Check if CHANGELOG.md is in the list
           if echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
             echo "✅ CHANGELOG.md has been updated"

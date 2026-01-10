@@ -26,7 +26,7 @@ const ws = new WebSocket('ws://localhost:7998/ws/progress');
 
 ws.onopen = () => {
   console.log('✅ Connected to progress WebSocket');
-  
+
   // REQUIRED: Send authentication as first message
   ws.send(JSON.stringify({
     type: 'auth',
@@ -36,13 +36,13 @@ ws.onopen = () => {
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
-  
+
   // First message will be auth confirmation
   if (message.type === 'auth_success') {
     console.log('✅ Authenticated as user:', message.user_id);
     return;
   }
-  
+
   // Handle progress events
   console.log('Event:', message.type, message.data);
 };
@@ -460,7 +460,7 @@ Ping/pong test:
    - Implementation:
      ```python
      from auth import decode_jwt_with_secret, decode_jwt_with_jwks
-     
+
      @app.websocket("/ws/progress")
      async def websocket_progress(websocket: WebSocket):
          await websocket.accept()
@@ -468,7 +468,7 @@ Ping/pong test:
          auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
          auth_data = json.loads(auth_message)
          token = auth_data.get("token")
-         
+
          # PRODUCTION: Use verified decode methods only
          # Prefer decode_jwt_with_secret (HS256) or decode_jwt_with_jwks (RS256)
          # Do NOT use decode_supabase_jwt in production with untrusted clients
@@ -477,7 +477,7 @@ Ping/pong test:
          if not payload:
              await websocket.close(code=1008, reason="Invalid token")
              return
-         
+
          user_id = payload.get("sub")
      ```
    - **Browser Compatible**: This approach works with standard browser WebSocket API
