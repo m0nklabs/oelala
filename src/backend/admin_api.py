@@ -64,14 +64,16 @@ class CreditAdjustment(BaseModel):
 
     user_id: str
     amount: int  # Positive to add, negative to subtract
-    reason: str = Field(min_length=3, description="Reason for credit adjustment (min 3 characters)")
+    reason: str = Field(
+        min_length=3, description="Reason for credit adjustment (min 3 characters)"
+    )
 
-    @validator('amount')
+    @validator("amount")
     def validate_amount(cls, v):
         if abs(v) > 100000:
-            raise ValueError('Amount must be between -100,000 and 100,000')
+            raise ValueError("Amount must be between -100,000 and 100,000")
         if v == 0:
-            raise ValueError('Amount cannot be zero')
+            raise ValueError("Amount cannot be zero")
         return v
 
 
@@ -526,7 +528,7 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
 
         # Use PostgreSQL aggregation for efficiency
         query = """
-            SELECT 
+            SELECT
                 COUNT(*) as total_users,
                 SUM(lifetime_purchased) as total_purchased,
                 SUM(lifetime_used) as total_used,
