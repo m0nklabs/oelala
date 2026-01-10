@@ -4,9 +4,9 @@ A modern web platform for AI-powered image and video generation. Create, customi
 
 ## 📺 Repository Activity
 
-https://github.com/user-attachments/assets/oelala-gource-latest.mp4
+![Oelala Repository Activity](media/oelala-gource-preview.gif)
 
-<sub>*Auto-generated with [Gource](https://gource.io) • Updated weekly*</sub>
+<sub>*Auto-generated with [Gource](https://gource.io) • Updated weekly • [Full video (MP4)](media/oelala-gource-latest.mp4)*</sub>
 
 ## ✨ Features
 

@@ -6,8 +6,8 @@ set -e
 
 REPO_DIR="/home/flip/oelala"
 OUTPUT_DIR="${REPO_DIR}/media"
-OUTPUT_FILE="${OUTPUT_DIR}/oelala-gource-latest.mp4"
-TEMP_PPM="/tmp/gource-oelala.ppm"
+OUTPUT_MP4="${OUTPUT_DIR}/oelala-gource-latest.mp4"
+OUTPUT_GIF="${OUTPUT_DIR}/oelala-gource-preview.gif"
 
 echo "🎬 Generating Gource visualization for Oelala..."
 
@@ -36,8 +36,18 @@ xvfb-run -a gource \
     2>/dev/null | \
 ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i - \
     -vcodec libx264 -preset medium -pix_fmt yuv420p -crf 18 \
-    "$OUTPUT_FILE" \
+    "$OUTPUT_MP4" \
     2>/dev/null
 
-echo "✅ Generated: $OUTPUT_FILE"
-echo "📊 Size: $(du -h "$OUTPUT_FILE" | cut -f1)"
+echo "✅ Generated: $OUTPUT_MP4"
+echo "📊 Size: $(du -h "$OUTPUT_MP4" | cut -f1)"
+
+# Generate GIF preview for GitHub README (first 10 seconds, optimized)
+echo "🎞️ Generating GIF preview..."
+ffmpeg -y -ss 0 -t 10 -i "$OUTPUT_MP4" \
+    -vf "fps=8,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
+    -loop 0 "$OUTPUT_GIF" \
+    2>/dev/null
+
+echo "✅ Generated: $OUTPUT_GIF"
+echo "📊 Size: $(du -h "$OUTPUT_GIF" | cut -f1)"
