@@ -8,7 +8,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 import httpx
 
 from auth import get_current_user, User
@@ -64,7 +64,15 @@ class CreditAdjustment(BaseModel):
 
     user_id: str
     amount: int  # Positive to add, negative to subtract
-    reason: str
+    reason: str = Field(min_length=3, description="Reason for credit adjustment (min 3 characters)")
+
+    @validator('amount')
+    def validate_amount(cls, v):
+        if abs(v) > 100000:
+            raise ValueError('Amount must be between -100,000 and 100,000')
+        if v == 0:
+            raise ValueError('Amount cannot be zero')
+        return v
 
 
 class TierUpdate(BaseModel):
@@ -505,7 +513,7 @@ async def get_user_transactions(
 @router.get("/stats", response_model=AdminStats)
 async def get_admin_stats(admin: User = Depends(get_admin_user)):
     """
-    Get system-wide statistics.
+    Get system-wide statistics using database aggregation.
     Admin only.
     """
     debug_log("Fetching admin stats")
@@ -516,39 +524,81 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
         }
 
-        # Get all user_credits for stats
-        response = await client.get(
-            f"{SUPABASE_URL}/rest/v1/user_credits",
+        # Use PostgreSQL aggregation for efficiency
+        query = """
+            SELECT 
+                COUNT(*) as total_users,
+                SUM(lifetime_purchased) as total_purchased,
+                SUM(lifetime_used) as total_used,
+                COUNT(*) FILTER (WHERE is_admin = true) as admin_count,
+                COUNT(*) FILTER (WHERE is_vip = true) as vip_count,
+                COUNT(*) FILTER (WHERE tier = 'free') as free_count,
+                COUNT(*) FILTER (WHERE tier = 'pro') as pro_count,
+                COUNT(*) FILTER (WHERE tier = 'vip') as vip_tier_count
+            FROM user_credits
+        """
+
+        response = await client.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/get_admin_stats",
             headers=headers,
-            params={"select": "*"},
+            json={},
         )
 
+        # Fallback to simple query if RPC doesn't exist
         if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to fetch stats")
+            # Get aggregated data directly
+            response = await client.get(
+                f"{SUPABASE_URL}/rest/v1/user_credits",
+                headers=headers,
+                params={
+                    "select": "tier,is_admin,is_vip,lifetime_purchased,lifetime_used",
+                },
+            )
 
-        users = response.json()
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to fetch stats")
 
-        tier_counts = {"free": 0, "pro": 0, "vip": 0}
-        total_purchased = 0
-        total_used = 0
-        admin_count = 0
-        vip_count = 0
+            users = response.json()
 
-        for user in users:
-            tier = user.get("tier", "free")
-            tier_counts[tier] = tier_counts.get(tier, 0) + 1
-            total_purchased += user.get("lifetime_purchased", 0)
-            total_used += user.get("lifetime_used", 0)
-            if user.get("is_admin"):
-                admin_count += 1
-            if user.get("is_vip"):
-                vip_count += 1
+            tier_counts = {"free": 0, "pro": 0, "vip": 0}
+            total_purchased = 0
+            total_used = 0
+            admin_count = 0
+            vip_count = 0
+
+            for user in users:
+                tier = user.get("tier", "free")
+                tier_counts[tier] = tier_counts.get(tier, 0) + 1
+                total_purchased += user.get("lifetime_purchased", 0)
+                total_used += user.get("lifetime_used", 0)
+                if user.get("is_admin"):
+                    admin_count += 1
+                if user.get("is_vip"):
+                    vip_count += 1
+
+            return AdminStats(
+                total_users=len(users),
+                total_credits_issued=total_purchased,
+                total_credits_used=total_used,
+                total_admins=admin_count,
+                total_vips=vip_count,
+                tier_counts=tier_counts,
+            )
+
+        # Use RPC result if available
+        result = response.json()
+        if isinstance(result, list) and result:
+            result = result[0]
 
         return AdminStats(
-            total_users=len(users),
-            total_credits_issued=total_purchased,
-            total_credits_used=total_used,
-            total_admins=admin_count,
-            total_vips=vip_count,
-            tier_counts=tier_counts,
+            total_users=result.get("total_users", 0),
+            total_credits_issued=result.get("total_purchased", 0),
+            total_credits_used=result.get("total_used", 0),
+            total_admins=result.get("admin_count", 0),
+            total_vips=result.get("vip_count", 0),
+            tier_counts={
+                "free": result.get("free_count", 0),
+                "pro": result.get("pro_count", 0),
+                "vip": result.get("vip_tier_count", 0),
+            },
         )

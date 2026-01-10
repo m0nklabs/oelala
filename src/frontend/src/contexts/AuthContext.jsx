@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
       return
     }
 
-    const checkAdminStatus = async () => {
+    const checkAdminStatus = async (retryCount = 0) => {
       try {
         const response = await fetch(`${BACKEND_BASE}/api/admin/check`, {
           headers: {
@@ -44,12 +44,22 @@ export function AuthProvider({ children }) {
         if (response.ok) {
           const data = await response.json()
           setIsAdmin(data.is_admin || false)
+        } else if (response.status >= 500 && retryCount < 2) {
+          // Retry on server errors
+          setTimeout(() => checkAdminStatus(retryCount + 1), 1000 * (retryCount + 1))
         } else {
+          // On client errors or final retry, default to false
           setIsAdmin(false)
         }
       } catch (error) {
         console.error('Failed to check admin status:', error)
-        setIsAdmin(false)
+        // Retry on network errors
+        if (retryCount < 2) {
+          setTimeout(() => checkAdminStatus(retryCount + 1), 1000 * (retryCount + 1))
+        } else {
+          // Final fallback: don't change admin status on persistent network errors
+          console.warn('Admin status check failed after retries, keeping current state')
+        }
       }
     }
 

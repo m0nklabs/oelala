@@ -52,33 +52,27 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================================
 
 -- Allow admins to view all user credits (for admin panel)
+DROP POLICY IF EXISTS "Admins can view all user credits" ON public.user_credits;
 CREATE POLICY "Admins can view all user credits"
     ON public.user_credits FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1 FROM public.user_credits uc
-            WHERE uc.user_id = auth.uid() AND uc.is_admin = true
-        )
+        (SELECT is_admin FROM public.user_credits WHERE user_id = auth.uid()) = true
     );
 
 -- Allow admins to update any user's credits/tier/status
+DROP POLICY IF EXISTS "Admins can update any user credits" ON public.user_credits;
 CREATE POLICY "Admins can update any user credits"
     ON public.user_credits FOR UPDATE
     USING (
-        EXISTS (
-            SELECT 1 FROM public.user_credits uc
-            WHERE uc.user_id = auth.uid() AND uc.is_admin = true
-        )
+        (SELECT is_admin FROM public.user_credits WHERE user_id = auth.uid()) = true
     );
 
 -- Allow admins to view all transactions
+DROP POLICY IF EXISTS "Admins can view all transactions" ON public.credit_transactions;
 CREATE POLICY "Admins can view all transactions"
     ON public.credit_transactions FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1 FROM public.user_credits uc
-            WHERE uc.user_id = auth.uid() AND uc.is_admin = true
-        )
+        (SELECT is_admin FROM public.user_credits WHERE user_id = auth.uid()) = true
     );
 
 -- ============================================================================
@@ -99,16 +93,33 @@ CREATE OR REPLACE FUNCTION public.admin_grant_credits(
 DECLARE
     new_bal INTEGER;
     v_admin_id UUID;
+    current_balance INTEGER;
 BEGIN
-    -- Get the authenticated user ID
-    v_admin_id := COALESCE(p_admin_id, auth.uid());
+    -- SECURITY: Always use authenticated user ID, ignore caller-supplied p_admin_id
+    v_admin_id := auth.uid();
 
-    -- Check if caller is admin
+    -- Check if authenticated user is admin
     IF NOT EXISTS (
         SELECT 1 FROM public.user_credits
         WHERE user_id = v_admin_id AND is_admin = true
     ) THEN
         RETURN QUERY SELECT false, 0, 'Unauthorized: Admin access required'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Check if target user exists and get current balance
+    SELECT balance INTO current_balance
+    FROM public.user_credits
+    WHERE user_id = p_user_id;
+
+    IF NOT FOUND THEN
+        RETURN QUERY SELECT false, 0, 'User not found'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Prevent negative balance
+    IF current_balance + p_amount < 0 THEN
+        RETURN QUERY SELECT false, current_balance, 'Insufficient credits: resulting balance would be negative'::TEXT;
         RETURN;
     END IF;
 
@@ -119,12 +130,7 @@ BEGIN
     WHERE user_id = p_user_id
     RETURNING balance INTO new_bal;
 
-    IF NOT FOUND THEN
-        RETURN QUERY SELECT false, 0, 'User not found'::TEXT;
-        RETURN;
-    END IF;
-
-    -- Log transaction
+    -- Log transaction with authenticated admin ID
     INSERT INTO public.credit_transactions (user_id, amount, type, description, reference_id, metadata)
     VALUES (
         p_user_id,
@@ -151,10 +157,10 @@ CREATE OR REPLACE FUNCTION public.admin_update_tier(
 DECLARE
     v_admin_id UUID;
 BEGIN
-    -- Get the authenticated user ID
-    v_admin_id := COALESCE(p_admin_id, auth.uid());
+    -- SECURITY: Always use authenticated user ID, ignore caller-supplied p_admin_id
+    v_admin_id := auth.uid();
 
-    -- Check if caller is admin
+    -- Check if authenticated user is admin
     IF NOT EXISTS (
         SELECT 1 FROM public.user_credits
         WHERE user_id = v_admin_id AND is_admin = true

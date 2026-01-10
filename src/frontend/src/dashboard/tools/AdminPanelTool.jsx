@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
 import {
-  Users, Search, Coins, Award, Shield, Crown,
-  ChevronDown, ChevronUp, Edit2, Trash2, Plus, Minus,
-  TrendingUp, Activity
+  Users, Search, Coins, Shield, Crown,
+  ChevronDown, ChevronUp,
+  TrendingUp
 } from 'lucide-react'
 
 export default function AdminPanel() {
@@ -12,7 +12,6 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
-  const [selectedUser, setSelectedUser] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTier, setFilterTier] = useState('')
   const [page, setPage] = useState(1)
@@ -25,6 +24,8 @@ export default function AdminPanel() {
   const [creditAdjustUser, setCreditAdjustUser] = useState(null)
   const [creditAmount, setCreditAmount] = useState('')
   const [creditReason, setCreditReason] = useState('')
+  const [creditError, setCreditError] = useState('')
+  const [creditLoading, setCreditLoading] = useState(false)
 
   // Fetch stats
   useEffect(() => {
@@ -125,11 +126,31 @@ export default function AdminPanel() {
     setCreditAdjustUser(user)
     setCreditAmount('')
     setCreditReason('')
+    setCreditError('')
+    setCreditLoading(false)
     setShowCreditModal(true)
   }
 
   const handleCreditAdjust = async () => {
-    if (!creditAmount || !creditReason || !creditAdjustUser) return
+    // Validate input
+    const amount = parseInt(creditAmount)
+    if (isNaN(amount) || amount === 0) {
+      setCreditError('Please enter a valid non-zero amount')
+      return
+    }
+
+    if (!creditReason || creditReason.trim().length < 3) {
+      setCreditError('Please provide a reason (min 3 characters)')
+      return
+    }
+
+    if (Math.abs(amount) > 100000) {
+      setCreditError('Amount must be between -100,000 and 100,000')
+      return
+    }
+
+    setCreditLoading(true)
+    setCreditError('')
 
     try {
       const response = await fetch(`${BACKEND_BASE}/api/admin/credits/adjust`, {
@@ -140,10 +161,18 @@ export default function AdminPanel() {
         },
         body: JSON.stringify({
           user_id: creditAdjustUser.user_id,
-          amount: parseInt(creditAmount),
-          reason: creditReason,
+          amount: amount,
+          reason: creditReason.trim(),
         }),
       })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setCreditError(data.detail || 'Failed to adjust credits')
+        setCreditLoading(false)
+        return
+      }
 
       if (response.ok) {
         // Refresh user list
@@ -156,16 +185,18 @@ export default function AdminPanel() {
         )
 
         if (refreshResponse.ok) {
-          const data = await refreshResponse.json()
-          setUsers(data.users)
+          const refreshData = await refreshResponse.json()
+          setUsers(refreshData.users)
         }
 
         setShowCreditModal(false)
         setCreditAdjustUser(null)
+        setCreditLoading(false)
       }
     } catch (error) {
       console.error('Failed to adjust credits:', error)
-      alert('Failed to adjust credits')
+      setCreditError('Network error: Failed to adjust credits')
+      setCreditLoading(false)
     }
   }
 
@@ -183,14 +214,22 @@ export default function AdminPanel() {
         }),
       })
 
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Failed to update tier:', data)
+        alert(`Failed to update tier: ${data.detail || 'Unknown error'}`)
+        return
+      }
+
       if (response.ok) {
-        // Refresh users
+        // Update local state
         setUsers(users.map(u =>
           u.user_id === userId ? { ...u, tier: newTier } : u
         ))
       }
     } catch (error) {
       console.error('Failed to update tier:', error)
+      alert('Network error: Failed to update tier')
     }
   }
 
@@ -208,14 +247,22 @@ export default function AdminPanel() {
         }),
       })
 
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Failed to toggle status:', data)
+        alert(`Failed to toggle status: ${data.detail || 'Unknown error'}`)
+        return
+      }
+
       if (response.ok) {
-        // Refresh users
+        // Update local state
         setUsers(users.map(u =>
           u.user_id === userId ? { ...u, [field]: !currentValue } : u
         ))
       }
     } catch (error) {
       console.error('Failed to toggle status:', error)
+      alert('Network error: Failed to toggle status')
     }
   }
 
@@ -407,6 +454,20 @@ export default function AdminPanel() {
               User: {creditAdjustUser?.email}
             </p>
 
+            {creditError && (
+              <div style={{
+                padding: '0.75rem',
+                marginBottom: '1rem',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                color: '#ef4444',
+                fontSize: '0.85rem',
+              }}>
+                {creditError}
+              </div>
+            )}
+
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Amount (positive to add, negative to subtract)
@@ -416,6 +477,7 @@ export default function AdminPanel() {
                 value={creditAmount}
                 onChange={(e) => setCreditAmount(e.target.value)}
                 placeholder="e.g., 100 or -50"
+                disabled={creditLoading}
                 style={{
                   width: '100%',
                   padding: '0.6rem 0.8rem',
@@ -430,13 +492,14 @@ export default function AdminPanel() {
 
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Reason
+                Reason (min 3 characters)
               </label>
               <input
                 type="text"
                 value={creditReason}
                 onChange={(e) => setCreditReason(e.target.value)}
                 placeholder="e.g., Compensation for issue #123"
+                disabled={creditLoading}
                 style={{
                   width: '100%',
                   padding: '0.6rem 0.8rem',
@@ -452,23 +515,24 @@ export default function AdminPanel() {
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
                 onClick={handleCreditAdjust}
-                disabled={!creditAmount || !creditReason}
+                disabled={creditLoading || !creditAmount || !creditReason}
                 style={{
                   flex: 1,
                   padding: '0.6rem 1rem',
-                  background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                  background: creditLoading ? '#666' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
                   border: 'none',
                   borderRadius: '6px',
                   color: 'white',
                   fontWeight: 500,
-                  cursor: (!creditAmount || !creditReason) ? 'not-allowed' : 'pointer',
-                  opacity: (!creditAmount || !creditReason) ? 0.5 : 1,
+                  cursor: (creditLoading || !creditAmount || !creditReason) ? 'not-allowed' : 'pointer',
+                  opacity: (creditLoading || !creditAmount || !creditReason) ? 0.5 : 1,
                 }}
               >
-                Confirm
+                {creditLoading ? 'Processing...' : 'Confirm'}
               </button>
               <button
                 onClick={() => setShowCreditModal(false)}
+                disabled={creditLoading}
                 style={{
                   flex: 1,
                   padding: '0.6rem 1rem',
@@ -476,7 +540,8 @@ export default function AdminPanel() {
                   border: '1px solid var(--border-color)',
                   borderRadius: '6px',
                   color: 'var(--text-secondary)',
-                  cursor: 'pointer',
+                  cursor: creditLoading ? 'not-allowed' : 'pointer',
+                  opacity: creditLoading ? 0.5 : 1,
                 }}
               >
                 Cancel
