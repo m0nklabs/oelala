@@ -193,12 +193,11 @@ class ComfyUIProgressMonitor:
         try:
             self._event_loop = asyncio.get_running_loop()
         except RuntimeError:
-            # Not in an async context - try to get the default loop
-            try:
-                self._event_loop = asyncio.get_event_loop()
-            except RuntimeError:
-                logger.warning("No event loop available - progress callbacks will not work")
-                self._event_loop = None
+            # Not in an async context or no running loop available
+            logger.warning(
+                "No running event loop available - progress callbacks will not work"
+            )
+            self._event_loop = None
 
         self._running = True
         self._monitor_thread = threading.Thread(

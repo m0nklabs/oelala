@@ -4,7 +4,7 @@
 
 The Oelala backend provides real-time job progress and queue position updates via WebSocket. This allows frontend clients to display live progress bars, queue positions, and ETAs without polling.
 
-**Authentication Required**: This endpoint requires JWT authentication via the Authorization header.
+**Authentication Required**: This endpoint requires JWT authentication sent in the first message after connection.
 
 ## WebSocket Endpoint
 
@@ -14,7 +14,7 @@ ws://localhost:7998/ws/progress
 
 ### Authentication
 
-The endpoint requires a valid JWT token sent in the Authorization header. The user ID is derived from the authenticated session token, not from query parameters.
+The endpoint requires a valid JWT token sent in the first message after connecting. The user ID is derived from the authenticated session token.
 
 ## Connection
 
@@ -24,19 +24,26 @@ const token = localStorage.getItem('auth_token'); // or from your auth state
 
 const ws = new WebSocket('ws://localhost:7998/ws/progress');
 
-// Note: WebSocket API doesn't support custom headers directly in browser
-// You need to send the token in the first message or use subprotocol
-// For production, consider using a WebSocket library that supports headers
-
-// Alternative: Send token after connection
 ws.onopen = () => {
   console.log('✅ Connected to progress WebSocket');
-  // If using token-based auth, send it in first message
-  ws.send(JSON.stringify({ type: 'auth', token: token }));
+  
+  // REQUIRED: Send authentication as first message
+  ws.send(JSON.stringify({
+    type: 'auth',
+    token: token
+  }));
 };
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
+  
+  // First message will be auth confirmation
+  if (message.type === 'auth_success') {
+    console.log('✅ Authenticated as user:', message.user_id);
+    return;
+  }
+  
+  // Handle progress events
   console.log('Event:', message.type, message.data);
 };
 
@@ -44,17 +51,21 @@ ws.onerror = (error) => {
   console.error('❌ WebSocket error:', error);
 };
 
-ws.onclose = () => {
+ws.onclose = (event) => {
   console.log('🔌 Disconnected from progress WebSocket');
+  if (event.code === 1008) {
+    console.error('Authentication failed:', event.reason);
+  }
 };
 ```
 
-**Note**: The current implementation expects the JWT token in the HTTP Authorization header during the WebSocket handshake. Browser WebSocket API has limited support for custom headers. For production use, consider one of these approaches:
+### Authentication Flow
 
-1. Use a WebSocket library that supports custom headers (e.g., `socket.io-client`, `ws` in Node.js)
-2. Send token as a subprotocol during handshake
-3. Use a cookie-based session authentication instead of header-based JWT
-4. Send token in the first WebSocket message after connection (requires additional backend handling)
+1. Client connects to WebSocket endpoint
+2. Client sends `{"type": "auth", "token": "jwt_token"}` as **first message**
+3. Server validates token and responds with `{"type": "auth_success", "user_id": "..."}`
+4. Client can now receive progress events
+5. If authentication fails or times out (5 seconds), connection is closed with code 1008
 
 ## Event Types
 
@@ -185,27 +196,43 @@ Sent when a job fails with an error.
 import { useEffect, useState } from 'react';
 
 interface ProgressEvent {
-  type: 'queue_update' | 'progress' | 'job_complete' | 'job_failed';
-  timestamp: string;
-  data: any;
+  type: 'auth_success' | 'queue_update' | 'progress' | 'job_complete' | 'job_failed';
+  timestamp?: string;
+  data?: any;
+  user_id?: string;
 }
 
-export function useJobProgress(jobId: string, userId?: string) {
+export function useJobProgress(jobId: string, authToken: string) {
   const [progress, setProgress] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  const [status, setStatus] = useState<'queued' | 'running' | 'completed' | 'failed'>('queued');
+  const [status, setStatus] = useState<'connecting' | 'queued' | 'running' | 'completed' | 'failed'>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    const wsUrl = `ws://localhost:7998/ws/progress${userId ? `?user_id=${userId}` : ''}`;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket('ws://localhost:7998/ws/progress');
+
+    ws.onopen = () => {
+      // Send authentication as first message
+      ws.send(JSON.stringify({
+        type: 'auth',
+        token: authToken
+      }));
+    };
 
     ws.onmessage = (event) => {
       const message: ProgressEvent = JSON.parse(event.data);
 
+      // Handle auth confirmation
+      if (message.type === 'auth_success') {
+        setAuthenticated(true);
+        setStatus('queued');
+        return;
+      }
+
       // Only process events for our job
-      if (message.data.job_id !== jobId) return;
+      if (message.data?.job_id !== jobId) return;
 
       switch (message.type) {
         case 'queue_update':
@@ -232,10 +259,17 @@ export function useJobProgress(jobId: string, userId?: string) {
       }
     };
 
-    return () => ws.close();
-  }, [jobId, userId]);
+    ws.onclose = (event) => {
+      if (event.code === 1008) {
+        setError(`Authentication failed: ${event.reason}`);
+        setStatus('failed');
+      }
+    };
 
-  return { progress, queuePosition, status, error, outputUrl };
+    return () => ws.close();
+  }, [jobId, authToken]);
+
+  return { progress, queuePosition, status, error, outputUrl, authenticated };
 }
 ```
 
@@ -244,23 +278,38 @@ export function useJobProgress(jobId: string, userId?: string) {
 ```typescript
 import { ref, onMounted, onUnmounted } from 'vue';
 
-export function useJobProgress(jobId: string, userId?: string) {
+export function useJobProgress(jobId: string, authToken: string) {
   const progress = ref(0);
   const queuePosition = ref<number | null>(null);
-  const status = ref<'queued' | 'running' | 'completed' | 'failed'>('queued');
+  const status = ref<'connecting' | 'queued' | 'running' | 'completed' | 'failed'>('connecting');
   const error = ref<string | null>(null);
   const outputUrl = ref<string | null>(null);
+  const authenticated = ref(false);
 
   let ws: WebSocket | null = null;
 
   onMounted(() => {
-    const wsUrl = `ws://localhost:7998/ws/progress${userId ? `?user_id=${userId}` : ''}`;
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket('ws://localhost:7998/ws/progress');
+
+    ws.onopen = () => {
+      // Send authentication as first message
+      ws!.send(JSON.stringify({
+        type: 'auth',
+        token: authToken
+      }));
+    };
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
 
-      if (message.data.job_id !== jobId) return;
+      // Handle auth confirmation
+      if (message.type === 'auth_success') {
+        authenticated.value = true;
+        status.value = 'queued';
+        return;
+      }
+
+      if (message.data?.job_id !== jobId) return;
 
       switch (message.type) {
         case 'queue_update':
@@ -376,42 +425,50 @@ function connect() {
 
 ## Testing
 
-Use `websocat` for manual testing:
+Use `websocat` (or any WebSocket client) for manual testing:
 
 ```bash
-# Connect and receive events
-websocat ws://localhost:7998/ws/progress?user_id=test_user
+# Set your JWT token (retrieve this from your auth system)
+TOKEN="your_jwt_token_here"
 
-# Send ping (optional)
-echo '{"type":"ping"}' | websocat ws://localhost:7998/ws/progress
+# Connect and authenticate
+echo '{"type":"auth","token":"'$TOKEN'"}' | websocat ws://localhost:7998/ws/progress
+
+# Or in interactive mode (send auth message first, then other messages)
+websocat ws://localhost:7998/ws/progress
+# Then manually type: {"type":"auth","token":"your_jwt_token_here"}
+# After auth_success response, you can send: {"type":"ping"}
 ```
 
-Expected response:
+Expected response after authentication:
+```json
+{"type":"auth_success","user_id":"your_user_id"}
+```
+
+Ping/pong test:
 ```json
 {"type":"pong"}
 ```
 
 ## Security Considerations
 
-1. **Authentication**: ✅ **IMPLEMENTED** - WebSocket endpoint now requires JWT authentication
-   - The endpoint validates JWT tokens from the Authorization header during WebSocket handshake
-   - User ID is derived from the authenticated token payload, not from client-supplied parameters
-   - Unauthorized clients receive a 1008 close code with "Authentication required" reason
+1. **Authentication**: ✅ **IMPLEMENTED** - WebSocket endpoint requires JWT authentication
+   - After connecting, clients must send `{"type":"auth","token":"jwt_token"}` as first message
+   - User ID is derived from the authenticated token payload (`sub` claim)
+   - Unauthorized clients receive close code 1008 with reason message
+   - Authentication must complete within 5 seconds or connection is closed
    - Implementation:
      ```python
      @app.websocket("/ws/progress")
-     async def websocket_progress(
-         websocket: WebSocket,
-         credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-     ):
-         # Validates token and extracts user_id from JWT payload
-         payload = decode_token(credentials.credentials)
+     async def websocket_progress(websocket: WebSocket):
+         await websocket.accept()
+         # Wait for auth message with 5 second timeout
+         auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+         auth_data = json.loads(auth_message)
+         payload = decode_supabase_jwt(auth_data.get("token"))
          user_id = payload.get("sub")
      ```
-   - **Browser Limitation**: Standard WebSocket API doesn't support custom headers. Consider:
-     - Using a WebSocket library with header support
-     - Cookie-based authentication
-     - Token in subprotocol or first message (requires backend modification)
+   - **Browser Compatible**: This approach works with standard browser WebSocket API
 
 2. **Authorization**: Events are only sent to job owners
    - Users can only see their own job progress
@@ -423,6 +480,7 @@ Expected response:
    - Connection limits should be enforced at nginx/load balancer level
    - Consider implementing per-user connection limits
    - Rate limit cache is automatically cleaned up when jobs complete
+   - Authentication timeout prevents resource exhaustion from unauthenticated connections
 
 ## Migration from Polling
 
