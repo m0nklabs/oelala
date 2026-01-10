@@ -5,6 +5,7 @@ Public programmatic API for external integrations.
 
 import os
 import logging
+import uuid
 from typing import Optional, List, Literal
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
@@ -16,6 +17,7 @@ from api_key_auth import get_api_key_user
 from auth import User
 from credits import calculate_credits, get_credit_manager
 from credits_api import check_credits, deduct_credits
+from comfyui_client import get_comfyui_client
 
 logger = logging.getLogger(__name__)
 
@@ -133,9 +135,6 @@ async def generate(
         f"Generate request: type={request.type}, prompt={request.prompt[:50]}..., user={user.id}"
     )
 
-    # Import here to avoid circular dependency
-    from comfyui_client import get_comfyui_client
-
     client = get_comfyui_client()
     if not client or not client.is_available():
         raise HTTPException(
@@ -167,10 +166,7 @@ async def generate(
     # Check and deduct credits
     await check_credits(user, credits_required)
 
-    # For now, return a placeholder response
-    # In a real implementation, this would queue the job to ComfyUI
-    import uuid
-
+    # Generate job ID
     job_id = str(uuid.uuid4())
 
     # Deduct credits
@@ -181,10 +177,16 @@ async def generate(
         f"credits={credits_required}, user={user.id}"
     )
 
-    # TODO: Actual job queuing logic
-    # For text-to-image: use /generate-image workflow
-    # For text-to-video: use /generate-text workflow
-    # For image-to-video: use /generate workflow
+    # TODO: Implement actual job queuing and tracking
+    # This is a skeleton implementation. Future work includes:
+    # 1. Store job metadata in database (job_id, user_id, type, params, status)
+    # 2. Queue workflow to ComfyUI based on request.type:
+    #    - text-to-image: use existing T2I workflow
+    #    - text-to-video: use existing T2V workflow
+    #    - image-to-video: use existing I2V workflow
+    # 3. Map job_id to ComfyUI prompt_id for status tracking
+    # 4. Return actual estimated time based on queue position
+    # For now, we return a success response after credit deduction
 
     return GenerateResponse(
         job_id=job_id,
@@ -220,10 +222,14 @@ async def get_job_status(
     """
     debug_log(f"Job status request: job_id={job_id}, user={user.id}")
 
-    # TODO: Implement actual job status lookup
-    # Check ComfyUI queue and history
-    # Match job_id to prompt_id
-    # Return actual status
+    # TODO: Implement actual job status lookup from database
+    # This is a skeleton implementation. Future work includes:
+    # 1. Look up job in database by job_id
+    # 2. Verify job belongs to requesting user
+    # 3. Check ComfyUI queue/history using prompt_id
+    # 4. Return actual status, progress, and result URLs
+    # 5. Update job status in database based on ComfyUI state
+    # For now, we return a placeholder running status
 
     # Placeholder response
     return JobStatus(
@@ -261,11 +267,14 @@ async def download_job_result(
     """
     debug_log(f"Download request: job_id={job_id}, user={user.id}")
 
-    # TODO: Implement actual file download
-    # 1. Verify job belongs to this user
-    # 2. Check job is completed
-    # 3. Locate output file in ComfyUI/output or generated/
-    # 4. Return FileResponse
+    # TODO: Implement actual file download from completed jobs
+    # This is a skeleton implementation. Future work includes:
+    # 1. Look up job in database by job_id
+    # 2. Verify job belongs to requesting user
+    # 3. Check job status is 'completed'
+    # 4. Locate output file in ComfyUI/output or generated/ directory
+    # 5. Return FileResponse with proper content type
+    # For now, we return 404 to indicate the feature needs implementation
 
     # Placeholder - return 404 for now
     raise HTTPException(

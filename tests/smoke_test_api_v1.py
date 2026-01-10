@@ -6,8 +6,10 @@ Tests basic endpoints without requiring authentication.
 
 import requests
 import sys
+import os
 
-BASE_URL = "http://192.168.1.2:7998"
+# Default to localhost, but allow override via environment variable
+BASE_URL = os.getenv("OELALA_API_URL", "http://localhost:7998")
 
 
 def test_api_v1_health():
