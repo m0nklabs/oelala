@@ -28,11 +28,11 @@ class TestWebSocketManager:
         manager = WebSocketManager()
         mock_ws = AsyncMock()
 
-        # Connect
+        # Connect (websocket must be already accepted by caller)
         await manager.connect(mock_ws, user_id="test_user")
         assert "test_user" in manager.connections
         assert mock_ws in manager.connections["test_user"]
-        mock_ws.accept.assert_called_once()
+        # Note: accept() is called by the endpoint, not by connect()
 
         # Disconnect
         manager.disconnect(mock_ws, user_id="test_user")

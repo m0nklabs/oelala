@@ -38,8 +38,7 @@ class WebSocketManager:
         self.last_broadcast: Dict[str, float] = {}
 
     async def connect(self, websocket: WebSocket, user_id: Optional[str] = None):
-        """Register a new WebSocket connection"""
-        await websocket.accept()
+        """Register a new WebSocket connection (must be already accepted)"""
         user_key = user_id or "anonymous"
         self.connections[user_key].add(websocket)
         logger.info(

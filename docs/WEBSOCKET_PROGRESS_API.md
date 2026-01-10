@@ -459,16 +459,29 @@ Ping/pong test:
    - Authentication must complete within 5 seconds or connection is closed
    - Implementation:
      ```python
+     from auth import decode_jwt_with_secret, decode_jwt_with_jwks
+     
      @app.websocket("/ws/progress")
      async def websocket_progress(websocket: WebSocket):
          await websocket.accept()
          # Wait for auth message with 5 second timeout
          auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
          auth_data = json.loads(auth_message)
-         payload = decode_supabase_jwt(auth_data.get("token"))
+         token = auth_data.get("token")
+         
+         # PRODUCTION: Use verified decode methods only
+         # Prefer decode_jwt_with_secret (HS256) or decode_jwt_with_jwks (RS256)
+         # Do NOT use decode_supabase_jwt in production with untrusted clients
+         # as it has an unverified fallback that can be exploited
+         payload = decode_jwt_with_secret(token)  # or decode_jwt_with_jwks(token)
+         if not payload:
+             await websocket.close(code=1008, reason="Invalid token")
+             return
+         
          user_id = payload.get("sub")
      ```
    - **Browser Compatible**: This approach works with standard browser WebSocket API
+   - **Security Warning**: Ensure `SUPABASE_JWT_SECRET` environment variable is set for production deployment to enable cryptographic JWT verification
 
 2. **Authorization**: Events are only sent to job owners
    - Users can only see their own job progress

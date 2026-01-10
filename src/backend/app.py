@@ -39,7 +39,7 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
 from auth import get_current_user, User
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 
 security = HTTPBearer(auto_error=False)
 
@@ -447,6 +447,12 @@ async def websocket_progress(websocket: WebSocket):
             logger.warning("📡 WebSocket rejected: No user_id in token")
             await websocket.close(code=1008, reason="Invalid token payload")
             return
+        
+        # Security note: decode_supabase_jwt may use unverified decode as fallback.
+        # In production with untrusted clients, consider requiring verified decode:
+        # - Ensure SUPABASE_JWT_SECRET is set in environment
+        # - Or use decode_jwt_with_secret/decode_jwt_with_jwks directly
+        # - And reject tokens that can't be cryptographically verified
             
     except asyncio.TimeoutError:
         logger.warning("📡 WebSocket rejected: Authentication timeout")

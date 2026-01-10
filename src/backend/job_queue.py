@@ -236,6 +236,9 @@ class JobQueueManager:
                         # Clean up job after completion
                         if prompt_id in self.jobs:
                             del self.jobs[prompt_id]
+                        # Clean up last_queue_state to prevent memory leak
+                        if prompt_id in self.last_queue_state:
+                            del self.last_queue_state[prompt_id]
                     else:
                         # Job failed or cancelled
                         self.fail_job(prompt_id, "Job cancelled or failed")
@@ -245,6 +248,9 @@ class JobQueueManager:
                         )
                         if prompt_id in self.jobs:
                             del self.jobs[prompt_id]
+                        # Clean up last_queue_state to prevent memory leak
+                        if prompt_id in self.last_queue_state:
+                            del self.last_queue_state[prompt_id]
         except Exception as e:
             logger.warning(f"Failed to check job completion for {prompt_id}: {e}")
 
