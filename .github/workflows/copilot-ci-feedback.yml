@@ -2,8 +2,19 @@ name: Copilot CI Feedback
 
 on:
   workflow_run:
-    workflows: ["CI", "Copilot Branch CI"]
+    workflows: ["CI", "Copilot Branch CI", "Changelog Check"]
     types: [completed]
+  # Allow manual/automated triggering for blocked runs
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch name to check for failed CI'
+        required: true
+        type: string
+      run_id:
+        description: 'Failed workflow run ID (optional)'
+        required: false
+        type: string
 
 permissions:
   pull-requests: write
@@ -12,9 +23,11 @@ permissions:
 jobs:
   notify-copilot:
     name: Notify Copilot of CI failures
+    # Run if: workflow_run with failure on copilot branch, OR manual dispatch
     if: >
-      github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.event == 'pull_request'
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       startsWith(github.event.workflow_run.head_branch, 'copilot/'))
     runs-on: [self-hosted, Linux, ci]
     steps:
       - name: Get PR details
@@ -22,8 +35,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
-          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          # Handle both workflow_run and workflow_dispatch events
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            HEAD_BRANCH="${{ inputs.branch }}"
+            # Get latest commit SHA for the branch
+            HEAD_SHA=$(gh api repos/${{ github.repository }}/git/refs/heads/$HEAD_BRANCH --jq '.object.sha' 2>/dev/null || echo "")
+          else
+            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+            HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          fi
           SHORT_SHA="${HEAD_SHA:0:7}"
 
           echo "head_branch=$HEAD_BRANCH" >> $GITHUB_OUTPUT
@@ -109,13 +129,34 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          RUN_ID="${{ github.event.workflow_run.id }}"
+          HEAD_BRANCH="${{ steps.pr.outputs.head_branch }}"
+
+          # Handle both workflow_run and workflow_dispatch events
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.run_id }}" ]; then
+            RUN_ID="${{ inputs.run_id }}"
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Find the most recent failed run for this branch
+            RUN_ID=$(gh api repos/${{ github.repository }}/actions/runs \
+              --jq "[.workflow_runs[] | select(.head_branch == \"$HEAD_BRANCH\" and .conclusion == \"failure\")] | first | .id" \
+              2>/dev/null || echo "")
+          else
+            RUN_ID="${{ github.event.workflow_run.id }}"
+          fi
+
+          if [ -z "$RUN_ID" ]; then
+            echo "No failed run found"
+            echo "jobs=Unknown (no run ID)" >> $GITHUB_OUTPUT
+            echo "url=https://github.com/${{ github.repository }}/actions" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           FAILED_JOBS=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs \
-            --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')
+            --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")' 2>/dev/null || echo "Unknown")
+
+          RUN_URL=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID --jq '.html_url' 2>/dev/null || echo "https://github.com/${{ github.repository }}/actions")
 
           echo "jobs=$FAILED_JOBS" >> $GITHUB_OUTPUT
-          echo "url=${{ github.event.workflow_run.html_url }}" >> $GITHUB_OUTPUT
+          echo "url=$RUN_URL" >> $GITHUB_OUTPUT
 
       - name: Notify Copilot to fix
         if: steps.pr.outputs.found == 'true' && steps.pr.outputs.is_copilot == 'true' && steps.loop_check.outputs.skip != 'true'

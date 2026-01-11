@@ -75,3 +75,45 @@ jobs:
           done
 
           echo "Done."
+
+  trigger-ci-feedback:
+    name: Trigger CI Feedback for failed Copilot runs
+    runs-on: [self-hosted, Linux, ci]
+    steps:
+      - name: Check for failed CI on Copilot branches
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          echo "Checking for failed CI on Copilot branches..."
+
+          # Find copilot branches with recent failed CI runs (within last hour)
+          FAILED=$(gh api repos/${{ github.repository }}/actions/runs \
+            --jq '[.workflow_runs[] |
+              select(.conclusion == "failure") |
+              select(.head_branch | startswith("copilot/")) |
+              select(.name == "CI" or .name == "Copilot Branch CI" or .name == "Changelog Check") |
+              {branch: .head_branch, id: .id, name: .name}
+            ] | unique_by(.branch)' \
+            2>/dev/null || echo "[]")
+
+          COUNT=$(echo "$FAILED" | jq 'length')
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No failed Copilot CI runs found."
+            exit 0
+          fi
+
+          echo "Found $COUNT branches with failed CI"
+
+          # For each failed branch, trigger CI Feedback if not already notified
+          echo "$FAILED" | jq -c '.[]' | while read -r item; do
+            BRANCH=$(echo "$item" | jq -r '.branch')
+            RUN_ID=$(echo "$item" | jq -r '.id')
+
+            echo "Triggering CI Feedback for $BRANCH (run $RUN_ID)"
+            gh api -X POST repos/${{ github.repository }}/actions/workflows/copilot-ci-feedback.yml/dispatches \
+              -f ref="main" \
+              -f "inputs[branch]=$BRANCH" \
+              -f "inputs[run_id]=$RUN_ID" 2>&1 || echo "  Failed to trigger feedback for $BRANCH"
+          done
+
+          echo "Done."
