@@ -45,7 +45,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
-from auth import get_current_user, User
+from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with_jwks
 
 # Storage client for user media
 from storage_client import get_client as get_storage_client
@@ -75,6 +75,19 @@ except ImportError as e:
     ComfyUIClient = None
     get_comfyui_client = None
 
+# WebSocket progress tracking
+try:
+    from websocket_handler import ws_manager
+    from job_queue import job_queue_manager
+    from comfyui_progress_monitor import progress_monitor
+
+    print("✅ WebSocket progress modules imported successfully")
+except ImportError as e:
+    print(f"❌ Failed to import WebSocket progress modules: {e}")
+    ws_manager = None
+    job_queue_manager = None
+    progress_monitor = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -89,6 +102,10 @@ log_subscribers: set[WebSocket] = set()
 
 # Global debug switch for verbose backend traces
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
+
+# WebSocket and polling configuration
+WEBSOCKET_AUTH_TIMEOUT = 5.0  # seconds - timeout for WebSocket authentication
+QUEUE_POLLING_INTERVAL = 2.0  # seconds - interval for ComfyUI queue polling
 
 
 def debug_log(message: str):
@@ -362,6 +379,40 @@ if COMFYUI_OUTPUT_DIR.exists():
     )
 
 
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def create_progress_callback(prompt_id: str):
+    """
+    Create a progress callback function for broadcasting WebSocket updates.
+
+    Args:
+        prompt_id: The job/prompt ID to broadcast progress for
+
+    Returns:
+        Async callback function that broadcasts progress updates
+    """
+
+    async def progress_callback(progress: int, node_name: str):
+        """Broadcast progress to user's WebSocket connections"""
+        if ws_manager:
+            await ws_manager.broadcast_progress(
+                job_id=prompt_id,
+                progress=progress,
+                node_name=node_name,
+                message=f"Processing {node_name}",
+            )
+
+    return progress_callback
+
+
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
+
 @app.get("/logs")
 async def get_logs():
     """Get recent server logs"""
@@ -392,6 +443,76 @@ async def websocket_logs(websocket: WebSocket):
         )
 
 
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time job progress updates.
+    Requires JWT authentication via initial message.
+    """
+    await websocket.accept()
+
+    if not ws_manager:
+        await websocket.close(code=1011, reason="WebSocket progress not available")
+        return
+
+    user_id = None
+
+    try:
+        # Wait for authentication message
+        auth_message = await asyncio.wait_for(
+            websocket.receive_text(), timeout=WEBSOCKET_AUTH_TIMEOUT
+        )
+        auth_data = json.loads(auth_message)
+
+        if auth_data.get("type") != "auth":
+            await websocket.close(code=1008, reason="Expected auth message")
+            return
+
+        # Verify JWT token
+        token = auth_data.get("token")
+        if not token:
+            await websocket.close(code=1008, reason="Missing token")
+            return
+
+        # Try to decode JWT (imported at top of file)
+        payload = decode_jwt_with_secret(token)
+        if not payload:
+            payload = decode_jwt_with_jwks(token)
+
+        if not payload:
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=1008, reason="Missing user_id in token")
+            return
+
+        # Authentication successful
+        await ws_manager.connect(websocket, user_id=user_id)
+        await websocket.send_json({"type": "auth_success"})
+        logger.info(f"📡 Progress WebSocket authenticated for user {user_id}")
+
+        # Keep connection alive and listen for close
+        while True:
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+
+    except asyncio.TimeoutError:
+        await websocket.close(code=1008, reason="Authentication timeout")
+    except json.JSONDecodeError:
+        await websocket.close(code=1008, reason="Invalid JSON")
+    except Exception as e:
+        logger.error(f"WebSocket progress error: {e}")
+        await websocket.close(code=1011, reason="Internal error")
+    finally:
+        if user_id and ws_manager:
+            ws_manager.disconnect(websocket, user_id=user_id)
+        logger.info(f"📡 Progress WebSocket disconnected for user {user_id}")
+
+
 @app.get("/progress/{job_id}")
 async def get_progress(job_id: str):
     data = progress_store.get(job_id, None)
@@ -411,12 +532,42 @@ async def serve_video_test():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup status"""
+    """Initialize services on startup"""
+    # Check ComfyUI availability
     client = get_comfyui_client()
     if client and client.is_available():
         logger.info("✅ ComfyUI backend available and ready!")
     else:
         logger.warning("⚠️ ComfyUI backend not available - some features may not work")
+
+    # Start WebSocket progress monitoring
+    if ws_manager and job_queue_manager and progress_monitor:
+        logger.info("🔄 Starting WebSocket progress monitoring...")
+        # Start background queue polling
+        await job_queue_manager.start_polling(
+            ws_manager, interval=QUEUE_POLLING_INTERVAL
+        )
+        # Start ComfyUI progress monitor
+        progress_monitor.start()
+        logger.info("✅ WebSocket progress monitoring started!")
+    else:
+        logger.warning(
+            "⚠️ WebSocket progress modules not available - real-time updates disabled"
+        )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up on shutdown"""
+    if job_queue_manager:
+        logger.info("🛑 Stopping queue polling...")
+        await job_queue_manager.stop_polling()
+
+    if progress_monitor:
+        logger.info("🛑 Stopping progress monitor...")
+        progress_monitor.stop()
+
+    logger.info("✅ Shutdown complete")
 
 
 @app.get("/")
@@ -1388,6 +1539,32 @@ async def get_job_status(prompt_id: str):
                             if audio.get("type") == "output":
                                 output_audio = f"/comfyui/output/{audio['filename']}"
                                 break
+
+                # Auto-upload to user storage if this is a registered job
+                comfyui = get_comfyui_client()
+                if comfyui and (output_video or output_image or output_audio):
+                    # Determine output type and path
+                    if output_video:
+                        output_type = "video"
+                        output_filename = output_video.split("/")[-1]
+                    elif output_image:
+                        output_type = "image"
+                        output_filename = output_image.split("/")[-1]
+                    else:
+                        output_type = "audio"
+                        output_filename = output_audio.split("/")[-1]
+
+                    output_path = COMFYUI_OUTPUT_DIR / output_filename
+
+                    # Trigger auto-upload (will only happen if job is registered)
+                    if output_path.exists():
+                        storage_path = comfyui.on_job_complete(
+                            prompt_id, str(output_path), output_type
+                        )
+                        if storage_path:
+                            logger.info(
+                                f"✅ Auto-uploaded {output_type} for job {prompt_id}: {storage_path}"
+                            )
 
                 return {
                     "prompt_id": prompt_id,
@@ -3458,8 +3635,47 @@ async def generate_wan22_async(
             status_code=500, detail="Failed to queue workflow to ComfyUI"
         )
 
-    # Store job info for tracking
+    # Calculate total frames for tracking
     total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
+
+    # Register job with ComfyUI client for auto-upload on completion
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "extend_mode": is_extend_mode,
+            "clip_count": actual_clip_count if is_extend_mode else 1,
+        },
+    )
+
+    # Register job with WebSocket manager for progress tracking
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="wan22_i2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": total_frames,
+                "fps": fps,
+            },
+        )
+
+        # Register progress callback to broadcast real-time progress
+        if progress_monitor:
+            progress_monitor.register_callback(
+                prompt_id, create_progress_callback(prompt_id)
+            )
+
+    # Store job info for tracking
     job_info = {
         "prompt": prompt[:100],
         "resolution": resolution,
@@ -3618,6 +3834,43 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
+
+    # Register job with ComfyUI client for auto-upload on completion
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "width": width,
+            "height": height,
+        },
+    )
+
+    # Register job with WebSocket manager for progress tracking
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="wan22_t2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+            },
+        )
+
+        # Register progress callback to broadcast real-time progress
+        if progress_monitor:
+            progress_monitor.register_callback(
+                prompt_id, create_progress_callback(prompt_id)
+            )
 
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
