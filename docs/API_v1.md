@@ -348,16 +348,16 @@ while true; do
   STATUS=$(curl -s https://oelala.xyz/api/v1/jobs/$JOB_ID \
     -H "X-API-Key: oelala_your_key" \
     | jq -r '.status')
-  
+
   echo "Status: $STATUS"
-  
+
   if [ "$STATUS" = "completed" ]; then
     break
   elif [ "$STATUS" = "failed" ]; then
     echo "Generation failed!"
     exit 1
   fi
-  
+
   sleep 5
 done
 

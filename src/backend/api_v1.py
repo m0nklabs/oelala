@@ -6,12 +6,10 @@ Public programmatic API for external integrations.
 import os
 import logging
 import uuid
-from typing import Optional, List, Literal
+from typing import Optional, Literal
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 from api_key_auth import get_api_key_user
 from auth import User
@@ -54,7 +52,10 @@ class GenerateRequest(BaseModel):
     cfg: Optional[float] = Field(7.5, ge=1.0, le=20.0, description="CFG scale")
     seed: Optional[int] = Field(-1, description="Random seed (-1 for random)")
     duration_seconds: Optional[int] = Field(
-        None, ge=1, le=30, description="Video duration in seconds (for video generation)"
+        None,
+        ge=1,
+        le=30,
+        description="Video duration in seconds (for video generation)",
     )
     # For image-to-video
     image_url: Optional[str] = Field(None, description="URL of source image (for I2V)")
@@ -64,7 +65,9 @@ class GenerateResponse(BaseModel):
     """Response from generation endpoint."""
 
     job_id: str = Field(..., description="Unique job identifier")
-    status: str = Field(..., description="Job status (queued, running, completed, failed)")
+    status: str = Field(
+        ..., description="Job status (queued, running, completed, failed)"
+    )
     credits_used: int = Field(..., description="Credits deducted for this generation")
     estimated_time_seconds: Optional[int] = Field(
         None, description="Estimated completion time in seconds"
@@ -78,7 +81,9 @@ class JobStatus(BaseModel):
     status: Literal["queued", "running", "completed", "failed"] = Field(
         ..., description="Current job status"
     )
-    progress: Optional[int] = Field(None, ge=0, le=100, description="Progress percentage")
+    progress: Optional[int] = Field(
+        None, ge=0, le=100, description="Progress percentage"
+    )
     created_at: str = Field(..., description="Job creation timestamp (ISO 8601)")
     completed_at: Optional[str] = Field(None, description="Job completion timestamp")
     error: Optional[str] = Field(None, description="Error message if failed")
@@ -170,7 +175,9 @@ async def generate(
     job_id = str(uuid.uuid4())
 
     # Deduct credits
-    await deduct_credits(user, credits_required, job_id, f"{generation_type} Generation")
+    await deduct_credits(
+        user, credits_required, job_id, f"{generation_type} Generation"
+    )
 
     logger.info(
         f"🎨 API v1 generation queued: job={job_id}, type={request.type}, "
@@ -303,7 +310,9 @@ async def get_credits(
     manager = get_credit_manager()
 
     if not manager.service_key:
-        logger.warning("SUPABASE_SERVICE_KEY not configured - returning default balance")
+        logger.warning(
+            "SUPABASE_SERVICE_KEY not configured - returning default balance"
+        )
         return CreditsResponse(
             balance=25,
             lifetime_purchased=0,

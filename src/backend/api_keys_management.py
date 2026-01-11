@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from auth import get_current_user, User
-from api_key_auth import generate_api_key, hash_api_key
+from api_key_auth import generate_api_key
 from credits import get_credit_manager
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,9 @@ def debug_log(msg: str):
 class CreateAPIKeyRequest(BaseModel):
     """Request to create a new API key."""
 
-    name: str = Field(..., min_length=1, max_length=100, description="Friendly name for the key")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Friendly name for the key"
+    )
     expires_days: Optional[int] = Field(
         None, ge=1, le=365, description="Days until expiration (optional)"
     )
@@ -47,7 +49,9 @@ class CreateAPIKeyResponse(BaseModel):
 
     id: str
     name: str
-    api_key: str = Field(..., description="Full API key - save this! It won't be shown again.")
+    api_key: str = Field(
+        ..., description="Full API key - save this! It won't be shown again."
+    )
     key_prefix: str
     created_at: str
     expires_at: Optional[str]
@@ -118,19 +122,27 @@ async def create_api_key(
     # Calculate expiration
     expires_at = None
     if request.expires_days:
-        expires_at = (datetime.utcnow() + timedelta(days=request.expires_days)).isoformat() + "Z"
+        expires_at = (
+            datetime.utcnow() + timedelta(days=request.expires_days)
+        ).isoformat() + "Z"
 
     # Insert into database
     try:
-        result = manager.supabase.table("api_keys").insert({
-            "user_id": user.id,
-            "name": request.name,
-            "key_hash": key_hash,
-            "key_prefix": key_prefix,
-            "expires_at": expires_at,
-            "is_active": True,
-            "usage_count": 0,
-        }).execute()
+        result = (
+            manager.supabase.table("api_keys")
+            .insert(
+                {
+                    "user_id": user.id,
+                    "name": request.name,
+                    "key_hash": key_hash,
+                    "key_prefix": key_prefix,
+                    "expires_at": expires_at,
+                    "is_active": True,
+                    "usage_count": 0,
+                }
+            )
+            .execute()
+        )
 
         if not result.data or len(result.data) == 0:
             raise HTTPException(status_code=500, detail="Failed to create API key")
@@ -176,9 +188,13 @@ async def list_api_keys(
         )
 
     try:
-        result = manager.supabase.table("api_keys").select("*").eq(
-            "user_id", user.id
-        ).order("created_at", desc=True).execute()
+        result = (
+            manager.supabase.table("api_keys")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .execute()
+        )
 
         keys = []
         for record in result.data:
@@ -223,9 +239,14 @@ async def get_api_key(
         )
 
     try:
-        result = manager.supabase.table("api_keys").select("*").eq("id", key_id).eq(
-            "user_id", user.id
-        ).single().execute()
+        result = (
+            manager.supabase.table("api_keys")
+            .select("*")
+            .eq("id", key_id)
+            .eq("user_id", user.id)
+            .single()
+            .execute()
+        )
 
         if not result.data:
             raise HTTPException(status_code=404, detail="API key not found")
@@ -291,17 +312,24 @@ async def update_api_key(
 
     try:
         # Verify ownership first
-        existing = manager.supabase.table("api_keys").select("user_id").eq(
-            "id", key_id
-        ).single().execute()
+        existing = (
+            manager.supabase.table("api_keys")
+            .select("user_id")
+            .eq("id", key_id)
+            .single()
+            .execute()
+        )
 
         if not existing.data or existing.data["user_id"] != user.id:
             raise HTTPException(status_code=404, detail="API key not found")
 
         # Update
-        result = manager.supabase.table("api_keys").update(updates).eq(
-            "id", key_id
-        ).execute()
+        result = (
+            manager.supabase.table("api_keys")
+            .update(updates)
+            .eq("id", key_id)
+            .execute()
+        )
 
         if not result.data or len(result.data) == 0:
             raise HTTPException(status_code=500, detail="Failed to update API key")
@@ -358,9 +386,13 @@ async def delete_api_key(
 
     try:
         # Verify ownership and delete
-        result = manager.supabase.table("api_keys").delete().eq("id", key_id).eq(
-            "user_id", user.id
-        ).execute()
+        result = (
+            manager.supabase.table("api_keys")
+            .delete()
+            .eq("id", key_id)
+            .eq("user_id", user.id)
+            .execute()
+        )
 
         if not result.data or len(result.data) == 0:
             raise HTTPException(status_code=404, detail="API key not found")

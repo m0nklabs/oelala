@@ -8,11 +8,11 @@ This document summarizes the implementation of the public REST API v1 for Oelala
 
 All requirements from issue #45 have been implemented:
 
-✅ API versioning (`/api/v1/`)  
-✅ Generation endpoint  
-✅ Status polling endpoint  
-✅ Download results endpoint  
-✅ API key validation middleware  
+✅ API versioning (`/api/v1/`)
+✅ Generation endpoint
+✅ Status polling endpoint
+✅ Download results endpoint
+✅ API key validation middleware
 
 Plus additional features:
 - Credits balance endpoint

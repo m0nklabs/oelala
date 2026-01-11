@@ -8,9 +8,8 @@ import hashlib
 import secrets
 import logging
 from typing import Optional
-from functools import lru_cache
-from fastapi import Request, HTTPException, Depends, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, APIKeyHeader
+from fastapi import HTTPException, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from auth import User  # Reuse User model from JWT auth
