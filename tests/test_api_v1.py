@@ -21,9 +21,14 @@ sys.path.insert(0, str(backend_dir))
 @pytest.fixture
 def mock_supabase():
     """Mock Supabase client."""
-    with patch("credits.get_supabase_client") as mock:
-        # Create a mock client
-        client = Mock()
+    with patch("credits.get_credit_manager") as mock:
+        # Create a mock manager
+        manager = Mock()
+
+        # Create a mock supabase client
+        supabase = Mock()
+        manager.supabase = supabase
+        manager.service_key = "test-service-key"
 
         # Mock RPC call for API key validation
         def mock_rpc(func_name, params):
@@ -53,7 +58,7 @@ def mock_supabase():
             result.execute = lambda: result
             return result
 
-        client.rpc = mock_rpc
+        supabase.rpc = mock_rpc
 
         # Mock from_ for balance queries
         def mock_from(table):
@@ -73,10 +78,16 @@ def mock_supabase():
 
             return query
 
-        client.from_ = mock_from
+        supabase.from_ = mock_from
 
-        mock.return_value = client
-        yield client
+        # Mock get_balance as async
+        async def mock_get_balance(user_id):
+            return Mock(balance=100, lifetime_purchased=200, lifetime_used=100)
+
+        manager.get_balance = mock_get_balance
+
+        mock.return_value = manager
+        yield manager
 
 
 @pytest.fixture
