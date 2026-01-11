@@ -11,6 +11,12 @@ paths = [
     '''docs/.*\.md$''',
     '''\.example$''',
     '''examples/.*''',
+    # Ignore ComfyUI submodule/vendor directory
+    '''ComfyUI/.*''',
+    # Ignore external dependencies
+    '''external/.*''',
+    # Ignore generated files
+    '''generated/.*''',
 ]
 
 # Ignore specific placeholder patterns
