@@ -6,13 +6,13 @@ on:
     - cron: '*/30 * * * *'
   # Manual trigger
   workflow_dispatch:
+  # Run when a PR is closed (to assign next issue)
+  pull_request:
+    types: [closed]
 
 concurrency:
   group: copilot-auto-assign
   cancel-in-progress: true
-  # Run when a PR is closed (to assign next issue)
-  pull_request:
-    types: [closed]
 
 permissions:
   issues: write
