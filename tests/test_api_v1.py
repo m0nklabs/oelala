@@ -144,14 +144,14 @@ def test_health_check_logging(client):
     with patch("api_v1.DEBUG", True), patch("api_v1.debug_log") as mock_debug_log:
         response = client.get("/api/v1/health")
         assert response.status_code == 200
-        
+
         # Verify debug_log was called
         assert mock_debug_log.called, "debug_log should have been called"
-        
+
         # Get the log message that was passed to debug_log
         call_args = mock_debug_log.call_args
         log_message = call_args[0][0] if call_args else ""
-        
+
         # Verify log contains required info
         assert "Health check:" in log_message
         assert "timestamp=" in log_message

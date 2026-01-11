@@ -344,7 +344,7 @@ async def health_check(request: Request):
     client_ip = request.client.host if request.client else "unknown"
     timestamp = datetime.utcnow().isoformat() + "Z"
     debug_log(f"Health check: timestamp={timestamp}, client_ip={client_ip}")
-    
+
     return {
         "status": "healthy",
         "version": "1.0.0",
