@@ -60,8 +60,8 @@ def generate_api_key() -> tuple[str, str, str]:
     # Hash for storage
     key_hash = hashlib.sha256(full_key.encode()).hexdigest()
 
-    # Prefix for display (first 8 chars after "oelala_")
-    key_prefix = full_key[:15]  # "oelala_" + first 8 random chars
+    # Prefix for display (first 15 chars total: "oelala_" + first 8 random chars)
+    key_prefix = full_key[:15]
 
     return full_key, key_hash, key_prefix
 

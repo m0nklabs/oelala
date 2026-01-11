@@ -48,7 +48,7 @@ Client Request
 - user_id (UUID, FK to auth.users)
 - name (text)
 - key_hash (text, unique) -- SHA-256
-- key_prefix (text) -- First 8 chars for display
+- key_prefix (text) -- First 15 chars for display
 - is_active (boolean)
 - usage_count (integer)
 - last_used_at (timestamp)
