@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import Optional, Literal
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 
 from api_key_auth import get_api_key_user
@@ -335,14 +335,18 @@ async def get_credits(
 
 # Health check for API v1
 @router.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """
     Health check endpoint (no authentication required).
 
     Returns API version and status.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    timestamp = datetime.utcnow().isoformat() + "Z"
+    debug_log(f"Health check: timestamp={timestamp}, client_ip={client_ip}")
+    
     return {
         "status": "healthy",
         "version": "1.0.0",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": timestamp,
     }
