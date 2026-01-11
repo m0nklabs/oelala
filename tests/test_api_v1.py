@@ -7,7 +7,6 @@ These tests verify the public REST API for programmatic access.
 import pytest
 import hashlib
 from unittest.mock import Mock, AsyncMock, patch
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Mock Supabase and dependencies before importing the app
@@ -217,6 +216,22 @@ def test_generate_image_to_video(client, mock_credits):
     assert data["credits_used"] > 0
 
 
+def test_generate_image_to_video_missing_url(client, mock_credits):
+    """Test image-to-video generation fails without image_url."""
+    response = client.post(
+        "/api/v1/generate",
+        headers={"X-API-Key": "oelala_test_valid_key"},
+        json={
+            "type": "image-to-video",
+            "prompt": "camera pans slowly",
+            "duration_seconds": 5,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "image_url is required" in response.json()["detail"]
+
+
 def test_generate_invalid_type(client):
     """Test generation with unsupported type."""
     response = client.post(
@@ -233,17 +248,15 @@ def test_generate_invalid_type(client):
 
 
 def test_get_job_status(client):
-    """Test job status endpoint."""
+    """Test job status endpoint returns 404 (not implemented yet)."""
     response = client.get(
         "/api/v1/jobs/test-job-123",
         headers={"X-API-Key": "oelala_test_valid_key"},
     )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["job_id"] == "test-job-123"
-    assert data["status"] in ["queued", "running", "completed", "failed"]
-    assert "created_at" in data
+    # Endpoint is not fully implemented, should return 404
+    assert response.status_code == 404
+    assert "not fully implemented" in response.json()["detail"].lower()
 
 
 def test_get_job_status_without_api_key(client):

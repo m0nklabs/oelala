@@ -147,6 +147,13 @@ async def generate(
         )
 
     # Calculate credits
+    # Validate image_url for image-to-video
+    if request.type == "image-to-video" and not request.image_url:
+        raise HTTPException(
+            status_code=400,
+            detail="image_url is required for image-to-video generation"
+        )
+
     if request.type == "text-to-image":
         credits_required = calculate_credits(
             "sdxl",
@@ -236,18 +243,13 @@ async def get_job_status(
     # 3. Check ComfyUI queue/history using prompt_id
     # 4. Return actual status, progress, and result URLs
     # 5. Update job status in database based on ComfyUI state
-    # For now, we return a placeholder running status
+    # For now, return 404 to avoid exposing job existence until proper
+    # ownership checks are implemented.
 
-    # Placeholder response
-    return JobStatus(
-        job_id=job_id,
-        status="running",
-        progress=50,
-        created_at=datetime.utcnow().isoformat() + "Z",
-        completed_at=None,
-        error=None,
-        result_url=None,
-        metadata={"type": "text-to-image", "prompt": "example"},
+    # Placeholder - return 404 for now to prevent information leakage
+    raise HTTPException(
+        status_code=404,
+        detail="Job not found. This endpoint is not fully implemented yet.",
     )
 
 

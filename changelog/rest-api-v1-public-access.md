@@ -24,7 +24,7 @@
 - **Security Features**:
   - API keys use `oelala_` prefix for easy identification
   - SHA-256 hashing for secure storage (keys never stored in plaintext)
-  - Key prefix display (first 8 chars) for user identification
+  - Key prefix display (first 15 chars) for user identification
   - Usage tracking (count, last used timestamp)
   - Optional expiration dates
   - Row Level Security (RLS) policies on `api_keys` table

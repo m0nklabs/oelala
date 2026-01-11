@@ -51,7 +51,7 @@ def generate_api_key() -> tuple[str, str, str]:
         tuple: (full_key, key_hash, key_prefix)
             - full_key: The actual key to give to the user (starts with "oelala_")
             - key_hash: SHA-256 hash to store in database
-            - key_prefix: First 8 chars for display (e.g., "oelala_1234")
+            - key_prefix: First 15 chars of the full key for display (e.g., "oelala_12345678")
     """
     # Generate 32 random bytes = 64 hex chars
     random_part = secrets.token_hex(32)

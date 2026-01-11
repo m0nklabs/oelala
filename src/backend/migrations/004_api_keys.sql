@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,  -- User-friendly name (e.g., "My App", "Production Server")
     key_hash TEXT NOT NULL UNIQUE,  -- SHA-256 hash of the API key
-    key_prefix TEXT NOT NULL,  -- First 8 chars for display (e.g., "oelala_12345678...")
+    key_prefix TEXT NOT NULL,  -- First 15 chars for display (e.g., "oelala_12345678...")
     last_used_at TIMESTAMPTZ,
     usage_count INTEGER NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
 
 COMMENT ON TABLE public.api_keys IS 'API keys for programmatic access to Oelala';
 COMMENT ON COLUMN public.api_keys.key_hash IS 'SHA-256 hash of the API key';
-COMMENT ON COLUMN public.api_keys.key_prefix IS 'First 8 characters for display purposes';
+COMMENT ON COLUMN public.api_keys.key_prefix IS 'First 15 characters for display purposes';
 COMMENT ON COLUMN public.api_keys.metadata IS 'Additional metadata (rate limits, scopes, etc.)';
 
 -- Indexes for efficient lookups
@@ -50,9 +50,11 @@ CREATE POLICY "Users can create own API keys"
     WITH CHECK (auth.uid() = user_id);
 
 -- Users can update their own API keys (revoke, rename)
+-- WITH CHECK prevents changing user_id to another user's ID
 CREATE POLICY "Users can update own API keys"
     ON public.api_keys FOR UPDATE
-    USING (auth.uid() = user_id);
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- Users can delete their own API keys
 CREATE POLICY "Users can delete own API keys"

@@ -92,7 +92,7 @@ POST /api/v1/generate
 | `cfg` | float | No | CFG scale (1.0-20.0, default: 7.5) |
 | `seed` | integer | No | Random seed (-1 for random) |
 | `duration_seconds` | integer | No | Video duration (1-30, for video types) |
-| `image_url` | string | No | Source image URL (for image-to-video) |
+| `image_url` | string | Yes (for `image-to-video`) | Source image URL. Required when `type` is `image-to-video`. |
 
 **Response:**
 
