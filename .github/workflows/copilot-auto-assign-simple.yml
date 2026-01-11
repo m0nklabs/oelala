@@ -26,7 +26,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             let issueNumber;
-            
+
             if (context.eventName === 'workflow_dispatch') {
               issueNumber = ${{ inputs.issue_number || 0 }};
               if (!issueNumber) {
@@ -47,24 +47,10 @@ jobs:
             } else {
               issueNumber = context.payload.issue.number;
             }
-            
+
             console.log(`Assigning Copilot to issue #${issueNumber}`);
 
-            // Step 1: Assign Copilot to the issue
-            try {
-              await github.rest.issues.addAssignees({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                assignees: ['copilot-swe-agent[bot]']
-              });
-              console.log(`✅ Assigned copilot-swe-agent to issue #${issueNumber}`);
-            } catch (e) {
-              console.log(`⚠️ Could not assign copilot-swe-agent: ${e.message}`);
-              // Continue anyway - the mention will still work
-            }
-
-            // Step 2: Add comment mentioning @copilot to trigger it
+            // Add comment mentioning @copilot
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
