@@ -17,6 +17,8 @@ paths = [
     '''external/.*''',
     # Ignore generated files
     '''generated/.*''',
+    # Ignore test files with test/mock API keys
+    '''tests/.*\.py$''',
 ]
 
 # Ignore specific placeholder patterns
@@ -24,6 +26,8 @@ regexes = [
     '''YOUR_[A-Z_]+''',
     '''<YOUR_.*>''',
     '''\$\{[A-Z_]+\}''',
+    # Ignore oelala placeholder/test keys
+    '''oelala_(invalid|test|your)_key_\w+''',
 ]
 
 # Ignore these specific strings (case-insensitive)
@@ -33,4 +37,7 @@ stopwords = [
     "YOUR_SECRET",
     "PLACEHOLDER",
     "example_token",
+    "oelala_invalid_key",
+    "oelala_test_key",
+    "oelala_your_key_here",
 ]
