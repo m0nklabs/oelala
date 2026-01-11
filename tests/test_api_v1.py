@@ -139,39 +139,23 @@ def test_health_check(client):
     assert "timestamp" in data
 
 
-def test_health_check_logging(client, caplog):
+def test_health_check_logging(client):
     """Test API v1 health check logs timestamp and client IP when DEBUG is enabled."""
-    import os
-    
-    # Enable debug mode
-    original_debug = os.environ.get("OELALA_DEBUG", "0")
-    os.environ["OELALA_DEBUG"] = "1"
-    
-    # Reload the api_v1 module to pick up the new DEBUG flag
-    import importlib
-    import sys
-    if "api_v1" in sys.modules:
-        importlib.reload(sys.modules["api_v1"])
-    
-    try:
-        with caplog.at_level("INFO"):
-            response = client.get("/api/v1/health")
-            assert response.status_code == 200
-            
-            # Check that debug log was called
-            debug_logs = [record for record in caplog.records if "🌐 API-v1:" in record.message]
-            assert len(debug_logs) > 0, "Expected debug log message not found"
-            
-            # Verify log contains required info
-            log_message = debug_logs[0].message
-            assert "Health check:" in log_message
-            assert "timestamp=" in log_message
-            assert "client_ip=" in log_message
-    finally:
-        # Restore original DEBUG state
-        os.environ["OELALA_DEBUG"] = original_debug
-        if "api_v1" in sys.modules:
-            importlib.reload(sys.modules["api_v1"])
+    with patch("api_v1.DEBUG", True), patch("api_v1.debug_log") as mock_debug_log:
+        response = client.get("/api/v1/health")
+        assert response.status_code == 200
+        
+        # Verify debug_log was called
+        assert mock_debug_log.called, "debug_log should have been called"
+        
+        # Get the log message that was passed to debug_log
+        call_args = mock_debug_log.call_args
+        log_message = call_args[0][0] if call_args else ""
+        
+        # Verify log contains required info
+        assert "Health check:" in log_message
+        assert "timestamp=" in log_message
+        assert "client_ip=" in log_message
 
 
 def test_generate_without_api_key(client):
