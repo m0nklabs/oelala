@@ -32,6 +32,23 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = context.payload.pull_request.number;
+            const reviewId = context.payload.review.id;
+
+            // First check if the review actually has any comments
+            const reviewComments = await github.rest.pulls.listCommentsForReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              review_id: reviewId,
+            });
+
+            if (reviewComments.data.length === 0) {
+              console.log('Review has no comments, nothing to apply');
+              core.setOutput('skip', 'true');
+              return;
+            }
+
+            console.log(`Review has ${reviewComments.data.length} comment(s)`);
 
             // Check for any previous auto-apply comment on this PR
             const comments = await github.rest.issues.listComments({
