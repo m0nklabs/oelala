@@ -151,7 +151,7 @@ async def generate(
     if request.type == "image-to-video" and not request.image_url:
         raise HTTPException(
             status_code=400,
-            detail="image_url is required for image-to-video generation"
+            detail="image_url is required for image-to-video generation",
         )
 
     if request.type == "text-to-image":
