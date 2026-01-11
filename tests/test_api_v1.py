@@ -35,9 +35,10 @@ def mock_supabase():
             result = Mock()
             if func_name == "validate_api_key":
                 # Simulate valid key
-                if params.get("p_key_hash") == hashlib.sha256(
-                    b"oelala_test_valid_key"
-                ).hexdigest():
+                if (
+                    params.get("p_key_hash")
+                    == hashlib.sha256(b"oelala_test_valid_key").hexdigest()
+                ):
                     result.data = [
                         {
                             "valid": True,
@@ -104,9 +105,10 @@ def mock_comfyui():
 @pytest.fixture
 def mock_credits():
     """Mock credit operations."""
-    with patch("api_v1.check_credits", new_callable=AsyncMock) as check_mock, patch(
-        "api_v1.deduct_credits", new_callable=AsyncMock
-    ) as deduct_mock:
+    with (
+        patch("api_v1.check_credits", new_callable=AsyncMock) as check_mock,
+        patch("api_v1.deduct_credits", new_callable=AsyncMock) as deduct_mock,
+    ):
         check_mock.return_value = None  # No exception = sufficient credits
         deduct_mock.return_value = None
         yield {"check": check_mock, "deduct": deduct_mock}
