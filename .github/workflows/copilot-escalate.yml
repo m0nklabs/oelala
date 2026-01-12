@@ -68,30 +68,11 @@ jobs:
             if [ "$FIX_REQUESTS" -ge 2 ]; then
               echo "  🚨 Escalating PR #$PR_NUMBER - $FIX_REQUESTS fix attempts failed"
 
-              # Add label
+              # Add label (no comment - label is enough)
               gh api repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
                 -X POST -f "labels[]=needs-manual-help"
 
-              # Post escalation comment
-              cat <<EOF > /tmp/escalate.md
-          ## 🆘 Manual Intervention Needed
-
-          Copilot has attempted to fix CI **$FIX_REQUESTS times** without success.
-
-          **Recommended next steps:**
-          1. Review the [failed CI logs](https://github.com/${{ github.repository }}/pull/$PR_NUMBER/checks)
-          2. Discuss fixes in VS Code Copilot Chat
-          3. Push manual fixes or guide Copilot with specific instructions
-
-          cc @m0nk1111
-
-          ---
-          _This PR has been labeled \`needs-manual-help\` and removed from auto-fix loop._
-          EOF
-
-              gh pr comment "$PR_NUMBER" --body-file /tmp/escalate.md
-
-              echo "  ✅ Escalated and labeled"
+              echo "  ✅ Labeled needs-manual-help"
             fi
           done
 
