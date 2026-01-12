@@ -240,6 +240,8 @@ cuda:0,12gb;cuda:1,16gb
 ### Key Files
 - `docs/COMFYUI_INVENTORY.md` - **Complete inventory of all models, LoRAs, custom nodes**
 - `docs/MULTI_GPU_SETUP.md` - Full multi-GPU configuration guide
+- `docs/GENERATION_MODES.md` - Detailed generation mode specifications
+- `docs/GENERATION_MODES_TREE.md` - **🌳 HOLY TREE - Visual tree of ALL tested generation modes**
 - `ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py` - DisTorch2 with local fixes
 - `workflows/ImageToVideo/wan22_i2v_distorch2_api.json` - DisTorch2 API workflow
 
@@ -249,6 +251,31 @@ cuda:0,12gb;cuda:1,16gb
 3. Test with both low (17 frames) and high (81 frames) settings
 4. Check ComfyUI logs for distribution: `[MultiGPU DisTorch V2]`
 5. **Consult `docs/COMFYUI_INVENTORY.md`** for available models/LoRAs
+
+## Generation Mode Documentation (MANDATORY)
+
+> **⚠️ CRITICAL: Document ALL successful generation tests!**
+
+After ANY successful ComfyUI generation run or new model/workflow test:
+
+1. **Update `docs/GENERATION_MODES_TREE.md`** - Add to "Tested Configurations Log"
+2. **Include**: Tool type, mode, resolution, frames, VRAM used, workflow file, result
+3. **Add new modes** to appropriate tool section with full sub-model tree
+4. **Update status** (🔨→✅) when a mode becomes production-ready
+
+**Why this matters:**
+- Research/testing results MUST be preserved
+- Prevents re-discovering what already works
+- Single source of truth for "what works with what settings"
+- Future agents/sessions can rely on documented configurations
+
+Example log entry:
+```
+│ 2026-01-12 | I2V | wan22 standard                                   │
+│   Resolution: 576x1024 | Frames: 81 | VRAM: ~24GB                   │
+│   Workflow: wan22_i2v_distorch2_api.json                            │
+│   Result: ✅ SUCCESS                                                 │
+```
 
 ## Debug Code Requirements
 
