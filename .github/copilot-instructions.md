@@ -69,7 +69,14 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 ## Related Repositories
 
-- **oelala-storage**: Separate Go-based storage service. See `docs/MEDIA_STORAGE.md` for architecture.
+- **oelala-storage**: Separate Go-based storage service at `/home/flip/oelala-storage/`. See `docs/MEDIA_STORAGE.md` for architecture.
+  - **Standalone product** - not just an oelala microservice, can be used by any project
+  - **Ports**: HTTP API (7990), gRPC Sync (7991), Metrics (7992)
+  - **S3-compatible API**: PUT/GET/DELETE/HEAD/LIST objects
+  - **Config**: `oelala-storage.yaml`
+  - **Build**: `go build -o bin/oelala-storage ./cmd/oelala-storage`
+  - **Run**: `./bin/oelala-storage serve`
+  - **Docs**: See `/home/flip/oelala-storage/docs/PRODUCT_VISION.md` for roadmap
 - When implementing storage features, defer to oelala-storage rather than building in Python.
 
 ## Media Storage Locations (CRITICAL)
@@ -158,6 +165,10 @@ The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk
     - Frontend dev server: 5174
     - Backend API: 7998
     - ComfyUI: 8188
+- oelala-storage:
+    - HTTP API: 7990
+    - gRPC Sync: 7991
+    - Metrics: 7992
 
 ## Services
 
@@ -167,6 +178,10 @@ The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk
 - **ComfyUI**: Runs as a systemd service `comfyui.service`.
   - Restart: `sudo systemctl restart comfyui`
   - Logs: `journalctl -u comfyui -f`
+- **oelala-storage**: Can run as systemd service `oelala-storage.service` in production.
+  - Restart: `sudo systemctl restart oelala-storage`
+  - Logs: `journalctl -u oelala-storage -f`
+  - Dev mode: `cd /home/flip/oelala-storage && ./bin/oelala-storage serve`
 - **Frontend**: Runs via `npm run dev` in development, or as static build in production.
 
 ## Safety & secrets
