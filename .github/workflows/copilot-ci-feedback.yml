@@ -188,26 +188,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
-          REQUEST_COUNT="${{ steps.loop_check.outputs.request_count }}"
 
-          # Add label for manual intervention
+          # Add label for manual intervention (no comment - label is enough)
           gh api repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
             -X POST -f "labels[]=needs-manual-help" 2>/dev/null || true
 
-          cat <<EOF > /tmp/alert.md
-          ## 🆘 Escalation: Manual Intervention Required
-
-          Copilot has failed to fix CI after **${REQUEST_COUNT} attempts**.
-
-          **Next steps:**
-          1. Open VS Code Copilot Chat
-          2. Discuss the remaining issues with Copilot Chat
-          3. Push fixes or provide specific guidance
-
-          The PR has been labeled \`needs-manual-help\`.
-
-          cc @m0nk1111
-          EOF
-
-          gh pr comment "$PR_NUMBER" --body-file /tmp/alert.md
-          echo "Escalation posted on PR #$PR_NUMBER"
+          echo "Labeled PR #$PR_NUMBER with needs-manual-help"
