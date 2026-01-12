@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 ComfyUI Progress Monitor - Bridges ComfyUI WebSocket to our WebSocket Manager
-Listens to ComfyUI progress events and broadcasts them to connected clients
+Listens to ComfyUI progress events and broadcasts them to connected clients.
+
+Also handles auto-upload of generated media when async jobs complete.
 """
 
 import asyncio
@@ -9,6 +11,8 @@ import json
 import logging
 import websocket
 import threading
+import requests
+from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -26,12 +30,15 @@ class ComfyUIProgressMonitor:
     """
     Monitors ComfyUI WebSocket for progress events and relays them to WebSocketManager.
     Runs in a background thread to avoid blocking the main async event loop.
+
+    Also handles auto-upload of generated content when async jobs complete.
     """
 
     def __init__(self, comfyui_host: str = "localhost", comfyui_port: int = 8188):
         self.comfyui_host = comfyui_host
         self.comfyui_port = comfyui_port
         self.ws_url = f"ws://{comfyui_host}:{comfyui_port}/ws"
+        self.base_url = f"http://{comfyui_host}:{comfyui_port}"
 
         # Callbacks: prompt_id -> async callback(progress, node_name)
         self.progress_callbacks: Dict[str, Callable] = {}
@@ -43,6 +50,9 @@ class ComfyUIProgressMonitor:
 
         # Event loop reference - set when start() is called from async context
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+        # Reference to ComfyUI client for auto-upload (lazy loaded)
+        self._comfyui_client = None
 
     def register_callback(self, prompt_id: str, callback: Callable):
         """
@@ -171,6 +181,16 @@ class ComfyUIProgressMonitor:
                 # Execution complete for this prompt
                 logger.info(f"✅ Job {prompt_id} completed")
                 self.unregister_callback(prompt_id)
+
+                # Trigger auto-upload in background thread
+                upload_thread = threading.Thread(
+                    target=self._auto_upload_on_complete,
+                    args=(prompt_id,),
+                    daemon=True,
+                    name=f"AutoUpload-{prompt_id[:8]}",
+                )
+                upload_thread.start()
+
             elif node_id:
                 debug_log(f"Executing node {node_id} for {prompt_id}")
 
@@ -182,6 +202,171 @@ class ComfyUIProgressMonitor:
 
             if prompt_id:
                 self.unregister_callback(prompt_id)
+
+    def _get_comfyui_client(self):
+        """Lazy-load ComfyUI client to avoid circular imports."""
+        if self._comfyui_client is None:
+            try:
+                from src.backend.comfyui_client import get_comfyui_client
+
+                self._comfyui_client = get_comfyui_client()
+            except ImportError:
+                logger.warning("Could not import ComfyUI client for auto-upload")
+        return self._comfyui_client
+
+    def _auto_upload_on_complete(self, prompt_id: str):
+        """
+        Auto-upload generated content when an async job completes.
+
+        This runs in a background thread and:
+        1. Checks if job has registered metadata (user_id, etc.)
+        2. Waits briefly for file to be written
+        3. Fetches history from ComfyUI to find output files
+        4. Triggers on_job_complete() to upload to user storage
+
+        Args:
+            prompt_id: ComfyUI prompt ID
+        """
+        import time
+
+        comfyui = self._get_comfyui_client()
+        if not comfyui:
+            debug_log(f"No ComfyUI client available for auto-upload of {prompt_id}")
+            return
+
+        # Check if this job has metadata (was registered for auto-upload)
+        metadata = comfyui.get_job_metadata(prompt_id)
+        if not metadata:
+            debug_log(f"No metadata for {prompt_id}, skipping auto-upload")
+            return
+
+        user_id = metadata.get("user_id")
+        if not user_id:
+            debug_log(f"No user_id in metadata for {prompt_id}, skipping auto-upload")
+            return
+
+        logger.info(f"📤 Auto-upload triggered for job {prompt_id} (user: {user_id})")
+
+        # Wait briefly for file to be written to disk
+        time.sleep(2)
+
+        # Fetch history from ComfyUI to find output files
+        try:
+            resp = requests.get(
+                f"{self.base_url}/history/{prompt_id}", timeout=10
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Failed to get history for {prompt_id}: {resp.status_code}")
+                return
+
+            history_data = resp.json()
+            history = history_data.get(prompt_id, {})
+            outputs = history.get("outputs", {})
+
+            if not outputs:
+                logger.warning(f"No outputs found in history for {prompt_id}")
+                return
+
+            # Process each output node
+            uploaded_count = 0
+            for node_id, node_output in outputs.items():
+                # Handle video outputs (VHS_VideoCombine)
+                if "gifs" in node_output:
+                    for gif in node_output["gifs"]:
+                        output_path = self._download_and_upload(
+                            prompt_id, gif, "video", comfyui
+                        )
+                        if output_path:
+                            uploaded_count += 1
+
+                # Handle image outputs
+                if "images" in node_output:
+                    for img in node_output["images"]:
+                        output_path = self._download_and_upload(
+                            prompt_id, img, "image", comfyui
+                        )
+                        if output_path:
+                            uploaded_count += 1
+
+            if uploaded_count > 0:
+                logger.info(
+                    f"✅ Auto-uploaded {uploaded_count} file(s) for job {prompt_id}"
+                )
+            else:
+                logger.warning(f"No files to upload for {prompt_id}")
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch history for auto-upload: {e}")
+        except Exception as e:
+            logger.error(f"Auto-upload error for {prompt_id}: {e}")
+
+    def _download_and_upload(
+        self,
+        prompt_id: str,
+        file_info: Dict[str, Any],
+        output_type: str,
+        comfyui,
+    ) -> Optional[str]:
+        """
+        Download a file from ComfyUI and upload to user storage.
+
+        Args:
+            prompt_id: ComfyUI prompt ID
+            file_info: Dict with filename, subfolder, type
+            output_type: 'video' or 'image'
+            comfyui: ComfyUI client instance
+
+        Returns:
+            Storage path if successful, None otherwise
+        """
+        import tempfile
+
+        filename = file_info.get("filename")
+        subfolder = file_info.get("subfolder", "")
+        file_type = file_info.get("type", "output")
+
+        if not filename:
+            return None
+
+        try:
+            # Download from ComfyUI
+            params = {
+                "filename": filename,
+                "subfolder": subfolder,
+                "type": file_type,
+            }
+            resp = requests.get(f"{self.base_url}/view", params=params, timeout=60)
+
+            if resp.status_code != 200:
+                logger.warning(f"Failed to download {filename}: {resp.status_code}")
+                return None
+
+            # Save to temp file
+            suffix = Path(filename).suffix
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(resp.content)
+                temp_path = tmp.name
+
+            debug_log(f"Downloaded {filename} to {temp_path} ({len(resp.content)} bytes)")
+
+            # Trigger auto-upload via ComfyUI client
+            storage_path = comfyui.on_job_complete(
+                prompt_id=prompt_id,
+                output_path=temp_path,
+                output_type=output_type,
+            )
+
+            # Clean up temp file
+            try:
+                Path(temp_path).unlink()
+            except OSError:
+                pass
+
+            return storage_path
+
+        except Exception as e:
+            logger.error(f"Download/upload error for {filename}: {e}")
+            return None
 
     def start(self):
         """Start the progress monitoring thread"""

@@ -1,6 +1,6 @@
 # Media Storage Architecture
 
-> **Last Updated**: 2026-01-06
+> **Last Updated**: 2026-01-12
 > **Related Project**: [oelala-storage](https://github.com/m0nklabs/oelala-storage) (separate repo)
 
 ## Overview
@@ -20,14 +20,17 @@ Storage is split into two components:
 Each user gets their own bucket (directory) based on Supabase user ID:
 ```
 /home/flip/oelala/media/
-├── {user-uuid-1}/           ← User 1's bucket
-│   ├── videos/
-│   ├── images/
-│   └── audio/
-├── {user-uuid-2}/           ← User 2's bucket
-│   ├── videos/
-│   └── images/
-└── ...
+├── users/
+│   ├── {user-uuid-1}/           ← User 1's bucket
+│   │   ├── videos/
+│   │   ├── images/
+│   │   └── audio/
+│   ├── {user-uuid-2}/           ← User 2's bucket
+│   │   ├── videos/
+│   │   └── images/
+│   └── ...
+├── public/                       ← Shared/published content
+└── temp/                         ← Temporary processing files
 ```
 
 Buckets are automatically created on first upload.
@@ -119,10 +122,80 @@ HEAD   /{bucket}/{key}        → Get file metadata
 
 | Issue | Status | Priority |
 |-------|--------|----------|
-| Auto-upload after generation | ✅ Complete | ~~Critical~~ |
+| Auto-upload after generation | ⚠️ Sync only | Critical (#15) |
+| Background auto-upload for async | ⏳ Todo | Critical (#15) |
 | Storage quota tracking | ⏳ Todo | High (#33) |
 | Retention policies | ⏳ Todo | Medium (#71) |
 | Signed URL generation | ⏳ Todo | Low |
+| User bucket support in storage | ⏳ Todo | Critical (oelala-storage) |
+
+## Integration Flow
+
+### User Registration → Bucket Creation
+```
+1. User signs up via Supabase Auth
+2. Profile created in profiles table (via PR #92)
+3. On first generation request:
+   a. Backend checks if user bucket exists
+   b. If not, creates bucket via oelala-storage API
+   c. Stores bucket_id in user profile (optional)
+4. All subsequent uploads go to user's bucket
+```
+
+### Generation → Auto-Upload Flow
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Frontend      │────▶│   oelala API    │────▶│   ComfyUI       │
+│   (React)       │     │   (FastAPI)     │     │   (localhost)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │                        │
+                               │ queue job              │ generate
+                               ▼                        ▼
+                        ┌─────────────────┐     ┌─────────────────┐
+                        │   Job Queue     │     │ ComfyUI Output  │
+                        │   (in-memory)   │     │ /output/*.mp4   │
+                        └─────────────────┘     └─────────────────┘
+                               │                        │
+                               │ poll status            │
+                               ▼                        ▼
+                        ┌─────────────────┐     ┌─────────────────┐
+                        │ Progress Monitor│────▶│ Auto-Upload     │
+                        │ (WebSocket)     │     │ Service         │
+                        └─────────────────┘     └─────────────────┘
+                                                       │
+                                                       │ PUT /{user_id}/videos/{file}
+                                                       ▼
+                                                ┌─────────────────┐
+                                                │ oelala-storage  │
+                                                │ (port 7990)     │
+                                                └─────────────────┘
+```
+
+### Async Job Auto-Upload (Proposed)
+```python
+# In comfyui_progress_monitor.py or new auto_upload_service.py
+
+async def on_job_complete(job_id: str, user_id: str, output_files: List[str]):
+    """Called when async job completes."""
+    storage = StorageClient()
+    
+    for file_path in output_files:
+        # Determine media type from extension
+        media_type = "videos" if file_path.endswith(".mp4") else "images"
+        
+        # Generate unique key
+        key = f"{media_type}/{datetime.now():%Y%m%d_%H%M%S}_{Path(file_path).name}"
+        
+        # Upload to user's bucket
+        bucket = f"users/{user_id}"
+        with open(file_path, "rb") as f:
+            storage.put(bucket, key, f)
+        
+        # Optionally clean up ComfyUI output
+        if CLEANUP_AFTER_UPLOAD:
+            os.remove(file_path)
+```
+
 - Long-term maintainability for one-man team
 
 **Philosophy**: Local-first, self-hosted nodes that sync P2P.
