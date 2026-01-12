@@ -3220,6 +3220,19 @@ async def generate_video(
     }
 
 
+@app.get("/api/i2v-modes")
+async def get_i2v_generation_modes():
+    """
+    Get available I2V generation modes.
+    Each mode has different workflow presets (LoRAs, models, etc.)
+    """
+    from comfyui_client import get_available_i2v_modes
+    return {
+        "modes": get_available_i2v_modes(),
+        "default": "standard",
+    }
+
+
 @app.post("/generate-wan22-comfyui")
 async def generate_wan22_comfyui(
     file: UploadFile = File(...),
@@ -3232,6 +3245,7 @@ async def generate_wan22_comfyui(
     steps: int = Form(6, description="Sampling steps"),
     cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
+    generation_mode: str = Form("standard", description="Generation mode: standard, nsfw_lora"),
     unet_high_noise: str = Form(
         "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         description="GGUF model for high noise pass",
@@ -3415,6 +3429,7 @@ async def generate_wan22_comfyui(
             logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
             logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
             logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
+            logger.info(f"   🎯 Mode: {generation_mode}")
             if parsed_lora_configs:
                 logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
                 for i, lc in enumerate(parsed_lora_configs):
@@ -3442,6 +3457,7 @@ async def generate_wan22_comfyui(
                     unet_high_noise=unet_high_noise,
                     unet_low_noise=unet_low_noise,
                     lora_configs=parsed_lora_configs,
+                    generation_mode=generation_mode,
                 ),
             )
 

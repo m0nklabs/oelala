@@ -24,6 +24,49 @@ from storage_client import get_client as get_storage_client
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Workflow Directory and Dynamic Loading
+# ─────────────────────────────────────────────────────────────────────────────
+WORKFLOWS_DIR = Path("/home/flip/oelala/workflows")
+
+# Available I2V generation modes with their workflow files
+I2V_GENERATION_MODES = {
+    "standard": {
+        "name": "Standard Q6 DisTorch2",
+        "description": "High quality dual-noise 14B Q6_K model",
+        "workflow_file": "ImageToVideo/wan22_i2v_distorch2_api.json",
+        "default_steps": 6,
+        "default_cfg": 1.0,
+    },
+    "nsfw_lora": {
+        "name": "NSFW LoRA Preset", 
+        "description": "Standard workflow with NSFW LoRAs pre-configured",
+        "workflow_file": "ImageToVideo/wan22_i2v_ltx2_audio_api.json",
+        "default_steps": 6,
+        "default_cfg": 1.0,
+    },
+}
+
+
+def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
+    """Load a workflow JSON file and return as dict."""
+    full_path = WORKFLOWS_DIR / workflow_path
+    if not full_path.exists():
+        logger.error(f"❌ Workflow file not found: {full_path}")
+        return None
+    try:
+        with open(full_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"❌ Failed to load workflow {workflow_path}: {e}")
+        return None
+
+
+def get_available_i2v_modes() -> Dict:
+    """Return available I2V generation modes."""
+    return I2V_GENERATION_MODES
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # WAN 2.2 Enhanced NSFW FAST MOVE V2 Q4KM Lightning (I2V)
 # Settings: steps=4 (2+2), cfg=1, euler simple scheduler
 # Already includes Lightning LoRAs – do NOT add extra LoRAs
@@ -2655,6 +2698,7 @@ class ComfyUIClient:
         unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
         lora_configs: Optional[List[Dict[str, Any]]] = None,
+        generation_mode: str = "standard",  # "standard" or "nsfw_lora"
         # Legacy T2I params (kept for compatibility)
         t2i_checkpoint_name: Optional[str] = None,
         t2i_prompt: Optional[str] = None,
@@ -2668,6 +2712,9 @@ class ComfyUIClient:
         """
         Full pipeline: upload image → build workflow → execute → return video path
         Now uses DisTorch2 dual-pass workflow with optional LoRA support.
+        
+        Args:
+            generation_mode: Which workflow preset to use ("standard", "nsfw_lora")
         """
         # Delegate to generate_q6_video which has full DisTorch2 support
         return self.generate_q6_video(
@@ -2686,6 +2733,7 @@ class ComfyUIClient:
             unet_low_noise=unet_low_noise,
             lora_configs=lora_configs,
             progress_callback=progress_callback,
+            generation_mode=generation_mode,
         )
 
     def generate_q6_video(
@@ -2709,6 +2757,7 @@ class ComfyUIClient:
         unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         progress_callback=None,
+        generation_mode: str = "standard",  # "standard" or "nsfw_lora"
     ) -> Optional[str]:
         """
         Full pipeline for WAN 2.2 DisTorch2 Dual-Pass workflow.
@@ -2721,6 +2770,7 @@ class ComfyUIClient:
             unet_high_noise: GGUF model for high noise pass
             unet_low_noise: GGUF model for low noise pass
             lora_configs: List of LoRA configs [{high, low, strength}, ...] for stacking
+            generation_mode: Which workflow preset to use ("standard", "nsfw_lora")
         """
         if not self.is_available():
             logger.error("❌ ComfyUI not available")
@@ -2746,28 +2796,79 @@ class ComfyUIClient:
                 f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
             )
         logger.info(
-            f"🔧 Building DisTorch2 workflow: {num_frames}f @ {fps}fps, {steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}"
+            f"🔧 Building DisTorch2 workflow (mode={generation_mode}): {num_frames}f @ {fps}fps, {steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}"
         )
 
-        workflow = self.build_q6_workflow(
-            image_name=image_name,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            output_prefix=output_prefix,
-            high_noise_steps=high_noise_steps,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-            unet_high_noise=unet_high_noise,
-            unet_low_noise=unet_low_noise,
-            lora_configs=lora_configs,
-        )
+        # For preset modes, load workflow from file and customize
+        if generation_mode != "standard" and generation_mode in I2V_GENERATION_MODES:
+            mode_config = I2V_GENERATION_MODES[generation_mode]
+            loaded_workflow = load_workflow_from_file(mode_config["workflow_file"])
+            if loaded_workflow:
+                workflow = copy.deepcopy(loaded_workflow)
+                logger.info(f"📂 Loaded preset workflow: {mode_config['workflow_file']}")
+                
+                # Update dynamic parameters in the loaded workflow
+                # Find and update image node
+                for node_id, node in workflow.items():
+                    if node.get("class_type") == "LoadImage":
+                        node["inputs"]["image"] = image_name
+                    elif node.get("class_type") in ["CLIPTextEncode"]:
+                        # Update prompts - node 7 is usually positive, 8 is negative
+                        if node_id in ["7", "9"]:
+                            node["inputs"]["text"] = prompt
+                        elif node_id in ["8", "10"]:
+                            node["inputs"]["text"] = negative_prompt
+                    elif node.get("class_type") == "VHS_VideoCombine":
+                        node["inputs"]["frame_rate"] = fps
+                        node["inputs"]["filename_prefix"] = output_prefix
+                    elif node.get("class_type") == "KSamplerAdvanced":
+                        node["inputs"]["noise_seed"] = seed if seed >= 0 else random.randint(0, 2**32 - 1)
+                        node["inputs"]["cfg"] = cfg
+                    elif node.get("class_type") == "WanImageToVideo":
+                        node["inputs"]["length"] = num_frames
+            else:
+                # Fallback to standard build if file not found
+                logger.warning(f"⚠️ Preset workflow not found, using standard build")
+                workflow = self.build_q6_workflow(
+                    image_name=image_name,
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    num_frames=num_frames,
+                    fps=fps,
+                    steps=steps,
+                    cfg=cfg,
+                    seed=seed,
+                    output_prefix=output_prefix,
+                    high_noise_steps=high_noise_steps,
+                    sampler_name=sampler_name,
+                    scheduler=scheduler,
+                    aspect_ratio=aspect_ratio,
+                    long_edge=long_edge,
+                    unet_high_noise=unet_high_noise,
+                    unet_low_noise=unet_low_noise,
+                    lora_configs=lora_configs,
+                )
+        else:
+            # Standard mode: build workflow dynamically
+            workflow = self.build_q6_workflow(
+                image_name=image_name,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                num_frames=num_frames,
+                fps=fps,
+                steps=steps,
+                cfg=cfg,
+                seed=seed,
+                output_prefix=output_prefix,
+                high_noise_steps=high_noise_steps,
+                sampler_name=sampler_name,
+                scheduler=scheduler,
+                aspect_ratio=aspect_ratio,
+                long_edge=long_edge,
+                unet_high_noise=unet_high_noise,
+                unet_low_noise=unet_low_noise,
+                lora_configs=lora_configs,
+            )
 
         # 4. Queue workflow
         prompt_id = self.queue_prompt(workflow)
@@ -3367,6 +3468,7 @@ class ComfyUIClient:
         output_prefix: str = "wan22_distorch2",
         lora_strength: float = 1.5,
         lora_config: list = None,  # Dynamic LoRA list: [{name, high, low}, ...]
+        generation_mode: str = "standard",  # "standard" or "nsfw_lora"
     ) -> Dict:
         """
         Build DisTorch2 dual-noise workflow with Power Lora Loader.
@@ -3374,10 +3476,21 @@ class ComfyUIClient:
 
         Args:
             lora_config: List of dicts with 'high' and 'low' paths for each LoRA
+            generation_mode: Which workflow preset to use ("standard", "nsfw_lora")
         """
         import copy
 
-        workflow = copy.deepcopy(WAN22_I2V_DISTORCH2_API_WORKFLOW)
+        # Load workflow from file based on generation mode
+        mode_config = I2V_GENERATION_MODES.get(generation_mode, I2V_GENERATION_MODES["standard"])
+        loaded_workflow = load_workflow_from_file(mode_config["workflow_file"])
+        
+        if loaded_workflow:
+            workflow = copy.deepcopy(loaded_workflow)
+            logger.info(f"📂 Loaded workflow from file: {mode_config['workflow_file']}")
+        else:
+            # Fallback to hardcoded workflow
+            workflow = copy.deepcopy(WAN22_I2V_DISTORCH2_API_WORKFLOW)
+            logger.warning(f"⚠️ Using fallback hardcoded workflow (mode: {generation_mode})")
 
         # Set seed
         if seed == -1:
