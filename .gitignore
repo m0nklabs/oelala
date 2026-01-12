@@ -121,3 +121,6 @@ ComfyUI/user/default/*
 
 # Ignore ComfyUI custom_nodes (they have their own repos)
 ComfyUI/custom_nodes/
+
+# Media storage (managed by oelala-storage)
+media/
