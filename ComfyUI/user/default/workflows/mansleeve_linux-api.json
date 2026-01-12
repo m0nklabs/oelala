@@ -1,0 +1,799 @@
+{
+  "8": {
+    "inputs": {
+      "samples": [
+        "177",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "37": {
+    "inputs": {
+      "unet_name": "smoothMixWan22GGUF_highQ6K.gguf",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "UnetLoaderGGUFDisTorch2MultiGPU",
+    "_meta": {
+      "title": "High Unet"
+    }
+  },
+  "38": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "cpu",
+      "virtual_vram_gb": 16,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": false
+    },
+    "class_type": "CLIPLoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "CLIPLoaderDisTorch2MultiGPU"
+    }
+  },
+  "39": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "_meta": {
+      "title": "VAELoaderDisTorch2MultiGPU"
+    }
+  },
+  "50": {
+    "inputs": {
+      "width": [
+        "64",
+        1
+      ],
+      "height": [
+        "64",
+        2
+      ],
+      "length": [
+        "166",
+        0
+      ],
+      "batch_size": 1,
+      "positive": [
+        "149",
+        0
+      ],
+      "negative": [
+        "153",
+        0
+      ],
+      "clip_vision_output": [
+        "107",
+        0
+      ],
+      "start_image": [
+        "64",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "WanImageToVideo",
+    "_meta": {
+      "title": "WanImageToVideo"
+    }
+  },
+  "52": {
+    "inputs": {
+      "image": "5KNMJZHWT753Z2XXVGG5ET98C0.jpeg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "54": {
+    "inputs": {
+      "shift": 8.000000000000002,
+      "model": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift"
+    }
+  },
+  "55": {
+    "inputs": {
+      "shift": 8.000000000000002,
+      "model": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift"
+    }
+  },
+  "56": {
+    "inputs": {
+      "unet_name": "smoothMixWan22GGUF_lowQ6K.gguf",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 16,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
+      "eject_models": true
+    },
+    "class_type": "UnetLoaderGGUFDisTorch2MultiGPU",
+    "_meta": {
+      "title": "Low Unet"
+    }
+  },
+  "64": {
+    "inputs": {
+      "width": 477,
+      "height": 848,
+      "upscale_method": "lanczos",
+      "keep_proportion": "crop",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "73": {
+    "inputs": {
+      "anything": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "74": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "scale_by": 2.0000000000000004,
+      "image": [
+        "73",
+        0
+      ]
+    },
+    "class_type": "ImageScaleBy",
+    "_meta": {
+      "title": "Upscale Image By"
+    }
+  },
+  "75": {
+    "inputs": {
+      "ckpt_name": "rife49.pth",
+      "clear_cache_after_n_frames": 10,
+      "multiplier": 2,
+      "fast_mode": false,
+      "ensemble": true,
+      "scale_factor": 1,
+      "frames": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "RIFE VFI",
+    "_meta": {
+      "title": "Frame Interpolation (RIFE)"
+    }
+  },
+  "76": {
+    "inputs": {
+      "anything": [
+        "74",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "77": {
+    "inputs": {
+      "frame_rate": 30,
+      "loop_count": 0,
+      "filename_prefix": "./comfyui/project/newstyle/images/Video/2026-01-04",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 15,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "75",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine \ud83c\udfa5\ud83c\udd65\ud83c\udd57\ud83c\udd62"
+    }
+  },
+  "88": {
+    "inputs": {
+      "value": "c0wg1rl. The viewers hand reaches out and grasps her torso. He fucks her like a cocksleeve. he thrusts her body down onto his pelvis with his hand, slamming her buttocks against his pelvis, driving his penis deep into her vulva until his penis is entirely inside her body. The fairy girl has transparent wings attached to her back. "
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Pos Prompt"
+    }
+  },
+  "107": {
+    "inputs": {
+      "crop": "none",
+      "clip_vision": [
+        "108",
+        0
+      ],
+      "image": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "CLIPVisionEncode",
+    "_meta": {
+      "title": "CLIP Vision Encode"
+    }
+  },
+  "108": {
+    "inputs": {
+      "clip_name": "clip-vit-large.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "109": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "BounceHighWan2_2.safetensors",
+        "strength": 0.4
+      },
+      "lora_2": {
+        "on": false,
+        "lora": "WAN\\2.2\\BouncyWalk02_HighWan2_2-000048.safetensors",
+        "strength": 0.2625
+      },
+      "lora_3": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2-i2v-pov-insertion-v1.0\\wan2.2-i2v-high-pov-insertion-v1.0.safetensors",
+        "strength": 0.75
+      },
+      "lora_4": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2-i2v-breast-insertion-v1.0\\wan2.2-i2v-high-breast-insertion-v1.0.safetensors",
+        "strength": 2
+      },
+      "lora_5": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan 2.2-i2v-oral-insertion\\wan2.2-i2v-high-oral-insertion-v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_6": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2_i2v_highnoise_pov_missionary_v1.0.safetensors",
+        "strength": 1.5
+      },
+      "lora_7": {
+        "on": false,
+        "lora": "WAN\\2.2\\reverse_suspended_congress_I2V_high.safetensors",
+        "strength": 2
+      },
+      "lora_8": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-BreastPlay-HIGH-v2.safetensors",
+        "strength": 0.5
+      },
+      "lora_9": {
+        "on": false,
+        "lora": "DR34MJOB_I2V_14b_HighNoise.safetensors",
+        "strength": 1
+      },
+      "lora_10": {
+        "on": false,
+        "lora": "wan 2.2/DR34ML4Y_I2V_14B_HIGH.safetensors",
+        "strength": 2
+      },
+      "lora_11": {
+        "on": true,
+        "lora": "NSFW-22-H-e8.safetensors",
+        "strength": 2
+      },
+      "lora_12": {
+        "on": false,
+        "lora": "WAN\\2.2\\BreastsLoRA_ByHearmemanAI_HighNoise-000070.safetensors",
+        "strength": 1
+      },
+      "lora_13": {
+        "on": false,
+        "lora": "WAN\\2.2\\slop_twerk_HighNoise_merged3_7_v2.safetensors",
+        "strength": 0.7
+      },
+      "lora_14": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-POV-Cowgirl-HIGH-v1.0-fixed.safetensors",
+        "strength": 1
+      },
+      "lora_15": {
+        "on": false,
+        "lora": "wan22-f4c3spl4sh-100epoc-high-k3nk.safetensors",
+        "strength": 1
+      },
+      "lora_16": {
+        "on": false,
+        "lora": "23High noise-Cumshot Aesthetics.safetensors",
+        "strength": 1
+      },
+      "lora_17": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2_highnoise_cumshot_v.1.0.safetensors",
+        "strength": 1
+      },
+      "lora_18": {
+        "on": false,
+        "lora": "WAN\\2.2\\WAN-2.2-I2V-POV-Body-Cumshot-Pullout-HIGH-v1.safetensors",
+        "strength": 2
+      },
+      "lora_19": {
+        "on": false,
+        "lora": "WAN\\2.2\\pworship_high_noise.safetensors",
+        "strength": 1
+      },
+      "lora_20": {
+        "on": false,
+        "lora": "WAN\\2.2\\HIGH_hands_trace_body.safetensors",
+        "strength": 2
+      },
+      "lora_21": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors",
+        "strength": 2
+      },
+      "lora_22": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-HandjobBlowjobCombo-HIGH-v1.safetensors",
+        "strength": 2
+      },
+      "lora_23": {
+        "on": false,
+        "lora": "WAN\\2.2\\P009-The-Walk-Wan2.2-i2v_Normal-H.safetensors",
+        "strength": 1
+      },
+      "lora_24": {
+        "on": false,
+        "lora": "WAN\\2.2\\Wan22_BiggestCock_high_noise_V1.safetensors",
+        "strength": 1.5
+      },
+      "lora_25": {
+        "on": false,
+        "lora": "Wan22_CumV2_High.safetensors",
+        "strength": 1
+      },
+      "lora_26": {
+        "on": false,
+        "lora": "WAN\\2.2\\Wan22_ThroatV2_High.safetensors",
+        "strength": 1.5
+      },
+      "lora_27": {
+        "on": false,
+        "lora": "WAN\\2.2\\HIGH - Hands trace body V2.safetensors",
+        "strength": 2
+      },
+      "lora_28": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors",
+        "strength": 2
+      },
+      "lora_29": {
+        "on": true,
+        "lora": "ManAndHisLivingCocksleeve_v1_5750H.safetensors",
+        "strength": 1
+      },
+      "\u2795 Add Lora": "",
+      "model": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "High"
+    }
+  },
+  "110": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "BounceLowWan2_2.safetensors",
+        "strength": 0.9
+      },
+      "lora_2": {
+        "on": false,
+        "lora": "WAN\\2.2\\BouncyWalk02_LowWan2_2-000048.safetensors",
+        "strength": 1
+      },
+      "lora_3": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2-i2v-pov-insertion-v1.0\\wan2.2-i2v-low-pov-insertion-v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_4": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2-i2v-breast-insertion-v1.0\\wan2.2-i2v-low-breast-insertion-v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_5": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan 2.2-i2v-oral-insertion\\wan2.2-i2v-low-oral-insertion-v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_6": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2_i2v_lownoise_pov_missionary_v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_7": {
+        "on": false,
+        "lora": "WAN\\2.2\\reverse_suspended_congress_I2V_low.safetensors",
+        "strength": 1
+      },
+      "lora_8": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-BreastPlay-LOW-v2.safetensors",
+        "strength": 0.5
+      },
+      "lora_9": {
+        "on": false,
+        "lora": "DR34MJOB_I2V_14b_LowNoise.safetensors",
+        "strength": 1
+      },
+      "lora_10": {
+        "on": false,
+        "lora": "wan 2.2/DR34ML4Y_I2V_14B_LOW.safetensors",
+        "strength": 1
+      },
+      "lora_11": {
+        "on": true,
+        "lora": "NSFW-22-L-e8.safetensors",
+        "strength": 1
+      },
+      "lora_12": {
+        "on": false,
+        "lora": "WAN\\2.2\\BreastsLoRA_ByHearmemanAI_LowNoise-000070.safetensors",
+        "strength": 1
+      },
+      "lora_13": {
+        "on": false,
+        "lora": "WAN\\2.2\\slop_twerk_LowNoise_merged3_7_v2.safetensors",
+        "strength": 0.5
+      },
+      "lora_14": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors",
+        "strength": 0.5
+      },
+      "lora_15": {
+        "on": false,
+        "lora": "wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors",
+        "strength": 1
+      },
+      "lora_16": {
+        "on": false,
+        "lora": "56Low noise-Cumshot Aesthetics.safetensors",
+        "strength": 1
+      },
+      "lora_17": {
+        "on": false,
+        "lora": "WAN\\2.2\\wan2.2_lownoise_cumshot_v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_18": {
+        "on": false,
+        "lora": "WAN\\2.2\\WAN-2.2-I2V-POV-Body-Cumshot-Pullout-LOW-v1.safetensors",
+        "strength": 1
+      },
+      "lora_19": {
+        "on": false,
+        "lora": "WAN\\2.2\\pworship_low_noise.safetensors",
+        "strength": 1
+      },
+      "lora_20": {
+        "on": false,
+        "lora": "WAN\\2.2\\LOW_hands_trace_body.safetensors",
+        "strength": 1
+      },
+      "lora_21": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_22": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-HandjobBlowjobCombo-LOW-v1.safetensors",
+        "strength": 1
+      },
+      "lora_23": {
+        "on": false,
+        "lora": "WAN\\2.2\\P009-The-Walk-Wan2.2-i2v_Normal-L.safetensors",
+        "strength": 1
+      },
+      "lora_24": {
+        "on": false,
+        "lora": "WAN\\2.2\\Wan22_BiggestCock_low_noise_V1.safetensors",
+        "strength": 1
+      },
+      "lora_25": {
+        "on": false,
+        "lora": "Wan22_CumV2_Low.safetensors",
+        "strength": 1
+      },
+      "lora_26": {
+        "on": false,
+        "lora": "WAN\\2.2\\Wan22_ThroatV2_Low.safetensors",
+        "strength": 1
+      },
+      "lora_27": {
+        "on": false,
+        "lora": "WAN\\2.2\\LOW - Hands trace body V2.safetensors",
+        "strength": 1
+      },
+      "lora_28": {
+        "on": false,
+        "lora": "WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors",
+        "strength": 1
+      },
+      "lora_29": {
+        "on": true,
+        "lora": "ManAndHisLivingCocksleeve_v1_5750L.safetensors",
+        "strength": 1
+      },
+      "\u2795 Add Lora": "",
+      "model": [
+        "55",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Low"
+    }
+  },
+  "133": {
+    "inputs": {
+      "images": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "141": {
+    "inputs": {
+      "value": "| Immediately cut to a new scene where the exact same person is now completely naked and lying on their back, and she moves her head forward slightly. The scene is a top-down view showing the same woman completely nude, with their legs in an open position, with her vagina visible. At the bottom of the frame a man can be partially seen, as the man takes his penis with his hand and inserts his penis into the woman's vagina, pushing his body towards her. He then moves back and forward, as he pushes his penis into the woman's vagina repeatedly. The angle is from the point of view of the man at the bottom of the frame.\n\n----\n\nA woman is lying on her back with her legs spread looking up at the viewer. The nude man inserts his penis into the woman's vagina. He then starts to thrust back and forth inside her vagina. Movements are fast with bouncing breasts. The view is POV from above. \n---\nshe is smiling and waving her hands to the viewer.\n\na moment later the camera makes a hard cut to POV view  of the the exact same \n\nwoman lying on her back with her legs spread \n\nwearing her top while  \n\nher bottom are removed \n\nwith her vagina exposed and staring up at the viewer without breaking contact while having sex with a nude and his penis is already in the woman's vagina. she lift her top up to her neck level with her hands to reveal her breasts and nipples.\n\n\nThe nude man is thrusting his penis back and forth inside her vagina causing her body to rock up and down. Movements are fast and with bouncing breasts. motion are fast and rapid.\n\nthe man body is barely visible at the bottom,\n\nshe is moaning in pleasure.\n\n\ncamera is still and steady.\n--\ncamera zoom out, 3/4 shot.\nshe takes off her bikini bottom to expose her pussy.\nshe lift up her bikini top to expose her bare breasts.\nshe smiles at camera playfully as she show off her breasts and pussy."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "POV Insertion Missionary"
+    }
+  },
+  "142": {
+    "inputs": {
+      "text": "A man appears and inserts his penis into her pussy. Static camera, fixed viewpoint, still shot.\n\nA man appears and she sucks his penis. Static camera, fixed viewpoint, still shot.\n\nA man appears and inserts his penis between her breasts"
+    },
+    "class_type": "ttN text",
+    "_meta": {
+      "title": "POV Insertion"
+    }
+  },
+  "147": {
+    "inputs": {
+      "anything": [
+        "38",
+        0
+      ],
+      "anything3": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "Anything Everywhere",
+    "_meta": {
+      "title": "Anything Everywhere"
+    }
+  },
+  "148": {
+    "inputs": {
+      "+ve": [
+        "50",
+        0
+      ],
+      "-ve": [
+        "50",
+        1
+      ]
+    },
+    "class_type": "Prompts Everywhere",
+    "_meta": {
+      "title": "Anything Everywhere Prompts"
+    }
+  },
+  "149": {
+    "inputs": {
+      "text": [
+        "155",
+        0
+      ],
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "153": {
+    "inputs": {
+      "text": "\u8272\u8c03\u8273\u4e3d\uff0c\u8fc7\u66dd\uff0c\u9759\u6001\uff0c\u7ec6\u8282\u6a21\u7cca\u4e0d\u6e05\uff0c\u5b57\u5e55\uff0c\u98ce\u683c\uff0c\u4f5c\u54c1\uff0c\u753b\u4f5c\uff0c\u753b\u9762\uff0c\u9759\u6b62\uff0c\u6574\u4f53\u53d1\u7070\uff0c\u6700\u5dee\u8d28\u91cf\uff0c\u4f4e\u8d28\u91cf\uff0cJPEG\u538b\u7f29\u6b8b\u7559\uff0c\u4e11\u964b\u7684\uff0c\u6b8b\u7f3a\u7684\uff0c\u591a\u4f59\u7684\u624b\u6307\uff0c\u753b\u5f97\u4e0d\u597d\u7684\u624b\u90e8\uff0c\u753b\u5f97\u4e0d\u597d\u7684\u8138\u90e8\uff0c\u7578\u5f62\u7684\uff0c\u6bc1\u5bb9\u7684\uff0c\u5f62\u6001\u7578\u5f62\u7684\u80a2\u4f53\uff0c\u624b\u6307\u878d\u5408\uff0c\u9759\u6b62\u4e0d\u52a8\u7684\u753b\u9762\uff0c\u6742\u4e71\u7684\u80cc\u666f\uff0c\u4e09\u6761\u817f\uff0c\u80cc\u666f\u4eba\u5f88\u591a\uff0c\u5012\u7740\u8d70, large testicles, huge testicles, testicles, ",
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "155": {
+    "inputs": {
+      "text_0": "c0wg1rl. The viewers hand reaches out and grasps her torso. He fucks her like a cocksleeve. he thrusts her body down onto his pelvis with his hand, slamming her buttocks against his pelvis, driving his penis deep into her vulva until his penis is entirely inside her body. The fairy girl has transparent wings attached to her back. ",
+      "text": [
+        "88",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text \ud83d\udc0d"
+    }
+  },
+  "162": {
+    "inputs": {
+      "anything": [
+        "176",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "166": {
+    "inputs": {
+      "Xi": 100,
+      "Xf": 100,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Sampling frames"
+    }
+  },
+  "176": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 700208146566841,
+      "steps": 6,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 3,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "109",
+        0
+      ],
+      "latent_image": [
+        "50",
+        2
+      ],
+      "positive": [
+        "50",
+        0
+      ],
+      "negative": [
+        "50",
+        1
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "KSampler (Advanced)"
+    }
+  },
+  "177": {
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 370501868056288,
+      "steps": 6,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 3,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "110",
+        0
+      ],
+      "latent_image": [
+        "162",
+        0
+      ],
+      "positive": [
+        "50",
+        0
+      ],
+      "negative": [
+        "50",
+        1
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "KSampler (Advanced)"
+    }
+  }
+}

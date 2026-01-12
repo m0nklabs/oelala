@@ -1,0 +1,27 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 10,
+  "nodes": [
+    {"id": 1, "type": "LoadImage", "pos": [50, 50], "size": [300, 300], "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [1]}], "widgets_values": ["input.png"]},
+    {"id": 2, "type": "LoadText", "pos": [50, 400], "size": [300, 100], "outputs": [{"name": "TEXT", "type": "STRING", "links": [2]}], "widgets_values": ["a nude woman, photorealistic, soft lighting, high detail"]},
+    {"id": 3, "type": "LoadText", "pos": [50, 600], "size": [300, 100], "outputs": [{"name": "TEXT", "type": "STRING", "links": [3]}], "widgets_values": ["clothes, blurry, low quality, censored, watermark"]},
+    {"id": 4, "type": "SDXLModelLoader", "pos": [400, 50], "size": [350, 200], "outputs": [{"name": "model", "type": "SDXLMODEL", "links": [4]}], "widgets_values": ["realisticVisionV6.safetensors"]},
+    {"id": 5, "type": "SDXLImageToImage", "pos": [800, 50], "size": [350, 250], "inputs": [{"name": "model", "type": "SDXLMODEL", "link": 4}, {"name": "image", "type": "IMAGE", "link": 1}, {"name": "prompt", "type": "STRING", "link": 2}, {"name": "negative_prompt", "type": "STRING", "link": 3}], "outputs": [{"name": "images", "type": "IMAGE", "links": [5]}], "widgets_values": [0.6, 30, 1024, 768]},
+    {"id": 6, "type": "SDXLInpaintMask", "pos": [800, 350], "size": [350, 150], "inputs": [{"name": "image", "type": "IMAGE", "link": 1}], "outputs": [{"name": "mask", "type": "MASK", "links": [6]}], "widgets_values": ["auto"]},
+    {"id": 7, "type": "SDXLInpaint", "pos": [1200, 50], "size": [350, 250], "inputs": [{"name": "model", "type": "SDXLMODEL", "link": 4}, {"name": "image", "type": "IMAGE", "link": 5}, {"name": "mask", "type": "MASK", "link": 6}, {"name": "prompt", "type": "STRING", "link": 2}, {"name": "negative_prompt", "type": "STRING", "link": 3}], "outputs": [{"name": "images", "type": "IMAGE", "links": [7]}], "widgets_values": [0.7, 30]},
+    {"id": 8, "type": "SaveImage", "pos": [1600, 50], "size": [300, 100], "inputs": [{"name": "image", "type": "IMAGE", "link": 7}], "outputs": [], "widgets_values": ["output.png"]}
+  ],
+  "links": [
+    [1, 1, 0, 5, 1, "IMAGE"],
+    [2, 2, 0, 5, 2, "STRING"],
+    [3, 3, 0, 5, 3, "STRING"],
+    [4, 4, 0, 5, 0, "SDXLMODEL"],
+    [5, 5, 0, 7, 1, "IMAGE"],
+    [6, 6, 0, 7, 2, "MASK"],
+    [7, 7, 0, 8, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {"ds": {"scale": 0.5, "offset": [0, 0]}},
+  "version": 0.4
+}

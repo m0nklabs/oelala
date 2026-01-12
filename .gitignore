@@ -104,7 +104,20 @@ ComfyUI/alembic_db/
 # ======================
 external/
 Wan2.2/
-ComfyUI/
 ComfyUI_ExtraModels/
 node_modules/
 docs/.private/
+
+# ======================
+# COMFYUI - Ignore most, keep workflows
+# ======================
+# Ignore ComfyUI except specific paths
+ComfyUI/*
+!ComfyUI/user/
+ComfyUI/user/*
+!ComfyUI/user/default/
+ComfyUI/user/default/*
+!ComfyUI/user/default/workflows/
+
+# Ignore ComfyUI custom_nodes (they have their own repos)
+ComfyUI/custom_nodes/

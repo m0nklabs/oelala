@@ -1,0 +1,169 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "2": {
+    "inputs": {
+      "text": "score_9, score_8_up, score_7_up, masterpiece, best quality, highly detailed, photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3\n\n1girl, beautiful woman, detailed face, detailed eyes, looking at viewer, natural lighting, soft skin texture",
+      "clip": [
+        "9",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "3": {
+    "inputs": {
+      "text": "score_6, score_5, score_4, ugly, deformed, blurry, low quality, bad anatomy, bad hands, extra fingers, missing fingers, extra limbs, missing limbs, watermark, signature, text, cropped, out of frame, worst quality, low resolution, jpeg artifacts, duplicate, morbid, mutilated, poorly drawn face, mutation, poorly drawn hands, extra legs, fused fingers, too many fingers, long neck, username, error",
+      "clip": [
+        "9",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "4": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "5": {
+    "inputs": {
+      "seed": 42,
+      "steps": 30,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "9",
+        0
+      ],
+      "positive": [
+        "2",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "6": {
+    "inputs": {
+      "samples": [
+        "5",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "7": {
+    "inputs": {
+      "images": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "8": {
+    "inputs": {
+      "filename_prefix": "CyberPony_T2I_LoRA",
+      "images": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "9": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "None",
+        "strength": 1
+      },
+      "lora_2": {
+        "on": false,
+        "lora": "None",
+        "strength": 1
+      },
+      "lora_3": {
+        "on": false,
+        "lora": "None",
+        "strength": 1
+      },
+      "lora_4": {
+        "on": false,
+        "lora": "None",
+        "strength": 1
+      },
+      "lora_5": {
+        "on": false,
+        "lora": "None",
+        "strength": 1
+      },
+      "lora_6": {
+        "on": false,
+        "lora": "None",
+        "strength": 1
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power LoRA Loader"
+    }
+  }
+}
