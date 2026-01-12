@@ -10,7 +10,7 @@ import re
 import random
 import string
 import httpx
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
@@ -187,9 +187,7 @@ async def get_my_profile(user: User = Depends(get_current_user)):
 
         if create_response.status_code not in (200, 201):
             logger.error(f"Failed to create profile: {create_response.text}")
-            raise HTTPException(
-                status_code=500, detail="Failed to create user profile"
-            )
+            raise HTTPException(status_code=500, detail="Failed to create user profile")
 
         profile = create_response.json()[0]
         return ProfileResponse(**profile)
@@ -205,9 +203,7 @@ async def update_my_profile(
     """
     async with await get_supabase_client() as client:
         # Prepare update data (only include non-None fields)
-        update_data = {
-            k: v for k, v in profile_data.dict().items() if v is not None
-        }
+        update_data = {k: v for k, v in profile_data.dict().items() if v is not None}
 
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -275,9 +271,7 @@ async def get_profile_by_username(
         is_public = profile.get("is_public", True)
 
         if not is_public and not is_owner:
-            raise HTTPException(
-                status_code=403, detail="This profile is private"
-            )
+            raise HTTPException(status_code=403, detail="This profile is private")
 
         debug_log(f"Retrieved profile for username {username}")
         return ProfileResponse(**profile)
@@ -308,9 +302,7 @@ async def get_profile_by_id(
         is_public = profile.get("is_public", True)
 
         if not is_public and not is_owner:
-            raise HTTPException(
-                status_code=403, detail="This profile is private"
-            )
+            raise HTTPException(status_code=403, detail="This profile is private")
 
         debug_log(f"Retrieved profile for user_id {user_id}")
         return ProfileResponse(**profile)

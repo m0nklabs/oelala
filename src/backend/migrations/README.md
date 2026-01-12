@@ -36,9 +36,9 @@ This directory contains SQL migration files for setting up the Oelala database s
 Check all tables were created:
 
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
@@ -193,7 +193,7 @@ GRANT USAGE ON SCHEMA public TO anon;
 ### Welcome credits not working
 Check trigger exists:
 ```sql
-SELECT * FROM information_schema.triggers 
+SELECT * FROM information_schema.triggers
 WHERE trigger_name = 'on_auth_user_created_credits';
 ```
 
@@ -208,5 +208,5 @@ Ensure using `SUPABASE_SERVICE_KEY` (not anon key).
 
 ---
 
-**Last Updated**: 2026-01-12  
+**Last Updated**: 2026-01-12
 **Migration Version**: 006

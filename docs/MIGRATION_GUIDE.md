@@ -44,8 +44,8 @@ cat src/backend/migrations/001_credits_system.sql
 4. Verify tables created:
 
 ```sql
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
 AND table_name IN ('user_credits', 'credit_transactions', 'credit_packages');
 ```
 
@@ -62,8 +62,8 @@ cat src/backend/migrations/002_published_media.sql
 3. Verify tables:
 
 ```sql
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
 AND table_name IN ('published_media', 'published_media_likes');
 ```
 
@@ -80,9 +80,9 @@ cat src/backend/migrations/003_admin_system.sql
 3. Verify columns added:
 
 ```sql
-SELECT column_name, data_type 
-FROM information_schema.columns 
-WHERE table_name = 'user_credits' 
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'user_credits'
 AND column_name IN ('tier', 'is_vip', 'is_admin');
 ```
 
@@ -99,8 +99,8 @@ cat src/backend/migrations/004_api_keys.sql
 3. Verify table:
 
 ```sql
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
 AND table_name = 'api_keys';
 ```
 
@@ -117,8 +117,8 @@ cat src/backend/migrations/005_user_profiles.sql
 3. Verify table:
 
 ```sql
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
 AND table_name = 'profiles';
 ```
 
@@ -135,8 +135,8 @@ cat src/backend/migrations/006_user_media.sql
 3. Verify tables:
 
 ```sql
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
 AND table_name IN ('user_media', 'gallery');
 ```
 
@@ -147,9 +147,9 @@ Expected output: 2 rows
 ### Check All Tables Created
 
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
@@ -167,9 +167,9 @@ Expected tables:
 ### Check RLS Policies
 
 ```sql
-SELECT schemaname, tablename, policyname 
-FROM pg_policies 
-WHERE schemaname = 'public' 
+SELECT schemaname, tablename, policyname
+FROM pg_policies
+WHERE schemaname = 'public'
 ORDER BY tablename, policyname;
 ```
 
@@ -178,9 +178,9 @@ You should see multiple RLS policies for each table.
 ### Check Functions
 
 ```sql
-SELECT routine_name 
-FROM information_schema.routines 
-WHERE routine_schema = 'public' 
+SELECT routine_name
+FROM information_schema.routines
+WHERE routine_schema = 'public'
 AND routine_type = 'FUNCTION'
 ORDER BY routine_name;
 ```
@@ -205,8 +205,8 @@ Expected functions:
 ### Check Triggers
 
 ```sql
-SELECT trigger_name, event_object_table 
-FROM information_schema.triggers 
+SELECT trigger_name, event_object_table
+FROM information_schema.triggers
 WHERE trigger_schema = 'public'
 ORDER BY event_object_table, trigger_name;
 ```
@@ -232,8 +232,8 @@ SELECT id, email FROM auth.users WHERE email = 'your-email@example.com';
 2. Grant admin status:
 
 ```sql
-UPDATE public.user_credits 
-SET is_admin = true 
+UPDATE public.user_credits
+SET is_admin = true
 WHERE user_id = 'YOUR_USER_ID_HERE';
 ```
 

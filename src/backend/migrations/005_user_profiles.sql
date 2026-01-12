@@ -100,7 +100,7 @@ DECLARE
 BEGIN
     -- Generate default username from email (before @)
     default_username := split_part(NEW.email, '@', 1);
-    
+
     -- Ensure uniqueness by appending random suffix if needed
     WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = default_username) LOOP
         default_username := split_part(NEW.email, '@', 1) || '_' || substr(md5(random()::text), 1, 4);
