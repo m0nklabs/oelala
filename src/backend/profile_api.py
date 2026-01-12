@@ -38,9 +38,9 @@ class ProfileCreateRequest(BaseModel):
 
     username: Optional[str] = Field(
         None,
-        min_length=3,
+        min_length=1,
         max_length=30,
-        description="Unique username (3-30 chars, alphanumeric + _ -)",
+        description="Unique username (1-30 chars, alphanumeric + _ -)",
     )
     display_name: Optional[str] = Field(
         None, max_length=100, description="Display name shown in UI"
@@ -163,6 +163,9 @@ async def get_my_profile(user: User = Depends(get_current_user)):
         # Generate default username from email
         default_username = user.email.split("@")[0] if user.email else "user"
         default_username = re.sub(r"[^a-zA-Z0-9_-]", "", default_username).lower()
+
+        # Remove leading/trailing underscores and hyphens
+        default_username = default_username.strip("_-")
 
         # Ensure username meets minimum length requirements (>= 3 chars)
         if not default_username or len(default_username) < 3:
