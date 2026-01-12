@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from 'react'
-import { BACKEND_BASE } from '../config'
+import { BACKEND_BASE, getMediaUrl } from '../config'
 import { useVideoHistory } from './useVideoHistory'
 import { Download, ExternalLink, History, Film, X, RefreshCw, Check, Image as ImageIcon, Clock } from 'lucide-react'
 
@@ -164,8 +164,8 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
                 key={vid.filename}
                 className="history-item"
                 onClick={() => {
-                  // Use the URL from API response (supports both /outputs/ and /comfyui-outputs/)
-                  const videoUrl = vid.url ? `${BACKEND_BASE}${vid.url}` : `${BACKEND_BASE}/outputs/${vid.filename}`
+                  // Use getMediaUrl to handle both signed URLs and relative paths
+                  const videoUrl = getMediaUrl(vid.url || `/outputs/${vid.filename}`, vid.signed_url)
                   onSelectHistoryVideo({
                     kind: 'video',
                     url: videoUrl,

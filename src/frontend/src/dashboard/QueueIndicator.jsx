@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Clock, Play, Loader2, X, CheckCircle, RefreshCw } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import ProgressTracker from './ProgressTracker'
 
 /**
@@ -270,7 +270,7 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
         )}
         {status === 'completed' && job.output_video && (
           <a
-            href={`${BACKEND_BASE}${job.output_video}`}
+            href={getMediaUrl(job.output_video, job.signed_url)}
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: '#3b82f6', fontSize: '0.7rem' }}

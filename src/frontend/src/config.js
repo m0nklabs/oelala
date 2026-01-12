@@ -22,6 +22,26 @@ const EXTERNAL_SERVICES = {
   NADSCAB: 'http://192.168.1.2:7000/'
 }
 
-export { BACKEND_BASE, STORAGE_BASE, EXTERNAL_SERVICES }
+/**
+ * Utility to get full media URL - handles both signed URLs and relative paths
+ * Signed URLs from oelala-storage come as full URLs (http://...)
+ * Legacy backend paths are relative (/files/video.mp4)
+ * @param {string} url - URL or relative path
+ * @param {string} [signedUrl] - Optional signed URL (preferred if available)
+ * @returns {string} Full URL ready for use
+ */
+const getMediaUrl = (url, signedUrl = null) => {
+  // Prefer signed URL if available
+  const finalUrl = signedUrl || url
+  if (!finalUrl) return ''
+  // If it's already a full URL, use as-is
+  if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+    return finalUrl
+  }
+  // Otherwise prepend backend base
+  return `${BACKEND_BASE}${finalUrl}`
+}
+
+export { BACKEND_BASE, STORAGE_BASE, EXTERNAL_SERVICES, getMediaUrl }
 export default BACKEND_BASE
 export { DEBUG }

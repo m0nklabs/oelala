@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
 import QueueIndicator from './QueueIndicator'
@@ -335,10 +335,11 @@ export default function Dashboard() {
               onJobComplete={(job) => {
                 setHistoryRefreshToken((n) => n + 1)
                 if (job.output_video) {
+                  const videoUrl = getMediaUrl(job.output_video, job.signed_url)
                   setOutput({
                     kind: 'video',
-                    url: `${BACKEND_BASE}${job.output_video}`,
-                    backendUrl: `${BACKEND_BASE}${job.output_video}`,
+                    url: videoUrl,
+                    backendUrl: videoUrl,
                   })
                 }
               }}

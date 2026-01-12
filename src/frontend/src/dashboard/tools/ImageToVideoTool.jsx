@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
@@ -219,7 +219,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
     try {
       // Fetch the image and convert to File object
-      const imageUrl = `${BACKEND_BASE}${item.url}`
+      // Use getMediaUrl to handle both signed URLs and relative paths
+      const imageUrl = getMediaUrl(item.url, item.signed_url)
       const response = await fetch(imageUrl)
       const blob = await response.blob()
       const filename = item.filename || item.url.split('/').pop()
@@ -371,9 +372,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         // Clear busy state immediately so user can queue more jobs
       } else {
         // Sync mode - result contains the video
+        // Use getMediaUrl helper for signed URL support
         const videoUrl = result.data?.video_url || result.data?.url
         const outputVideo = result.data?.output_video
-        const url = videoUrl ? `${BACKEND_BASE}${videoUrl}` : ''
+        const url = getMediaUrl(videoUrl, result.data?.signed_url)
 
         onOutput({
           kind: 'video',

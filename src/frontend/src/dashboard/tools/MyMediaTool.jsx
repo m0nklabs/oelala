@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload } from 'lucide-react'
-import { BACKEND_BASE } from '../../config'
+import { BACKEND_BASE, getMediaUrl } from '../../config'
 import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
@@ -542,7 +542,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const handleDownload = (item, e) => {
     e?.stopPropagation()
     const link = document.createElement('a')
-    link.href = `${BACKEND_BASE}${item.url}`
+    link.href = getMediaUrl(item.url, item.signed_url)
     link.download = item.filename
     link.click()
   }
@@ -557,7 +557,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const link = document.createElement('a')
-      link.href = `${BACKEND_BASE}${item.url}`
+      link.href = getMediaUrl(item.url, item.signed_url)
       link.download = item.filename
       link.click()
 
@@ -1507,7 +1507,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               <div style={{ flexShrink: 0 }}>
                 {item.type === 'video' ? (
                   <video
-                    src={`${BACKEND_BASE}${item.url}`}
+                    src={getMediaUrl(item.url, item.signed_url)}
                     style={{
                       width: '100px',
                       height: '100px',
@@ -1521,7 +1521,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   />
                 ) : (
                   <img
-                    src={`${BACKEND_BASE}${item.url}`}
+                    src={getMediaUrl(item.url, item.signed_url)}
                     alt={item.filename}
                     style={{
                       width: '100px',
@@ -1712,7 +1712,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               {/* Media content */}
               {item.type === 'video' ? (
                 <video
-                  src={`${BACKEND_BASE}${item.url}`}
+                  src={getMediaUrl(item.url, item.signed_url)}
                   autoPlay
                   loop
                   muted
@@ -1729,7 +1729,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 <div className="audio-thumb">
                   <div className="audio-icon">🎵</div>
                   <audio
-                    src={`${BACKEND_BASE}${item.url}`}
+                    src={getMediaUrl(item.url, item.signed_url)}
                     preload="metadata"
                     onLoadedMetadata={(e) => {
                       const duration = e.target.duration
@@ -1741,7 +1741,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 </div>
               ) : (
                 <img
-                  src={`${BACKEND_BASE}${item.url}`}
+                  src={getMediaUrl(item.url, item.signed_url)}
                   alt={item.filename}
                   loading="lazy"
                 />
@@ -1851,7 +1851,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             {selectedItem.type === 'video' ? (
               <video
-                src={`${BACKEND_BASE}${selectedItem.url}`}
+                src={getMediaUrl(selectedItem.url, selectedItem.signed_url)}
                 autoPlay
                 loop
                 controls
@@ -1862,7 +1862,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 <div className="audio-icon-large">🎵</div>
                 <div className="audio-filename">{selectedItem.filename}</div>
                 <audio
-                  src={`${BACKEND_BASE}${selectedItem.url}`}
+                  src={getMediaUrl(selectedItem.url, selectedItem.signed_url)}
                   autoPlay
                   controls
                   style={{ width: '100%', maxWidth: '400px', marginTop: '20px' }}
@@ -1870,7 +1870,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               </div>
             ) : (
               <img
-                src={`${BACKEND_BASE}${selectedItem.url}`}
+                src={getMediaUrl(selectedItem.url, selectedItem.signed_url)}
                 alt={selectedItem.filename}
                 style={{ borderRadius: '12px' }}
               />
@@ -1971,7 +1971,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                 {promptPopup.item.type === 'video' ? (
                   <video
-                    src={`${BACKEND_BASE}${promptPopup.item.url}`}
+                    src={getMediaUrl(promptPopup.item.url, promptPopup.item.signed_url)}
                     className="prompt-media-preview"
                     autoPlay
                     loop
@@ -1980,7 +1980,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   />
                 ) : (
                   <img
-                    src={`${BACKEND_BASE}${promptPopup.item.url}`}
+                    src={getMediaUrl(promptPopup.item.url, promptPopup.item.signed_url)}
                     alt={promptPopup.item.filename}
                     className="prompt-media-preview"
                   />

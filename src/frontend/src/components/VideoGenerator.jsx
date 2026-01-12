@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import BACKEND_BASE from '../config'
+import BACKEND_BASE, { getMediaUrl } from '../config'
 import { postForm } from '../api'
 import { Upload, Play, Download, Loader, FileText, Image, Sliders } from 'lucide-react'
 import PresetSelector from './PresetSelector'
@@ -136,8 +136,9 @@ function VideoGenerator() {
 
   const handleDownload = () => {
     if (generatedVideo) {
-  const link = document.createElement('a')
-  link.href = `${BACKEND_BASE}${generatedVideo.video_url}`
+      const link = document.createElement('a')
+      // Use getMediaUrl helper for signed URL support
+      link.href = getMediaUrl(generatedVideo.video_url, generatedVideo.signed_url)
       link.download = generatedVideo.output_video
       document.body.appendChild(link)
       link.click()
@@ -465,7 +466,7 @@ function VideoGenerator() {
           <div className="video-player">
             <video
               controls
-              src={`${BACKEND_BASE}${generatedVideo.video_url}`}
+              src={getMediaUrl(generatedVideo.video_url, generatedVideo.signed_url)}
               style={{ maxWidth: '100%', maxHeight: '400px' }}
             >
               Your browser does not support the video tag.
