@@ -613,6 +613,41 @@ MEDIA_GENERATED_DIR = Path("/home/flip/oelala/media/generated")
 COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
 
 
+def check_file_has_metadata(file_path: Path) -> bool:
+    """
+    Quick check if a media file has embedded ComfyUI workflow metadata.
+    Returns True if metadata exists, False otherwise.
+    """
+    import subprocess
+    import json
+    
+    ext = file_path.suffix.lower()
+    
+    try:
+        if ext in [".mp4", ".webm", ".mov"]:
+            # Check video metadata using ffprobe
+            result = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(file_path)],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                probe_data = json.loads(result.stdout)
+                comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                return bool(comment and comment.startswith("{"))
+        
+        elif ext == ".png":
+            # Check PNG metadata
+            from PIL import Image
+            img = Image.open(str(file_path))
+            if hasattr(img, "text"):
+                return "prompt" in img.text or "workflow" in img.text
+            img.close()
+    except Exception:
+        pass
+    
+    return False
+
+
 @router.get("/generated-media")
 async def list_generated_media(
     admin: User = Depends(get_admin_user),
@@ -638,6 +673,9 @@ async def list_generated_media(
                 if type != "all" and item_type != type:
                     continue
                 
+                # Check if file has embedded metadata (workflow)
+                has_metadata = check_file_has_metadata(file_path)
+                
                 media.append({
                     "name": file_path.name,
                     "type": item_type,
@@ -646,6 +684,7 @@ async def list_generated_media(
                     "size": stat.st_size,
                     "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     "mtime": stat.st_mtime,
+                    "has_metadata": has_metadata,
                 })
     
     # Scan ComfyUI output
@@ -659,6 +698,9 @@ async def list_generated_media(
                 if type != "all" and item_type != type:
                     continue
                 
+                # Check if file has embedded metadata (workflow)
+                has_metadata = check_file_has_metadata(file_path)
+                
                 media.append({
                     "name": file_path.name,
                     "type": item_type,
@@ -667,6 +709,7 @@ async def list_generated_media(
                     "size": stat.st_size,
                     "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     "mtime": stat.st_mtime,
+                    "has_metadata": has_metadata,
                 })
     
     # Sort by mtime (newest first)

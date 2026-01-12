@@ -1639,11 +1639,24 @@ async def get_comfyui_metadata(filename: str):
     """
     Extract and return the ComfyUI workflow/metadata from an output file.
     Works with videos (mp4, webm, mov) and images (png).
+    Searches in both ComfyUI/output/ and media/generated/ directories.
     """
     import subprocess
 
-    output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
-    if not output_path.exists():
+    # Search in multiple directories
+    search_dirs = [
+        Path("/home/flip/oelala/ComfyUI/output"),
+        Path("/home/flip/oelala/media/generated"),
+    ]
+    
+    output_path = None
+    for search_dir in search_dirs:
+        candidate = search_dir / filename
+        if candidate.exists():
+            output_path = candidate
+            break
+    
+    if not output_path:
         raise HTTPException(status_code=404, detail="Output file not found")
 
     ext = output_path.suffix.lower()

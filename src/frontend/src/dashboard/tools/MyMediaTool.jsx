@@ -278,7 +278,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   type: item.type,
                   size: item.size,
                   modified: item.modified,
-                  metadata: {},
+                  metadata: { has_metadata: item.has_metadata || false },
                   source: 'generated'
                 })),
                 stats: { videos, images, audio: 0 }
