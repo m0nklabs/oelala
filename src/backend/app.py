@@ -29,7 +29,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Optional
 import shutil
 from pathlib import Path
 import logging
@@ -47,8 +47,11 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 # Authentication
 from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with_jwks
 
-# Storage client for user media
+# Storage client for user media (legacy sync client)
 from storage_client import get_client as get_storage_client
+
+# MediaService for oelala-storage + Supabase integration (new async client)
+from media_service import MediaService, MediaRecord
 
 # Credits system
 from credits import calculate_credits
@@ -109,6 +112,18 @@ DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
 # WebSocket and polling configuration
 WEBSOCKET_AUTH_TIMEOUT = 5.0  # seconds - timeout for WebSocket authentication
 QUEUE_POLLING_INTERVAL = 2.0  # seconds - interval for ComfyUI queue polling
+
+# Global MediaService instance (initialized lazily)
+_media_service: Optional[MediaService] = None
+
+
+def get_media_service() -> MediaService:
+    """Get or create the global MediaService instance."""
+    global _media_service
+    if _media_service is None:
+        _media_service = MediaService()
+        logger.info("🗄️ MediaService initialized")
+    return _media_service
 
 
 def debug_log(message: str):
@@ -418,6 +433,74 @@ def create_progress_callback(prompt_id: str):
             )
 
     return progress_callback
+
+
+async def upload_generated_media(
+    user_id: str,
+    file_path: Path,
+    generation_type: str,
+    prompt: str,
+    workflow_id: Optional[str] = None,
+    extra_metadata: Optional[dict] = None,
+) -> Optional[MediaRecord]:
+    """
+    Upload a generated media file to oelala-storage and sync metadata to Supabase.
+    
+    Args:
+        user_id: User ID who owns the media
+        file_path: Path to the generated file
+        generation_type: Type of generation (t2v, i2v, t2i, etc.)
+        prompt: The prompt used for generation
+        workflow_id: Optional ComfyUI workflow ID
+        extra_metadata: Additional metadata (resolution, fps, model_name, etc.)
+    
+    Returns:
+        MediaRecord if successful, None if failed
+    """
+    try:
+        media_service = get_media_service()
+        
+        # Read file data
+        file_data = file_path.read_bytes()
+        
+        # Merge extra metadata
+        metadata = extra_metadata or {}
+        metadata["prompt"] = prompt
+        metadata["generation_type"] = generation_type
+        metadata["size_bytes"] = len(file_data)
+        
+        # Upload to storage + sync metadata
+        record = await media_service.upload(
+            user_id=user_id,
+            file_data=file_data,
+            filename=file_path.name,
+            generation_type=generation_type,
+            prompt=prompt,
+            workflow_id=workflow_id,
+            extra_metadata=metadata,
+        )
+        
+        logger.info(f"🗄️ Media uploaded to storage: {record.storage_path}")
+        return record
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to upload media to storage: {e}")
+        return None
+
+
+def get_signed_media_url(storage_path: str, expires_in: int = 3600) -> str:
+    """
+    Generate a signed URL for a media file.
+    
+    Args:
+        storage_path: Full storage path (e.g., users/{user_id}/videos/file.mp4)
+        expires_in: URL expiration time in seconds (default 1 hour)
+    
+    Returns:
+        Signed URL for public access
+    """
+    media_service = get_media_service()
+    return media_service.generate_signed_url(storage_path, expires_in)
 
 
 # =============================================================================
@@ -3493,12 +3576,43 @@ async def generate_wan22_comfyui(
             await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
             logger.info(f"🎬 Wan2.2 video generated (💰 -{credits_required} credits)")
 
+            # Upload to oelala-storage and sync metadata to Supabase
+            media_record = await upload_generated_media(
+                user_id=user.id,
+                file_path=final_output,
+                generation_type="i2v",
+                prompt=prompt,
+                workflow_id=job_id,
+                extra_metadata={
+                    "model_name": "wan2.2_i2v_14B_Q6",
+                    "resolution": resolution,
+                    "aspect_ratio": aspect_ratio,
+                    "num_frames": total_frames,
+                    "fps": fps,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "seed": seed,
+                    "input_image": input_filename,
+                    "extend_mode": is_extend_mode,
+                    "clip_count": actual_clip_count,
+                },
+            )
+
+            # Generate signed URL if upload succeeded
+            video_url = f"/files/{output_filename}"  # Fallback to local
+            signed_url = None
+            if media_record:
+                signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)  # 24h
+                video_url = signed_url
+
             return {
                 "success": True,
                 "message": f"Wan2.2 video generated via ComfyUI{' (sequential)' if actual_clip_count > 1 else ''}",
                 "input_image": input_filename,
                 "output_video": output_filename,
-                "video_url": f"/files/{output_filename}",
+                "video_url": video_url,
+                "signed_url": signed_url,
+                "storage_path": media_record.storage_path if media_record else None,
                 "video_path": result_path,
                 "prompt": prompt,
                 "num_frames": total_frames,
