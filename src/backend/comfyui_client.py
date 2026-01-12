@@ -18,8 +18,22 @@ import logging
 import io
 import copy
 
-# Import for auto-upload functionality
+# Import for auto-upload functionality (legacy sync client)
 from storage_client import get_client as get_storage_client
+
+# Import MediaService for async uploads with Supabase sync
+try:
+    from media_service import MediaService
+    _media_service: Optional[MediaService] = None
+    
+    def get_media_service() -> MediaService:
+        """Get or create the global MediaService instance."""
+        global _media_service
+        if _media_service is None:
+            _media_service = MediaService()
+        return _media_service
+except ImportError:
+    get_media_service = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -1887,6 +1901,99 @@ class ComfyUIClient:
             logger.error(f"❌ Unexpected error during auto-upload for {prompt_id}: {e}")
             # Don't raise - we don't want to break the user flow if upload fails
             return None
+
+    async def on_job_complete_async(
+        self,
+        prompt_id: str,
+        output_path: str,
+        output_type: str = "video",
+    ) -> Optional[str]:
+        """
+        Async version of on_job_complete that uses MediaService for upload + Supabase sync.
+        
+        This should be called from async contexts (like FastAPI endpoints) for better
+        integration with Supabase metadata tracking and signed URL generation.
+
+        Args:
+            prompt_id: ComfyUI prompt ID
+            output_path: Local path to generated file
+            output_type: Type of output ('video', 'image', 'audio')
+
+        Returns:
+            Full storage path (e.g., users/{user_id}/videos/file.mp4) or None if failed
+        """
+        if get_media_service is None:
+            logger.warning("⚠️ MediaService not available, falling back to sync upload")
+            return self.on_job_complete(prompt_id, output_path, output_type)
+
+        # Get job metadata
+        metadata = self.get_job_metadata(prompt_id)
+        if not metadata:
+            logger.warning(f"⚠️ No job metadata found for {prompt_id}, skipping auto-upload")
+            return None
+
+        user_id = metadata.get("user_id")
+        if not user_id:
+            logger.warning(f"⚠️ No user_id in job metadata for {prompt_id}")
+            return None
+
+        try:
+            # Read file content
+            file_path = Path(output_path)
+            if not file_path.exists():
+                logger.error(f"❌ Output file not found: {output_path}")
+                self.clear_job_metadata(prompt_id)
+                return None
+
+            file_data = file_path.read_bytes()
+
+            # Map output_type to generation_type
+            gen_type_map = {
+                "video": "t2v" if "t2v" in metadata.get("type", "") else "i2v",
+                "image": "t2i",
+                "audio": "audio",
+            }
+            generation_type = gen_type_map.get(output_type, output_type)
+
+            # Extract metadata for Supabase
+            extra_metadata = {
+                "model_name": metadata.get("model_name") or metadata.get("model_type"),
+                "resolution": metadata.get("resolution"),
+                "aspect_ratio": metadata.get("aspect_ratio"),
+                "num_frames": metadata.get("num_frames"),
+                "fps": metadata.get("fps"),
+                "seed": metadata.get("seed"),
+                "steps": metadata.get("steps"),
+                "cfg": metadata.get("cfg"),
+                "size_bytes": len(file_data),
+            }
+            # Remove None values
+            extra_metadata = {k: v for k, v in extra_metadata.items() if v is not None}
+
+            # Upload via MediaService (storage + Supabase sync)
+            media_service = get_media_service()
+            record = await media_service.upload(
+                user_id=user_id,
+                file_data=file_data,
+                filename=file_path.name,
+                generation_type=generation_type,
+                prompt=metadata.get("prompt", ""),
+                workflow_id=prompt_id,
+                extra_metadata=extra_metadata,
+            )
+
+            logger.info(f"✅ Async uploaded to storage: {record.storage_path} ({len(file_data)} bytes)")
+
+            # Clear job metadata after successful upload
+            self.clear_job_metadata(prompt_id)
+
+            return record.storage_path
+
+        except Exception as e:
+            logger.error(f"❌ Async upload failed for {prompt_id}: {e}")
+            # Fallback to sync upload
+            logger.info("🔄 Falling back to sync upload...")
+            return self.on_job_complete(prompt_id, output_path, output_type)
 
     def wait_for_completion(
         self,

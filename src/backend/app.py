@@ -1651,15 +1651,19 @@ async def get_job_status(prompt_id: str):
 
                     output_path = COMFYUI_OUTPUT_DIR / output_filename
 
-                    # Trigger auto-upload (will only happen if job is registered)
+                    # Trigger async auto-upload with MediaService (storage + Supabase sync)
+                    storage_path = None
+                    signed_url = None
                     if output_path.exists():
-                        storage_path = comfyui.on_job_complete(
+                        storage_path = await comfyui.on_job_complete_async(
                             prompt_id, str(output_path), output_type
                         )
                         if storage_path:
                             logger.info(
                                 f"✅ Auto-uploaded {output_type} for job {prompt_id}: {storage_path}"
                             )
+                            # Generate signed URL for the uploaded content
+                            signed_url = get_signed_media_url(storage_path, expires_in=86400)  # 24h
 
                 return {
                     "prompt_id": prompt_id,
@@ -1667,9 +1671,9 @@ async def get_job_status(prompt_id: str):
                     "output_video": output_video,
                     "output_image": output_image,
                     "output_audio": output_audio,
-                    "url": output_image
-                    or output_video
-                    or output_audio,  # Convenience field
+                    "url": signed_url or output_image or output_video or output_audio,  # Prefer signed URL
+                    "signed_url": signed_url,
+                    "storage_path": storage_path,
                     **job_info,
                 }
     except Exception as e:
@@ -2970,9 +2974,35 @@ async def generate_flux_image(
 
         filename = Path(output_path).name
 
+        # Upload to storage with metadata sync
+        media_record = await upload_generated_media(
+            user_id=user.id,
+            file_path=Path(output_path),
+            generation_type="t2i",
+            prompt=prompt,
+            workflow_id=job_id,
+            extra_metadata={
+                "model_name": "flux1-dev-fp8",
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "guidance": guidance,
+                "seed": seed,
+            },
+        )
+
+        # Generate signed URL if upload succeeded
+        url = f"/files/{filename}"
+        signed_url = None
+        if media_record:
+            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+            url = signed_url
+
         return {
             "status": "success",
-            "url": f"/files/{filename}",
+            "url": url,
+            "signed_url": signed_url,
+            "storage_path": media_record.storage_path if media_record else None,
             "filename": filename,
             "job_id": job_id,
             "credits_used": credits_required,
@@ -3076,9 +3106,36 @@ async def generate_sd15_image(
         await deduct_credits(user, credits_required, job_id, "SD1.5 T2I")
         logger.info(f"🎨 SD1.5 image generated (💰 -{credits_required} credits)")
 
+        # Upload to storage with metadata sync
+        media_record = await upload_generated_media(
+            user_id=user.id,
+            file_path=Path(output_path),
+            generation_type="t2i",
+            prompt=prompt,
+            workflow_id=job_id,
+            extra_metadata={
+                "model_name": "Realistic_Vision_V5.1",
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+                "negative_prompt": negative_prompt,
+            },
+        )
+
+        # Generate signed URL if upload succeeded
+        url = f"/files/{filename}"
+        signed_url = None
+        if media_record:
+            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+            url = signed_url
+
         return {
             "status": "success",
-            "url": f"/files/{filename}",
+            "url": url,
+            "signed_url": signed_url,
+            "storage_path": media_record.storage_path if media_record else None,
             "filename": filename,
             "job_id": job_id,
             "credits_used": credits_required,
@@ -3166,9 +3223,34 @@ async def generate_wan22_t2i(
         await deduct_credits(user, credits_required, job_id, "Wan2.2 T2I")
         logger.info(f"🎨 Wan2.2 T2I image generated (💰 -{credits_required} credits)")
 
+        # Upload to storage with metadata sync
+        media_record = await upload_generated_media(
+            user_id=user.id,
+            file_path=Path(output_path),
+            generation_type="t2i",
+            prompt=prompt,
+            workflow_id=job_id,
+            extra_metadata={
+                "model_name": "wan2.2-t2i-distorch2",
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "seed": seed,
+            },
+        )
+
+        # Generate signed URL if upload succeeded
+        url = f"/files/{filename}"
+        signed_url = None
+        if media_record:
+            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+            url = signed_url
+
         return {
             "status": "success",
-            "url": f"/files/{filename}",
+            "url": url,
+            "signed_url": signed_url,
+            "storage_path": media_record.storage_path if media_record else None,
             "filename": filename,
             "job_id": job_id,
             "credits_used": credits_required,
