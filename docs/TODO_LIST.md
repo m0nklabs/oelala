@@ -34,9 +34,14 @@
 ### Infrastructure Required
 | Task | Status | Notes |
 |------|--------|-------|
-| Supabase `user_credits` table | ❌ Missing | Causes 404 errors |
-| Supabase `published_media` table | ❌ Missing | Gallery broken |
-| Backend admin API endpoints | ⏳ Todo | `/api/admin/*` |
+| Supabase `user_credits` table | ✅ Complete | Migration 001 |
+| Supabase `published_media` table | ✅ Complete | Migration 002 |
+| Supabase `profiles` table | ✅ Complete | Migration 005 |
+| Supabase `user_media` table | ✅ Complete | Migration 006 |
+| Supabase `gallery` table | ✅ Complete | Migration 006 |
+| Backend admin API endpoints | ✅ Complete | `/api/admin/*` |
+| Backend profile API endpoints | ✅ Complete | `/api/profile/*` |
+| Migration documentation | ✅ Complete | `docs/MIGRATION_GUIDE.md` |
 
 ---
 

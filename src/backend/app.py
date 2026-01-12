@@ -62,6 +62,9 @@ from credits_api import (
 # Gallery system
 from gallery_api import router as gallery_router
 
+# Profile system
+from profile_api import router as profile_router
+
 # Admin system
 from admin_api import router as admin_router
 
@@ -365,6 +368,7 @@ app.include_router(api_keys_router)  # API key management at /api/keys/*
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
+app.include_router(profile_router)  # User profiles at /api/profile/*
 app.include_router(admin_router)  # Admin panel at /api/admin/*
 
 # Create directories
