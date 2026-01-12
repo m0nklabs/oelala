@@ -28,7 +28,7 @@ jobs:
           COPILOT_PRS=$(gh api repos/${{ github.repository }}/pulls \
             --jq '[.[] | select(
               .state == "open" and
-              (.user.login | ascii_downcase | contains("copilot") or .head.ref | startswith("copilot/"))
+              ((.user.login | ascii_downcase | contains("copilot")) or (.head.ref // "" | startswith("copilot/")))
             ) | {number: .number, branch: .head.ref, title: .title}]')
 
           COUNT=$(echo "$COPILOT_PRS" | jq 'length')
