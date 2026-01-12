@@ -71,6 +71,10 @@ from profile_api import router as profile_router
 # Admin system
 from admin_api import router as admin_router
 
+# Webhooks system
+from webhooks_api import router as webhooks_router
+from webhook_service import webhook_service
+
 # ComfyUI Client for all image/video generation
 try:
     from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
@@ -385,6 +389,7 @@ app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
 app.include_router(profile_router)  # User profiles at /api/profile/*
 app.include_router(admin_router)  # Admin panel at /api/admin/*
+app.include_router(webhooks_router)  # Webhooks at /webhooks/*
 
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")
@@ -650,6 +655,11 @@ async def startup_event():
             "⚠️ WebSocket progress modules not available - real-time updates disabled"
         )
 
+    # Start webhook retry worker
+    logger.info("🪝 Starting webhook retry worker...")
+    await webhook_service.start_retry_worker(interval=30.0)
+    logger.info("✅ Webhook retry worker started!")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -661,6 +671,10 @@ async def shutdown_event():
     if progress_monitor:
         logger.info("🛑 Stopping progress monitor...")
         progress_monitor.stop()
+
+    # Stop webhook retry worker
+    logger.info("🛑 Stopping webhook retry worker...")
+    await webhook_service.stop_retry_worker()
 
     logger.info("✅ Shutdown complete")
 

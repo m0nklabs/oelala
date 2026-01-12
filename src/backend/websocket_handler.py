@@ -23,6 +23,34 @@ def debug_log(message: str):
         logger.info(f"🐛 {message}")
 
 
+# Lazy import to avoid circular dependency
+_webhook_triggers = None
+
+
+def _get_webhook_triggers():
+    """Lazy load webhook trigger functions to avoid circular imports."""
+    global _webhook_triggers
+    if _webhook_triggers is None:
+        try:
+            from webhook_service import (
+                trigger_job_queued,
+                trigger_job_started,
+                trigger_job_completed,
+                trigger_job_failed,
+            )
+            _webhook_triggers = {
+                "queued": trigger_job_queued,
+                "started": trigger_job_started,
+                "completed": trigger_job_completed,
+                "failed": trigger_job_failed,
+            }
+            debug_log("Webhook triggers loaded")
+        except ImportError as e:
+            logger.warning(f"Webhook service not available: {e}")
+            _webhook_triggers = {}
+    return _webhook_triggers
+
+
 class WebSocketManager:
     """
     Manages WebSocket connections for real-time progress updates.
@@ -32,8 +60,8 @@ class WebSocketManager:
     def __init__(self):
         # WebSocket connections grouped by user_id
         self.connections: Dict[str, Set[WebSocket]] = defaultdict(set)
-        # Track job ownership: job_id -> user_id
-        self.job_ownership: Dict[str, str] = {}
+        # Track job ownership: job_id -> {user_id, job_type, started_at}
+        self.job_ownership: Dict[str, Dict[str, Any]] = {}
         # Last broadcast timestamps to avoid spam
         self.last_broadcast: Dict[str, float] = {}
 
@@ -59,17 +87,21 @@ class WebSocketManager:
                 del self.connections[user_key]
                 debug_log(f"Removed empty connection set for user {user_key}")
 
-    def register_job(self, job_id: str, user_id: Optional[str] = None):
+    def register_job(self, job_id: str, user_id: Optional[str] = None, job_type: str = "generation"):
         """Register a job for a specific user"""
         user_key = user_id or "anonymous"
-        self.job_ownership[job_id] = user_key
-        debug_log(f"Registered job {job_id} for user {user_key}")
+        self.job_ownership[job_id] = {
+            "user_id": user_key,
+            "job_type": job_type,
+            "started_at": None,
+        }
+        debug_log(f"Registered job {job_id} for user {user_key} (type: {job_type})")
 
     def unregister_job(self, job_id: str):
         """Unregister a completed/failed job"""
         if job_id in self.job_ownership:
-            user_id = self.job_ownership.pop(job_id)
-            debug_log(f"Unregistered job {job_id} for user {user_id}")
+            job_info = self.job_ownership.pop(job_id)
+            debug_log(f"Unregistered job {job_id} for user {job_info.get('user_id')}")
 
             # Clean up rate limiting cache for this job to prevent memory leak
             keys_to_remove = [k for k in self.last_broadcast.keys() if job_id in k]
@@ -145,7 +177,13 @@ class WebSocketManager:
             total_pending: Total number of pending jobs
             eta_seconds: Estimated time to start (optional)
         """
-        user_id = self.job_ownership.get(job_id)
+        job_info = self.job_ownership.get(job_id)
+        if not job_info:
+            debug_log(f"Job {job_id} not registered, cannot broadcast queue update")
+            return
+
+        user_id = job_info.get("user_id")
+        job_type = job_info.get("job_type", "generation")
         if not user_id:
             debug_log(f"Job {job_id} not registered, cannot broadcast queue update")
             return
@@ -165,6 +203,24 @@ class WebSocketManager:
             f"📊 Queue update: job {job_id} at position {queue_position}/{total_pending}"
         )
 
+        # Trigger job.queued webhook (only when entering queue, not when running)
+        if queue_position > 0:
+            triggers = _get_webhook_triggers()
+            if triggers.get("queued") and user_id and user_id != "anonymous":
+                try:
+                    asyncio.create_task(
+                        triggers["queued"](
+                            user_id=user_id,
+                            job_id=job_id,
+                            job_type=job_type,
+                            queue_position=queue_position,
+                            total_pending=total_pending,
+                            eta_seconds=eta_seconds,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to trigger job.queued webhook: {e}")
+
     async def broadcast_progress(
         self,
         job_id: str,
@@ -181,10 +237,33 @@ class WebSocketManager:
             message: Optional status message
             node_name: Optional current processing node name
         """
-        user_id = self.job_ownership.get(job_id)
-        if not user_id:
+        job_info = self.job_ownership.get(job_id)
+        if not job_info:
             debug_log(f"Job {job_id} not registered, cannot broadcast progress")
             return
+
+        user_id = job_info.get("user_id")
+        job_type = job_info.get("job_type", "generation")
+
+        # Track when job starts running (for job.started webhook)
+        if progress > 0 and not job_info.get("started_at"):
+            import time
+            job_info["started_at"] = time.time()
+            self.job_ownership[job_id] = job_info
+
+            # Trigger job.started webhook
+            triggers = _get_webhook_triggers()
+            if triggers.get("started") and user_id and user_id != "anonymous":
+                try:
+                    asyncio.create_task(
+                        triggers["started"](
+                            user_id=user_id,
+                            job_id=job_id,
+                            job_type=job_type,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to trigger job.started webhook: {e}")
 
         data = {
             "job_id": job_id,
@@ -213,10 +292,20 @@ class WebSocketManager:
             output_url: URL to generated output
             metadata: Additional job metadata
         """
-        user_id = self.job_ownership.get(job_id)
-        if not user_id:
+        job_info = self.job_ownership.get(job_id)
+        if not job_info:
             debug_log(f"Job {job_id} not registered, cannot broadcast completion")
             return
+
+        user_id = job_info.get("user_id")
+        job_type = job_info.get("job_type", "generation")
+        started_at = job_info.get("started_at")
+
+        # Calculate processing time
+        processing_time = None
+        if started_at:
+            import time
+            processing_time = time.time() - started_at
 
         data = {
             "job_id": job_id,
@@ -230,6 +319,24 @@ class WebSocketManager:
 
         await self.broadcast_to_user(user_id, "job_complete", data)
         logger.info(f"✅ Job complete: {job_id}")
+
+        # Trigger job.completed webhook
+        triggers = _get_webhook_triggers()
+        if triggers.get("completed") and user_id and user_id != "anonymous":
+            try:
+                asyncio.create_task(
+                    triggers["completed"](
+                        user_id=user_id,
+                        job_id=job_id,
+                        job_type=job_type,
+                        output_url=output_url,
+                        processing_time_seconds=processing_time,
+                        metadata=metadata,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Failed to trigger job.completed webhook: {e}")
+
         self.unregister_job(job_id)
 
     async def broadcast_job_failed(
@@ -243,10 +350,13 @@ class WebSocketManager:
             error: Error message
             metadata: Additional job metadata
         """
-        user_id = self.job_ownership.get(job_id)
-        if not user_id:
+        job_info = self.job_ownership.get(job_id)
+        if not job_info:
             debug_log(f"Job {job_id} not registered, cannot broadcast failure")
             return
+
+        user_id = job_info.get("user_id")
+        job_type = job_info.get("job_type", "generation")
 
         data = {
             "job_id": job_id,
@@ -258,6 +368,22 @@ class WebSocketManager:
 
         await self.broadcast_to_user(user_id, "job_failed", data)
         logger.error(f"❌ Job failed: {job_id} - {error}")
+
+        # Trigger job.failed webhook
+        triggers = _get_webhook_triggers()
+        if triggers.get("failed") and user_id and user_id != "anonymous":
+            try:
+                asyncio.create_task(
+                    triggers["failed"](
+                        user_id=user_id,
+                        job_id=job_id,
+                        job_type=job_type,
+                        error=error,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Failed to trigger job.failed webhook: {e}")
+
         self.unregister_job(job_id)
 
     @staticmethod
