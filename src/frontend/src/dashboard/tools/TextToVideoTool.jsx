@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import { sendClientLog } from '../../logging'
-import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock } from 'lucide-react'
+import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu } from 'lucide-react'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
@@ -17,6 +17,24 @@ const RESOLUTION_PRESETS = [
 const FPS_OPTIONS = [8, 12, 16, 24]
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
+// T2V Models
+const T2V_MODELS = {
+  wan22: {
+    name: 'Wan2.2 14B',
+    description: 'High quality T2V with T2I pipeline',
+    maxFrames: 81,
+    defaultFrames: 41,
+    frameStep: 4,
+  },
+  ltx2: {
+    name: 'LTX-2 19B',
+    description: 'Fast direct text-to-video',
+    maxFrames: 97,
+    defaultFrames: 25,
+    frameStep: 1,
+  },
+}
+
 export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
 
@@ -25,7 +43,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     return saved && saved.trim() ? saved : getDefaultPrompt(false)
   })
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, ugly')
-  const [numFrames, setNumFrames] = useState(81)
+  const [modelType, setModelType] = useState('wan22')
+  const [numFrames, setNumFrames] = useState(41)
   const [aspectRatio, setAspectRatio] = useState('1:1')
   const [resolution, setResolution] = useState('480p')
   const [fps, setFps] = useState(16)
@@ -42,6 +61,45 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
+  const [availableModels, setAvailableModels] = useState(T2V_MODELS)
+
+  // Fetch available T2V modes from backend
+  useEffect(() => {
+    const fetchT2VModes = async () => {
+      try {
+        const res = await fetch(`${BACKEND_BASE}/api/t2v-modes`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.modes) {
+            // Merge backend config with frontend display info
+            const merged = { ...T2V_MODELS }
+            Object.entries(data.modes).forEach(([key, config]) => {
+              if (merged[key]) {
+                merged[key] = { ...merged[key], ...config }
+              } else {
+                merged[key] = config
+              }
+            })
+            setAvailableModels(merged)
+          }
+        }
+      } catch (e) {
+        if (DEBUG) console.warn('Failed to fetch T2V modes:', e)
+      }
+    }
+    fetchT2VModes()
+  }, [])
+
+  // Update frames when model changes
+  useEffect(() => {
+    const modelConfig = availableModels[modelType]
+    if (modelConfig) {
+      // Clamp numFrames to model's max
+      if (numFrames > modelConfig.maxFrames) {
+        setNumFrames(modelConfig.defaultFrames)
+      }
+    }
+  }, [modelType, availableModels])
 
   // Save prompt to localStorage
   const handlePromptChange = (value) => {
@@ -79,12 +137,13 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     const formData = new FormData()
     formData.append('prompt', finalPrompt)
     formData.append('num_frames', String(numFrames))
+    formData.append('model_type', modelType)
     formData.append('aspect_ratio', aspectRatio)
     formData.append('resolution', resolution)
     formData.append('fps', String(fps))
 
     try {
-      if (DEBUG) console.debug('🎬 T2V request:', { prompt, numFrames, resolution, fps })
+      if (DEBUG) console.debug('🎬 T2V request:', { prompt, modelType, numFrames, resolution, fps })
 
       const result = await postForm(`${BACKEND_BASE}/generate-text`, formData)
 
@@ -159,6 +218,30 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       <div className="tool-section">
         <h3>Settings</h3>
 
+        {/* Model Selection */}
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Cpu size={14} />
+            Model
+          </label>
+          <div className="button-group">
+            {Object.entries(availableModels).map(([key, config]) => (
+              <button
+                key={key}
+                className={`btn-option ${modelType === key ? 'active' : ''}`}
+                onClick={() => setModelType(key)}
+                type="button"
+                title={config.description}
+              >
+                {config.name}
+              </button>
+            ))}
+          </div>
+          <div className="model-hint">
+            {availableModels[modelType]?.description}
+          </div>
+        </div>
+
         {/* Resolution */}
         <div className="form-group">
           <label>Resolution</label>
@@ -218,15 +301,15 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           </label>
           <input
             type="range"
-            min="17"
-            max="81"
-            step="4"
+            min={modelType === 'ltx2' ? 9 : 17}
+            max={availableModels[modelType]?.maxFrames || 81}
+            step={availableModels[modelType]?.frameStep || 4}
             value={numFrames}
             onChange={(e) => setNumFrames(parseInt(e.target.value, 10))}
           />
           <div className="range-labels">
-            <span>{(17 / fps).toFixed(1)}s</span>
-            <span>{(81 / fps).toFixed(1)}s</span>
+            <span>{((modelType === 'ltx2' ? 9 : 17) / fps).toFixed(1)}s</span>
+            <span>{((availableModels[modelType]?.maxFrames || 81) / fps).toFixed(1)}s</span>
           </div>
         </div>
       </div>
@@ -359,7 +442,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       </button>
 
       <div className="tool-info">
-        💡 Text-to-Video first generates an image from your prompt, then animates it using Wan2.2
+        💡 {modelType === 'ltx2' 
+          ? 'LTX-2 generates video directly from text (faster)' 
+          : 'Wan2.2 first generates an image, then animates it (higher quality)'}
       </div>
 
       <style>{`
@@ -415,6 +500,12 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         .btn-option.active {
           background: var(--accent-color, #7c3aed);
           border-color: var(--accent-color, #7c3aed);
+        }
+        .model-hint {
+          font-size: 11px;
+          color: var(--text-muted, #888);
+          margin-top: 6px;
+          font-style: italic;
         }
         .range-labels {
           display: flex;

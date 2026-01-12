@@ -3233,6 +3233,19 @@ async def get_i2v_generation_modes():
     }
 
 
+@app.get("/api/t2v-modes")
+async def get_t2v_generation_modes():
+    """
+    Get available T2V (Text-to-Video) generation modes.
+    Different base models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
+    """
+    from comfyui_client import get_available_t2v_modes
+    return {
+        "modes": get_available_t2v_modes(),
+        "default": "wan22",
+    }
+
+
 @app.post("/generate-wan22-comfyui")
 async def generate_wan22_comfyui(
     file: UploadFile = File(...),
@@ -3808,7 +3821,7 @@ async def comfyui_status():
 async def generate_text_video(
     prompt: str = Form(..., description="Text description of the video to generate"),
     num_frames: int = Form(41, description="Number of frames in video"),
-    model_type: str = Form("wan2.2", description="Model type (wan2.2)"),
+    model_type: str = Form("wan22", description="Model type: wan22, ltx2"),
     output_filename: str = Form("", description="Custom output filename"),
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
@@ -3817,7 +3830,7 @@ async def generate_text_video(
 ):
     """
     Generate video from text prompt via ComfyUI T2V workflow.
-    Note: Text-to-Video first generates an image, then animates it.
+    Supports multiple models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
     Requires authentication and credits.
     """
     if not get_comfyui_client:
@@ -3834,15 +3847,28 @@ async def generate_text_video(
     if not prompt or len(prompt.strip()) == 0:
         raise HTTPException(status_code=400, detail="Prompt is required")
 
+    # Validate model_type
+    from comfyui_client import T2V_GENERATION_MODES, build_ltx2_t2v_workflow
+    
+    if model_type not in T2V_GENERATION_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model_type. Available: {list(T2V_GENERATION_MODES.keys())}"
+        )
+    
+    mode_config = T2V_GENERATION_MODES[model_type]
+    logger.info(f"🎬 T2V generation with model: {mode_config['name']}")
+
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
 
     # Calculate duration for credit calculation
     duration_seconds = num_frames / fps if fps > 0 else 3
 
-    # Calculate and check credits
+    # Calculate and check credits (using model_type for pricing)
+    credit_type = f"{model_type}_t2v"
     credits_required = calculate_credits(
-        "wan22_t2v",
+        credit_type,
         width=width,
         height=height,
         duration_seconds=int(duration_seconds),
@@ -3859,23 +3885,38 @@ async def generate_text_video(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     seed = random.randint(0, 2**32 - 1)
 
-    # Adjust num_frames to Wan2.2 format (4k+1)
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    # Build T2V workflow (using T2I + I2V)
-    workflow = comfyui.build_t2v_workflow(
-        prompt=prompt,
-        width=width,
-        height=height,
-        num_frames=num_frames,
-        fps=fps,
-        steps=6,
-        cfg=1.0,
-        seed=seed,
-        output_prefix=f"oelala_t2v_{timestamp}",
-    )
+    # Build workflow based on model type
+    if model_type == "ltx2":
+        # LTX-2 doesn't need frame adjustment
+        workflow = build_ltx2_t2v_workflow(
+            prompt=prompt,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            steps=mode_config["default_steps"],
+            cfg=mode_config["default_cfg"],
+            seed=seed,
+            filename_prefix=f"oelala_ltx2_t2v_{timestamp}",
+        )
+        if not workflow:
+            raise HTTPException(status_code=500, detail="Failed to build LTX-2 workflow")
+    else:
+        # Wan2.2: Adjust num_frames to 4k+1 format
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+        
+        workflow = comfyui.build_t2v_workflow(
+            prompt=prompt,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            fps=fps,
+            steps=mode_config["default_steps"],
+            cfg=mode_config["default_cfg"],
+            seed=seed,
+            output_prefix=f"oelala_t2v_{timestamp}",
+        )
 
     # Queue workflow
     prompt_id = comfyui.queue_prompt(workflow)
@@ -3894,22 +3935,25 @@ async def generate_text_video(
             "fps": fps,
             "width": width,
             "height": height,
+            "model_type": model_type,
         },
     )
 
     # Register job with WebSocket manager for progress tracking
+    job_type = f"{model_type}_t2v"
     if ws_manager and job_queue_manager:
         ws_manager.register_job(prompt_id, user_id=user.id)
         job_queue_manager.register_job(
             prompt_id=prompt_id,
             user_id=user.id,
-            job_type="wan22_t2v",
+            job_type=job_type,
             metadata={
                 "prompt": prompt[:100],
                 "resolution": resolution,
                 "aspect_ratio": aspect_ratio,
                 "num_frames": num_frames,
                 "fps": fps,
+                "model_type": model_type,
             },
         )
 
@@ -3920,8 +3964,9 @@ async def generate_text_video(
             )
 
     # Deduct credits after successful queue
-    await deduct_credits(user, credits_required, prompt_id, "Wan2.2 T2V")
-    logger.info(f"📋 T2V queued: {prompt_id} (💰 -{credits_required} credits)")
+    model_display = mode_config['name']
+    await deduct_credits(user, credits_required, prompt_id, f"{model_display} T2V")
+    logger.info(f"📋 T2V ({model_type}) queued: {prompt_id} (💰 -{credits_required} credits)")
 
     return {
         "status": "queued",
@@ -3936,6 +3981,8 @@ async def generate_text_video(
             "fps": fps,
             "seed": seed,
             "type": "text-to-video",
+            "model_type": model_type,
+            "model_name": mode_config['name'],
         },
     }
 

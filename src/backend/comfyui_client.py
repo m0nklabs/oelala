@@ -46,6 +46,30 @@ I2V_GENERATION_MODES = {
     },
 }
 
+# Available T2V (Text-to-Video) generation modes - different base models
+T2V_GENERATION_MODES = {
+    "wan22": {
+        "name": "Wan2.2 14B",
+        "description": "High quality Wan 2.2 T2V model with DisTorch2 multi-GPU",
+        "workflow_file": None,  # Uses built-in workflow builder
+        "model_type": "wan22",
+        "default_steps": 6,
+        "default_cfg": 1.0,
+        "max_frames": 81,
+        "default_frames": 41,
+    },
+    "ltx2": {
+        "name": "LTX-2 19B",
+        "description": "Lightricks LTX-2 19B distilled model, faster inference",
+        "workflow_file": "ltx2_distorch2_multigpu_api.json",
+        "model_type": "ltx2",
+        "default_steps": 8,
+        "default_cfg": 1.0,
+        "max_frames": 97,
+        "default_frames": 25,
+    },
+}
+
 
 def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
     """Load a workflow JSON file and return as dict."""
@@ -64,6 +88,67 @@ def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
 def get_available_i2v_modes() -> Dict:
     """Return available I2V generation modes."""
     return I2V_GENERATION_MODES
+
+
+def get_available_t2v_modes() -> Dict:
+    """Return available T2V generation modes (base models)."""
+    return T2V_GENERATION_MODES
+
+
+def build_ltx2_t2v_workflow(
+    prompt: str,
+    negative_prompt: str = "blurry, low quality, distorted, watermark",
+    width: int = 768,
+    height: int = 512,
+    num_frames: int = 25,
+    steps: int = 8,
+    cfg: float = 1.0,
+    seed: int = None,
+    filename_prefix: str = "oelala_ltx2_t2v",
+) -> Optional[Dict]:
+    """
+    Build LTX-2 T2V workflow by loading template and injecting parameters.
+    
+    LTX-2 19B distilled - faster inference, good quality for T2V.
+    Uses DisTorch2 multi-GPU distribution.
+    """
+    workflow = load_workflow_from_file("ltx2_distorch2_multigpu_api.json")
+    if not workflow:
+        logger.error("❌ Failed to load LTX-2 T2V workflow template")
+        return None
+    
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    
+    logger.info(f"🎬 Building LTX-2 T2V workflow: {width}x{height}, {num_frames} frames, {steps} steps")
+    
+    # Update prompts (nodes 4 and 5 are CLIPTextEncode)
+    if "4" in workflow:
+        workflow["4"]["inputs"]["text"] = prompt
+    if "5" in workflow:
+        workflow["5"]["inputs"]["text"] = negative_prompt
+    
+    # Update dimensions and frame count (node 7: EmptyLTXVLatentVideo)
+    if "7" in workflow:
+        workflow["7"]["inputs"]["width"] = width
+        workflow["7"]["inputs"]["height"] = height
+        workflow["7"]["inputs"]["length"] = num_frames
+    
+    # Update scheduler steps (node 8: LTXVScheduler)
+    if "8" in workflow:
+        workflow["8"]["inputs"]["steps"] = steps
+    
+    # Update sampler seed and cfg (node 9: SamplerCustom)
+    if "9" in workflow:
+        workflow["9"]["inputs"]["noise_seed"] = seed
+        workflow["9"]["inputs"]["cfg"] = cfg
+    
+    # Update output filename (node 12: VHS_VideoCombine)
+    if "12" in workflow:
+        workflow["12"]["inputs"]["filename_prefix"] = filename_prefix
+    
+    logger.debug(f"✅ LTX-2 T2V workflow built: seed={seed}")
+    return workflow
 
 
 # ─────────────────────────────────────────────────────────────────────────────
