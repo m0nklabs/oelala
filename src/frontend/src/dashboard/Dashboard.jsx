@@ -37,6 +37,7 @@ import ComingSoonTool from './tools/ComingSoonTool'
 import MyMediaTool from './tools/MyMediaTool'
 import Gallery from '../pages/Gallery'
 import AdminPanelTool from './tools/AdminPanelTool'
+import APIKeysTool from './tools/APIKeysTool'
 import LogViewer from '../components/LogViewer'
 import { sendClientLog } from '../logging'
 
@@ -179,6 +180,8 @@ export default function Dashboard() {
         return 'My Media - Prompts'
       case TOOL_IDS.GALLERY:
         return 'Community Gallery'
+      case TOOL_IDS.API_KEYS:
+        return 'API Keys'
       case TOOL_IDS.ADMIN_PANEL:
         return 'Admin Panel'
       default:
@@ -268,6 +271,9 @@ export default function Dashboard() {
         return <ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
       case TOOL_IDS.FACE_SWAP:
         return <FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+
+      case TOOL_IDS.API_KEYS:
+        return <APIKeysTool />
 
       case TOOL_IDS.ADMIN_PANEL:
         return <AdminPanelTool />

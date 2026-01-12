@@ -32,6 +32,8 @@ export const TOOL_IDS = {
   MY_MEDIA_IMAGES: 'my-media-images',
   MY_MEDIA_AUDIO: 'my-media-audio',
   MY_MEDIA_PROMPTS: 'my-media-prompts',
+  // Account
+  API_KEYS: 'api-keys',
   // Admin
   ADMIN_PANEL: 'admin-panel',
 }
@@ -103,6 +105,13 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.MY_MEDIA_IMAGES, label: 'Images', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_AUDIO, label: 'Audio', status: 'ready' },
       { id: TOOL_IDS.MY_MEDIA_PROMPTS, label: 'Prompts', status: 'ready' },
+    ],
+  },
+  {
+    id: 'account',
+    title: 'Account',
+    items: [
+      { id: TOOL_IDS.API_KEYS, label: 'API Keys', status: 'new', emoji: '🔑' },
     ],
   },
   {
