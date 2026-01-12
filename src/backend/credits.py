@@ -430,6 +430,7 @@ class CreditManager:
 
         Uses Supabase RPC for atomic operation.
         Returns True if reserved, raises InsufficientCreditsError if not.
+        Raises HTTPException 403 if user is suspended.
         """
         # Bypass credits if disabled
         if not CREDITS_ENABLED:
@@ -440,6 +441,27 @@ class CreditManager:
             return True
 
         client = await self.get_client()
+
+        # Check if user is suspended FIRST before checking credits
+        from fastapi import HTTPException
+
+        suspend_response = await client.get(
+            "/user_credits",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "is_suspended,suspension_reason",
+            },
+        )
+
+        if suspend_response.status_code == 200:
+            data = suspend_response.json()
+            if data and data[0].get("is_suspended"):
+                reason = data[0].get("suspension_reason") or "Account suspended"
+                debug_log(f"User {user_id} is suspended: {reason}")
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Account suspended: {reason}. Contact support if you believe this is an error.",
+                )
 
         # Atomic decrement with balance check
         # UPDATE user_credits SET balance = balance - $amount

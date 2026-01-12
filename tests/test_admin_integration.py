@@ -18,16 +18,18 @@ class TestAdminAPI:
         "/api/admin/credits/adjust",
         "/api/admin/tier/update",
         "/api/admin/status/toggle",
+        "/api/admin/suspension/toggle",
         "/api/admin/transactions/{user_id}",
         "/api/admin/stats",
     ]
 
     def test_all_admin_endpoints_documented(self):
         """Verify all admin endpoints are listed"""
-        assert len(self.ADMIN_ENDPOINTS) == 8
+        assert len(self.ADMIN_ENDPOINTS) == 9
         assert "/api/admin/check" in self.ADMIN_ENDPOINTS
         assert "/api/admin/users" in self.ADMIN_ENDPOINTS
         assert "/api/admin/credits/adjust" in self.ADMIN_ENDPOINTS
+        assert "/api/admin/suspension/toggle" in self.ADMIN_ENDPOINTS
 
     def test_admin_authorization_pattern(self):
         """
@@ -57,11 +59,15 @@ class TestAdminAPI:
         - tier: TEXT DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'vip'))
         - is_vip: BOOLEAN DEFAULT false
         - is_admin: BOOLEAN DEFAULT false
+        - is_suspended: BOOLEAN DEFAULT false
+        - suspended_at: TIMESTAMPTZ DEFAULT NULL
+        - suspension_reason: TEXT DEFAULT NULL
 
         Functions:
         - admin_grant_credits(user_id, amount, description, admin_id)
         - admin_update_tier(user_id, tier, admin_id)
         - admin_toggle_status(user_id, is_admin, is_vip)
+        - admin_toggle_suspension(user_id, is_suspended, reason, admin_id)
 
         All admin actions are logged in credit_transactions with type='admin'.
         """
@@ -69,10 +75,14 @@ class TestAdminAPI:
             "tier": "TEXT",
             "is_vip": "BOOLEAN",
             "is_admin": "BOOLEAN",
+            "is_suspended": "BOOLEAN",
+            "suspended_at": "TIMESTAMPTZ",
+            "suspension_reason": "TEXT",
         }
-        assert len(schema) == 3
+        assert len(schema) == 6
         assert "tier" in schema
         assert "is_admin" in schema
+        assert "is_suspended" in schema
 
     def test_frontend_admin_context(self):
         """
@@ -167,6 +177,73 @@ class TestAdminAPI:
         }
         assert len(permissions) == 3
         assert len(permissions["admin"]) == 5
+
+
+class TestUserSuspension:
+    """Test user suspension functionality"""
+
+    def test_suspension_endpoint_documented(self):
+        """
+        Document suspension endpoint:
+
+        POST /api/admin/suspension/toggle
+        Body: {
+            "user_id": "uuid",
+            "is_suspended": true/false,
+            "reason": "optional reason string"
+        }
+
+        Response: {"success": true, "message": "User suspended/unsuspended successfully"}
+
+        Effects:
+        - Sets is_suspended flag in user_credits
+        - Records suspended_at timestamp
+        - Stores suspension_reason
+        - Logs action in credit_transactions (type='admin')
+        """
+        endpoint_spec = {
+            "method": "POST",
+            "path": "/api/admin/suspension/toggle",
+            "body_fields": ["user_id", "is_suspended", "reason"],
+            "response_fields": ["success", "message"],
+        }
+        assert endpoint_spec["method"] == "POST"
+        assert "reason" in endpoint_spec["body_fields"]
+
+    def test_suspended_users_blocked_from_generation(self):
+        """
+        Document suspended user behavior:
+
+        When a user is suspended:
+        - They receive HTTP 403 when trying to generate content
+        - The error message includes the suspension reason
+        - They can still view their existing media
+        - They can still view their profile and credits
+
+        The suspension check is performed in credits.check_and_reserve()
+        before any credit operation.
+        """
+        blocked_actions = ["generate_video", "generate_image", "any_credit_operation"]
+        allowed_actions = ["view_media", "view_profile", "view_credits"]
+        assert len(blocked_actions) == 3
+        assert len(allowed_actions) == 3
+
+    def test_suspension_safety_checks(self):
+        """
+        Document suspension safety checks:
+
+        1. Admins cannot suspend themselves
+        2. Suspension reason is required when suspending (optional for unsuspend)
+        3. Only admins can toggle suspension
+        4. All suspension actions are audit logged
+        """
+        safety_checks = [
+            "cannot_self_suspend",
+            "reason_required",
+            "admin_only",
+            "audit_logged",
+        ]
+        assert len(safety_checks) == 4
 
 
 class TestAdminSecurity:

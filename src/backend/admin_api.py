@@ -52,6 +52,9 @@ class UserInfo(BaseModel):
     tier: str
     is_vip: bool
     is_admin: bool
+    is_suspended: bool = False
+    suspended_at: Optional[datetime] = None
+    suspension_reason: Optional[str] = None
     lifetime_purchased: int
     lifetime_used: int
 
@@ -96,6 +99,16 @@ class StatusToggle(BaseModel):
     user_id: str
     is_admin: Optional[bool] = None
     is_vip: Optional[bool] = None
+
+
+class SuspensionToggle(BaseModel):
+    """Request to suspend/unsuspend a user."""
+
+    user_id: str
+    is_suspended: bool
+    reason: Optional[str] = Field(
+        None, max_length=500, description="Reason for suspension (optional for unsuspend)"
+    )
 
 
 class TransactionInfo(BaseModel):
@@ -269,6 +282,9 @@ async def list_users(
                 tier=u["tier"],
                 is_vip=u["is_vip"],
                 is_admin=u["is_admin"],
+                is_suspended=u.get("is_suspended", False),
+                suspended_at=u.get("suspended_at"),
+                suspension_reason=u.get("suspension_reason"),
                 lifetime_purchased=u["lifetime_purchased"],
                 lifetime_used=u["lifetime_used"],
             )
@@ -330,6 +346,9 @@ async def get_user(user_id: str, admin: User = Depends(get_admin_user)):
             tier=data["tier"],
             is_vip=data["is_vip"],
             is_admin=data["is_admin"],
+            is_suspended=data.get("is_suspended", False),
+            suspended_at=data.get("suspended_at"),
+            suspension_reason=data.get("suspension_reason"),
             lifetime_purchased=data["lifetime_purchased"],
             lifetime_used=data["lifetime_used"],
         )
@@ -473,6 +492,55 @@ async def toggle_status(status: StatusToggle, admin: User = Depends(get_admin_us
             )
 
         return {"success": True, "message": "Status updated successfully"}
+
+
+@router.post("/suspension/toggle")
+async def toggle_suspension(
+    suspension: SuspensionToggle, admin: User = Depends(get_admin_user)
+):
+    """
+    Suspend or unsuspend a user.
+    Suspended users cannot generate content but can still view their existing media.
+    Admin only.
+    """
+    debug_log(
+        f"Toggling suspension for {suspension.user_id}: suspended={suspension.is_suspended}, reason={suspension.reason}"
+    )
+
+    async with httpx.AsyncClient() as client:
+        headers = {
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        # Call admin_toggle_suspension function
+        response = await client.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/admin_toggle_suspension",
+            headers=headers,
+            json={
+                "p_user_id": suspension.user_id,
+                "p_is_suspended": suspension.is_suspended,
+                "p_reason": suspension.reason,
+            },
+        )
+
+        if response.status_code != 200:
+            logger.error(f"Failed to toggle suspension: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to toggle suspension")
+
+        result = response.json()
+        if isinstance(result, list) and result:
+            result = result[0]
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("error", "Failed to toggle suspension"),
+            )
+
+        action = "suspended" if suspension.is_suspended else "unsuspended"
+        return {"success": True, "message": f"User {action} successfully"}
 
 
 @router.get("/transactions/{user_id}", response_model=List[TransactionInfo])
