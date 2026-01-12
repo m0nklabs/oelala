@@ -210,7 +210,10 @@ BEGIN
         false
     )
     ON CONFLICT (user_id, storage_path) DO UPDATE SET
+        workflow_id = EXCLUDED.workflow_id,
         metadata = EXCLUDED.metadata,
+        is_nsfw = EXCLUDED.is_nsfw,
+        media_type = EXCLUDED.media_type,
         updated_at = NOW()
     RETURNING id INTO new_media_id;
 

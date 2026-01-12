@@ -7,6 +7,8 @@ Handles user profile CRUD operations and lookups
 import os
 import logging
 import re
+import random
+import string
 import httpx
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -169,9 +171,6 @@ async def get_my_profile(user: User = Depends(get_current_user)):
         )
         if check_response.status_code == 200 and check_response.json():
             # Username taken, append random suffix
-            import random
-            import string
-
             suffix = "".join(random.choices(string.digits, k=4))
             default_username = f"{default_username}_{suffix}"
 
