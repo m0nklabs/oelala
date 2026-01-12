@@ -101,13 +101,13 @@ DECLARE
 BEGIN
     -- Generate base username from email (before @)
     base_username := split_part(NEW.email, '@', 1);
-    
+
     -- Remove non-alphanumeric characters (except underscore and hyphen)
     base_username := regexp_replace(base_username, '[^a-zA-Z0-9_-]', '', 'g');
-    
+
     -- Remove leading/trailing underscores and hyphens
     base_username := trim(both '_-' from base_username);
-    
+
     -- If empty after sanitization, use 'user'
     IF base_username = '' OR base_username IS NULL THEN
         base_username := 'user';
