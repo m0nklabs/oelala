@@ -164,6 +164,21 @@ async def get_my_profile(user: User = Depends(get_current_user)):
         default_username = user.email.split("@")[0] if user.email else "user"
         default_username = re.sub(r"[^a-zA-Z0-9_-]", "", default_username).lower()
 
+        # Ensure username meets minimum length requirements (>= 3 chars)
+        if not default_username or len(default_username) < 3:
+            # Fallback if email prefix was fully stripped by sanitization
+            if not default_username:
+                default_username = "user"
+            # Pad to minimum length if needed
+            if len(default_username) < 3:
+                padding_length = 3 - len(default_username)
+                padding_chars = string.ascii_lowercase + string.digits
+                padding = "".join(random.choices(padding_chars, k=padding_length))
+                default_username = f"{default_username}{padding}"
+                debug_log(
+                    f"Padded short default username to meet length constraint: {default_username}"
+                )
+
         # Ensure uniqueness
         check_response = await client.get(
             "/profiles",

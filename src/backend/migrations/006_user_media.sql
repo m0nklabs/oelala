@@ -244,7 +244,20 @@ DECLARE
     v_storage_path TEXT;
     v_is_nsfw BOOLEAN;
     v_published_media_id UUID;
+    v_authenticated_user_id UUID;
 BEGIN
+    -- SECURITY: Verify that the caller is the user they claim to be
+    v_authenticated_user_id := auth.uid();
+    IF v_authenticated_user_id IS NULL THEN
+        RETURN QUERY SELECT false, NULL::UUID, 'Authentication required'::TEXT;
+        RETURN;
+    END IF;
+
+    IF v_authenticated_user_id != p_user_id THEN
+        RETURN QUERY SELECT false, NULL::UUID, 'Unauthorized: Cannot publish media for another user'::TEXT;
+        RETURN;
+    END IF;
+
     -- Verify user owns the media
     SELECT media_type, storage_path, is_nsfw
     INTO v_media_type, v_storage_path, v_is_nsfw
@@ -353,7 +366,7 @@ BEGIN
     LIMIT p_limit
     OFFSET p_offset;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY INVOKER;
 
 -- ============================================================================
 -- Grant necessary permissions

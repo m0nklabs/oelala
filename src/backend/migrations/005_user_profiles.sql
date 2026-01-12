@@ -96,14 +96,22 @@ CREATE TRIGGER update_profiles_updated_at
 CREATE OR REPLACE FUNCTION public.create_profile_on_signup()
 RETURNS TRIGGER AS $$
 DECLARE
+    base_username TEXT;
     default_username TEXT;
 BEGIN
-    -- Generate default username from email (before @)
-    default_username := split_part(NEW.email, '@', 1);
+    -- Generate base username from email (before @)
+    base_username := split_part(NEW.email, '@', 1);
+
+    -- Ensure minimum length of 3 characters for username
+    IF char_length(base_username) < 3 THEN
+        base_username := base_username || repeat('x', 3 - char_length(base_username));
+    END IF;
+
+    default_username := base_username;
 
     -- Ensure uniqueness by appending random suffix if needed
     WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = default_username) LOOP
-        default_username := split_part(NEW.email, '@', 1) || '_' || substr(md5(random()::text), 1, 4);
+        default_username := base_username || '_' || substr(md5(random()::text), 1, 4);
     END LOOP;
 
     -- Create profile with default values
