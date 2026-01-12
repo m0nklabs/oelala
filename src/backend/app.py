@@ -1624,6 +1624,16 @@ async def get_comfyui_output(filename: str):
     return FileResponse(output_path)
 
 
+@app.get("/media/generated/{filename}")
+async def get_generated_media(filename: str):
+    """Serve files from media/generated/ directory (public for now, will be auth-gated later)"""
+    # TODO: Add proper auth once user-scoped storage is implemented
+    media_path = Path("/home/flip/oelala/media/generated") / filename
+    if not media_path.exists():
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return FileResponse(media_path)
+
+
 @app.get("/comfyui-metadata/{filename}")
 async def get_comfyui_metadata(filename: str):
     """

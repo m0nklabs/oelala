@@ -207,7 +207,7 @@ WAN22_I2V_Q6_API_WORKFLOW = {
     "4": {
         "class_type": "CLIPLoaderDisTorch2MultiGPU",
         "inputs": {
-            "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+            "clip_name": "umt5-xxl-enc-bf16.safetensors",
             "type": "wan",
             "device": "cuda:0",
             "virtual_vram_gb": 16,
@@ -3047,7 +3047,7 @@ class ComfyUIClient:
         # 4: CLIP Loader
         workflow[str(node_id)] = {
             "inputs": {
-                "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+                "clip_name": "umt5-xxl-enc-bf16.safetensors",
                 "type": "wan",
                 "device": "cuda:0",
                 "virtual_vram_gb": 4,
@@ -3637,7 +3637,7 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
     },
     "4": {
         "inputs": {
-            "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+            "clip_name": "umt5-xxl-enc-bf16.safetensors",
             "type": "wan",
             "device": "cuda:0",
             "virtual_vram_gb": 4,

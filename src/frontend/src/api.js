@@ -9,7 +9,7 @@ import { supabase } from './lib/supabase'
 /**
  * Get the current session's access token
  */
-async function getAccessToken() {
+export async function getAccessToken() {
   try {
     if (!supabase) {
       console.log('🔐 API: supabase client not available')

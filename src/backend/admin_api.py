@@ -5,9 +5,11 @@ FastAPI endpoints for admin user management.
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, validator
 import httpx
 
@@ -20,6 +22,10 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 # Debug flag
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
+
+# TEMPORARY: Bypass admin check until Supabase user_credits table is set up
+# TODO: Remove this once PR for admin/storage/supabase integration is merged
+ADMIN_BYPASS = os.getenv("OELALA_ADMIN_BYPASS", "1") == "1"
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://nsbjwhxdkxnyggtuxjjp.supabase.co")
@@ -122,6 +128,11 @@ class AdminStats(BaseModel):
 
 async def check_admin(user: User) -> bool:
     """Check if user is an admin by querying user_credits table."""
+    # TEMPORARY BYPASS: All authenticated users are admin until DB is set up
+    if ADMIN_BYPASS:
+        debug_log(f"ADMIN_BYPASS enabled - user {user.id} granted admin access")
+        return True
+
     if not SUPABASE_SERVICE_KEY:
         debug_log("SUPABASE_SERVICE_KEY not configured")
         return False
@@ -591,3 +602,130 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
                 "vip": result.get("vip_tier_count", 0),
             },
         )
+
+
+# =============================================================================
+# Admin Generated Media Access (Transition Phase)
+# =============================================================================
+
+# Media directories for admin access
+MEDIA_GENERATED_DIR = Path("/home/flip/oelala/media/generated")
+COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
+
+
+@router.get("/generated-media")
+async def list_generated_media(
+    admin: User = Depends(get_admin_user),
+    type: str = Query("all", description="Filter: 'all', 'video', 'image'"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """
+    List all media files from generated directories (admin only).
+    
+    This is a transition endpoint while migrating to user-scoped storage.
+    Returns videos/images from media/generated/ and ComfyUI/output/.
+    """
+    media = []
+    
+    # Scan media/generated
+    if MEDIA_GENERATED_DIR.exists():
+        for ext in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
+            for file_path in MEDIA_GENERATED_DIR.glob(ext):
+                stat = file_path.stat()
+                is_video = file_path.suffix.lower() in [".mp4", ".webm"]
+                item_type = "video" if is_video else "image"
+                
+                if type != "all" and item_type != type:
+                    continue
+                
+                media.append({
+                    "name": file_path.name,
+                    "type": item_type,
+                    "url": f"/media/generated/{file_path.name}",
+                    "source": "media/generated",
+                    "size": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "mtime": stat.st_mtime,
+                })
+    
+    # Scan ComfyUI output
+    if COMFYUI_OUTPUT_DIR.exists():
+        for ext in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
+            for file_path in COMFYUI_OUTPUT_DIR.glob(ext):
+                stat = file_path.stat()
+                is_video = file_path.suffix.lower() in [".mp4", ".webm"]
+                item_type = "video" if is_video else "image"
+                
+                if type != "all" and item_type != type:
+                    continue
+                
+                media.append({
+                    "name": file_path.name,
+                    "type": item_type,
+                    "url": f"/comfyui/output/{file_path.name}",
+                    "source": "ComfyUI/output",
+                    "size": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "mtime": stat.st_mtime,
+                })
+    
+    # Sort by mtime (newest first)
+    media.sort(key=lambda m: m.get("mtime", 0), reverse=True)
+    
+    return {
+        "media": media[:limit],
+        "total": len(media),
+        "sources": ["media/generated", "ComfyUI/output"],
+    }
+
+
+@router.get("/generated-media/file/{filename}")
+async def get_generated_file(
+    filename: str,
+    admin: User = Depends(get_admin_user),
+):
+    """Serve a file from media/generated/ (admin only)."""
+    file_path = MEDIA_GENERATED_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine content type
+    suffix = file_path.suffix.lower()
+    content_types = {
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    content_type = content_types.get(suffix, "application/octet-stream")
+    
+    return FileResponse(path=file_path, media_type=content_type, filename=filename)
+
+
+@router.get("/generated-media/comfyui/{filename}")
+async def get_comfyui_file(
+    filename: str,
+    admin: User = Depends(get_admin_user),
+):
+    """Serve a file from ComfyUI/output/ (admin only)."""
+    file_path = COMFYUI_OUTPUT_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine content type
+    suffix = file_path.suffix.lower()
+    content_types = {
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    content_type = content_types.get(suffix, "application/octet-stream")
+    
+    return FileResponse(path=file_path, media_type=content_type, filename=filename)

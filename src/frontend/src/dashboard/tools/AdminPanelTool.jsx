@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
 import {
@@ -287,7 +287,7 @@ export default function AdminPanel() {
           👑 Admin Panel
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          Manage users, credits, and system settings
+          Manage users and credits
         </p>
       </div>
 
@@ -299,7 +299,7 @@ export default function AdminPanel() {
           <StatsCard icon={<TrendingUp size={20} />} label="Credits Used" value={stats.total_credits_used} color="#10b981" />
           <StatsCard icon={<Crown size={20} />} label="VIP Users" value={stats.total_vips} color="#f59e0b" />
         </div>
-      )}
+          )}
 
       {/* Filters */}
       <div style={{

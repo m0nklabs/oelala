@@ -4,6 +4,7 @@ import { BACKEND_BASE } from '../../config'
 import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
+import { getAccessToken } from '../../api'
 import { getMediaType } from '../../utils/mediaUtils'
 
 // Format video duration as MM:SS
@@ -104,7 +105,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const containerRef = useRef(null)
 
   // Get auth context for user-scoped fetching (must be declared before use in other hooks)
-  const { user } = useAuth()
+  const { user, isAdmin: isAdminUser } = useAuth()
 
   // Fetch user's published items to show published state correctly
   useEffect(() => {
@@ -237,15 +238,12 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       const apiFilter = filter === 'prompts' ? 'all' : filter
 
       // Fetch from both ComfyUI output (legacy) and user storage (new)
-      // If user is logged in, ONLY show their personal storage (not shared ComfyUI output)
-      // EXCEPT for admin/dev accounts who see both
-      const ADMIN_EMAILS = ['mark.op.mobiel@gmail.com']
-      const isAdmin = user && ADMIN_EMAILS.includes(user.email)
-
-      console.log('🎬 MyMedia: Fetching media, user:', user?.id, user?.email, 'isAdmin:', isAdmin)
+      // Use isAdmin from auth context (bypasses hardcoded email list)
+      console.log('🎬 MyMedia: Fetching media, user:', user?.id, user?.email, 'isAdmin:', isAdminUser)
 
       let comfyRes = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
       let userMedia = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
+      let generatedMedia = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
 
       if (user) {
         // Logged in: fetch from user storage (private, user-scoped)
@@ -259,8 +257,39 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
             return { media: [], stats: { videos: 0, images: 0, audio: 0 } }
           })
 
-        // Admin accounts also see ComfyUI shared output
-        if (isAdmin) {
+        // Admin accounts see ALL generated media (media/generated/ folder)
+        if (isAdminUser) {
+          try {
+            const token = await getAccessToken()
+            const genRes = await fetch(`${BACKEND_BASE}/api/admin/generated-media?type=${apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all'}&limit=500`, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            })
+            if (genRes.ok) {
+              const genData = await genRes.json()
+              // Transform admin API response to MyMedia format
+              // Count videos/images from the media array
+              const videos = (genData.media || []).filter(m => m.type === 'video').length
+              const images = (genData.media || []).filter(m => m.type === 'image').length
+              generatedMedia = {
+                media: (genData.media || []).map(item => ({
+                  filename: item.name,
+                  url: item.url,
+                  thumbnail_url: item.url,
+                  type: item.type,
+                  size: item.size,
+                  modified: item.modified,
+                  metadata: {},
+                  source: 'generated'
+                })),
+                stats: { videos, images, audio: 0 }
+              }
+              console.log('🎬 MyMedia: Admin generated media:', generatedMedia.media.length, 'items')
+            }
+          } catch (err) {
+            console.error('🎬 MyMedia: Admin generated media error:', err)
+          }
+
+          // Also show ComfyUI shared output for admins
           comfyRes = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
             .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
             .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
@@ -283,8 +312,11 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         source: 'comfyui',
       }))
 
-      // Combine both sources
-      let media = [...userItems, ...comfyItems]
+      // Generated items already have source: 'generated' set above
+      const generatedItems = generatedMedia.media || []
+
+      // Combine all sources (user storage + generated + comfyui)
+      let media = [...userItems, ...generatedItems, ...comfyItems]
 
       // For prompts view, filter to only items with prompts
       if (filter === 'prompts') {
@@ -294,11 +326,11 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         )
       }
 
-      // Combine stats
+      // Combine stats from all sources
       const stats = {
-        videos: (comfyRes.stats?.videos || 0) + (userMedia.stats?.videos || 0),
-        images: (comfyRes.stats?.images || 0) + (userMedia.stats?.images || 0),
-        audio: (comfyRes.stats?.audio || 0) + (userMedia.stats?.audio || 0),
+        videos: (comfyRes.stats?.videos || 0) + (userMedia.stats?.videos || 0) + (generatedMedia.stats?.videos || 0),
+        images: (comfyRes.stats?.images || 0) + (userMedia.stats?.images || 0) + (generatedMedia.stats?.images || 0),
+        audio: (comfyRes.stats?.audio || 0) + (userMedia.stats?.audio || 0) + (generatedMedia.stats?.audio || 0),
       }
 
       setMediaList(media)
@@ -310,7 +342,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, hideStartImages, user?.id]) // Use user.id for stable reference
+  }, [filter, hideStartImages, user?.id, isAdminUser]) // Use user.id for stable reference
 
   // Fetch on mount and when dependencies change (but not on every user object change)
   useEffect(() => {
@@ -318,7 +350,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     if (mounted) fetchMedia()
     return () => { mounted = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, hideStartImages, user?.id])
+  }, [filter, hideStartImages, user?.id, isAdminUser])
 
   // Keyboard navigation
   useEffect(() => {

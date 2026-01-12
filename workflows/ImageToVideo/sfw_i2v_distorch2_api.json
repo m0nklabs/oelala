@@ -49,7 +49,7 @@
   },
   "4": {
     "inputs": {
-      "clip_name": "umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors",
+      "clip_name": "umt5-xxl-enc-bf16.safetensors",
       "type": "wan",
       "device": "cuda:0",
       "virtual_vram_gb": 4,

@@ -72,6 +72,64 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **oelala-storage**: Separate Go-based storage service. See `docs/MEDIA_STORAGE.md` for architecture.
 - When implementing storage features, defer to oelala-storage rather than building in Python.
 
+## Media Storage Locations (CRITICAL)
+
+**DO NOT create new output directories.** Use ONLY these canonical locations:
+
+| Purpose | Path | Served via |
+|---------|------|------------|
+| Generated videos/images (primary) | `/home/flip/oelala/media/generated/` | `/media/generated/{filename}` |
+| ComfyUI direct output | `/home/flip/oelala/ComfyUI/output/` | `/comfyui/output/{filename}` |
+| User uploads (temporary) | `/home/flip/oelala/uploads/` | N/A (processed only) |
+| Example/demo media | `/home/flip/oelala/examples/` | Static files |
+
+### Rules
+
+1. **NEVER create new output directories** like `/mnt/ssd/comfyui_output/`, `/tmp/output/`, or any other location.
+2. **ComfyUI workflows** must use `filename_prefix` that writes to `ComfyUI/output/` (default) or configure VHS_VideoCombine to use `media/generated/`.
+3. **Backend API** saves generated media to `media/generated/` with consistent naming: `{type}_{timestamp}_{index}.{ext}`.
+4. **Legacy files** on `/mnt/ssd/comfyui_output/` should be migrated to `media/generated/`, not used as a new standard location.
+5. When in doubt, use `media/generated/` - it's the canonical location for all AI-generated content.
+
+### Naming Conventions
+
+- Text-to-Video: `oelala_t2v_{YYYYMMDD}_{HHMMSS}_{index}.mp4`
+- Image-to-Video: `oelala_i2v_{YYYYMMDD}_{HHMMSS}_{index}.mp4`
+- Text-to-Image: `oelala_t2i_{index}_.png`
+- LTX-2 Audio: `ltx2_audio_{index}.mp4` (with `-audio` suffix for audio version)
+- Benchmarks: `bench_{resolution}_{duration}_{vram}_{index}.mp4`
+
+## External Storage (SSD) - Models Only
+
+The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk space constraints. Do NOT use it for generated output.
+
+| Purpose | Path |
+|---------|------|
+| LoRA models | `/mnt/ssd/loras/` |
+| Large checkpoints (overflow) | `/mnt/ssd/checkpoints/` |
+| HuggingFace cache | `/mnt/ssd/huggingface/` |
+
+**Primary model locations remain in workspace:**
+- ComfyUI models: `/home/flip/oelala/ComfyUI/models/`
+- Checkpoints: `ComfyUI/models/checkpoints/`
+- VAEs: `ComfyUI/models/vae/`
+- Text encoders: `ComfyUI/models/text_encoders/`
+- GGUF models: `ComfyUI/models/diffusion_models/`
+
+## Key File Locations Reference
+
+| What | Where |
+|------|-------|
+| Workflows (API format) | `/home/flip/oelala/workflows/` |
+| Backend API | `/home/flip/oelala/src/backend/` |
+| Frontend | `/home/flip/oelala/src/frontend/` |
+| ComfyUI custom nodes | `/home/flip/oelala/ComfyUI/custom_nodes/` |
+| Test files | `/home/flip/oelala/tests/` |
+| Documentation | `/home/flip/oelala/docs/` |
+| GPU venv | `/home/flip/venvs/gpu` (symlink) |
+| ComfyUI logs | `journalctl -u comfyui` |
+| Backend logs | `journalctl -u oelala-api` |
+
 ## Python / GPU Virtual Environments
 
 - **Canonical GPU venv**: Use `/home/flip/venvs/gpu` (a symlink) as the single canonical environment for GPU/ML work on this server.

@@ -1,0 +1,198 @@
+{
+  "1": {
+    "class_type": "UnetLoaderGGUFAdvanced",
+    "inputs": {
+      "unet_name": "ltx-2-19b-dev-Q4_K_M.gguf",
+      "dequant_dtype": "bfloat16",
+      "patch_dtype": "bfloat16",
+      "patch_on_device": false
+    }
+  },
+  "2": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "LTX2_video_vae_bf16.safetensors"
+    }
+  },
+  "3": {
+    "class_type": "LTXVAudioVAELoader",
+    "inputs": {
+      "ckpt_name": "ltx2_audio_vae.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "LTXVCPUGemmaEncode",
+    "inputs": {
+      "gemma_path": "gemma-3-12b-it-qat-q4_0-unquantized/model-00001-of-00005.safetensors",
+      "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
+      "text": "A cat sitting on a windowsill, looking out at a rainy day. The sound of rain on the window.",
+      "max_length": 256,
+      "output_device": "cuda:0"
+    }
+  },
+  "5": {
+    "class_type": "LTXVCPUGemmaNegativeEncode",
+    "inputs": {
+      "gemma_path": "gemma-3-12b-it-qat-q4_0-unquantized/model-00001-of-00005.safetensors",
+      "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
+      "text": "worst quality, low quality, blurry, distorted, no audio",
+      "max_length": 256,
+      "output_device": "cuda:0"
+    }
+  },
+  "10": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 768,
+      "height": 512,
+      "length": 97,
+      "batch_size": 1
+    }
+  },
+  "11": {
+    "class_type": "LTXVEmptyLatentAudio",
+    "inputs": {
+      "frames_number": 97,
+      "frame_rate": 25,
+      "batch_size": 1,
+      "audio_vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": {
+      "video_latent": [
+        "10",
+        0
+      ],
+      "audio_latent": [
+        "11",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "cfg": 3.0
+    }
+  },
+  "21": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "22": {
+    "class_type": "LTXVScheduler",
+    "inputs": {
+      "steps": 30,
+      "max_shift": 2.05,
+      "base_shift": 0.95,
+      "stg_end_percent": 0.0,
+      "stretch": true,
+      "terminal": 0.1,
+      "stretch_strength": 0.25
+    }
+  },
+  "23": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 1768044706
+    }
+  },
+  "30": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "23",
+        0
+      ],
+      "guider": [
+        "20",
+        0
+      ],
+      "sampler": [
+        "21",
+        0
+      ],
+      "sigmas": [
+        "22",
+        0
+      ],
+      "latent_image": [
+        "12",
+        0
+      ]
+    }
+  },
+  "40": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "30",
+        1
+      ]
+    }
+  },
+  "50": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "40",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    }
+  },
+  "51": {
+    "class_type": "LTXVAudioVAEDecode",
+    "inputs": {
+      "samples": [
+        "40",
+        1
+      ],
+      "audio_vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "60": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": [
+        "50",
+        0
+      ],
+      "frame_rate": 25.0,
+      "loop_count": 0,
+      "pingpong": false,
+      "filename_prefix": "ltx2_audio",
+      "format": "video/h264-mp4",
+      "save_output": true,
+      "audio": [
+        "51",
+        0
+      ]
+    }
+  }
+}
