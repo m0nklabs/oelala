@@ -1,24 +1,32 @@
-# Admin Panel Deployment Checklist
+# Oelala Deployment Checklist
 
-Use this checklist when deploying the admin panel to production.
+Use this checklist when deploying the Oelala platform to production.
 
 ## Pre-Deployment
 
 - [ ] Review all code changes in PR
 - [ ] Verify frontend builds successfully
-- [ ] Read ADMIN_MIGRATION_GUIDE.md
+- [ ] Read docs/MIGRATION_GUIDE.md (for database setup)
 - [ ] Backup Supabase database
 - [ ] Test in staging environment (if available)
 
 ## Database Migration
 
+**For complete database setup, see `docs/MIGRATION_GUIDE.md`**
+
+### Quick Migration Checklist
+
 - [ ] Open Supabase SQL Editor
-- [ ] Copy contents of `src/backend/migrations/003_admin_system.sql`
-- [ ] Review migration SQL before running
-- [ ] Run migration in SQL Editor
-- [ ] Verify columns added: `tier`, `is_vip`, `is_admin`
-- [ ] Verify functions created: `admin_grant_credits`, `admin_update_tier`, `admin_toggle_status`
-- [ ] Verify RLS policies created (3 policies)
+- [ ] Run migrations in order (001-006):
+  - [ ] 001_credits_system.sql (user_credits, credit_transactions, credit_packages)
+  - [ ] 002_published_media.sql (published_media, published_media_likes)
+  - [ ] 003_admin_system.sql (admin columns and functions)
+  - [ ] 004_api_keys.sql (api_keys)
+  - [ ] 005_user_profiles.sql (profiles)
+  - [ ] 006_user_media.sql (user_media, gallery)
+- [ ] Verify all tables created (run verification queries from MIGRATION_GUIDE.md)
+- [ ] Verify RLS policies enabled
+- [ ] Verify triggers created
 
 ## Grant Initial Admin Access
 
