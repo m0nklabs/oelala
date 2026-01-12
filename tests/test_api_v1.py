@@ -139,6 +139,26 @@ def test_health_check(client):
     assert "timestamp" in data
 
 
+def test_health_check_logging(client):
+    """Test API v1 health check logs timestamp and client IP when DEBUG is enabled."""
+    with patch("api_v1.DEBUG", True), patch("api_v1.logger.info") as mock_logger_info:
+        response = client.get("/api/v1/health")
+        assert response.status_code == 200
+
+        # Verify logger.info was called via debug_log when DEBUG is enabled
+        assert mock_logger_info.called, "logger.info should have been called when DEBUG=True"
+
+        # Get the log message that was passed to logger.info
+        call_args = mock_logger_info.call_args
+        log_message = call_args[0][0] if call_args else ""
+
+        # Verify log contains required info
+        assert "🌐 API-v1:" in log_message
+        assert "Health check:" in log_message
+        assert "timestamp=" in log_message
+        assert "client_ip=" in log_message
+
+
 def test_generate_without_api_key(client):
     """Test generation endpoint requires API key."""
     response = client.post(
