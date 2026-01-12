@@ -1,0 +1,1227 @@
+diff --git a/__init__.py b/__init__.py
+index 2f5efd4..9501c33 100644
+--- a/__init__.py
++++ b/__init__.py
+@@ -339,14 +339,14 @@ def register_and_count(module_names, node_map):
+         if check_module_exists(name):
+             found = True
+             break
+-    
++
+     count = 0
+     if found:
+         initial_len = len(NODE_CLASS_MAPPINGS)
+         for key, value in node_map.items():
+             NODE_CLASS_MAPPINGS[key] = value
+         count = len(NODE_CLASS_MAPPINGS) - initial_len
+-        
++
+     registration_data.append({"name": module_names[0], "found": "Y" if found else "N", "count": count})
+     return found
+ 
+diff --git a/checkpoint_multigpu.py b/checkpoint_multigpu.py
+index 973a78e..0320875 100644
+--- a/checkpoint_multigpu.py
++++ b/checkpoint_multigpu.py
+@@ -21,11 +21,11 @@ original_load_state_dict_guess_config = None
+ def patch_load_state_dict_guess_config():
+     """Monkey patch comfy.sd.load_state_dict_guess_config with MultiGPU-aware checkpoint loading."""
+     global original_load_state_dict_guess_config
+-    
++
+     if original_load_state_dict_guess_config is not None:
+         logger.debug("[MultiGPU Checkpoint] load_state_dict_guess_config is already patched.")
+         return
+-    
++
+     logger.info("[MultiGPU Core Patching] Patching comfy.sd.load_state_dict_guess_config for advanced MultiGPU loading.")
+     original_load_state_dict_guess_config = comfy.sd.load_state_dict_guess_config
+     comfy.sd.load_state_dict_guess_config = patched_load_state_dict_guess_config
+@@ -35,7 +35,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+                                         te_model_options={}, metadata=None):
+     """Patched checkpoint loader with MultiGPU and DisTorch2 device placement support."""
+     from . import set_current_device, set_current_text_encoder_device, get_current_device, get_current_text_encoder_device
+-    
++
+     sd_size = sum(p.numel() for p in sd.values() if hasattr(p, 'numel'))
+     config_hash = str(sd_size)
+     device_config = checkpoint_device_config.get(config_hash)
+@@ -53,7 +53,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+     vae = None
+     model = None
+     model_patcher = None
+-    
++
+     # Capture the current devices at runtime so we can restore them after loading
+     original_main_device = get_current_device()
+     original_clip_device = get_current_text_encoder_device()
+@@ -63,7 +63,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+         parameters = comfy.utils.calculate_parameters(sd, diffusion_model_prefix)
+         weight_dtype = comfy.utils.weight_dtype(sd, diffusion_model_prefix)
+         model_config = comfy.model_detection.model_config_from_unet(sd, diffusion_model_prefix, metadata=metadata)
+-        
++
+         if model_config is None:
+             logger.warning("[MultiGPU] Warning: Not a standard checkpoint file. Trying to load as diffusion model only.")
+             # Simplified fallback for non-checkpoints
+@@ -78,12 +78,12 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+         unet_weight_dtype = list(model_config.supported_inference_dtypes)
+         if model_config.scaled_fp8 is not None:
+             weight_dtype = None
+-        
++
+         model_config.custom_operations = model_options.get("custom_operations", None)
+         unet_dtype = model_options.get("dtype", model_options.get("weight_dtype", None))
+         if unet_dtype is None:
+             unet_dtype = mm.unet_dtype(model_params=parameters, supported_dtypes=unet_weight_dtype, weight_dtype=weight_dtype)
+-        
++
+         unet_compute_device = device_config.get('unet_device', original_main_device)
+         manual_cast_dtype = mm.unet_manual_cast(unet_dtype, torch.device(unet_compute_device), model_config.supported_inference_dtypes)
+         model_config.set_inference_dtype(unet_dtype, manual_cast_dtype)
+@@ -95,7 +95,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+ 
+         if output_model:
+             unet_compute_device = device_config.get('unet_device', original_main_device)
+-            set_current_device(unet_compute_device)            
++            set_current_device(unet_compute_device)
+             inital_load_device = mm.unet_inital_load_device(parameters, unet_dtype)
+ 
+             multigpu_memory_log(f"unet:{config_hash[:8]}", "pre-load")
+@@ -123,7 +123,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+             vae_target_device = torch.device(device_config.get('vae_device', original_main_device))
+             set_current_device(vae_target_device) # Use main device context for VAE
+             multigpu_memory_log(f"vae:{config_hash[:8]}", "pre-load")
+-            
++
+             vae_sd = comfy.utils.state_dict_prefix_replace(sd, {k: "" for k in model_config.vae_key_prefix}, filter_keys=True)
+             vae_sd = model_config.process_vae_state_dict(vae_sd)
+             vae = VAE(sd=vae_sd, metadata=metadata)
+@@ -132,7 +132,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+         if output_clip:
+             clip_target_device = device_config.get('clip_device', original_clip_device)
+             set_current_text_encoder_device(clip_target_device)
+-            
++
+             clip_target = model_config.clip_target(state_dict=sd)
+             if clip_target is not None:
+                 clip_sd = model_config.process_clip_state_dict(sd)
+@@ -161,7 +161,7 @@ def patched_load_state_dict_guess_config(sd, output_vae=True, output_clip=True,
+                     logger.warning("No CLIP/text encoder weights in checkpoint.")
+             else:
+                 logger.warning("CLIP target not found in model config.")
+-        
++
+     finally:
+         set_current_device(original_main_device)
+         set_current_text_encoder_device(original_clip_device)
+@@ -177,7 +177,7 @@ class CheckpointLoaderAdvancedMultiGPU:
+         import folder_paths
+         devices = get_device_list()
+         default_device = devices[1] if len(devices) > 1 else devices[0]
+-        
++
+         return {
+             "required": {
+                 "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+@@ -186,27 +186,27 @@ class CheckpointLoaderAdvancedMultiGPU:
+                 "vae_device": (devices, {"default": default_device}),
+             }
+         }
+-    
++
+     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+     FUNCTION = "load_checkpoint"
+     CATEGORY = "multigpu"
+     TITLE = "Checkpoint Loader Advanced (MultiGPU)"
+-    
++
+     def load_checkpoint(self, ckpt_name, unet_device, clip_device, vae_device):
+         patch_load_state_dict_guess_config()
+-        
++
+         import folder_paths
+         import comfy.utils
+-        
++
+         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+         sd = comfy.utils.load_torch_file(ckpt_path)
+         sd_size = sum(p.numel() for p in sd.values() if hasattr(p, 'numel'))
+         config_hash = str(sd_size)
+-        
++
+         checkpoint_device_config[config_hash] = {
+             'unet_device': unet_device, 'clip_device': clip_device, 'vae_device': vae_device
+         }
+-        
++
+         # Load using standard loader, our patch will intercept
+         from nodes import CheckpointLoaderSimple
+         return CheckpointLoaderSimple().load_checkpoint(ckpt_name)
+@@ -218,7 +218,7 @@ class CheckpointLoaderAdvancedDisTorch2MultiGPU:
+         import folder_paths
+         devices = get_device_list()
+         compute_device = devices[1] if len(devices) > 1 else devices[0]
+-        
++
+         return {
+             "required": {
+                 "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+@@ -235,26 +235,26 @@ class CheckpointLoaderAdvancedDisTorch2MultiGPU:
+                 "high_precision_loras": ("BOOLEAN", {"default": True}),
+             }
+         }
+-    
++
+     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+     FUNCTION = "load_checkpoint"
+     CATEGORY = "multigpu/distorch_2"
+     TITLE = "Checkpoint Loader Advanced (DisTorch2)"
+-    
++
+     def load_checkpoint(self, ckpt_name, unet_compute_device, unet_virtual_vram_gb, unet_donor_device,
+                        clip_compute_device, clip_virtual_vram_gb, clip_donor_device, vae_device,
+                        unet_expert_mode_allocations="", clip_expert_mode_allocations="", high_precision_loras=True):
+-        
+-        patch_load_state_dict_guess_config()        
+-        
++
++        patch_load_state_dict_guess_config()
++
+         import folder_paths
+         import comfy.utils
+-        
++
+         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+         sd = comfy.utils.load_torch_file(ckpt_path)
+         sd_size = sum(p.numel() for p in sd.values() if hasattr(p, 'numel'))
+         config_hash = str(sd_size)
+-        
++
+         checkpoint_device_config[config_hash] = {
+             'unet_device': unet_compute_device,
+             'clip_device': clip_compute_device,
+@@ -267,7 +267,7 @@ class CheckpointLoaderAdvancedDisTorch2MultiGPU:
+         elif unet_expert_mode_allocations:
+             unet_vram_str = unet_compute_device
+         unet_alloc = f"{unet_expert_mode_allocations}#{unet_vram_str}" if unet_expert_mode_allocations or unet_vram_str else ""
+-        
++
+         clip_vram_str = ""
+         if clip_virtual_vram_gb > 0:
+             clip_vram_str = f"{clip_compute_device};{clip_virtual_vram_gb};{clip_donor_device}"
+@@ -282,6 +282,6 @@ class CheckpointLoaderAdvancedDisTorch2MultiGPU:
+             'unet_settings': hashlib.sha256(f"{unet_alloc}{high_precision_loras}".encode()).hexdigest(),
+             'clip_settings': hashlib.sha256(f"{clip_alloc}{high_precision_loras}".encode()).hexdigest(),
+         }
+-        
++
+         from nodes import CheckpointLoaderSimple
+         return CheckpointLoaderSimple().load_checkpoint(ckpt_name)
+diff --git a/device_utils.py b/device_utils.py
+index 6647572..8955c97 100644
+--- a/device_utils.py
++++ b/device_utils.py
+@@ -14,7 +14,7 @@ def get_device_list():
+     Enumerate ALL physically available devices that can store torch tensors.
+     This includes all device types supported by ComfyUI core.
+     Results are cached after first call since devices don't change during runtime.
+-    
++
+     Returns a comprehensive list of all available devices across all types:
+     - CPU (always available)
+     - CUDA devices (NVIDIA GPUs + AMD w/ ROCm GPUs)
+@@ -26,29 +26,29 @@ def get_device_list():
+     - CoreX/IXUCA devices
+     """
+     global _DEVICE_LIST_CACHE
+-    
++
+     if _DEVICE_LIST_CACHE is not None:
+         return _DEVICE_LIST_CACHE
+-    
++
+     devs = []
+-    
++
+     devs.append("cpu")
+-    
++
+     if hasattr(torch, "cuda") and hasattr(torch.cuda, "is_available") and torch.cuda.is_available():
+         device_count = torch.cuda.device_count()
+         devs += [f"cuda:{i}" for i in range(device_count)]
+         logger.debug(f"[MultiGPU_Device_Utils] Found {device_count} CUDA device(s)")
+-    
++
+     try:
+         import intel_extension_for_pytorch as ipex
+     except ImportError:
+         pass
+-    
++
+     if hasattr(torch, "xpu") and hasattr(torch.xpu, "is_available") and torch.xpu.is_available():
+         device_count = torch.xpu.device_count()
+         devs += [f"xpu:{i}" for i in range(device_count)]
+         logger.debug(f"[MultiGPU_Device_Utils] Found {device_count} XPU device(s)")
+-    
++
+     try:
+         import torch_npu
+         if hasattr(torch, "npu") and hasattr(torch.npu, "is_available") and torch.npu.is_available():
+@@ -57,7 +57,7 @@ def get_device_list():
+             logger.debug(f"[MultiGPU_Device_Utils] Found {device_count} NPU device(s)")
+     except ImportError:
+         pass
+-    
++
+     try:
+         import torch_mlu
+         if hasattr(torch, "mlu") and hasattr(torch.mlu, "is_available") and torch.mlu.is_available():
+@@ -66,11 +66,11 @@ def get_device_list():
+             logger.debug(f"[MultiGPU_Device_Utils] Found {device_count} MLU device(s)")
+     except ImportError:
+         pass
+-    
++
+     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+         devs.append("mps")
+         logger.debug("[MultiGPU_Device_Utils] Found MPS device")
+-    
++
+     try:
+         import torch_directml
+         adapter_count = torch_directml.device_count()
+@@ -79,7 +79,7 @@ def get_device_list():
+             logger.debug(f"[MultiGPU_Device_Utils] Found {adapter_count} DirectML adapter(s)")
+     except ImportError:
+         pass
+-    
++
+     try:
+         if hasattr(torch, "corex"):
+             if hasattr(torch.corex, "device_count"):
+@@ -91,21 +91,21 @@ def get_device_list():
+                 logger.debug("[MultiGPU_Device_Utils] Found CoreX device")
+     except ImportError:
+         pass
+-    
++
+     _DEVICE_LIST_CACHE = devs
+-    
++
+     logger.debug(f"[MultiGPU_Device_Utils] Device list initialized: {devs}")
+-    
++
+     return devs
+ 
+ def is_accelerator_available():
+     """Check if any GPU or accelerator device is available including CUDA, XPU, NPU, MLU, MPS, DirectML, or CoreX."""
+     if hasattr(torch, "cuda") and torch.cuda.is_available():
+         return True
+-    
++
+     if hasattr(torch, "xpu") and hasattr(torch.xpu, "is_available") and torch.xpu.is_available():
+         return True
+-    
++
+     try:
+         import torch_npu
+         if hasattr(torch, "npu") and hasattr(torch.npu, "is_available") and torch.npu.is_available():
+@@ -132,7 +132,7 @@ def is_accelerator_available():
+ 
+     if hasattr(torch, "corex"):
+         return True
+-    
++
+     return False
+ 
+ def is_device_compatible(device_string):
+@@ -156,7 +156,7 @@ def parse_device_string(device_string):
+ def soft_empty_cache_multigpu():
+     """Clear allocator caches across all devices using context managers to preserve calling thread device context."""
+     from .model_management_mgpu import multigpu_memory_log
+-    
++
+     logger.mgpu_mm_log("soft_empty_cache_multigpu: starting GC and multi-device cache clear")
+ 
+     gc.collect()
+@@ -164,7 +164,7 @@ def soft_empty_cache_multigpu():
+     # Clear cache for ALL devices (not just ComfyUI's single device)
+     all_devices = get_device_list()
+     logger.mgpu_mm_log(f"soft_empty_cache_multigpu: devices to clear = {all_devices}")
+-    
++
+     # Check global availability first to avoid unnecessary iteration if backend is missing
+     is_cuda_available = hasattr(torch, "cuda") and hasattr(torch.cuda, "is_available") and torch.cuda.is_available()
+ 
+@@ -235,14 +235,14 @@ original_soft_empty_cache = mm.soft_empty_cache
+ def soft_empty_cache_distorch2_patched(force=False):
+     """Patched mm.soft_empty_cache managing VRAM across all devices, CPU RAM with adaptive thresholding, and DisTorch store pruning."""
+     from .model_management_mgpu import multigpu_memory_log, check_cpu_memory_threshold, trigger_executor_cache_reset
+-    
++
+     is_distorch_active = False
+ 
+     for i, lm in enumerate(mm.current_loaded_models):
+         mp = lm.model
+         if mp is not None:
+             inner_model = mp.model
+-            
++
+             if hasattr(inner_model, '_distorch_v2_meta'):
+                 is_distorch_active = True
+                 break
+diff --git a/distorch_2.py b/distorch_2.py
+index 3713a28..023c1a7 100644
+--- a/distorch_2.py
++++ b/distorch_2.py
+@@ -34,7 +34,7 @@ def register_patched_safetensor_modelpatcher():
+             from comfy.model_management import cleanup_models_gc, get_free_memory, free_memory, current_loaded_models
+             from comfy.model_management import VRAMState, vram_state, lowvram_available, MIN_WEIGHT_MEMORY_RATIO
+             from comfy.model_management import minimum_inference_memory, extra_reserved_memory, is_device_cpu
+-            
++
+             multigpu_memory_log("load_models_gpu_top_level", "start")
+ 
+             cleanup_models_gc()
+@@ -64,7 +64,7 @@ def register_patched_safetensor_modelpatcher():
+                             logger.debug(f"[MultiGPU DisTorch V2] Registering mm_patch: {type(mm_patch).__name__}")
+                             models_temp.add(mm_patch)
+                     continue
+-                
++
+                 for mm_patch in m.model_patches_models():
+                     models_temp.add(mm_patch)
+                 patches = m.model_patches_to(m.load_device)
+@@ -111,16 +111,16 @@ def register_patched_safetensor_modelpatcher():
+                 base_memory = loaded_model.model_memory_required(device)
+ 
+                 inner_model = loaded_model.model.model
+-                
++
+                 if hasattr(inner_model, '_distorch_v2_meta'):
+                     meta = inner_model._distorch_v2_meta
+                     allocation_str = meta['full_allocation']
+-                    
++
+                     # Parse allocation string: "expert#compute_device;virtual_vram_gb;donors"
+                     parts = allocation_str.split('#')
+                     virtual_vram_gb = 0.0
+                     has_eject = False
+-                    
++
+                     if len(parts) > 1:
+                         virtual_vram_str = parts[1]
+                         virtual_info = virtual_vram_str.split(';')
+@@ -128,11 +128,11 @@ def register_patched_safetensor_modelpatcher():
+                             virtual_vram_gb = float(virtual_info[1])
+                         if len(virtual_info) > 2 and virtual_info[2]:
+                             has_eject = True
+-                    
++
+                     if has_eject:
+                         eject_device = device
+                         logger.mgpu_mm_log("DisTorch eject_models detected - MAX memory eviction")
+-                    
++
+                     virtual_vram_bytes = virtual_vram_gb * (1024**3)
+                     adjusted_memory = max(0, base_memory - virtual_vram_bytes)
+                     total_memory_required[device] = total_memory_required.get(device, 0) + adjusted_memory
+@@ -146,8 +146,8 @@ def register_patched_safetensor_modelpatcher():
+                 if device != torch.device("cpu"):
+                     requested_mem = total_memory_required[device] * 1.1 + extra_mem
+                     logger.mgpu_mm_log(f"[FREE_MEMORY_CALL] Device {device}: requesting {requested_mem/(1024**3):.2f}GB = {total_memory_required[device]/(1024**3):.2f}GB * 1.1 + {extra_mem/(1024**3):.2f}GB inference")
+-            
+-            
++
++
+             multigpu_memory_log("free_memory", "pre")
+ 
+             for device in total_memory_required:
+@@ -159,7 +159,7 @@ def register_patched_safetensor_modelpatcher():
+                     else:
+                         logger.mgpu_mm_log(f"[LOAD_MODELS_GPU] eject_models=0, using Comfy Core Computed memory ({(total_memory_required[device] * 1.1 + extra_mem)/(1024**3):.2f}GB) for eviction")
+                         free_memory(total_memory_required[device] * 1.1 + extra_mem, device)
+-            
++
+             multigpu_memory_log("free_memory/minimum_memory_required", "post/pre")
+ 
+             for device in total_memory_required:
+@@ -204,21 +204,21 @@ def register_patched_safetensor_modelpatcher():
+ 
+         def new_partially_load(self, device_to, extra_memory=0, full_load=False, force_patch_weights=False, **kwargs):
+             """Override to use direct model annotation for allocation"""
+-            
++
+             mp_id = id(self)
+             mp_patches_uuid = self.patches_uuid
+             inner_model = self.model
+             inner_model_id = id(inner_model)
+-            
++
+             if not hasattr(inner_model, "_distorch_v2_meta"):
+                 logger.debug(f"[DISTORCH_SKIP] ModelPatcher=0x{mp_id:x} inner_model=0x{inner_model_id:x} type={type(inner_model).__name__} - no metadata, using standard loading")
+                 result = original_partially_load(self, device_to, extra_memory, force_patch_weights)
+                 if hasattr(self, '_distorch_block_assignments'):
+                     del self._distorch_block_assignments
+                 return result
+-            
++
+             allocations = inner_model._distorch_v2_meta['full_allocation']
+-            
++
+             if not hasattr(self.model, '_distorch_high_precision_loras'):
+                 self.model._distorch_high_precision_loras = True
+ 
+@@ -237,7 +237,7 @@ def register_patched_safetensor_modelpatcher():
+ 
+             is_clip_model = getattr(self, 'is_clip', False)
+             device_assignments = analyze_safetensor_loading(self, allocations, is_clip=is_clip_model)
+-            
++
+             model_original_dtype = comfy.utils.weight_dtype(self.model.state_dict())
+             high_precision_loras = getattr(self.model, "_distorch_high_precision_loras", True)
+             loading = self._load_list()
+@@ -314,7 +314,7 @@ def register_patched_safetensor_modelpatcher():
+ 
+             return 0
+ 
+-        
++
+         comfy.model_patcher.ModelPatcher.partially_load = new_partially_load
+         comfy.model_patcher.ModelPatcher._distorch_patched = True
+         logger.info("[MultiGPU Core Patching] Successfully patched ModelPatcher.partially_load")
+@@ -326,7 +326,7 @@ def _extract_clip_head_blocks(raw_block_list, compute_device):
+     distributable_blocks = []
+     head_memory = 0
+     block_assignments = {}
+-    
++
+     # _load_list() returns: (module_offload_mem, module_mem, module_name, module_object, params)
+     for entry in raw_block_list:
+         if len(entry) < 5:
+@@ -343,7 +343,7 @@ def _extract_clip_head_blocks(raw_block_list, compute_device):
+             head_memory += module_size
+         else:
+             distributable_blocks.append((module_size, module_name, module_object, params))
+-    
++
+     return head_blocks, distributable_blocks, block_assignments, head_memory
+ 
+ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False):
+@@ -375,7 +375,7 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+     elif "%" in distorch_alloc:
+         mode = "ratio"
+         distorch_alloc = calculate_fraction_from_ratio_expert_string(model_patcher, distorch_alloc)
+-        
++
+     all_devices = get_device_list()
+     present_devices = {item.split(',')[0] for item in distorch_alloc.split(';') if ',' in item}
+     for device in all_devices:
+@@ -406,20 +406,20 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+     logger.info(eq_line)
+     logger.info("    DisTorch2 Model Device Allocations")
+     logger.info(eq_line)
+-    
++
+     fmt_rosetta = "{:<8}{:>9}{:>9}{:>11}{:>10}"
+     logger.info(fmt_rosetta.format("Device", "VRAM GB", "Dev %", "Model GB", "Dist %"))
+     logger.info(dash_line)
+ 
+     sorted_devices = sorted(device_table.keys(), key=lambda d: (d == "cpu", d))
+-    
++
+     total_allocated_model_bytes = sum(d["alloc_gb"] * (1024**3) for d in device_table.values())
+ 
+     for dev in sorted_devices:
+         total_dev_gb = device_table[dev]["total_gb"]
+         alloc_fraction = device_table[dev]["fraction"]
+         alloc_gb = device_table[dev]["alloc_gb"]
+-        
++
+         dist_ratio_percent = (alloc_gb * (1024**3) / total_allocated_model_bytes) * 100 if total_allocated_model_bytes > 0 else 0
+ 
+         logger.info(fmt_rosetta.format(
+@@ -429,7 +429,7 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+             f"{alloc_gb:.2f}",
+             f"{dist_ratio_percent:.1f}%"
+         ))
+-    
++
+     logger.info(dash_line)
+ 
+     block_summary = {}
+@@ -484,7 +484,7 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+ 
+     block_list = [b for b in distributable_all_blocks if b[3] >= MIN_BLOCK_THRESHOLD]
+     tiny_block_list = [b for b in distributable_all_blocks if b[3] < MIN_BLOCK_THRESHOLD]
+-    
++
+     logger.debug(f"[MultiGPU DisTorch V2] Total blocks: {len(all_blocks)}")
+     logger.debug(f"[MultiGPU DisTorch V2] Distributable blocks: {len(block_list)}")
+     logger.debug(f"[MultiGPU DisTorch V2] Tiny blocks (<0.01%): {len(tiny_block_list)}")
+@@ -494,12 +494,12 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+     fmt_layer = "{:<18}{:>7}{:>14}{:>10}"
+     logger.info(fmt_layer.format("Layer Type", "Layers", "Memory (MB)", "% Total"))
+     logger.info(dash_line)
+-    
++
+     for layer_type, count in block_summary.items():
+         mem_mb = memory_by_type[layer_type] / (1024 * 1024)
+         mem_percent = (memory_by_type[layer_type] / total_memory) * 100 if total_memory > 0 else 0
+         logger.info(fmt_layer.format(layer_type[:18], str(count), f"{mem_mb:.2f}", f"{mem_percent:.1f}%"))
+-    
++
+     logger.info(dash_line)
+ 
+     # Distribute blocks sequentially from the tail of the model
+@@ -528,7 +528,7 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+                 donor_quotas[donor] -= block_memory
+                 assigned_to_donor = True
+                 break # Move to the next block
+-        
++
+         if not assigned_to_donor:  #Note - small rounding errors and tensor-fitting on devices make a block occasionally an orphan. We treat orphans the same as tiny_block_list as they are generally small rounding errors
+             block_assignments[block_name] = compute_device
+ 
+@@ -552,7 +552,7 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+     logger.info(dash_line)
+     logger.info(fmt_assign.format("Device", "Layers", "Memory (MB)", "% Total"))
+     logger.info(dash_line)
+-    
++
+     if tiny_block_list:
+         tiny_block_memory = sum(b[3] for b in tiny_block_list)
+         tiny_mem_mb = tiny_block_memory / (1024 * 1024)
+@@ -563,7 +563,7 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+ 
+     total_assigned_memory = 0
+     device_memories = {}
+-    
++
+     for device, blocks in device_assignments.items():
+         dist_blocks = [b for b in blocks if b[3] >= MIN_BLOCK_THRESHOLD]
+         if not dist_blocks:
+@@ -580,11 +580,11 @@ def analyze_safetensor_loading(model_patcher, allocations_string, is_clip=False)
+         dist_blocks = [b for b in device_assignments[dev] if b[3] >= MIN_BLOCK_THRESHOLD]
+         if not dist_blocks:
+             continue
+-            
++
+         mem_mb = device_memories[dev] / (1024 * 1024)
+         mem_percent = (device_memories[dev] / total_memory) * 100 if total_memory > 0 else 0
+         logger.info(fmt_assign.format(dev, str(len(dist_blocks)), f"{mem_mb:.2f}", f"{mem_percent:.1f}%"))
+-    
++
+     logger.info(dash_line)
+ 
+     return {
+@@ -598,10 +598,10 @@ def parse_memory_string(mem_str):
+     match = re.match(r'(\d+\.?\d*)\s*([gmkb]?)', mem_str)
+     if not match:
+         raise ValueError(f"Invalid memory string format: {mem_str}")
+-    
++
+     val, unit = match.groups()
+     val = float(val)
+-    
++
+     if unit == 'g':
+         return val * (1024**3)
+     elif unit == 'm':
+@@ -627,7 +627,7 @@ def calculate_fraction_from_byte_expert_string(model_patcher, byte_str):
+             continue
+         dev_name, val_str = allocation.split(',', 1)
+         is_wildcard = '*' in val_str
+-        
++
+         if is_wildcard:
+             wildcard_device = dev_name
+             has_wildcard = True
+@@ -645,12 +645,12 @@ def calculate_fraction_from_byte_expert_string(model_patcher, byte_str):
+ 
+         # Determine the actual bytes to allocate to this device
+         bytes_to_assign = min(requested_bytes, remaining_model_bytes)
+-        
++
+         if bytes_to_assign > 0:
+             final_byte_allocations[dev] = bytes_to_assign
+             remaining_model_bytes -= bytes_to_assign
+             logger.info(f"[MultiGPU DisTorch V2] Assigning {bytes_to_assign / (1024**2):.2f}MB of model to {dev} (requested {requested_bytes / (1024**2):.2f}MB).")
+-        
++
+         if remaining_model_bytes <= 0:
+             logger.info("[MultiGPU DisTorch V2] All model blocks have been allocated. Subsequent devices in the string will receive no assignment.")
+             break
+@@ -680,7 +680,7 @@ def calculate_fraction_from_byte_expert_string(model_patcher, byte_str):
+         if total_device_vram > 0:
+             fraction = bytes_alloc / total_device_vram
+             allocation_parts.append(f"{dev},{fraction:.4f}")
+-    
++
+     allocations_string = ";".join(allocation_parts)
+ 
+     return allocations_string
+@@ -714,7 +714,7 @@ def calculate_fraction_from_ratio_expert_string(model_patcher, ratio_str):
+     ratio_string = ":".join(ratio_values)
+ 
+     normalized_pcts = [(v / total_ratio_parts) * 100 for v in raw_ratios.values()]
+-    
++
+     put_parts = []
+     for i, dev_name in enumerate(raw_ratios.keys()):
+         put_parts.append(f"{int(normalized_pcts[i])}% on {dev_name}")
+@@ -725,7 +725,7 @@ def calculate_fraction_from_ratio_expert_string(model_patcher, ratio_str):
+         put_part = f"{put_parts[0]} and {put_parts[1]}"
+     else:
+         put_part = ", ".join(put_parts[:-1]) + f", and {put_parts[-1]}"
+-    
++
+     logger.info(f"[MultiGPU DisTorch V2] Ratio(%) Mode - {ratio_str} -> {ratio_string} ratio, put {put_part}")
+ 
+     allocations_string = ";".join(allocation_parts)
+@@ -756,29 +756,29 @@ def calculate_safetensor_vvram_allocation(model_patcher, virtual_vram_str):
+     # Handle donor devices
+     ram_donors = [d for d in donors.split(',')]
+     remaining_vram_needed = virtual_vram_gb
+-    
++
+     donor_device_info = {}
+     donor_allocations = {}
+-    
++
+     for donor in ram_donors:
+         donor_vram = mm.get_total_memory(torch.device(donor)) / (1024**3)
+         max_donor_capacity = donor_vram
+-        
++
+         donation = min(remaining_vram_needed, max_donor_capacity)
+         donor_virtual = donor_vram - donation
+         remaining_vram_needed -= donation
+         donor_allocations[donor] = donation
+-            
++
+         donor_device_info[donor] = (donor_vram, donor_virtual)
+         logger.info(fmt_assign.format(donor, 'donor', f"{donor_vram:.2f}GB",  f"{donor_virtual:.2f}GB", f"-{donation:.2f}GB"))
+-    
+-    
++
++
+     logger.info(dash_line)
+ 
+     # Calculate model size
+     model = model_patcher.model if hasattr(model_patcher, 'model') else model_patcher
+     total_memory = 0
+-    
++
+     for name, module in model.named_modules():
+         if hasattr(module, "weight"):
+             if module.weight is not None:
+@@ -808,6 +808,6 @@ def calculate_safetensor_vvram_allocation(model_patcher, virtual_vram_str):
+         donor_vram = donor_device_info[donor][0]
+         donor_percent = donor_allocations[donor] / donor_vram
+         allocation_parts.append(f"{donor},{donor_percent:.4f}")
+-    
++
+     allocations_string = ";".join(allocation_parts)
+     return allocations_string
+diff --git a/model_management_mgpu.py b/model_management_mgpu.py
+index bd3be8f..42999de 100644
+--- a/model_management_mgpu.py
++++ b/model_management_mgpu.py
+@@ -46,13 +46,13 @@ def _capture_memory_snapshot():
+     """Capture memory snapshot for CPU and all devices"""
+     # Import here to avoid circular dependency
+     from .device_utils import get_device_list
+-    
++
+     snapshot = {}
+-    
++
+     # CPU
+     vm = psutil.virtual_memory()
+     snapshot["cpu"] = (vm.used, vm.total)
+-    
++
+     # GPU devices
+     devices = [d for d in get_device_list() if d != "cpu"]
+     for dev_str in devices:
+@@ -85,26 +85,26 @@ def multigpu_memory_log(identifier, tag):
+ 
+     ts = datetime.now(timezone.utc)
+     curr = _capture_memory_snapshot()
+-    
++
+     # Store in series
+     if identifier not in _MEM_SNAPSHOT_SERIES:
+         _MEM_SNAPSHOT_SERIES[identifier] = []
+     _MEM_SNAPSHOT_SERIES[identifier].append((ts, tag, curr))
+-    
++
+     # Clean aligned format: timestamp + padded tag + memory values
+     ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+     tag_padded = f"{identifier}_{tag}".ljust(35)
+-    
++
+     parts = []
+     cpu_used, _ = curr.get("cpu", (0, 0))
+     parts.append(f"cpu|{cpu_used/(1024**3):.2f}")
+-    
++
+     for dev in sorted([k for k in curr.keys() if k != "cpu"]):
+         used, _ = curr[dev]
+         parts.append(f"{dev}|{used/(1024**3):.2f}")
+-    
++
+     logger.mgpu_mm_log(f"{ts_str} {tag_padded} {' '.join(parts)}")
+-    
++
+     _MEM_SNAPSHOT_LAST[identifier] = (tag, curr)
+ 
+ 
+diff --git a/nodes.py b/nodes.py
+index 4a75b78..b00cd4c 100644
+--- a/nodes.py
++++ b/nodes.py
+@@ -208,7 +208,7 @@ class DownloadAndLoadFlorence2Model:
+     def INPUT_TYPES(s):
+         return {"required": {
+             "model": (
+-                    [ 
++                    [
+                     'microsoft/Florence-2-base',
+                     'microsoft/Florence-2-base-ft',
+                     'microsoft/Florence-2-large',
+@@ -429,11 +429,11 @@ class UNetLoaderLP:
+         """Load UNet with low-precision LoRA flag for CPU storage optimization."""
+         original_loader = NODE_CLASS_MAPPINGS["UNETLoader"]()
+         out = original_loader.load_unet(unet_name)
+-        
++
+         # Set the low-precision LoRA flag on the loaded model
+         if hasattr(out[0], 'model'):
+             out[0].model._distorch_high_precision_loras = False
+         elif hasattr(out[0], 'patcher') and hasattr(out[0].patcher, 'model'):
+             out[0].patcher.model._distorch_high_precision_loras = False
+-            
++
+         return out
+diff --git a/wanvideo.py b/wanvideo.py
+index 4ebecf9..70b8f41 100644
+--- a/wanvideo.py
++++ b/wanvideo.py
+@@ -45,7 +45,7 @@ class WanVideoModelLoader:
+                 "model": (folder_paths.get_filename_list("unet_gguf") + folder_paths.get_filename_list("diffusion_models"), {"tooltip": "These models are loaded from the 'ComfyUI/models/diffusion_models' -folder",}),
+ 
+             "base_precision": (["fp32", "bf16", "fp16", "fp16_fast"], {"default": "bf16"}),
+-            "quantization": (["disabled", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e4m3fn_scaled", "fp8_e4m3fn_scaled_fast", "fp8_e5m2", "fp8_e5m2_fast", "fp8_e5m2_scaled", "fp8_e5m2_scaled_fast"], {"default": "disabled", 
++            "quantization": (["disabled", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e4m3fn_scaled", "fp8_e4m3fn_scaled_fast", "fp8_e5m2", "fp8_e5m2_fast", "fp8_e5m2_scaled", "fp8_e5m2_scaled_fast"], {"default": "disabled",
+                             "tooltip": "Optional quantization method, 'disabled' acts as autoselect based by weights. Scaled modes only work with matching weights, _fast modes (fp8 matmul) require CUDA compute capability >= 8.9 (NVIDIA 4000 series and up), e4m3fn generally can not be torch.compiled on compute capability < 8.9 (3000 series and under)"}),
+             "load_device": (["main_device", "offload_device"], {"default": "offload_device", "tooltip": "Initial device to load the model to, NOT recommended with the larger models unless you have 48GB+ VRAM"}),
+             "compute_device": (devices, {"default": default_device}),
+@@ -83,7 +83,7 @@ class WanVideoModelLoader:
+         loader_module = inspect.getmodule(original_loader)
+         original_module_device = loader_module.device
+ 
+-        set_current_device(compute_device)      
++        set_current_device(compute_device)
+         compute_device_to_be_patched = mm.get_torch_device()
+ 
+         loader_module.device = compute_device_to_be_patched
+@@ -138,16 +138,16 @@ class WanVideoSampler:
+                 "add_noise_to_samples": ("BOOLEAN", {"default": False, "tooltip": "Add noise to the samples before sampling, needed for video2video sampling when starting from clean video"}),
+             }
+         }
+-    
++
+     RETURN_TYPES = ("LATENT", "LATENT",)
+     RETURN_NAMES = ("samples", "denoised_samples",)
+     FUNCTION = "process"
+     CATEGORY = "multigpu/WanVideoWrapper"
+     DESCRIPTION = "MultiGPU-aware sampler that ensures correct device for each model"
+-    
++
+     def process(self, model, compute_device, **kwargs):
+         from . import set_current_device
+-        
++
+         original_sampler = NODE_CLASS_MAPPINGS["WanVideoSampler"]()
+         sampler_module = inspect.getmodule(original_sampler)
+ 
+@@ -250,7 +250,7 @@ class LoadWanVideoT5TextEncoder:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         if device == "cpu":
+             load_device = "offload_device"
+         else:
+@@ -288,7 +288,7 @@ class LoadWanVideoClipTextEncoder:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         if device == "cpu":
+             load_device = "offload_device"
+         else:
+@@ -425,7 +425,7 @@ class WanVideoTinyVAELoader:
+             },
+             "optional": {
+                 "load_device": (devices, {"default": default_device}),
+-                "precision": (["fp16", "fp32", "bf16"], {"default": "fp16"}), 
++                "precision": (["fp16", "fp32", "bf16"], {"default": "fp16"}),
+                 "parallel": ("BOOLEAN", {"default": False, "tooltip": "uses more memory but is faster"}),
+             }
+         }
+@@ -505,8 +505,8 @@ class WanVideoImageToVideoEncode:
+     FUNCTION = "process"
+     CATEGORY = "multigpu/WanVideoWrapper"
+ 
+-    def process(self, width, height, num_frames, force_offload, noise_aug_strength, 
+-                    start_latent_strength, end_latent_strength, start_image=None, end_image=None, control_embeds=None, fun_or_fl2v_model=False, 
++    def process(self, width, height, num_frames, force_offload, noise_aug_strength,
++                    start_latent_strength, end_latent_strength, start_image=None, end_image=None, control_embeds=None, fun_or_fl2v_model=False,
+                     temporal_mask=None, extra_latents=None, clip_embeds=None, tiled_vae=False, add_cond_latents=None, vae=None, load_device=None):
+         from . import set_current_device
+ 
+@@ -576,7 +576,7 @@ class WanVideoDecode:
+         decode_module = inspect.getmodule(original_decode)
+         original_module_device = decode_module.device
+ 
+-        set_current_device(load_device)      
++        set_current_device(load_device)
+         compute_device_to_be_patched = mm.get_torch_device()
+         decode_module.device = compute_device_to_be_patched
+ 
+@@ -678,7 +678,7 @@ class WanVideoClipVisionEncode:
+             "clip_vision": ("CLIP_VISION",),
+             "load_device": ("MULTIGPUDEVICE",),
+             "image_1": ("IMAGE", {"tooltip": "Image to encode"}),
+-            "strength_1": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.001, "tooltip": "Additional clip embed multiplier"}), 
++            "strength_1": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.001, "tooltip": "Additional clip embed multiplier"}),
+             "strength_2": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.001, "tooltip": "Additional clip embed multiplier"}),
+             "crop": (["center", "disabled"], {"default": "center", "tooltip": "Crop image to 224x224 before encoding"}),
+             "combine_embeds": (["average", "sum", "concat", "batch"], {"default": "average", "tooltip": "Method to combine multiple clip embeds"}),
+@@ -738,7 +738,7 @@ class WanVideoControlnetLoader:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         original_loader = NODE_CLASS_MAPPINGS["WanVideoControlnetLoader"]()
+         return original_loader.loadmodel(model, base_precision, load_device, quantization)
+ 
+@@ -765,7 +765,7 @@ class FantasyTalkingModelLoader:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         original_loader = NODE_CLASS_MAPPINGS["FantasyTalkingModelLoader"]()
+         return original_loader.loadmodel(model, base_precision)
+ 
+@@ -793,7 +793,7 @@ class Wav2VecModelLoader:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         original_loader = NODE_CLASS_MAPPINGS["Wav2VecModelLoader"]()
+         return original_loader.loadmodel(model, base_precision, load_device)
+ 
+@@ -826,7 +826,7 @@ class DownloadAndLoadWav2VecModel:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         original_loader = NODE_CLASS_MAPPINGS["DownloadAndLoadWav2VecModel"]()
+         return original_loader.loadmodel(model, base_precision, load_device)
+ 
+@@ -861,6 +861,6 @@ class WanVideoUni3C_ControlnetLoader:
+         from . import set_current_device
+ 
+         set_current_device(device)
+-        
++
+         original_loader = NODE_CLASS_MAPPINGS["WanVideoUni3C_ControlnetLoader"]()
+         return original_loader.loadmodel(model, base_precision, load_device, quantization, attention_mode, compile_args)
+\ No newline at end of file
+diff --git a/wrappers.py b/wrappers.py
+index a132792..19b7afb 100644
+--- a/wrappers.py
++++ b/wrappers.py
+@@ -19,7 +19,7 @@ def _create_distorch_safetensor_v2_override(cls, device_param_name, device_sette
+     """Internal factory function creating DisTorch2 override class with parameterized device selection behavior."""
+     from .distorch_2 import register_patched_safetensor_modelpatcher
+     from .model_management_mgpu import force_full_system_cleanup
+-    
++
+     class NodeOverrideDisTorchSafetensorV2(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -93,7 +93,7 @@ def _create_distorch_safetensor_v2_override(cls, device_param_name, device_sette
+                            if k not in [device_param_name, 'virtual_vram_gb',
+                                         'donor_device', 'expert_mode_allocations',
+                                         'eject_models']}
+-            
++
+             if apply_device_kwarg_workaround:
+                 clean_kwargs['device'] = 'default'
+ 
+@@ -106,10 +106,10 @@ def _create_distorch_safetensor_v2_override(cls, device_param_name, device_sette
+                 vram_string = device_value
+ 
+             full_allocation = f"{expert_mode_allocations}#{vram_string}" if expert_mode_allocations or vram_string else ""
+-            
++
+             fn = getattr(super(), cls.FUNCTION)
+             out = fn(*args, **clean_kwargs)
+-            
++
+             model_to_check = None
+             if hasattr(out[0], 'model'):
+                 model_to_check = out[0]
+@@ -174,7 +174,7 @@ def override_class_with_distorch_gguf(cls):
+     """DisTorch V1 Legacy wrapper - maintains V1 UI but calls V2 backend"""
+     from . import set_current_device, get_current_device
+     from .distorch_2 import register_patched_safetensor_modelpatcher
+-    
++
+     class NodeOverrideDisTorchGGUFLegacy(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -197,14 +197,14 @@ def override_class_with_distorch_gguf(cls):
+             original_device = get_current_device()
+             if device is not None:
+                 set_current_device(device)
+-            
++
+             # Strip MultiGPU-specific parameters before calling original function
+-            clean_kwargs = {k: v for k, v in kwargs.items() 
+-                           if k not in ['device', 'virtual_vram_gb', 'use_other_vram', 
++            clean_kwargs = {k: v for k, v in kwargs.items()
++                           if k not in ['device', 'virtual_vram_gb', 'use_other_vram',
+                                         'expert_mode_allocations']}
+-            
++
+             register_patched_safetensor_modelpatcher()
+-            
++
+             vram_string = ""
+             if virtual_vram_gb > 0:
+                 if use_other_vram:
+@@ -217,7 +217,7 @@ def override_class_with_distorch_gguf(cls):
+                     vram_string = f"{device};{virtual_vram_gb};cpu"
+ 
+             full_allocation = f"{expert_mode_allocations}#{vram_string}" if expert_mode_allocations or vram_string else ""
+-            
++
+             fn = getattr(super(), cls.FUNCTION)
+             out = fn(*args, **clean_kwargs)
+ 
+@@ -226,7 +226,7 @@ def override_class_with_distorch_gguf(cls):
+                 model_to_check = out[0]
+             elif hasattr(out[0], 'patcher') and hasattr(out[0].patcher, 'model'):
+                 model_to_check = out[0].patcher
+-            
++
+             if model_to_check and full_allocation:
+                 inner_model = model_to_check.model
+                 inner_model._distorch_v2_meta = {"full_allocation": full_allocation}
+@@ -242,14 +242,14 @@ def override_class_with_distorch_gguf_v2(cls):
+     """DisTorch V2 wrapper for GGUF models"""
+     from . import set_current_device, get_current_device
+     from .distorch_2 import register_patched_safetensor_modelpatcher
+-    
++
+     class NodeOverrideDisTorchGGUFv2(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+             inputs = copy.deepcopy(cls.INPUT_TYPES())
+             devices = get_device_list()
+             compute_device = devices[1] if len(devices) > 1 else devices[0]
+-            
++
+             inputs["optional"] = inputs.get("optional", {})
+             inputs["optional"]["compute_device"] = (devices, {"default": compute_device})
+             inputs["optional"]["virtual_vram_gb"] = ("FLOAT", {"default": 4.0, "min": 0.0, "max": 128.0, "step": 0.1})
+@@ -265,14 +265,14 @@ def override_class_with_distorch_gguf_v2(cls):
+             original_device = get_current_device()
+             if compute_device is not None:
+                 set_current_device(compute_device)
+-            
++
+             # Strip MultiGPU-specific parameters before calling original function
+-            clean_kwargs = {k: v for k, v in kwargs.items() 
+-                           if k not in ['compute_device', 'virtual_vram_gb', 
++            clean_kwargs = {k: v for k, v in kwargs.items()
++                           if k not in ['compute_device', 'virtual_vram_gb',
+                                         'donor_device', 'expert_mode_allocations']}
+-            
++
+             register_patched_safetensor_modelpatcher()
+-            
++
+             vram_string = ""
+             if virtual_vram_gb > 0:
+                 vram_string = f"{compute_device};{virtual_vram_gb};{donor_device}"
+@@ -280,18 +280,18 @@ def override_class_with_distorch_gguf_v2(cls):
+                 vram_string = compute_device
+ 
+             full_allocation = f"{expert_mode_allocations}#{vram_string}" if expert_mode_allocations or vram_string else ""
+-            
++
+             logger.info(f"[MultiGPU DisTorch V2] Full allocation string: {full_allocation}")
+-            
++
+             fn = getattr(super(), cls.FUNCTION)
+             out = fn(*args, **clean_kwargs)
+-            
++
+             model_to_check = None
+             if hasattr(out[0], 'model'):
+                 model_to_check = out[0]
+             elif hasattr(out[0], 'patcher') and hasattr(out[0].patcher, 'model'):
+                 model_to_check = out[0].patcher
+-            
++
+             if model_to_check and full_allocation:
+                 inner_model = model_to_check.model
+                 inner_model._distorch_v2_meta = {"full_allocation": full_allocation}
+@@ -307,7 +307,7 @@ def override_class_with_distorch_clip(cls):
+     """DisTorch V1 wrapper for CLIP models - calls V2 backend"""
+     from . import set_current_text_encoder_device, get_current_text_encoder_device
+     from .distorch_2 import register_patched_safetensor_modelpatcher
+-    
++
+     class NodeOverrideDisTorchClip(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -329,14 +329,14 @@ def override_class_with_distorch_clip(cls):
+             original_text_device = get_current_text_encoder_device()
+             if device is not None:
+                 set_current_text_encoder_device(device)
+-            
++
+             # Strip MultiGPU-specific parameters before calling original function
+-            clean_kwargs = {k: v for k, v in kwargs.items() 
+-                           if k not in ['device', 'virtual_vram_gb', 'use_other_vram', 
++            clean_kwargs = {k: v for k, v in kwargs.items()
++                           if k not in ['device', 'virtual_vram_gb', 'use_other_vram',
+                                         'expert_mode_allocations']}
+-            
++
+             register_patched_safetensor_modelpatcher()
+-            
++
+             vram_string = ""
+             if virtual_vram_gb > 0:
+                 if use_other_vram:
+@@ -349,16 +349,16 @@ def override_class_with_distorch_clip(cls):
+                     vram_string = f"{device};{virtual_vram_gb};cpu"
+ 
+             full_allocation = f"{expert_mode_allocations}#{vram_string}" if expert_mode_allocations or vram_string else ""
+-            
++
+             fn = getattr(super(), cls.FUNCTION)
+             out = fn(*args, **clean_kwargs)
+-            
++
+             model_to_check = None
+             if hasattr(out[0], 'model'):
+                 model_to_check = out[0]
+             elif hasattr(out[0], 'patcher') and hasattr(out[0].patcher, 'model'):
+                 model_to_check = out[0].patcher
+-            
++
+             if model_to_check and full_allocation:
+                 inner_model = model_to_check.model
+                 inner_model._distorch_v2_meta = {"full_allocation": full_allocation}
+@@ -374,7 +374,7 @@ def override_class_with_distorch_clip_no_device(cls):
+     """DisTorch V1 wrapper for Triple/Quad CLIP models - calls V2 backend"""
+     from . import set_current_text_encoder_device, get_current_text_encoder_device
+     from .distorch_2 import register_patched_safetensor_modelpatcher
+-    
++
+     class NodeOverrideDisTorchClipNoDevice(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -396,14 +396,14 @@ def override_class_with_distorch_clip_no_device(cls):
+             original_text_device = get_current_text_encoder_device()
+             if device is not None:
+                 set_current_text_encoder_device(device)
+-            
++
+             # Strip MultiGPU-specific parameters before calling original function
+-            clean_kwargs = {k: v for k, v in kwargs.items() 
+-                           if k not in ['device', 'virtual_vram_gb', 'use_other_vram', 
++            clean_kwargs = {k: v for k, v in kwargs.items()
++                           if k not in ['device', 'virtual_vram_gb', 'use_other_vram',
+                                         'expert_mode_allocations']}
+-            
++
+             register_patched_safetensor_modelpatcher()
+-            
++
+             vram_string = ""
+             if virtual_vram_gb > 0:
+                 if use_other_vram:
+@@ -416,16 +416,16 @@ def override_class_with_distorch_clip_no_device(cls):
+                     vram_string = f"{device};{virtual_vram_gb};cpu"
+ 
+             full_allocation = f"{expert_mode_allocations}#{vram_string}" if expert_mode_allocations or vram_string else ""
+-            
++
+             fn = getattr(super(), cls.FUNCTION)
+             out = fn(*args, **clean_kwargs)
+-            
++
+             model_to_check = None
+             if hasattr(out[0], 'model'):
+                 model_to_check = out[0]
+             elif hasattr(out[0], 'patcher') and hasattr(out[0].patcher, 'model'):
+                 model_to_check = out[0].patcher
+-            
++
+             if model_to_check and full_allocation:
+                 inner_model = model_to_check.model
+                 inner_model._distorch_v2_meta = {"full_allocation": full_allocation}
+@@ -448,7 +448,7 @@ override_class_with_distorch = override_class_with_distorch_gguf
+ def override_class(cls):
+     """Standard MultiGPU device override for UNet/VAE models"""
+     from . import set_current_device, get_current_device
+-    
++
+     class NodeOverride(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -478,7 +478,7 @@ def override_class(cls):
+ def override_class_offload(cls):
+     """Standard MultiGPU device override for UNet/VAE models"""
+     from . import set_current_device, set_current_unet_offload_device, get_current_device, get_current_unet_offload_device
+-    
++
+     class NodeOverride(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -515,7 +515,7 @@ def override_class_offload(cls):
+ def override_class_clip(cls):
+     """Standard MultiGPU device override for CLIP models (with device kwarg workaround)"""
+     from . import set_current_text_encoder_device, get_current_text_encoder_device
+-    
++
+     class NodeOverride(cls):
+         @classmethod
+         def INPUT_TYPES(s):
+@@ -547,7 +547,7 @@ def override_class_clip(cls):
+ def override_class_clip_no_device(cls):
+     """Standard MultiGPU device override for Triple/Quad CLIP models (no device kwarg workaround)"""
+     from . import set_current_text_encoder_device, get_current_text_encoder_device
+-    
++
+     class NodeOverride(cls):
+         @classmethod
+         def INPUT_TYPES(s):
