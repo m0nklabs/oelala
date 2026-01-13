@@ -3429,6 +3429,265 @@ async def get_t2v_generation_modes():
     }
 
 
+@app.get("/api/v2v-modes")
+async def get_v2v_generation_modes():
+    """
+    Get available V2V (Video-to-Video) style transfer modes.
+    Uses I2V pipeline with extracted first frame.
+    """
+    from comfyui_client import get_available_i2v_modes
+    
+    # V2V uses I2V modes under the hood
+    i2v_modes = get_available_i2v_modes()
+    
+    # Add V2V-specific modes
+    v2v_modes = {
+        "style_transfer": {
+            "name": "Style Transfer",
+            "description": "Apply artistic style while preserving motion",
+            "strength_range": [0.3, 0.8],
+            "default_strength": 0.5,
+        },
+        "anime": {
+            "name": "Anime Conversion",
+            "description": "Convert video to anime/cartoon style",
+            "strength_range": [0.4, 0.9],
+            "default_strength": 0.7,
+        },
+        "enhance": {
+            "name": "AI Enhancement",
+            "description": "Enhance quality while preserving content",
+            "strength_range": [0.1, 0.4],
+            "default_strength": 0.25,
+        },
+    }
+    
+    return {
+        "modes": v2v_modes,
+        "i2v_modes": i2v_modes,  # Available I2V presets
+        "default": "style_transfer",
+    }
+
+
+@app.post("/api/v2v/generate")
+async def generate_video_to_video(
+    file: UploadFile = File(..., description="Input video file"),
+    style_prompt: str = Form(..., description="Style description (e.g., 'anime style, vibrant colors')"),
+    mode: str = Form("style_transfer", description="V2V mode: style_transfer, anime, enhance"),
+    strength: float = Form(0.5, description="Style strength (0.0-1.0, higher = more style change)"),
+    num_frames: int = Form(41, description="Output frames (4k+1 format for Wan2.2)"),
+    resolution: str = Form("480p", description="Output resolution: 480p, 720p"),
+    fps: int = Form(16, description="Output FPS"),
+    preserve_motion: bool = Form(True, description="Try to preserve original motion"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    generation_mode: str = Form("standard", description="I2V generation mode to use"),
+    user: User = Depends(get_current_user),
+):
+    """
+    Video-to-Video style transfer using AI.
+    
+    Process:
+    1. Extract first frame from input video
+    2. Apply style via I2V workflow
+    3. Generate new video with transferred style
+    
+    Use cases:
+    - Turn real footage into anime style
+    - Apply artistic filters
+    - AI enhancement of video quality
+    
+    Note: This uses I2V pipeline under the hood with the first frame as input.
+    For best results, use short clips (2-5 seconds) with clear subjects.
+    """
+    import cv2
+    
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    
+    comfyui = get_comfyui_client()
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
+        )
+    
+    # Validate strength
+    strength = max(0.0, min(1.0, strength))
+    
+    # Wan2.2 requires num_frames in format 4k+1
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+    
+    # Get resolution dimensions
+    width, height = comfyui.get_resolution_dimensions(resolution, "16:9")  # Default to 16:9 for video
+    
+    # Calculate credits (V2V costs same as I2V)
+    duration_seconds = num_frames / fps if fps > 0 else 3
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=duration_seconds,
+    )
+    
+    logger.info(f"💰 V2V generation costs {credits_required} credits ({width}x{height}, {num_frames} frames)")
+    await check_credits(user, credits_required)
+    
+    job_id = str(uuid.uuid4())
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Save uploaded video
+    input_filename = f"v2v_input_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+    
+    with open(input_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+    
+    logger.info(f"📥 V2V input saved: {input_path}")
+    
+    try:
+        # Extract first frame using OpenCV
+        cap = cv2.VideoCapture(str(input_path))
+        if not cap.isOpened():
+            raise HTTPException(status_code=400, detail="Could not open video file")
+        
+        # Get video info
+        original_fps = cap.get(cv2.CAP_PROP_FPS) or 24
+        original_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        original_duration = original_frames / original_fps
+        original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        logger.info(f"🎬 Input video: {original_width}x{original_height}, {original_fps}fps, {original_duration:.1f}s")
+        
+        # Read first frame
+        ret, first_frame = cap.read()
+        cap.release()
+        
+        if not ret or first_frame is None:
+            raise HTTPException(status_code=400, detail="Could not extract first frame from video")
+        
+        # Save first frame as input image for I2V
+        frame_filename = f"v2v_frame_{timestamp}.png"
+        frame_path = UPLOAD_DIR / frame_filename
+        
+        # Resize to target resolution if needed
+        if first_frame.shape[1] != width or first_frame.shape[0] != height:
+            first_frame = cv2.resize(first_frame, (width, height), interpolation=cv2.INTER_LANCZOS4)
+        
+        cv2.imwrite(str(frame_path), first_frame)
+        logger.info(f"📸 First frame extracted: {frame_path} ({width}x{height})")
+        
+        # Build the style-enhanced prompt
+        base_prompt = style_prompt.strip()
+        
+        # Add motion preservation hints based on mode
+        if preserve_motion:
+            if mode == "anime":
+                full_prompt = f"{base_prompt}, anime style, smooth animation, consistent character design, fluid motion"
+            elif mode == "enhance":
+                full_prompt = f"{base_prompt}, high quality, sharp details, natural movement, enhanced clarity"
+            else:  # style_transfer
+                full_prompt = f"{base_prompt}, artistic style transfer, preserve motion, consistent style throughout"
+        else:
+            full_prompt = base_prompt
+        
+        logger.info(f"🎨 V2V prompt: {full_prompt}")
+        
+        # Generate video using DisTorch2 I2V workflow with the extracted frame
+        output_prefix = f"oelala_v2v_{timestamp}"
+        
+        # Call the DisTorch2 generation method from comfyui_client
+        output_path = comfyui.generate_distorch2_video(
+            image_path=str(frame_path),
+            prompt=full_prompt,
+            output_dir=str(OUTPUT_DIR),
+            output_prefix=output_prefix,
+            resolution=resolution,
+            aspect_ratio="16:9",  # Default for video
+            num_frames=num_frames,
+            fps=fps,
+            steps=6,  # Default for DisTorch2
+            cfg=1.0,  # Default for DisTorch2
+            seed=seed if seed >= 0 else -1,
+        )
+        
+        if not output_path:
+            raise HTTPException(status_code=500, detail="V2V generation failed - no output")
+        
+        output_filename = Path(output_path).name
+        
+        # Deduct credits
+        await deduct_credits(user, credits_required, job_id, f"V2V {mode}")
+        logger.info(f"🎬 V2V generated: {output_filename} (💰 -{credits_required} credits)")
+        
+        # Upload to storage
+        media_record = await upload_generated_media(
+            user_id=user.id,
+            file_path=Path(output_path),
+            generation_type="v2v",
+            prompt=full_prompt,
+            workflow_id=job_id,
+            extra_metadata={
+                "model_name": "wan2.2-v2v-distorch2",
+                "mode": mode,
+                "strength": strength,
+                "width": width,
+                "height": height,
+                "num_frames": num_frames,
+                "fps": fps,
+                "seed": seed,
+                "original_video": input_filename,
+                "original_duration": original_duration,
+            },
+        )
+        
+        # Get signed URL
+        url = f"/files/{output_filename}"
+        signed_url = None
+        if media_record:
+            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+        
+        return {
+            "status": "success",
+            "job_id": job_id,
+            "url": url,
+            "signed_url": signed_url,
+            "filename": output_filename,
+            "credits_used": credits_required,
+            "meta": {
+                "mode": mode,
+                "style_prompt": style_prompt,
+                "strength": strength,
+                "width": width,
+                "height": height,
+                "num_frames": num_frames,
+                "fps": fps,
+                "seed": seed,
+                "original_video": {
+                    "filename": file.filename,
+                    "duration": original_duration,
+                    "resolution": f"{original_width}x{original_height}",
+                },
+            },
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ V2V generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"V2V generation failed: {str(e)}")
+    finally:
+        # Cleanup input video (keep extracted frame for debugging)
+        if input_path.exists():
+            try:
+                input_path.unlink()
+            except Exception:
+                pass
+
+
 @app.post("/generate-wan22-comfyui")
 async def generate_wan22_comfyui(
     file: UploadFile = File(...),
