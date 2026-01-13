@@ -365,10 +365,17 @@ _default_client: Optional[StorageClient] = None
 
 
 def get_client() -> StorageClient:
-    """Get the default storage client singleton."""
+    """Get the default storage client singleton.
+
+    Auth token is loaded from STORAGE_API_KEY environment variable.
+    """
+    import os
+
     global _default_client
     if _default_client is None:
-        _default_client = StorageClient()
+        auth_token = os.environ.get("STORAGE_API_KEY")
+        base_url = os.environ.get("STORAGE_URL", "http://localhost:7990")
+        _default_client = StorageClient(base_url=base_url, auth_token=auth_token)
     return _default_client
 
 
