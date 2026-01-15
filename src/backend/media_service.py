@@ -37,7 +37,7 @@ import logging
 import hashlib
 import hmac
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
 from dataclasses import dataclass
@@ -46,6 +46,17 @@ import mimetypes
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# Retention policy: days until media expires per tier
+# Storage GC will clean up files after X-Expires-At passes
+TIER_RETENTION_DAYS: Dict[str, int] = {
+    "free": 30,   # 1 month
+    "pro": 90,    # 3 months
+    "vip": 365,   # 1 year
+}
+
+DEFAULT_RETENTION_DAYS = 30  # Fallback for unknown tiers
 
 
 @dataclass
@@ -208,6 +219,54 @@ class MediaService:
             "Prefer": "return=representation",
         }
     
+    async def get_user_tier(self, user_id: str) -> str:
+        """
+        Fetch user's tier from Supabase user_credits table.
+        
+        Args:
+            user_id: User's UUID
+            
+        Returns:
+            Tier string: 'free', 'pro', or 'vip'
+        """
+        if not self.supabase_url or not self.supabase_key:
+            logger.warning("⚠️ Supabase not configured, using default tier")
+            return "free"
+        
+        try:
+            resp = await self.http_client.get(
+                f"{self.supabase_url}/rest/v1/user_credits",
+                params={"user_id": f"eq.{user_id}", "select": "tier"},
+                headers=self._supabase_headers(),
+            )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and isinstance(data, list) and len(data) > 0:
+                    tier = data[0].get("tier", "free")
+                    logger.debug(f"👤 User {user_id[:8]}... tier: {tier}")
+                    return tier
+            
+            logger.debug(f"👤 No tier found for user {user_id[:8]}..., defaulting to free")
+            return "free"
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to fetch user tier: {e}")
+            return "free"
+    
+    def calculate_expires_at(self, tier: str) -> datetime:
+        """
+        Calculate expiration datetime based on user tier.
+        
+        Args:
+            tier: User tier ('free', 'pro', 'vip')
+            
+        Returns:
+            Datetime when the file should expire
+        """
+        retention_days = TIER_RETENTION_DAYS.get(tier, DEFAULT_RETENTION_DAYS)
+        return datetime.utcnow() + timedelta(days=retention_days)
+    
     def _detect_media_type(self, mime_type: str) -> str:
         """Detect media type from MIME type."""
         if mime_type.startswith("video/"):
@@ -241,6 +300,7 @@ class MediaService:
         height: Optional[int] = None,
         duration_seconds: Optional[float] = None,
         is_nsfw: bool = False,
+        user_tier: Optional[str] = None,
     ) -> MediaRecord:
         """
         Upload a file to storage and create Supabase metadata record.
@@ -258,6 +318,7 @@ class MediaService:
             height: Media height in pixels
             duration_seconds: Duration for video/audio
             is_nsfw: Whether content is NSFW
+            user_tier: User tier for retention policy (auto-fetched if not provided)
         
         Returns:
             MediaRecord with full metadata
@@ -276,12 +337,21 @@ class MediaService:
         media_type = self._detect_media_type(mime_type)
         storage_path = self._generate_storage_path(user_id, filename, media_type)
         
-        # 1. Upload to oelala-storage
-        logger.info(f"📤 Uploading {filename} to {storage_path}")
+        # Get user tier for retention policy if not provided
+        if user_tier is None:
+            user_tier = await self.get_user_tier(user_id)
+        
+        # Calculate expiration based on tier
+        expires_at = self.calculate_expires_at(user_tier)
+        retention_days = TIER_RETENTION_DAYS.get(user_tier, DEFAULT_RETENTION_DAYS)
+        
+        # 1. Upload to oelala-storage with retention header
+        logger.info(f"📤 Uploading {filename} to {storage_path} (tier={user_tier}, expires={expires_at.date()})")
         
         upload_url = f"{self.storage_url}/{storage_path}"
         headers = self._storage_headers()
         headers["Content-Type"] = mime_type
+        headers["X-Expires-At"] = expires_at.isoformat() + "Z"  # RFC3339 format
         
         resp = await self.http_client.put(upload_url, content=data, headers=headers)
         resp.raise_for_status()
@@ -309,6 +379,11 @@ class MediaService:
             metadata["height"] = height
         if duration_seconds:
             metadata["duration_seconds"] = duration_seconds
+        
+        # Add retention info to metadata
+        metadata["tier"] = user_tier
+        metadata["retention_days"] = retention_days
+        metadata["expires_at"] = expires_at.isoformat() + "Z"
         
         # 2. Create Supabase metadata record
         record_id: Optional[str] = None
