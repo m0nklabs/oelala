@@ -1,7 +1,26 @@
 # Media Storage Architecture
 
-> **Last Updated**: 2026-01-12
+> **Last Updated**: 2026-01-15
 > **Related Project**: [oelala-storage](https://github.com/m0nklabs/oelala-storage) (separate repo)
+> **Canonical Docs**: [oelala-storage/docs/VISION.md](../../oelala-storage/docs/VISION.md)
+
+---
+
+## 🎯 Key Concept: Separation of Concerns
+
+**oelala-backend is the "brain", oelala-storage is the "dumb" storage.**
+
+| Responsibility | oelala-backend | oelala-storage |
+|---------------|----------------|----------------|
+| User authentication | ✅ | ❌ |
+| Access control (who sees what) | ✅ | ❌ |
+| Retention policies | ✅ (sets `X-Expires-At`) | ❌ (just executes) |
+| Tier/quota logic | ✅ | ❌ |
+| Storing files | ❌ | ✅ |
+| Deduplication | ❌ | ✅ |
+| CDN/replication | ❌ | ✅ |
+
+---
 
 ## Overview
 
@@ -9,9 +28,39 @@ Storage is split into two components:
 1. **oelala** - Main application (this repo) - handles generation, UI, business logic
 2. **oelala-storage** - Standalone storage service (separate repo) - handles files, sync, caching
 
+### oelala-storage Architecture
+
+oelala-storage is a **client/server/CDN** system:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  oelala-backend (this repo)                                    │
+│                                                                │
+│  • Determines who can see what                                 │
+│  • Sets retention via X-Expires-At header                     │
+│  • Manages user tiers/quotas                                  │
+│                                                                │
+│                        │                                       │
+│                        ▼                                       │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  oelala-storage Coordinator (CDN entry point)            │ │
+│  │                                                          │ │
+│  │  • Routes requests to correct node                       │ │
+│  │  • Manages replication                                   │ │
+│  │  • Handles deduplication                                 │ │
+│  │                                                          │ │
+│  │               ┌─────────┬─────────┐                     │ │
+│  │               ▼         ▼         ▼                     │ │
+│  │            Node 1    Node 2    Node 3                   │ │
+│  │            500GB     200GB     1TB                      │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────┘
+```
+
 ## Current Status ✅
 
 ### oelala-storage Service
+- **Mode**: Standalone (coordinator + node combined)
 - **Port**: 7990 (HTTP), 7991 (gRPC), 7992 (Metrics)
 - **Status**: Running as systemd service
 - **Storage Path**: `/home/flip/oelala/media/`
@@ -125,210 +174,69 @@ HEAD   /{bucket}/{key}        → Get file metadata
 | Auto-upload after generation | ⚠️ Sync only | Critical (#15) |
 | Background auto-upload for async | ⏳ Todo | Critical (#15) |
 | Storage quota tracking | ⏳ Todo | High (#33) |
-| Retention policies | ⏳ Todo | Medium (#71) |
-| Signed URL generation | ⏳ Todo | Low |
+| Retention policies via `X-Expires-At` | ⏳ Todo | Medium (#71) |
+| ✅ Signed URL generation | ✅ Done | - |
 | User bucket support in storage | ⏳ Todo | Critical (oelala-storage) |
 
-## Integration Flow
+---
 
-### User Registration → Bucket Creation
-```
-1. User signs up via Supabase Auth
-2. Profile created in profiles table (via PR #92)
-3. On first generation request:
-   a. Backend checks if user bucket exists
-   b. If not, creates bucket via oelala-storage API
-   c. Stores bucket_id in user profile (optional)
-4. All subsequent uploads go to user's bucket
-```
+## 📅 Retention & Cleanup
 
-### Generation → Auto-Upload Flow
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Frontend      │────▶│   oelala API    │────▶│   ComfyUI       │
-│   (React)       │     │   (FastAPI)     │     │   (localhost)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │                        │
-                               │ queue job              │ generate
-                               ▼                        ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │   Job Queue     │     │ ComfyUI Output  │
-                        │   (in-memory)   │     │ /output/*.mp4   │
-                        └─────────────────┘     └─────────────────┘
-                               │                        │
-                               │ poll status            │
-                               ▼                        ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │ Progress Monitor│────▶│ Auto-Upload     │
-                        │ (WebSocket)     │     │ Service         │
-                        └─────────────────┘     └─────────────────┘
-                                                       │
-                                                       │ PUT /{user_id}/videos/{file}
-                                                       ▼
-                                                ┌─────────────────┐
-                                                │ oelala-storage  │
-                                                │ (port 7990)     │
-                                                └─────────────────┘
-```
+### oelala-backend Responsibility
 
-### Async Job Auto-Upload (Proposed)
+oelala-backend determines retention, NOT storage:
+
 ```python
-# In comfyui_progress_monitor.py or new auto_upload_service.py
-
-async def on_job_complete(job_id: str, user_id: str, output_files: List[str]):
-    """Called when async job completes."""
-    storage = StorageClient()
-    
-    for file_path in output_files:
-        # Determine media type from extension
-        media_type = "videos" if file_path.endswith(".mp4") else "images"
-        
-        # Generate unique key
-        key = f"{media_type}/{datetime.now():%Y%m%d_%H%M%S}_{Path(file_path).name}"
-        
-        # Upload to user's bucket
-        bucket = f"users/{user_id}"
-        with open(file_path, "rb") as f:
-            storage.put(bucket, key, f)
-        
-        # Optionally clean up ComfyUI output
-        if CLEANUP_AFTER_UPLOAD:
-            os.remove(file_path)
+# When uploading to storage
+headers = {
+    "X-User-ID": user_id,
+    "X-Expires-At": (datetime.now() + timedelta(days=180)).isoformat(),  # 6 months EU
+}
+storage_client.put(bucket, key, data, headers=headers)
 ```
 
-- Long-term maintainability for one-man team
+### Retention Rules (Backend enforces)
 
-**Philosophy**: Local-first, self-hosted nodes that sync P2P.
+| Content Type | Retention | Reason |
+|--------------|-----------|--------|
+| Generated media | 6 months | EU GDPR minimum |
+| User uploads | 6 months | EU GDPR minimum |
+| Deleted account media | 2 years + 6 months | Legal requirements |
+| Published content | Until unpublished | User controls |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              oelala-storage node (Go binary)                │
-├─────────────────────────────────────────────────────────────┤
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
-│  │  BadgerDB     │  │  HTTP/gRPC    │  │  Sync Engine  │   │
-│  │  (metadata)   │  │  (S3-compat)  │  │  (P2P/WAN)    │   │
-│  └───────────────┘  └───────────────┘  └───────────────┘   │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
-│  │  Local FS     │  │  LRU Cache    │  │  WebSocket    │   │
-│  │  (blobs)      │  │  (hot files)  │  │  (events)     │   │
-│  └───────────────┘  └───────────────┘  └───────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│  Node A         │  │  Node B         │  │  Node C         │
-│  (Home Server)  │◀─▶│  (Office PC)    │◀─▶│  (Cloud VPS)    │
-│  Linux          │  │  Windows        │  │  Linux          │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-```
+### What Storage Does
 
-#### Integration with Oelala
+Storage just executes what backend tells it:
+1. Receives `X-Expires-At` header on upload
+2. Stores expiration in file metadata
+3. GC job deletes expired files periodically
+4. Backend can delete files early if needed
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    oelala (FastAPI)                         │
-│  - Generation logic, UI, auth, billing                      │
-│  - Talks to oelala-storage via S3-compatible API            │
-│  - Local Redis/SQLite cache for metadata                    │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           │ S3 API (GET/PUT/DELETE)
-                           │ WebSocket (realtime events)
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  oelala-storage node                        │
-│  - Handles file storage, dedup, sync                        │
-│  - Can run on same machine or separate                      │
-│  - Scales horizontally with more nodes                      │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-#### Storage Node Features
+## 🔗 oelala-storage Architecture
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| Go binary | Single executable, ~10-15MB | Critical |
-| Windows + Linux | Native builds, no Wine/WSL | Critical |
-| S3-compatible API | Standard interface for tools | High |
-| BadgerDB metadata | Embedded KV store, no setup | High |
-| Content addressing | SHA-256 hash for deduplication | High |
-| LRU caching | Hot files in memory | High |
-| gRPC node-to-node | Efficient binary protocol for sync | Medium |
-| File chunking | Large file support, resumable | Medium |
-| Sync engine | Background P2P sync | Medium |
-| Conflict resolution | Last-write-wins or versioning | Medium |
-| Encryption | Optional at-rest (ChaCha20-Poly1305) | Low |
-| Compression | Optional LZ4 for bandwidth savings | Low |
+See [oelala-storage/docs/VISION.md](../../oelala-storage/docs/VISION.md) for the canonical architecture.
 
-#### Node Types
+**Current Mode**: Standalone (single node, coordinator + storage combined)
 
-| Type | Description | Use Case |
-|------|-------------|----------|
-| **Primary** | Main node, write-enabled | Production server |
-| **Replica** | Mirror, can be promoted | Failover/backup |
-| **Edge** | Local cache, partial sync | User's desktop |
-| **Archive** | Cold storage, async sync | Long-term backup |
-
-#### Configuration Example
-
-```yaml
-# oelala-storage.yaml
-node:
-  id: "node_abc123"
-  name: "Home Server"
-  type: primary
-
-storage:
-  path: "/data/oelala"
-  max_size_gb: 500
-  cache_size_mb: 2048
-
-api:
-  http_port: 7999
-  grpc_port: 7998
-  enable_tls: true
-
-sync:
-  peers:
-    - url: "https://node-b.example.com:7999"
-      type: replica
-    - url: "https://archive.example.com:7999"
-      type: archive
-  strategy: realtime  # realtime, scheduled, manual
-  interval_minutes: 15
-
-security:
-  encryption_at_rest: true
-  auth_tokens:
-    - name: "oelala-main"
-      token: "${OELALA_STORAGE_TOKEN}"
-      permissions: ["read", "write", "delete"]
-```
-
-### Phase 4: Cloud Integration (Future)
-
-Once local distributed storage is stable, add cloud backends:
+**Future Mode**: Client/Server/CDN with multiple storage nodes:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Storage Abstraction Layer                │
-├─────────────────────────────────────────────────────────────┤
-│  Oelala Nodes  │  S3/MinIO  │  GCS  │  Azure Blob  │  IPFS │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    │   CDN Layer       │
-                    │  (CloudFlare/etc) │
-                    └───────────────────┘
+oelala-backend  ───────────────────→  Coordinator (CDN)
+     │                                      │
+     │  "Store this with 6 month expiry"    │
+     │  "User X can access file Y"           │
+     │  "Delete all files for user Z"        │
+                                            │
+                                     ┌──────┼──────┐
+                                     ▼      ▼      ▼
+                                  Node 1  Node 2  Node 3
 ```
 
-**Cloud Features** (Phase 4+):
-- S3-compatible API for existing tools
-- CDN integration for delivery
-- Geographic distribution
-- Tiered storage (hot/warm/cold)
+---
 
-## File Naming Convention
+## 📁 File Naming Convention
 
 ### Current Format
 ```

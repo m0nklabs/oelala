@@ -69,15 +69,48 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 ## Related Repositories
 
-- **oelala-storage**: Separate Go-based storage service at `/home/flip/oelala-storage/`. See `docs/MEDIA_STORAGE.md` for architecture.
+- **oelala-storage**: Separate Go-based storage service at `/home/flip/oelala-storage/`. 
+  - **Canonical Docs**: `/home/flip/oelala-storage/docs/VISION.md` (architecture)
   - **Standalone product** - not just an oelala microservice, can be used by any project
   - **Ports**: HTTP API (7990), gRPC Sync (7991), Metrics (7992)
   - **S3-compatible API**: PUT/GET/DELETE/HEAD/LIST objects
   - **Config**: `oelala-storage.yaml`
   - **Build**: `go build -o bin/oelala-storage ./cmd/oelala-storage`
   - **Run**: `./bin/oelala-storage serve`
-  - **Docs**: See `/home/flip/oelala-storage/docs/PRODUCT_VISION.md` for roadmap
 - When implementing storage features, defer to oelala-storage rather than building in Python.
+
+### oelala-storage Architecture (CLIENT/SERVER/CDN)
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│ oelala-backend (Python/FastAPI) - THE BRAIN                       │
+│ • User auth, access control, retention policies, tier logic       │
+│ • Sends X-Expires-At header for retention                        │
+│ • Decides who can see what                                        │
+└───────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────────────┐
+│ oelala-storage Coordinator - CDN ENTRY POINT                      │
+│ • Routes requests to correct node                                 │
+│ • Manages replication and deduplication                           │
+│ • Database-based blob references (NO SYMLINKS)                    │
+└───────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+        ┌──────────┐    ┌──────────┐    ┌──────────┐
+        │  Node 1  │    │  Node 2  │    │  Node 3  │
+        │  Linux   │    │  Windows │    │  Linux   │
+        │  500GB   │    │  200GB   │    │  1TB     │
+        └──────────┘    └──────────┘    └──────────┘
+```
+
+**Key Principles:**
+1. **Storage is "dumb"** - backend tells storage what to do
+2. **Deduplication via database** - hash → node locations, NOT symlinks  
+3. **Retention via headers** - backend sends `X-Expires-At`, storage executes
+4. **EU retention** - 6 months minimum (GDPR)
 
 ## Media Storage Locations (CRITICAL)
 
