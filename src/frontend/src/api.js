@@ -203,6 +203,26 @@ export async function listUserMedia(type = 'all') {
 }
 
 /**
+ * Unified media listing - aggregates user, generated, comfyui-local, and public sources
+ * @param {string} type - 'all', 'video', 'image', 'audio'
+ * @param {string} source - 'all', 'user', 'generated', 'comfyui-local', 'public'
+ * @param {object} adminFilters - Admin-only filters: { filterUserId, includeAllUsers }
+ */
+export async function listUnifiedMedia(type = 'all', source = 'all', adminFilters = {}) {
+  const params = new URLSearchParams({ type, source })
+  
+  // Admin-only filters
+  if (adminFilters.filterUserId) {
+    params.append('filter_user_id', adminFilters.filterUserId)
+  }
+  if (adminFilters.includeAllUsers) {
+    params.append('include_all_users', 'true')
+  }
+  
+  return apiGet(`/api/media/unified?${params.toString()}`)
+}
+
+/**
  * Build authenticated URL for user media
  * Note: For direct access, use the proxy endpoint which checks auth
  */

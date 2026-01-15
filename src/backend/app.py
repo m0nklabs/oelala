@@ -69,7 +69,7 @@ from gallery_api import router as gallery_router
 from profile_api import router as profile_router
 
 # Admin system
-from admin_api import router as admin_router
+from admin_api import router as admin_router, check_admin
 
 # Webhooks system
 from webhooks_api import router as webhooks_router
@@ -2168,6 +2168,283 @@ async def health_check():
 # =============================================================================
 
 
+@app.get("/api/media/unified")
+async def list_unified_media(
+    type: str = "all",
+    source: str = "all",
+    # Admin-only filters
+    filter_user_id: Optional[str] = None,  # Admin: filter by specific user
+    include_all_users: bool = False,  # Admin: show media from all users
+    user: User = Depends(get_current_user),
+):
+    """
+    Unified media endpoint that aggregates all media sources.
+
+    Args:
+        type: Filter by media type ('all', 'video', 'image', 'audio')
+        source: Filter by source ('all', 'user', 'generated', 'comfyui-local', 'public')
+               - 'user': User's private storage (always visible to owner)
+               - 'generated': Generated media (admin only)
+               - 'comfyui-local': ComfyUI output (admin only)
+               - 'public': Published gallery items (everyone)
+        filter_user_id: (Admin only) Filter to show media from specific user
+        include_all_users: (Admin only) Include media from all users
+
+    Returns:
+        Combined list of media from all accessible sources
+        For admin: includes owner_id, owner_email, visibility fields
+    """
+    try:
+        storage = get_storage_client()
+        all_media = []
+
+        # Check admin status for accessing generated/comfyui-local
+        is_admin = await check_admin(user)
+
+        # Determine which user's media to fetch
+        # Admin can view other users' media
+        target_user_id = user.id
+        if is_admin:
+            if filter_user_id:
+                target_user_id = filter_user_id
+            elif include_all_users:
+                target_user_id = None  # Signal to fetch all users
+
+        # User's own media (or filtered user for admin)
+        if source in ("all", "user"):
+            try:
+                media_type = None
+                if type != "all":
+                    type_map = {"video": "videos", "image": "images", "audio": "audio"}
+                    media_type = type_map.get(type, type)
+
+                if target_user_id:
+                    # Fetch specific user's media
+                    objects = storage.list_user_media(target_user_id, media_type)
+                    for obj in objects:
+                        key = obj.get("key", "")
+                        filename = obj.get("filename", key.split("/")[-1] if "/" in key else key)
+                        obj_type = obj.get("media_type", "")
+
+                        if obj_type == "videos" or obj.get("content_type", "").startswith("video/"):
+                            item_type = "video"
+                        elif obj_type == "audio" or obj.get("content_type", "").startswith("audio/"):
+                            item_type = "audio"
+                        else:
+                            item_type = "image"
+
+                        item = {
+                            "name": filename,
+                            "filename": filename,
+                            "type": item_type,
+                            "url": f"/user/media/{obj_type}/{filename}",
+                            "size": obj.get("size", 0),
+                            "modified": obj.get("modified_at", ""),
+                            "mtime": obj.get("modified_at").timestamp() if hasattr(obj.get("modified_at"), "timestamp") else 0,
+                            "source": "user",
+                            "visibility": "private",  # User storage = private by default
+                        }
+                        # Admin gets extra info
+                        if is_admin:
+                            item["owner_id"] = target_user_id
+                        all_media.append(item)
+                elif is_admin and include_all_users:
+                    # Admin: list all users' media
+                    # List buckets that start with "users/"
+                    try:
+                        # Get all user directories from storage
+                        users_path = Path("/home/flip/oelala/media/users")
+                        if users_path.exists():
+                            for user_dir in users_path.iterdir():
+                                if user_dir.is_dir():
+                                    uid = user_dir.name
+                                    try:
+                                        objects = storage.list_user_media(uid, media_type)
+                                        for obj in objects:
+                                            key = obj.get("key", "")
+                                            filename = obj.get("filename", key.split("/")[-1] if "/" in key else key)
+                                            obj_type = obj.get("media_type", "")
+
+                                            if obj_type == "videos" or obj.get("content_type", "").startswith("video/"):
+                                                item_type = "video"
+                                            elif obj_type == "audio" or obj.get("content_type", "").startswith("audio/"):
+                                                item_type = "audio"
+                                            else:
+                                                item_type = "image"
+
+                                            all_media.append({
+                                                "name": filename,
+                                                "filename": filename,
+                                                "type": item_type,
+                                                "url": f"/admin/user-media/{uid}/{obj_type}/{filename}",
+                                                "size": obj.get("size", 0),
+                                                "modified": obj.get("modified_at", ""),
+                                                "mtime": obj.get("modified_at").timestamp() if hasattr(obj.get("modified_at"), "timestamp") else 0,
+                                                "source": "user",
+                                                "visibility": "private",
+                                                "owner_id": uid,
+                                            })
+                                    except Exception:
+                                        pass  # Skip users with no media
+                    except Exception as e:
+                        logger.debug(f"Error listing all users: {e}")
+            except Exception as e:
+                logger.debug(f"User media not found: {e}")
+
+        # Generated media (admin only)
+        if is_admin and source in ("all", "generated"):
+            try:
+                objects = storage.list("generated")
+                for obj in objects:
+                    key = obj.get("key", "")
+                    if not key or key == ".":
+                        continue
+                    filename = key.split("/")[-1] if "/" in key else key
+
+                    # Determine type from extension
+                    ext = filename.lower().split(".")[-1] if "." in filename else ""
+                    if ext in ("mp4", "webm", "mov", "avi"):
+                        item_type = "video"
+                    elif ext in ("mp3", "wav", "flac", "ogg"):
+                        item_type = "audio"
+                    else:
+                        item_type = "image"
+
+                    # Filter by type if specified
+                    if type != "all" and item_type != type:
+                        continue
+
+                    all_media.append({
+                        "name": filename,
+                        "filename": filename,
+                        "type": item_type,
+                        "url": f"/media/generated/{key}",
+                        "size": obj.get("size", 0),
+                        "modified": obj.get("modified_at", ""),
+                        "mtime": 0,  # Storage API returns string, not timestamp
+                        "source": "generated",
+                        "visibility": "dev",  # Generated = dev visibility
+                    })
+            except Exception as e:
+                logger.debug(f"Generated media error: {e}")
+
+        # ComfyUI local output (admin only)
+        if is_admin and source in ("all", "comfyui-local"):
+            try:
+                # List directly from filesystem since symlink listing is broken in oelala-storage
+                import os
+                comfyui_path = Path("/home/flip/oelala/ComfyUI/output")
+                if comfyui_path.exists():
+                    for file in comfyui_path.iterdir():
+                        if file.is_file() and not file.name.startswith("."):
+                            filename = file.name
+                            ext = filename.lower().split(".")[-1] if "." in filename else ""
+
+                            if ext in ("mp4", "webm", "mov", "avi"):
+                                item_type = "video"
+                            elif ext in ("mp3", "wav", "flac", "ogg"):
+                                item_type = "audio"
+                            elif ext in ("png", "jpg", "jpeg", "webp", "gif"):
+                                item_type = "image"
+                            else:
+                                continue
+
+                            # Filter by type if specified
+                            if type != "all" and item_type != type:
+                                continue
+
+                            stat = file.stat()
+                            all_media.append({
+                                "name": filename,
+                                "filename": filename,
+                                "type": item_type,
+                                "url": f"/comfyui/output/{filename}",
+                                "size": stat.st_size,
+                                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                "mtime": stat.st_mtime,
+                                "source": "comfyui-local",
+                                "visibility": "dev",  # ComfyUI local = dev visibility
+                            })
+            except Exception as e:
+                logger.debug(f"ComfyUI media error: {e}")
+
+        # Public gallery items (everyone can see)
+        if source in ("all", "public"):
+            try:
+                # Query published_media from Supabase
+                from supabase_utils import get_supabase_client
+                supabase = get_supabase_client()
+                if supabase:
+                    query = supabase.table("published_media").select(
+                        "id,user_id,storage_path,title,media_type,is_nsfw,thumbnail_url,created_at"
+                    )
+                    
+                    # Filter by type if specified
+                    if type != "all":
+                        query = query.eq("media_type", type)
+                    
+                    # Non-admin users don't see NSFW by default
+                    if not is_admin:
+                        query = query.eq("is_nsfw", False)
+                    
+                    response = query.order("created_at", desc=True).limit(100).execute()
+                    
+                    for item in response.data or []:
+                        # Determine URL based on storage_path
+                        storage_path = item.get("storage_path", "")
+                        if storage_path.startswith("video/"):
+                            url = f"/user/media/videos/{storage_path.split('/', 1)[1]}"
+                        elif storage_path.startswith("image/"):
+                            url = f"/user/media/images/{storage_path.split('/', 1)[1]}"
+                        else:
+                            url = f"/gallery/media/{item['id']}"
+                        
+                        all_media.append({
+                            "id": item.get("id"),
+                            "name": item.get("title", "Untitled"),
+                            "filename": storage_path.split("/")[-1] if "/" in storage_path else storage_path,
+                            "type": item.get("media_type", "image"),
+                            "url": url,
+                            "thumbnail_url": item.get("thumbnail_url"),
+                            "source": "public",
+                            "visibility": "public",
+                            "is_nsfw": item.get("is_nsfw", False),
+                            "owner_id": item.get("user_id"),
+                            "mtime": 0,  # Will sort by created_at
+                        })
+            except Exception as e:
+                logger.debug(f"Public gallery error: {e}")
+
+        # Sort by mtime (newest first)
+        all_media.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+
+        # Count stats by source for admin
+        stats = {
+            "videos": sum(1 for m in all_media if m["type"] == "video"),
+            "images": sum(1 for m in all_media if m["type"] == "image"),
+            "audio": sum(1 for m in all_media if m["type"] == "audio"),
+        }
+        
+        # Add source breakdown for admin
+        source_stats = {}
+        if is_admin:
+            for m in all_media:
+                src = m.get("source", "unknown")
+                source_stats[src] = source_stats.get(src, 0) + 1
+
+        return {
+            "media": all_media,
+            "stats": stats,
+            "source_stats": source_stats if is_admin else {},
+            "is_admin": is_admin,
+            "total": len(all_media),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list unified media: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/user/media")
 async def list_user_media(type: str = "all", user: User = Depends(get_current_user)):
     """
@@ -2257,7 +2534,8 @@ async def get_user_media(
     """
     try:
         storage = get_storage_client()
-        data = storage.get_user_media(user.id, media_type, filename)
+        stream = storage.iter_user_media(user.id, media_type, filename)
+        debug_log(f"🔍 streaming media {media_type}/{filename} for user {user.id}")
 
         # Determine content type
         ext = Path(filename).suffix.lower()
@@ -2278,7 +2556,7 @@ async def get_user_media(
         content_type = content_types.get(ext, "application/octet-stream")
 
         return StreamingResponse(
-            iter([data]),
+            stream,
             media_type=content_type,
             headers={"Content-Disposition": f'inline; filename="{filename}"'},
         )

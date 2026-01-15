@@ -23,9 +23,9 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 # Debug flag
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
 
-# TEMPORARY: Bypass admin check until Supabase user_credits table is set up
-# TODO: Remove this once PR for admin/storage/supabase integration is merged
-ADMIN_BYPASS = os.getenv("OELALA_ADMIN_BYPASS", "1") == "1"
+# Admin bypass - ONLY enable explicitly for local development
+# Default is OFF (secure) - set OELALA_ADMIN_BYPASS=1 to enable
+ADMIN_BYPASS = os.getenv("OELALA_ADMIN_BYPASS", "0") == "1"
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://nsbjwhxdkxnyggtuxjjp.supabase.co")

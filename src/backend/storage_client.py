@@ -285,6 +285,26 @@ class StorageClient:
         key = self.user_key(media_type, filename)
         return self.get(bucket, key)
 
+    def iter_user_media(
+        self,
+        user_id: str,
+        media_type: str,
+        filename: str,
+    ):
+        """Stream user's media file as an iterator of bytes."""
+        bucket = self.user_bucket(user_id)
+        key = self.user_key(media_type, filename)
+        url = f"/{bucket}/{key}"
+
+        def _iter():
+            with self.client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                for chunk in resp.iter_bytes():
+                    if chunk:
+                        yield chunk
+
+        return _iter()
+
     def delete_user_media(
         self,
         user_id: str,

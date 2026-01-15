@@ -1,11 +1,121 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video } from 'lucide-react'
 import { BACKEND_BASE, getMediaUrl } from '../../config'
-import { listUserMedia, deleteUserMedia, apiFetch } from '../../api'
+import { listUserMedia, listUnifiedMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
 import { getAccessToken } from '../../api'
 import { getMediaType } from '../../utils/mediaUtils'
+
+// Lazy loading media component - only loads when in viewport
+const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurations }) => {
+  const ref = useRef(null)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      {
+        rootMargin: '200px', // Start loading 200px before viewport
+        threshold: 0,
+      }
+    )
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const mediaUrl = getMediaUrl(item.url, item.signed_url)
+  
+  const handleLoadedMetadata = (e) => {
+    const duration = e.target.duration
+    if (duration && !videoDurations[item.filename]) {
+      setVideoDurations(prev => ({ ...prev, [item.filename]: duration }))
+    }
+  }
+
+  if (item.type === 'video') {
+    return (
+      <div ref={ref} style={{ width: '100%', height: '100%', borderRadius: 'inherit', overflow: 'hidden' }}>
+        {isVisible ? (
+          <video
+            src={mediaUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={handleLoadedMetadata}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#111',
+            color: '#444',
+          }}>
+            <Video size={32} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (item.type === 'audio') {
+    return (
+      <div ref={ref} className="audio-thumb">
+        <div className="audio-icon">🎵</div>
+        {isVisible && (
+          <audio
+            src={mediaUrl}
+            preload="metadata"
+            onLoadedMetadata={handleLoadedMetadata}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // Image
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%', borderRadius: 'inherit', overflow: 'hidden' }}>
+      {isVisible ? (
+        <img
+          src={mediaUrl}
+          alt={item.filename}
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#111',
+          color: '#444',
+        }}>
+          <ImageIcon size={32} />
+        </div>
+      )}
+    </div>
+  )
+})
+
+LazyMedia.displayName = 'LazyMedia'
 
 // Format video duration as MM:SS
 const formatDuration = (seconds) => {
@@ -93,6 +203,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
   const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
   const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
+
+  // Admin-specific state
+  const [sourceStats, setSourceStats] = useState({}) // { user: 10, generated: 5, ... }
+  const [sourceFilter, setSourceFilter] = useState('all') // 'all', 'user', 'generated', 'comfyui-local', 'public'
+  const [visibilityFilter, setVisibilityFilter] = useState('all') // 'all', 'private', 'public', 'dev'
+  const [filterUserId, setFilterUserId] = useState('') // Admin: filter by specific user
+  const [includeAllUsers, setIncludeAllUsers] = useState(false) // Admin: show all users' media
+  const [showAdminPanel, setShowAdminPanel] = useState(false) // Toggle admin panel visibility
 
   // Compute gridSize from profile
   const activeProfile = profile === 'auto' ? detectProfile() : profile
@@ -233,90 +351,49 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     setLoading(true)
     setError('')
     try {
-      // Use grouped mode to pair videos with source images
-      // For prompts filter, fetch all media with metadata then filter client-side
+      // For prompts filter, fetch all media then filter client-side
       const apiFilter = filter === 'prompts' ? 'all' : filter
+      console.log('🎬 MyMedia: Fetching unified media, user:', user?.id, 'isAdmin:', isAdminUser)
 
-      // Fetch from both ComfyUI output (legacy) and user storage (new)
-      // Use isAdmin from auth context (bypasses hardcoded email list)
-      console.log('🎬 MyMedia: Fetching media, user:', user?.id, user?.email, 'isAdmin:', isAdminUser)
-
-      let comfyRes = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
-      let userMedia = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
-      let generatedMedia = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
-
-      if (user) {
-        // Logged in: fetch from user storage (private, user-scoped)
-        userMedia = await listUserMedia(apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all')
-          .then(data => {
-            console.log('🎬 MyMedia: User storage response:', data)
-            return data
-          })
-          .catch(err => {
-            console.error('🎬 MyMedia: User storage error:', err)
-            return { media: [], stats: { videos: 0, images: 0, audio: 0 } }
-          })
-
-        // Admin accounts see ALL generated media (media/generated/ folder)
-        if (isAdminUser) {
-          try {
-            const token = await getAccessToken()
-            const genRes = await fetch(`${BACKEND_BASE}/api/admin/generated-media?type=${apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all'}&limit=500`, {
-              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            })
-            if (genRes.ok) {
-              const genData = await genRes.json()
-              // Transform admin API response to MyMedia format
-              // Count videos/images from the media array
-              const videos = (genData.media || []).filter(m => m.type === 'video').length
-              const images = (genData.media || []).filter(m => m.type === 'image').length
-              generatedMedia = {
-                media: (genData.media || []).map(item => ({
-                  filename: item.name,
-                  url: item.url,
-                  thumbnail_url: item.url,
-                  type: item.type,
-                  size: item.size,
-                  modified: item.modified,
-                  metadata: { has_metadata: item.has_metadata || false },
-                  source: 'generated'
-                })),
-                stats: { videos, images, audio: 0 }
-              }
-              console.log('🎬 MyMedia: Admin generated media:', generatedMedia.media.length, 'items')
-            }
-          } catch (err) {
-            console.error('🎬 MyMedia: Admin generated media error:', err)
-          }
-
-          // Also show ComfyUI shared output for admins
-          comfyRes = await fetch(`${BACKEND_BASE}/list-comfyui-media?type=${apiFilter}&grouped=true&include_metadata=true&hide_start_images=${hideStartImages}`)
-            .then(r => r.ok ? r.json() : { media: [], stats: { videos: 0, images: 0, audio: 0 } })
-            .catch(() => ({ media: [], stats: { videos: 0, images: 0, audio: 0 } }))
-        }
-      } else {
-        // Not logged in: show nothing (users must log in to see their media)
-        // Dev/NSFW content is never shown to guests
-        comfyRes = { media: [], stats: { videos: 0, images: 0, audio: 0 } }
+      if (!user) {
+        // Not logged in: show nothing
+        setMediaList([])
+        setStats({ videos: 0, images: 0, audio: 0 })
+        setSourceStats({})
+        setSelectedItems(new Set())
+        return
       }
 
-      // Mark user storage items with source flag
-      const userItems = (userMedia.media || []).map(item => ({
+      // Build admin filters if admin
+      const adminFilters = {}
+      if (isAdminUser) {
+        if (filterUserId) {
+          adminFilters.filterUserId = filterUserId
+        }
+        if (includeAllUsers) {
+          adminFilters.includeAllUsers = true
+        }
+      }
+
+      // Use unified API - backend handles admin visibility for generated/comfyui-local
+      const response = await listUnifiedMedia(
+        apiFilter === 'video' ? 'video' : apiFilter === 'image' ? 'image' : 'all',
+        sourceFilter, // Use admin source filter if set
+        adminFilters
+      )
+
+      console.log('🎬 MyMedia: Unified response:', response.media?.length, 'items, isAdmin:', response.is_admin)
+
+      let media = (response.media || []).map(item => ({
         ...item,
-        source: 'storage',
+        filename: item.filename || item.name,
+        mtime: item.mtime || 0,
       }))
 
-      // Mark comfy items with source flag
-      const comfyItems = (comfyRes.media || []).map(item => ({
-        ...item,
-        source: 'comfyui',
-      }))
-
-      // Generated items already have source: 'generated' set above
-      const generatedItems = generatedMedia.media || []
-
-      // Combine all sources (user storage + generated + comfyui)
-      let media = [...userItems, ...generatedItems, ...comfyItems]
+      // Client-side visibility filter (for admin)
+      if (isAdminUser && visibilityFilter !== 'all') {
+        media = media.filter(item => item.visibility === visibilityFilter)
+      }
 
       // For prompts view, filter to only items with prompts
       if (filter === 'prompts') {
@@ -326,23 +403,18 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         )
       }
 
-      // Combine stats from all sources
-      const stats = {
-        videos: (comfyRes.stats?.videos || 0) + (userMedia.stats?.videos || 0) + (generatedMedia.stats?.videos || 0),
-        images: (comfyRes.stats?.images || 0) + (userMedia.stats?.images || 0) + (generatedMedia.stats?.images || 0),
-        audio: (comfyRes.stats?.audio || 0) + (userMedia.stats?.audio || 0) + (generatedMedia.stats?.audio || 0),
-      }
-
       setMediaList(media)
-      setStats(stats)
+      setStats(response.stats || { videos: 0, images: 0, audio: 0 })
+      setSourceStats(response.source_stats || {})
       setSelectedItems(new Set()) // Clear selection on refresh
     } catch (err) {
+      console.error('🎬 MyMedia: Fetch error:', err)
       setError(err.message)
     } finally {
       setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, hideStartImages, user?.id, isAdminUser]) // Use user.id for stable reference
+  }, [filter, user?.id, isAdminUser, sourceFilter, visibilityFilter, filterUserId, includeAllUsers])
 
   // Fetch on mount and when dependencies change (but not on every user object change)
   useEffect(() => {
@@ -350,7 +422,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     if (mounted) fetchMedia()
     return () => { mounted = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, hideStartImages, user?.id, isAdminUser])
+  }, [filter, user?.id, isAdminUser, sourceFilter, visibilityFilter, filterUserId, includeAllUsers])
 
   // Keyboard navigation
   useEffect(() => {
@@ -896,6 +968,66 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           z-index: 20;
         }
 
+        /* ========== ADMIN VISIBILITY/SOURCE BADGES ========== */
+        .admin-badge {
+          position: absolute;
+          bottom: 40px;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 0.6rem;
+          font-weight: 600;
+          z-index: 20;
+          opacity: 0.9;
+        }
+        .visibility-badge {
+          left: 8px;
+        }
+        .visibility-badge.private {
+          background: rgba(239, 68, 68, 0.9);
+          color: #fff;
+        }
+        .visibility-badge.public {
+          background: rgba(34, 197, 94, 0.9);
+          color: #fff;
+        }
+        .visibility-badge.dev {
+          background: rgba(234, 179, 8, 0.9);
+          color: #000;
+        }
+        .source-badge {
+          right: 8px;
+        }
+        .source-badge.user {
+          background: rgba(59, 130, 246, 0.9);
+          color: #fff;
+        }
+        .source-badge.generated {
+          background: rgba(168, 85, 247, 0.9);
+          color: #fff;
+        }
+        .source-badge.comfyui-local {
+          background: rgba(234, 179, 8, 0.9);
+          color: #000;
+        }
+        .source-badge.public {
+          background: rgba(34, 197, 94, 0.9);
+          color: #fff;
+        }
+        .owner-badge {
+          position: absolute;
+          top: 40px;
+          left: 8px;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 0.55rem;
+          background: rgba(0, 0, 0, 0.7);
+          color: rgba(255, 255, 255, 0.8);
+          z-index: 20;
+          max-width: 120px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
 
         /* ========== MEDIA OVERLAY (hover info) ========== */
         .media-overlay {
@@ -1335,8 +1467,156 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           >
             <HelpCircle size={18} />
           </button>
+
+          {/* Admin toggle button - only show for admins */}
+          {isAdminUser && (
+            <button
+              onClick={() => setShowAdminPanel(!showAdminPanel)}
+              style={{
+                padding: '6px 10px',
+                border: 'none',
+                borderRadius: '6px',
+                background: showAdminPanel ? 'var(--accent-color, #a855f7)' : 'rgba(255,165,0,0.2)',
+                color: showAdminPanel ? '#fff' : 'orange',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+              }}
+              title="Toggle Admin Panel"
+            >
+              🛡️ Admin
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Admin Panel - only visible to admins when toggled */}
+      {isAdminUser && showAdminPanel && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          padding: '12px 16px',
+          borderBottom: '1px solid rgba(255, 165, 0, 0.3)',
+          backgroundColor: 'rgba(255, 165, 0, 0.05)',
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ color: 'orange', fontWeight: 600, fontSize: '0.85rem' }}>🛡️ Admin Filters</span>
+
+          {/* Source filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Source:</span>
+            <select
+              className="sort-select"
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              style={{ minWidth: '100px' }}
+            >
+              <option value="all">All Sources</option>
+              <option value="user">👤 User Storage</option>
+              <option value="generated">⚙️ Generated</option>
+              <option value="comfyui-local">🖥️ ComfyUI Local</option>
+              <option value="public">🌍 Public Gallery</option>
+            </select>
+          </div>
+
+          {/* Visibility filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Visibility:</span>
+            <select
+              className="sort-select"
+              value={visibilityFilter}
+              onChange={(e) => setVisibilityFilter(e.target.value)}
+              style={{ minWidth: '100px' }}
+            >
+              <option value="all">All</option>
+              <option value="private">🔒 Private</option>
+              <option value="public">🌍 Public</option>
+              <option value="dev">🔧 Dev</option>
+            </select>
+          </div>
+
+          {/* Include all users toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={includeAllUsers}
+              onChange={(e) => {
+                setIncludeAllUsers(e.target.checked)
+                if (e.target.checked) setFilterUserId('') // Clear user filter when viewing all
+              }}
+              style={{ width: '16px', height: '16px' }}
+            />
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Show all users</span>
+          </label>
+
+          {/* Filter by user ID */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>User ID:</span>
+            <input
+              type="text"
+              placeholder="Filter by user..."
+              value={filterUserId}
+              onChange={(e) => {
+                setFilterUserId(e.target.value)
+                if (e.target.value) setIncludeAllUsers(false) // Disable all users when filtering specific
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                padding: '4px 8px',
+                color: 'var(--text-primary)',
+                fontSize: '0.8rem',
+                width: '180px',
+              }}
+            />
+            {filterUserId && (
+              <button
+                onClick={() => setFilterUserId('')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '2px',
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Source stats */}
+          {Object.keys(sourceStats).length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+              {Object.entries(sourceStats).map(([src, count]) => (
+                <span
+                  key={src}
+                  style={{
+                    fontSize: '0.75rem',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background: src === 'user' ? 'rgba(59,130,246,0.2)' :
+                               src === 'generated' ? 'rgba(168,85,247,0.2)' :
+                               src === 'comfyui-local' ? 'rgba(234,179,8,0.2)' :
+                               src === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.1)',
+                    color: src === 'user' ? '#3b82f6' :
+                           src === 'generated' ? '#a855f7' :
+                           src === 'comfyui-local' ? '#eab308' :
+                           src === 'public' ? '#22c55e' : 'var(--text-muted)',
+                  }}
+                >
+                  {src}: {count}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Keyboard Shortcuts Help Modal */}
       {showHelp && (
@@ -1503,35 +1783,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-color, #a855f7)'}
               onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color, #333)'}
             >
-              {/* Media thumbnail */}
-              <div style={{ flexShrink: 0 }}>
-                {item.type === 'video' ? (
-                  <video
-                    src={getMediaUrl(item.url, item.signed_url)}
-                    style={{
-                      width: '100px',
-                      height: '100px',
-                      objectFit: 'cover',
-                      borderRadius: '8px'
-                    }}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                  />
-                ) : (
-                  <img
-                    src={getMediaUrl(item.url, item.signed_url)}
-                    alt={item.filename}
-                    style={{
-                      width: '100px',
-                      height: '100px',
-                      objectFit: 'cover',
-                      borderRadius: '8px'
-                    }}
-                    loading="lazy"
-                  />
-                )}
+              {/* Media thumbnail - lazy loaded */}
+              <div style={{ flexShrink: 0, width: '100px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
+                <LazyMedia
+                  item={item}
+                  getMediaUrl={getMediaUrl}
+                  videoDurations={videoDurations}
+                  setVideoDurations={setVideoDurations}
+                />
               </div>
 
               {/* Prompt content */}
@@ -1709,43 +1968,37 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 </div>
               )}
 
-              {/* Media content */}
-              {item.type === 'video' ? (
-                <video
-                  src={getMediaUrl(item.url, item.signed_url)}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  preload="metadata"
-                  onLoadedMetadata={(e) => {
-                    const duration = e.target.duration
-                    if (duration && !videoDurations[item.filename]) {
-                      setVideoDurations(prev => ({ ...prev, [item.filename]: duration }))
-                    }
-                  }}
-                />
-              ) : item.type === 'audio' ? (
-                <div className="audio-thumb">
-                  <div className="audio-icon">🎵</div>
-                  <audio
-                    src={getMediaUrl(item.url, item.signed_url)}
-                    preload="metadata"
-                    onLoadedMetadata={(e) => {
-                      const duration = e.target.duration
-                      if (duration && !videoDurations[item.filename]) {
-                        setVideoDurations(prev => ({ ...prev, [item.filename]: duration }))
-                      }
-                    }}
-                  />
-                </div>
-              ) : (
-                <img
-                  src={getMediaUrl(item.url, item.signed_url)}
-                  alt={item.filename}
-                  loading="lazy"
-                />
+              {/* Admin badges - only show when admin panel is active */}
+              {isAdminUser && showAdminPanel && (
+                <>
+                  {/* Visibility badge */}
+                  {item.visibility && (
+                    <div className={`admin-badge visibility-badge ${item.visibility}`}>
+                      {item.visibility === 'private' ? '🔒' : item.visibility === 'public' ? '🌍' : '🔧'} {item.visibility}
+                    </div>
+                  )}
+                  {/* Source badge */}
+                  {item.source && (
+                    <div className={`admin-badge source-badge ${item.source}`}>
+                      {item.source === 'user' ? '👤' : item.source === 'generated' ? '⚙️' : item.source === 'comfyui-local' ? '🖥️' : '🌍'} {item.source}
+                    </div>
+                  )}
+                  {/* Owner badge - show truncated user ID */}
+                  {item.owner_id && (
+                    <div className="owner-badge" title={item.owner_id}>
+                      👤 {item.owner_id.slice(0, 8)}...
+                    </div>
+                  )}
+                </>
               )}
+
+              {/* Media content - lazy loaded */}
+              <LazyMedia
+                item={item}
+                getMediaUrl={getMediaUrl}
+                videoDurations={videoDurations}
+                setVideoDurations={setVideoDurations}
+              />
 
               <div className="media-overlay">
                 <div>

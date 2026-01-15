@@ -3,8 +3,13 @@
 ## Tested Configuration (December 2025)
 
 ### Hardware
-- **GPU0**: NVIDIA RTX 3060 12GB (cuda:0)
-- **GPU1**: NVIDIA RTX 5060 Ti 16GB (cuda:1)
+> **⚠️ NOTE**: PyTorch CUDA indices differ from nvidia-smi! Always use PyTorch mapping below.
+
+| nvidia-smi | PyTorch | GPU | VRAM | Role |
+|------------|---------|-----|------|------|
+| 1 | **cuda:0** | RTX 5060 Ti | 16GB | Primary (compute) |
+| 0 | **cuda:1** | RTX 3060 | 12GB | Secondary (donor) |
+
 - **Total VRAM**: 28GB
 - **RAM**: 115GB (CPU offload optional)
 
@@ -17,8 +22,9 @@
 
 ### GPU-Only Mode (Recommended)
 ```
-cuda:0,12gb;cuda:1,16gb
+cuda:0,10gb;cuda:1,4gb
 ```
+- Primary on cuda:0 (5060 Ti), overflow on cuda:1 (3060)
 - No CPU fallback
 - Lower RAM usage (~24GB vs ~53GB)
 - Full GPU utilization
@@ -26,7 +32,7 @@ cuda:0,12gb;cuda:1,16gb
 
 ### CPU Fallback Mode
 ```
-cuda:0,12gb;cuda:1,16gb;cpu,*
+cuda:0,10gb;cuda:1,4gb;cpu,*
 ```
 - T5 encoder offloaded to CPU
 - Higher resolution/frames possible

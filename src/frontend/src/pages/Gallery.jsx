@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Filter, Image as ImageIcon, Video, RefreshCw, Eye, Heart } from 'lucide-react'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'
@@ -6,7 +6,270 @@ import { useAuth } from '../contexts/AuthContext'
 import { useNSFW } from '../contexts/NSFWContext'
 import MediaDetailModal from '../components/MediaDetailModal'
 
+// Lazy loaded media item - only loads src when in viewport
+const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick }) => {
+  const ref = useRef(null)
+  const [isVisible, setIsVisible] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
+
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+
+    // Create observer for THIS item only
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+          // Once visible, stop observing - media will load once and stay
+          observer.disconnect()
+        }
+      },
+      {
+        rootMargin: '100px', // Start loading 100px before entering viewport
+        threshold: 0,
+      }
+    )
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const previewUrl = getPreviewUrl(item)
+  const mediaUrl = getMediaUrl(item)
+
+  return (
+    <div
+      ref={ref}
+      onClick={onClick}
+      style={{
+        background: '#2a2a2a',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        border: '1px solid #333',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-4px)'
+        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)'
+        e.currentTarget.style.boxShadow = 'none'
+      }}
+    >
+      {/* Media Preview */}
+      <div style={{
+        aspectRatio: '9/16',
+        background: '#000',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {item.media_type === 'video' ? (
+          isVisible ? (
+            <video
+              src={mediaUrl}
+              poster={previewUrl || undefined}
+              preload="metadata"
+              muted
+              playsInline
+              onLoadedData={() => setHasLoaded(true)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                opacity: hasLoaded ? 1 : 0,
+                transition: 'opacity 0.3s',
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#111',
+              color: '#444',
+            }}>
+              <Video size={32} />
+            </div>
+          )
+        ) : item.media_type === 'audio' ? (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#111',
+            color: '#aaa',
+            fontSize: '12px'
+          }}>
+            🎵 Audio
+          </div>
+        ) : isVisible ? (
+          <>
+            <img
+              src={mediaUrl}
+              alt={item.title}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setHasLoaded(true)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                opacity: hasLoaded ? 1 : 0,
+                transition: 'opacity 0.3s',
+              }}
+            />
+            {!hasLoaded && (
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#111',
+                color: '#444',
+              }}>
+                <ImageIcon size={32} />
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#111',
+            color: '#444',
+          }}>
+            <ImageIcon size={32} />
+          </div>
+        )}
+
+        {/* NSFW Badge */}
+        {item.is_nsfw && (
+          <div style={{
+            position: 'absolute',
+            top: '8px',
+            right: '8px',
+            background: 'rgba(239, 68, 68, 0.9)',
+            color: '#fff',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 600,
+          }}>
+            🔞 NSFW
+          </div>
+        )}
+
+        {/* Stats Overlay */}
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
+          padding: '8px 12px',
+          display: 'flex',
+          gap: '12px',
+          fontSize: '12px',
+          color: '#fff'
+        }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Eye size={14} />
+            {item.view_count}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Heart size={14} />
+            {item.like_count}
+          </span>
+        </div>
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: '12px' }}>
+        <h3 style={{
+          margin: '0 0 6px',
+          fontSize: '14px',
+          fontWeight: 600,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}>
+          {item.title}
+        </h3>
+
+        {item.description && (
+          <p style={{
+            margin: '0 0 8px',
+            fontSize: '12px',
+            color: '#888',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            lineHeight: 1.4
+          }}>
+            {item.description}
+          </p>
+        )}
+
+        {/* Tags */}
+        {item.tags && item.tags.length > 0 && (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '4px',
+            marginTop: '8px'
+          }}>
+            {item.tags.slice(0, 3).map((tag, idx) => (
+              <span
+                key={idx}
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  background: '#3a3a3a',
+                  borderRadius: '4px',
+                  color: '#aaa'
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+            {item.tags.length > 3 && (
+              <span style={{ fontSize: '11px', color: '#666' }}>
+                +{item.tags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})
+
+LazyMediaItem.displayName = 'LazyMediaItem'
+
 export default function Gallery() {
+  const DEBUG = true // Enable debug for troubleshooting
+  const debugLog = (message, data = null) => {
+    if (!DEBUG) return
+    if (data) {
+      console.log('🐛 [Gallery]', message, data)
+    } else {
+      console.log('🐛 [Gallery]', message)
+    }
+  }
+
   const { user } = useAuth()
   const { nsfwEnabled } = useNSFW()
   const [items, setItems] = useState([])
@@ -19,6 +282,7 @@ export default function Gallery() {
   const [total, setTotal] = useState(0)
   const containerRef = useRef(null)
   const [selectedItem, setSelectedItem] = useState(null)
+  const PAGE_SIZE = 12 // Items per page
 
   // Fetch gallery items
   const fetchGallery = useCallback(async (resetPage = false) => {
@@ -44,8 +308,9 @@ export default function Gallery() {
       params.append('sort_by', sortBy)
       params.append('order', 'desc')
       params.append('page', currentPage.toString())
-      params.append('per_page', '30')
+      params.append('per_page', PAGE_SIZE.toString())
 
+      debugLog('🔍 Fetching gallery', { currentPage, mediaType, sortBy })
       const response = await apiFetch(`/api/gallery?${params.toString()}`)
 
       if (!response.ok) {
@@ -53,7 +318,7 @@ export default function Gallery() {
       }
 
       const data = await response.json()
-      console.log('📸 Gallery data:', data)
+      debugLog('📸 Gallery data received', { total: data.total, itemCount: data.items?.length })
 
       if (resetPage) {
         setItems(data.items)
@@ -77,13 +342,19 @@ export default function Gallery() {
     fetchGallery(true)
   }, [mediaType, sortBy, user, nsfwEnabled])
 
-  // Infinite scroll
+  const loadNextPage = useCallback(() => {
+    if (loading || !hasMore) return
+    debugLog('📄 Loading next page')
+    setPage(prev => prev + 1)
+  }, [loading, hasMore])
+
   const handleScroll = useCallback((e) => {
     const { scrollTop, clientHeight, scrollHeight } = e.target
-    if (scrollHeight - scrollTop - clientHeight < 500 && !loading && hasMore) {
-      setPage(prev => prev + 1)
+    if (scrollTop <= 0) return
+    if (scrollHeight - scrollTop - clientHeight < 300) {
+      loadNextPage()
     }
-  }, [loading, hasMore])
+  }, [loadNextPage])
 
   useEffect(() => {
     if (page > 1) {
@@ -92,11 +363,21 @@ export default function Gallery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page])
 
-  // Get media URL for display
-  const getMediaUrl = (item) => {
-    // Assuming storage_path is like "video/filename.mp4" or "image/filename.png"
-    return `${BACKEND_BASE}/user/media/${item.storage_path}`
-  }
+  // Get media URL for display - use the PUBLIC gallery file endpoint
+  // This streams media from the owner's storage without requiring auth
+  const getMediaUrl = useCallback((item) => {
+    return `${BACKEND_BASE}/api/gallery/${item.id}/file`
+  }, [])
+
+  const getPreviewUrl = useCallback((item) => {
+    if (!item.thumbnail_url) {
+      return null
+    }
+    if (item.thumbnail_url.startsWith('http://') || item.thumbnail_url.startsWith('https://')) {
+      return item.thumbnail_url
+    }
+    return `${BACKEND_BASE}${item.thumbnail_url}`
+  }, [])
 
   return (
     <div style={{
@@ -271,155 +552,13 @@ export default function Gallery() {
         }}
       >
         {items.map((item) => (
-          <div
+          <LazyMediaItem
             key={item.id}
+            item={item}
+            getMediaUrl={getMediaUrl}
+            getPreviewUrl={getPreviewUrl}
             onClick={() => setSelectedItem(item)}
-            style={{
-              background: '#2a2a2a',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              cursor: 'pointer',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              border: '1px solid #333',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)'
-              e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
-          >
-            {/* Media Preview */}
-            <div style={{
-              aspectRatio: '9/16',
-              background: '#000',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
-              {item.media_type === 'video' ? (
-                <video
-                  src={getMediaUrl(item)}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                />
-              ) : (
-                <img
-                  src={getMediaUrl(item)}
-                  alt={item.title}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                />
-              )}
-
-              {/* NSFW Badge */}
-              {item.is_nsfw && (
-                <div style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  background: 'rgba(239, 68, 68, 0.9)',
-                  color: '#fff',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                }}>
-                  🔞 NSFW
-                </div>
-              )}
-
-              {/* Stats Overlay */}
-              <div style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
-                padding: '8px 12px',
-                display: 'flex',
-                gap: '12px',
-                fontSize: '12px',
-                color: '#fff'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Eye size={14} />
-                  {item.view_count}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Heart size={14} />
-                  {item.like_count}
-                </span>
-              </div>
-            </div>
-
-            {/* Info */}
-            <div style={{ padding: '12px' }}>
-              <h3 style={{
-                margin: '0 0 6px',
-                fontSize: '14px',
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                {item.title}
-              </h3>
-
-              {item.description && (
-                <p style={{
-                  margin: '0 0 8px',
-                  fontSize: '12px',
-                  color: '#888',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  lineHeight: 1.4
-                }}>
-                  {item.description}
-                </p>
-              )}
-
-              {/* Tags */}
-              {item.tags && item.tags.length > 0 && (
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '4px',
-                  marginTop: '8px'
-                }}>
-                  {item.tags.slice(0, 3).map((tag, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        fontSize: '11px',
-                        padding: '2px 8px',
-                        background: '#3a3a3a',
-                        borderRadius: '4px',
-                        color: '#aaa'
-                      }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                  {item.tags.length > 3 && (
-                    <span style={{ fontSize: '11px', color: '#666' }}>
-                      +{item.tags.length - 3}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+          />
         ))}
 
         {/* Loading indicator */}
@@ -445,6 +584,7 @@ export default function Gallery() {
             No more items
           </div>
         )}
+
 
         {/* Empty state */}
         {!loading && items.length === 0 && (

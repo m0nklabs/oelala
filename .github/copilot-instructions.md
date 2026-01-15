@@ -172,17 +172,46 @@ The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk
 
 ## Services
 
-- **Backend API**: Runs as a systemd service `oelala-api.service`. Do NOT start/stop manually with uvicorn commands.
-  - Restart: `sudo systemctl restart oelala-api`
-  - Logs: `journalctl -u oelala-api -f`
-- **ComfyUI**: Runs as a systemd service `comfyui.service`.
-  - Restart: `sudo systemctl restart comfyui`
-  - Logs: `journalctl -u comfyui -f`
-- **oelala-storage**: Can run as systemd service `oelala-storage.service` in production.
-  - Restart: `sudo systemctl restart oelala-storage`
-  - Logs: `journalctl -u oelala-storage -f`
-  - Dev mode: `cd /home/flip/oelala-storage && ./bin/oelala-storage serve`
-- **Frontend**: Runs via `npm run dev` in development, or as static build in production.
+All oelala services run as **systemd services**. NEVER start/stop manually with npm/uvicorn/go commands - always use systemctl!
+
+### Oelala Services
+
+| Service | systemd unit | Port | Restart Command |
+|---------|--------------|------|-----------------|
+| Backend API | `oelala-backend.service` | 7998 | `sudo systemctl restart oelala-backend` |
+| Frontend | `oelala-frontend.service` | 5174 | `sudo systemctl restart oelala-frontend` |
+| ComfyUI | `comfyui.service` | 8188 | `sudo systemctl restart comfyui` |
+
+### Oelala-Storage Services
+
+| Service | systemd unit | Port | Restart Command |
+|---------|--------------|------|-----------------|
+| Storage API | `oelala-storage.service` | 7990 | `sudo systemctl restart oelala-storage` |
+
+### Service Commands Reference
+
+```bash
+# Status check
+sudo systemctl status oelala-backend oelala-frontend comfyui oelala-storage
+
+# View logs (follow mode)
+journalctl -u oelala-backend -f
+journalctl -u oelala-frontend -f
+journalctl -u comfyui -f
+journalctl -u oelala-storage -f
+
+# Restart all oelala services
+sudo systemctl restart oelala-backend oelala-frontend
+
+# Check if services are enabled at boot
+systemctl is-enabled oelala-backend oelala-frontend comfyui oelala-storage
+```
+
+### CRITICAL Rules
+- **NEVER run `npm run dev` manually** - use `sudo systemctl restart oelala-frontend`
+- **NEVER run `uvicorn` manually** - use `sudo systemctl restart oelala-backend`
+- **NEVER run `python main.py` for ComfyUI** - use `sudo systemctl restart comfyui`
+- **Dev mode exception**: Only for oelala-storage during active development: `cd /home/flip/oelala-storage && ./bin/oelala-storage serve`
 
 ## Safety & secrets
 
@@ -232,17 +261,21 @@ This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct acce
 The server uses **DisTorch2** for multi-GPU model distribution across both GPUs:
 
 ### Hardware
-| GPU | VRAM | CUDA Device |
-|-----|------|-------------|
-| RTX 5060 Ti | 16GB | `cuda:1` |
-| RTX 3060 | 12GB | `cuda:0` |
-| **Total** | **28GB** | |
+> **⚠️ CRITICAL**: PyTorch CUDA indices differ from nvidia-smi! Use PyTorch mapping:
+
+| nvidia-smi | PyTorch | GPU | VRAM | Role |
+|------------|---------|-----|------|------|
+| 1 | **cuda:0** | RTX 5060 Ti | 16GB | Primary (compute) |
+| 0 | **cuda:1** | RTX 3060 | 12GB | Secondary (donor) |
+| - | **Total** | - | **28GB** | |
 
 ### DisTorch2 Allocation String
 ```
-cuda:0,12gb;cuda:1,16gb
+cuda:0,10gb;cuda:1,4gb;cpu,*
 ```
-- GPU-only mode (no CPU fallback for model weights)
+- cuda:0 = 5060 Ti (primary, gets most of model)
+- cuda:1 = 3060 (secondary, overflow)
+- cpu,* = safety fallback
 - Used in UnetLoaderGGUFAdvancedDisTorch2MultiGPU, VAELoaderDisTorch2MultiGPU, CLIPLoaderDisTorch2MultiGPU
 
 ### Video Generation Limits (WAN 2.2 14B Q6_K)

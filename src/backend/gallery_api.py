@@ -7,13 +7,19 @@ Handles publishing/unpublishing media and fetching gallery content
 import os
 import logging
 import re
+import tempfile
+import subprocess
+from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
+THUMBNAIL_DIR = Path("/home/flip/oelala/media/generated")
+THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def debug_log(msg: str):
@@ -75,6 +81,7 @@ class PublishRequest(BaseModel):
             raise ValueError("Maximum 10 tags allowed")
         # Trim whitespace and filter empty tags
         return [tag.strip() for tag in v if tag.strip()]
+
 
 
 class PublishedMediaResponse(BaseModel):
@@ -710,3 +717,112 @@ async def toggle_like(media_id: str, user: User = Depends(get_current_user)):
     except Exception:
         logger.exception("Error toggling like")
         raise HTTPException(status_code=500, detail="Failed to toggle like")
+
+
+# ============================================================================
+# Endpoint: Serve published media file (PUBLIC - no auth required)
+# ============================================================================
+@router.get("/{media_id}/file")
+async def get_published_media_file(media_id: str):
+    """
+    Serve the actual media file for a published gallery item.
+    This is PUBLIC - no authentication required for published content.
+    
+    Media source priority:
+    1. oelala-storage (user's cloud storage)
+    2. Local directories (media/generated/, ComfyUI/output/) for dev/testing
+    """
+    from fastapi.responses import StreamingResponse, FileResponse
+    from storage_client import get_storage_client
+
+    debug_log(f"Serving media file for {media_id}")
+
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Gallery service unavailable")
+
+    try:
+        # Fetch media to get storage_path and user_id
+        result = (
+            supabase.table("published_media")
+            .select("user_id,storage_path,media_type")
+            .eq("id", media_id)
+            .execute()
+        )
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        item = result.data[0]
+        user_id = item["user_id"]
+        storage_path = item["storage_path"]
+
+        # Parse storage_path (format: "video/filename.mp4")
+        parts = storage_path.split("/", 1)
+        if len(parts) != 2:
+            raise HTTPException(status_code=400, detail="Invalid storage path")
+
+        media_type_dir, filename = parts
+
+        # Determine content type
+        ext = Path(filename).suffix.lower()
+        content_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".flac": "audio/flac",
+            ".ogg": "audio/ogg",
+        }
+        content_type = content_types.get(ext, "application/octet-stream")
+
+        # Try oelala-storage first
+        try:
+            storage = get_storage_client()
+            stream = storage.iter_user_media(user_id, media_type_dir, filename)
+            debug_log(f"Streaming from oelala-storage: {media_type_dir}/{filename} for user {user_id}")
+
+            return StreamingResponse(
+                stream,
+                media_type=content_type,
+                headers={
+                    "Content-Disposition": f'inline; filename="{filename}"',
+                    "Cache-Control": "public, max-age=86400",
+                },
+            )
+        except Exception as storage_err:
+            debug_log(f"oelala-storage failed: {storage_err}, trying local directories")
+
+        # Fallback to local directories for dev/testing
+        local_dirs = [
+            Path("/home/flip/oelala/media/generated"),
+            Path("/home/flip/oelala/ComfyUI/output"),
+        ]
+
+        for local_dir in local_dirs:
+            local_path = local_dir / filename
+            if local_path.exists():
+                debug_log(f"Serving from local: {local_path}")
+                return FileResponse(
+                    path=local_path,
+                    media_type=content_type,
+                    filename=filename,
+                    headers={
+                        "Cache-Control": "public, max-age=86400",
+                    },
+                )
+
+        # Nothing found
+        raise HTTPException(status_code=404, detail=f"Media file not found: {filename}")
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error serving media file")
+        raise HTTPException(status_code=500, detail="Failed to serve media file")
