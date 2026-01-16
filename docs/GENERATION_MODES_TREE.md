@@ -267,26 +267,31 @@ Sub-Models (Shared Components)
 
 ## 🖥️ DisTorch2 GPU Distribution Tree
 
+> **⚠️ PyTorch CUDA indices differ from nvidia-smi!**
+> See [DISTORCH2_MULTI_GPU_SETTINGS.md](DISTORCH2_MULTI_GPU_SETTINGS.md) for full documentation.
+
 ```
 Multi-GPU Distribution (28GB Total)
 │
-├── 🎮 cuda:0 (RTX 3060 12GB)
+├── 🎮 cuda:0 (RTX 5060 Ti 16GB) ← PyTorch primary
+│   │   nvidia-smi shows as GPU 1
+│   │
+│   ├── Typical Load: 12-16GB
+│   │
+│   └── Best for:
+│       ├── Activations/KV-cache (needs contiguous memory)
+│       ├── Main compute (100% GPU utilization)
+│       └── Small model portion (when 3060 holds most)
+│
+├── 🎮 cuda:1 (RTX 3060 12GB) ← PyTorch secondary
+│   │   nvidia-smi shows as GPU 0
 │   │
 │   ├── Typical Load: 10-12GB
 │   │
 │   └── Best for:
-│       ├── Text Encoders (UMT5, Gemma)
-│       ├── VAE operations
-│       └── Smaller model portions
-│
-├── 🎮 cuda:1 (RTX 5060 Ti 16GB)
-│   │
-│   ├── Typical Load: 14-16GB
-│   │
-│   └── Best for:
-│       ├── Main diffusion model
-│       ├── GGUF inference
-│       └── Larger model portions
+│       ├── Model weight storage (97% of model)
+│       ├── Freeing cuda:0 for activations
+│       └── PUT THIS FIRST in allocation for long videos
 │
 └── 💾 cpu (System RAM - Emergency)
     │
@@ -295,21 +300,71 @@ Multi-GPU Distribution (28GB Total)
         └── Very high resolution/frames
 ```
 
-### Allocation Examples
+### Optimal Allocation Strings
 
 ```
-VRAM Budget by Use Case
+ALLOCATION STRING FORMAT: device,size;device,size;cpu,*
+
+CRITICAL: Order determines which GPU gets model FIRST!
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MAX VIDEO LENGTH (480p Portrait, ~22 sec)                           │
+│ cuda:1,11gb;cuda:0,15gb;cpu,*                                       │
+│   → 3060 holds 97% of model (~11GB)                                 │
+│   → 5060 Ti has 15GB free for activations                           │
+│   → Max: 353-355 frames                                             │
+├─────────────────────────────────────────────────────────────────────┤
+│ BALANCED (faster, 10 sec max)                                       │
+│ cuda:0,10gb;cuda:1,4gb;cpu,*                                        │
+│   → 5060 Ti holds most of model                                     │
+│   → Faster due to less memory transfers                             │
+│   → Max: ~161 frames                                                │
+├─────────────────────────────────────────────────────────────────────┤
+│ CPU OFFLOAD (longest, slowest)                                      │
+│ cuda:1,8gb;cuda:0,12gb;cpu,*                                        │
+│   → Part of model on CPU RAM                                        │
+│   → Slowest due to PCIe transfers                                   │
+│   → For 400+ frames if needed                                       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### VRAM Budget by Resolution (tested 2026-01-16)
+
+```
+480 × 848 (Portrait) - RECOMMENDED FOR LONG VIDEOS
 │
-├── 🟢 Safe (GPU-only)
-│   ├── 480p @ 81 frames  → ~22GB
-│   ├── 576p @ 81 frames  → ~24GB
-│   └── 720p @ 41 frames  → ~22GB
+├── cuda:1,11gb;cuda:0,15gb;cpu,*
+│   ├── 161 frames (~10 sec): ✅ ~22GB SAFE
+│   ├── 241 frames (~15 sec): ✅ ~24GB SAFE  
+│   ├── 321 frames (~20 sec): ✅ ~26GB SAFE ← RECOMMENDED MAX
+│   ├── 341 frames (~21 sec): ✅ ~27GB TIGHT
+│   ├── 351-355 frames: ⚠️ Works sometimes, OOM risk
+│   └── 357+ frames: ❌ OOM
 │
-├── 🟡 Tight (may need optimization)
-│   └── 720p @ 81 frames  → ~27GB
+└── cuda:0,10gb;cuda:1,4gb;cpu,* (balanced)
+    └── 161 frames max: ✅ ~20GB
+
+576 × 1024 (Standard Portrait)
 │
-└── 🔴 Needs CPU offload
-    └── 1080p @ 41+ frames → ~30GB+
+├── 🟢 81 frames (~5 sec): ✅ ~24GB
+├── 🟡 121 frames: ⚠️ Tight
+└── 🔴 161+ frames: ❌ OOM
+
+720 × 1280 (HD Portrait)
+│
+├── 41 frames with CPU offload: ✅
+└── 81+ frames: ❌ OOM
+
+RECOMMENDED SETTINGS FOR PRODUCTION:
+├── Maximum video length: 321 frames (~20 sec)
+├── Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*
+└── Headroom: 1-2GB for stability
+
+GENERATION TIMES (6 steps, uni_pc sampler):
+├── 81 frames:  ~50-60s/step  → ~5-6 min total
+├── 161 frames: ~110-120s/step → ~12 min total
+├── 321 frames: ~227s/step    → ~23 min total
+└── Scaling: ~linear with frame count
 ```
 
 ---
@@ -560,7 +615,18 @@ Video-to-Video Modes
 │   Workflow: (T2I → I2V pipeline)                                    │
 │   Result: ✅ SUCCESS                                                 │
 │                                                                      │
-│ [Add new test results here]                                         │
+│ 2026-01-16 | I2V | wan22 DisTorch2 PLAFOND TEST                     │
+│   Resolution: 480x848 | Frames: 353 (~22 sec) | VRAM: ~27GB         │
+│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   Model: wan2.2_i2v_14B_Q6_K.gguf                                   │
+│   CLIP: umt5_xxl_fp8_e4m3fn_scaled.safetensors                      │
+│   Workflow: WAN22-I2V-DISTORCH2-LATEST-api.json                     │
+│   3060: 11.2GB (91%) | 5060Ti: 15.8GB (97%)                         │
+│   Result: ✅ SUCCESS - MAX VRAM CEILING FOUND                        │
+│                                                                      │
+│ Frame Limits @ 480x848 (tested 2026-01-16):                         │
+│   321 frames: ✅ | 341 frames: ✅ | 353 frames: ✅ (CEILING)          │
+│   355 frames: ✅ | 357 frames: ❌ OOM | 361 frames: ❌ OOM            │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -619,5 +685,5 @@ Video-to-Video Modes
 
 ---
 
-**Last Updated**: 2026-01-12
+**Last Updated**: 2026-01-16
 **Maintainer**: @copilot (auto-update on generation complete - FUTURE)

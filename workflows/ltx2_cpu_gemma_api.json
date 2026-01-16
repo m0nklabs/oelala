@@ -9,7 +9,7 @@
       "compute_device": "cuda:1",
       "virtual_vram_gb": 14.0,
       "donor_device": "cuda:0",
-      "expert_mode_allocations": "cuda:0,11gb;cuda:1,14gb;cpu,2gb",
+      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
       "eject_models": true
     }
   },

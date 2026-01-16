@@ -8,7 +8,7 @@
       "compute_device": "cuda:0",
       "virtual_vram_gb": 16.0,
       "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -28,7 +28,7 @@
       "compute_device": "cuda:0",
       "virtual_vram_gb": 16.0,
       "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -45,7 +45,7 @@
       "compute_device": "cuda:0",
       "virtual_vram_gb": 16.0,
       "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "VAELoaderDisTorch2MultiGPU",
@@ -63,7 +63,7 @@
       "device": "cuda:0",
       "virtual_vram_gb": 16.0,
       "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "CLIPLoaderDisTorch2MultiGPU",
