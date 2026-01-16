@@ -296,14 +296,30 @@ Total:                ~26 GB / 28 GB
 
 Based on tested 480p limits, extrapolated for other resolutions:
 
-| Resolution | Pixel Count | Safe Max Frames | Video Length |
-|------------|-------------|-----------------|--------------|
-| 480×848 | 407K | **321** | ~20 sec |
-| 576×1024 | 590K | ~81-121 | ~5-8 sec |
-| 720×1280 | 922K | ~41-61 | ~2.5-4 sec |
-| 1080×1920 | 2073K | ~17-25 | ~1-1.5 sec |
+| Resolution | Pixel Count | Safe Max Frames | Video Length | Notes |
+|------------|-------------|-----------------|--------------|-------|
+| 480×848 | 407K | **321** | ~20 sec | Tested ✅ |
+| 576×1024 | 590K | ~81-121 | ~5-8 sec | 1.45x pixels vs 480p |
+| 720×1280 | 922K | ~41-61 | ~2.5-4 sec | 2.26x pixels vs 480p |
+| 1080×1920 | 2073K | ~17-25 | ~1-1.5 sec | 5.09x pixels vs 480p |
 
-**Memory scaling:** VRAM ∝ resolution² × frames
+**Memory scaling formula:**
+```
+VRAM_needed ≈ base_vram + (pixels × frames × constant)
+
+For Wan2.2 14B Q6_K:
+- Base VRAM (model): ~11.5GB
+- Per-frame overhead: ~50MB at 480p
+- Scaling: quadratic with resolution
+```
+
+**576×1024 Recommended Settings:**
+- Frames: 81-121 for safe operation
+- Allocation: same `cuda:1,11gb;cuda:0,15gb;cpu,*`
+- Expected VRAM: ~24-27GB
+
+**Tip:** For higher resolutions, prioritize fewer frames over lower quality.
+Always test with target resolution before production use.
 
 ---
 

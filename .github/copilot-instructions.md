@@ -178,18 +178,23 @@ The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk
 
 ## GPU Configuration & DisTorch2
 
-- **Hardware**: RTX 5060 Ti 16GB (cuda:1) + RTX 3060 12GB (cuda:0) = 28GB total VRAM
-- **DisTorch2 Allocation**: `cuda:0,11gb;cuda:1,15gb;cpu,2gb` (recommended for all video workflows)
+- **Hardware**: RTX 5060 Ti 16GB (cuda:0) + RTX 3060 12GB (cuda:1) = 28GB total VRAM
+- **⚠️ CRITICAL**: PyTorch indices differ from nvidia-smi! nvidia-smi GPU 0 = PyTorch cuda:1
+- **DisTorch2 Allocation**: `cuda:1,11gb;cuda:0,15gb;cpu,*` (OPTIMAL - puts 3060 first!)
 - **Model Inventory**: See `docs/COMFYUI_INVENTORY.md` for complete list of available models and VRAM limits
+- **DisTorch2 Guide**: See `docs/DISTORCH2_MULTI_GPU_SETTINGS.md` for comprehensive configuration
 - **DisTorch2 Nodes** for multi-GPU video generation:
   - `UnetLoaderGGUFAdvancedDisTorch2MultiGPU` - GGUF model loading with GPU distribution
   - `VAELoaderDisTorch2MultiGPU` - VAE loading with GPU distribution
   - `CLIPLoaderDisTorch2MultiGPU` - T5 text encoder loading with GPU distribution
 - **SageAttention**: Always use `PathchSageAttentionKJ` node to reduce VRAM by 15-20%
-- **VRAM Limits**:
+- **VRAM Limits (Tested 2026-01-16)**:
+  - 480×848 @ 321 frames: ~26GB (SAFE MAX, ~20 sec video)
   - 576×1024 @ 81 frames: ~24GB (GPU-only, safe)
-  - 720×1280 @ 81 frames: ~27GB (CPU offload required)
-  - 720×400 @ 241 frames: ~22GB (GPU-only, 15s video)
+  - 720×1280 @ 41 frames: ~27GB (tight)
+
+**Key Discovery**: Allocation order matters! `cuda:1` first makes 3060 hold 97% of model,
+leaving 5060 Ti with 15GB free for activations. 5060 Ti runs at 100% utilization.
 
 ## Ports
 
@@ -304,34 +309,44 @@ The server uses **DisTorch2** for multi-GPU model distribution across both GPUs:
 
 ### DisTorch2 Allocation String
 ```
-cuda:0,10gb;cuda:1,4gb;cpu,*
+cuda:1,11gb;cuda:0,15gb;cpu,*
 ```
-- cuda:0 = 5060 Ti (primary, gets most of model)
-- cuda:1 = 3060 (secondary, overflow)
-- cpu,* = safety fallback
+- cuda:1 = 3060 (FIRST - receives 97% of model weights)
+- cuda:0 = 5060 Ti (compute device, 15GB free for activations)
+- cpu,* = safety fallback (rarely needed)
 - Used in UnetLoaderGGUFAdvancedDisTorch2MultiGPU, VAELoaderDisTorch2MultiGPU, CLIPLoaderDisTorch2MultiGPU
 
-### Video Generation Limits (WAN 2.2 14B Q6_K)
-| Resolution | Max Frames | Notes |
-|------------|------------|-------|
-| 480p (848x480) | 81 | Standard quality |
-| 720p (1280x720) | 41 | High quality |
-| 1080p | 17-25 | May need lower frames |
+**⚠️ ORDER MATTERS!** First device in string gets model first. Put 3060 first!
+
+### Video Generation Limits (WAN 2.2 14B Q6_K, tested 2026-01-16)
+| Resolution | Max Frames | Video Length | VRAM | Notes |
+|------------|------------|--------------|------|-------|
+| 480×848 | **321** | ~20 sec | ~26GB | SAFE production max |
+| 480×848 | 341-350 | ~21 sec | ~27GB | Tight, works |
+| 576×1024 | 81-121 | ~5-8 sec | ~24-27GB | Standard quality |
+| 720×1280 | 41-61 | ~2.5-4 sec | ~27GB | High quality |
+
+### Generation Times (6 steps, uni_pc sampler)
+| Frames | Time/Step | Total Time |
+|--------|-----------|------------|
+| 81 | ~50-60s | ~5-6 min |
+| 161 | ~110-120s | ~12 min |
+| 321 | ~227s | ~23 min |
 
 ### Key Files
-- `docs/COMFYUI_INVENTORY.md` - **Complete inventory of all models, LoRAs, custom nodes**
-- `docs/MULTI_GPU_SETUP.md` - Full multi-GPU configuration guide
-- `docs/GENERATION_MODES.md` - Detailed generation mode specifications
+- `docs/DISTORCH2_MULTI_GPU_SETTINGS.md` - **COMPREHENSIVE DisTorch2 guide** ⭐
+- `docs/COMFYUI_INVENTORY.md` - Complete inventory of all models, LoRAs, custom nodes
 - `docs/GENERATION_MODES_TREE.md` - **🌳 HOLY TREE - Visual tree of ALL tested generation modes**
 - `ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py` - DisTorch2 with local fixes
-- `workflows/ImageToVideo/wan22_i2v_distorch2_api.json` - DisTorch2 API workflow
+- `workflows/ImageToVideo/WAN22-I2V-DISTORCH2-LATEST-api.json` - Optimal DisTorch2 API workflow
 
 ### When modifying video workflows:
 1. Always use DisTorch2 loader nodes for Wan2.2
-2. Include `expert_mode_allocations` on ALL loader nodes
-3. Test with both low (17 frames) and high (81 frames) settings
-4. Check ComfyUI logs for distribution: `[MultiGPU DisTorch V2]`
-5. **Consult `docs/COMFYUI_INVENTORY.md`** for available models/LoRAs
+2. Use allocation: `cuda:1,11gb;cuda:0,15gb;cpu,*` (3060 FIRST!)
+3. Include `expert_mode_allocations` on ALL loader nodes
+4. Test with target resolution before production
+5. Check ComfyUI logs for distribution: `[MultiGPU DisTorch V2]`
+6. **Consult `docs/DISTORCH2_MULTI_GPU_SETTINGS.md`** for optimal settings
 
 ## Generation Mode Documentation (MANDATORY)
 
