@@ -33,6 +33,7 @@ export const TOOL_IDS = {
   MY_MEDIA_AUDIO: 'my-media-audio',
   MY_MEDIA_PROMPTS: 'my-media-prompts',
   // Account
+  MY_PROFILE: 'my-profile',
   API_KEYS: 'api-keys',
   // Admin
   ADMIN_PANEL: 'admin-panel',
@@ -111,6 +112,7 @@ export const NAV_GROUPS = [
     id: 'account',
     title: 'Account',
     items: [
+      { id: TOOL_IDS.MY_PROFILE, label: 'My Profile', status: 'new', emoji: '👤' },
       { id: TOOL_IDS.API_KEYS, label: 'API Keys', status: 'new', emoji: '🔑' },
     ],
   },

@@ -38,6 +38,7 @@ import MyMediaTool from './tools/MyMediaTool'
 import Gallery from '../pages/Gallery'
 import AdminPanelTool from './tools/AdminPanelTool'
 import APIKeysTool from './tools/APIKeysTool'
+import ProfileTool from './tools/ProfileTool'
 import LogViewer from '../components/LogViewer'
 import { sendClientLog } from '../logging'
 
@@ -180,6 +181,8 @@ export default function Dashboard() {
         return 'My Media - Prompts'
       case TOOL_IDS.GALLERY:
         return 'Community Gallery'
+      case TOOL_IDS.MY_PROFILE:
+        return 'My Profile'
       case TOOL_IDS.API_KEYS:
         return 'API Keys'
       case TOOL_IDS.ADMIN_PANEL:
@@ -274,6 +277,9 @@ export default function Dashboard() {
 
       case TOOL_IDS.API_KEYS:
         return <APIKeysTool />
+
+      case TOOL_IDS.MY_PROFILE:
+        return <ProfileTool />
 
       case TOOL_IDS.ADMIN_PANEL:
         return <AdminPanelTool />

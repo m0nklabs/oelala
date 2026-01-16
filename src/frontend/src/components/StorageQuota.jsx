@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { HardDrive, AlertTriangle, ArrowUpCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { API_BASE_URL } from '../config'
+import { BACKEND_BASE } from '../config'
 
 /**
  * Storage quota display component for user dropdown.
@@ -21,7 +21,7 @@ export default function StorageQuota() {
 
     async function fetchQuota() {
       try {
-        const res = await fetch(`${API_BASE_URL}/user/storage-quota`, {
+        const res = await fetch(`${BACKEND_BASE}/user/storage-quota`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
