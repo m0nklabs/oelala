@@ -632,12 +632,10 @@ Video-to-Video Modes
 │   Same models as above                                               │
 │   Tested: 2026-01-12 ✅                                              │
 │                                                                      │
-│ 720×1280 HD Portrait (TIGHT)                                         │
+│ 720×1280 HD Portrait - ❌ UNACCEPTABLE (under 5 sec)                 │
 │ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 41 (~2.5 sec) | VRAM: ~27GB | Time: ~5 min                │
-│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
-│   ⚠️ Near VRAM limit, may OOM under load                            │
-│   Tested: 2026-01-12 ✅                                              │
+│   Max possible: 41 frames (~2.5 sec) - TOO SHORT FOR PRODUCTION     │
+│   DO NOT USE for video generation - use 480p or 576p instead        │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
 │ 🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B                                  │
@@ -742,15 +740,25 @@ Video-to-Video Modes
 
 ### Quick Reference: What Works Right Now
 
-| Tool | Mode | Resolution | Frames | Time | Status |
-|------|------|------------|--------|------|--------|
-| I2V | wan22 | 480×848 | 321 | 23min | ✅ BEST |
-| I2V | wan22 | 576×1024 | 81 | 6min | ✅ |
-| I2V | wan22 | 720×1280 | 41 | 5min | ⚠️ Tight |
-| T2V | ltx2 | 768×512 | 97 | 8min | ✅ |
-| T2V | wan22 | 848×480 | 41 | 8min | ✅ |
-| T2I | flux | 1024×1024 | - | 30s | ✅ |
-| T2I | sdxl | 1024×1024 | - | 15s | ✅ |
+> **⚠️ MINIMUM 81 FRAMES (5 sec) - Anything less is UNACCEPTABLE!**
+
+| Tool | Mode | Resolution | Frames | Duration | Time | Status |
+|------|------|------------|--------|----------|------|--------|
+| I2V | wan22 | 480×848 | 321 | **20 sec** | 23min | ✅ BEST |
+| I2V | wan22 | 480×848 | 161 | **10 sec** | 12min | ✅ SAFE |
+| I2V | wan22 | 480×848 | 81 | **5 sec** | 6min | ✅ MIN |
+| I2V | wan22 | 576×1024 | 81 | **5 sec** | 6min | ✅ |
+| T2V | ltx2 | 768×512 | 97 | **6 sec** | 8min | ✅ |
+| T2I | flux | 1024×1024 | - | - | 30s | ✅ |
+| T2I | sdxl | 1024×1024 | - | - | 15s | ✅ |
+
+### ❌ REMOVED - Under 5 seconds (UNACCEPTABLE)
+
+| Resolution | Frames | Duration | Reason |
+|------------|--------|----------|--------|
+| 720×1280 | 41 | 2.5 sec | Too short, useless |
+| 848×480 T2V | 41 | 2.5 sec | Too short, useless |
+| Any | <81 | <5 sec | **NO PRODUCTION USE** |
 
 ---
 
