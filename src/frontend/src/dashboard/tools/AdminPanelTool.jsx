@@ -4,11 +4,13 @@ import { BACKEND_BASE } from '../../config'
 import {
   Users, Search, Coins, Shield, Crown,
   ChevronDown, ChevronUp,
-  TrendingUp
+  TrendingUp, Server, Activity
 } from 'lucide-react'
+import AdminSystemTab from './AdminSystemTab'
 
 export default function AdminPanel() {
   const { session, isAdmin } = useAuth()
+  const [activeMainTab, setActiveMainTab] = useState('users')  // 'users' or 'system'
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
@@ -282,30 +284,79 @@ export default function AdminPanel() {
   return (
     <div style={{ padding: '1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: '2rem' }}>
+      <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
           👑 Admin Panel
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          Manage users and credits
+          Manage users, credits, and system monitoring
         </p>
       </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-          <StatsCard icon={<Users size={20} />} label="Total Users" value={stats.total_users} color="#3b82f6" />
-          <StatsCard icon={<Coins size={20} />} label="Credits Issued" value={stats.total_credits_issued} color="#8b5cf6" />
-          <StatsCard icon={<TrendingUp size={20} />} label="Credits Used" value={stats.total_credits_used} color="#10b981" />
-          <StatsCard icon={<Crown size={20} />} label="VIP Users" value={stats.total_vips} color="#f59e0b" />
-        </div>
+      {/* Main Tabs: Users vs System */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+        <button
+          onClick={() => setActiveMainTab('users')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1.25rem',
+            background: activeMainTab === 'users' ? 'var(--accent-color)' : 'transparent',
+            border: 'none',
+            borderRadius: '8px 8px 0 0',
+            color: activeMainTab === 'users' ? 'white' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontWeight: activeMainTab === 'users' ? 600 : 400,
+            fontSize: '1rem',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Users size={18} />
+          User Management
+        </button>
+        <button
+          onClick={() => setActiveMainTab('system')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1.25rem',
+            background: activeMainTab === 'system' ? 'var(--accent-color)' : 'transparent',
+            border: 'none',
+            borderRadius: '8px 8px 0 0',
+            color: activeMainTab === 'system' ? 'white' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontWeight: activeMainTab === 'system' ? 600 : 400,
+            fontSize: '1rem',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Activity size={18} />
+          System Monitoring
+        </button>
+      </div>
+
+      {/* Render tab content */}
+      {activeMainTab === 'system' ? (
+        <AdminSystemTab />
+      ) : (
+        <>
+          {/* Stats Cards */}
+          {stats && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+              <StatsCard icon={<Users size={20} />} label="Total Users" value={stats.total_users} color="#3b82f6" />
+              <StatsCard icon={<Coins size={20} />} label="Credits Issued" value={stats.total_credits_issued} color="#8b5cf6" />
+              <StatsCard icon={<TrendingUp size={20} />} label="Credits Used" value={stats.total_credits_used} color="#10b981" />
+              <StatsCard icon={<Crown size={20} />} label="VIP Users" value={stats.total_vips} color="#f59e0b" />
+            </div>
           )}
 
-      {/* Filters */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '8px',
+          {/* Filters */}
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
         padding: '1rem',
         marginBottom: '1.5rem',
         display: 'flex',
@@ -543,6 +594,8 @@ export default function AdminPanel() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   )

@@ -840,3 +840,251 @@ async def get_comfyui_file(
     content_type = content_types.get(suffix, "application/octet-stream")
     
     return FileResponse(path=file_path, media_type=content_type, filename=filename)
+
+
+# =============================================================================
+# System Monitoring Endpoints (Issue #58)
+# =============================================================================
+
+
+@router.get("/system/gpu")
+async def get_gpu_status(admin: User = Depends(get_admin_user)):
+    """
+    Get GPU utilization via nvidia-smi.
+    Returns VRAM usage, GPU utilization, temperature for each GPU.
+    """
+    import subprocess
+    import re
+    
+    try:
+        # Run nvidia-smi with CSV output for easy parsing
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,name,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail="nvidia-smi failed")
+        
+        gpus = []
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 7:
+                # Parse values
+                idx = int(parts[0])
+                name = parts[1]
+                mem_total = int(parts[2])
+                mem_used = int(parts[3])
+                mem_free = int(parts[4])
+                util = int(parts[5]) if parts[5] != "[N/A]" else 0
+                temp = int(parts[6]) if parts[6] != "[N/A]" else 0
+                
+                gpus.append({
+                    "index": idx,
+                    "name": name,
+                    "memory_total_mb": mem_total,
+                    "memory_used_mb": mem_used,
+                    "memory_free_mb": mem_free,
+                    "memory_percent": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
+                    "utilization_percent": util,
+                    "temperature_c": temp,
+                })
+        
+        return {
+            "gpus": gpus,
+            "total_gpus": len(gpus),
+            "timestamp": datetime.now().isoformat(),
+        }
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="nvidia-smi timed out")
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="nvidia-smi not found")
+    except Exception as e:
+        logger.error(f"GPU status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/system/queue")
+async def get_queue_status(admin: User = Depends(get_admin_user)):
+    """
+    Get ComfyUI queue status - running and pending jobs.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:8188/queue", timeout=5.0)
+            
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": "ComfyUI not responding",
+                    "running": [],
+                    "pending": [],
+                }
+            
+            data = response.json()
+            
+            # Parse running jobs
+            running = []
+            for item in data.get("queue_running", []):
+                if len(item) >= 2:
+                    running.append({
+                        "prompt_id": item[1],
+                        "status": "running",
+                    })
+            
+            # Parse pending jobs
+            pending = []
+            for idx, item in enumerate(data.get("queue_pending", [])):
+                if len(item) >= 2:
+                    pending.append({
+                        "prompt_id": item[1],
+                        "status": "pending",
+                        "position": idx + 1,
+                    })
+            
+            return {
+                "status": "ok",
+                "running": running,
+                "pending": pending,
+                "running_count": len(running),
+                "pending_count": len(pending),
+                "timestamp": datetime.now().isoformat(),
+            }
+            
+    except httpx.TimeoutException:
+        return {
+            "status": "timeout",
+            "message": "ComfyUI request timed out",
+            "running": [],
+            "pending": [],
+        }
+    except httpx.ConnectError:
+        return {
+            "status": "offline",
+            "message": "ComfyUI is offline",
+            "running": [],
+            "pending": [],
+        }
+    except Exception as e:
+        logger.error(f"Queue status error: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "running": [],
+            "pending": [],
+        }
+
+
+@router.get("/system/health")
+async def get_system_health(admin: User = Depends(get_admin_user)):
+    """
+    Comprehensive system health check for admin dashboard.
+    """
+    import shutil
+    
+    health = {
+        "timestamp": datetime.now().isoformat(),
+        "services": {},
+        "disk": {},
+    }
+    
+    # Check ComfyUI
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:8188/system_stats", timeout=3.0)
+            health["services"]["comfyui"] = {
+                "status": "online" if response.status_code == 200 else "error",
+                "port": 8188,
+            }
+            if response.status_code == 200:
+                stats = response.json()
+                if "system" in stats:
+                    health["services"]["comfyui"]["system"] = stats["system"]
+    except Exception:
+        health["services"]["comfyui"] = {"status": "offline", "port": 8188}
+    
+    # Check oelala-storage
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:7990/health", timeout=3.0)
+            health["services"]["storage"] = {
+                "status": "online" if response.status_code == 200 else "error",
+                "port": 7990,
+            }
+    except Exception:
+        health["services"]["storage"] = {"status": "offline", "port": 7990}
+    
+    # Disk usage
+    for name, path in [
+        ("root", "/"),
+        ("home", "/home/flip"),
+        ("ssd", "/mnt/ssd"),
+    ]:
+        try:
+            usage = shutil.disk_usage(path)
+            health["disk"][name] = {
+                "total_gb": round(usage.total / (1024**3), 1),
+                "used_gb": round(usage.used / (1024**3), 1),
+                "free_gb": round(usage.free / (1024**3), 1),
+                "percent": round(usage.used / usage.total * 100, 1),
+            }
+        except Exception:
+            pass
+    
+    return health
+
+
+@router.get("/system/logs")
+async def get_recent_logs(
+    service: str = "oelala-backend",
+    lines: int = Query(default=50, le=200),
+    admin: User = Depends(get_admin_user),
+):
+    """
+    Get recent logs from systemd services.
+    Supported services: oelala-backend, comfyui, oelala-storage
+    """
+    import subprocess
+    
+    allowed_services = ["oelala-backend", "comfyui", "oelala-storage", "oelala-frontend"]
+    
+    if service not in allowed_services:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Service must be one of: {', '.join(allowed_services)}",
+        )
+    
+    try:
+        result = subprocess.run(
+            ["journalctl", "-u", service, "-n", str(lines), "--no-pager", "-o", "short-iso"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        log_lines = []
+        for line in result.stdout.strip().split("\n"):
+            if line.strip():
+                log_lines.append(line)
+        
+        return {
+            "service": service,
+            "lines": log_lines,
+            "count": len(log_lines),
+            "timestamp": datetime.now().isoformat(),
+        }
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Log fetch timed out")
+    except Exception as e:
+        logger.error(f"Log fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
