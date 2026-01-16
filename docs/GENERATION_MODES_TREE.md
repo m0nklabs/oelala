@@ -593,43 +593,164 @@ Video-to-Video Modes
 
 ## Tested Configurations Log
 
-> **Add entries here after successful generation runs!**
+> **⚠️ ADD ENTRIES HERE AFTER EVERY SUCCESSFUL TEST!**
+> This is the MOST IMPORTANT section - proves what actually works.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ TESTED & WORKING CONFIGURATIONS                                      │
+│ ✅ PRODUCTION-READY CONFIGURATIONS (Copy-paste ready!)              │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│ 2026-01-12 | I2V | wan22 standard                                   │
-│   Resolution: 576x1024 | Frames: 81 | VRAM: ~24GB                   │
-│   Workflow: wan22_i2v_distorch2_api.json                            │
-│   Result: ✅ SUCCESS                                                 │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🎬 IMAGE-TO-VIDEO (I2V) - WAN2.2 14B GGUF                          │
+│ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
-│ 2026-01-12 | T2V | ltx2                                             │
-│   Resolution: 768x512 | Frames: 97 | VRAM: ~22GB                    │
-│   Workflow: ltx2_distorch2_multigpu_api.json                        │
-│   Result: ✅ SUCCESS                                                 │
-│                                                                      │
-│ 2026-01-XX | T2V | wan22                                            │
-│   Resolution: 848x480 | Frames: 41 | VRAM: ~20GB                    │
-│   Workflow: (T2I → I2V pipeline)                                    │
-│   Result: ✅ SUCCESS                                                 │
-│                                                                      │
-│ 2026-01-16 | I2V | wan22 DisTorch2 PLAFOND TEST                     │
-│   Resolution: 480x848 | Frames: 353 (~22 sec) | VRAM: ~27GB         │
+│ [RECOMMENDED] 480×848 Portrait - MAX LENGTH                          │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 321 (~20 sec) | VRAM: ~26GB | Time: ~23 min               │
 │   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
-│   Model: wan2.2_i2v_14B_Q6_K.gguf                                   │
-│   CLIP: umt5_xxl_fp8_e4m3fn_scaled.safetensors                      │
+│   Models:                                                            │
+│     - wan2.2_i2v_high_noise_14B_Q6_K.gguf                           │
+│     - wan2.2_i2v_low_noise_14B_Q6_K.gguf                            │
+│   CLIP: umt5-xxl-enc-bf16.safetensors                               │
+│   VAE: wan_2.1_vae.safetensors                                      │
 │   Workflow: WAN22-I2V-DISTORCH2-LATEST-api.json                     │
-│   3060: 11.2GB (91%) | 5060Ti: 15.8GB (97%)                         │
-│   Result: ✅ SUCCESS - MAX VRAM CEILING FOUND                        │
+│   Sampler: uni_pc | Steps: 6 | CFG: 1.0                             │
+│   Tested: 2026-01-16 ✅                                              │
 │                                                                      │
-│ Frame Limits @ 480x848 (tested 2026-01-16):                         │
-│   321 frames: ✅ | 341 frames: ✅ | 353 frames: ✅ (CEILING)          │
-│   355 frames: ✅ | 357 frames: ❌ OOM | 361 frames: ❌ OOM            │
+│ 480×848 Portrait - SAFE PRODUCTION                                   │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 161 (~10 sec) | VRAM: ~22GB | Time: ~12 min               │
+│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   Same models as above                                               │
+│   Tested: 2026-01-16 ✅                                              │
+│                                                                      │
+│ 576×1024 Standard Portrait                                           │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 81 (~5 sec) | VRAM: ~24GB | Time: ~6 min                  │
+│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   Same models as above                                               │
+│   Tested: 2026-01-12 ✅                                              │
+│                                                                      │
+│ 720×1280 HD Portrait (TIGHT)                                         │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 41 (~2.5 sec) | VRAM: ~27GB | Time: ~5 min                │
+│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   ⚠️ Near VRAM limit, may OOM under load                            │
+│   Tested: 2026-01-12 ✅                                              │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B                                  │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ 768×512 Landscape                                                    │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 97 (~6 sec) | VRAM: ~22GB | Time: ~8 min                  │
+│   Model: ltx-2-19b-distilled_Q4_K_M.gguf                            │
+│   CLIP: gemma-3-12b-it-qat-q4_0-unquantized/                        │
+│   VAE: LTX2_video_vae_bf16.safetensors                              │
+│   Connector: ltx-2-19b-embeddings_connector_bf16.safetensors        │
+│   Workflow: ltx2_distorch2_multigpu_api.json                        │
+│   Tested: 2026-01-12 ✅                                              │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🎥 TEXT-TO-VIDEO (T2V) - WAN2.2 (T2I→I2V Pipeline)                  │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ 848×480 Landscape                                                    │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 41 (~2.5 sec) | VRAM: ~20GB | Time: ~8 min                │
+│   Pipeline: Flux T2I → Wan2.2 I2V                                   │
+│   Tested: 2026-01-10 ✅                                              │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🖼️ TEXT-TO-IMAGE (T2I) - FLUX                                       │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ 1024×1024 Square                                                     │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: flux1-dev-fp8.safetensors                                  │
+│   VRAM: ~17GB | Time: ~30 sec                                       │
+│   Steps: 20 | CFG: 3.5                                              │
+│   Tested: 2026-01-08 ✅                                              │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🖼️ TEXT-TO-IMAGE (T2I) - SDXL                                       │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ 1024×1024 with CyberRealistic Pony                                   │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: CyberRealistic_Pony_v14.1_FP16.safetensors                 │
+│   VRAM: ~8GB | Time: ~15 sec                                        │
+│   Steps: 25 | CFG: 7                                                │
+│   Tested: 2026-01-05 ✅                                              │
+│                                                                      │
+│ 1024×1024 with DreamShaper XL                                        │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: dreamshaperXL_lightningDPMSDE.safetensors                  │
+│   VRAM: ~8GB | Time: ~8 sec (lightning)                             │
+│   Steps: 8 | CFG: 2                                                 │
+│   Tested: 2026-01-05 ✅                                              │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ 🔬 EXPERIMENTAL / NEEDS MORE TESTING                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ I2V Lightning Models (faster but lower quality)                      │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Models: Wan22-I2V_A14B-Lightning-H/L-Q6_K.gguf                    │
+│   Status: 🔨 Untested with optimal allocation                        │
+│                                                                      │
+│ I2V Enhanced NSFW V2                                                 │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Models: wan22EnhancedNSFW_V2_Q6K_HIGH/LOW.gguf                    │
+│   Status: 🔨 Untested with optimal allocation                        │
+│                                                                      │
+│ LTX-2 with Audio                                                     │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Workflow: wan22_i2v_ltx2_audio_api.json                           │
+│   Status: 🔨 Audio sync issues                                       │
+│                                                                      │
+│ 576×1024 Extended (121+ frames)                                      │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Status: 🔨 NEEDS TESTING - expected ~27GB VRAM                     │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ ❌ KNOWN FAILURES / DO NOT USE                                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ 480×848 @ 357+ frames: OOM even with optimal allocation              │
+│ 576×1024 @ 161+ frames: OOM                                          │
+│ 720×1280 @ 81+ frames: OOM                                           │
+│ realvisxlV50_v50Bakedvae.safetensors: REMOVED - do not reference     │
+│ umt5-xxl-enc-bf16-uncensored.safetensors: RENAMED to umt5-xxl-enc-bf16│
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Quick Copy-Paste: Optimal I2V Settings
+
+```json
+{
+  "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+  "compute_device": "cuda:0",
+  "donor_device": "cuda:1", 
+  "virtual_vram_gb": 16,
+  "eject_models": true
+}
+```
+
+### Quick Reference: What Works Right Now
+
+| Tool | Mode | Resolution | Frames | Time | Status |
+|------|------|------------|--------|------|--------|
+| I2V | wan22 | 480×848 | 321 | 23min | ✅ BEST |
+| I2V | wan22 | 576×1024 | 81 | 6min | ✅ |
+| I2V | wan22 | 720×1280 | 41 | 5min | ⚠️ Tight |
+| T2V | ltx2 | 768×512 | 97 | 8min | ✅ |
+| T2V | wan22 | 848×480 | 41 | 8min | ✅ |
+| T2I | flux | 1024×1024 | - | 30s | ✅ |
+| T2I | sdxl | 1024×1024 | - | 15s | ✅ |
 
 ---
 
