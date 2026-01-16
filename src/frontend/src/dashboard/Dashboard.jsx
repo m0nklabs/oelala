@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react'
-import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X } from 'lucide-react'
+import React, { useEffect, useMemo, useState, useRef, lazy, Suspense } from 'react'
+import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X, Loader2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
@@ -13,34 +13,52 @@ import { useAuth } from '../contexts/AuthContext'
 import { useCredits } from '../contexts/CreditsContext'
 import { TOOL_IDS } from './nav'
 
-import TextToVideoTool from './tools/TextToVideoTool'
-import ImageToVideoTool from './tools/ImageToVideoTool'
-import TextToImageTool from './tools/TextToImageTool'
-import TextToImageToVideoTool from './tools/TextToImageToVideoTool'
-import VideoToVideoTool from './tools/VideoToVideoTool'
-import VideoToTextTool from './tools/VideoToTextTool'
-import SpeechToVideoTool from './tools/SpeechToVideoTool'
-import VideoUpscalerTool from './tools/VideoUpscalerTool'
-import FrameInterpolationTool from './tools/FrameInterpolationTool'
-import PipelineTool from './tools/PipelineTool'
-import LoRATrainingTool from './tools/LoRATrainingTool'
-import ImageToTextTool from './tools/ImageToTextTool'
-import PromptGeneratorTool from './tools/PromptGeneratorTool'
-import ImageToImageTool from './tools/ImageToImageTool'
-import UpscalerTool from './tools/UpscalerTool'
-import AudioGenerationTool from './tools/AudioGenerationTool'
-import VoiceCloningTool from './tools/VoiceCloningTool'
-import LipSyncTool from './tools/LipSyncTool'
-import ReframeTool from './tools/ReframeTool'
-import FaceSwapTool from './tools/FaceSwapTool'
-import ComingSoonTool from './tools/ComingSoonTool'
-import MyMediaTool from './tools/MyMediaTool'
-import Gallery from '../pages/Gallery'
-import AdminPanelTool from './tools/AdminPanelTool'
-import APIKeysTool from './tools/APIKeysTool'
-import ProfileTool from './tools/ProfileTool'
+// Lazy load all tool components for code splitting
+const TextToVideoTool = lazy(() => import('./tools/TextToVideoTool'))
+const ImageToVideoTool = lazy(() => import('./tools/ImageToVideoTool'))
+const TextToImageTool = lazy(() => import('./tools/TextToImageTool'))
+const TextToImageToVideoTool = lazy(() => import('./tools/TextToImageToVideoTool'))
+const VideoToVideoTool = lazy(() => import('./tools/VideoToVideoTool'))
+const VideoToTextTool = lazy(() => import('./tools/VideoToTextTool'))
+const SpeechToVideoTool = lazy(() => import('./tools/SpeechToVideoTool'))
+const VideoUpscalerTool = lazy(() => import('./tools/VideoUpscalerTool'))
+const FrameInterpolationTool = lazy(() => import('./tools/FrameInterpolationTool'))
+const PipelineTool = lazy(() => import('./tools/PipelineTool'))
+const LoRATrainingTool = lazy(() => import('./tools/LoRATrainingTool'))
+const ImageToTextTool = lazy(() => import('./tools/ImageToTextTool'))
+const PromptGeneratorTool = lazy(() => import('./tools/PromptGeneratorTool'))
+const ImageToImageTool = lazy(() => import('./tools/ImageToImageTool'))
+const UpscalerTool = lazy(() => import('./tools/UpscalerTool'))
+const AudioGenerationTool = lazy(() => import('./tools/AudioGenerationTool'))
+const VoiceCloningTool = lazy(() => import('./tools/VoiceCloningTool'))
+const LipSyncTool = lazy(() => import('./tools/LipSyncTool'))
+const ReframeTool = lazy(() => import('./tools/ReframeTool'))
+const FaceSwapTool = lazy(() => import('./tools/FaceSwapTool'))
+const ComingSoonTool = lazy(() => import('./tools/ComingSoonTool'))
+const MyMediaTool = lazy(() => import('./tools/MyMediaTool'))
+const Gallery = lazy(() => import('../pages/Gallery'))
+const AdminPanelTool = lazy(() => import('./tools/AdminPanelTool'))
+const APIKeysTool = lazy(() => import('./tools/APIKeysTool'))
+const ProfileTool = lazy(() => import('./tools/ProfileTool'))
 import LogViewer from '../components/LogViewer'
 import { sendClientLog } from '../logging'
+
+// Loading fallback component
+function ToolLoader() {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '3rem',
+      color: 'var(--text-muted)',
+      gap: '0.75rem',
+    }}>
+      <Loader2 size={24} className="animate-spin" />
+      <span>Loading tool...</span>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const [activeToolId, setActiveToolId] = useState(TOOL_IDS.IMAGE_TO_VIDEO)
@@ -211,81 +229,88 @@ export default function Dashboard() {
       setQueueRefreshToken((n) => n + 1)
     }
 
+    // Wrap tool component in Suspense for lazy loading
+    const wrapWithSuspense = (component) => (
+      <Suspense fallback={<ToolLoader />}>
+        {component}
+      </Suspense>
+    )
+
     switch (activeToolId) {
       case TOOL_IDS.TEXT_TO_VIDEO:
-        return <TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.IMAGE_TO_VIDEO:
-        return <ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
-        return <TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.PIPELINE:
-        return <PipelineTool />
+        return wrapWithSuspense(<PipelineTool />)
       case TOOL_IDS.LORA_TRAINING:
-        return <LoRATrainingTool onOutput={setOutput} />
+        return wrapWithSuspense(<LoRATrainingTool onOutput={setOutput} />)
 
       case TOOL_IDS.MY_MEDIA_ALL:
-        return <MyMediaTool filter="all" />
+        return wrapWithSuspense(<MyMediaTool filter="all" />)
       case TOOL_IDS.MY_MEDIA_VIDEOS:
-        return <MyMediaTool filter="video" />
+        return wrapWithSuspense(<MyMediaTool filter="video" />)
       case TOOL_IDS.MY_MEDIA_IMAGES:
-        return <MyMediaTool filter="image" />
+        return wrapWithSuspense(<MyMediaTool filter="image" />)
       case TOOL_IDS.MY_MEDIA_AUDIO:
-        return <MyMediaTool filter="audio" />
+        return wrapWithSuspense(<MyMediaTool filter="audio" />)
       case TOOL_IDS.MY_MEDIA_PROMPTS:
-        return <MyMediaTool filter="prompts" />
+        return wrapWithSuspense(<MyMediaTool filter="prompts" />)
       case TOOL_IDS.GALLERY:
-        return <Gallery />
+        return wrapWithSuspense(<Gallery />)
 
       case TOOL_IDS.TEXT_TO_IMAGE:
-        return <TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.IMAGE_TO_TEXT:
-        return <ImageToTextTool />
+        return wrapWithSuspense(<ImageToTextTool />)
       case TOOL_IDS.PROMPT_GENERATOR:
-        return <PromptGeneratorTool />
+        return wrapWithSuspense(<PromptGeneratorTool />)
 
       case TOOL_IDS.IMAGE_TO_IMAGE:
-        return <ImageToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<ImageToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.UPSCALER:
-        return <UpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<UpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.VIDEO_TO_VIDEO:
-        return <VideoToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<VideoToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.VIDEO_TO_TEXT:
-        return <VideoToTextTool />
+        return wrapWithSuspense(<VideoToTextTool />)
       case TOOL_IDS.VIDEO_UPSCALER:
-        return <VideoUpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<VideoUpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.FRAME_INTERPOLATION:
-        return <FrameInterpolationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<FrameInterpolationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.AUDIO_GENERATION:
-        return <AudioGenerationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<AudioGenerationTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.VOICE_CLONING:
-        return <VoiceCloningTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<VoiceCloningTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.LIP_SYNC:
-        return <LipSyncTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<LipSyncTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.SPEECH_TO_VIDEO:
-        return <SpeechToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<SpeechToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.REFRAME:
-        return <ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.FACE_SWAP:
-        return <FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />
+        return wrapWithSuspense(<FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.API_KEYS:
-        return <APIKeysTool />
+        return wrapWithSuspense(<APIKeysTool />)
 
       case TOOL_IDS.MY_PROFILE:
-        return <ProfileTool />
+        return wrapWithSuspense(<ProfileTool />)
 
       case TOOL_IDS.ADMIN_PANEL:
-        return <AdminPanelTool />
+        return wrapWithSuspense(<AdminPanelTool />)
 
       default:
-        return <ComingSoonTool title={toolTitle} />
+        return wrapWithSuspense(<ComingSoonTool title={toolTitle} />)
     }
   }
 
