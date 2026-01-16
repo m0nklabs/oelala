@@ -161,64 +161,150 @@ Alternative LTX-2 Variants
 
 ## 🖼️ Text-to-Image (T2I)
 
+> **⚠️ IMAGE GENERATION IS FAST** - Unlike video, images take seconds not minutes!
+> All benchmarks tested 2026-01-16 on RTX 5060 Ti 16GB.
+
 ```
-T2I Model Categories
+T2I Model Categories (Speed Tiers)
 │
-├── 📦 wan22
-│   │   "Wan2.2 T2I Multi-GPU (video-ready images)"
+├── ⚡ LIGHTNING FAST (5-15 sec)
 │   │
-│   └── wan2.2-t2i
-│       ├── 🧠 Model: Built-in T2I workflow
-│       └── 🎨 VAE: wan_2.1_vae.safetensors
+│   ├── 📦 sdxl_lightning
+│   │   │   "DreamShaper XL Lightning - FASTEST SDXL"
+│   │   │   1024×1024 @ 8 steps: ~8s | VRAM: ~8GB
+│   │   │
+│   │   └── dreamshaperXL_lightningDPMSDE.safetensors     [6.5GB]
+│   │       ├── Sampler: dpmpp_sde + karras
+│   │       ├── Steps: 8 (optimized for lightning)
+│   │       ├── CFG: 2.0
+│   │       └── Best for: Quick iterations, previews
+│   │
+│   └── 📦 z_image_turbo
+│       │   "Z-Image Turbo - Experimental Fast Model"
+│       │   Status: 🔨 NEEDS TESTING
+│       │
+│       └── z_image_turbo_bf16.safetensors                [12GB]
 │
-├── 📦 flux
-│   │   "Flux.1 (high quality artistic)"
+├── 🏃 FAST (15-30 sec)
 │   │
-│   └── flux1-dev-fp8
-│       ├── 🧠 Model: flux1-dev-fp8.safetensors              [17GB]
-│       ├── 📝 T5: (built-in)
-│       └── 🎨 VAE: ae.safetensors                           [335MB]
+│   └── 📦 sdxl_standard
+│       │   "SDXL Standard Checkpoints"
+│       │   1024×1024 @ 25 steps: ~18-28s | VRAM: ~8GB
+│       │
+│       ├── CyberRealistic_Pony_v14.1_FP16.safetensors    [6.5GB] ★ FASTEST
+│       │   ├── 1024×1024 @ 25 steps: ~18s
+│       │   ├── Category: Realistic/Pony
+│       │   ├── Sampler: dpmpp_2m + karras
+│       │   ├── CFG: 7.0
+│       │   └── Prompt: score_9, score_8_up prefixes
+│       │
+│       ├── reapony_v90.safetensors                       [6.5GB]
+│       │   ├── 1024×1024 @ 25 steps: ~27s
+│       │   ├── Category: Realistic/Pony
+│       │   └── Best for: NSFW realistic content
+│       │
+│       ├── juggernautXL_ragnarok.safetensors             [7GB]
+│       │   ├── 1024×1024 @ 25 steps: ~28s
+│       │   └── Category: General/Artistic
+│       │
+│       ├── novaAnimeXL_ilV150.safetensors                [6.5GB]
+│       │   ├── 1024×1024 @ 25 steps: ~28s
+│       │   └── Category: Anime
+│       │
+│       ├── illustriousRealismBy_v10VAE.safetensors       [6.5GB]
+│       │   └── Category: Realistic
+│       │
+│       ├── ponyDiffusionV6XL_v6StartWithThisOne.safetensors [6.5GB]
+│       │   └── Category: Pony base
+│       │
+│       ├── ultraRealisticByStable_v20FP16.safetensors    [6.5GB]
+│       │   └── Category: Photorealistic
+│       │
+│       └── waiIllustriousSDXL_v160.safetensors           [6.5GB]
+│           └── Category: Anime/Illustrious
 │
-├── 📦 sdxl
-│   │   "SDXL Checkpoints (general purpose)"
+├── 🐢 QUALITY (60-120 sec)
 │   │
-│   ├── CyberRealistic_Pony_v14.1_FP16.safetensors          [6.5GB]
-│   │   └── Category: Realistic/Pony
+│   ├── 📦 flux_dev
+│   │   │   "Flux.1 Dev FP8 - Highest Quality"
+│   │   │   1024×1024 @ 20 steps: ~119s | VRAM: ~17GB
+│   │   │
+│   │   └── flux1-dev-fp8.safetensors                     [17GB]
+│   │       ├── Sampler: euler + simple
+│   │       ├── Steps: 20
+│   │       ├── CFG: 3.5
+│   │       └── Best for: Final renders, marketing
 │   │
-│   ├── dreamshaperXL_lightningDPMSDE.safetensors           [6.5GB]
-│   │   └── Category: General
+│   ├── 📦 flux_nsfw
+│   │   │   "Flux NSFW Variants"
+│   │   │   1024×1024 @ 20 steps: ~75s | VRAM: ~12GB
+│   │   │
+│   │   ├── fluxedUpFluxNSFW_51FP8.safetensors            [12GB]
+│   │   │   ├── 1024×1024 @ 20 steps: ~75s
+│   │   │   └── CFG: 1.0 (classifier-free)
+│   │   │
+│   │   └── persephoneFluxNSFWSFW_11FP8.safetensors       [12GB]
+│   │       └── NSFW/SFW dual mode
 │   │
-│   ├── illustriousRealismBy_v10VAE.safetensors             [6.5GB]
-│   │   └── Category: Realistic
-│   │
-│   ├── juggernautXL_ragnarok.safetensors                   [7GB]
-│   │   └── Category: General
-│   │
-│   ├── novaAnimeXL_ilV150.safetensors                      [6.5GB]
-│   │   └── Category: Anime
-│   │
-│   ├── ponyDiffusionV6XL_v6StartWithThisOne.safetensors    [6.5GB]
-│   │   └── Category: Pony
-│   │
-│   ├── reapony_v90.safetensors                             [6.5GB]
-│   │   └── Category: Realistic/Pony
-│   │
-│   ├── ultraRealisticByStable_v20FP16.safetensors          [6.5GB]
-│   │   └── Category: Realistic
-│   │
-│   └── waiIllustriousSDXL_v160.safetensors                 [6.5GB]
-│       └── Category: Anime
+│   └── 📦 wan22_t2i
+│       │   "Wan2.2 T2I (video-compatible images)"
+│       │   Status: 🔨 NEEDS TESTING
+│       │
+│       └── Uses T2V models for T2I
+│           └── Best for: Images that will become video
 │
-├── 📦 sd15
-│   │   "SD 1.5 (photorealistic)"
-│   │
-│   └── Realistic_Vision_V5.1.safetensors                   [4GB]
-│
-└── 📦 diffusers
-    │   "Diffusers Models (experimental)"
+└── 📦 sd15
+    │   "SD 1.5 (legacy, fast)"
+    │   512×512 @ 25 steps: ~5s | VRAM: ~4GB
     │
-    └── sd3.5-large-int8
-        └── (Requires diffusers pipeline)
+    └── Realistic_Vision_V5.1.safetensors                 [4GB]
+        └── Best for: Quick low-res previews
+```
+
+### T2I Resolution Limits (SDXL)
+
+```
+SDXL Tested Resolutions (DreamShaper Lightning)
+│
+├── 1024×1024 (1:1 square): ✅ ~8s @ 8 steps
+├── 1024×1536 (2:3 portrait): ✅ Scales linearly
+├── 1536×1024 (3:2 landscape): ✅ Scales linearly
+├── 832×1216 (SDXL native portrait): ✅ Optimal
+├── 1216×832 (SDXL native landscape): ✅ Optimal
+├── 2048×2048 (2K): ✅ ~4x time, ~16GB VRAM
+└── 4096×4096 (4K): ⚠️ May OOM, use tiled VAE
+
+Flux Tested Resolutions
+│
+├── 1024×1024: ✅ ~119s
+├── 1536×1536: ✅ ~4x time
+└── 2048×2048: ⚠️ May need fp16 offload
+```
+
+### T2I Optimal Settings Quick Reference
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ SPEED PRIORITY (previews, iterations)                               │
+│ Model: dreamshaperXL_lightningDPMSDE.safetensors                    │
+│ Steps: 8 | CFG: 2.0 | Sampler: dpmpp_sde + karras                  │
+│ Result: 1024×1024 in ~8 seconds                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ QUALITY PRIORITY (final renders)                                    │
+│ Model: CyberRealistic_Pony_v14.1_FP16.safetensors                   │
+│ Steps: 25-30 | CFG: 7.0 | Sampler: dpmpp_2m + karras               │
+│ Result: 1024×1024 in ~18-25 seconds                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│ BEST QUALITY (marketing, hero images)                               │
+│ Model: flux1-dev-fp8.safetensors                                    │
+│ Steps: 20 | CFG: 3.5 | Sampler: euler + simple                     │
+│ Result: 1024×1024 in ~120 seconds                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│ NSFW CONTENT                                                        │
+│ SDXL: reapony_v90 or CyberRealistic_Pony (score_ prompts)          │
+│ Flux: fluxedUpFluxNSFW_51FP8 (CFG 1.0)                             │
+│ Prompt: Use Pony score tags for SDXL models                         │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -662,33 +748,67 @@ Video-to-Video Modes
 │   Tested: 2026-01-10 ✅                                              │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
-│ 🖼️ TEXT-TO-IMAGE (T2I) - FLUX                                       │
+│ 🖼️ TEXT-TO-IMAGE (T2I) - FLUX (Benchmarked 2026-01-16)              │
 │ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
-│ 1024×1024 Square                                                     │
+│ Flux Dev FP8 - 1024×1024                                             │
 │ ─────────────────────────────────────────────────────────────────── │
-│   Model: flux1-dev-fp8.safetensors                                  │
-│   VRAM: ~17GB | Time: ~30 sec                                       │
-│   Steps: 20 | CFG: 3.5                                              │
-│   Tested: 2026-01-08 ✅                                              │
+│   Model: flux1-dev-fp8.safetensors [17GB]                           │
+│   VRAM: ~17GB | Time: 119s (2 min)                                  │
+│   Steps: 20 | CFG: 3.5 | Sampler: euler + simple                    │
+│   Quality: HIGHEST - use for final renders                          │
+│   Tested: 2026-01-16 ✅                                              │
+│                                                                      │
+│ FluxedUp NSFW - 1024×1024                                            │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: fluxedUpFluxNSFW_51FP8.safetensors [12GB]                  │
+│   VRAM: ~12GB | Time: 75s                                           │
+│   Steps: 20 | CFG: 1.0 | Sampler: euler + simple                    │
+│   Quality: HIGH - faster than flux dev                              │
+│   Tested: 2026-01-16 ✅                                              │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
-│ 🖼️ TEXT-TO-IMAGE (T2I) - SDXL                                       │
+│ 🖼️ TEXT-TO-IMAGE (T2I) - SDXL (Benchmarked 2026-01-16)              │
 │ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
-│ 1024×1024 with CyberRealistic Pony                                   │
+│ ⚡ DreamShaper Lightning - 1024×1024 (FASTEST)                       │
 │ ─────────────────────────────────────────────────────────────────── │
-│   Model: CyberRealistic_Pony_v14.1_FP16.safetensors                 │
-│   VRAM: ~8GB | Time: ~15 sec                                        │
-│   Steps: 25 | CFG: 7                                                │
-│   Tested: 2026-01-05 ✅                                              │
+│   Model: dreamshaperXL_lightningDPMSDE.safetensors [6.5GB]          │
+│   VRAM: ~8GB | Time: 8-33s (depends on model warmup)                │
+│   Steps: 8 | CFG: 2.0 | Sampler: dpmpp_sde + karras                 │
+│   Best for: Quick iterations, previews                              │
+│   Tested: 2026-01-16 ✅                                              │
 │                                                                      │
-│ 1024×1024 with DreamShaper XL                                        │
+│ CyberRealistic Pony - 1024×1024 (FASTEST STANDARD)                   │
 │ ─────────────────────────────────────────────────────────────────── │
-│   Model: dreamshaperXL_lightningDPMSDE.safetensors                  │
-│   VRAM: ~8GB | Time: ~8 sec (lightning)                             │
-│   Steps: 8 | CFG: 2                                                 │
-│   Tested: 2026-01-05 ✅                                              │
+│   Model: CyberRealistic_Pony_v14.1_FP16.safetensors [6.5GB]         │
+│   VRAM: ~8GB | Time: 18s @ 25 steps                                 │
+│   Steps: 25 | CFG: 7.0 | Sampler: dpmpp_2m + karras                 │
+│   Prompt: score_9, score_8_up prefixes                              │
+│   Quality: HIGH realistic                                           │
+│   Tested: 2026-01-16 ✅                                              │
+│                                                                      │
+│ Reapony - 1024×1024                                                  │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: reapony_v90.safetensors [6.5GB]                            │
+│   VRAM: ~8GB | Time: 27s @ 25 steps                                 │
+│   Steps: 25 | CFG: 7.0 | Sampler: dpmpp_2m + karras                 │
+│   Best for: NSFW realistic content                                  │
+│   Tested: 2026-01-16 ✅                                              │
+│                                                                      │
+│ Juggernaut Ragnarok - 1024×1024                                      │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: juggernautXL_ragnarok.safetensors [7GB]                    │
+│   VRAM: ~8GB | Time: 28s @ 25 steps                                 │
+│   Best for: General/artistic                                        │
+│   Tested: 2026-01-16 ✅                                              │
+│                                                                      │
+│ Nova Anime - 1024×1024                                               │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: novaAnimeXL_ilV150.safetensors [6.5GB]                     │
+│   VRAM: ~8GB | Time: 28s @ 25 steps                                 │
+│   Best for: Anime style                                             │
+│   Tested: 2026-01-16 ✅                                              │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 🔬 EXPERIMENTAL / NEEDS MORE TESTING                                │
@@ -740,7 +860,9 @@ Video-to-Video Modes
 
 ### Quick Reference: What Works Right Now
 
-> **⚠️ MINIMUM 81 FRAMES (5 sec) - Anything less is UNACCEPTABLE!**
+> **⚠️ VIDEO: MINIMUM 81 FRAMES (5 sec) - Anything less is UNACCEPTABLE!**
+
+#### 🎬 Video Generation
 
 | Tool | Mode | Resolution | Frames | Duration | Time | Status |
 |------|------|------------|--------|----------|------|--------|
@@ -749,8 +871,26 @@ Video-to-Video Modes
 | I2V | wan22 | 480×848 | 81 | **5 sec** | 6min | ✅ MIN |
 | I2V | wan22 | 576×1024 | 81 | **5 sec** | 6min | ✅ |
 | T2V | ltx2 | 768×512 | 97 | **6 sec** | 8min | ✅ |
-| T2I | flux | 1024×1024 | - | - | 30s | ✅ |
-| T2I | sdxl | 1024×1024 | - | - | 15s | ✅ |
+
+#### 🖼️ Image Generation (Benchmarked 2026-01-16)
+
+| Model | Resolution | Steps | Time | VRAM | Use Case |
+|-------|------------|-------|------|------|----------|
+| DreamShaper Lightning | 1024×1024 | 8 | **8s** | 8GB | ⚡ Fastest previews |
+| CyberRealistic Pony | 1024×1024 | 25 | **18s** | 8GB | 🎯 Best quality/speed |
+| Reapony | 1024×1024 | 25 | **27s** | 8GB | 🔞 NSFW realistic |
+| Juggernaut | 1024×1024 | 25 | **28s** | 8GB | 🎨 Artistic |
+| Nova Anime | 1024×1024 | 25 | **28s** | 8GB | 🎌 Anime |
+| FluxedUp NSFW | 1024×1024 | 20 | **75s** | 12GB | 🔥 Quality NSFW |
+| Flux Dev FP8 | 1024×1024 | 20 | **119s** | 17GB | 👑 HIGHEST quality |
+
+#### ⏱️ T2I Speed Tiers
+
+```
+⚡ LIGHTNING (5-10s)     → DreamShaper Lightning @ 8 steps
+🏃 FAST (15-30s)         → SDXL models @ 25 steps  
+🐢 QUALITY (60-120s)     → Flux models @ 20 steps
+```
 
 ### ❌ REMOVED - Under 5 seconds (UNACCEPTABLE)
 
