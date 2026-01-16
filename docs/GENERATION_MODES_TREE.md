@@ -14,31 +14,55 @@ Visual tree structure of all generation modes per tool type.
 ## Tool Status Overview
 
 ```
-Tool Implementation Status
-│
-├── ✅ PRODUCTION (Fully tested, working)
-│   ├── 🎬 ImageToVideo (I2V)
-│   ├── 🎥 TextToVideo (T2V)
-│   └── 🖼️ TextToImage (T2I)
-│
-├── 🔨 IN DEVELOPMENT (Partially working)
-│   ├── 🎵 AudioGeneration (LTX-2 audio)
-│   ├── 🔄 FrameInterpolation
-│   ├── 📈 VideoUpscaler
-│   └── 🖼️ ImageToImage (style transfer)
-│
-├── 📋 PLANNED (Workflow exists, not integrated)
-│   ├── 📝 ImageToText (captioning)
-│   ├── 🎭 FaceSwap
-│   ├── 💋 LipSync
-│   ├── 🔊 VoiceCloning
-│   ├── 📺 VideoToVideo
-│   └── 🗣️ SpeechToVideo
-│
-└── 💡 FUTURE (No workflow yet)
-    ├── 🎓 LoRATraining
-    ├── 🔲 Reframe
-    └── 🧠 PromptGenerator
+┌─────────────────────────────────────────────────────────────────────┐
+│ 🛠️ PRIMARY TOOLS (Standalone generation)                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ ✅ PRODUCTION                                                        │
+│   ├── 🖼️ TextToImage (T2I)      → Generate images from text        │
+│   ├── 🎬 ImageToVideo (I2V)     → Animate images into video        │
+│   └── 🎥 TextToVideo (T2V)      → Direct text to video             │
+│                                                                      │
+│ 🔨 IN DEVELOPMENT                                                    │
+│   ├── 🖼️ ImageToImage (I2I)     → Style transfer, inpainting       │
+│   ├── 📝 ImageToText (caption)  → Generate descriptions            │
+│   └── 🎵 TextToAudio (T2A)      → Generate audio/music             │
+│                                                                      │
+│ 📋 PLANNED                                                           │
+│   ├── 🔊 TextToSpeech (TTS)     → Voice synthesis                   │
+│   └── 🎭 FaceSwap               → Face replacement                  │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ ⚙️ POST-PROCESSING OPTIONS (Applied to tool output)                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ 🎬 Video Post-Processing:                                           │
+│   ├── 📈 Upscale              → Increase resolution (RIFE/ESRGAN)  │
+│   ├── 🔄 Frame Interpolation  → Smooth motion (increase FPS)       │
+│   ├── 💋 LipSync              → Sync lips to audio (Wav2Lip)       │
+│   └── 🔊 Add Audio            → Attach audio track to video        │
+│                                                                      │
+│ 🖼️ Image Post-Processing:                                           │
+│   ├── 📈 Upscale              → Increase resolution (ESRGAN)       │
+│   ├── 🎨 Face Restore         → Fix faces (GFPGAN/CodeFormer)      │
+│   └── ✂️ Background Remove    → Remove/replace background          │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ 🔗 PIPELINES (Tool combinations)                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ├── 🗣️ SpeechToVideo        → TTS + I2V + LipSync                │
+│   ├── 📺 VideoToVideo         → Extract frames + I2V + Stitch      │
+│   ├── 🎬 T2I→I2V Pipeline     → T2I + I2V (Wan2.2 T2V method)      │
+│   └── 🎵 Video+Audio          → I2V/T2V + Audio generation         │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ 💡 FUTURE (No workflow yet)                                         │
+├─────────────────────────────────────────────────────────────────────┤
+│   ├── 🎓 LoRATraining         → Train custom models                │
+│   ├── 🔲 Reframe              → Change aspect ratio intelligently  │
+│   └── 🧠 PromptGenerator      → AI-assisted prompt creation        │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -530,65 +554,134 @@ Audio Generation Modes
 
 ---
 
-## 🔄 Frame Interpolation (RIFE)
+## ⚙️ POST-PROCESSING OPTIONS
+
+> **These are NOT standalone tools** - they are applied to output from primary tools.
+
+### 📈 Upscaling
 
 ```
-Frame Interpolation Modes
+Upscaling Options
 │
-└── 📦 rife_v4 (default)
-    │   "RIFE v4.6 Frame Interpolation"
+├── 🖼️ Image Upscaling
+│   │
+│   ├── 📦 realesrgan_image
+│   │   ├── RealESRGAN_x4plus.pth            → General 4x upscale
+│   │   └── RealESRGAN_x4plus_anime_6B.pth   → Anime optimized
+│   │
+│   └── 📦 face_restore
+│       ├── GFPGANv1.4.pth                   → Face enhancement
+│       └── CodeFormer                        → Alternative face fix
+│
+└── 🎬 Video Upscaling
+    │
+    └── 📦 realesrgan_video
+        │   "Frame-by-frame upscaling"
+        │   Status: 🔨 IN DEVELOPMENT
+        │
+        ├── 📂 Workflow: workflows/VideoUpscale/
+        └── ⚠️ Note: Slow - upscales each frame individually
+```
+
+### 🔄 Frame Interpolation
+
+```
+Frame Interpolation Options
+│
+└── 📦 rife_v4
+    │   "RIFE v4.6 - Increase FPS / Smooth motion"
     │   Status: 🔨 IN DEVELOPMENT
     │
     ├── 📂 Workflow: workflows/FrameInterpolation/
+    ├── 🧠 Model: rife_v4.6 (ComfyUI-Frame-Interpolation)
     │
-    └── 🧠 Model
-        └── rife_v4.6 (built into ComfyUI-Frame-Interpolation)
-```
-
----
-
-## 📈 Video Upscaler
-
-```
-Video Upscaler Modes
-│
-├── 📦 realesrgan (default)
-│   │   "RealESRGAN 4x Video Upscaler"
-│   │   Status: 🔨 IN DEVELOPMENT
-│   │
-│   ├── 📂 Workflow: workflows/VideoUpscale/
-│   │
-│   └── 🧠 Model
-│       ├── RealESRGAN_x4plus.pth
-│       └── RealESRGAN_x4plus_anime_6B.pth (anime variant)
-│
-└── 📦 topaz (external)
-    │   "Topaz Video AI (if available)"
-    │   Status: 💡 FUTURE
+    ├── Use cases:
+    │   ├── 16fps → 32fps (2x interpolation)
+    │   ├── 16fps → 48fps (3x interpolation)
+    │   └── Slow motion effects
     │
-    └── [External integration required]
+    └── ⚠️ Note: Does NOT increase video length, only smoothness
 ```
 
----
-
-## 🖼️ Image-to-Image (Style Transfer)
+### 💋 Audio Sync / LipSync
 
 ```
-Image-to-Image Modes
+Audio Sync Options
 │
-├── 📦 img2img_sdxl
-│   │   "SDXL Image-to-Image"
-│   │   Status: 🔨 IN DEVELOPMENT
+├── 📦 wav2lip
+│   │   "Wav2Lip - Sync lips to audio"
+│   │   Status: 📋 PLANNED
 │   │
-│   ├── 📂 Workflow: workflows/ImageToImage/
-│   │
-│   └── 🧠 Uses T2I checkpoints with denoise control
+│   ├── 🧠 Model: wav2lip_gan.pth
+│   └── Use case: Make video character "speak" audio
 │
-└── 📦 controlnet
-    │   "ControlNet Guided Generation"
+└── 📦 audio_attach
+    │   "Simple audio track attachment"
     │   Status: 📋 PLANNED
     │
-    └── ControlNet models (canny, depth, pose, etc.)
+    └── Use case: Add background music/sfx to video
+```
+
+---
+
+## 🔗 PIPELINES (Tool Combinations)
+
+> **Pipelines combine multiple tools** into a single workflow.
+
+### 🗣️ Speech-to-Video Pipeline
+
+```
+SpeechToVideo Pipeline
+│
+│   Input: Text script + Reference image
+│   Output: Video of character speaking the text
+│
+├── Step 1: TextToSpeech (TTS)
+│   └── Generate audio from text script
+│
+├── Step 2: ImageToVideo (I2V)
+│   └── Animate the reference image
+│
+└── Step 3: LipSync (Post-process)
+    └── Sync lips to generated audio
+
+Status: 📋 PLANNED - Requires TTS + LipSync integration
+```
+
+### 📺 Video-to-Video Pipeline
+
+```
+VideoToVideo Pipeline
+│
+│   Input: Source video + Style prompt
+│   Output: Restyled video
+│
+├── Step 1: Extract frames from source video
+│
+├── Step 2: I2V on keyframes OR I2I on each frame
+│
+└── Step 3: Stitch frames back together
+
+Status: 📋 PLANNED
+Workflow: Uses I2V pipeline with frame extraction
+```
+
+### 🎬 T2I→I2V Pipeline (Wan2.2 T2V Method)
+
+```
+T2I→I2V Pipeline (PRODUCTION)
+│
+│   Input: Text prompt
+│   Output: Video
+│
+├── Step 1: TextToImage (T2I)
+│   └── Flux/SDXL generates starting frame
+│
+└── Step 2: ImageToVideo (I2V)
+    └── Wan2.2 animates the image
+
+Status: ✅ PRODUCTION
+Workflow: reapony_t2i_wan22_i2v_multigpu.json
 ```
 
 ---
@@ -615,6 +708,27 @@ Image-to-Text Modes
 
 ---
 
+## 🖼️ Image-to-Image (Style Transfer)
+
+```
+Image-to-Image Modes
+│
+├── 📦 img2img_sdxl
+│   │   "SDXL Image-to-Image"
+│   │   Status: 🔨 IN DEVELOPMENT
+│   │
+│   ├── 📂 Workflow: workflows/ImageToImage/
+│   └── 🧠 Uses T2I checkpoints with denoise control
+│
+└── 📦 controlnet
+    │   "ControlNet Guided Generation"
+    │   Status: 📋 PLANNED
+    │
+    └── ControlNet models (canny, depth, pose, etc.)
+```
+
+---
+
 ## 🎭 FaceSwap
 
 ```
@@ -633,46 +747,23 @@ FaceSwap Modes
 
 ---
 
-## 💋 LipSync
+## 🔊 Text-to-Speech (TTS)
 
 ```
-LipSync Modes
+TTS Modes
 │
-└── 📦 wav2lip (planned)
-    │   "Wav2Lip Audio-Driven LipSync"
-    │   Status: 📋 PLANNED
-    │
-    └── 🧠 Model
-        └── wav2lip_gan.pth
-```
-
----
-
-## 🔊 Voice Cloning
-
-```
-Voice Cloning Modes
+├── 📦 xtts (planned)
+│   │   "Coqui XTTS v2 - Voice Cloning"
+│   │   Status: 📋 PLANNED
+│   │
+│   └── 🧠 Model
+│       └── XTTS-v2/
 │
-└── 📦 xtts (planned)
-    │   "Coqui XTTS v2"
-    │   Status: 📋 PLANNED
+└── 📦 elevenlabs (external)
+    │   "ElevenLabs API"
+    │   Status: 💡 FUTURE
     │
-    └── 🧠 Model
-        └── XTTS-v2/
-```
-
----
-
-## 📺 Video-to-Video
-
-```
-Video-to-Video Modes
-│
-└── 📦 vid2vid_wan
-    │   "Wan2.2 Video-to-Video (restyle)"
-    │   Status: 📋 PLANNED
-    │
-    └── Uses I2V pipeline with frame extraction
+    └── Requires API key
 ```
 
 ---
