@@ -579,6 +579,75 @@ class MediaService:
             return None
         return self.generate_signed_url(record.storage_path, expires_in)
     
+    async def get_user_quota(self, user_id: str) -> Dict[str, Any]:
+        """
+        Get storage quota information for a user from oelala-storage.
+        
+        Args:
+            user_id: User's UUID
+            
+        Returns:
+            Dict with quota info:
+            - used_bytes: Current storage used
+            - quota_bytes: Total quota limit
+            - file_count: Number of files stored
+            - tier: User's storage tier
+            - used_percent: Percentage of quota used (0-100)
+            - warning: True if usage > 80%
+            - upgrade_needed: True if usage > 95%
+        """
+        try:
+            resp = await self.http_client.get(
+                f"{self.storage_url}/buckets/{user_id}",
+                headers=self._storage_headers(),
+            )
+            
+            if resp.status_code == 404:
+                # No bucket exists yet - return zeros
+                return {
+                    "used_bytes": 0,
+                    "quota_bytes": 10 * 1024 * 1024 * 1024,  # Default 10GB
+                    "file_count": 0,
+                    "tier": "free",
+                    "used_percent": 0,
+                    "warning": False,
+                    "upgrade_needed": False,
+                    "human_used": "0 B",
+                    "human_limit": "10 GB",
+                }
+            
+            resp.raise_for_status()
+            data = resp.json()
+            
+            used = data.get("used_bytes", 0)
+            quota = data.get("quota_bytes", 1)
+            percent = round((used / quota) * 100, 1) if quota > 0 else 0
+            
+            return {
+                "used_bytes": used,
+                "quota_bytes": quota,
+                "file_count": data.get("file_count", 0),
+                "tier": data.get("tier", "free"),
+                "used_percent": percent,
+                "warning": percent > 80,
+                "upgrade_needed": percent > 95,
+                "human_used": self._human_size(used),
+                "human_limit": self._human_size(quota),
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to get quota for {user_id}: {e}")
+            raise
+    
+    @staticmethod
+    def _human_size(size_bytes: int) -> str:
+        """Convert bytes to human-readable format."""
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size_bytes < 1024:
+                return f"{size_bytes:.1f} {unit}" if size_bytes != int(size_bytes) else f"{int(size_bytes)} {unit}"
+            size_bytes /= 1024
+        return f"{size_bytes:.1f} PB"
+    
     def _record_from_dict(self, data: Dict[str, Any]) -> MediaRecord:
         """Create MediaRecord from database dictionary."""
         created_at = data.get("created_at")

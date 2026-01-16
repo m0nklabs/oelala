@@ -1,134 +1,123 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-01-10
+> Active development tasks. Updated: 2026-01-15
 
 ---
 
-## 🔥 Current Priority: Admin Panel
+## ✅ Current Status: Core Features Complete
 
-**MEGA Issue**: [#84](https://github.com/m0nklabs/oelala/issues/84)
-
-**Goal**: Full admin dashboard for user/credits/content management
-
-### P0 - Critical (Admin Access)
-| Task | Status | Issue |
-|------|--------|-------|
-| Admin route protection (isAdmin check) | ⏳ Todo | #84 |
-| Admin panel page (`/admin`) | ⏳ Todo | #84 |
-| Admin navigation in sidebar | ⏳ Todo | #84 |
-
-### P1 - User Management
-| Task | Status | Issue |
-|------|--------|-------|
-| Users list with search/filter | ⏳ Todo | #59 |
-| View user details | ⏳ Todo | #59 |
-| Edit user credits | ⏳ Todo | #59 |
-| Ban/suspend user | ⏳ Todo | #59 |
-
-### P2 - Credits & Content
-| Task | Status | Issue |
-|------|--------|-------|
-| Analytics dashboard | ⏳ Todo | #60 |
-| Content moderation queue | ⏳ Todo | #61 |
-
-### Infrastructure Required
-| Task | Status | Notes |
-|------|--------|-------|
-| Supabase `user_credits` table | ✅ Complete | Migration 001 |
-| Supabase `published_media` table | ✅ Complete | Migration 002 |
-| Supabase `profiles` table | ✅ Complete | Migration 005 |
-| Supabase `user_media` table | ✅ Complete | Migration 006 |
-| Supabase `gallery` table | ✅ Complete | Migration 006 |
-| Backend admin API endpoints | ✅ Complete | `/api/admin/*` |
-| Backend profile API endpoints | ✅ Complete | `/api/profile/*` |
-| Migration documentation | ✅ Complete | `docs/MIGRATION_GUIDE.md` |
+The main functionality is complete! All MEGA issues for core features are done:
+- ✅ Credit System & Payments (MEGA #78)
+- ✅ Real-Time Progress Tracking (MEGA #8)
+- ✅ Auto-Upload to Storage (MEGA #7)
+- ✅ Admin Panel (MEGA #84)
+- ✅ Supabase Database (EPIC #91)
+- ✅ API Keys & Webhooks (#62, #63)
+- ✅ Public REST API v1 (#65)
+- ✅ Retention Policy (#71)
 
 ---
 
 ## 📋 Open GitHub Issues (by priority)
 
-### High Priority
-| Issue | Title | Labels |
-|-------|-------|--------|
-| #65 | Backend: Public REST API v1 | backend, priority:high |
-| #63 | API key management system | backend, priority:high |
-| #62 | Backend: Webhook delivery system | backend, priority:high |
-| #51 | Video upscaling (480p → 4K) | frontend, backend, priority:high |
-| #50 | Video-to-Video style transfer | frontend, backend, priority:high |
+### 🔴 High Priority
+| Issue | Title | Labels | Notes |
+|-------|-------|--------|-------|
+| #51 | Video upscaling (480p → 4K) | frontend, backend | **BLOCKED**: No ESRGAN models installed |
 
-### Medium Priority
+### 🟡 Medium Priority - Ready to Work
 | Issue | Title | Labels |
 |-------|-------|--------|
-| #71 | Retention policy (tier-based expiration) | priority:medium |
-| #70 | Monitoring and observability | infrastructure, priority:medium |
-| #69 | CDN and caching optimization | priority:medium |
-| #68 | Frontend: Code splitting | frontend, priority:medium |
-| #67 | Backend: Database optimization | backend, database, priority:medium |
-| #61 | Content moderation queue | backend, priority:medium |
-| #60 | Analytics dashboard | frontend, priority:medium |
-| #59 | Admin: User management tools | backend, priority:medium |
-| #58 | Admin dashboard main page | frontend, priority:medium |
-| #56 | User profile page | frontend, priority:medium |
-| #55 | User profile API | backend, database, priority:medium |
+| #33 | Storage quota tracking and display | frontend, backend, storage |
+| #36 | Age verification modal for NSFW | frontend, ux |
+| #47 | Audio generation API endpoints | backend |
+| #48 | MMAudio model integration | backend |
+| #49 | Audio generation UI panel | frontend |
+| #55 | User profile API and database | backend, database |
+| #56 | User profile page component | frontend |
+| #58 | Admin dashboard main page | frontend |
+| #60 | Analytics and metrics dashboard | frontend |
+| #61 | Content moderation queue | backend |
+| #67 | Database query optimization | backend, database |
+| #68 | Code splitting and lazy loading | frontend |
+| #69 | CDN and caching optimization | infrastructure |
+| #70 | Monitoring and observability | infrastructure |
 
-### Low Priority
+### 🟢 Low Priority
 | Issue | Title | Labels |
 |-------|-------|--------|
-| #64 | SDKs and developer examples | documentation, priority:low |
-| #57 | Following system | database, backend, priority:low |
-| #54 | Avatar upload | frontend, priority:low |
+| #29 | ControlNet integration | frontend, backend |
+| #30 | Canvas-based inpainting | frontend |
+| #31 | Email notification on job completion | backend |
+| #32 | Remix button - copy settings | frontend |
+| #35 | NSFW default prompt pool | frontend |
+| #37 | Share link generation | frontend, backend |
+| #54 | Avatar upload and management | frontend |
+| #57 | Following system | backend, database |
+| #64 | SDKs and developer examples | documentation |
+
+### 🚀 MEGA Issues (Epics)
+| Issue | Title | Priority |
+|-------|-------|----------|
+| #41 | Audio Generation & Sound Design | medium |
+| #42 | Advanced Video Workflows | medium |
+| #43 | User Profiles & Social Features | medium |
+| #44 | Admin Dashboard & Content Moderation | medium |
+| #45 | Public API & Developer Integrations | medium |
+| #46 | Performance & Infrastructure Optimization | medium |
+
+---
+
+## 📊 oelala-storage Status
+
+| Issue | Title | Priority | Status |
+|-------|-------|----------|--------|
+| #12 | Prometheus metrics | done | ✅ Closed |
+| #13 | Admin CLI | done | ✅ Closed (stats command added) |
+| #10 | Webhook notifications | medium | 🔄 Open |
+| #7 | Windows installer | low | 🔄 Open |
+| #19 | MEGA: Operations & Observability | medium | 🔄 Open |
+| #20 | MEGA: Platform & Deployment | low | 🔄 Open |
+| #24 | MEGA: Distributed Storage Network | high | 🔄 Open |
 
 ---
 
 ## ✅ Recently Completed
 
+### 2026-01-15
+- [x] Retention policy business logic (#71)
+  - Tier-based expiration: free=30d, pro=90d, vip=365d
+  - X-Expires-At header sent to storage
+  - Metadata includes tier, retention_days, expires_at
+
+### 2026-01-13
+- [x] Video-to-Video style transfer (#50)
+
+### 2026-01-12
+- [x] Supabase Database Implementation (EPIC #91)
+- [x] API key management system (#63)
+- [x] Webhook delivery system (#62)
+- [x] Admin user management tools (#59)
+- [x] Auto-upload service (#15)
+- [x] Stripe integration (#12)
+
+### 2026-01-11
+- [x] Real-Time Queue & Progress (MEGA #8)
+- [x] Public REST API v1 (#65)
+
 ### 2026-01-10
-- [x] Mobile responsive layout (collapsible parameters)
-- [x] README modernization
-- [x] Repo description update
-
-### 2026-01-09
-- [x] ComfyUI upstream sync (13 commits)
-- [x] Audio VAE fix (committed to fork)
-- [x] Fiber security fix in oelala-storage
-- [x] Credits bypass toggle (CREDITS_ENABLED)
-
-### 2026-01-07
-- [x] CHANGELOG enforcement on PRs
-- [x] MEGA issue template
-- [x] Vite 7.3.0 security upgrade
-- [x] Rick & Morty agent personas
-
-### 2026-01-06
-- [x] Guest access (view-only dashboard)
-- [x] LoginModal for auth-required actions
-- [x] NSFW forced off for guests
-- [x] LogViewer admin-only
-
-### 2026-01-05
-- [x] Credit system (Stripe, packages)
-- [x] Gallery system (publish, likes, views)
-- [x] SFW/NSFW content tagging
+- [x] Admin Panel (MEGA #84)
+- [x] Auto-Upload to Storage (MEGA #7)
+- [x] WebSocket progress events (#17)
+- [x] Real-time progress indicator (#16)
 
 ---
 
-## 🔄 Backlog
+## 🎯 Suggested Next Steps
 
-### Storage & Quota
-- [ ] Auto-upload generated content (#7, #15)
-- [ ] Storage quota tracking (#33)
-- [ ] Tier-based limits (free: 1GB)
+Based on project priorities:
 
-### Generation
-- [ ] ControlNet integration
-- [ ] Video extension (loop/extend)
-- [ ] Queue position indicator
-
-### UX
-- [ ] Age verification modal
-- [ ] "Remix" button on gallery
-- [ ] Share link generation
-
----
-
-*Sync with [GitHub Issues](https://github.com/m0nklabs/oelala/issues)*
+1. **#33 Storage quota tracking** - Completes storage integration with UI
+2. **#55 + #56 User profiles** - Enables social features
+3. **#47 + #48 + #49 Audio generation** - New product feature
+4. **#67 Database optimization** - Performance improvement

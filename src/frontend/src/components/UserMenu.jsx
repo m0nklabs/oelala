@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useCredits } from '../contexts/CreditsContext'
 import { LogIn, User, LogOut, Loader2, ChevronDown, Coins, Plus, RefreshCw } from 'lucide-react'
 import PurchaseCreditsModal from './PurchaseCreditsModal'
+import StorageQuota from './StorageQuota'
 
 export default function UserMenu() {
   const { user, loading, signInWithGoogle, signOut, switchAccount } = useAuth()
@@ -154,6 +155,9 @@ export default function UserMenu() {
               Buy Credits
             </button>
           </div>
+
+          {/* Storage Quota */}
+          <StorageQuota />
 
           {/* Switch Account */}
           <button

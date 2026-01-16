@@ -2733,6 +2733,36 @@ async def get_user_profile(user: User = Depends(get_current_user)):
     }
 
 
+@app.get("/user/storage-quota")
+async def get_user_storage_quota(user: User = Depends(get_current_user)):
+    """
+    Get storage quota information for the authenticated user.
+    
+    Returns quota usage, limits, and warnings.
+    """
+    try:
+        media_service = get_media_service()
+        quota_info = await media_service.get_user_quota(user.id)
+        
+        return {
+            "success": True,
+            "data": quota_info,
+        }
+    except Exception as e:
+        logger.error(f"❌ Failed to get storage quota: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": {
+                "used_bytes": 0,
+                "quota_bytes": 0,
+                "used_percent": 0,
+                "warning": False,
+                "upgrade_needed": False,
+            },
+        }
+
+
 # =============================================================================
 # WORKFLOW PRESETS API
 # =============================================================================
