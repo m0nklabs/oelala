@@ -10,7 +10,6 @@ export const TOOL_IDS = {
   IMAGE_TO_IMAGE: 'image-to-image',
   REFRAME: 'reframe',
   FACE_SWAP: 'face-swap',
-  UPSCALER: 'upscaler',
   // Prompt Tools
   PROMPT_GENERATOR: 'prompt-generator',
   IMAGE_TO_TEXT: 'image-to-text',
@@ -56,7 +55,6 @@ export const NAV_GROUPS = [
     items: [
       { id: TOOL_IDS.TEXT_TO_IMAGE, label: 'Text to Image', status: 'ready' },
       { id: TOOL_IDS.IMAGE_TO_IMAGE, label: 'Image to Image', status: 'ready' },
-      { id: TOOL_IDS.UPSCALER, label: 'Upscaler', status: 'ready' },
       { id: TOOL_IDS.REFRAME, label: 'Reframe', status: 'new' },
       { id: TOOL_IDS.FACE_SWAP, label: 'Face Swap', status: 'new' },
     ],
