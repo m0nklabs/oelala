@@ -25,6 +25,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
     Depends,
+    Request,
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -5553,84 +5554,244 @@ async def caption_image(
     }
 
 
-@app.post("/generate-prompt")
-async def generate_prompt(
-    input: str = Form(..., description="Basic idea or keywords"),
-    style: str = Form(None, description="Style preset"),
-    mode: str = Form("expand", description="Mode: expand, refine, variations"),
-    include_negative: bool = Form(True),
-    include_motion: bool = Form(False),
-):
-    """
-    Generate enhanced prompts from basic input.
-    Uses templates by default, can integrate with LLM for smarter enhancement.
-    """
-    if not input or not input.strip():
-        raise HTTPException(status_code=400, detail="Input is required")
+# ─────────────────────────────────────────────────────────────────────────────
+# Prompt Enhancement with Local LLM (Ollama)
+# ─────────────────────────────────────────────────────────────────────────────
 
-    base_input = input.strip()
+# Ollama configuration
+OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:9b")  # Fast and good quality
 
-    # Style keywords mapping
-    STYLE_KEYWORDS = {
-        "cinematic": "cinematic lighting, film grain, dramatic shadows, professional photography, movie still",
-        "anime": "anime style, vibrant colors, cel shading, Japanese animation, detailed linework",
-        "photorealistic": "photorealistic, highly detailed, 8k resolution, sharp focus, professional photo, DSLR",
-        "abstract": "abstract art, geometric shapes, vibrant colors, artistic, modern art",
-        "vintage": "vintage aesthetic, retro, film photography, nostalgic, 1970s style, grain",
-        "cyberpunk": "cyberpunk, neon lights, futuristic, dystopian, high tech low life, rain",
-        "fantasy": "fantasy art, magical, ethereal lighting, mystical, enchanted, detailed illustration",
-        "minimalist": "minimalist, clean, simple, negative space, modern, elegant",
-        "horror": "dark atmosphere, eerie, horror, unsettling, creepy, moody lighting",
-        "scifi": "science fiction, futuristic, space, advanced technology, sleek design",
-    }
 
-    # Quality boosters
+class PromptGenerateRequest(BaseModel):
+    """JSON body for prompt generation"""
+    input: str
+    style: Optional[str] = None
+    mode: str = "expand"  # expand, refine, variations
+    include_negative: bool = True
+    include_motion: bool = False
+    use_llm: bool = True  # Set to False to use template-only mode
+
+
+# Style keywords mapping (used for both template and LLM modes)
+PROMPT_STYLE_KEYWORDS = {
+    "cinematic": "cinematic lighting, film grain, dramatic shadows, professional photography, movie still",
+    "anime": "anime style, vibrant colors, cel shading, Japanese animation, detailed linework",
+    "photorealistic": "photorealistic, highly detailed, 8k resolution, sharp focus, professional photo, DSLR",
+    "abstract": "abstract art, geometric shapes, vibrant colors, artistic, modern art",
+    "vintage": "vintage aesthetic, retro, film photography, nostalgic, 1970s style, grain",
+    "cyberpunk": "cyberpunk, neon lights, futuristic, dystopian, high tech low life, rain",
+    "fantasy": "fantasy art, magical, ethereal lighting, mystical, enchanted, detailed illustration",
+    "minimalist": "minimalist, clean, simple, negative space, modern, elegant",
+    "horror": "dark atmosphere, eerie, horror, unsettling, creepy, moody lighting",
+    "scifi": "science fiction, futuristic, space, advanced technology, sleek design",
+}
+
+
+async def generate_prompt_with_llm(
+    base_input: str, style: Optional[str], mode: str, include_motion: bool
+) -> dict:
+    """Use Ollama LLM to generate enhanced prompts"""
+    import httpx
+
+    style_desc = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
+    style_context = f"Style requested: {style} ({style_desc})" if style else "No specific style"
+    motion_context = "Include camera motion/animation descriptions." if include_motion else ""
+
+    # System prompt for image/video generation
+    system_prompt = """You are an expert AI image/video generation prompt engineer.
+Your task is to enhance simple descriptions into detailed, high-quality prompts.
+
+Rules:
+1. Keep the core subject/concept intact
+2. Add visual details: lighting, composition, atmosphere, colors
+3. Add quality boosters at the end: masterpiece, best quality, highly detailed
+4. For negative prompts: focus on common defects to avoid
+5. Be concise but descriptive (max 100 words per prompt)
+6. Output ONLY valid JSON, no markdown, no explanation
+
+Output format (strict JSON):
+{"prompt": "enhanced prompt here", "negative_prompt": "negative prompt here", "motion_prompt": "motion description if requested"}"""
+
+    user_prompt = f"""Enhance this prompt:
+Input: "{base_input}"
+{style_context}
+Mode: {mode}
+{motion_context}
+
+Generate the enhanced prompt as JSON."""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
+            response = await client.post(
+                f"{OLLAMA_BASE}/api/generate",
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": user_prompt,
+                    "system": system_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "num_predict": 500,
+                    },
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+            llm_output = result.get("response", "").strip()
+
+            # Parse JSON from LLM output
+            # Try to extract JSON if it's wrapped in markdown
+            if "```json" in llm_output:
+                llm_output = llm_output.split("```json")[1].split("```")[0].strip()
+            elif "```" in llm_output:
+                llm_output = llm_output.split("```")[1].split("```")[0].strip()
+
+            parsed = json.loads(llm_output)
+            return {
+                "prompt": parsed.get("prompt", base_input),
+                "negative_prompt": parsed.get("negative_prompt", ""),
+                "motion_prompt": parsed.get("motion_prompt", ""),
+                "llm_model": OLLAMA_MODEL,
+                "llm_used": True,
+            }
+
+    except httpx.ConnectError:
+        logger.warning("Ollama not available, falling back to template mode")
+        return None
+    except json.JSONDecodeError as e:
+        logger.warning(f"LLM returned invalid JSON: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"LLM prompt generation failed: {e}")
+        return None
+
+
+def generate_prompt_template(
+    base_input: str, style: Optional[str], mode: str, include_negative: bool, include_motion: bool
+) -> dict:
+    """Template-based prompt enhancement (no LLM needed)"""
     quality_suffix = ", masterpiece, best quality, highly detailed"
 
-    # Build enhanced prompt
-    style_part = STYLE_KEYWORDS.get(style, "") if style else ""
+    style_part = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
     if style_part:
         enhanced_prompt = f"{base_input}, {style_part}{quality_suffix}"
     else:
         enhanced_prompt = f"{base_input}{quality_suffix}"
 
-    # Generate negative prompt
     negative_prompt = ""
     if include_negative:
         negative_prompt = "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text, cropped, worst quality, low resolution, jpeg artifacts, duplicate, morbid, mutilated, out of frame, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck"
 
-    # Generate motion prompt for video
     motion_prompt = ""
     if include_motion:
-        motion_keywords = [
-            "smooth camera motion",
-            "cinematic movement",
-            "fluid animation",
-            "natural motion",
-            "gentle movement",
-        ]
-        motion_prompt = ", ".join(motion_keywords)
-
-    # Generate variations if requested
-    variations = None
-    if mode == "variations":
-        variations = [
-            f"{base_input}, dramatic lighting{quality_suffix}",
-            f"{base_input}, soft natural light{quality_suffix}",
-            f"{base_input}, studio lighting, professional{quality_suffix}",
-        ]
-        if style_part:
-            variations = [f"{v}, {style_part}" for v in variations]
+        motion_prompt = "smooth camera motion, cinematic movement, fluid animation, natural motion, gentle movement"
 
     return {
         "prompt": enhanced_prompt,
         "negative_prompt": negative_prompt,
         "motion_prompt": motion_prompt,
+        "llm_used": False,
+    }
+
+
+@app.post("/generate-prompt")
+async def generate_prompt(request: Request):
+    """
+    Generate enhanced prompts from basic input.
+    Accepts both JSON body and form data.
+    Uses Ollama LLM when available, falls back to templates.
+    """
+    # Parse request - accept both JSON and form data
+    content_type = request.headers.get("content-type", "")
+
+    if "application/json" in content_type:
+        try:
+            data = await request.json()
+            req = PromptGenerateRequest(**data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+    else:
+        # Form data fallback
+        form = await request.form()
+        req = PromptGenerateRequest(
+            input=form.get("input", ""),
+            style=form.get("style"),
+            mode=form.get("mode", "expand"),
+            include_negative=form.get("include_negative", "true").lower() == "true",
+            include_motion=form.get("include_motion", "false").lower() == "true",
+            use_llm=form.get("use_llm", "true").lower() == "true",
+        )
+
+    if not req.input or not req.input.strip():
+        raise HTTPException(status_code=400, detail="Input is required")
+
+    base_input = req.input.strip()
+
+    # Try LLM first if enabled
+    result = None
+    if req.use_llm:
+        result = await generate_prompt_with_llm(
+            base_input, req.style, req.mode, req.include_motion
+        )
+
+    # Fall back to template mode
+    if result is None:
+        result = generate_prompt_template(
+            base_input, req.style, req.mode, req.include_negative, req.include_motion
+        )
+
+    # Generate variations if requested
+    variations = None
+    if req.mode == "variations":
+        variations = [
+            f"{base_input}, dramatic lighting, masterpiece, best quality",
+            f"{base_input}, soft natural light, masterpiece, best quality",
+            f"{base_input}, studio lighting, professional, masterpiece, best quality",
+        ]
+        style_part = PROMPT_STYLE_KEYWORDS.get(req.style, "")
+        if style_part:
+            variations = [f"{v}, {style_part}" for v in variations]
+
+    return {
+        **result,
         "variations": variations,
         "input": base_input,
-        "style": style,
-        "mode": mode,
+        "style": req.style,
+        "mode": req.mode,
     }
+
+
+@app.get("/ollama/status")
+async def ollama_status():
+    """Check if Ollama is available and what model is configured"""
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0, auth=("oelala-backend", "")) as client:
+            response = await client.get(f"{OLLAMA_BASE}/api/tags")
+            response.raise_for_status()
+            models = response.json().get("models", [])
+            model_names = [m.get("name", "") for m in models]
+
+            configured_available = OLLAMA_MODEL in model_names or any(
+                OLLAMA_MODEL.split(":")[0] in m for m in model_names
+            )
+
+            return {
+                "available": True,
+                "base_url": OLLAMA_BASE,
+                "configured_model": OLLAMA_MODEL,
+                "model_available": configured_available,
+                "models": model_names[:10],  # First 10 models
+            }
+    except Exception as e:
+        return {
+            "available": False,
+            "base_url": OLLAMA_BASE,
+            "configured_model": OLLAMA_MODEL,
+            "error": str(e),
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

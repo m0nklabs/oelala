@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { sendClientLog } from '../../logging'
@@ -96,6 +96,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   // Camera motion preset
   const [cameraMotion, setCameraMotion] = useState('')
+  const [isEnhancing, setIsEnhancing] = useState(false)
 
   // LoRA state - now supports multiple LoRAs with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
@@ -134,6 +135,47 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [selectedCreation, setSelectedCreation] = useState(null)
 
   const canSubmit = useMemo(() => !!file && !busy, [file, busy])
+
+  // Enhance prompt with LLM
+  const handleEnhancePrompt = async () => {
+    if (!prompt.trim() || isEnhancing) return
+    setIsEnhancing(true)
+    setError('')
+
+    try {
+      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: prompt.trim(),
+          style: null,
+          mode: 'expand',
+          include_negative: true,
+          include_motion: true,
+          use_llm: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Enhancement failed')
+      }
+
+      const data = await res.json()
+      if (DEBUG) console.log('✨ Enhanced prompt:', data)
+
+      // Update prompts
+      setPrompt(data.prompt)
+      if (data.negative_prompt) {
+        setNegativePrompt(data.negative_prompt)
+      }
+    } catch (err) {
+      console.error('Enhance error:', err)
+      setError(`Enhance failed: ${err.message}`)
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
 
   // Calculate max duration based on resolution and model mode
   const maxDuration = useMemo(() => {
@@ -730,6 +772,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              className="icon-btn"
+              style={{ width: '24px', height: '24px', padding: '4px' }}
+              onClick={handleEnhancePrompt}
+              disabled={isEnhancing || !prompt.trim()}
+              title="Enhance prompt with AI"
+            >
+              {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
+            </button>
             <button
               className="icon-btn"
               style={{ width: '24px', height: '24px', fontSize: '14px' }}

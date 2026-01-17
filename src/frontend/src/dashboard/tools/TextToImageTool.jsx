@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Sparkles, Settings2, Image as ImageIcon, Info, ChevronDown } from 'lucide-react'
+import { Sparkles, Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
@@ -52,6 +52,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [model, setModel] = useState('CyberRealistic_Pony_v14.1_FP16.safetensors')
   const [batchCount, setBatchCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isEnhancing, setIsEnhancing] = useState(false)
   const [error, setError] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
@@ -71,6 +72,47 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [seed, setSeed] = useState(-1)
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
+
+  // Enhance prompt with LLM
+  const handleEnhancePrompt = async () => {
+    if (!prompt.trim() || isEnhancing) return
+    setIsEnhancing(true)
+    setError('')
+
+    try {
+      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: prompt.trim(),
+          style: null,
+          mode: 'expand',
+          include_negative: true,
+          include_motion: false,
+          use_llm: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Enhancement failed')
+      }
+
+      const data = await res.json()
+      if (DEBUG) console.log('✨ Enhanced prompt:', data)
+
+      // Update prompts
+      setPrompt(data.prompt)
+      if (data.negative_prompt) {
+        setNegativePrompt(data.negative_prompt)
+      }
+    } catch (err) {
+      console.error('Enhance error:', err)
+      setError(`Enhance failed: ${err.message}`)
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
 
   // Fetch available LoRAs on mount
   useEffect(() => {
@@ -234,9 +276,16 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
         <div className="grok-card-header">
           <div className="grok-card-title">Enter Image Prompt</div>
           <div style={{ display: 'flex', gap: '4px' }}>
-             {/* Mock icons for prompt tools */}
-             <button className="icon-btn" style={{ width: '24px', height: '24px', fontSize: '10px' }}>T</button>
-             <button className="icon-btn" style={{ width: '24px', height: '24px', fontSize: '10px' }}>✨</button>
+             {/* Enhance with LLM */}
+             <button 
+               className="icon-btn" 
+               style={{ width: '28px', height: '28px', padding: '4px' }}
+               onClick={handleEnhancePrompt}
+               disabled={isEnhancing || !prompt.trim()}
+               title="Enhance prompt with AI"
+             >
+               {isEnhancing ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />}
+             </button>
           </div>
         </div>
 

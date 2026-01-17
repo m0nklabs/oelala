@@ -49,6 +49,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [resolution, setResolution] = useState('480p')
   const [fps, setFps] = useState(16)
   const [cameraMotion, setCameraMotion] = useState('')
+  const [isEnhancing, setIsEnhancing] = useState(false)
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -112,6 +113,47 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const handlePromptChange = (value) => {
     setPrompt(value)
     localStorage.setItem('t2v_prompt', value)
+  }
+
+  // Enhance prompt with LLM
+  const handleEnhancePrompt = async () => {
+    if (!prompt.trim() || isEnhancing) return
+    setIsEnhancing(true)
+    setError('')
+
+    try {
+      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: prompt.trim(),
+          style: null,
+          mode: 'expand',
+          include_negative: true,
+          include_motion: true,
+          use_llm: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Enhancement failed')
+      }
+
+      const data = await res.json()
+      if (DEBUG) console.log('✨ Enhanced prompt:', data)
+
+      // Update prompts
+      handlePromptChange(data.prompt)
+      if (data.negative_prompt) {
+        setNegativePrompt(data.negative_prompt)
+      }
+    } catch (err) {
+      console.error('Enhance error:', err)
+      setError(`Enhance failed: ${err.message}`)
+    } finally {
+      setIsEnhancing(false)
+    }
   }
 
   const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting, [prompt, submitting])
@@ -211,14 +253,25 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             <Video size={18} />
             Video Prompt
           </span>
-          <button
-            className="icon-btn"
-            style={{ width: '28px', height: '28px', fontSize: '16px' }}
-            onClick={() => handlePromptChange(getRandomPrompt(false))}
-            title="Generate random creative prompt"
-          >
-            ✨
-          </button>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              className="icon-btn"
+              style={{ width: '28px', height: '28px', padding: '4px' }}
+              onClick={handleEnhancePrompt}
+              disabled={isEnhancing || !prompt.trim()}
+              title="Enhance prompt with AI"
+            >
+              {isEnhancing ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />}
+            </button>
+            <button
+              className="icon-btn"
+              style={{ width: '28px', height: '28px', fontSize: '16px' }}
+              onClick={() => handlePromptChange(getRandomPrompt(false))}
+              title="Generate random creative prompt"
+            >
+              ✨
+            </button>
+          </div>
         </h3>
         <textarea
           className="prompt-textarea"
