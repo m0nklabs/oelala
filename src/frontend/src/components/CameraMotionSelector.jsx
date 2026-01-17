@@ -1,4 +1,5 @@
 import React from 'react'
+import { ChevronDown } from 'lucide-react'
 
 // Camera motion presets for Wan2.2 video generation
 export const CAMERA_MOTIONS = [
@@ -31,42 +32,65 @@ export function getCameraMotionPrefix(motionValue) {
 }
 
 /**
- * Camera Motion Selector Component
- * Reusable component for selecting camera motion presets in video generation tools
+ * Camera Motion Selector Component - Dropdown version
+ * Compact dropdown for selecting camera motion presets
  */
 export default function CameraMotionSelector({ value, onChange, style = {} }) {
   const selectedMotion = CAMERA_MOTIONS.find(m => m.value === value)
 
   return (
-    <div style={{ marginBottom: '12px', ...style }}>
+    <div style={{ ...style }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
         <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Camera Motion</span>
-        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-          {value ? selectedMotion?.desc : 'Optional'}
-        </span>
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-        {CAMERA_MOTIONS.map(motion => (
-          <button
-            key={motion.value}
-            onClick={() => onChange(motion.value === value ? '' : motion.value)}
-            type="button"
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: value === motion.value ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-              background: value === motion.value ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-              color: value === motion.value ? 'var(--accent-color)' : 'var(--text-secondary)',
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            title={motion.desc}
-          >
-            {motion.label}
-          </button>
-        ))}
+      <div style={{ position: 'relative' }}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '10px 36px 10px 12px',
+            backgroundColor: 'var(--bg-secondary, #1a1a1a)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
+            color: 'var(--text-primary, #fff)',
+            fontSize: '0.9rem',
+            appearance: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          {CAMERA_MOTIONS.map(motion => (
+            <option key={motion.value} value={motion.value}>
+              {motion.label} {motion.desc && motion.value ? `- ${motion.desc}` : ''}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          size={18}
+          style={{
+            position: 'absolute',
+            right: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none',
+            color: 'var(--text-muted)'
+          }}
+        />
       </div>
+      {/* Show prefix preview when motion is selected */}
+      {value && selectedMotion?.prefix && (
+        <div style={{
+          marginTop: '6px',
+          padding: '6px 10px',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderRadius: '6px',
+          fontSize: '0.75rem',
+          color: 'var(--accent-color)',
+          fontStyle: 'italic',
+        }}>
+          ➕ Prefix: "{selectedMotion.prefix}"
+        </div>
+      )}
     </div>
   )
 }
