@@ -1,6 +1,6 @@
 import React from 'react'
 import { NAV_GROUPS } from './nav'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 // Emoji icons for reliable cross-browser display
@@ -45,6 +45,13 @@ export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggl
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-logo">Oelala</div>
+        <button
+          onClick={onToggleCollapsed}
+          className="sidebar-collapse-btn"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+        </button>
       </div>
 
       <nav className="sidebar-nav">
@@ -81,18 +88,6 @@ export default function Sidebar({ activeToolId, onSelectTool, collapsed, onToggl
           )
         })}
       </nav>
-
-      <div className="sidebar-footer">
-        <button
-            onClick={onToggleCollapsed}
-            className="nav-item collapse-btn"
-        >
-            <span className="nav-icon" style={{ fontSize: '16px' }}>
-              {collapsed ? '▶️' : '◀️'}
-            </span>
-            <span className="nav-label">Collapse</span>
-        </button>
-      </div>
     </aside>
   )
 }

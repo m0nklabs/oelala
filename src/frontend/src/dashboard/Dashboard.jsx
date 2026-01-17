@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef, lazy, Suspense } from 'react'
-import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X, Loader2 } from 'lucide-react'
+import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X, Loader2, PanelRightClose, PanelRight } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import Sidebar from './Sidebar'
 import OutputPanel from './OutputPanel'
@@ -61,6 +61,7 @@ function ToolLoader() {
 export default function Dashboard() {
   const [activeToolId, setActiveToolId] = useState(TOOL_IDS.IMAGE_TO_VIDEO)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [paramsCollapsed, setParamsCollapsed] = useState(false)
 
   // Mobile parameters panel state
   const [mobileParamsOpen, setMobileParamsOpen] = useState(false)
@@ -485,29 +486,45 @@ export default function Dashboard() {
               <ChevronUp size={18} />
             </button>
 
-            <section className={`controls-panel ${mobileParamsOpen ? 'mobile-open' : 'mobile-collapsed'}`}>
-              <div className="panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parameters</div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+            <section className={`controls-panel ${mobileParamsOpen ? 'mobile-open' : 'mobile-collapsed'} ${paramsCollapsed ? 'collapsed' : ''}`}>
+              <div className="panel-header" style={{ marginBottom: paramsCollapsed ? '0' : '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="panel-title" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {!paramsCollapsed && 'Parameters'}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {!paramsCollapsed && (
+                    <button
+                      className="icon-btn"
+                      onClick={handleDownloadParams}
+                      title="Download parameters als JSON"
+                      style={{ padding: '4px' }}
+                    >
+                      <Download size={16} />
+                    </button>
+                  )}
                   <button
-                    className="icon-btn"
-                    onClick={handleDownloadParams}
-                    title="Download parameters als JSON"
+                    className="icon-btn panel-collapse-btn"
+                    onClick={() => setParamsCollapsed(!paramsCollapsed)}
+                    title={paramsCollapsed ? 'Expand parameters' : 'Collapse parameters'}
                     style={{ padding: '4px' }}
                   >
-                    <Download size={16} />
+                    {paramsCollapsed ? <PanelRight size={16} /> : <PanelRightClose size={16} />}
                   </button>
                 </div>
               </div>
-              <div className="panel-body">{renderControls()}</div>
-              {/* Mobile close button at bottom */}
-              <button
-                className="mobile-close-params"
-                onClick={() => setMobileParamsOpen(false)}
-              >
-                <ChevronUp size={18} />
-                Close Parameters
-              </button>
+              {!paramsCollapsed && (
+                <>
+                  <div className="panel-body">{renderControls()}</div>
+                  {/* Mobile close button at bottom */}
+                  <button
+                    className="mobile-close-params"
+                    onClick={() => setMobileParamsOpen(false)}
+                  >
+                    <ChevronUp size={18} />
+                    Close Parameters
+                  </button>
+                </>
+              )}
             </section>
 
             {/* Show OutputPanel only when there's active output, otherwise show MyMediaTool */}
