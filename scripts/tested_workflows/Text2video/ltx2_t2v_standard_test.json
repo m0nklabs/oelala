@@ -1,0 +1,169 @@
+{
+  "_test_info": {
+    "name": "LTX-2 T2V Standard Test",
+    "tool": "Text2Video",
+    "mode": "ltx2",
+    "settings": {
+      "resolution": "576x1024 (portrait)",
+      "duration_sec": 10,
+      "fps": 16,
+      "frames": 161
+    },
+    "memory_config": {
+      "strategy": "aggressive_cpu_offload",
+      "distorch2_allocation": "cuda:0,8gb;cuda:1,10gb;cpu,10gb",
+      "notes": "Heavy CPU offload for 160+ frames at 576p"
+    }
+  },
+  "1": {
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "inputs": {
+      "unet_name": "ltx-2-19b-distilled_Q4_K_M.gguf",
+      "dequant_dtype": "bfloat16",
+      "patch_dtype": "bfloat16",
+      "patch_on_device": false,
+      "compute_device": "cuda:1",
+      "virtual_vram_gb": 14.0,
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,8gb;cuda:1,10gb;cpu,10gb",
+      "eject_models": true
+    },
+    "_meta": {
+      "title": "LTX-2 GGUF (DisTorch2)"
+    }
+  },
+  "2": {
+    "class_type": "LTXVGemmaCLIPModelLoader",
+    "inputs": {
+      "gemma_path": "gemma-3-12b-it-qat-q4_0-unquantized/model-00001-of-00005.safetensors",
+      "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
+      "max_length": 256
+    },
+    "_meta": {
+      "title": "Gemma Text Encoder"
+    }
+  },
+  "3": {
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "inputs": {
+      "vae_name": "LTX2_video_vae_bf16.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 3.0,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,3gb;cpu,*",
+      "eject_models": true
+    },
+    "_meta": {
+      "title": "LTX-2 VAE (DisTorch2)"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "TEST_PROMPT_PLACEHOLDER",
+      "clip": ["2", 0]
+    },
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode", 
+    "inputs": {
+      "text": "blurry, low quality, distorted, watermark, artifacts, flickering, frame stutter",
+      "clip": ["2", 0]
+    },
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "6": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "frame_rate": 16.0
+    },
+    "_meta": {
+      "title": "LTX-2 Conditioning"
+    }
+  },
+  "7": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 576,
+      "height": 1024,
+      "length": 161,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty Latent (576x1024, 161 frames)"
+    }
+  },
+  "8": {
+    "class_type": "LTXVScheduler",
+    "inputs": {
+      "steps": 8,
+      "max_shift": 2.05,
+      "base_shift": 0.95,
+      "stretch": true,
+      "terminal": 0.1
+    },
+    "_meta": {
+      "title": "LTX-2 Scheduler"
+    }
+  },
+  "9": {
+    "class_type": "SamplerCustom",
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 12345,
+      "cfg": 1.0,
+      "model": ["1", 0],
+      "positive": ["6", 0],
+      "negative": ["6", 1],
+      "sampler": ["10", 0],
+      "sigmas": ["8", 0],
+      "latent_image": ["7", 0]
+    },
+    "_meta": {
+      "title": "Sampler"
+    }
+  },
+  "10": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "_meta": {
+      "title": "Sampler Select"
+    }
+  },
+  "11": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["9", 0],
+      "vae": ["3", 0]
+    },
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "12": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["11", 0],
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "t2v_ltx2_test",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "crf": 19,
+      "save_metadata": true
+    },
+    "_meta": {
+      "title": "Video Output"
+    }
+  }
+}

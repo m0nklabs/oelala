@@ -576,10 +576,23 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         .map(idx => sortedMediaList[idx])
         .filter(Boolean)
 
-      const comfyItems = selectedList.filter(item => item.source === 'comfyui' || !item.source)
-      const storageItems = selectedList.filter(item => item.source === 'storage')
+      // Route items to correct delete endpoint based on source:
+      // - 'user': user storage (/user/media/...) - new API
+      // - 'comfyui-local': local ComfyUI output - legacy delete
+      // - 'generated': media/generated/ folder - legacy delete (same as comfyui)
+      // - 'public': gallery items - not deletable here
+      // - undefined/null: legacy comfyui items
+      const comfyItems = selectedList.filter(item => 
+        item.source === 'comfyui-local' || 
+        item.source === 'generated' || 
+        !item.source
+      )
+      const userStorageItems = selectedList.filter(item => 
+        item.source === 'user' || 
+        item.source === 'storage'
+      )
 
-      // Delete ComfyUI items (legacy)
+      // Delete ComfyUI/generated items (legacy endpoint)
       if (comfyItems.length > 0) {
         const comfyFilenames = comfyItems.map(item => item.filename)
         const res = await apiFetch(`${BACKEND_BASE}/delete-comfyui-media`, {
@@ -590,8 +603,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         if (!res.ok) console.error('Failed to delete some ComfyUI items')
       }
 
-      // Delete storage items (user-scoped)
-      for (const item of storageItems) {
+      // Delete user storage items (user-scoped API)
+      for (const item of userStorageItems) {
         try {
           // Parse media type from URL: /user/media/<type>/<filename>
           const urlParts = (item.url || '').split('/')
@@ -623,7 +636,10 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const handleBatchDownload = async () => {
     if (selectedItems.size === 0) return
 
-    const items = sortedMediaList.filter(item => selectedItems.has(item.filename))
+    // selectedItems contains indices, not filenames
+    const items = Array.from(selectedItems)
+      .map(idx => sortedMediaList[idx])
+      .filter(Boolean)
 
     // Download one by one with small delay to avoid browser blocking
     for (let i = 0; i < items.length; i++) {

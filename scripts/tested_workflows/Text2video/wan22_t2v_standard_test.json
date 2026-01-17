@@ -1,0 +1,149 @@
+{
+  "_test_info": {
+    "name": "Wan2.2 T2V Standard Test",
+    "tool": "Text2Video",
+    "mode": "wan22",
+    "settings": {
+      "resolution": "576x1024 (portrait)",
+      "duration_sec": 10,
+      "fps": 16,
+      "frames": 161
+    },
+    "memory_config": {
+      "strategy": "aggressive_cpu_offload",
+      "distorch2_allocation": "cuda:0,6gb;cuda:1,10gb;cpu,12gb",
+      "notes": "Heavy CPU offload for 160+ frames - Wan2.2 is VRAM hungry"
+    }
+  },
+  "1": {
+    "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+    "inputs": {
+      "unet_name": "Wan2.2_VAE_14B-Q6_K.gguf",
+      "dequant_dtype": "bfloat16",
+      "patch_dtype": "bfloat16",
+      "patch_on_device": false,
+      "compute_device": "cuda:1",
+      "virtual_vram_gb": 12.0,
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,6gb;cuda:1,10gb;cpu,12gb",
+      "eject_models": true
+    },
+    "_meta": {
+      "title": "Wan2.2 UNET (DisTorch2)"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoaderDisTorch2MultiGPU",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 8.0,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,6gb;cpu,*",
+      "eject_models": true
+    },
+    "_meta": {
+      "title": "T5 Encoder (DisTorch2)"
+    }
+  },
+  "3": {
+    "class_type": "VAELoaderDisTorch2MultiGPU",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors",
+      "compute_device": "cuda:0",
+      "virtual_vram_gb": 2.0,
+      "donor_device": "cpu",
+      "expert_mode_allocations": "cuda:0,2gb;cpu,*",
+      "eject_models": true
+    },
+    "_meta": {
+      "title": "Wan VAE (DisTorch2)"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "TEST_PROMPT_PLACEHOLDER",
+      "clip": ["2", 0]
+    },
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, low quality, distorted, watermark, artifacts, flickering, static, nsfw",
+      "clip": ["2", 0]
+    },
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "6": {
+    "class_type": "EmptyHunyuanLatentVideo",
+    "inputs": {
+      "width": 576,
+      "height": 1024,
+      "length": 161,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty Latent (576x1024, 161 frames)"
+    }
+  },
+  "7": {
+    "class_type": "PathchSageAttentionKJ",
+    "inputs": {
+      "backend": "sageattn_qk_int8_pv_fp16_triton"
+    },
+    "_meta": {
+      "title": "SageAttention (VRAM -15%)"
+    }
+  },
+  "8": {
+    "class_type": "WanSampler",
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "latent_image": ["6", 0],
+      "shift": 5.0,
+      "steps": 25,
+      "cfg": 5.0,
+      "seed": 12345,
+      "force_sigma_min": true
+    },
+    "_meta": {
+      "title": "Wan Sampler"
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["8", 0],
+      "vae": ["3", 0]
+    },
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "10": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["9", 0],
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "t2v_wan22_test",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "crf": 19,
+      "save_metadata": true
+    },
+    "_meta": {
+      "title": "Video Output"
+    }
+  }
+}
