@@ -1,44 +1,64 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Sparkles, Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2 } from 'lucide-react'
+import { Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
+import CameraPositionSelector, { getCameraPositionPrefix } from '../../components/CameraPositionSelector'
 
-// Model categories
-const MODEL_CATEGORIES = {
-  wan22: [
-    { value: 'wan2.2-t2i', label: 'Wan2.2 T2I (Multi-GPU)', category: 'Video Model' },
-  ],
-  flux: [
-    { value: 'flux1-dev-fp8', label: 'Flux.1 Dev (FP8)', category: 'Flux' },
-  ],
-  sdxl: [
-    { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony', category: 'Realistic/Pony' },
-    { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', category: 'General' },
-    { value: 'illustriousRealismBy_v10VAE.safetensors', label: 'Illustrious Realism', category: 'Realistic' },
-    { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL', category: 'General' },
-    { value: 'novaAnimeXL_ilV150.safetensors', label: 'Nova Anime XL', category: 'Anime' },
-    { value: 'ponyDiffusionV6XL_v6StartWithThisOne.safetensors', label: 'Pony Diffusion V6', category: 'Pony' },
-    { value: 'reapony_v90.safetensors', label: 'Reapony V9', category: 'Realistic/Pony' },
-    { value: 'ultraRealisticByStable_v20FP16.safetensors', label: 'Ultra Realistic', category: 'Realistic' },
-    { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious', category: 'Anime' },
-  ],
-  sd15: [
-    { value: 'Realistic_Vision_V5.1.safetensors', label: 'Realistic Vision V5.1', category: 'Realistic' },
-  ],
-  diffusers: [
-    { value: 'sd3.5-large-int8', label: 'SD3.5 Large (INT8)' },
-  ],
+// Models grouped by category
+const MODEL_GROUPS = {
+  flux: {
+    label: '⚡ Flux',
+    desc: 'Best quality',
+    models: [
+      { value: 'flux1-dev-fp8', label: 'Flux.1 Dev (FP8)', desc: 'Highest quality, slower' },
+    ]
+  },
+  sdxl: {
+    label: '🎨 SDXL',
+    desc: 'Great balance',
+    models: [
+      { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony', desc: 'Photorealistic + Pony tags' },
+      { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', desc: 'Fast, artistic' },
+      { value: 'illustriousRealismBy_v10VAE.safetensors', label: 'Illustrious Realism', desc: 'Detailed realistic' },
+      { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL', desc: 'All-rounder' },
+      { value: 'novaAnimeXL_ilV150.safetensors', label: 'Nova Anime XL', desc: 'Anime style' },
+      { value: 'ponyDiffusionV6XL_v6StartWithThisOne.safetensors', label: 'Pony Diffusion V6', desc: 'Booru tags, NSFW' },
+      { value: 'reapony_v90.safetensors', label: 'Reapony V9', desc: 'Realistic + Pony' },
+      { value: 'ultraRealisticByStable_v20FP16.safetensors', label: 'Ultra Realistic', desc: 'Hyperrealistic' },
+      { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious', desc: 'Anime + 2.5D' },
+    ]
+  },
+  sd15: {
+    label: '🚀 SD 1.5',
+    desc: 'Fast, low VRAM',
+    models: [
+      { value: 'Realistic_Vision_V5.1.safetensors', label: 'Realistic Vision V5.1', desc: 'Fast realistic' },
+    ]
+  },
+  wan22: {
+    label: '🎬 Wan2.2',
+    desc: 'Video model T2I',
+    models: [
+      { value: 'wan2.2-t2i', label: 'Wan2.2 T2I', desc: 'Multi-GPU video model' },
+    ]
+  },
+  diffusers: {
+    label: '🐍 Diffusers',
+    desc: 'Python pipeline',
+    models: [
+      { value: 'sd3.5-large-int8', label: 'SD3.5 Large (INT8)', desc: 'Latest SD3.5' },
+    ]
+  },
 }
 
 // Determine model type
-const getModelType = (model) => {
-  if (model === 'wan2.2-t2i') return 'wan22'
-  if (model.startsWith('flux')) return 'flux'
-  if (model === 'Realistic_Vision_V5.1.safetensors') return 'sd15'
-  if (model.endsWith('.safetensors')) return 'sdxl'
-  return 'diffusers'
+const getModelType = (modelValue) => {
+  for (const [type, group] of Object.entries(MODEL_GROUPS)) {
+    if (group.models.find(m => m.value === modelValue)) return type
+  }
+  return 'sdxl'
 }
 
 export default function TextToImageTool({ onOutput, onJobSubmitted }) {
@@ -48,7 +68,6 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text')
   const [aspectRatio, setAspectRatio] = useState('1:1')
-  const [mode, setMode] = useState('normal')
   const [model, setModel] = useState('CyberRealistic_Pony_v14.1_FP16.safetensors')
   const [batchCount, setBatchCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -56,6 +75,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [error, setError] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
+  const [cameraPosition, setCameraPosition] = useState('')
 
   // LoRA settings
   const [availableLoras, setAvailableLoras] = useState([])
@@ -73,18 +93,40 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
 
+  // Random subjects for empty prompt generation
+  const randomSubjects = [
+    'beautiful woman in elegant dress',
+    'handsome man in suit',
+    'cute cat lounging',
+    'majestic wolf in forest',
+    'futuristic city skyline',
+    'fantasy castle on mountain',
+    'cozy coffee shop interior',
+    'tropical beach sunset',
+    'mystical forest with glowing mushrooms',
+    'cyberpunk street at night',
+    'portrait of elegant lady',
+    'vintage car in countryside',
+    'underwater coral reef',
+    'astronaut on alien planet',
+    'steampunk airship',
+  ]
+
   // Enhance prompt with LLM
   const handleEnhancePrompt = async () => {
-    if (!prompt.trim() || isEnhancing) return
+    if (isEnhancing) return
     setIsEnhancing(true)
     setError('')
+
+    // If empty, pick a random subject
+    const inputPrompt = prompt.trim() || randomSubjects[Math.floor(Math.random() * randomSubjects.length)]
 
     try {
       const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: prompt.trim(),
+          input: inputPrompt,
           style: null,
           mode: 'expand',
           include_negative: true,
@@ -160,10 +202,14 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
     try {
       const queuedJobs = []
 
+      // Build prompt with camera position prefix
+      const positionPrefix = getCameraPositionPrefix(cameraPosition)
+      const finalPrompt = positionPrefix + prompt
+
       for (let i = 0; i < batchCount; i++) {
         const jobId = `t2i-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         const formData = new FormData()
-        formData.append('prompt', prompt)
+        formData.append('prompt', finalPrompt)
         formData.append('aspect_ratio', aspectRatio)
 
         // Determine endpoint based on model type
@@ -243,70 +289,16 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
 
   // Get model display label
   const getModelLabel = () => {
-    const allModels = [
-      ...MODEL_CATEGORIES.wan22,
-      ...MODEL_CATEGORIES.flux,
-      ...MODEL_CATEGORIES.sdxl,
-      ...MODEL_CATEGORIES.sd15,
-      ...MODEL_CATEGORIES.diffusers
-    ]
-    const found = allModels.find(m => m.value === model)
-    return found?.label || model
+    for (const group of Object.values(MODEL_GROUPS)) {
+      const found = group.models.find(m => m.value === model)
+      if (found) return found.label
+    }
+    return model
   }
 
   return (
     <div className="tool-container">
-      {/* Mode Selection */}
-      <div className="grok-card">
-        <div className="form-group">
-          <label className="grok-section-label">Mode</label>
-          <div className="form-select" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <Sparkles size={16} className="text-primary" />
-            <span>Normal</span>
-          </div>
-          <div className="info-badge">
-            <span style={{ color: '#93c5fd' }}>Standard Quality</span>
-            <div style={{ marginTop: '4px', opacity: 0.8 }}>Fast and efficient image generation (1 credit per image)</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Prompt Input */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <div className="grok-card-title">Enter Image Prompt</div>
-          <div style={{ display: 'flex', gap: '4px' }}>
-             {/* Enhance with LLM */}
-             <button 
-               className="icon-btn" 
-               style={{ width: '28px', height: '28px', padding: '4px' }}
-               onClick={handleEnhancePrompt}
-               disabled={isEnhancing || !prompt.trim()}
-               title="Enhance prompt with AI"
-             >
-               {isEnhancing ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />}
-             </button>
-          </div>
-        </div>
-
-        <div style={{ position: 'relative' }}>
-          <textarea
-            className="form-textarea"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={4}
-            placeholder="A attractive blonde woman with cup f, tattoos, looking at me defiantly."
-            style={{
-              backgroundColor: '#0f0f0f',
-              border: 'none',
-              resize: 'none',
-              paddingBottom: '24px'
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Model Selection */}
+      {/* Model Selection - Grouped with hover info */}
       <div className="grok-card">
         <div className="grok-card-header">
           <div className="grok-card-title">Model</div>
@@ -314,122 +306,69 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
             {getModelType(model).toUpperCase()}
           </span>
         </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {Object.entries(MODEL_GROUPS).map(([groupKey, group]) => (
+            <div key={groupKey}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
+                {group.label}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {group.models.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setModel(m.value)}
+                    title={m.desc}
+                    style={{
+                      padding: '6px 12px',
+                      background: model === m.value ? 'var(--primary-color)' : 'var(--bg-input)',
+                      border: model === m.value ? '1px solid var(--primary-color)' : '1px solid var(--border-color)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      color: model === m.value ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {/* Flux Models */}
-        <div style={{ marginBottom: '12px' }}>
-          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            ⚡ Flux (Best Quality)
-          </label>
-          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
-            {MODEL_CATEGORIES.flux.map((option) => (
-              <button
-                key={option.value}
-                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
-                onClick={() => setModel(option.value)}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '6px 10px',
-                  minWidth: 'auto'
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+      {/* Prompt Input */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Positive Prompt</div>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <button
+              className="icon-btn"
+              style={{ width: '24px', height: '24px', padding: '4px' }}
+              onClick={handleEnhancePrompt}
+              disabled={isEnhancing}
+              title={prompt.trim() ? 'Enhance prompt with AI' : 'Generate random prompt with AI'}
+            >
+              {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
+            </button>
           </div>
         </div>
-
-        {/* SDXL Models (ComfyUI) */}
-        <div style={{ marginBottom: '12px' }}>
-          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            🎨 SDXL Checkpoints
-          </label>
-          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
-            {MODEL_CATEGORIES.sdxl.map((option) => (
-              <button
-                key={option.value}
-                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
-                onClick={() => setModel(option.value)}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '6px 10px',
-                  minWidth: 'auto'
-                }}
-                title={option.category}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* SD 1.5 Models */}
-        <div style={{ marginBottom: '12px' }}>
-          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            🖼️ SD 1.5 (Fast, Low VRAM)
-          </label>
-          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
-            {MODEL_CATEGORIES.sd15.map((option) => (
-              <button
-                key={option.value}
-                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
-                onClick={() => setModel(option.value)}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '6px 10px',
-                  minWidth: 'auto'
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Wan2.2 Models (Video Model T2I) */}
-        <div style={{ marginBottom: '12px' }}>
-          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            🎬 Wan2.2 (Video Model T2I)
-          </label>
-          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
-            {MODEL_CATEGORIES.wan22.map((option) => (
-              <button
-                key={option.value}
-                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
-                onClick={() => setModel(option.value)}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '6px 10px',
-                  minWidth: 'auto'
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Diffusers Models */}
-        <div>
-          <label className="grok-section-label" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '8px' }}>
-            🐍 Diffusers (Python)
-          </label>
-          <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
-            {MODEL_CATEGORIES.diffusers.map((option) => (
-              <button
-                key={option.value}
-                className={`grok-toggle-btn ${model === option.value ? 'active' : ''}`}
-                onClick={() => setModel(option.value)}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '6px 10px',
-                  minWidth: 'auto'
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <textarea
+          className="form-textarea"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={4}
+          placeholder="A attractive blonde woman, tattoos, looking at me defiantly..."
+          style={{
+            backgroundColor: '#0f0f0f',
+            border: 'none',
+            resize: 'none',
+          }}
+        />
+        {/* Camera Position Selector */}
+        <CameraPositionSelector value={cameraPosition} onChange={setCameraPosition} style={{ marginTop: '12px' }} />
       </div>
 
       {/* Negative Prompt (for SDXL and SD1.5, not Flux) */}

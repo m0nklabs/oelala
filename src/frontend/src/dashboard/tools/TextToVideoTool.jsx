@@ -256,16 +256,16 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           <div style={{ display: 'flex', gap: '4px' }}>
             <button
               className="icon-btn"
-              style={{ width: '28px', height: '28px', padding: '4px' }}
+              style={{ width: '24px', height: '24px', padding: '4px' }}
               onClick={handleEnhancePrompt}
               disabled={isEnhancing || !prompt.trim()}
               title="Enhance prompt with AI"
             >
-              {isEnhancing ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />}
+              {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
             </button>
             <button
               className="icon-btn"
-              style={{ width: '28px', height: '28px', fontSize: '16px' }}
+              style={{ width: '24px', height: '24px', fontSize: '14px' }}
               onClick={() => handlePromptChange(getRandomPrompt(false))}
               title="Generate random creative prompt"
             >

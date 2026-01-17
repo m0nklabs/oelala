@@ -1571,6 +1571,125 @@ active_jobs = {}
 # Maps prompt_id -> [{type: "upscale", scale: 2}, {type: "interpolate", target_fps: 60}]
 pending_post_processing = {}
 
+# Generation stats file for analysis
+GENERATION_STATS_FILE = Path("/home/flip/oelala/data/generation_stats.json")
+
+
+def load_generation_stats() -> list:
+    """Load generation stats from file"""
+    if GENERATION_STATS_FILE.exists():
+        try:
+            with open(GENERATION_STATS_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load generation stats: {e}")
+    return []
+
+
+def save_generation_stat(stat: dict) -> bool:
+    """Append a generation stat to the stats file"""
+    try:
+        GENERATION_STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        stats = load_generation_stats()
+        stats.append(stat)
+        # Keep only last 10000 entries to prevent file from growing too large
+        if len(stats) > 10000:
+            stats = stats[-10000:]
+        with open(GENERATION_STATS_FILE, "w") as f:
+            json.dump(stats, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save generation stat: {e}")
+        return False
+
+
+def record_generation_start(prompt_id: str, job_info: dict) -> None:
+    """Record the start of a generation job"""
+    import time
+    if prompt_id in active_jobs:
+        active_jobs[prompt_id]["_start_time"] = time.time()
+        active_jobs[prompt_id]["_job_type"] = job_info.get("job_type", "unknown")
+
+
+def record_generation_complete(prompt_id: str, success: bool = True, error: str = None) -> None:
+    """Record completion of a generation job and save stats"""
+    import time
+    
+    job_info = active_jobs.get(prompt_id, {})
+    start_time = job_info.get("_start_time")
+    
+    if not start_time:
+        logger.warning(f"No start time recorded for job {prompt_id}")
+        return
+    
+    duration_seconds = time.time() - start_time
+    
+    stat = {
+        "prompt_id": prompt_id,
+        "timestamp": datetime.now().isoformat(),
+        "duration_seconds": round(duration_seconds, 2),
+        "success": success,
+        "error": error,
+        "job_type": job_info.get("_job_type", "unknown"),
+        "resolution": job_info.get("resolution", "unknown"),
+        "aspect_ratio": job_info.get("aspect_ratio", "unknown"),
+        "num_frames": job_info.get("num_frames", 0),
+        "fps": job_info.get("fps", 0),
+        "steps": job_info.get("steps", 0),
+        "model_mode": job_info.get("model_mode", "wan2.2"),
+        "extend_mode": job_info.get("extend_mode", False),
+        "clip_count": job_info.get("clip_count", 1),
+        "lora_count": job_info.get("lora_count", 0),
+        "cfg": job_info.get("cfg", 1.0),
+    }
+    
+    save_generation_stat(stat)
+    logger.info(f"📊 Generation stats recorded: {prompt_id} - {duration_seconds:.1f}s {'✅' if success else '❌'}")
+
+
+@app.get("/api/generation-stats")
+async def get_generation_stats(
+    limit: int = 100,
+    job_type: str = None,
+    success_only: bool = False,
+):
+    """
+    Get generation statistics for analysis.
+    
+    Parameters:
+    - limit: Max number of records to return (default 100)
+    - job_type: Filter by job type (wan22_i2v, ltx2_i2v, post_process_*)
+    - success_only: Only show successful generations
+    """
+    stats = load_generation_stats()
+    
+    # Apply filters
+    if job_type:
+        stats = [s for s in stats if s.get("job_type", "").startswith(job_type)]
+    if success_only:
+        stats = [s for s in stats if s.get("success", False)]
+    
+    # Most recent first
+    stats = stats[-limit:][::-1]
+    
+    # Calculate summary stats
+    if stats:
+        durations = [s["duration_seconds"] for s in stats if s.get("duration_seconds")]
+        successful = sum(1 for s in stats if s.get("success", False))
+        summary = {
+            "total": len(stats),
+            "successful": successful,
+            "failed": len(stats) - successful,
+            "success_rate": round(successful / len(stats) * 100, 1) if stats else 0,
+            "avg_duration": round(sum(durations) / len(durations), 1) if durations else 0,
+            "min_duration": round(min(durations), 1) if durations else 0,
+            "max_duration": round(max(durations), 1) if durations else 0,
+        }
+    else:
+        summary = {"total": 0, "successful": 0, "failed": 0, "success_rate": 0, "avg_duration": 0}
+    
+    return {"summary": summary, "records": stats}
+
 
 async def trigger_post_processing_chain(
     prompt_id: str,
@@ -1818,6 +1937,9 @@ async def get_job_status(prompt_id: str):
                             )
                             # Generate signed URL for the uploaded content
                             signed_url = get_signed_media_url(storage_path, expires_in=86400)  # 24h
+
+                # Record generation completion for stats tracking
+                record_generation_complete(prompt_id, success=True)
 
                 return {
                     "prompt_id": prompt_id,
@@ -4702,8 +4824,12 @@ async def generate_wan22_async(
         "lora_count": len(parsed_lora_configs),
         "post_processing": parsed_post_processing,
         "post_audio_path": post_audio_path,
+        "job_type": "wan22_i2v",
+        "cfg": cfg,
+        "model_mode": model_mode,
     }
     active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
 
     if is_extend_mode and actual_clip_count > 1:
         logger.info(
@@ -4923,8 +5049,12 @@ async def generate_ltx2_i2v_async(
         "model": "ltx2",
         "post_processing": parsed_post_processing,
         "post_audio_path": post_audio_path,
+        "job_type": "ltx2_i2v",
+        "cfg": cfg,
+        "model_mode": "ltx2",
     }
     active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
 
     logger.info(f"🚀 Queued LTX-2 I2V async job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
@@ -5089,8 +5219,10 @@ async def post_process_media(
         "input_files": input_paths,
         "user_id": user.id,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "job_type": f"post_process_{mode}",
     }
     active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
 
     # Deduct credits
     await deduct_credits(user, credits_required, prompt_id, f"Post-process: {mode}")
@@ -5562,6 +5694,51 @@ async def caption_image(
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:9b")  # Fast and good quality
 
+# AI Settings file (admin-editable)
+AI_SETTINGS_FILE = Path("/home/flip/oelala/data/ai_settings.json")
+
+# Default system prompt for prompt enhancement
+DEFAULT_PROMPT_SYSTEM = """You are an WILDLY creative AI image prompt engineer who NEVER repeats yourself.
+
+CRITICAL RULES:
+1. NEVER use these clichés: sunbeams, golden hour, window light, cozy scenes, basking
+2. Each prompt must be COMPLETELY DIFFERENT from anything before
+3. Use unexpected settings: underwater, space, noir, cyberpunk, ancient ruins, microscopic, surreal dreamscapes
+4. Vary lighting dramatically: neon, bioluminescence, moonlight, candlelight, harsh shadows, x-ray
+5. Add quality boosters: masterpiece, 8k, photorealistic, cinematic, detailed
+6. For simple inputs like "a cat" - go WILD with the setting and style
+7. Be concise (max 100 words) but SURPRISING
+8. Output ONLY valid JSON, no markdown
+
+Output format (strict JSON):
+{"prompt": "creative enhanced prompt", "negative_prompt": "defects to avoid", "motion_prompt": "motion if requested"}"""
+
+
+def load_ai_settings() -> dict:
+    """Load AI settings from file or return defaults"""
+    if AI_SETTINGS_FILE.exists():
+        try:
+            with open(AI_SETTINGS_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load AI settings: {e}")
+    return {
+        "prompt_system": DEFAULT_PROMPT_SYSTEM,
+        "ollama_model": OLLAMA_MODEL,
+    }
+
+
+def save_ai_settings(settings: dict) -> bool:
+    """Save AI settings to file"""
+    try:
+        AI_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(AI_SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save AI settings: {e}")
+        return False
+
 
 class PromptGenerateRequest(BaseModel):
     """JSON body for prompt generation"""
@@ -5593,46 +5770,64 @@ async def generate_prompt_with_llm(
 ) -> dict:
     """Use Ollama LLM to generate enhanced prompts"""
     import httpx
+    import random
+
+    # Load admin-configurable settings
+    ai_settings = load_ai_settings()
+    system_prompt = ai_settings.get("prompt_system", DEFAULT_PROMPT_SYSTEM)
+    model = ai_settings.get("ollama_model", OLLAMA_MODEL)
 
     style_desc = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
     style_context = f"Style requested: {style} ({style_desc})" if style else "No specific style"
     motion_context = "Include camera motion/animation descriptions." if include_motion else ""
+    
+    # Add randomness to make each generation unique
+    random_seed = random.randint(1, 99999)
+    
+    # Different creative directions to push variety
+    creative_directions = [
+        "Make it cyberpunk/neon",
+        "Make it underwater/oceanic", 
+        "Make it cosmic/space themed",
+        "Make it noir/dramatic shadows",
+        "Make it surreal/dreamlike",
+        "Make it ancient/mythological",
+        "Make it microscopic/tiny world",
+        "Make it post-apocalyptic",
+        "Make it steampunk/victorian",
+        "Make it bioluminescent/glowing",
+        "Make it minimalist/artistic",
+        "Make it maximalist/baroque",
+    ]
+    direction = random.choice(creative_directions)
 
-    # System prompt for image/video generation
-    system_prompt = """You are an expert AI image/video generation prompt engineer.
-Your task is to enhance simple descriptions into detailed, high-quality prompts.
+    user_prompt = f"""Create a UNIQUE image prompt. Be surprising! Seed: {random_seed}
 
-Rules:
-1. Keep the core subject/concept intact
-2. Add visual details: lighting, composition, atmosphere, colors
-3. Add quality boosters at the end: masterpiece, best quality, highly detailed
-4. For negative prompts: focus on common defects to avoid
-5. Be concise but descriptive (max 100 words per prompt)
-6. Output ONLY valid JSON, no markdown, no explanation
-
-Output format (strict JSON):
-{"prompt": "enhanced prompt here", "negative_prompt": "negative prompt here", "motion_prompt": "motion description if requested"}"""
-
-    user_prompt = f"""Enhance this prompt:
 Input: "{base_input}"
+Creative direction: {direction}
 {style_context}
 Mode: {mode}
 {motion_context}
 
-Generate the enhanced prompt as JSON."""
+IMPORTANT: Do NOT use sunbeams, golden hour, or cozy clichés. Be WILD and creative!
+
+Generate as JSON."""
 
     try:
         async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
             response = await client.post(
                 f"{OLLAMA_BASE}/api/generate",
                 json={
-                    "model": OLLAMA_MODEL,
+                    "model": model,
                     "prompt": user_prompt,
                     "system": system_prompt,
                     "stream": False,
+                    "keep_alive": "0",  # Unload immediately to free VRAM
                     "options": {
-                        "temperature": 0.7,
+                        "temperature": 1.2,  # VERY high for maximum creativity
                         "num_predict": 500,
+                        "seed": random_seed,
+                        "top_p": 0.95,  # Nucleus sampling for variety
                     },
                 },
             )
@@ -5652,7 +5847,7 @@ Generate the enhanced prompt as JSON."""
                 "prompt": parsed.get("prompt", base_input),
                 "negative_prompt": parsed.get("negative_prompt", ""),
                 "motion_prompt": parsed.get("motion_prompt", ""),
-                "llm_model": OLLAMA_MODEL,
+                "llm_model": model,
                 "llm_used": True,
             }
 
@@ -5759,6 +5954,258 @@ async def generate_prompt(request: Request):
         "input": base_input,
         "style": req.style,
         "mode": req.mode,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image Analysis with Vision LLM (Moondream)
+# ─────────────────────────────────────────────────────────────────────────────
+
+VISION_MODEL = os.getenv("VISION_MODEL", "moondream:latest")
+
+
+async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None) -> str:
+    """
+    Use Moondream (vision LLM) to analyze an image and return a description.
+    
+    Args:
+        image_base64: Base64 encoded image data
+        custom_prompt: Optional custom prompt for the analysis
+    
+    Returns:
+        Text description of the image
+    """
+    import httpx
+    
+    analysis_prompt = custom_prompt or "Describe this image in detail. Focus on: the main subject, their appearance, clothing, pose, expression, the setting/background, lighting, colors, and overall mood. Be specific and descriptive."
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0, auth=("oelala-backend", "")) as client:
+            response = await client.post(
+                f"{OLLAMA_BASE}/api/generate",
+                json={
+                    "model": VISION_MODEL,
+                    "prompt": analysis_prompt,
+                    "images": [image_base64],
+                    "stream": False,
+                    "keep_alive": "0",  # Unload immediately to free VRAM for video gen
+                    "options": {
+                        "temperature": 0.3,  # Lower temp for accurate description
+                        "num_predict": 500,
+                    },
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("response", "").strip()
+    except httpx.ConnectError:
+        logger.warning("Ollama not available for vision analysis")
+        raise HTTPException(status_code=503, detail="Vision model not available")
+    except Exception as e:
+        logger.error(f"Vision analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Vision analysis failed: {str(e)}")
+
+
+# System prompt specifically for I2V creative scene generation
+I2V_SCENE_SYSTEM_PROMPT = """You are a creative director for AI video generation. Given an image description, create a compelling video scene.
+
+CRITICAL RULES:
+1. The subject in the image is the STAR - keep them as the focus
+2. Create an interesting SCENARIO/ACTION for the video (not just a static scene)
+3. Include specific MOVEMENT descriptions (what moves, how it moves)
+4. Vary the scenarios wildly - action, emotion, interaction, transformation
+5. Be concise but vivid (max 80 words for prompt)
+6. Output ONLY valid JSON
+
+Output format:
+{"prompt": "video scene description with movement", "negative_prompt": "quality issues to avoid", "motion_prompt": "camera/subject motion"}"""
+
+I2V_NSFW_SCENE_SYSTEM_PROMPT = """You are a creative director for AI adult video generation. Given an image description, create a sensual/erotic video scene.
+
+CRITICAL RULES:
+1. The subject in the image is the STAR - keep them as the focus  
+2. Create an INTIMATE or SENSUAL scenario for the video
+3. Include specific MOVEMENT descriptions (body movements, expressions)
+4. Be tasteful but explicit - focus on sensuality and desire
+5. Be concise but vivid (max 80 words for prompt)
+6. Output ONLY valid JSON
+
+Output format:
+{"prompt": "sensual video scene with movement", "negative_prompt": "quality issues to avoid", "motion_prompt": "movement description"}"""
+
+
+async def generate_i2v_prompt_from_description(
+    image_description: str, nsfw: bool = False
+) -> dict:
+    """
+    Use LLM to generate creative video prompts based on an image description.
+    
+    Args:
+        image_description: Text description of the image from vision model
+        nsfw: If True, generate adult/sensual content
+    
+    Returns:
+        Dict with prompt, negative_prompt, motion_prompt
+    """
+    import httpx
+    import random
+    
+    ai_settings = load_ai_settings()
+    model = ai_settings.get("ollama_model", OLLAMA_MODEL)
+    
+    system_prompt = I2V_NSFW_SCENE_SYSTEM_PROMPT if nsfw else I2V_SCENE_SYSTEM_PROMPT
+    
+    # Random creative directions for variety
+    sfw_directions = [
+        "Make it dramatic and cinematic",
+        "Add an element of surprise or wonder", 
+        "Create tension or anticipation",
+        "Make it playful and dynamic",
+        "Add environmental interaction",
+        "Create an emotional moment",
+        "Make it mysterious or intriguing",
+        "Add graceful, flowing movement",
+    ]
+    
+    nsfw_directions = [
+        "Focus on seduction and eye contact",
+        "Create intimate tension",
+        "Emphasize sensual movement",
+        "Build anticipation and desire",
+        "Focus on touch and connection",
+        "Create passionate energy",
+        "Emphasize curves and form",
+        "Add playful teasing",
+    ]
+    
+    directions = nsfw_directions if nsfw else sfw_directions
+    direction = random.choice(directions)
+    random_seed = random.randint(1, 99999)
+    
+    user_prompt = f"""Create a video prompt from this image description:
+
+IMAGE: {image_description}
+
+Creative direction: {direction}
+Seed: {random_seed}
+
+Generate a compelling video scene as JSON. Include what happens, how things move, and the mood."""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
+            response = await client.post(
+                f"{OLLAMA_BASE}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": user_prompt,
+                    "system": system_prompt,
+                    "stream": False,
+                    "keep_alive": "0",  # Unload immediately to free VRAM for video gen
+                    "options": {
+                        "temperature": 1.1,  # High creativity
+                        "num_predict": 400,
+                        "seed": random_seed,
+                        "top_p": 0.95,
+                    },
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+            llm_output = result.get("response", "").strip()
+            
+            # Parse JSON from LLM output
+            if "```json" in llm_output:
+                llm_output = llm_output.split("```json")[1].split("```")[0].strip()
+            elif "```" in llm_output:
+                llm_output = llm_output.split("```")[1].split("```")[0].strip()
+            
+            parsed = json.loads(llm_output)
+            return {
+                "prompt": parsed.get("prompt", ""),
+                "negative_prompt": parsed.get("negative_prompt", "low quality, blurry, artifacts, distortion"),
+                "motion_prompt": parsed.get("motion_prompt", ""),
+            }
+    except json.JSONDecodeError as e:
+        logger.warning(f"I2V LLM returned invalid JSON: {e}")
+        # Return a basic prompt based on description
+        return {
+            "prompt": f"{image_description}, cinematic motion, masterpiece quality",
+            "negative_prompt": "low quality, blurry, artifacts, distortion, jitter",
+            "motion_prompt": "smooth cinematic motion",
+        }
+    except Exception as e:
+        logger.error(f"I2V prompt generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Prompt generation failed: {str(e)}")
+
+
+class AnalyzeImageRequest(BaseModel):
+    """Request body for image analysis"""
+    image_base64: str  # Base64 encoded image
+    custom_prompt: Optional[str] = None
+
+
+class AnalyzeAndGenerateRequest(BaseModel):
+    """Request body for analyze + generate pipeline"""
+    image_base64: str  # Base64 encoded image
+    nsfw: bool = False
+
+
+@app.post("/api/analyze-image")
+async def analyze_image(request: AnalyzeImageRequest):
+    """
+    Analyze an image using the vision model (Moondream).
+    Returns a detailed text description of the image.
+    """
+    if not request.image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 is required")
+    
+    # Remove data URL prefix if present
+    image_data = request.image_base64
+    if image_data.startswith("data:"):
+        image_data = image_data.split(",", 1)[1]
+    
+    description = await analyze_image_with_vision(image_data, request.custom_prompt)
+    
+    return {
+        "description": description,
+        "model": VISION_MODEL,
+    }
+
+
+@app.post("/api/analyze-and-generate")
+async def analyze_and_generate(request: AnalyzeAndGenerateRequest):
+    """
+    Full pipeline: Analyze image with vision model, then generate creative video prompts.
+    
+    1. Use Moondream to describe the image
+    2. Use Gemma2 to create a creative video scene based on the description
+    
+    Returns both the image description and generated prompts.
+    """
+    if not request.image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 is required")
+    
+    # Remove data URL prefix if present
+    image_data = request.image_base64
+    if image_data.startswith("data:"):
+        image_data = image_data.split(",", 1)[1]
+    
+    # Step 1: Analyze image with vision model
+    logger.info(f"🔮 Analyzing image with {VISION_MODEL}...")
+    description = await analyze_image_with_vision(image_data)
+    logger.info(f"📝 Image description: {description[:100]}...")
+    
+    # Step 2: Generate creative video prompt from description
+    logger.info(f"🎬 Generating {'NSFW' if request.nsfw else 'SFW'} video prompt...")
+    prompts = await generate_i2v_prompt_from_description(description, request.nsfw)
+    
+    return {
+        "description": description,
+        "prompt": prompts["prompt"],
+        "negative_prompt": prompts["negative_prompt"],
+        "motion_prompt": prompts["motion_prompt"],
+        "vision_model": VISION_MODEL,
+        "nsfw": request.nsfw,
     }
 
 

@@ -483,6 +483,20 @@ WAN22_I2V_Q6_API_WORKFLOW = {
     },
     # Node 11: Load Image
     "11": {"class_type": "LoadImage", "inputs": {"image": "example_480.png"}},
+    # Node 20: ImageResize - Resize input image to exact target resolution
+    # Uses "fill / crop" to ensure exact dimensions with center cropping
+    "20": {
+        "class_type": "ImageResize+",
+        "inputs": {
+            "image": ["11", 0],
+            "width": 480,
+            "height": 848,
+            "interpolation": "lanczos",
+            "method": "fill / crop",
+            "condition": "always",
+            "multiple_of": 8,
+        },
+    },
     # Node 12: WanImageToVideo - encodes image to latent + conditioning
     # Uses direct width/height values (aspect ratio calculated by script)
     "12": {
@@ -495,7 +509,7 @@ WAN22_I2V_Q6_API_WORKFLOW = {
             "positive": ["9", 0],
             "negative": ["10", 0],
             "vae": ["3", 0],
-            "start_image": ["11", 0],
+            "start_image": ["20", 0],
         },
     },
     # Node 13: KSamplerAdvanced - Pass 1 (High Noise) steps 0-3
@@ -1480,6 +1494,11 @@ class ComfyUIClient:
         # Ensure dimensions are multiples of 8 for VAE
         width = (width // 8) * 8
         height = (height // 8) * 8
+
+        # Node 20: ImageResize+ - resize input image to exact target dimensions
+        workflow["20"]["inputs"]["width"] = width
+        workflow["20"]["inputs"]["height"] = height
+        logger.info(f"🖼️ Image resize: {width}x{height} (fill/crop to exact size)")
 
         # Node 12: WanImageToVideo - set direct width/height values
         workflow["12"]["inputs"]["width"] = width

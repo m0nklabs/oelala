@@ -90,13 +90,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [fps, setFps] = useState(16)
   const [steps, setSteps] = useState(6)
-  const [cfg, setCfg] = useState(1.0)
+  const [cfg, setCfg] = useState(3.0)  // Default to balanced prompt strength
   const [seed, setSeed] = useState(-1)
   const [showAdvanced, setShowAdvanced] = useState(false)  // Sampling settings collapsed by default
 
   // Camera motion preset
   const [cameraMotion, setCameraMotion] = useState('')
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [imageDescription, setImageDescription] = useState('')  // Store vision analysis result
 
   // LoRA state - now supports multiple LoRAs with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
@@ -174,6 +176,72 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       setError(`Enhance failed: ${err.message}`)
     } finally {
       setIsEnhancing(false)
+    }
+  }
+
+  // Analyze image with vision model and generate creative video prompts
+  const handleAnalyzeAndGenerate = async (useNsfw = false) => {
+    if (!previewUrl || isAnalyzing) return
+    setIsAnalyzing(true)
+    setError('')
+
+    try {
+      // Get image as base64
+      let imageBase64 = ''
+      
+      // If previewUrl is a blob or data URL, fetch it
+      if (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')) {
+        const response = await fetch(previewUrl)
+        const blob = await response.blob()
+        imageBase64 = await new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result)
+          reader.readAsDataURL(blob)
+        })
+      } else {
+        // For remote URLs, fetch through backend or directly
+        const response = await fetch(previewUrl)
+        const blob = await response.blob()
+        imageBase64 = await new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result)
+          reader.readAsDataURL(blob)
+        })
+      }
+
+      if (DEBUG) console.log('🔮 Analyzing image and generating prompts...')
+
+      const res = await fetch(`${BACKEND_BASE}/api/analyze-and-generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+          nsfw: useNsfw,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Analysis failed')
+      }
+
+      const data = await res.json()
+      if (DEBUG) console.log('🎬 Generated prompts:', data)
+
+      // Store the image description for reference
+      setImageDescription(data.description)
+
+      // Update prompts
+      setPrompt(data.prompt)
+      if (data.negative_prompt) {
+        setNegativePrompt(data.negative_prompt)
+      }
+
+    } catch (err) {
+      console.error('Analyze error:', err)
+      setError(`Analysis failed: ${err.message}`)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -804,7 +872,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             >
               🔍
             </button>
-            <button className="icon-btn" style={{ width: '24px', height: '24px', fontSize: '12px' }} title="Show prompt tips">📝</button>
             <button
               className="icon-btn"
               style={{ width: '24px', height: '24px', fontSize: '14px' }}
@@ -813,8 +880,72 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             >
               ✨
             </button>
+            {/* Divider */}
+            <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--border-color)', margin: '0 2px' }} />
+            {/* Analyze & Generate SFW */}
+            <button
+              className="icon-btn"
+              style={{ 
+                width: 'auto', 
+                height: '24px', 
+                padding: '4px 8px',
+                fontSize: '0.7rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: isAnalyzing ? 'var(--bg-input)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                color: 'white',
+                border: 'none',
+              }}
+              onClick={() => handleAnalyzeAndGenerate(false)}
+              disabled={isAnalyzing || !previewUrl}
+              title="Analyze image with AI and generate creative SFW video prompt"
+            >
+              {isAnalyzing ? <Loader2 size={12} className="spin" /> : '🔮'}
+              <span>SFW</span>
+            </button>
+            {/* Analyze & Generate NSFW - only show if NSFW enabled */}
+            {nsfwEnabled && (
+              <button
+                className="icon-btn"
+                style={{ 
+                  width: 'auto', 
+                  height: '24px', 
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: isAnalyzing ? 'var(--bg-input)' : 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                  color: 'white',
+                  border: 'none',
+                }}
+                onClick={() => handleAnalyzeAndGenerate(true)}
+                disabled={isAnalyzing || !previewUrl}
+                title="Analyze image with AI and generate creative NSFW video prompt"
+              >
+                {isAnalyzing ? <Loader2 size={12} className="spin" /> : '🔥'}
+                <span>NSFW</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Image Description - show if we have one from analysis */}
+        {imageDescription && (
+          <div style={{
+            marginTop: '8px',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            borderRadius: '8px',
+            fontSize: '0.75rem',
+            color: 'var(--text-secondary)',
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: '4px', color: '#a78bfa' }}>📝 Image Analysis:</div>
+            <div style={{ lineHeight: 1.5 }}>{imageDescription}</div>
+          </div>
+        )}
 
         {/* Camera Motion Selector */}
         <CameraMotionSelector value={cameraMotion} onChange={setCameraMotion} />
@@ -887,6 +1018,63 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </div>
             </div>
           )}
+        </div>
+
+        {/* Prompt Strength Slider */}
+        <div style={{ marginTop: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Prompt Strength
+              </label>
+              <span 
+                title="How strictly the video follows your prompt. Low = subtle movement, High = dramatic action (may cause artifacts)"
+                style={{ cursor: 'help', opacity: 0.5 }}
+              >
+                <HelpCircle size={12} />
+              </span>
+            </div>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 600,
+              color: cfg <= 1.5 ? '#fbbf24' : cfg <= 3 ? '#34d399' : '#f87171',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              backgroundColor: cfg <= 1.5 ? 'rgba(251,191,36,0.1)' : cfg <= 3 ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+            }}>
+              {cfg <= 1.5 ? '🌊 Subtle' : cfg <= 3 ? '⚡ Balanced' : '🔥 Strong'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              step="0.5"
+              value={cfg}
+              onChange={(e) => setCfg(parseFloat(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{ 
+              fontSize: '0.85rem', 
+              fontWeight: 600, 
+              minWidth: '32px', 
+              textAlign: 'right',
+              color: 'var(--text-primary)'
+            }}>
+              {cfg.toFixed(1)}
+            </span>
+          </div>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            fontSize: '0.7rem', 
+            color: 'var(--text-muted)',
+            marginTop: '4px'
+          }}>
+            <span>Subtle motion</span>
+            <span>Strong action</span>
+          </div>
         </div>
       </div>
 

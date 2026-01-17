@@ -131,10 +131,10 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
           right: 0,
           marginTop: '8px',
           width: '320px',
-          backgroundColor: 'var(--bg-secondary)',
+          backgroundColor: 'var(--bg-panel)',
           border: '1px solid var(--border-color)',
           borderRadius: '8px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
           zIndex: 1000,
           overflow: 'hidden',
         }}>

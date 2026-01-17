@@ -1088,3 +1088,135 @@ async def get_recent_logs(
     except Exception as e:
         logger.error(f"Log fetch error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# AI Settings Management
+# =============================================================================
+
+AI_SETTINGS_FILE = Path("/home/flip/oelala/data/ai_settings.json")
+
+DEFAULT_PROMPT_SYSTEM = """You are an expert AI image/video generation prompt engineer.
+Your task is to enhance simple descriptions into detailed, high-quality prompts.
+
+Rules:
+1. Keep the core subject/concept intact
+2. Add visual details: lighting, composition, atmosphere, colors
+3. Add quality boosters at the end: masterpiece, best quality, highly detailed
+4. For negative prompts: focus on common defects to avoid
+5. Be concise but descriptive (max 100 words per prompt)
+6. Output ONLY valid JSON, no markdown, no explanation
+
+Output format (strict JSON):
+{"prompt": "enhanced prompt here", "negative_prompt": "negative prompt here", "motion_prompt": "motion description if requested"}"""
+
+
+class AISettingsUpdate(BaseModel):
+    """AI settings update request"""
+    prompt_system: Optional[str] = None
+    ollama_model: Optional[str] = None
+
+
+@router.get("/ai-settings")
+async def get_ai_settings(user: User = Depends(get_current_user)):
+    """Get current AI settings (admin only)"""
+    if not ADMIN_BYPASS and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    import json
+    
+    settings = {
+        "prompt_system": DEFAULT_PROMPT_SYSTEM,
+        "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
+    }
+    
+    if AI_SETTINGS_FILE.exists():
+        try:
+            with open(AI_SETTINGS_FILE, "r") as f:
+                saved = json.load(f)
+                settings.update(saved)
+        except Exception as e:
+            logger.warning(f"Failed to load AI settings: {e}")
+    
+    # Also get available Ollama models
+    available_models = []
+    try:
+        async with httpx.AsyncClient(timeout=5.0, auth=("oelala-backend", "")) as client:
+            res = await client.get("http://localhost:11434/api/tags")
+            if res.status_code == 200:
+                models = res.json().get("models", [])
+                available_models = [m.get("name", "") for m in models]
+    except Exception:
+        pass
+    
+    return {
+        **settings,
+        "available_models": available_models,
+        "default_prompt_system": DEFAULT_PROMPT_SYSTEM,
+    }
+
+
+@router.post("/ai-settings")
+async def update_ai_settings(
+    update: AISettingsUpdate,
+    user: User = Depends(get_current_user)
+):
+    """Update AI settings (admin only)"""
+    if not ADMIN_BYPASS and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    import json
+    
+    # Load existing settings
+    settings = {
+        "prompt_system": DEFAULT_PROMPT_SYSTEM,
+        "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
+    }
+    
+    if AI_SETTINGS_FILE.exists():
+        try:
+            with open(AI_SETTINGS_FILE, "r") as f:
+                settings.update(json.load(f))
+        except Exception:
+            pass
+    
+    # Update with new values
+    if update.prompt_system is not None:
+        settings["prompt_system"] = update.prompt_system
+    if update.ollama_model is not None:
+        settings["ollama_model"] = update.ollama_model
+    
+    # Save
+    try:
+        AI_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(AI_SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
+        
+        logger.info(f"AI settings updated by admin {user.id}")
+        return {"success": True, "settings": settings}
+    except Exception as e:
+        logger.error(f"Failed to save AI settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {e}")
+
+
+@router.post("/ai-settings/reset")
+async def reset_ai_settings(user: User = Depends(get_current_user)):
+    """Reset AI settings to defaults (admin only)"""
+    if not ADMIN_BYPASS and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        if AI_SETTINGS_FILE.exists():
+            AI_SETTINGS_FILE.unlink()
+        
+        logger.info(f"AI settings reset to defaults by admin {user.id}")
+        return {
+            "success": True,
+            "settings": {
+                "prompt_system": DEFAULT_PROMPT_SYSTEM,
+                "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to reset AI settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset settings: {e}")

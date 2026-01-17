@@ -103,10 +103,10 @@ export default function UserMenu() {
             right: 0,
             marginTop: 4,
             minWidth: 200,
-            background: 'var(--bg-card)',
+            background: 'var(--bg-panel)',
             border: '1px solid var(--border-color)',
             borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
             zIndex: 1000,
             overflow: 'hidden',
           }}

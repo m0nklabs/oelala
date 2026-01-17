@@ -24,6 +24,13 @@ export default function AdminSystemTab() {
   const [logsData, setLogsData] = useState(null)
   const [selectedService, setSelectedService] = useState('oelala-backend')
   
+  // AI Settings
+  const [aiSettings, setAiSettings] = useState(null)
+  const [aiSettingsLoading, setAiSettingsLoading] = useState(false)
+  const [aiSettingsSaving, setAiSettingsSaving] = useState(false)
+  const [editedPromptSystem, setEditedPromptSystem] = useState('')
+  const [editedOllamaModel, setEditedOllamaModel] = useState('')
+  
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
@@ -76,6 +83,83 @@ export default function AdminSystemTab() {
     }
   }, [isAdmin, session, selectedService])
 
+  // Fetch AI settings
+  const fetchAiSettings = useCallback(async () => {
+    if (!isAdmin || !session) return
+    setAiSettingsLoading(true)
+    
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiSettings(data)
+        setEditedPromptSystem(data.prompt_system || '')
+        setEditedOllamaModel(data.ollama_model || '')
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI settings:', err)
+    } finally {
+      setAiSettingsLoading(false)
+    }
+  }, [isAdmin, session])
+
+  // Save AI settings
+  const saveAiSettings = async () => {
+    if (!session) return
+    setAiSettingsSaving(true)
+    
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          prompt_system: editedPromptSystem,
+          ollama_model: editedOllamaModel,
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiSettings(data.settings)
+        alert('AI settings saved!')
+      } else {
+        const err = await res.json()
+        alert(`Failed to save: ${err.detail}`)
+      }
+    } catch (err) {
+      console.error('Failed to save AI settings:', err)
+      alert('Failed to save AI settings')
+    } finally {
+      setAiSettingsSaving(false)
+    }
+  }
+
+  // Reset AI settings to defaults
+  const resetAiSettings = async () => {
+    if (!confirm('Reset AI settings to defaults?')) return
+    if (!session) return
+    
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings/reset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiSettings(data.settings)
+        setEditedPromptSystem(data.settings.prompt_system)
+        setEditedOllamaModel(data.settings.ollama_model)
+        alert('AI settings reset to defaults!')
+      }
+    } catch (err) {
+      console.error('Failed to reset AI settings:', err)
+    }
+  }
+
   // Initial load
   useEffect(() => {
     fetchSystemData()
@@ -86,7 +170,10 @@ export default function AdminSystemTab() {
     if (activeTab === 'logs') {
       fetchLogs()
     }
-  }, [activeTab, selectedService, fetchLogs])
+    if (activeTab === 'ai') {
+      fetchAiSettings()
+    }
+  }, [activeTab, selectedService, fetchLogs, fetchAiSettings])
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
@@ -111,6 +198,7 @@ export default function AdminSystemTab() {
     { id: 'overview', label: '📊 Overview', icon: <Activity size={16} /> },
     { id: 'queue', label: '📋 Queue', icon: <Clock size={16} /> },
     { id: 'logs', label: '📜 Logs', icon: <FileText size={16} /> },
+    { id: 'ai', label: '🤖 AI Settings', icon: <Cpu size={16} /> },
   ]
 
   return (
@@ -185,6 +273,20 @@ export default function AdminSystemTab() {
               selectedService={selectedService}
               onServiceChange={setSelectedService}
               onRefresh={fetchLogs}
+            />
+          )}
+          
+          {activeTab === 'ai' && (
+            <AISettingsTab
+              aiSettings={aiSettings}
+              aiSettingsLoading={aiSettingsLoading}
+              aiSettingsSaving={aiSettingsSaving}
+              editedPromptSystem={editedPromptSystem}
+              editedOllamaModel={editedOllamaModel}
+              onPromptSystemChange={setEditedPromptSystem}
+              onOllamaModelChange={setEditedOllamaModel}
+              onSave={saveAiSettings}
+              onReset={resetAiSettings}
             />
           )}
         </>
@@ -573,6 +675,130 @@ function LogsTab({ logsData, selectedService, onServiceChange, onRefresh }) {
 
       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
         Showing last {logsData?.count || 0} lines • Auto-refreshes every 10s
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// AI Settings Tab
+// =============================================================================
+
+function AISettingsTab({
+  aiSettings,
+  aiSettingsLoading,
+  aiSettingsSaving,
+  editedPromptSystem,
+  editedOllamaModel,
+  onPromptSystemChange,
+  onOllamaModelChange,
+  onSave,
+  onReset,
+}) {
+  if (aiSettingsLoading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+        Loading AI settings...
+      </div>
+    )
+  }
+
+  const hasChanges = aiSettings && (
+    editedPromptSystem !== aiSettings.prompt_system ||
+    editedOllamaModel !== aiSettings.ollama_model
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Ollama Model Selection */}
+      <section style={{ background: 'var(--bg-card)', borderRadius: '8px', padding: '1.5rem' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          🤖 Ollama Model
+        </h3>
+        <div style={{ marginBottom: '0.5rem' }}>
+          <select
+            value={editedOllamaModel}
+            onChange={(e) => onOllamaModelChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              color: 'var(--text-primary)',
+              fontSize: '0.9rem',
+            }}
+          >
+            {aiSettings?.available_models?.map((model) => (
+              <option key={model} value={model}>{model}</option>
+            ))}
+          </select>
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          Current: {aiSettings?.ollama_model || 'gemma2:9b'}
+        </p>
+      </section>
+
+      {/* System Prompt Editor */}
+      <section style={{ background: 'var(--bg-card)', borderRadius: '8px', padding: '1.5rem' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          📝 Prompt Enhancement System Prompt
+        </h3>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          This is the system prompt sent to the LLM when users click the ✨ enhance button.
+        </p>
+        <textarea
+          value={editedPromptSystem}
+          onChange={(e) => onPromptSystemChange(e.target.value)}
+          rows={15}
+          style={{
+            width: '100%',
+            padding: '1rem',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            color: 'var(--text-primary)',
+            fontSize: '0.85rem',
+            fontFamily: 'monospace',
+            lineHeight: 1.6,
+            resize: 'vertical',
+          }}
+        />
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+          {editedPromptSystem.length} characters
+        </div>
+      </section>
+
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+        <button
+          onClick={onReset}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+          }}
+        >
+          Reset to Defaults
+        </button>
+        <button
+          onClick={onSave}
+          disabled={aiSettingsSaving || !hasChanges}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: hasChanges ? 'var(--accent-primary)' : 'var(--bg-input)',
+            border: 'none',
+            borderRadius: '6px',
+            color: hasChanges ? 'white' : 'var(--text-muted)',
+            cursor: aiSettingsSaving || !hasChanges ? 'not-allowed' : 'pointer',
+            opacity: aiSettingsSaving ? 0.6 : 1,
+          }}
+        >
+          {aiSettingsSaving ? 'Saving...' : 'Save Changes'}
+        </button>
       </div>
     </div>
   )
