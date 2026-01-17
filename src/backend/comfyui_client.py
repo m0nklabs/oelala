@@ -3897,6 +3897,251 @@ class ComfyUIClient:
         # 6. Get output video
         return self.get_output_video(history, output_dir, prompt_id)
 
+    def build_video_upscale_workflow(
+        self,
+        video_path: str,
+        scale: int = 2,
+        output_prefix: str = "upscaled",
+        model: str = "realesrgan-x4plus",
+    ) -> Optional[Dict]:
+        """
+        Build a video upscaling workflow using Real-ESRGAN.
+        
+        Args:
+            video_path: Path to input video
+            scale: Upscale factor (2 or 4)
+            output_prefix: Prefix for output filename
+            model: Upscale model to use
+            
+        Returns:
+            ComfyUI workflow dict or None if video doesn't exist
+        """
+        if not Path(video_path).exists():
+            logger.error(f"Video not found: {video_path}")
+            return None
+
+        # Upload video to ComfyUI
+        video_name = self.upload_video(video_path)
+        if not video_name:
+            logger.error("Failed to upload video for upscaling")
+            return None
+
+        workflow = {
+            "1": {
+                "inputs": {
+                    "video": video_name,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                },
+                "class_type": "VHS_LoadVideo",
+            },
+            "2": {
+                "inputs": {
+                    "model_name": f"{model}.pth",
+                },
+                "class_type": "UpscaleModelLoader",
+            },
+            "3": {
+                "inputs": {
+                    "upscale_model": ["2", 0],
+                    "image": ["1", 0],
+                },
+                "class_type": "ImageUpscaleWithModel",
+            },
+            "4": {
+                "inputs": {
+                    "frame_rate": ["1", 2],
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "images": ["3", 0],
+                    "audio": ["1", 1],
+                },
+                "class_type": "VHS_VideoCombine",
+            },
+        }
+
+        logger.info(f"🔧 Built video upscale workflow: {scale}x with {model}")
+        return workflow
+
+    def build_rife_workflow(
+        self,
+        video_path: str,
+        target_fps: int = 60,
+        output_prefix: str = "interpolated",
+        multiplier: int = 2,
+    ) -> Optional[Dict]:
+        """
+        Build a RIFE frame interpolation workflow.
+        
+        Args:
+            video_path: Path to input video
+            target_fps: Target framerate
+            output_prefix: Prefix for output filename
+            multiplier: Frame multiplier (2 = double frames, 4 = quadruple)
+            
+        Returns:
+            ComfyUI workflow dict or None if video doesn't exist
+        """
+        if not Path(video_path).exists():
+            logger.error(f"Video not found: {video_path}")
+            return None
+
+        # Upload video to ComfyUI
+        video_name = self.upload_video(video_path)
+        if not video_name:
+            logger.error("Failed to upload video for interpolation")
+            return None
+
+        workflow = {
+            "1": {
+                "inputs": {
+                    "video": video_name,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                },
+                "class_type": "VHS_LoadVideo",
+            },
+            "2": {
+                "inputs": {
+                    "ckpt_name": "rife49.pth",
+                    "clear_cache_after_n_frames": 10,
+                    "multiplier": multiplier,
+                    "fast_mode": True,
+                    "ensemble": True,
+                    "scale_factor": 1.0,
+                    "frames": ["1", 0],
+                },
+                "class_type": "RIFE VFI",
+            },
+            "3": {
+                "inputs": {
+                    "frame_rate": target_fps,
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "images": ["2", 0],
+                    "audio": ["1", 1],
+                },
+                "class_type": "VHS_VideoCombine",
+            },
+        }
+
+        logger.info(f"🔧 Built RIFE workflow: {multiplier}x → {target_fps}fps")
+        return workflow
+
+    def build_video_concat_workflow(
+        self,
+        video_paths: list,
+        output_prefix: str = "concatenated",
+        transition: str = "none",
+    ) -> Optional[Dict]:
+        """
+        Build a video concatenation workflow to join multiple videos.
+        
+        Args:
+            video_paths: List of video paths to concatenate
+            output_prefix: Prefix for output filename
+            transition: Transition type between clips ("none", "crossfade")
+            
+        Returns:
+            ComfyUI workflow dict or None
+        """
+        if not video_paths or len(video_paths) < 2:
+            logger.error("Need at least 2 videos to concatenate")
+            return None
+
+        # Upload all videos
+        video_names = []
+        for vp in video_paths:
+            if not Path(vp).exists():
+                logger.error(f"Video not found: {vp}")
+                return None
+            name = self.upload_video(vp)
+            if not name:
+                return None
+            video_names.append(name)
+
+        # Build workflow with video loaders and batch
+        workflow = {}
+        node_id = 1
+
+        # Load each video
+        load_nodes = []
+        for i, vname in enumerate(video_names):
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "video": vname,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                },
+                "class_type": "VHS_LoadVideo",
+            }
+            load_nodes.append(str(node_id))
+            node_id += 1
+
+        # Batch images together
+        workflow[str(node_id)] = {
+            "inputs": {
+                "images": [load_nodes[0], 0],
+            },
+            "class_type": "ImageBatch",
+        }
+        batch_node = str(node_id)
+        
+        # Chain additional videos
+        for ln in load_nodes[1:]:
+            node_id += 1
+            workflow[str(node_id)] = {
+                "inputs": {
+                    "images1": [batch_node, 0],
+                    "images2": [ln, 0],
+                },
+                "class_type": "ImageBatch",
+            }
+            batch_node = str(node_id)
+        
+        node_id += 1
+
+        # Output combined video
+        workflow[str(node_id)] = {
+            "inputs": {
+                "frame_rate": 16,  # Will be overridden by first video's rate
+                "loop_count": 0,
+                "filename_prefix": output_prefix,
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 19,
+                "save_metadata": True,
+                "images": [batch_node, 0],
+            },
+            "class_type": "VHS_VideoCombine",
+        }
+
+        logger.info(f"🔧 Built video concat workflow: {len(video_paths)} videos")
+        return workflow
+
 
 # WAN 2.2 I2V DisTorch2 Dual-Noise Workflow (Q6_K 14B models)
 # Uses separate high_noise and low_noise models with 2-stage KSampler

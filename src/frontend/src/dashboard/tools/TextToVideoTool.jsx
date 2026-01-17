@@ -3,7 +3,7 @@ import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import { sendClientLog } from '../../logging'
-import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu } from 'lucide-react'
+import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu, Zap } from 'lucide-react'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
@@ -62,6 +62,13 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
   const [availableModels, setAvailableModels] = useState(T2V_MODELS)
+
+  // Post-processing options (chained jobs after generation)
+  const [showPostProcessing, setShowPostProcessing] = useState(false)
+  const [postUpscale, setPostUpscale] = useState(false)
+  const [postUpscaleScale, setPostUpscaleScale] = useState(2)
+  const [postInterpolate, setPostInterpolate] = useState(false)
+  const [postInterpolateFps, setPostInterpolateFps] = useState(60)
 
   // Fetch available T2V modes from backend
   useEffect(() => {
@@ -141,6 +148,18 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     formData.append('aspect_ratio', aspectRatio)
     formData.append('resolution', resolution)
     formData.append('fps', String(fps))
+
+    // Add post-processing chain if any options selected
+    const postProcessingSteps = []
+    if (postUpscale) {
+      postProcessingSteps.push({ type: 'upscale', scale: postUpscaleScale, model: 'realesrgan-x4plus' })
+    }
+    if (postInterpolate) {
+      postProcessingSteps.push({ type: 'interpolate', target_fps: postInterpolateFps })
+    }
+    if (postProcessingSteps.length > 0) {
+      formData.append('post_processing', JSON.stringify(postProcessingSteps))
+    }
 
     try {
       if (DEBUG) console.debug('🎬 T2V request:', { prompt, modelType, numFrames, resolution, fps })
@@ -393,6 +412,77 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                 placeholder="Things to avoid..."
               />
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Post-Processing Options */}
+      <div className="tool-section collapsible">
+        <button
+          className="section-toggle"
+          onClick={() => setShowPostProcessing(!showPostProcessing)}
+        >
+          <Zap size={16} />
+          Post-Processing
+          <ChevronDown size={16} className={showPostProcessing ? 'rotated' : ''} />
+        </button>
+
+        {showPostProcessing && (
+          <div className="advanced-content">
+            <p className="help-text" style={{ marginBottom: '12px', fontSize: '0.85rem' }}>
+              These will run automatically after generation completes.
+            </p>
+
+            {/* Upscale option */}
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={postUpscale}
+                  onChange={(e) => setPostUpscale(e.target.checked)}
+                />
+                Upscale video (Real-ESRGAN)
+              </label>
+              {postUpscale && (
+                <select
+                  value={postUpscaleScale}
+                  onChange={(e) => setPostUpscaleScale(parseInt(e.target.value))}
+                  style={{ width: 'auto', padding: '4px 8px' }}
+                >
+                  <option value={2}>2x</option>
+                  <option value={4}>4x</option>
+                </select>
+              )}
+            </div>
+
+            {/* Frame interpolation option */}
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={postInterpolate}
+                  onChange={(e) => setPostInterpolate(e.target.checked)}
+                />
+                Frame interpolation (RIFE)
+              </label>
+              {postInterpolate && (
+                <select
+                  value={postInterpolateFps}
+                  onChange={(e) => setPostInterpolateFps(parseInt(e.target.value))}
+                  style={{ width: 'auto', padding: '4px 8px' }}
+                >
+                  <option value={30}>30 fps</option>
+                  <option value={48}>48 fps</option>
+                  <option value={60}>60 fps</option>
+                </select>
+              )}
+            </div>
+
+            {(postUpscale || postInterpolate) && (
+              <p className="help-text" style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                ℹ️ Post-processing adds extra credits: {postUpscale ? '+5 upscale' : ''}{postUpscale && postInterpolate ? ', ' : ''}{postInterpolate ? '+3 interpolation' : ''}
+              </p>
+            )}
           </div>
         )}
       </div>

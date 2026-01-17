@@ -6,8 +6,6 @@ export const TOOL_IDS = {
   TEXT_TO_IMAGE_TO_VIDEO: 'text-to-image-to-video',
   VIDEO_TO_VIDEO: 'video-to-video',
   SPEECH_TO_VIDEO: 'speech-to-video',
-  VIDEO_UPSCALER: 'video-upscaler',
-  FRAME_INTERPOLATION: 'frame-interpolation',
   // Image Tools
   IMAGE_TO_IMAGE: 'image-to-image',
   REFRAME: 'reframe',
@@ -24,6 +22,7 @@ export const TOOL_IDS = {
   // Advanced
   PIPELINE: 'pipeline',
   LORA_TRAINING: 'lora-training',
+  POST_PROCESSING: 'post-processing',  // New: standalone post-processing tool
   // Community
   GALLERY: 'gallery',
   // My Media
@@ -48,8 +47,6 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.TEXT_TO_VIDEO, label: 'Text to Video', status: 'ready' },
       { id: TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO, label: 'Text to Image to Video', status: 'ready' },
       { id: TOOL_IDS.VIDEO_TO_VIDEO, label: 'Video to Video', status: 'ready' },
-      { id: TOOL_IDS.VIDEO_UPSCALER, label: 'Video Upscaler', status: 'new' },
-      { id: TOOL_IDS.FRAME_INTERPOLATION, label: 'Frame Interpolation', status: 'new' },
       { id: TOOL_IDS.SPEECH_TO_VIDEO, label: 'Speech to Video', status: 'new' },
     ],
   },
@@ -86,6 +83,7 @@ export const NAV_GROUPS = [
     id: 'advanced',
     title: 'Advanced',
     items: [
+      { id: TOOL_IDS.POST_PROCESSING, label: 'Post-Processing', status: 'new', emoji: '⚙️' },
       { id: TOOL_IDS.PIPELINE, label: 'Pipeline', status: 'ready' },
       { id: TOOL_IDS.LORA_TRAINING, label: 'LoRA Training', status: 'ready' },
     ],

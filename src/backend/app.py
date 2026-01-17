@@ -1546,6 +1546,102 @@ async def list_unet_models():
 # Maps prompt_id -> {status, prompt, created_at, output_path, ...}
 active_jobs = {}
 
+# Store for pending post-processing chains
+# Maps prompt_id -> [{type: "upscale", scale: 2}, {type: "interpolate", target_fps: 60}]
+pending_post_processing = {}
+
+
+async def trigger_post_processing_chain(
+    prompt_id: str,
+    video_path: str,
+    post_processing: list,
+    user_id: str,
+    post_audio_path: str = None,
+):
+    """
+    Trigger chained post-processing jobs after video generation completes.
+    Each step queues a new ComfyUI job that triggers the next step on completion.
+    """
+    if not post_processing:
+        return
+
+    comfyui = get_comfyui_client()
+    if not comfyui:
+        logger.warning(f"⚠️ ComfyUI not available for post-processing chain")
+        return
+
+    current_video = video_path
+    chain_id = f"chain_{prompt_id}"
+
+    for idx, step in enumerate(post_processing):
+        step_type = step.get("type")
+        logger.info(f"🔄 Post-processing step {idx + 1}/{len(post_processing)}: {step_type}")
+
+        if step_type == "upscale":
+            scale = step.get("scale", 2)
+            # Queue upscale workflow
+            workflow = comfyui.build_video_upscale_workflow(
+                video_path=current_video,
+                scale=scale,
+                output_prefix=f"{chain_id}_upscale_{idx}",
+            )
+            if workflow:
+                new_prompt_id = comfyui.queue_prompt(workflow)
+                if new_prompt_id:
+                    # Store remaining chain for this new job
+                    remaining_steps = post_processing[idx + 1:]
+                    if remaining_steps:
+                        pending_post_processing[new_prompt_id] = {
+                            "steps": remaining_steps,
+                            "user_id": user_id,
+                            "post_audio_path": post_audio_path,
+                        }
+                    logger.info(f"   📈 Queued upscale job: {new_prompt_id}")
+                return  # Chain continues via completion callback
+
+        elif step_type == "interpolate":
+            target_fps = step.get("target_fps", 60)
+            # Queue RIFE interpolation workflow
+            workflow = comfyui.build_rife_workflow(
+                video_path=current_video,
+                target_fps=target_fps,
+                output_prefix=f"{chain_id}_rife_{idx}",
+            )
+            if workflow:
+                new_prompt_id = comfyui.queue_prompt(workflow)
+                if new_prompt_id:
+                    remaining_steps = post_processing[idx + 1:]
+                    if remaining_steps:
+                        pending_post_processing[new_prompt_id] = {
+                            "steps": remaining_steps,
+                            "user_id": user_id,
+                            "post_audio_path": post_audio_path,
+                        }
+                    logger.info(f"   🔄 Queued RIFE job: {new_prompt_id}")
+                return
+
+        elif step_type == "add_audio":
+            if post_audio_path and Path(post_audio_path).exists():
+                # Use ffmpeg to add audio (simpler than ComfyUI workflow)
+                import subprocess
+                output_with_audio = current_video.replace(".mp4", "_audio.mp4")
+                try:
+                    subprocess.run([
+                        "ffmpeg", "-y",
+                        "-i", current_video,
+                        "-i", post_audio_path,
+                        "-c:v", "copy",
+                        "-c:a", "aac",
+                        "-shortest",
+                        output_with_audio
+                    ], check=True, capture_output=True)
+                    logger.info(f"   🔊 Added audio: {output_with_audio}")
+                    current_video = output_with_audio
+                except Exception as e:
+                    logger.error(f"   ❌ Failed to add audio: {e}")
+
+    logger.info(f"✅ Post-processing chain completed for {prompt_id}")
+
 
 @app.get("/comfyui/queue")
 async def get_comfyui_queue():
@@ -1664,6 +1760,29 @@ async def get_job_status(prompt_id: str):
                         output_filename = output_audio.split("/")[-1]
 
                     output_path = COMFYUI_OUTPUT_DIR / output_filename
+
+                    # Check if this job has pending post-processing from a chain
+                    if prompt_id in pending_post_processing:
+                        chain_info = pending_post_processing.pop(prompt_id)
+                        logger.info(f"🔄 Continuing post-processing chain for {prompt_id}")
+                        await trigger_post_processing_chain(
+                            prompt_id=prompt_id,
+                            video_path=str(output_path),
+                            post_processing=chain_info["steps"],
+                            user_id=chain_info["user_id"],
+                            post_audio_path=chain_info.get("post_audio_path"),
+                        )
+
+                    # Check if this is a fresh job with post-processing requested
+                    elif job_info.get("post_processing") and output_video:
+                        logger.info(f"🔄 Starting post-processing chain for {prompt_id}")
+                        await trigger_post_processing_chain(
+                            prompt_id=prompt_id,
+                            video_path=str(output_path),
+                            post_processing=job_info["post_processing"],
+                            user_id=job_info.get("user_id", "unknown"),
+                            post_audio_path=job_info.get("post_audio_path"),
+                        )
 
                     # Trigger async auto-upload with MediaService (storage + Supabase sync)
                     storage_path = None
@@ -4335,6 +4454,10 @@ async def generate_wan22_async(
     ),
     extend_mode: str = Form("false", description="Enable sequential clip extension"),
     clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
+    post_processing: str = Form(
+        "", description="JSON array of post-processing steps [{type, ...}, ...]"
+    ),
+    post_audio_file: UploadFile = File(None, description="Audio file for add_audio post-processing"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
@@ -4408,6 +4531,28 @@ async def generate_wan22_async(
             parsed_lora_configs = json.loads(lora_configs)
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
+
+    # Parse post_processing chain
+    parsed_post_processing = []
+    if post_processing:
+        try:
+            parsed_post_processing = json.loads(post_processing)
+            logger.info(f"🔄 Post-processing chain: {parsed_post_processing}")
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse post_processing JSON: {post_processing}")
+
+    # Save audio file for post-processing if provided
+    post_audio_path = None
+    if post_audio_file and post_audio_file.filename:
+        audio_filename = f"post_audio_{timestamp}_{post_audio_file.filename}"
+        post_audio_path = str(UPLOAD_DIR / audio_filename)
+        try:
+            with open(post_audio_path, "wb") as buffer:
+                shutil.copyfileobj(post_audio_file.file, buffer)
+            logger.info(f"📤 Saved post-processing audio: {post_audio_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save post audio file: {e}")
+            post_audio_path = None
 
     # Generate output prefix
     if not output_filename:
@@ -4533,6 +4678,8 @@ async def generate_wan22_async(
         "input_image": input_filename,
         "created_at": timestamp,
         "lora_count": len(parsed_lora_configs),
+        "post_processing": parsed_post_processing,
+        "post_audio_path": post_audio_path,
     }
     active_jobs[prompt_id] = job_info
 
@@ -4557,6 +4704,169 @@ async def generate_wan22_async(
         "credits_used": credits_required,
         "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
         **job_info,
+    }
+
+
+# =============================================================================
+# POST-PROCESSING ENDPOINT (Standalone for existing media)
+# =============================================================================
+
+
+@app.post("/post-process")
+async def post_process_media(
+    mode: str = Form(...),  # "upscale", "interpolate", "concat"
+    files: List[UploadFile] = File(None),
+    media_urls: str = Form(""),  # JSON array of existing media URLs/filenames
+    model: str = Form("realesrgan-x4plus"),  # For upscale
+    scale: int = Form(2),  # For upscale: 2 or 4
+    target_fps: int = Form(60),  # For interpolate
+    user: User = Depends(get_current_user),
+):
+    """
+    Standalone post-processing endpoint for existing or uploaded media.
+
+    Modes:
+    - upscale: Upscale video using Real-ESRGAN
+    - interpolate: Frame interpolation using RIFE
+    - concat: Concatenate multiple videos into one
+    """
+    logger.info(f"🔧 Post-process request: mode={mode}, user={user.id}")
+
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI not available")
+
+    comfyui = get_comfyui_client()
+    if not comfyui.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI is not running")
+
+    # Parse media URLs if provided
+    existing_media = []
+    if media_urls:
+        try:
+            existing_media = json.loads(media_urls)
+            if isinstance(existing_media, str):
+                existing_media = [existing_media]
+        except json.JSONDecodeError:
+            # Single URL as string
+            existing_media = [media_urls]
+
+    # Collect input files (uploaded + existing)
+    input_paths = []
+
+    # Handle uploaded files
+    if files:
+        for upload_file in files:
+            if upload_file.filename:
+                # Save to temp location
+                temp_path = UPLOAD_DIR / f"pp_{uuid.uuid4().hex[:8]}_{upload_file.filename}"
+                async with aiofiles.open(temp_path, "wb") as f:
+                    content = await upload_file.read()
+                    await f.write(content)
+                input_paths.append(str(temp_path))
+                logger.info(f"   📤 Uploaded: {upload_file.filename}")
+
+    # Handle existing media references
+    for media_ref in existing_media:
+        # Could be a filename or full path
+        if media_ref.startswith("/"):
+            # Absolute path
+            input_paths.append(media_ref)
+        elif media_ref.startswith("generated/") or media_ref.startswith("media/"):
+            # Relative to workspace
+            full_path = Path("/home/flip/oelala") / media_ref
+            input_paths.append(str(full_path))
+        else:
+            # Just filename - check common locations
+            for search_dir in [GENERATED_DIR, COMFYUI_OUTPUT_DIR, UPLOAD_DIR]:
+                candidate = search_dir / media_ref
+                if candidate.exists():
+                    input_paths.append(str(candidate))
+                    break
+            else:
+                logger.warning(f"   ⚠️ Could not find media: {media_ref}")
+
+    if not input_paths:
+        raise HTTPException(status_code=400, detail="No input media provided")
+
+    logger.info(f"   📁 Input files: {len(input_paths)}")
+
+    # Validate mode and build workflow
+    job_id = f"pp_{uuid.uuid4().hex[:8]}"
+
+    if mode == "upscale":
+        if len(input_paths) != 1:
+            raise HTTPException(status_code=400, detail="Upscale requires exactly 1 input video")
+
+        workflow = comfyui.build_video_upscale_workflow(
+            input_video=input_paths[0],
+            model=model,
+            scale=scale,
+            output_prefix=f"upscaled_{job_id}",
+        )
+        credits_required = 5  # Upscaling cost
+
+    elif mode == "interpolate":
+        if len(input_paths) != 1:
+            raise HTTPException(status_code=400, detail="Interpolation requires exactly 1 input video")
+
+        workflow = comfyui.build_rife_workflow(
+            input_video=input_paths[0],
+            target_fps=target_fps,
+            output_prefix=f"interpolated_{job_id}",
+        )
+        credits_required = 3  # Interpolation cost
+
+    elif mode == "concat":
+        if len(input_paths) < 2:
+            raise HTTPException(status_code=400, detail="Concatenation requires at least 2 input videos")
+
+        workflow = comfyui.build_video_concat_workflow(
+            input_videos=input_paths,
+            output_prefix=f"concat_{job_id}",
+        )
+        credits_required = 2  # Concat cost
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}. Use: upscale, interpolate, concat")
+
+    # Check credits
+    if user.credits < credits_required:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits. Required: {credits_required}, Available: {user.credits}",
+        )
+
+    # Queue the workflow
+    try:
+        prompt_id = await comfyui.queue_prompt(workflow)
+    except Exception as e:
+        logger.error(f"❌ Failed to queue post-process workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Store job info
+    job_info = {
+        "job_id": job_id,
+        "prompt_id": prompt_id,
+        "mode": mode,
+        "input_files": input_paths,
+        "user_id": user.id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    active_jobs[prompt_id] = job_info
+
+    # Deduct credits
+    await deduct_credits(user, credits_required, prompt_id, f"Post-process: {mode}")
+
+    logger.info(f"✅ Queued post-process job: {prompt_id} ({mode})")
+
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "job_id": job_id,
+        "mode": mode,
+        "status": "queued",
+        "credits_used": credits_required,
+        "message": f"Post-processing job ({mode}) queued. Poll /comfyui/job/{prompt_id} for status.",
     }
 
 
@@ -4607,6 +4917,7 @@ async def generate_text_video(
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
+    post_processing: str = Form("", description="JSON array of post-processing steps"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
@@ -4704,6 +5015,21 @@ async def generate_text_video(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
+    # Parse post-processing steps if provided
+    post_processing_steps = []
+    if post_processing:
+        try:
+            post_processing_steps = json.loads(post_processing)
+            if not isinstance(post_processing_steps, list):
+                post_processing_steps = []
+        except json.JSONDecodeError:
+            post_processing_steps = []
+
+    # Register pending post-processing if any steps specified
+    if post_processing_steps:
+        pending_post_processing[prompt_id] = post_processing_steps
+        logger.info(f"   📦 Registered {len(post_processing_steps)} post-processing step(s)")
+
     # Register job with ComfyUI client for auto-upload on completion
     comfyui.register_job(
         prompt_id=prompt_id,
@@ -4717,6 +5043,7 @@ async def generate_text_video(
             "width": width,
             "height": height,
             "model_type": model_type,
+            "post_processing": post_processing_steps,
         },
     )
 

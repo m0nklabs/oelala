@@ -102,6 +102,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [extendMode, setExtendMode] = useState(false)
   const [clipCount, setClipCount] = useState(1)
 
+  // Post-processing options (chained jobs)
+  const [postUpscale, setPostUpscale] = useState(false)
+  const [postUpscaleScale, setPostUpscaleScale] = useState(2)
+  const [postInterpolate, setPostInterpolate] = useState(false)
+  const [postInterpolateFps, setPostInterpolateFps] = useState(60)
+  const [postAudio, setPostAudio] = useState(false)
+  const [postAudioFile, setPostAudioFile] = useState(null)
+  const [showPostProcessing, setShowPostProcessing] = useState(false)
+
   // Preset mode
   const [usePresets, setUsePresets] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState(null)
@@ -351,6 +360,21 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       // LoRA parameters - send as JSON array
       if (loraConfigs.length > 0) {
         formData.append('lora_configs', JSON.stringify(loraConfigs))
+      }
+      // Post-processing chain
+      const postProcessing = []
+      if (postUpscale) {
+        postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
+      }
+      if (postInterpolate) {
+        postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
+      }
+      if (postAudio && postAudioFile) {
+        formData.append('post_audio_file', postAudioFile)
+        postProcessing.push({ type: 'add_audio' })
+      }
+      if (postProcessing.length > 0) {
+        formData.append('post_processing', JSON.stringify(postProcessing))
       }
     }
 
@@ -1202,6 +1226,158 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 </div>
               </div>
             )}
+
+            {/* Post-Processing Settings */}
+            <div style={{
+              marginTop: '16px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--border-color)'
+            }}>
+              <div
+                onClick={() => setShowPostProcessing(!showPostProcessing)}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  marginBottom: showPostProcessing ? '12px' : 0
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={16} />
+                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Post-Processing</span>
+                  {(postUpscale || postInterpolate || postAudio) && (
+                    <span style={{
+                      fontSize: '0.7rem',
+                      backgroundColor: 'var(--success-color)',
+                      color: 'white',
+                      padding: '2px 6px',
+                      borderRadius: '4px'
+                    }}>
+                      {[postUpscale && 'Upscale', postInterpolate && 'RIFE', postAudio && 'Audio'].filter(Boolean).join(' + ')}
+                    </span>
+                  )}
+                </div>
+                <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showPostProcessing ? '▼' : '▶'}</span>
+              </div>
+
+              {showPostProcessing && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Upscale option */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: postUpscale ? 'rgba(var(--success-rgb), 0.1)' : 'var(--bg-secondary)',
+                    borderRadius: '8px',
+                    border: postUpscale ? '1px solid var(--success-color)' : '1px solid var(--border-color)'
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={postUpscale}
+                        onChange={(e) => setPostUpscale(e.target.checked)}
+                        style={{ width: '16px', height: '16px' }}
+                      />
+                      <span>📈 Upscale Video</span>
+                    </label>
+                    {postUpscale && (
+                      <select
+                        value={postUpscaleScale}
+                        onChange={(e) => setPostUpscaleScale(parseInt(e.target.value))}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: 'var(--bg-tertiary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          color: 'var(--text-primary)'
+                        }}
+                      >
+                        <option value={2}>2x</option>
+                        <option value={4}>4x</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Frame Interpolation option */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: postInterpolate ? 'rgba(var(--success-rgb), 0.1)' : 'var(--bg-secondary)',
+                    borderRadius: '8px',
+                    border: postInterpolate ? '1px solid var(--success-color)' : '1px solid var(--border-color)'
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={postInterpolate}
+                        onChange={(e) => setPostInterpolate(e.target.checked)}
+                        style={{ width: '16px', height: '16px' }}
+                      />
+                      <span>🔄 Smooth Motion (RIFE)</span>
+                    </label>
+                    {postInterpolate && (
+                      <select
+                        value={postInterpolateFps}
+                        onChange={(e) => setPostInterpolateFps(parseInt(e.target.value))}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: 'var(--bg-tertiary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          color: 'var(--text-primary)'
+                        }}
+                      >
+                        <option value={30}>30 fps</option>
+                        <option value={60}>60 fps</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Add Audio option */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: postAudio ? 'rgba(var(--success-rgb), 0.1)' : 'var(--bg-secondary)',
+                    borderRadius: '8px',
+                    border: postAudio ? '1px solid var(--success-color)' : '1px solid var(--border-color)'
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={postAudio}
+                        onChange={(e) => {
+                          setPostAudio(e.target.checked)
+                          if (!e.target.checked) setPostAudioFile(null)
+                        }}
+                        style={{ width: '16px', height: '16px' }}
+                      />
+                      <span>🔊 Add Audio Track</span>
+                    </label>
+                    {postAudio && (
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={(e) => setPostAudioFile(e.target.files?.[0] || null)}
+                        style={{
+                          fontSize: '0.8rem',
+                          color: 'var(--text-muted)'
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    💡 Post-processing runs as chained jobs after video generation completes
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* LoRA Settings */}
             <div style={{

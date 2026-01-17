@@ -23,6 +23,7 @@ const VideoToTextTool = lazy(() => import('./tools/VideoToTextTool'))
 const SpeechToVideoTool = lazy(() => import('./tools/SpeechToVideoTool'))
 const VideoUpscalerTool = lazy(() => import('./tools/VideoUpscalerTool'))
 const FrameInterpolationTool = lazy(() => import('./tools/FrameInterpolationTool'))
+const PostProcessingTool = lazy(() => import('./tools/PostProcessingTool'))
 const PipelineTool = lazy(() => import('./tools/PipelineTool'))
 const LoRATrainingTool = lazy(() => import('./tools/LoRATrainingTool'))
 const ImageToTextTool = lazy(() => import('./tools/ImageToTextTool'))
@@ -163,6 +164,8 @@ export default function Dashboard() {
         return 'Video Upscaler'
       case TOOL_IDS.FRAME_INTERPOLATION:
         return 'Frame Interpolation'
+      case TOOL_IDS.POST_PROCESSING:
+        return 'Post-Processing'
       case TOOL_IDS.PIPELINE:
         return 'Pipeline'
       case TOOL_IDS.LORA_TRAINING:
@@ -299,6 +302,9 @@ export default function Dashboard() {
         return wrapWithSuspense(<ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.FACE_SWAP:
         return wrapWithSuspense(<FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+
+      case TOOL_IDS.POST_PROCESSING:
+        return wrapWithSuspense(<PostProcessingTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.API_KEYS:
         return wrapWithSuspense(<APIKeysTool />)
