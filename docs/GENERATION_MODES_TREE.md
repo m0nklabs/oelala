@@ -33,19 +33,18 @@ Visual tree structure of all generation modes per tool type.
 │   └── 🎭 FaceSwap               → Face replacement                  │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
-│ ⚙️ POST-PROCESSING OPTIONS (Applied to tool output)                 │
+│ ⚙️ POST-PROCESSING (Unified System - 2026-01-17)                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│ 🎬 Video Post-Processing:                                           │
-│   ├── 📈 Upscale              → Increase resolution (RIFE/ESRGAN)  │
-│   ├── 🔄 Frame Interpolation  → Smooth motion (increase FPS)       │
-│   ├── 💋 LipSync              → Sync lips to audio (Wav2Lip)       │
-│   └── 🔊 Add Audio            → Attach audio track to video        │
+│ ✅ INLINE OPTIONS (I2V/T2V checkboxes):                             │
+│   ├── 📈 Upscale              → 2x/4x Real-ESRGAN (+5 credits)     │
+│   ├── 🔄 Frame Interpolation  → 30/48/60 fps RIFE (+3 credits)     │
+│   └── 🔊 Add Audio            → Attach audio track (I2V only)       │
 │                                                                      │
-│ 🖼️ Image Post-Processing:                                           │
-│   ├── 📈 Upscale              → Increase resolution (ESRGAN)       │
-│   ├── 🎨 Face Restore         → Fix faces (GFPGAN/CodeFormer)      │
-│   └── ✂️ Background Remove    → Remove/replace background          │
+│ ✅ STANDALONE TOOL (Advanced → Post-Processing):                    │
+│   ├── 📈 Upscale Mode         → Process existing videos            │
+│   ├── 🔄 Interpolate Mode     → Increase FPS of existing videos    │
+│   └── 🔗 Concat Mode          → Join multiple videos together      │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 🔗 PIPELINES (Tool combinations)                                    │
@@ -556,9 +555,85 @@ Audio Generation Modes
 
 ## ⚙️ POST-PROCESSING OPTIONS
 
-> **These are NOT standalone tools** - they are applied to output from primary tools.
+> **UNIFIED POST-PROCESSING SYSTEM (2026-01-17)**
+>
+> Post-processing is now available in TWO ways:
+> 1. **Inline on I2V/T2V tools** - Checkbox options that run automatically after generation
+> 2. **Standalone Post-Processing tool** - Under Advanced, for existing/uploaded media
 
-### 📈 Upscaling
+### 🔄 Inline Post-Processing (I2V/T2V)
+
+```
+Inline Options (Chained Jobs)
+│
+│   These checkboxes appear on I2V and T2V tools.
+│   They run AUTOMATICALLY after generation completes.
+│
+├── ☑️ Upscale Video (Real-ESRGAN)
+│   ├── 2x upscale (default)
+│   └── 4x upscale
+│   💰 +5 credits
+│
+├── ☑️ Frame Interpolation (RIFE)
+│   ├── 30 fps
+│   ├── 48 fps
+│   └── 60 fps (default)
+│   💰 +3 credits
+│
+└── ☑️ Add Audio Track (I2V only)
+    └── Upload audio file to attach
+    💰 +0 credits (included)
+```
+
+### 🛠️ Standalone Post-Processing Tool
+
+```
+Post-Processing Tool (Advanced → Post-Processing)
+│
+│   Process EXISTING or UPLOADED media without regeneration.
+│   Location: Advanced section in navigation
+│
+├── 📈 Upscale Mode
+│   │   "Real-ESRGAN video upscaling"
+│   │   Input: Single video
+│   │
+│   ├── Models:
+│   │   └── realesrgan-x4plus.pth
+│   ├── Scale options: 2x, 4x
+│   └── 💰 5 credits
+│
+├── 🔄 Interpolate Mode
+│   │   "RIFE frame interpolation"
+│   │   Input: Single video
+│   │
+│   ├── Model: rife_v4.6
+│   ├── Target FPS: 30, 48, 60
+│   └── 💰 3 credits
+│
+└── 🔗 Concat Mode
+    │   "Join multiple videos"
+    │   Input: 2+ videos
+    │
+    ├── Preserves resolution of first video
+    └── 💰 2 credits
+```
+
+### ComfyUI Workflow Builders
+
+```
+Backend Implementation
+│
+├── build_video_upscale_workflow()
+│   └── Real-ESRGAN frame-by-frame upscaling
+│
+├── build_rife_workflow()
+│   └── RIFE v4.6 interpolation
+│
+└── build_video_concat_workflow()
+    └── FFmpeg-based video concatenation
+```
+
+### 📈 Upscaling (Legacy Reference)
 
 ```
 Upscaling Options
@@ -577,22 +652,20 @@ Upscaling Options
     │
     └── 📦 realesrgan_video
         │   "Frame-by-frame upscaling"
-        │   Status: 🔨 IN DEVELOPMENT
+        │   Status: ✅ PRODUCTION (via Post-Processing tool)
         │
-        ├── 📂 Workflow: workflows/VideoUpscale/
         └── ⚠️ Note: Slow - upscales each frame individually
 ```
 
-### 🔄 Frame Interpolation
+### 🔄 Frame Interpolation (Legacy Reference)
 
 ```
 Frame Interpolation Options
 │
 └── 📦 rife_v4
     │   "RIFE v4.6 - Increase FPS / Smooth motion"
-    │   Status: 🔨 IN DEVELOPMENT
+    │   Status: ✅ PRODUCTION (via Post-Processing tool)
     │
-    ├── 📂 Workflow: workflows/FrameInterpolation/
     ├── 🧠 Model: rife_v4.6 (ComfyUI-Frame-Interpolation)
     │
     ├── Use cases:
@@ -617,7 +690,7 @@ Audio Sync Options
 │
 └── 📦 audio_attach
     │   "Simple audio track attachment"
-    │   Status: 📋 PLANNED
+    │   Status: ✅ PRODUCTION (via I2V inline option)
     │
     └── Use case: Add background music/sfx to video
 ```

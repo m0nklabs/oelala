@@ -1258,32 +1258,52 @@ class DeleteMediaRequest(BaseModel):
 
 @app.delete("/delete-comfyui-media")
 async def delete_comfyui_media(request: DeleteMediaRequest):
-    """Delete media files from ComfyUI output directory"""
+    """Delete media files from ComfyUI output directory or generated media"""
     comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
-
-    if not comfyui_output.exists():
-        raise HTTPException(status_code=404, detail="Output directory not found")
+    generated_dir = Path("/home/flip/oelala/media/generated")
 
     deleted = []
     errors = []
 
+    logger.info(f"🗑️ Delete request for {len(request.filenames)} files")
+
     for filename in request.filenames:
+        found = False
+        logger.debug(f"   Trying to delete: {filename}")
+
+        # Try ComfyUI output first
         file_path = comfyui_output / filename
+        if str(file_path.resolve()).startswith(str(comfyui_output.resolve())):
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    deleted.append(filename)
+                    found = True
+                    logger.info(f"   ✅ Deleted from ComfyUI: {filename}")
+                except Exception as e:
+                    errors.append({"filename": filename, "error": str(e)})
+                    found = True
 
-        # Security: prevent path traversal
-        if not str(file_path.resolve()).startswith(str(comfyui_output.resolve())):
-            errors.append({"filename": filename, "error": "Invalid path"})
-            continue
+        # If not found in ComfyUI output, try generated dir
+        if not found:
+            file_path = generated_dir / filename
+            if str(file_path.resolve()).startswith(str(generated_dir.resolve())):
+                if file_path.exists():
+                    try:
+                        file_path.unlink()
+                        deleted.append(filename)
+                        found = True
+                        logger.info(f"   ✅ Deleted from generated: {filename}")
+                    except Exception as e:
+                        errors.append({"filename": filename, "error": str(e)})
+                        found = True
 
-        if not file_path.exists():
-            errors.append({"filename": filename, "error": "File not found"})
-            continue
+        if not found:
+            errors.append({"filename": filename, "error": "File not found in ComfyUI or generated"})
+            logger.warning(f"   ⚠️ Not found: {filename}")
 
-        try:
-            file_path.unlink()
-            deleted.append(filename)
-        except Exception as e:
-            errors.append({"filename": filename, "error": str(e)})
+    logger.info(f"🗑️ Delete complete: {len(deleted)} deleted, {len(errors)} errors")
+    return {"deleted": deleted, "errors": errors, "count": len(deleted)}
 
     return {"deleted": deleted, "errors": errors, "count": len(deleted)}
 
@@ -2418,7 +2438,8 @@ async def list_unified_media(
                     key = obj.get("key", "")
                     if not key or key == ".":
                         continue
-                    filename = key.split("/")[-1] if "/" in key else key
+                    # Keep full key as filename for proper deletion
+                    filename = key
 
                     # Determine type from extension
                     ext = filename.lower().split(".")[-1] if "." in filename else ""
@@ -2434,8 +2455,8 @@ async def list_unified_media(
                         continue
 
                     all_media.append({
-                        "name": filename,
-                        "filename": filename,
+                        "name": key.split("/")[-1] if "/" in key else key,  # Display name
+                        "filename": key,  # Full path for deletion
                         "type": item_type,
                         "url": f"/media/generated/{key}",
                         "size": obj.get("size", 0),
