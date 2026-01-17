@@ -165,6 +165,74 @@ def build_ltx2_t2v_workflow(
     return workflow
 
 
+def build_ltx2_i2v_workflow(
+    image_name: str,
+    prompt: str,
+    negative_prompt: str = "blurry, low quality, distorted, watermark, artifacts",
+    width: int = 576,
+    height: int = 1024,
+    num_frames: int = 97,
+    steps: int = 20,
+    cfg: float = 3.0,
+    seed: int = None,
+    filename_prefix: str = "oelala_ltx2_i2v",
+    fps: int = 25,
+) -> Optional[Dict]:
+    """
+    Build LTX-2 I2V workflow by loading template and injecting parameters.
+    
+    LTX-2 19B - single model (no high/low noise), uses Gemma text encoder.
+    Uses LTXVImgToVideo node for image conditioning.
+    """
+    workflow = load_workflow_from_file("ImageToVideo/ltx2_i2v_api.json")
+    if not workflow:
+        logger.error("❌ Failed to load LTX-2 I2V workflow template")
+        return None
+    
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    
+    logger.info(f"🎬 Building LTX-2 I2V workflow: {width}x{height}, {num_frames} frames, {steps} steps")
+    
+    # Update input image (node 4: LoadImage)
+    if "4" in workflow:
+        workflow["4"]["inputs"]["image"] = image_name
+    
+    # Update prompts (nodes 5 and 6 are CLIPTextEncode)
+    if "5" in workflow:
+        workflow["5"]["inputs"]["text"] = prompt
+    if "6" in workflow:
+        workflow["6"]["inputs"]["text"] = negative_prompt
+    
+    # Update dimensions, frame count and strength (node 7: LTXVImgToVideo)
+    if "7" in workflow:
+        workflow["7"]["inputs"]["width"] = width
+        workflow["7"]["inputs"]["height"] = height
+        workflow["7"]["inputs"]["length"] = num_frames
+        workflow["7"]["inputs"]["strength"] = 1.0
+    
+    # Update frame rate (node 8: LTXVConditioning)
+    if "8" in workflow:
+        workflow["8"]["inputs"]["frame_rate"] = float(fps)
+    
+    # Update scheduler steps (node 9: LTXVScheduler)
+    if "9" in workflow:
+        workflow["9"]["inputs"]["steps"] = steps
+    
+    # Update sampler seed and cfg (node 11: SamplerCustom)
+    if "11" in workflow:
+        workflow["11"]["inputs"]["noise_seed"] = seed
+        workflow["11"]["inputs"]["cfg"] = cfg
+    
+    # Update output filename and fps (node 13: VHS_VideoCombine)
+    if "13" in workflow:
+        workflow["13"]["inputs"]["filename_prefix"] = filename_prefix
+        workflow["13"]["inputs"]["frame_rate"] = fps
+    
+    logger.debug(f"✅ LTX-2 I2V workflow built: image={image_name}, seed={seed}")
+    return workflow
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # WAN 2.2 Enhanced NSFW FAST MOVE V2 Q4KM Lightning (I2V)
 # Settings: steps=4 (2+2), cfg=1, euler simple scheduler

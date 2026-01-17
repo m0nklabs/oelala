@@ -13,12 +13,14 @@ import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
 
-// Model mode options for I2V (only Q6 DisTorch2 supported)
+// Model mode options for I2V
 const MODEL_MODES = [
-  { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality via ComfyUI' },
+  { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
+  { value: 'ltx2', label: '⚡ LTX-2 19B Distilled', desc: 'Fast single-pass, lower VRAM' },
 ]
 
 // Resolution presets with dimensions per aspect ratio
+// Includes max_duration based on tested VRAM limits (28GB dual GPU)
 const RESOLUTION_PRESETS = {
   '480p': {
     label: '480p',
@@ -28,7 +30,10 @@ const RESOLUTION_PRESETS = {
       '1:1': '480×480',
       '4:3': '640×480',
       '3:4': '480×640',
-    }
+    },
+    // Tested: 321 frames @ 16fps = 20.06 sec, ~26GB VRAM
+    max_duration_wan22: 20,
+    max_duration_ltx2: 12,  // LTX-2 uses more VRAM per frame
   },
   '576p': {
     label: '576p',
@@ -38,7 +43,10 @@ const RESOLUTION_PRESETS = {
       '1:1': '576×576',
       '4:3': '768×576',
       '3:4': '576×768',
-    }
+    },
+    // Tested: 81 frames @ 16fps = 5.06 sec, ~24GB VRAM
+    max_duration_wan22: 7,
+    max_duration_ltx2: 8,
   },
   '720p': {
     label: '720p',
@@ -48,7 +56,10 @@ const RESOLUTION_PRESETS = {
       '1:1': '720×720',
       '4:3': '960×720',
       '3:4': '720×960',
-    }
+    },
+    // Tested: 41 frames @ 16fps = 2.56 sec, ~27GB VRAM - too short for production
+    max_duration_wan22: 4,
+    max_duration_ltx2: 5,
   },
 }
 
@@ -123,6 +134,23 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [selectedCreation, setSelectedCreation] = useState(null)
 
   const canSubmit = useMemo(() => !!file && !busy, [file, busy])
+
+  // Calculate max duration based on resolution and model mode
+  const maxDuration = useMemo(() => {
+    const preset = RESOLUTION_PRESETS[resolution]
+    if (!preset) return 15
+    if (modelMode === 'ltx2') {
+      return preset.max_duration_ltx2 || 12
+    }
+    return preset.max_duration_wan22 || 15
+  }, [resolution, modelMode])
+
+  // Clamp duration when max changes
+  useEffect(() => {
+    if (duration > maxDuration) {
+      setDuration(maxDuration)
+    }
+  }, [maxDuration, duration])
 
   // Calculate estimated generation time
   const timeEstimate = useMemo(() => {
@@ -343,6 +371,27 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (usePose) {
       endpoint = `${BACKEND_BASE}/generate-pose`
       useAsync = false  // Pose generation is not async yet
+    } else if (modelMode === 'ltx2') {
+      // LTX-2 endpoint
+      endpoint = `${BACKEND_BASE}/generate-ltx2-i2v-async`
+      formData.append('steps', String(steps))
+      formData.append('cfg', String(cfg))
+      formData.append('seed', String(seed))
+      // Post-processing chain (LTX-2 supports the same post-processing)
+      const postProcessing = []
+      if (postUpscale) {
+        postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
+      }
+      if (postInterpolate) {
+        postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
+      }
+      if (postAudio && postAudioFile) {
+        formData.append('post_audio_file', postAudioFile)
+        postProcessing.push({ type: 'add_audio' })
+      }
+      if (postProcessing.length > 0) {
+        formData.append('post_processing', JSON.stringify(postProcessing))
+      }
     } else {
       // Use async ComfyUI endpoint for Wan2.2 Q6 - returns immediately with prompt_id
       endpoint = `${BACKEND_BASE}/generate-wan22-async`
@@ -448,12 +497,21 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <select
               value={modelMode}
               onChange={(e) => {
-                setModelMode(e.target.value)
-                // Adjust defaults for Wan2.2
-                if (e.target.value === 'wan2.2') {
-                  setResolution('576p')
+                const newMode = e.target.value
+                setModelMode(newMode)
+                // Adjust defaults per model
+                if (newMode === 'wan2.2') {
+                  setResolution('480p')  // Best quality/length ratio for Wan2.2
                   setAspectRatio('9:16')
-                  setDuration(6)
+                  setDuration(8)
+                  setSteps(6)
+                  setCfg(1.0)
+                } else if (newMode === 'ltx2') {
+                  setResolution('576p')  // LTX-2 handles higher res better
+                  setAspectRatio('9:16')
+                  setDuration(5)
+                  setSteps(20)  // LTX-2 needs more steps
+                  setCfg(3.0)
                 }
               }}
               style={{
@@ -490,15 +548,25 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               }}
             />
           </div>
-          <div className="info-badge" style={{ marginTop: '8px' }}>
-            <span style={{ fontWeight: 600 }}>🎬 Wan2.2 14B Q6</span> • <span style={{ color: '#93c5fd' }}>ComfyUI Backend</span>
-            <div style={{ marginTop: '4px', opacity: 0.8 }}>
-              High-quality I2V with DisTorch2 + SageAttention (10GB VRAM)
+          {modelMode === 'wan2.2' ? (
+            <div className="info-badge" style={{ marginTop: '8px' }}>
+              <span style={{ fontWeight: 600 }}>🎬 Wan2.2 14B Q6</span> • <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>
+                Dual-pass (high/low noise) • 480p max 20s • 576p max 7s • 720p max 4s
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="info-badge" style={{ marginTop: '8px' }}>
+              <span style={{ fontWeight: 600 }}>⚡ LTX-2 19B</span> • <span style={{ color: '#86efac' }}>Single Model</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>
+                Faster inference • No high/low noise • Uses Gemma 3 text encoder
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Unet Model Selection - Collapsible */}
+        {/* Unet Model Selection - Only for Wan2.2 */}
+        {modelMode === 'wan2.2' && (
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
           <div
             onClick={() => setShowUnetPanel(!showUnetPanel)}
@@ -615,6 +683,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Positive Prompt */}
@@ -968,7 +1037,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <input
               type="range"
               min="3"
-              max="15"
+              max={maxDuration}
               step="1"
               value={duration}
               onChange={(e) => setDuration(parseInt(e.target.value, 10))}
@@ -984,7 +1053,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               borderRadius: '2px'
             }}>
               <div style={{
-                width: `${((duration - 3) / (15 - 3)) * 100}%`,
+                width: `${((duration - 3) / (maxDuration - 3)) * 100}%`,
                 height: '100%',
                 backgroundColor: 'var(--accent-color, #a855f7)',
                 borderRadius: '2px'
@@ -993,7 +1062,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{
               position: 'absolute',
               top: '2px',
-              left: `calc(${((duration - 3) / (15 - 3)) * 100}% - 10px)`,
+              left: `calc(${((duration - 3) / (maxDuration - 3)) * 100}% - 10px)`,
               width: '20px',
               height: '20px',
               backgroundColor: 'white',
@@ -1003,8 +1072,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             <span>3s</span>
-            <span>6s (rec)</span>
-            <span>15s</span>
+            <span>{Math.floor((3 + maxDuration) / 2)}s</span>
+            <span>{maxDuration}s (max)</span>
           </div>
         </div>
 

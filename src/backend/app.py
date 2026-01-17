@@ -4729,6 +4729,222 @@ async def generate_wan22_async(
 
 
 # =============================================================================
+# LTX-2 Image-to-Video Async Endpoint
+# =============================================================================
+
+
+@app.post("/generate-ltx2-i2v-async")
+async def generate_ltx2_i2v_async(
+    file: UploadFile = File(...),
+    prompt: str = Form("The subject in the image begins to move naturally"),
+    num_frames: int = Form(97, description="Number of frames (LTX-2: 9-16384, step 8)"),
+    output_filename: str = Form("", description="Custom output filename"),
+    resolution: str = Form("576p", description="Video resolution: 480p, 576p, 720p"),
+    fps: int = Form(25, description="Frames per second (LTX-2 default: 25)"),
+    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
+    steps: int = Form(20, description="Sampling steps (LTX-2 needs ~20)"),
+    cfg: float = Form(3.0, description="CFG guidance scale"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    post_processing: str = Form(
+        "", description="JSON array of post-processing steps [{type, ...}, ...]"
+    ),
+    post_audio_file: UploadFile = File(None, description="Audio file for add_audio post-processing"),
+    user: User = Depends(get_current_user),
+):
+    """
+    Queue LTX-2 I2V video generation and return immediately.
+    
+    LTX-2 19B uses a single model (no high/low noise dual-pass like Wan2.2).
+    Uses Gemma 3 text encoder. Faster inference, good for shorter clips.
+    """
+    from comfyui_client import build_ltx2_i2v_workflow
+    
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+
+    comfyui = get_comfyui_client()
+
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
+        )
+
+    # LTX-2 frame count: should be multiple of 8 + 1 (e.g., 9, 17, 25, 33, 41, 49, 57, 65, 73, 81, 89, 97)
+    # Round to nearest valid value
+    k = round((num_frames - 1) / 8)
+    k = max(1, k)  # Minimum k=1 gives 9 frames
+    num_frames = 8 * k + 1
+    
+    # Get resolution dimensions
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    duration_seconds = num_frames / fps if fps > 0 else 3
+    
+    # Calculate credits (use same formula as Wan2.2 for now)
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui",  # Reuse same credit calculation
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 LTX-2 I2V async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+    job_id = str(uuid.uuid4())
+
+    # Validate file type
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    # Generate unique filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"ltx2_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+
+    # Save uploaded file
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"📤 Saved input image: {input_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+    # Upload to ComfyUI
+    image_name = comfyui.upload_image(str(input_path))
+    if not image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+
+    # Parse post_processing chain
+    parsed_post_processing = []
+    if post_processing:
+        try:
+            parsed_post_processing = json.loads(post_processing)
+            logger.info(f"🔄 Post-processing chain: {parsed_post_processing}")
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse post_processing JSON: {post_processing}")
+
+    # Save audio file for post-processing if provided
+    post_audio_path = None
+    if post_audio_file and post_audio_file.filename:
+        audio_filename = f"post_audio_{timestamp}_{post_audio_file.filename}"
+        post_audio_path = str(UPLOAD_DIR / audio_filename)
+        try:
+            with open(post_audio_path, "wb") as buffer:
+                shutil.copyfileobj(post_audio_file.file, buffer)
+            logger.info(f"📤 Saved post-processing audio: {post_audio_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save post audio file: {e}")
+            post_audio_path = None
+
+    # Generate output prefix
+    output_prefix = f"oelala_ltx2_i2v_{timestamp}"
+
+    # Get actual seed
+    actual_seed = (
+        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    )
+
+    # Build LTX-2 I2V workflow
+    workflow = build_ltx2_i2v_workflow(
+        image_name=image_name,
+        prompt=prompt,
+        width=width,
+        height=height,
+        num_frames=num_frames,
+        steps=steps,
+        cfg=cfg,
+        seed=actual_seed,
+        filename_prefix=output_prefix,
+        fps=fps,
+    )
+    
+    if not workflow:
+        raise HTTPException(status_code=500, detail="Failed to build LTX-2 I2V workflow")
+
+    # Queue the workflow (non-blocking)
+    prompt_id = comfyui.queue_prompt(workflow)
+
+    if not prompt_id:
+        raise HTTPException(
+            status_code=500, detail="Failed to queue workflow to ComfyUI"
+        )
+
+    # Register job with ComfyUI client for auto-upload on completion
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "model": "ltx2",
+        },
+    )
+
+    # Register job with WebSocket manager for progress tracking
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="ltx2_i2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+            },
+        )
+
+        # Register progress callback
+        if progress_monitor:
+            progress_monitor.register_callback(
+                prompt_id, create_progress_callback(prompt_id)
+            )
+
+    # Store job info for tracking
+    job_info = {
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "seed": actual_seed,
+        "output_prefix": output_prefix,
+        "input_image": input_filename,
+        "created_at": timestamp,
+        "model": "ltx2",
+        "post_processing": parsed_post_processing,
+        "post_audio_path": post_audio_path,
+    }
+    active_jobs[prompt_id] = job_info
+
+    logger.info(f"🚀 Queued LTX-2 I2V async job: {prompt_id}")
+    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
+    logger.info(f"   📝 {prompt[:50]}...")
+
+    # Deduct credits after successful queue
+    await deduct_credits(user, credits_required, prompt_id, "LTX-2 I2V (async)")
+    logger.info(f"   💰 -{credits_required} credits")
+
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "job_id": job_id,
+        "status": "queued",
+        "credits_used": credits_required,
+        "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
+        **job_info,
+    }
+
+
+# =============================================================================
 # POST-PROCESSING ENDPOINT (Standalone for existing media)
 # =============================================================================
 

@@ -68,11 +68,23 @@ Visual tree structure of all generation modes per tool type.
 
 ## 🎬 Image-to-Video (I2V)
 
+### Maximum Duration Settings (Tested 2026-01-17)
+
+| Resolution | Model | Max Duration | Max Frames | VRAM Usage |
+|------------|-------|--------------|------------|------------|
+| **480p** | Wan2.2 | **20 sec** | 321 | ~26GB |
+| 576p | Wan2.2 | 7 sec | 113 | ~24GB |
+| 720p | Wan2.2 | 4 sec | 65 | ~27GB |
+| **480p** | LTX-2 | **12 sec** | 97 | ~18GB |
+| 576p | LTX-2 | 8 sec | 97 | ~20GB |
+| 720p | LTX-2 | 5 sec | 65 | ~22GB |
+
 ```
 I2V Generation Modes
 │
-├── 📦 standard (default)
+├── 📦 wan2.2 (default)
 │   │   "Wan2.2 14B Q6_K DisTorch2"
+│   │   Dual-pass (high/low noise) • Best quality
 │   │
 │   ├── 🧠 Diffusion Models (Dual-Pass)
 │   │   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf  [12GB]
@@ -86,6 +98,21 @@ I2V Generation Modes
 │   │
 │   └── 🎨 VAE
 │       └── wan_2.1_vae.safetensors              [242MB]
+│
+├── 📦 ltx2 (NEW - 2026-01-17)
+│   │   "LTX-2 19B Q4_K_M"
+│   │   Single model • Faster inference • Uses Gemma encoder
+│   │
+│   ├── 🧠 Diffusion Model (Single)
+│   │   └── ltx-2-19b-dev-Q4_K_M.gguf            [12GB]
+│   │       OR ltx-2-19b-distilled_Q4_K_M.gguf   [12GB] (faster)
+│   │
+│   ├── 📝 Text Encoder (Gemma 3)
+│   │   ├── gemma_3_12B_it_nvfp4.safetensors     [8GB]
+│   │   └── ltx-2-19b-embeddings_connector_bf16  [2.9GB]
+│   │
+│   └── 🎨 VAE
+│       └── LTX2_video_vae_bf16.safetensors      [2.5GB]
 │
 └── 📦 nsfw_lora
     │   "Wan2.2 Enhanced NSFW with LoRAs"
@@ -107,7 +134,19 @@ I2V Generation Modes
         └── [NSFW LoRAs as defined in workflow]
 ```
 
-### I2V Alternative Models (Swappable)
+### I2V Model Comparison
+
+| Feature | Wan2.2 | LTX-2 |
+|---------|--------|-------|
+| Pass Type | Dual (high/low noise) | Single |
+| Default Steps | 6 | 20 |
+| Default CFG | 1.0 | 3.0 |
+| Text Encoder | UMT5-XXL | Gemma 3 |
+| Best For | Quality, longer clips | Speed, shorter clips |
+| LoRA Support | ✅ Yes | ❌ No (native) |
+| Max Duration (480p) | 20 sec | 12 sec |
+
+### I2V Alternative Models (Swappable - Wan2.2 only)
 
 ```
 Alternative High/Low Noise Pairs
