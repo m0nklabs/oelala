@@ -20,13 +20,12 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from auth import User, get_current_user
 from webhook_service import (
     WebhookEvent,
     WebhookPayload,
-    WebhookService,
     webhook_service,
 )
 
@@ -75,7 +74,11 @@ class WebhookCreate(BaseModel):
         """Validate webhook URL."""
         if not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
-        if not v.startswith("https://") and "localhost" not in v and "127.0.0.1" not in v:
+        if (
+            not v.startswith("https://")
+            and "localhost" not in v
+            and "127.0.0.1" not in v
+        ):
             logger.warning(f"Non-HTTPS webhook URL configured: {v}")
         return v
 
@@ -524,7 +527,9 @@ async def list_deliveries(
 
             if resp.status_code != 200:
                 logger.error(f"Supabase error: {resp.status_code} - {resp.text}")
-                raise HTTPException(status_code=500, detail="Failed to fetch deliveries")
+                raise HTTPException(
+                    status_code=500, detail="Failed to fetch deliveries"
+                )
 
             return resp.json()
 

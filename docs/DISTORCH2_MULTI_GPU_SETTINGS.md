@@ -38,7 +38,7 @@ Always use **PyTorch indices** in allocation strings!
 If expert_mode_allocations is set:
     → Uses expert allocation string (ignores virtual_vram_gb/donor_device for distribution)
     → compute_device still determines WHERE computation happens
-    
+
 If expert_mode_allocations is empty:
     → Uses virtual_vram_gb + donor_device for simple 2-device split
 ```

@@ -26,11 +26,11 @@ export default function StorageQuota() {
             'Authorization': `Bearer ${token}`,
           },
         })
-        
+
         if (!res.ok) {
           throw new Error('Failed to fetch quota')
         }
-        
+
         const data = await res.json()
         if (data.success) {
           setQuota(data.data)
@@ -72,22 +72,22 @@ export default function StorageQuota() {
   }
 
   return (
-    <div 
-      style={{ 
-        padding: '12px 14px', 
+    <div
+      style={{
+        padding: '12px 14px',
         borderBottom: '1px solid var(--border-color)',
         background: warning ? 'rgba(245,158,11,0.05)' : 'transparent',
       }}
     >
       {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 8,
       }}>
-        <span style={{ 
-          fontSize: '0.75rem', 
+        <span style={{
+          fontSize: '0.75rem',
           color: 'var(--text-muted)',
           display: 'flex',
           alignItems: 'center',
@@ -96,8 +96,8 @@ export default function StorageQuota() {
           <HardDrive size={12} />
           Storage ({tier.toUpperCase()})
         </span>
-        <span style={{ 
-          fontSize: '0.7rem', 
+        <span style={{
+          fontSize: '0.7rem',
           color: warning ? '#f59e0b' : 'var(--text-muted)',
         }}>
           {human_used} / {human_limit}
@@ -123,20 +123,20 @@ export default function StorageQuota() {
       </div>
 
       {/* Usage Percentage */}
-      <div style={{ 
-        fontSize: '0.7rem', 
+      <div style={{
+        fontSize: '0.7rem',
         color: 'var(--text-muted)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
         <span>{used_percent.toFixed(1)}% used</span>
-        
+
         {warning && !upgrade_needed && (
-          <span style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 4, 
+          <span style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
             color: '#f59e0b',
             fontSize: '0.65rem',
           }}>

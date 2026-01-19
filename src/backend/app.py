@@ -451,7 +451,7 @@ async def upload_generated_media(
 ) -> Optional[MediaRecord]:
     """
     Upload a generated media file to oelala-storage and sync metadata to Supabase.
-    
+
     Args:
         user_id: User ID who owns the media
         file_path: Path to the generated file
@@ -459,22 +459,22 @@ async def upload_generated_media(
         prompt: The prompt used for generation
         workflow_id: Optional ComfyUI workflow ID
         extra_metadata: Additional metadata (resolution, fps, model_name, etc.)
-    
+
     Returns:
         MediaRecord if successful, None if failed
     """
     try:
         media_service = get_media_service()
-        
+
         # Read file data
         file_data = file_path.read_bytes()
-        
+
         # Merge extra metadata
         metadata = extra_metadata or {}
         metadata["prompt"] = prompt
         metadata["generation_type"] = generation_type
         metadata["size_bytes"] = len(file_data)
-        
+
         # Upload to storage + sync metadata
         record = await media_service.upload(
             user_id=user_id,
@@ -485,10 +485,10 @@ async def upload_generated_media(
             workflow_id=workflow_id,
             extra_metadata=metadata,
         )
-        
+
         logger.info(f"🗄️ Media uploaded to storage: {record.storage_path}")
         return record
-        
+
     except Exception as e:
         logger.error(f"❌ Failed to upload media to storage: {e}")
         return None
@@ -497,11 +497,11 @@ async def upload_generated_media(
 def get_signed_media_url(storage_path: str, expires_in: int = 3600) -> str:
     """
     Generate a signed URL for a media file.
-    
+
     Args:
         storage_path: Full storage path (e.g., users/{user_id}/videos/file.mp4)
         expires_in: URL expiration time in seconds (default 1 hour)
-    
+
     Returns:
         Signed URL for public access
     """
@@ -1300,7 +1300,12 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
                         found = True
 
         if not found:
-            errors.append({"filename": filename, "error": "File not found in ComfyUI or generated"})
+            errors.append(
+                {
+                    "filename": filename,
+                    "error": "File not found in ComfyUI or generated",
+                }
+            )
             logger.warning(f"   ⚠️ Not found: {filename}")
 
     logger.info(f"🗑️ Delete complete: {len(deleted)} deleted, {len(errors)} errors")
@@ -1606,24 +1611,27 @@ def save_generation_stat(stat: dict) -> bool:
 def record_generation_start(prompt_id: str, job_info: dict) -> None:
     """Record the start of a generation job"""
     import time
+
     if prompt_id in active_jobs:
         active_jobs[prompt_id]["_start_time"] = time.time()
         active_jobs[prompt_id]["_job_type"] = job_info.get("job_type", "unknown")
 
 
-def record_generation_complete(prompt_id: str, success: bool = True, error: str = None) -> None:
+def record_generation_complete(
+    prompt_id: str, success: bool = True, error: str = None
+) -> None:
     """Record completion of a generation job and save stats"""
     import time
-    
+
     job_info = active_jobs.get(prompt_id, {})
     start_time = job_info.get("_start_time")
-    
+
     if not start_time:
         logger.warning(f"No start time recorded for job {prompt_id}")
         return
-    
+
     duration_seconds = time.time() - start_time
-    
+
     stat = {
         "prompt_id": prompt_id,
         "timestamp": datetime.now().isoformat(),
@@ -1642,9 +1650,11 @@ def record_generation_complete(prompt_id: str, success: bool = True, error: str 
         "lora_count": job_info.get("lora_count", 0),
         "cfg": job_info.get("cfg", 1.0),
     }
-    
+
     save_generation_stat(stat)
-    logger.info(f"📊 Generation stats recorded: {prompt_id} - {duration_seconds:.1f}s {'✅' if success else '❌'}")
+    logger.info(
+        f"📊 Generation stats recorded: {prompt_id} - {duration_seconds:.1f}s {'✅' if success else '❌'}"
+    )
 
 
 @app.get("/api/generation-stats")
@@ -1655,23 +1665,23 @@ async def get_generation_stats(
 ):
     """
     Get generation statistics for analysis.
-    
+
     Parameters:
     - limit: Max number of records to return (default 100)
     - job_type: Filter by job type (wan22_i2v, ltx2_i2v, post_process_*)
     - success_only: Only show successful generations
     """
     stats = load_generation_stats()
-    
+
     # Apply filters
     if job_type:
         stats = [s for s in stats if s.get("job_type", "").startswith(job_type)]
     if success_only:
         stats = [s for s in stats if s.get("success", False)]
-    
+
     # Most recent first
     stats = stats[-limit:][::-1]
-    
+
     # Calculate summary stats
     if stats:
         durations = [s["duration_seconds"] for s in stats if s.get("duration_seconds")]
@@ -1681,13 +1691,21 @@ async def get_generation_stats(
             "successful": successful,
             "failed": len(stats) - successful,
             "success_rate": round(successful / len(stats) * 100, 1) if stats else 0,
-            "avg_duration": round(sum(durations) / len(durations), 1) if durations else 0,
+            "avg_duration": round(sum(durations) / len(durations), 1)
+            if durations
+            else 0,
             "min_duration": round(min(durations), 1) if durations else 0,
             "max_duration": round(max(durations), 1) if durations else 0,
         }
     else:
-        summary = {"total": 0, "successful": 0, "failed": 0, "success_rate": 0, "avg_duration": 0}
-    
+        summary = {
+            "total": 0,
+            "successful": 0,
+            "failed": 0,
+            "success_rate": 0,
+            "avg_duration": 0,
+        }
+
     return {"summary": summary, "records": stats}
 
 
@@ -1707,7 +1725,7 @@ async def trigger_post_processing_chain(
 
     comfyui = get_comfyui_client()
     if not comfyui:
-        logger.warning(f"⚠️ ComfyUI not available for post-processing chain")
+        logger.warning("⚠️ ComfyUI not available for post-processing chain")
         return
 
     current_video = video_path
@@ -1715,7 +1733,9 @@ async def trigger_post_processing_chain(
 
     for idx, step in enumerate(post_processing):
         step_type = step.get("type")
-        logger.info(f"🔄 Post-processing step {idx + 1}/{len(post_processing)}: {step_type}")
+        logger.info(
+            f"🔄 Post-processing step {idx + 1}/{len(post_processing)}: {step_type}"
+        )
 
         if step_type == "upscale":
             scale = step.get("scale", 2)
@@ -1729,7 +1749,7 @@ async def trigger_post_processing_chain(
                 new_prompt_id = comfyui.queue_prompt(workflow)
                 if new_prompt_id:
                     # Store remaining chain for this new job
-                    remaining_steps = post_processing[idx + 1:]
+                    remaining_steps = post_processing[idx + 1 :]
                     if remaining_steps:
                         pending_post_processing[new_prompt_id] = {
                             "steps": remaining_steps,
@@ -1750,7 +1770,7 @@ async def trigger_post_processing_chain(
             if workflow:
                 new_prompt_id = comfyui.queue_prompt(workflow)
                 if new_prompt_id:
-                    remaining_steps = post_processing[idx + 1:]
+                    remaining_steps = post_processing[idx + 1 :]
                     if remaining_steps:
                         pending_post_processing[new_prompt_id] = {
                             "steps": remaining_steps,
@@ -1764,17 +1784,27 @@ async def trigger_post_processing_chain(
             if post_audio_path and Path(post_audio_path).exists():
                 # Use ffmpeg to add audio (simpler than ComfyUI workflow)
                 import subprocess
+
                 output_with_audio = current_video.replace(".mp4", "_audio.mp4")
                 try:
-                    subprocess.run([
-                        "ffmpeg", "-y",
-                        "-i", current_video,
-                        "-i", post_audio_path,
-                        "-c:v", "copy",
-                        "-c:a", "aac",
-                        "-shortest",
-                        output_with_audio
-                    ], check=True, capture_output=True)
+                    subprocess.run(
+                        [
+                            "ffmpeg",
+                            "-y",
+                            "-i",
+                            current_video,
+                            "-i",
+                            post_audio_path,
+                            "-c:v",
+                            "copy",
+                            "-c:a",
+                            "aac",
+                            "-shortest",
+                            output_with_audio,
+                        ],
+                        check=True,
+                        capture_output=True,
+                    )
                     logger.info(f"   🔊 Added audio: {output_with_audio}")
                     current_video = output_with_audio
                 except Exception as e:
@@ -1904,7 +1934,9 @@ async def get_job_status(prompt_id: str):
                     # Check if this job has pending post-processing from a chain
                     if prompt_id in pending_post_processing:
                         chain_info = pending_post_processing.pop(prompt_id)
-                        logger.info(f"🔄 Continuing post-processing chain for {prompt_id}")
+                        logger.info(
+                            f"🔄 Continuing post-processing chain for {prompt_id}"
+                        )
                         await trigger_post_processing_chain(
                             prompt_id=prompt_id,
                             video_path=str(output_path),
@@ -1915,7 +1947,9 @@ async def get_job_status(prompt_id: str):
 
                     # Check if this is a fresh job with post-processing requested
                     elif job_info.get("post_processing") and output_video:
-                        logger.info(f"🔄 Starting post-processing chain for {prompt_id}")
+                        logger.info(
+                            f"🔄 Starting post-processing chain for {prompt_id}"
+                        )
                         await trigger_post_processing_chain(
                             prompt_id=prompt_id,
                             video_path=str(output_path),
@@ -1936,7 +1970,9 @@ async def get_job_status(prompt_id: str):
                                 f"✅ Auto-uploaded {output_type} for job {prompt_id}: {storage_path}"
                             )
                             # Generate signed URL for the uploaded content
-                            signed_url = get_signed_media_url(storage_path, expires_in=86400)  # 24h
+                            signed_url = get_signed_media_url(
+                                storage_path, expires_in=86400
+                            )  # 24h
 
                 # Record generation completion for stats tracking
                 record_generation_complete(prompt_id, success=True)
@@ -1947,7 +1983,10 @@ async def get_job_status(prompt_id: str):
                     "output_video": output_video,
                     "output_image": output_image,
                     "output_audio": output_audio,
-                    "url": signed_url or output_image or output_video or output_audio,  # Prefer signed URL
+                    "url": signed_url
+                    or output_image
+                    or output_video
+                    or output_audio,  # Prefer signed URL
                     "signed_url": signed_url,
                     "storage_path": storage_path,
                     **job_info,
@@ -2015,14 +2054,14 @@ async def get_comfyui_metadata(filename: str):
         Path("/home/flip/oelala/ComfyUI/output"),
         Path("/home/flip/oelala/media/generated"),
     ]
-    
+
     output_path = None
     for search_dir in search_dirs:
         candidate = search_dir / filename
         if candidate.exists():
             output_path = candidate
             break
-    
+
     if not output_path:
         raise HTTPException(status_code=404, detail="Output file not found")
 
@@ -2485,12 +2524,18 @@ async def list_unified_media(
                     objects = storage.list_user_media(target_user_id, media_type)
                     for obj in objects:
                         key = obj.get("key", "")
-                        filename = obj.get("filename", key.split("/")[-1] if "/" in key else key)
+                        filename = obj.get(
+                            "filename", key.split("/")[-1] if "/" in key else key
+                        )
                         obj_type = obj.get("media_type", "")
 
-                        if obj_type == "videos" or obj.get("content_type", "").startswith("video/"):
+                        if obj_type == "videos" or obj.get(
+                            "content_type", ""
+                        ).startswith("video/"):
                             item_type = "video"
-                        elif obj_type == "audio" or obj.get("content_type", "").startswith("audio/"):
+                        elif obj_type == "audio" or obj.get(
+                            "content_type", ""
+                        ).startswith("audio/"):
                             item_type = "audio"
                         else:
                             item_type = "image"
@@ -2502,7 +2547,9 @@ async def list_unified_media(
                             "url": f"/user/media/{obj_type}/{filename}",
                             "size": obj.get("size", 0),
                             "modified": obj.get("modified_at", ""),
-                            "mtime": obj.get("modified_at").timestamp() if hasattr(obj.get("modified_at"), "timestamp") else 0,
+                            "mtime": obj.get("modified_at").timestamp()
+                            if hasattr(obj.get("modified_at"), "timestamp")
+                            else 0,
                             "source": "user",
                             "visibility": "private",  # User storage = private by default
                         }
@@ -2521,31 +2568,53 @@ async def list_unified_media(
                                 if user_dir.is_dir():
                                     uid = user_dir.name
                                     try:
-                                        objects = storage.list_user_media(uid, media_type)
+                                        objects = storage.list_user_media(
+                                            uid, media_type
+                                        )
                                         for obj in objects:
                                             key = obj.get("key", "")
-                                            filename = obj.get("filename", key.split("/")[-1] if "/" in key else key)
+                                            filename = obj.get(
+                                                "filename",
+                                                key.split("/")[-1]
+                                                if "/" in key
+                                                else key,
+                                            )
                                             obj_type = obj.get("media_type", "")
 
-                                            if obj_type == "videos" or obj.get("content_type", "").startswith("video/"):
+                                            if obj_type == "videos" or obj.get(
+                                                "content_type", ""
+                                            ).startswith("video/"):
                                                 item_type = "video"
-                                            elif obj_type == "audio" or obj.get("content_type", "").startswith("audio/"):
+                                            elif obj_type == "audio" or obj.get(
+                                                "content_type", ""
+                                            ).startswith("audio/"):
                                                 item_type = "audio"
                                             else:
                                                 item_type = "image"
 
-                                            all_media.append({
-                                                "name": filename,
-                                                "filename": filename,
-                                                "type": item_type,
-                                                "url": f"/admin/user-media/{uid}/{obj_type}/{filename}",
-                                                "size": obj.get("size", 0),
-                                                "modified": obj.get("modified_at", ""),
-                                                "mtime": obj.get("modified_at").timestamp() if hasattr(obj.get("modified_at"), "timestamp") else 0,
-                                                "source": "user",
-                                                "visibility": "private",
-                                                "owner_id": uid,
-                                            })
+                                            all_media.append(
+                                                {
+                                                    "name": filename,
+                                                    "filename": filename,
+                                                    "type": item_type,
+                                                    "url": f"/admin/user-media/{uid}/{obj_type}/{filename}",
+                                                    "size": obj.get("size", 0),
+                                                    "modified": obj.get(
+                                                        "modified_at", ""
+                                                    ),
+                                                    "mtime": obj.get(
+                                                        "modified_at"
+                                                    ).timestamp()
+                                                    if hasattr(
+                                                        obj.get("modified_at"),
+                                                        "timestamp",
+                                                    )
+                                                    else 0,
+                                                    "source": "user",
+                                                    "visibility": "private",
+                                                    "owner_id": uid,
+                                                }
+                                            )
                                     except Exception:
                                         pass  # Skip users with no media
                     except Exception as e:
@@ -2577,17 +2646,21 @@ async def list_unified_media(
                     if type != "all" and item_type != type:
                         continue
 
-                    all_media.append({
-                        "name": key.split("/")[-1] if "/" in key else key,  # Display name
-                        "filename": key,  # Full path for deletion
-                        "type": item_type,
-                        "url": f"/media/generated/{key}",
-                        "size": obj.get("size", 0),
-                        "modified": obj.get("modified_at", ""),
-                        "mtime": 0,  # Storage API returns string, not timestamp
-                        "source": "generated",
-                        "visibility": "dev",  # Generated = dev visibility
-                    })
+                    all_media.append(
+                        {
+                            "name": key.split("/")[-1]
+                            if "/" in key
+                            else key,  # Display name
+                            "filename": key,  # Full path for deletion
+                            "type": item_type,
+                            "url": f"/media/generated/{key}",
+                            "size": obj.get("size", 0),
+                            "modified": obj.get("modified_at", ""),
+                            "mtime": 0,  # Storage API returns string, not timestamp
+                            "source": "generated",
+                            "visibility": "dev",  # Generated = dev visibility
+                        }
+                    )
             except Exception as e:
                 logger.debug(f"Generated media error: {e}")
 
@@ -2595,13 +2668,16 @@ async def list_unified_media(
         if is_admin and source in ("all", "comfyui-local"):
             try:
                 # List directly from filesystem since symlink listing is broken in oelala-storage
-                import os
                 comfyui_path = Path("/home/flip/oelala/ComfyUI/output")
                 if comfyui_path.exists():
                     for file in comfyui_path.iterdir():
                         if file.is_file() and not file.name.startswith("."):
                             filename = file.name
-                            ext = filename.lower().split(".")[-1] if "." in filename else ""
+                            ext = (
+                                filename.lower().split(".")[-1]
+                                if "." in filename
+                                else ""
+                            )
 
                             if ext in ("mp4", "webm", "mov", "avi"):
                                 item_type = "video"
@@ -2617,17 +2693,21 @@ async def list_unified_media(
                                 continue
 
                             stat = file.stat()
-                            all_media.append({
-                                "name": filename,
-                                "filename": filename,
-                                "type": item_type,
-                                "url": f"/comfyui/output/{filename}",
-                                "size": stat.st_size,
-                                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                                "mtime": stat.st_mtime,
-                                "source": "comfyui-local",
-                                "visibility": "dev",  # ComfyUI local = dev visibility
-                            })
+                            all_media.append(
+                                {
+                                    "name": filename,
+                                    "filename": filename,
+                                    "type": item_type,
+                                    "url": f"/comfyui/output/{filename}",
+                                    "size": stat.st_size,
+                                    "modified": datetime.fromtimestamp(
+                                        stat.st_mtime
+                                    ).isoformat(),
+                                    "mtime": stat.st_mtime,
+                                    "source": "comfyui-local",
+                                    "visibility": "dev",  # ComfyUI local = dev visibility
+                                }
+                            )
             except Exception as e:
                 logger.debug(f"ComfyUI media error: {e}")
 
@@ -2636,22 +2716,23 @@ async def list_unified_media(
             try:
                 # Query published_media from Supabase
                 from supabase_utils import get_supabase_client
+
                 supabase = get_supabase_client()
                 if supabase:
                     query = supabase.table("published_media").select(
                         "id,user_id,storage_path,title,media_type,is_nsfw,thumbnail_url,created_at"
                     )
-                    
+
                     # Filter by type if specified
                     if type != "all":
                         query = query.eq("media_type", type)
-                    
+
                     # Non-admin users don't see NSFW by default
                     if not is_admin:
                         query = query.eq("is_nsfw", False)
-                    
+
                     response = query.order("created_at", desc=True).limit(100).execute()
-                    
+
                     for item in response.data or []:
                         # Determine URL based on storage_path
                         storage_path = item.get("storage_path", "")
@@ -2661,20 +2742,24 @@ async def list_unified_media(
                             url = f"/user/media/images/{storage_path.split('/', 1)[1]}"
                         else:
                             url = f"/gallery/media/{item['id']}"
-                        
-                        all_media.append({
-                            "id": item.get("id"),
-                            "name": item.get("title", "Untitled"),
-                            "filename": storage_path.split("/")[-1] if "/" in storage_path else storage_path,
-                            "type": item.get("media_type", "image"),
-                            "url": url,
-                            "thumbnail_url": item.get("thumbnail_url"),
-                            "source": "public",
-                            "visibility": "public",
-                            "is_nsfw": item.get("is_nsfw", False),
-                            "owner_id": item.get("user_id"),
-                            "mtime": 0,  # Will sort by created_at
-                        })
+
+                        all_media.append(
+                            {
+                                "id": item.get("id"),
+                                "name": item.get("title", "Untitled"),
+                                "filename": storage_path.split("/")[-1]
+                                if "/" in storage_path
+                                else storage_path,
+                                "type": item.get("media_type", "image"),
+                                "url": url,
+                                "thumbnail_url": item.get("thumbnail_url"),
+                                "source": "public",
+                                "visibility": "public",
+                                "is_nsfw": item.get("is_nsfw", False),
+                                "owner_id": item.get("user_id"),
+                                "mtime": 0,  # Will sort by created_at
+                            }
+                        )
             except Exception as e:
                 logger.debug(f"Public gallery error: {e}")
 
@@ -2687,7 +2772,7 @@ async def list_unified_media(
             "images": sum(1 for m in all_media if m["type"] == "image"),
             "audio": sum(1 for m in all_media if m["type"] == "audio"),
         }
-        
+
         # Add source breakdown for admin
         source_stats = {}
         if is_admin:
@@ -3000,13 +3085,13 @@ async def get_user_profile(user: User = Depends(get_current_user)):
 async def get_user_storage_quota(user: User = Depends(get_current_user)):
     """
     Get storage quota information for the authenticated user.
-    
+
     Returns quota usage, limits, and warnings.
     """
     try:
         media_service = get_media_service()
         quota_info = await media_service.get_user_quota(user.id)
-        
+
         return {
             "success": True,
             "data": quota_info,
@@ -3580,7 +3665,9 @@ async def generate_flux_image(
         url = f"/files/{filename}"
         signed_url = None
         if media_record:
-            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+            signed_url = get_signed_media_url(
+                media_record.storage_path, expires_in=86400
+            )
             url = signed_url
 
         return {
@@ -3713,7 +3800,9 @@ async def generate_sd15_image(
         url = f"/files/{filename}"
         signed_url = None
         if media_record:
-            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+            signed_url = get_signed_media_url(
+                media_record.storage_path, expires_in=86400
+            )
             url = signed_url
 
         return {
@@ -3828,7 +3917,9 @@ async def generate_wan22_t2i(
         url = f"/files/{filename}"
         signed_url = None
         if media_record:
-            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
+            signed_url = get_signed_media_url(
+                media_record.storage_path, expires_in=86400
+            )
             url = signed_url
 
         return {
@@ -3981,6 +4072,7 @@ async def get_i2v_generation_modes():
     Each mode has different workflow presets (LoRAs, models, etc.)
     """
     from comfyui_client import get_available_i2v_modes
+
     return {
         "modes": get_available_i2v_modes(),
         "default": "standard",
@@ -3994,6 +4086,7 @@ async def get_t2v_generation_modes():
     Different base models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
     """
     from comfyui_client import get_available_t2v_modes
+
     return {
         "modes": get_available_t2v_modes(),
         "default": "wan22",
@@ -4007,10 +4100,10 @@ async def get_v2v_generation_modes():
     Uses I2V pipeline with extracted first frame.
     """
     from comfyui_client import get_available_i2v_modes
-    
+
     # V2V uses I2V modes under the hood
     i2v_modes = get_available_i2v_modes()
-    
+
     # Add V2V-specific modes
     v2v_modes = {
         "style_transfer": {
@@ -4032,7 +4125,7 @@ async def get_v2v_generation_modes():
             "default_strength": 0.25,
         },
     }
-    
+
     return {
         "modes": v2v_modes,
         "i2v_modes": i2v_modes,  # Available I2V presets
@@ -4043,9 +4136,15 @@ async def get_v2v_generation_modes():
 @app.post("/api/v2v/generate")
 async def generate_video_to_video(
     file: UploadFile = File(..., description="Input video file"),
-    style_prompt: str = Form(..., description="Style description (e.g., 'anime style, vibrant colors')"),
-    mode: str = Form("style_transfer", description="V2V mode: style_transfer, anime, enhance"),
-    strength: float = Form(0.5, description="Style strength (0.0-1.0, higher = more style change)"),
+    style_prompt: str = Form(
+        ..., description="Style description (e.g., 'anime style, vibrant colors')"
+    ),
+    mode: str = Form(
+        "style_transfer", description="V2V mode: style_transfer, anime, enhance"
+    ),
+    strength: float = Form(
+        0.5, description="Style strength (0.0-1.0, higher = more style change)"
+    ),
     num_frames: int = Form(41, description="Output frames (4k+1 format for Wan2.2)"),
     resolution: str = Form("480p", description="Output resolution: 480p, 720p"),
     fps: int = Form(16, description="Output FPS"),
@@ -4056,43 +4155,45 @@ async def generate_video_to_video(
 ):
     """
     Video-to-Video style transfer using AI.
-    
+
     Process:
     1. Extract first frame from input video
     2. Apply style via I2V workflow
     3. Generate new video with transferred style
-    
+
     Use cases:
     - Turn real footage into anime style
     - Apply artistic filters
     - AI enhancement of video quality
-    
+
     Note: This uses I2V pipeline under the hood with the first frame as input.
     For best results, use short clips (2-5 seconds) with clear subjects.
     """
     import cv2
-    
+
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
-    
+
     comfyui = get_comfyui_client()
     if not comfyui.is_available():
         raise HTTPException(
             status_code=503,
             detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
         )
-    
+
     # Validate strength
     strength = max(0.0, min(1.0, strength))
-    
+
     # Wan2.2 requires num_frames in format 4k+1
     k = round((num_frames - 1) / 4)
     k = max(1, k)
     num_frames = 4 * k + 1
-    
+
     # Get resolution dimensions
-    width, height = comfyui.get_resolution_dimensions(resolution, "16:9")  # Default to 16:9 for video
-    
+    width, height = comfyui.get_resolution_dimensions(
+        resolution, "16:9"
+    )  # Default to 16:9 for video
+
     # Calculate credits (V2V costs same as I2V)
     duration_seconds = num_frames / fps if fps > 0 else 3
     credits_required = calculate_credits(
@@ -4101,59 +4202,67 @@ async def generate_video_to_video(
         height=height,
         duration_seconds=duration_seconds,
     )
-    
-    logger.info(f"💰 V2V generation costs {credits_required} credits ({width}x{height}, {num_frames} frames)")
+
+    logger.info(
+        f"💰 V2V generation costs {credits_required} credits ({width}x{height}, {num_frames} frames)"
+    )
     await check_credits(user, credits_required)
-    
+
     job_id = str(uuid.uuid4())
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     # Save uploaded video
     input_filename = f"v2v_input_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-    
+
     with open(input_path, "wb") as f:
         content = await file.read()
         f.write(content)
-    
+
     logger.info(f"📥 V2V input saved: {input_path}")
-    
+
     try:
         # Extract first frame using OpenCV
         cap = cv2.VideoCapture(str(input_path))
         if not cap.isOpened():
             raise HTTPException(status_code=400, detail="Could not open video file")
-        
+
         # Get video info
         original_fps = cap.get(cv2.CAP_PROP_FPS) or 24
         original_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         original_duration = original_frames / original_fps
         original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
-        logger.info(f"🎬 Input video: {original_width}x{original_height}, {original_fps}fps, {original_duration:.1f}s")
-        
+
+        logger.info(
+            f"🎬 Input video: {original_width}x{original_height}, {original_fps}fps, {original_duration:.1f}s"
+        )
+
         # Read first frame
         ret, first_frame = cap.read()
         cap.release()
-        
+
         if not ret or first_frame is None:
-            raise HTTPException(status_code=400, detail="Could not extract first frame from video")
-        
+            raise HTTPException(
+                status_code=400, detail="Could not extract first frame from video"
+            )
+
         # Save first frame as input image for I2V
         frame_filename = f"v2v_frame_{timestamp}.png"
         frame_path = UPLOAD_DIR / frame_filename
-        
+
         # Resize to target resolution if needed
         if first_frame.shape[1] != width or first_frame.shape[0] != height:
-            first_frame = cv2.resize(first_frame, (width, height), interpolation=cv2.INTER_LANCZOS4)
-        
+            first_frame = cv2.resize(
+                first_frame, (width, height), interpolation=cv2.INTER_LANCZOS4
+            )
+
         cv2.imwrite(str(frame_path), first_frame)
         logger.info(f"📸 First frame extracted: {frame_path} ({width}x{height})")
-        
+
         # Build the style-enhanced prompt
         base_prompt = style_prompt.strip()
-        
+
         # Add motion preservation hints based on mode
         if preserve_motion:
             if mode == "anime":
@@ -4164,12 +4273,12 @@ async def generate_video_to_video(
                 full_prompt = f"{base_prompt}, artistic style transfer, preserve motion, consistent style throughout"
         else:
             full_prompt = base_prompt
-        
+
         logger.info(f"🎨 V2V prompt: {full_prompt}")
-        
+
         # Generate video using DisTorch2 I2V workflow with the extracted frame
         output_prefix = f"oelala_v2v_{timestamp}"
-        
+
         # Call the DisTorch2 generation method from comfyui_client
         output_path = comfyui.generate_distorch2_video(
             image_path=str(frame_path),
@@ -4184,16 +4293,20 @@ async def generate_video_to_video(
             cfg=1.0,  # Default for DisTorch2
             seed=seed if seed >= 0 else -1,
         )
-        
+
         if not output_path:
-            raise HTTPException(status_code=500, detail="V2V generation failed - no output")
-        
+            raise HTTPException(
+                status_code=500, detail="V2V generation failed - no output"
+            )
+
         output_filename = Path(output_path).name
-        
+
         # Deduct credits
         await deduct_credits(user, credits_required, job_id, f"V2V {mode}")
-        logger.info(f"🎬 V2V generated: {output_filename} (💰 -{credits_required} credits)")
-        
+        logger.info(
+            f"🎬 V2V generated: {output_filename} (💰 -{credits_required} credits)"
+        )
+
         # Upload to storage
         media_record = await upload_generated_media(
             user_id=user.id,
@@ -4214,13 +4327,15 @@ async def generate_video_to_video(
                 "original_duration": original_duration,
             },
         )
-        
+
         # Get signed URL
         url = f"/files/{output_filename}"
         signed_url = None
         if media_record:
-            signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)
-        
+            signed_url = get_signed_media_url(
+                media_record.storage_path, expires_in=86400
+            )
+
         return {
             "status": "success",
             "job_id": job_id,
@@ -4244,7 +4359,7 @@ async def generate_video_to_video(
                 },
             },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -4271,7 +4386,9 @@ async def generate_wan22_comfyui(
     steps: int = Form(6, description="Sampling steps"),
     cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    generation_mode: str = Form("standard", description="Generation mode: standard, nsfw_lora"),
+    generation_mode: str = Form(
+        "standard", description="Generation mode: standard, nsfw_lora"
+    ),
     unet_high_noise: str = Form(
         "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         description="GGUF model for high noise pass",
@@ -4528,7 +4645,9 @@ async def generate_wan22_comfyui(
             video_url = f"/files/{output_filename}"  # Fallback to local
             signed_url = None
             if media_record:
-                signed_url = get_signed_media_url(media_record.storage_path, expires_in=86400)  # 24h
+                signed_url = get_signed_media_url(
+                    media_record.storage_path, expires_in=86400
+                )  # 24h
                 video_url = signed_url
 
             return {
@@ -4601,7 +4720,9 @@ async def generate_wan22_async(
     post_processing: str = Form(
         "", description="JSON array of post-processing steps [{type, ...}, ...]"
     ),
-    post_audio_file: UploadFile = File(None, description="Audio file for add_audio post-processing"),
+    post_audio_file: UploadFile = File(
+        None, description="Audio file for add_audio post-processing"
+    ),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
@@ -4875,17 +4996,19 @@ async def generate_ltx2_i2v_async(
     post_processing: str = Form(
         "", description="JSON array of post-processing steps [{type, ...}, ...]"
     ),
-    post_audio_file: UploadFile = File(None, description="Audio file for add_audio post-processing"),
+    post_audio_file: UploadFile = File(
+        None, description="Audio file for add_audio post-processing"
+    ),
     user: User = Depends(get_current_user),
 ):
     """
     Queue LTX-2 I2V video generation and return immediately.
-    
+
     LTX-2 19B uses a single model (no high/low noise dual-pass like Wan2.2).
     Uses Gemma 3 text encoder. Faster inference, good for shorter clips.
     """
     from comfyui_client import build_ltx2_i2v_workflow
-    
+
     if not get_comfyui_client:
         raise HTTPException(status_code=503, detail="ComfyUI client not available")
 
@@ -4902,11 +5025,11 @@ async def generate_ltx2_i2v_async(
     k = round((num_frames - 1) / 8)
     k = max(1, k)  # Minimum k=1 gives 9 frames
     num_frames = 8 * k + 1
-    
+
     # Get resolution dimensions
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
     duration_seconds = num_frames / fps if fps > 0 else 3
-    
+
     # Calculate credits (use same formula as Wan2.2 for now)
     credits_required = calculate_credits(
         "generate_wan22_comfyui",  # Reuse same credit calculation
@@ -4986,9 +5109,11 @@ async def generate_ltx2_i2v_async(
         filename_prefix=output_prefix,
         fps=fps,
     )
-    
+
     if not workflow:
-        raise HTTPException(status_code=500, detail="Failed to build LTX-2 I2V workflow")
+        raise HTTPException(
+            status_code=500, detail="Failed to build LTX-2 I2V workflow"
+        )
 
     # Queue the workflow (non-blocking)
     prompt_id = comfyui.queue_prompt(workflow)
@@ -5126,7 +5251,9 @@ async def post_process_media(
         for upload_file in files:
             if upload_file.filename:
                 # Save to temp location
-                temp_path = UPLOAD_DIR / f"pp_{uuid.uuid4().hex[:8]}_{upload_file.filename}"
+                temp_path = (
+                    UPLOAD_DIR / f"pp_{uuid.uuid4().hex[:8]}_{upload_file.filename}"
+                )
                 async with aiofiles.open(temp_path, "wb") as f:
                     content = await upload_file.read()
                     await f.write(content)
@@ -5163,7 +5290,9 @@ async def post_process_media(
 
     if mode == "upscale":
         if len(input_paths) != 1:
-            raise HTTPException(status_code=400, detail="Upscale requires exactly 1 input video")
+            raise HTTPException(
+                status_code=400, detail="Upscale requires exactly 1 input video"
+            )
 
         workflow = comfyui.build_video_upscale_workflow(
             input_video=input_paths[0],
@@ -5175,7 +5304,9 @@ async def post_process_media(
 
     elif mode == "interpolate":
         if len(input_paths) != 1:
-            raise HTTPException(status_code=400, detail="Interpolation requires exactly 1 input video")
+            raise HTTPException(
+                status_code=400, detail="Interpolation requires exactly 1 input video"
+            )
 
         workflow = comfyui.build_rife_workflow(
             input_video=input_paths[0],
@@ -5186,7 +5317,9 @@ async def post_process_media(
 
     elif mode == "concat":
         if len(input_paths) < 2:
-            raise HTTPException(status_code=400, detail="Concatenation requires at least 2 input videos")
+            raise HTTPException(
+                status_code=400, detail="Concatenation requires at least 2 input videos"
+            )
 
         workflow = comfyui.build_video_concat_workflow(
             input_videos=input_paths,
@@ -5195,7 +5328,10 @@ async def post_process_media(
         credits_required = 2  # Concat cost
 
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}. Use: upscale, interpolate, concat")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown mode: {mode}. Use: upscale, interpolate, concat",
+        )
 
     # Check credits
     if user.credits < credits_required:
@@ -5311,13 +5447,13 @@ async def generate_text_video(
 
     # Validate model_type
     from comfyui_client import T2V_GENERATION_MODES, build_ltx2_t2v_workflow
-    
+
     if model_type not in T2V_GENERATION_MODES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model_type. Available: {list(T2V_GENERATION_MODES.keys())}"
+            detail=f"Invalid model_type. Available: {list(T2V_GENERATION_MODES.keys())}",
         )
-    
+
     mode_config = T2V_GENERATION_MODES[model_type]
     logger.info(f"🎬 T2V generation with model: {mode_config['name']}")
 
@@ -5361,13 +5497,15 @@ async def generate_text_video(
             filename_prefix=f"oelala_ltx2_t2v_{timestamp}",
         )
         if not workflow:
-            raise HTTPException(status_code=500, detail="Failed to build LTX-2 workflow")
+            raise HTTPException(
+                status_code=500, detail="Failed to build LTX-2 workflow"
+            )
     else:
         # Wan2.2: Adjust num_frames to 4k+1 format
         k = round((num_frames - 1) / 4)
         k = max(1, k)
         num_frames = 4 * k + 1
-        
+
         workflow = comfyui.build_t2v_workflow(
             prompt=prompt,
             width=width,
@@ -5398,7 +5536,9 @@ async def generate_text_video(
     # Register pending post-processing if any steps specified
     if post_processing_steps:
         pending_post_processing[prompt_id] = post_processing_steps
-        logger.info(f"   📦 Registered {len(post_processing_steps)} post-processing step(s)")
+        logger.info(
+            f"   📦 Registered {len(post_processing_steps)} post-processing step(s)"
+        )
 
     # Register job with ComfyUI client for auto-upload on completion
     comfyui.register_job(
@@ -5442,9 +5582,11 @@ async def generate_text_video(
             )
 
     # Deduct credits after successful queue
-    model_display = mode_config['name']
+    model_display = mode_config["name"]
     await deduct_credits(user, credits_required, prompt_id, f"{model_display} T2V")
-    logger.info(f"📋 T2V ({model_type}) queued: {prompt_id} (💰 -{credits_required} credits)")
+    logger.info(
+        f"📋 T2V ({model_type}) queued: {prompt_id} (💰 -{credits_required} credits)"
+    )
 
     return {
         "status": "queued",
@@ -5460,7 +5602,7 @@ async def generate_text_video(
             "seed": seed,
             "type": "text-to-video",
             "model_type": model_type,
-            "model_name": mode_config['name'],
+            "model_name": mode_config["name"],
         },
     }
 
@@ -5742,6 +5884,7 @@ def save_ai_settings(settings: dict) -> bool:
 
 class PromptGenerateRequest(BaseModel):
     """JSON body for prompt generation"""
+
     input: str
     style: Optional[str] = None
     mode: str = "expand"  # expand, refine, variations
@@ -5778,16 +5921,20 @@ async def generate_prompt_with_llm(
     model = ai_settings.get("ollama_model", OLLAMA_MODEL)
 
     style_desc = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
-    style_context = f"Style requested: {style} ({style_desc})" if style else "No specific style"
-    motion_context = "Include camera motion/animation descriptions." if include_motion else ""
-    
+    style_context = (
+        f"Style requested: {style} ({style_desc})" if style else "No specific style"
+    )
+    motion_context = (
+        "Include camera motion/animation descriptions." if include_motion else ""
+    )
+
     # Add randomness to make each generation unique
     random_seed = random.randint(1, 99999)
-    
+
     # Different creative directions to push variety
     creative_directions = [
         "Make it cyberpunk/neon",
-        "Make it underwater/oceanic", 
+        "Make it underwater/oceanic",
         "Make it cosmic/space themed",
         "Make it noir/dramatic shadows",
         "Make it surreal/dreamlike",
@@ -5814,7 +5961,9 @@ IMPORTANT: Do NOT use sunbeams, golden hour, or cozy clichés. Be WILD and creat
 Generate as JSON."""
 
     try:
-        async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, auth=("oelala-backend", "")
+        ) as client:
             response = await client.post(
                 f"{OLLAMA_BASE}/api/generate",
                 json={
@@ -5863,7 +6012,11 @@ Generate as JSON."""
 
 
 def generate_prompt_template(
-    base_input: str, style: Optional[str], mode: str, include_negative: bool, include_motion: bool
+    base_input: str,
+    style: Optional[str],
+    mode: str,
+    include_negative: bool,
+    include_motion: bool,
 ) -> dict:
     """Template-based prompt enhancement (no LLM needed)"""
     quality_suffix = ", masterpiece, best quality, highly detailed"
@@ -5964,23 +6117,30 @@ async def generate_prompt(request: Request):
 VISION_MODEL = os.getenv("VISION_MODEL", "moondream:latest")
 
 
-async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None) -> str:
+async def analyze_image_with_vision(
+    image_base64: str, custom_prompt: str = None
+) -> str:
     """
     Use Moondream (vision LLM) to analyze an image and return a description.
-    
+
     Args:
         image_base64: Base64 encoded image data
         custom_prompt: Optional custom prompt for the analysis
-    
+
     Returns:
         Text description of the image
     """
     import httpx
-    
-    analysis_prompt = custom_prompt or "Describe this image in detail. Focus on: the main subject, their appearance, clothing, pose, expression, the setting/background, lighting, colors, and overall mood. Be specific and descriptive."
-    
+
+    analysis_prompt = (
+        custom_prompt
+        or "Describe this image in detail. Focus on: the main subject, their appearance, clothing, pose, expression, the setting/background, lighting, colors, and overall mood. Be specific and descriptive."
+    )
+
     try:
-        async with httpx.AsyncClient(timeout=60.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(
+            timeout=60.0, auth=("oelala-backend", "")
+        ) as client:
             response = await client.post(
                 f"{OLLAMA_BASE}/api/generate",
                 json={
@@ -6023,7 +6183,7 @@ Output format:
 I2V_NSFW_SCENE_SYSTEM_PROMPT = """You are a creative director for AI adult video generation. Given an image description, create a sensual/erotic video scene.
 
 CRITICAL RULES:
-1. The subject in the image is the STAR - keep them as the focus  
+1. The subject in the image is the STAR - keep them as the focus
 2. Create an INTIMATE or SENSUAL scenario for the video
 3. Include specific MOVEMENT descriptions (body movements, expressions)
 4. Be tasteful but explicit - focus on sensuality and desire
@@ -6039,26 +6199,26 @@ async def generate_i2v_prompt_from_description(
 ) -> dict:
     """
     Use LLM to generate creative video prompts based on an image description.
-    
+
     Args:
         image_description: Text description of the image from vision model
         nsfw: If True, generate adult/sensual content
-    
+
     Returns:
         Dict with prompt, negative_prompt, motion_prompt
     """
     import httpx
     import random
-    
+
     ai_settings = load_ai_settings()
     model = ai_settings.get("ollama_model", OLLAMA_MODEL)
-    
+
     system_prompt = I2V_NSFW_SCENE_SYSTEM_PROMPT if nsfw else I2V_SCENE_SYSTEM_PROMPT
-    
+
     # Random creative directions for variety
     sfw_directions = [
         "Make it dramatic and cinematic",
-        "Add an element of surprise or wonder", 
+        "Add an element of surprise or wonder",
         "Create tension or anticipation",
         "Make it playful and dynamic",
         "Add environmental interaction",
@@ -6066,7 +6226,7 @@ async def generate_i2v_prompt_from_description(
         "Make it mysterious or intriguing",
         "Add graceful, flowing movement",
     ]
-    
+
     nsfw_directions = [
         "Focus on seduction and eye contact",
         "Create intimate tension",
@@ -6077,11 +6237,11 @@ async def generate_i2v_prompt_from_description(
         "Emphasize curves and form",
         "Add playful teasing",
     ]
-    
+
     directions = nsfw_directions if nsfw else sfw_directions
     direction = random.choice(directions)
     random_seed = random.randint(1, 99999)
-    
+
     user_prompt = f"""Create a video prompt from this image description:
 
 IMAGE: {image_description}
@@ -6092,7 +6252,9 @@ Seed: {random_seed}
 Generate a compelling video scene as JSON. Include what happens, how things move, and the mood."""
 
     try:
-        async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, auth=("oelala-backend", "")
+        ) as client:
             response = await client.post(
                 f"{OLLAMA_BASE}/api/generate",
                 json={
@@ -6112,17 +6274,19 @@ Generate a compelling video scene as JSON. Include what happens, how things move
             response.raise_for_status()
             result = response.json()
             llm_output = result.get("response", "").strip()
-            
+
             # Parse JSON from LLM output
             if "```json" in llm_output:
                 llm_output = llm_output.split("```json")[1].split("```")[0].strip()
             elif "```" in llm_output:
                 llm_output = llm_output.split("```")[1].split("```")[0].strip()
-            
+
             parsed = json.loads(llm_output)
             return {
                 "prompt": parsed.get("prompt", ""),
-                "negative_prompt": parsed.get("negative_prompt", "low quality, blurry, artifacts, distortion"),
+                "negative_prompt": parsed.get(
+                    "negative_prompt", "low quality, blurry, artifacts, distortion"
+                ),
                 "motion_prompt": parsed.get("motion_prompt", ""),
             }
     except json.JSONDecodeError as e:
@@ -6135,17 +6299,21 @@ Generate a compelling video scene as JSON. Include what happens, how things move
         }
     except Exception as e:
         logger.error(f"I2V prompt generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prompt generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Prompt generation failed: {str(e)}"
+        )
 
 
 class AnalyzeImageRequest(BaseModel):
     """Request body for image analysis"""
+
     image_base64: str  # Base64 encoded image
     custom_prompt: Optional[str] = None
 
 
 class AnalyzeAndGenerateRequest(BaseModel):
     """Request body for analyze + generate pipeline"""
+
     image_base64: str  # Base64 encoded image
     nsfw: bool = False
 
@@ -6158,14 +6326,14 @@ async def analyze_image(request: AnalyzeImageRequest):
     """
     if not request.image_base64:
         raise HTTPException(status_code=400, detail="image_base64 is required")
-    
+
     # Remove data URL prefix if present
     image_data = request.image_base64
     if image_data.startswith("data:"):
         image_data = image_data.split(",", 1)[1]
-    
+
     description = await analyze_image_with_vision(image_data, request.custom_prompt)
-    
+
     return {
         "description": description,
         "model": VISION_MODEL,
@@ -6176,29 +6344,29 @@ async def analyze_image(request: AnalyzeImageRequest):
 async def analyze_and_generate(request: AnalyzeAndGenerateRequest):
     """
     Full pipeline: Analyze image with vision model, then generate creative video prompts.
-    
+
     1. Use Moondream to describe the image
     2. Use Gemma2 to create a creative video scene based on the description
-    
+
     Returns both the image description and generated prompts.
     """
     if not request.image_base64:
         raise HTTPException(status_code=400, detail="image_base64 is required")
-    
+
     # Remove data URL prefix if present
     image_data = request.image_base64
     if image_data.startswith("data:"):
         image_data = image_data.split(",", 1)[1]
-    
+
     # Step 1: Analyze image with vision model
     logger.info(f"🔮 Analyzing image with {VISION_MODEL}...")
     description = await analyze_image_with_vision(image_data)
     logger.info(f"📝 Image description: {description[:100]}...")
-    
+
     # Step 2: Generate creative video prompt from description
     logger.info(f"🎬 Generating {'NSFW' if request.nsfw else 'SFW'} video prompt...")
     prompts = await generate_i2v_prompt_from_description(description, request.nsfw)
-    
+
     return {
         "description": description,
         "prompt": prompts["prompt"],
@@ -6215,7 +6383,9 @@ async def ollama_status():
     import httpx
 
     try:
-        async with httpx.AsyncClient(timeout=5.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(
+            timeout=5.0, auth=("oelala-backend", "")
+        ) as client:
             response = await client.get(f"{OLLAMA_BASE}/api/tags")
             response.raise_for_status()
             models = response.json().get("models", [])

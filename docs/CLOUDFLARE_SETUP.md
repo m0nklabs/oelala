@@ -77,7 +77,7 @@ ingress:
     service: http://localhost:7990
     originRequest:
       noTLSVerify: true
-  
+
   # Catch-all (required)
   - service: http_status:404
 ```
