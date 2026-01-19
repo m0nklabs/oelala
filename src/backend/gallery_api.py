@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
 
@@ -81,7 +81,6 @@ class PublishRequest(BaseModel):
             raise ValueError("Maximum 10 tags allowed")
         # Trim whitespace and filter empty tags
         return [tag.strip() for tag in v if tag.strip()]
-
 
 
 class PublishedMediaResponse(BaseModel):
@@ -475,8 +474,6 @@ async def get_published_media_workflow(media_id: str):
     """
     Extract and return the ComfyUI workflow JSON from a published media item.
     """
-    import subprocess
-    import tempfile
     from pathlib import Path as PathLib
 
     debug_log(f"Extracting workflow from media {media_id}")
@@ -727,12 +724,12 @@ async def get_published_media_file(media_id: str):
     """
     Serve the actual media file for a published gallery item.
     This is PUBLIC - no authentication required for published content.
-    
+
     Media source priority:
     1. oelala-storage (user's cloud storage)
     2. Local directories (media/generated/, ComfyUI/output/) for dev/testing
     """
-    from fastapi.responses import StreamingResponse, FileResponse
+    from fastapi.responses import StreamingResponse
     from storage_client import get_storage_client
 
     debug_log(f"Serving media file for {media_id}")
@@ -786,7 +783,9 @@ async def get_published_media_file(media_id: str):
         try:
             storage = get_storage_client()
             stream = storage.iter_user_media(user_id, media_type_dir, filename)
-            debug_log(f"Streaming from oelala-storage: {media_type_dir}/{filename} for user {user_id}")
+            debug_log(
+                f"Streaming from oelala-storage: {media_type_dir}/{filename} for user {user_id}"
+            )
 
             return StreamingResponse(
                 stream,

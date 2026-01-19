@@ -37,37 +37,37 @@ DECLARE
 BEGIN
     -- SECURITY: Always use authenticated user ID
     v_admin_id := auth.uid();
-    
+
     -- Check if caller is admin
     SELECT uc.is_admin INTO is_caller_admin
     FROM public.user_credits uc
     WHERE uc.user_id = v_admin_id;
-    
+
     IF NOT is_caller_admin THEN
         RETURN QUERY SELECT false, 'Not authorized - admin only';
         RETURN;
     END IF;
-    
+
     -- Cannot suspend yourself
     IF p_user_id = v_admin_id THEN
         RETURN QUERY SELECT false, 'Cannot suspend yourself';
         RETURN;
     END IF;
-    
+
     -- Update suspension status
     UPDATE public.user_credits
-    SET 
+    SET
         is_suspended = p_is_suspended,
         suspended_at = CASE WHEN p_is_suspended THEN NOW() ELSE NULL END,
         suspension_reason = CASE WHEN p_is_suspended THEN p_reason ELSE NULL END,
         updated_at = NOW()
     WHERE user_id = p_user_id;
-    
+
     IF NOT FOUND THEN
         RETURN QUERY SELECT false, 'User not found';
         RETURN;
     END IF;
-    
+
     -- Log the action in credit_transactions for audit trail
     INSERT INTO public.credit_transactions (
         user_id,
@@ -79,7 +79,7 @@ BEGIN
         p_user_id,
         0,
         'admin',
-        CASE WHEN p_is_suspended 
+        CASE WHEN p_is_suspended
             THEN 'Account suspended: ' || COALESCE(p_reason, 'No reason provided')
             ELSE 'Account unsuspended'
         END,
@@ -89,7 +89,7 @@ BEGIN
             'reason', p_reason
         )
     );
-    
+
     RETURN QUERY SELECT true, NULL::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

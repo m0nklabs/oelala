@@ -34,7 +34,7 @@ const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurat
   }, [])
 
   const mediaUrl = getMediaUrl(item.url, item.signed_url)
-  
+
   const handleLoadedMetadata = (e) => {
     const duration = e.target.duration
     if (duration && !videoDurations[item.filename]) {
@@ -582,13 +582,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
       // - 'generated': media/generated/ folder - legacy delete (same as comfyui)
       // - 'public': gallery items - not deletable here
       // - undefined/null: legacy comfyui items
-      const comfyItems = selectedList.filter(item => 
-        item.source === 'comfyui-local' || 
-        item.source === 'generated' || 
+      const comfyItems = selectedList.filter(item =>
+        item.source === 'comfyui-local' ||
+        item.source === 'generated' ||
         !item.source
       )
-      const userStorageItems = selectedList.filter(item => 
-        item.source === 'user' || 
+      const userStorageItems = selectedList.filter(item =>
+        item.source === 'user' ||
         item.source === 'storage'
       )
 

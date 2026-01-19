@@ -38,6 +38,7 @@ def _get_webhook_triggers():
                 trigger_job_completed,
                 trigger_job_failed,
             )
+
             _webhook_triggers = {
                 "queued": trigger_job_queued,
                 "started": trigger_job_started,
@@ -87,7 +88,9 @@ class WebSocketManager:
                 del self.connections[user_key]
                 debug_log(f"Removed empty connection set for user {user_key}")
 
-    def register_job(self, job_id: str, user_id: Optional[str] = None, job_type: str = "generation"):
+    def register_job(
+        self, job_id: str, user_id: Optional[str] = None, job_type: str = "generation"
+    ):
         """Register a job for a specific user"""
         user_key = user_id or "anonymous"
         self.job_ownership[job_id] = {
@@ -248,6 +251,7 @@ class WebSocketManager:
         # Track when job starts running (for job.started webhook)
         if progress > 0 and not job_info.get("started_at"):
             import time
+
             job_info["started_at"] = time.time()
             self.job_ownership[job_id] = job_info
 
@@ -305,6 +309,7 @@ class WebSocketManager:
         processing_time = None
         if started_at:
             import time
+
             processing_time = time.time() - started_at
 
         data = {
