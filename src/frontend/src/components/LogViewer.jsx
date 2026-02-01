@@ -41,14 +41,14 @@ export default function LogViewer() {
     ws.onmessage = (event) => {
       try {
         const log = JSON.parse(event.data)
-        
+
         // Filter out noisy httpx polling messages
         const message = log.message || log.msg || ''
         if (message.includes('HTTP Request: GET http://localhost:8188/queue') ||
             message.includes('HTTP Request: GET https://') && message.includes('webhook_deliveries')) {
           return // Skip these noisy polling logs
         }
-        
+
         setLogs(prev => {
           const newLogs = [...prev, log]
           // Keep last 500 logs to prevent memory bloat

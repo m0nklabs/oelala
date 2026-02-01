@@ -252,11 +252,11 @@ class ComfyUIProgressMonitor:
 
         # Fetch history from ComfyUI to find output files
         try:
-            resp = requests.get(
-                f"{self.base_url}/history/{prompt_id}", timeout=10
-            )
+            resp = requests.get(f"{self.base_url}/history/{prompt_id}", timeout=10)
             if resp.status_code != 200:
-                logger.warning(f"Failed to get history for {prompt_id}: {resp.status_code}")
+                logger.warning(
+                    f"Failed to get history for {prompt_id}: {resp.status_code}"
+                )
                 return
 
             history_data = resp.json()
@@ -347,7 +347,9 @@ class ComfyUIProgressMonitor:
                 tmp.write(resp.content)
                 temp_path = tmp.name
 
-            debug_log(f"Downloaded {filename} to {temp_path} ({len(resp.content)} bytes)")
+            debug_log(
+                f"Downloaded {filename} to {temp_path} ({len(resp.content)} bytes)"
+            )
 
             # Trigger auto-upload via ComfyUI client
             storage_path = comfyui.on_job_complete(

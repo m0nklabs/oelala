@@ -107,7 +107,9 @@ class SuspensionToggle(BaseModel):
     user_id: str
     is_suspended: bool
     reason: Optional[str] = Field(
-        None, max_length=500, description="Reason for suspension (optional for unsuspend)"
+        None,
+        max_length=500,
+        description="Reason for suspension (optional for unsuspend)",
     )
 
 
@@ -688,31 +690,44 @@ def check_file_has_metadata(file_path: Path) -> bool:
     """
     import subprocess
     import json
-    
+
     ext = file_path.suffix.lower()
-    
+
     try:
         if ext in [".mp4", ".webm", ".mov"]:
             # Check video metadata using ffprobe
             result = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(file_path)],
-                capture_output=True, text=True, timeout=5
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    str(file_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 probe_data = json.loads(result.stdout)
-                comment = probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                comment = (
+                    probe_data.get("format", {}).get("tags", {}).get("comment", "")
+                )
                 return bool(comment and comment.startswith("{"))
-        
+
         elif ext == ".png":
             # Check PNG metadata
             from PIL import Image
+
             img = Image.open(str(file_path))
             if hasattr(img, "text"):
                 return "prompt" in img.text or "workflow" in img.text
             img.close()
     except Exception:
         pass
-    
+
     return False
 
 
@@ -724,12 +739,12 @@ async def list_generated_media(
 ):
     """
     List all media files from generated directories (admin only).
-    
+
     This is a transition endpoint while migrating to user-scoped storage.
     Returns videos/images from media/generated/ and ComfyUI/output/.
     """
     media = []
-    
+
     # Scan media/generated
     if MEDIA_GENERATED_DIR.exists():
         for ext in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
@@ -737,24 +752,26 @@ async def list_generated_media(
                 stat = file_path.stat()
                 is_video = file_path.suffix.lower() in [".mp4", ".webm"]
                 item_type = "video" if is_video else "image"
-                
+
                 if type != "all" and item_type != type:
                     continue
-                
+
                 # Check if file has embedded metadata (workflow)
                 has_metadata = check_file_has_metadata(file_path)
-                
-                media.append({
-                    "name": file_path.name,
-                    "type": item_type,
-                    "url": f"/media/generated/{file_path.name}",
-                    "source": "media/generated",
-                    "size": stat.st_size,
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    "mtime": stat.st_mtime,
-                    "has_metadata": has_metadata,
-                })
-    
+
+                media.append(
+                    {
+                        "name": file_path.name,
+                        "type": item_type,
+                        "url": f"/media/generated/{file_path.name}",
+                        "source": "media/generated",
+                        "size": stat.st_size,
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        "mtime": stat.st_mtime,
+                        "has_metadata": has_metadata,
+                    }
+                )
+
     # Scan ComfyUI output
     if COMFYUI_OUTPUT_DIR.exists():
         for ext in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
@@ -762,27 +779,29 @@ async def list_generated_media(
                 stat = file_path.stat()
                 is_video = file_path.suffix.lower() in [".mp4", ".webm"]
                 item_type = "video" if is_video else "image"
-                
+
                 if type != "all" and item_type != type:
                     continue
-                
+
                 # Check if file has embedded metadata (workflow)
                 has_metadata = check_file_has_metadata(file_path)
-                
-                media.append({
-                    "name": file_path.name,
-                    "type": item_type,
-                    "url": f"/comfyui/output/{file_path.name}",
-                    "source": "ComfyUI/output",
-                    "size": stat.st_size,
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    "mtime": stat.st_mtime,
-                    "has_metadata": has_metadata,
-                })
-    
+
+                media.append(
+                    {
+                        "name": file_path.name,
+                        "type": item_type,
+                        "url": f"/comfyui/output/{file_path.name}",
+                        "source": "ComfyUI/output",
+                        "size": stat.st_size,
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        "mtime": stat.st_mtime,
+                        "has_metadata": has_metadata,
+                    }
+                )
+
     # Sort by mtime (newest first)
     media.sort(key=lambda m: m.get("mtime", 0), reverse=True)
-    
+
     return {
         "media": media[:limit],
         "total": len(media),
@@ -797,10 +816,10 @@ async def get_generated_file(
 ):
     """Serve a file from media/generated/ (admin only)."""
     file_path = MEDIA_GENERATED_DIR / filename
-    
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     # Determine content type
     suffix = file_path.suffix.lower()
     content_types = {
@@ -812,7 +831,7 @@ async def get_generated_file(
         ".webp": "image/webp",
     }
     content_type = content_types.get(suffix, "application/octet-stream")
-    
+
     return FileResponse(path=file_path, media_type=content_type, filename=filename)
 
 
@@ -823,10 +842,10 @@ async def get_comfyui_file(
 ):
     """Serve a file from ComfyUI/output/ (admin only)."""
     file_path = COMFYUI_OUTPUT_DIR / filename
-    
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     # Determine content type
     suffix = file_path.suffix.lower()
     content_types = {
@@ -838,7 +857,7 @@ async def get_comfyui_file(
         ".webp": "image/webp",
     }
     content_type = content_types.get(suffix, "application/octet-stream")
-    
+
     return FileResponse(path=file_path, media_type=content_type, filename=filename)
 
 
@@ -854,8 +873,7 @@ async def get_gpu_status(admin: User = Depends(get_admin_user)):
     Returns VRAM usage, GPU utilization, temperature for each GPU.
     """
     import subprocess
-    import re
-    
+
     try:
         # Run nvidia-smi with CSV output for easy parsing
         result = subprocess.run(
@@ -868,10 +886,10 @@ async def get_gpu_status(admin: User = Depends(get_admin_user)):
             text=True,
             timeout=10,
         )
-        
+
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail="nvidia-smi failed")
-        
+
         gpus = []
         for line in result.stdout.strip().split("\n"):
             if not line.strip():
@@ -886,24 +904,28 @@ async def get_gpu_status(admin: User = Depends(get_admin_user)):
                 mem_free = int(parts[4])
                 util = int(parts[5]) if parts[5] != "[N/A]" else 0
                 temp = int(parts[6]) if parts[6] != "[N/A]" else 0
-                
-                gpus.append({
-                    "index": idx,
-                    "name": name,
-                    "memory_total_mb": mem_total,
-                    "memory_used_mb": mem_used,
-                    "memory_free_mb": mem_free,
-                    "memory_percent": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
-                    "utilization_percent": util,
-                    "temperature_c": temp,
-                })
-        
+
+                gpus.append(
+                    {
+                        "index": idx,
+                        "name": name,
+                        "memory_total_mb": mem_total,
+                        "memory_used_mb": mem_used,
+                        "memory_free_mb": mem_free,
+                        "memory_percent": round(mem_used / mem_total * 100, 1)
+                        if mem_total > 0
+                        else 0,
+                        "utilization_percent": util,
+                        "temperature_c": temp,
+                    }
+                )
+
         return {
             "gpus": gpus,
             "total_gpus": len(gpus),
             "timestamp": datetime.now().isoformat(),
         }
-        
+
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="nvidia-smi timed out")
     except FileNotFoundError:
@@ -921,7 +943,7 @@ async def get_queue_status(admin: User = Depends(get_admin_user)):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get("http://localhost:8188/queue", timeout=5.0)
-            
+
             if response.status_code != 200:
                 return {
                     "status": "error",
@@ -929,28 +951,32 @@ async def get_queue_status(admin: User = Depends(get_admin_user)):
                     "running": [],
                     "pending": [],
                 }
-            
+
             data = response.json()
-            
+
             # Parse running jobs
             running = []
             for item in data.get("queue_running", []):
                 if len(item) >= 2:
-                    running.append({
-                        "prompt_id": item[1],
-                        "status": "running",
-                    })
-            
+                    running.append(
+                        {
+                            "prompt_id": item[1],
+                            "status": "running",
+                        }
+                    )
+
             # Parse pending jobs
             pending = []
             for idx, item in enumerate(data.get("queue_pending", [])):
                 if len(item) >= 2:
-                    pending.append({
-                        "prompt_id": item[1],
-                        "status": "pending",
-                        "position": idx + 1,
-                    })
-            
+                    pending.append(
+                        {
+                            "prompt_id": item[1],
+                            "status": "pending",
+                            "position": idx + 1,
+                        }
+                    )
+
             return {
                 "status": "ok",
                 "running": running,
@@ -959,7 +985,7 @@ async def get_queue_status(admin: User = Depends(get_admin_user)):
                 "pending_count": len(pending),
                 "timestamp": datetime.now().isoformat(),
             }
-            
+
     except httpx.TimeoutException:
         return {
             "status": "timeout",
@@ -990,17 +1016,19 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
     Comprehensive system health check for admin dashboard.
     """
     import shutil
-    
+
     health = {
         "timestamp": datetime.now().isoformat(),
         "services": {},
         "disk": {},
     }
-    
+
     # Check ComfyUI
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:8188/system_stats", timeout=3.0)
+            response = await client.get(
+                "http://localhost:8188/system_stats", timeout=3.0
+            )
             health["services"]["comfyui"] = {
                 "status": "online" if response.status_code == 200 else "error",
                 "port": 8188,
@@ -1011,7 +1039,7 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
                     health["services"]["comfyui"]["system"] = stats["system"]
     except Exception:
         health["services"]["comfyui"] = {"status": "offline", "port": 8188}
-    
+
     # Check oelala-storage
     try:
         async with httpx.AsyncClient() as client:
@@ -1022,7 +1050,7 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
             }
     except Exception:
         health["services"]["storage"] = {"status": "offline", "port": 7990}
-    
+
     # Disk usage
     for name, path in [
         ("root", "/"),
@@ -1039,7 +1067,7 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
             }
         except Exception:
             pass
-    
+
     return health
 
 
@@ -1054,35 +1082,49 @@ async def get_recent_logs(
     Supported services: oelala-backend, comfyui, oelala-storage
     """
     import subprocess
-    
-    allowed_services = ["oelala-backend", "comfyui", "oelala-storage", "oelala-frontend"]
-    
+
+    allowed_services = [
+        "oelala-backend",
+        "comfyui",
+        "oelala-storage",
+        "oelala-frontend",
+    ]
+
     if service not in allowed_services:
         raise HTTPException(
             status_code=400,
             detail=f"Service must be one of: {', '.join(allowed_services)}",
         )
-    
+
     try:
         result = subprocess.run(
-            ["journalctl", "-u", service, "-n", str(lines), "--no-pager", "-o", "short-iso"],
+            [
+                "journalctl",
+                "-u",
+                service,
+                "-n",
+                str(lines),
+                "--no-pager",
+                "-o",
+                "short-iso",
+            ],
             capture_output=True,
             text=True,
             timeout=10,
         )
-        
+
         log_lines = []
         for line in result.stdout.strip().split("\n"):
             if line.strip():
                 log_lines.append(line)
-        
+
         return {
             "service": service,
             "lines": log_lines,
             "count": len(log_lines),
             "timestamp": datetime.now().isoformat(),
         }
-        
+
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="Log fetch timed out")
     except Exception as e:
@@ -1113,6 +1155,7 @@ Output format (strict JSON):
 
 class AISettingsUpdate(BaseModel):
     """AI settings update request"""
+
     prompt_system: Optional[str] = None
     ollama_model: Optional[str] = None
 
@@ -1122,14 +1165,14 @@ async def get_ai_settings(user: User = Depends(get_current_user)):
     """Get current AI settings (admin only)"""
     if not ADMIN_BYPASS and not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     import json
-    
+
     settings = {
         "prompt_system": DEFAULT_PROMPT_SYSTEM,
         "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
     }
-    
+
     if AI_SETTINGS_FILE.exists():
         try:
             with open(AI_SETTINGS_FILE, "r") as f:
@@ -1137,18 +1180,20 @@ async def get_ai_settings(user: User = Depends(get_current_user)):
                 settings.update(saved)
         except Exception as e:
             logger.warning(f"Failed to load AI settings: {e}")
-    
+
     # Also get available Ollama models
     available_models = []
     try:
-        async with httpx.AsyncClient(timeout=5.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(
+            timeout=5.0, auth=("oelala-backend", "")
+        ) as client:
             res = await client.get("http://localhost:11434/api/tags")
             if res.status_code == 200:
                 models = res.json().get("models", [])
                 available_models = [m.get("name", "") for m in models]
     except Exception:
         pass
-    
+
     return {
         **settings,
         "available_models": available_models,
@@ -1158,40 +1203,39 @@ async def get_ai_settings(user: User = Depends(get_current_user)):
 
 @router.post("/ai-settings")
 async def update_ai_settings(
-    update: AISettingsUpdate,
-    user: User = Depends(get_current_user)
+    update: AISettingsUpdate, user: User = Depends(get_current_user)
 ):
     """Update AI settings (admin only)"""
     if not ADMIN_BYPASS and not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     import json
-    
+
     # Load existing settings
     settings = {
         "prompt_system": DEFAULT_PROMPT_SYSTEM,
         "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
     }
-    
+
     if AI_SETTINGS_FILE.exists():
         try:
             with open(AI_SETTINGS_FILE, "r") as f:
                 settings.update(json.load(f))
         except Exception:
             pass
-    
+
     # Update with new values
     if update.prompt_system is not None:
         settings["prompt_system"] = update.prompt_system
     if update.ollama_model is not None:
         settings["ollama_model"] = update.ollama_model
-    
+
     # Save
     try:
         AI_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(AI_SETTINGS_FILE, "w") as f:
             json.dump(settings, f, indent=2)
-        
+
         logger.info(f"AI settings updated by admin {user.id}")
         return {"success": True, "settings": settings}
     except Exception as e:
@@ -1204,18 +1248,18 @@ async def reset_ai_settings(user: User = Depends(get_current_user)):
     """Reset AI settings to defaults (admin only)"""
     if not ADMIN_BYPASS and not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         if AI_SETTINGS_FILE.exists():
             AI_SETTINGS_FILE.unlink()
-        
+
         logger.info(f"AI settings reset to defaults by admin {user.id}")
         return {
             "success": True,
             "settings": {
                 "prompt_system": DEFAULT_PROMPT_SYSTEM,
                 "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
-            }
+            },
         }
     except Exception as e:
         logger.error(f"Failed to reset AI settings: {e}")
