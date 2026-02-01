@@ -274,7 +274,7 @@ Update the tool component (e.g., `TextToVideoTool.jsx`) to:
 ├── Sampler (steps 1-3)
 └── [eject models]
 
-[Pass 2: Low Noise]  
+[Pass 2: Low Noise]
 ├── UnetLoaderGGUFAdvancedDisTorch2MultiGPU (low noise model)
 ├── Sampler (steps 4-6)
 ├── VAE Decode

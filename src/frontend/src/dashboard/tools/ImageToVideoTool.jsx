@@ -188,7 +188,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     try {
       // Get image as base64
       let imageBase64 = ''
-      
+
       // If previewUrl is a blob or data URL, fetch it
       if (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')) {
         const response = await fetch(previewUrl)
@@ -885,9 +885,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             {/* Analyze & Generate SFW */}
             <button
               className="icon-btn"
-              style={{ 
-                width: 'auto', 
-                height: '24px', 
+              style={{
+                width: 'auto',
+                height: '24px',
                 padding: '4px 8px',
                 fontSize: '0.7rem',
                 display: 'flex',
@@ -908,9 +908,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             {nsfwEnabled && (
               <button
                 className="icon-btn"
-                style={{ 
-                  width: 'auto', 
-                  height: '24px', 
+                style={{
+                  width: 'auto',
+                  height: '24px',
                   padding: '4px 8px',
                   fontSize: '0.7rem',
                   display: 'flex',
@@ -1027,15 +1027,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Prompt Strength
               </label>
-              <span 
+              <span
                 title="How strictly the video follows your prompt. Low = subtle movement, High = dramatic action (may cause artifacts)"
                 style={{ cursor: 'help', opacity: 0.5 }}
               >
                 <HelpCircle size={12} />
               </span>
             </div>
-            <span style={{ 
-              fontSize: '0.8rem', 
+            <span style={{
+              fontSize: '0.8rem',
               fontWeight: 600,
               color: cfg <= 1.5 ? '#fbbf24' : cfg <= 3 ? '#34d399' : '#f87171',
               padding: '2px 8px',
@@ -1055,20 +1055,20 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               onChange={(e) => setCfg(parseFloat(e.target.value))}
               style={{ flex: 1 }}
             />
-            <span style={{ 
-              fontSize: '0.85rem', 
-              fontWeight: 600, 
-              minWidth: '32px', 
+            <span style={{
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              minWidth: '32px',
               textAlign: 'right',
               color: 'var(--text-primary)'
             }}>
               {cfg.toFixed(1)}
             </span>
           </div>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            fontSize: '0.7rem', 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '0.7rem',
             color: 'var(--text-muted)',
             marginTop: '4px'
           }}>
