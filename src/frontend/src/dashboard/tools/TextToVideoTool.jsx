@@ -585,8 +585,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       </button>
 
       <div className="tool-info">
-        💡 {modelType === 'ltx2' 
-          ? 'LTX-2 generates video directly from text (faster)' 
+        💡 {modelType === 'ltx2'
+          ? 'LTX-2 generates video directly from text (faster)'
           : 'Wan2.2 first generates an image, then animates it (higher quality)'}
       </div>
 

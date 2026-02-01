@@ -71,7 +71,7 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
 
   const addFiles = useCallback((newFiles) => {
     const videoFiles = newFiles.filter(f => f.type.startsWith('video/'))
-    
+
     const fileEntries = videoFiles.map(file => {
       const url = URL.createObjectURL(file)
       return {
@@ -391,7 +391,7 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
                 {mode === 'concat' && (
                   <GripVertical size={16} style={{ color: 'var(--text-muted)', cursor: 'grab' }} />
                 )}
-                
+
                 <div style={{
                   width: '80px',
                   height: '45px',

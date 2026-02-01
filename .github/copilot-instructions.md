@@ -69,7 +69,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 ## Related Repositories
 
-- **oelala-storage**: Separate Go-based storage service at `/home/flip/oelala-storage/`. 
+- **oelala-storage**: Separate Go-based storage service at `/home/flip/oelala-storage/`.
   - **Canonical Docs**: `/home/flip/oelala-storage/docs/VISION.md` (architecture)
   - **Standalone product** - not just an oelala microservice, can be used by any project
   - **Ports**: HTTP API (7990), gRPC Sync (7991), Metrics (7992)
@@ -108,7 +108,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 
 **Key Principles:**
 1. **Storage is "dumb"** - backend tells storage what to do
-2. **Deduplication via database** - hash → node locations, NOT symlinks  
+2. **Deduplication via database** - hash → node locations, NOT symlinks
 3. **Retention via headers** - backend sends `X-Expires-At`, storage executes
 4. **EU retention** - 6 months minimum (GDPR)
 

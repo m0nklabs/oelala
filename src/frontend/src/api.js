@@ -210,7 +210,7 @@ export async function listUserMedia(type = 'all') {
  */
 export async function listUnifiedMedia(type = 'all', source = 'all', adminFilters = {}) {
   const params = new URLSearchParams({ type, source })
-  
+
   // Admin-only filters
   if (adminFilters.filterUserId) {
     params.append('filter_user_id', adminFilters.filterUserId)
@@ -218,7 +218,7 @@ export async function listUnifiedMedia(type = 'all', source = 'all', adminFilter
   if (adminFilters.includeAllUsers) {
     params.append('include_all_users', 'true')
   }
-  
+
   return apiGet(`/api/media/unified?${params.toString()}`)
 }
 
