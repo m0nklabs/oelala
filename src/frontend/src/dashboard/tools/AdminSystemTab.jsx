@@ -16,31 +16,31 @@ export default function AdminSystemTab() {
   const { session, isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
-  
+
   // System data
   const [gpuData, setGpuData] = useState(null)
   const [healthData, setHealthData] = useState(null)
   const [queueData, setQueueData] = useState(null)
   const [logsData, setLogsData] = useState(null)
   const [selectedService, setSelectedService] = useState('oelala-backend')
-  
+
   // AI Settings
   const [aiSettings, setAiSettings] = useState(null)
   const [aiSettingsLoading, setAiSettingsLoading] = useState(false)
   const [aiSettingsSaving, setAiSettingsSaving] = useState(false)
   const [editedPromptSystem, setEditedPromptSystem] = useState('')
   const [editedOllamaModel, setEditedOllamaModel] = useState('')
-  
+
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
   // Fetch all system data
   const fetchSystemData = useCallback(async () => {
     if (!isAdmin || !session) return
-    
+
     setRefreshing(true)
     setError(null)
-    
+
     try {
       // Fetch GPU, health, and queue in parallel
       const [gpuRes, healthRes, queueRes] = await Promise.all([
@@ -54,11 +54,11 @@ export default function AdminSystemTab() {
           headers: { Authorization: `Bearer ${session.access_token}` },
         }),
       ])
-      
+
       if (gpuRes.ok) setGpuData(await gpuRes.json())
       if (healthRes.ok) setHealthData(await healthRes.json())
       if (queueRes.ok) setQueueData(await queueRes.json())
-      
+
     } catch (err) {
       console.error('Failed to fetch system data:', err)
       setError('Failed to fetch system data')
@@ -71,7 +71,7 @@ export default function AdminSystemTab() {
   // Fetch logs for selected service
   const fetchLogs = useCallback(async () => {
     if (!isAdmin || !session) return
-    
+
     try {
       const res = await fetch(
         `${BACKEND_BASE}/api/admin/system/logs?service=${selectedService}&lines=100`,
@@ -87,7 +87,7 @@ export default function AdminSystemTab() {
   const fetchAiSettings = useCallback(async () => {
     if (!isAdmin || !session) return
     setAiSettingsLoading(true)
-    
+
     try {
       const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
@@ -109,7 +109,7 @@ export default function AdminSystemTab() {
   const saveAiSettings = async () => {
     if (!session) return
     setAiSettingsSaving(true)
-    
+
     try {
       const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings`, {
         method: 'POST',
@@ -142,7 +142,7 @@ export default function AdminSystemTab() {
   const resetAiSettings = async () => {
     if (!confirm('Reset AI settings to defaults?')) return
     if (!session) return
-    
+
     try {
       const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings/reset`, {
         method: 'POST',
@@ -181,7 +181,7 @@ export default function AdminSystemTab() {
       if (activeTab === 'overview') fetchSystemData()
       if (activeTab === 'logs') fetchLogs()
     }, 10000)
-    
+
     return () => clearInterval(interval)
   }, [activeTab, fetchSystemData, fetchLogs])
 
@@ -275,7 +275,7 @@ export default function AdminSystemTab() {
               onRefresh={fetchLogs}
             />
           )}
-          
+
           {activeTab === 'ai' && (
             <AISettingsTab
               aiSettings={aiSettings}
@@ -339,15 +339,15 @@ function OverviewTab({ gpuData, healthData, queueData }) {
             <Clock size={18} /> Queue Summary
           </h3>
           <div style={{ display: 'flex', gap: '1rem' }}>
-            <StatCard 
-              label="Running" 
-              value={queueData.running_count || 0} 
-              color="#10b981" 
+            <StatCard
+              label="Running"
+              value={queueData.running_count || 0}
+              color="#10b981"
             />
-            <StatCard 
-              label="Pending" 
-              value={queueData.pending_count || 0} 
-              color="#f59e0b" 
+            <StatCard
+              label="Pending"
+              value={queueData.pending_count || 0}
+              color="#f59e0b"
             />
           </div>
         </section>
@@ -371,7 +371,7 @@ function OverviewTab({ gpuData, healthData, queueData }) {
 function GpuCard({ gpu }) {
   const memPercent = gpu.memory_percent || 0
   const tempColor = gpu.temperature_c > 80 ? '#ef4444' : gpu.temperature_c > 65 ? '#f59e0b' : '#10b981'
-  
+
   return (
     <div style={{
       background: 'var(--bg-card)',
@@ -389,7 +389,7 @@ function GpuCard({ gpu }) {
           <span style={{ fontWeight: 600 }}>{gpu.temperature_c}°C</span>
         </div>
       </div>
-      
+
       {/* VRAM Bar */}
       <div style={{ marginBottom: '0.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
@@ -405,7 +405,7 @@ function GpuCard({ gpu }) {
           }} />
         </div>
       </div>
-      
+
       {/* Utilization */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
         <span style={{ color: 'var(--text-muted)' }}>Utilization</span>
@@ -417,7 +417,7 @@ function GpuCard({ gpu }) {
 
 function ServiceCard({ name, info }) {
   const isOnline = info.status === 'online'
-  
+
   return (
     <div style={{
       background: 'var(--bg-card)',
@@ -447,7 +447,7 @@ function ServiceCard({ name, info }) {
 
 function DiskCard({ name, info }) {
   const percent = info.percent || 0
-  
+
   return (
     <div style={{
       background: 'var(--bg-card)',
@@ -560,9 +560,9 @@ function StatusBadge({ status }) {
     error: { bg: '#ef444420', color: '#ef4444', text: 'Error' },
     timeout: { bg: '#f59e0b20', color: '#f59e0b', text: 'Timeout' },
   }
-  
+
   const style = colors[status] || colors.error
-  
+
   return (
     <span style={{
       padding: '0.25rem 0.75rem',
@@ -618,7 +618,7 @@ function JobCard({ job, status }) {
 
 function LogsTab({ logsData, selectedService, onServiceChange, onRefresh }) {
   const services = ['oelala-backend', 'comfyui', 'oelala-storage', 'oelala-frontend']
-  
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Service Selector */}
@@ -658,11 +658,11 @@ function LogsTab({ logsData, selectedService, onServiceChange, onRefresh }) {
       }}>
         {logsData?.lines?.length > 0 ? (
           logsData.lines.map((line, idx) => (
-            <div key={idx} style={{ 
-              whiteSpace: 'pre-wrap', 
+            <div key={idx} style={{
+              whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
-              color: line.includes('ERROR') ? '#ef4444' : 
-                     line.includes('WARNING') ? '#f59e0b' : 
+              color: line.includes('ERROR') ? '#ef4444' :
+                     line.includes('WARNING') ? '#f59e0b' :
                      line.includes('INFO') ? '#10b981' : '#d4d4d4',
             }}>
               {line}

@@ -13,9 +13,9 @@ Works with the existing user_media table schema from 006_user_media.sql:
 
 Usage:
     from media_service import MediaService
-    
+
     service = MediaService()
-    
+
     # Upload with metadata sync
     media = await service.upload(
         user_id="uuid-here",
@@ -24,10 +24,10 @@ Usage:
         generation_type="t2v",
         prompt="A cat dancing"
     )
-    
+
     # Get signed URL for sharing
     url = service.generate_signed_url(media.storage_path, expires_in=3600)
-    
+
     # List user's media
     media_list = await service.list_user_media(user_id, media_type="video")
 """
@@ -51,9 +51,9 @@ logger = logging.getLogger(__name__)
 # Retention policy: days until media expires per tier
 # Storage GC will clean up files after X-Expires-At passes
 TIER_RETENTION_DAYS: Dict[str, int] = {
-    "free": 30,   # 1 month
-    "pro": 90,    # 3 months
-    "vip": 365,   # 1 year
+    "free": 30,  # 1 month
+    "pro": 90,  # 3 months
+    "vip": 365,  # 1 year
 }
 
 DEFAULT_RETENTION_DAYS = 30  # Fallback for unknown tiers
@@ -62,6 +62,7 @@ DEFAULT_RETENTION_DAYS = 30  # Fallback for unknown tiers
 @dataclass
 class MediaRecord:
     """Represents a media file record (matches 006_user_media.sql schema)."""
+
     id: str
     user_id: str
     storage_path: str  # Full path: users/{user_id}/videos/filename.mp4
@@ -72,7 +73,7 @@ class MediaRecord:
     is_published: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     @property
     def bucket(self) -> str:
         """Extract bucket from storage_path (first two segments: users/{user_id})."""
@@ -80,52 +81,52 @@ class MediaRecord:
         if len(parts) >= 2:
             return f"{parts[0]}/{parts[1]}"
         return parts[0] if parts else ""
-    
+
     @property
     def key(self) -> str:
         """Extract key from storage_path (everything after bucket)."""
         parts = self.storage_path.split("/", 2)
         return parts[2] if len(parts) > 2 else ""
-    
+
     @property
     def filename(self) -> str:
         """Extract filename from storage_path."""
         return Path(self.storage_path).name
-    
+
     @property
     def storage_url(self) -> str:
         """URL path to access via oelala-storage."""
         return f"/{self.storage_path}"
-    
+
     # Convenience accessors for metadata
     @property
     def prompt(self) -> Optional[str]:
         return self.metadata.get("prompt") if self.metadata else None
-    
+
     @property
     def model_name(self) -> Optional[str]:
         return self.metadata.get("model_name") if self.metadata else None
-    
+
     @property
     def generation_type(self) -> Optional[str]:
         return self.metadata.get("generation_type") if self.metadata else None
-    
+
     @property
     def width(self) -> Optional[int]:
         return self.metadata.get("width") if self.metadata else None
-    
+
     @property
     def height(self) -> Optional[int]:
         return self.metadata.get("height") if self.metadata else None
-    
+
     @property
     def duration_seconds(self) -> Optional[float]:
         return self.metadata.get("duration_seconds") if self.metadata else None
-    
+
     @property
     def size_bytes(self) -> Optional[int]:
         return self.metadata.get("size_bytes") if self.metadata else None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""
         return {
@@ -155,7 +156,7 @@ class MediaService:
     """
     Unified media service that syncs oelala-storage with Supabase metadata.
     """
-    
+
     def __init__(
         self,
         storage_url: Optional[str] = None,
@@ -166,7 +167,7 @@ class MediaService:
     ):
         """
         Initialize media service.
-        
+
         Args:
             storage_url: oelala-storage base URL (default: env STORAGE_URL or localhost:7990)
             storage_token: oelala-storage API token (default: env STORAGE_API_KEY)
@@ -174,40 +175,44 @@ class MediaService:
             supabase_key: Supabase service key (default: env SUPABASE_SERVICE_KEY)
             signing_secret: Secret for generating signed URLs (default: env MEDIA_SIGNING_SECRET)
         """
-        self.storage_url = (storage_url or os.getenv("STORAGE_URL", "http://localhost:7990")).rstrip("/")
+        self.storage_url = (
+            storage_url or os.getenv("STORAGE_URL", "http://localhost:7990")
+        ).rstrip("/")
         self.storage_token = storage_token or os.getenv("STORAGE_API_KEY")
         self.supabase_url = (supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
         self.supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
-        self.signing_secret = signing_secret or os.getenv("MEDIA_SIGNING_SECRET", "change-me-in-production")
-        
+        self.signing_secret = signing_secret or os.getenv(
+            "MEDIA_SIGNING_SECRET", "change-me-in-production"
+        )
+
         self._http_client: Optional[httpx.AsyncClient] = None
-    
+
     @property
     def http_client(self) -> httpx.AsyncClient:
         """Lazy-init async HTTP client."""
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=60.0)
         return self._http_client
-    
+
     async def close(self):
         """Close HTTP client."""
         if self._http_client:
             await self._http_client.aclose()
             self._http_client = None
-    
+
     async def __aenter__(self):
         return self
-    
+
     async def __aexit__(self, *args):
         await self.close()
-    
+
     def _storage_headers(self) -> Dict[str, str]:
         """Headers for oelala-storage requests."""
         headers: Dict[str, str] = {}
         if self.storage_token:
             headers["Authorization"] = f"Bearer {self.storage_token}"
         return headers
-    
+
     def _supabase_headers(self) -> Dict[str, str]:
         """Headers for Supabase requests."""
         if not self.supabase_key:
@@ -218,55 +223,57 @@ class MediaService:
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         }
-    
+
     async def get_user_tier(self, user_id: str) -> str:
         """
         Fetch user's tier from Supabase user_credits table.
-        
+
         Args:
             user_id: User's UUID
-            
+
         Returns:
             Tier string: 'free', 'pro', or 'vip'
         """
         if not self.supabase_url or not self.supabase_key:
             logger.warning("⚠️ Supabase not configured, using default tier")
             return "free"
-        
+
         try:
             resp = await self.http_client.get(
                 f"{self.supabase_url}/rest/v1/user_credits",
                 params={"user_id": f"eq.{user_id}", "select": "tier"},
                 headers=self._supabase_headers(),
             )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
                 if data and isinstance(data, list) and len(data) > 0:
                     tier = data[0].get("tier", "free")
                     logger.debug(f"👤 User {user_id[:8]}... tier: {tier}")
                     return tier
-            
-            logger.debug(f"👤 No tier found for user {user_id[:8]}..., defaulting to free")
+
+            logger.debug(
+                f"👤 No tier found for user {user_id[:8]}..., defaulting to free"
+            )
             return "free"
-            
+
         except Exception as e:
             logger.warning(f"⚠️ Failed to fetch user tier: {e}")
             return "free"
-    
+
     def calculate_expires_at(self, tier: str) -> datetime:
         """
         Calculate expiration datetime based on user tier.
-        
+
         Args:
             tier: User tier ('free', 'pro', 'vip')
-            
+
         Returns:
             Datetime when the file should expire
         """
         retention_days = TIER_RETENTION_DAYS.get(tier, DEFAULT_RETENTION_DAYS)
         return datetime.utcnow() + timedelta(days=retention_days)
-    
+
     def _detect_media_type(self, mime_type: str) -> str:
         """Detect media type from MIME type."""
         if mime_type.startswith("video/"):
@@ -276,16 +283,18 @@ class MediaService:
         elif mime_type.startswith("audio/"):
             return "audio"
         return "video"  # Default to video for unknown
-    
-    def _generate_storage_path(self, user_id: str, filename: str, media_type: str) -> str:
+
+    def _generate_storage_path(
+        self, user_id: str, filename: str, media_type: str
+    ) -> str:
         """Generate storage path for a file."""
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         safe_filename = Path(filename).name.replace(" ", "_")
-        
+
         # Structure: users/{user_id}/{media_type}s/{timestamp}_{filename}
         type_folder = f"{media_type}s"  # videos, images, audios
         return f"users/{user_id}/{type_folder}/{timestamp}_{safe_filename}"
-    
+
     async def upload(
         self,
         user_id: str,
@@ -304,7 +313,7 @@ class MediaService:
     ) -> MediaRecord:
         """
         Upload a file to storage and create Supabase metadata record.
-        
+
         Args:
             user_id: User's UUID
             file_data: File content (bytes or Path)
@@ -319,7 +328,7 @@ class MediaService:
             duration_seconds: Duration for video/audio
             is_nsfw: Whether content is NSFW
             user_tier: User tier for retention policy (auto-fetched if not provided)
-        
+
         Returns:
             MediaRecord with full metadata
         """
@@ -328,39 +337,41 @@ class MediaService:
             data = file_data.read_bytes()
         else:
             data = file_data
-        
+
         # Auto-detect MIME type
         if not mime_type:
             guessed_type, _ = mimetypes.guess_type(filename)
             mime_type = guessed_type or "application/octet-stream"
-        
+
         media_type = self._detect_media_type(mime_type)
         storage_path = self._generate_storage_path(user_id, filename, media_type)
-        
+
         # Get user tier for retention policy if not provided
         if user_tier is None:
             user_tier = await self.get_user_tier(user_id)
-        
+
         # Calculate expiration based on tier
         expires_at = self.calculate_expires_at(user_tier)
         retention_days = TIER_RETENTION_DAYS.get(user_tier, DEFAULT_RETENTION_DAYS)
-        
+
         # 1. Upload to oelala-storage with retention header
-        logger.info(f"📤 Uploading {filename} to {storage_path} (tier={user_tier}, expires={expires_at.date()})")
-        
+        logger.info(
+            f"📤 Uploading {filename} to {storage_path} (tier={user_tier}, expires={expires_at.date()})"
+        )
+
         upload_url = f"{self.storage_url}/{storage_path}"
         headers = self._storage_headers()
         headers["Content-Type"] = mime_type
         headers["X-Expires-At"] = expires_at.isoformat() + "Z"  # RFC3339 format
-        
+
         resp = await self.http_client.put(upload_url, content=data, headers=headers)
         resp.raise_for_status()
-        
+
         storage_result = resp.json()
         storage_hash = storage_result.get("hash")
-        
+
         logger.info(f"✅ Uploaded to storage: {storage_hash}")
-        
+
         # Build metadata JSONB
         metadata: Dict[str, Any] = {
             "mime_type": mime_type,
@@ -379,16 +390,16 @@ class MediaService:
             metadata["height"] = height
         if duration_seconds:
             metadata["duration_seconds"] = duration_seconds
-        
+
         # Add retention info to metadata
         metadata["tier"] = user_tier
         metadata["retention_days"] = retention_days
         metadata["expires_at"] = expires_at.isoformat() + "Z"
-        
+
         # 2. Create Supabase metadata record
         record_id: Optional[str] = None
         created_at: Optional[str] = None
-        
+
         if self.supabase_url and self.supabase_key:
             record_data = {
                 "user_id": user_id,
@@ -399,13 +410,13 @@ class MediaService:
                 "is_nsfw": is_nsfw,
                 "is_published": False,
             }
-            
+
             supabase_resp = await self.http_client.post(
                 f"{self.supabase_url}/rest/v1/user_media",
                 json=record_data,
                 headers=self._supabase_headers(),
             )
-            
+
             if supabase_resp.status_code == 201:
                 result = supabase_resp.json()
                 if isinstance(result, list) and result:
@@ -418,17 +429,23 @@ class MediaService:
                 logger.error(f"❌ Supabase insert failed: {supabase_resp.text}")
         else:
             # No Supabase, generate local ID
-            record_id = storage_hash[:16] if storage_hash else hashlib.md5(data).hexdigest()[:16]
+            record_id = (
+                storage_hash[:16]
+                if storage_hash
+                else hashlib.md5(data).hexdigest()[:16]
+            )
             created_at = datetime.utcnow().isoformat()
             logger.warning("⚠️ Supabase not configured, metadata not synced")
-        
+
         parsed_created_at = None
         if created_at:
             try:
-                parsed_created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                parsed_created_at = datetime.fromisoformat(
+                    created_at.replace("Z", "+00:00")
+                )
             except (ValueError, AttributeError):
                 pass
-        
+
         return MediaRecord(
             id=record_id or "",
             user_id=user_id,
@@ -440,24 +457,24 @@ class MediaService:
             is_published=False,
             created_at=parsed_created_at,
         )
-    
+
     async def get(self, media_id: str) -> Optional[MediaRecord]:
         """Get media record by ID."""
         if not self.supabase_url:
             return None
-        
+
         resp = await self.http_client.get(
             f"{self.supabase_url}/rest/v1/user_media",
             params={"id": f"eq.{media_id}", "select": "*"},
             headers=self._supabase_headers(),
         )
-        
+
         if resp.status_code == 200:
             data = resp.json()
             if data and isinstance(data, list) and len(data) > 0:
                 return self._record_from_dict(data[0])
         return None
-    
+
     async def list_user_media(
         self,
         user_id: str,
@@ -469,7 +486,7 @@ class MediaService:
     ) -> List[MediaRecord]:
         """
         List user's media files.
-        
+
         Args:
             user_id: User's UUID
             media_type: Filter by type (video, image, audio)
@@ -480,7 +497,7 @@ class MediaService:
         """
         if not self.supabase_url:
             return []
-        
+
         params: Dict[str, Any] = {
             "user_id": f"eq.{user_id}",
             "select": "*",
@@ -488,24 +505,24 @@ class MediaService:
             "offset": offset,
             "order": f"{order_by}.{'asc' if ascending else 'desc'}",
         }
-        
+
         if media_type:
             params["media_type"] = f"eq.{media_type}"
-        
+
         resp = await self.http_client.get(
             f"{self.supabase_url}/rest/v1/user_media",
             params=params,
             headers=self._supabase_headers(),
         )
-        
+
         if resp.status_code == 200:
             return [self._record_from_dict(item) for item in resp.json()]
         return []
-    
+
     async def delete(self, media_id: str, hard_delete: bool = False) -> bool:
         """
         Delete media file.
-        
+
         Args:
             media_id: Media record ID
             hard_delete: If True, delete from storage too. Otherwise just remove record.
@@ -513,15 +530,17 @@ class MediaService:
         record = await self.get(media_id)
         if not record:
             return False
-        
+
         if hard_delete:
             # Delete from storage
             delete_url = f"{self.storage_url}/{record.storage_path}"
             try:
-                await self.http_client.delete(delete_url, headers=self._storage_headers())
+                await self.http_client.delete(
+                    delete_url, headers=self._storage_headers()
+                )
             except Exception as e:
                 logger.warning(f"Failed to delete from storage: {e}")
-        
+
         # Delete from Supabase
         if self.supabase_url:
             await self.http_client.delete(
@@ -529,9 +548,9 @@ class MediaService:
                 params={"id": f"eq.{media_id}"},
                 headers=self._supabase_headers(),
             )
-        
+
         return True
-    
+
     def generate_signed_url(
         self,
         storage_path: str,
@@ -539,38 +558,38 @@ class MediaService:
     ) -> str:
         """
         Generate a signed URL for temporary public access.
-        
+
         The signature is HMAC-SHA256(path:expires, secret) encoded as hex.
         This matches the server-side verification in oelala-storage.
-        
+
         Args:
             storage_path: Full storage path (e.g., users/{user_id}/videos/file.mp4)
             expires_in: Expiration time in seconds (default 1 hour)
-        
+
         Returns:
             Signed URL that can be used without authentication
         """
         expires_at = int(time.time()) + expires_in
         path = f"/{storage_path}"
-        
+
         # Create signature: HMAC-SHA256(path:expires, secret) as hex
         message = f"{path}:{expires_at}"
         signature = hmac.new(
-            self.signing_secret.encode(),
-            message.encode(),
-            hashlib.sha256
+            self.signing_secret.encode(), message.encode(), hashlib.sha256
         ).hexdigest()
-        
+
         return f"{self.storage_url}{path}?expires={expires_at}&sig={signature}"
-    
-    async def get_signed_url(self, media_id: str, expires_in: int = 3600) -> Optional[str]:
+
+    async def get_signed_url(
+        self, media_id: str, expires_in: int = 3600
+    ) -> Optional[str]:
         """
         Get signed URL for a media record.
-        
+
         Args:
             media_id: Media record ID
             expires_in: Expiration time in seconds
-        
+
         Returns:
             Signed URL or None if record not found
         """
@@ -578,14 +597,14 @@ class MediaService:
         if not record:
             return None
         return self.generate_signed_url(record.storage_path, expires_in)
-    
+
     async def get_user_quota(self, user_id: str) -> Dict[str, Any]:
         """
         Get storage quota information for a user from oelala-storage.
-        
+
         Args:
             user_id: User's UUID
-            
+
         Returns:
             Dict with quota info:
             - used_bytes: Current storage used
@@ -601,7 +620,7 @@ class MediaService:
                 f"{self.storage_url}/buckets/{user_id}",
                 headers=self._storage_headers(),
             )
-            
+
             if resp.status_code == 404:
                 # No bucket exists yet - return zeros
                 return {
@@ -615,14 +634,14 @@ class MediaService:
                     "human_used": "0 B",
                     "human_limit": "10 GB",
                 }
-            
+
             resp.raise_for_status()
             data = resp.json()
-            
+
             used = data.get("used_bytes", 0)
             quota = data.get("quota_bytes", 1)
             percent = round((used / quota) * 100, 1) if quota > 0 else 0
-            
+
             return {
                 "used_bytes": used,
                 "quota_bytes": quota,
@@ -634,37 +653,41 @@ class MediaService:
                 "human_used": self._human_size(used),
                 "human_limit": self._human_size(quota),
             }
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to get quota for {user_id}: {e}")
             raise
-    
+
     @staticmethod
     def _human_size(size_bytes: int) -> str:
         """Convert bytes to human-readable format."""
         for unit in ["B", "KB", "MB", "GB", "TB"]:
             if size_bytes < 1024:
-                return f"{size_bytes:.1f} {unit}" if size_bytes != int(size_bytes) else f"{int(size_bytes)} {unit}"
+                return (
+                    f"{size_bytes:.1f} {unit}"
+                    if size_bytes != int(size_bytes)
+                    else f"{int(size_bytes)} {unit}"
+                )
             size_bytes /= 1024
         return f"{size_bytes:.1f} PB"
-    
+
     def _record_from_dict(self, data: Dict[str, Any]) -> MediaRecord:
         """Create MediaRecord from database dictionary."""
         created_at = data.get("created_at")
         updated_at = data.get("updated_at")
-        
+
         if created_at and isinstance(created_at, str):
             try:
                 created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except ValueError:
                 created_at = None
-        
+
         if updated_at and isinstance(updated_at, str):
             try:
                 updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except ValueError:
                 updated_at = None
-        
+
         return MediaRecord(
             id=data.get("id", ""),
             user_id=data.get("user_id", ""),

@@ -483,7 +483,7 @@ CRITICAL: Order determines which GPU gets model FIRST!
 │
 ├── cuda:1,11gb;cuda:0,15gb;cpu,*
 │   ├── 161 frames (~10 sec): ✅ ~22GB SAFE
-│   ├── 241 frames (~15 sec): ✅ ~24GB SAFE  
+│   ├── 241 frames (~15 sec): ✅ ~24GB SAFE
 │   ├── 321 frames (~20 sec): ✅ ~26GB SAFE ← RECOMMENDED MAX
 │   ├── 341 frames (~21 sec): ✅ ~27GB TIGHT
 │   ├── 351-355 frames: ⚠️ Works sometimes, OOM risk
@@ -1055,7 +1055,7 @@ TTS Modes
 {
   "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
   "compute_device": "cuda:0",
-  "donor_device": "cuda:1", 
+  "donor_device": "cuda:1",
   "virtual_vram_gb": 16,
   "eject_models": true
 }
@@ -1091,7 +1091,7 @@ TTS Modes
 
 ```
 ⚡ LIGHTNING (5-10s)     → DreamShaper Lightning @ 8 steps
-🏃 FAST (15-30s)         → SDXL models @ 25 steps  
+🏃 FAST (15-30s)         → SDXL models @ 25 steps
 🐢 QUALITY (60-120s)     → Flux models @ 20 steps
 ```
 

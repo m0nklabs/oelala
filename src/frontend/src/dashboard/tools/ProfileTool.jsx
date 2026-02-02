@@ -13,7 +13,7 @@ export default function ProfileTool() {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [stats, setStats] = useState(null)
-  
+
   // Profile form state
   const [profile, setProfile] = useState({
     username: '',
@@ -40,7 +40,7 @@ export default function ProfileTool() {
       const res = await fetch(`${BACKEND_BASE}/api/profile/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      
+
       if (res.ok) {
         const data = await res.json()
         setProfile({
@@ -76,12 +76,12 @@ export default function ProfileTool() {
 
   async function handleSave() {
     if (!token) return
-    
+
     try {
       setSaving(true)
       setError(null)
       setSuccess(null)
-      
+
       const res = await fetch(`${BACKEND_BASE}/api/profile/me`, {
         method: 'PUT',
         headers: {
@@ -90,12 +90,12 @@ export default function ProfileTool() {
         },
         body: JSON.stringify(profile),
       })
-      
+
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.detail || 'Failed to save profile')
       }
-      
+
       setSuccess('Profile saved successfully!')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
@@ -237,7 +237,7 @@ export default function ProfileTool() {
           {/* Basic Info */}
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>Basic Information</h3>
-            
+
             <div style={styles.formGroup}>
               <label style={styles.label}>Username</label>
               <input
@@ -296,7 +296,7 @@ export default function ProfileTool() {
               <Link2 size={16} />
               Social Links
             </h3>
-            
+
             {socialPlatforms.map(({ key, label, icon: Icon, placeholder }) => (
               <div key={key} style={styles.socialRow}>
                 <Icon size={16} style={{ opacity: 0.6, flexShrink: 0 }} />

@@ -47,11 +47,11 @@ class WebhookEvent:
 
 # Retry configuration (exponential backoff)
 RETRY_DELAYS = [
-    10,      # Retry 1: 10 seconds
-    60,      # Retry 2: 1 minute
-    300,     # Retry 3: 5 minutes
-    1800,    # Retry 4: 30 minutes
-    3600,    # Retry 5: 1 hour
+    10,  # Retry 1: 10 seconds
+    60,  # Retry 2: 1 minute
+    300,  # Retry 3: 5 minutes
+    1800,  # Retry 4: 30 minutes
+    3600,  # Retry 5: 1 hour
 ]
 MAX_ATTEMPTS = len(RETRY_DELAYS) + 1  # Initial attempt + retries
 
@@ -212,8 +212,7 @@ class WebhookService:
                 # Filter by event type if specified
                 if event_type:
                     webhooks = [
-                        w for w in webhooks
-                        if event_type in (w.get("events") or [])
+                        w for w in webhooks if event_type in (w.get("events") or [])
                     ]
 
                 debug_log(f"Found {len(webhooks)} webhooks for user {user_id}")
@@ -366,12 +365,16 @@ class WebhookService:
                     }
 
                     if result["status"] == "success":
-                        update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
+                        update_data["delivered_at"] = datetime.now(
+                            timezone.utc
+                        ).isoformat()
                         update_data["next_retry_at"] = None
                     elif result["status"] == "failed" and attempt < MAX_ATTEMPTS:
                         # Schedule retry
                         delay = RETRY_DELAYS[attempt - 1]
-                        next_retry = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                        next_retry = datetime.now(timezone.utc) + timedelta(
+                            seconds=delay
+                        )
                         update_data["status"] = "retrying"
                         update_data["next_retry_at"] = next_retry.isoformat()
 
@@ -405,11 +408,15 @@ class WebhookService:
                     }
 
                     if result["status"] == "success":
-                        insert_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
+                        insert_data["delivered_at"] = datetime.now(
+                            timezone.utc
+                        ).isoformat()
                     elif result["status"] == "failed" and attempt < MAX_ATTEMPTS:
                         # Schedule retry
                         delay = RETRY_DELAYS[attempt - 1]
-                        next_retry = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                        next_retry = datetime.now(timezone.utc) + timedelta(
+                            seconds=delay
+                        )
                         insert_data["status"] = "retrying"
                         insert_data["next_retry_at"] = next_retry.isoformat()
 
@@ -455,15 +462,13 @@ class WebhookService:
         payload = WebhookPayload(event_type=event_type, data=data)
 
         # Deliver to all webhooks concurrently
-        tasks = [
-            self.deliver_webhook(webhook, payload)
-            for webhook in webhooks
-        ]
+        tasks = [self.deliver_webhook(webhook, payload) for webhook in webhooks]
 
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             success_count = sum(
-                1 for r in results
+                1
+                for r in results
                 if isinstance(r, dict) and r.get("status") == "success"
             )
             logger.info(
@@ -499,7 +504,9 @@ class WebhookService:
                 )
 
                 if resp.status_code != 200:
-                    logger.warning(f"Failed to fetch pending retries: {resp.status_code}")
+                    logger.warning(
+                        f"Failed to fetch pending retries: {resp.status_code}"
+                    )
                     return
 
                 deliveries = resp.json()
@@ -549,7 +556,9 @@ class WebhookService:
             webhooks = resp.json()
             if not webhooks:
                 # Webhook was disabled or deleted, mark as failed
-                await self._mark_delivery_failed(client, delivery_id, "Webhook disabled")
+                await self._mark_delivery_failed(
+                    client, delivery_id, "Webhook disabled"
+                )
                 return
 
             webhook = webhooks[0]
@@ -643,6 +652,7 @@ webhook_service = WebhookService()
 # ==============================================================================
 # Helper functions for job event integration
 # ==============================================================================
+
 
 async def trigger_job_queued(
     user_id: str,
