@@ -1,0 +1,14 @@
+### Added
+- Content moderation system with user reporting and admin review queue
+- `POST /api/report` endpoint for users to report published content
+- `GET /api/report/reasons` endpoint listing valid report categories
+- Admin moderation queue at `/api/admin/moderation/queue` with report grouping
+- Admin moderation actions: approve, reject, hide, unhide, warn, dismiss
+- Bulk moderation actions for batch review (`/api/admin/moderation/bulk-action`)
+- Moderation audit log at `/api/admin/moderation/log/actions`
+- Moderation statistics endpoint at `/api/admin/moderation/stats`
+- Report button (Flag icon) in MediaDetailModal with reason selection modal
+- AdminModerationTab in admin panel: stats cards, queue view, media preview, bulk ops, audit log
+- Auto-flag content with 3+ pending reports
+- Underage content reports immediately hide content (urgent response)
+- Database migration `010_content_moderation.sql`: `content_reports` and `moderation_actions` tables with RLS policies
