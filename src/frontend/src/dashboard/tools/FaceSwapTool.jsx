@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import {
   User, Users, Upload, Loader2, Download, AlertCircle,
-  Smile, RefreshCw, Trash2, Plus, Check, Image as ImageIcon
+  Smile, RefreshCw, Trash2, Plus, Check, Image as ImageIcon,
+  Cpu, Zap, Clock, Copy, CheckCheck
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,33 +13,44 @@ import { useAuth } from '../../contexts/AuthContext'
 
 export default function FaceSwapTool({ onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
-  const [tab, setTab] = useState('swap') // 'swap' | 'profiles'
+  const [tab, setTab] = useState('swap') // 'swap' | 'profiles' | 'train'
 
   return (
     <div className="space-y-4">
       {/* Tab pills */}
-      <div className="flex gap-2 p-1 bg-gray-800 rounded-lg">
+      <div className="flex gap-1 p-1 bg-gray-800 rounded-lg">
         <button
           onClick={() => setTab('swap')}
-          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
             tab === 'swap'
               ? 'bg-purple-600 text-white'
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
-          <RefreshCw className="w-4 h-4" />
-          Face Swap
+          <RefreshCw className="w-3.5 h-3.5" />
+          Swap
         </button>
         <button
           onClick={() => setTab('profiles')}
-          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
             tab === 'profiles'
               ? 'bg-purple-600 text-white'
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
-          <Users className="w-4 h-4" />
-          Face Profiles
+          <Users className="w-3.5 h-3.5" />
+          Profiles
+        </button>
+        <button
+          onClick={() => setTab('train')}
+          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+            tab === 'train'
+              ? 'bg-purple-600 text-white'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          Train LoRA
         </button>
       </div>
 
@@ -47,6 +59,9 @@ export default function FaceSwapTool({ onJobSubmitted }) {
       )}
       {tab === 'profiles' && (
         <ProfilesPanel user={user} requestLogin={requestLogin} />
+      )}
+      {tab === 'train' && (
+        <TrainLoraPanel user={user} requestLogin={requestLogin} />
       )}
 
       {/* Ethical use notice */}
@@ -681,6 +696,310 @@ function ProfileCard({ profile, onDelete }) {
       >
         <Trash2 className="w-4 h-4" />
       </button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TrainLoraPanel
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STATUS_COLORS = {
+  pending: 'text-yellow-400',
+  running: 'text-blue-400',
+  done: 'text-green-400',
+  failed: 'text-red-400',
+  cancelled: 'text-gray-400',
+}
+
+const STATUS_ICONS = {
+  pending: Clock,
+  running: Loader2,
+  done: Check,
+  failed: AlertCircle,
+  cancelled: AlertCircle,
+}
+
+function TrainLoraPanel({ user, requestLogin }) {
+  const [images, setImages] = useState([])
+  const [previews, setPreviews] = useState([])
+  const [name, setName] = useState('')
+  const [steps, setSteps] = useState(1000)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+  const [jobs, setJobs] = useState([])
+  const [loras, setLoras] = useState([])
+  const [copiedTrigger, setCopiedTrigger] = useState(null)
+
+  const fileInputRef = useRef(null)
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const [jobsRes, lorasRes] = await Promise.all([
+        fetch(`${BACKEND_BASE}/api/face-train`),
+        fetch(`${BACKEND_BASE}/api/face-train/loras`),
+      ])
+      const [jobsData, lorasData] = await Promise.all([jobsRes.json(), lorasRes.json()])
+      setJobs((jobsData.jobs || []).slice().reverse()) // newest first
+      setLoras(lorasData.loras || [])
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    loadStatus()
+    // Poll while any job is running or pending
+    const interval = setInterval(() => {
+      loadStatus()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [loadStatus])
+
+  const handleImagePick = (e) => {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
+    setImages(prev => [...prev, ...files])
+    setPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const removeImage = (idx) => {
+    setImages(prev => prev.filter((_, i) => i !== idx))
+    setPreviews(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleSubmit = async () => {
+    if (!user) { requestLogin('Log in om een face LoRA te trainen'); return }
+    if (!name.trim()) { setError('Name is required'); return }
+    if (images.length < 2) { setError('Upload at least 2 reference photos'); return }
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('name', name.trim())
+      fd.append('steps', String(steps))
+      images.forEach(img => fd.append('images', img))
+
+      const res = await fetch(`${BACKEND_BASE}/api/face-train`, { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Start failed')
+
+      setName('')
+      setImages([])
+      setPreviews([])
+      loadStatus()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleCancel = async (jobId) => {
+    await fetch(`${BACKEND_BASE}/api/face-train/${jobId}`, { method: 'DELETE' })
+    loadStatus()
+  }
+
+  const copyTrigger = (trigger) => {
+    navigator.clipboard.writeText(trigger)
+    setCopiedTrigger(trigger)
+    setTimeout(() => setCopiedTrigger(null), 2000)
+  }
+
+  const triggerPreview = name.trim()
+    ? `ohwx_${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+    : null
+
+  return (
+    <div className="space-y-5">
+      {/* Train new LoRA form */}
+      <div className="border border-purple-700/50 bg-gray-800/50 rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-purple-400" />
+          <h3 className="text-sm font-semibold text-gray-200">Train New Face LoRA</h3>
+        </div>
+        <p className="text-xs text-gray-400">
+          Trains a Dreambooth-style SDXL LoRA from your reference photos.
+          Use the trigger word in any SDXL prompt to generate images with this person's face.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Person Name *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. John Doe"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
+            />
+            {triggerPreview && (
+              <p className="text-xs text-purple-400 mt-1">Trigger: <code>{triggerPreview}</code></p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Training Steps: <strong className="text-gray-200">{steps}</strong>
+            </label>
+            <input
+              type="range"
+              min={500}
+              max={2000}
+              step={100}
+              value={steps}
+              onChange={e => setSteps(Number(e.target.value))}
+              className="w-full accent-purple-500"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-0.5">
+              <span>500 (fast)</span>
+              <span>2000 (detailed)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Photo upload */}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Reference Photos * ({images.length} selected)</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {previews.map((url, idx) => (
+              <div key={idx} className="relative">
+                <img src={url} alt="" className="w-14 h-14 object-cover rounded border border-gray-600" />
+                <button
+                  onClick={() => removeImage(idx)}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700"
+                >
+                  <Trash2 className="w-2.5 h-2.5 text-white" />
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-14 h-14 border-2 border-dashed border-gray-600 rounded flex items-center justify-center hover:border-purple-500 transition-colors"
+            >
+              <Plus className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImagePick} className="hidden" />
+          <p className="text-xs text-gray-500">Tip: 10–20 varied photos (angles, lighting, expressions) give the best results.</p>
+        </div>
+
+        {error && (
+          <div className="p-2 bg-red-900/50 border border-red-700 rounded text-red-200 text-xs">{error}</div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !name.trim() || images.length < 2}
+          className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded font-medium text-sm flex items-center justify-center gap-2"
+        >
+          {submitting
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting...</>
+            : <><Zap className="w-4 h-4" /> Start Training (~{Math.ceil(steps / 60)} min)</>}
+        </button>
+      </div>
+
+      {/* Training jobs */}
+      {jobs.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Training Jobs</h4>
+          {jobs.map(job => {
+            const progress = job.steps_total > 0 ? Math.round((job.steps_done / job.steps_total) * 100) : 0
+            const StatusIcon = STATUS_ICONS[job.status] || Clock
+            return (
+              <div key={job.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <StatusIcon
+                        className={`w-3.5 h-3.5 flex-shrink-0 ${STATUS_COLORS[job.status]} ${
+                          job.status === 'running' ? 'animate-spin' : ''
+                        }`}
+                      />
+                      <span className="text-sm font-medium text-gray-200 truncate">{job.name}</span>
+                      <span className={`text-xs ${STATUS_COLORS[job.status]}`}>{job.status}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      trigger: <code className="text-purple-300">{job.trigger}</code>
+                      {' · '}{job.images_count} photos · {job.steps_total} steps
+                    </div>
+                    {job.status === 'running' && (
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Step {job.steps_done} / {job.steps_total}</span>
+                          <span>{progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-700 rounded-full h-1.5">
+                          <div
+                            className="bg-purple-500 h-1.5 rounded-full transition-all duration-500"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {job.error && (
+                      <div className="text-xs text-red-400 mt-1">{job.error}</div>
+                    )}
+                  </div>
+                  {(job.status === 'pending' || job.status === 'running') && (
+                    <button
+                      onClick={() => handleCancel(job.id)}
+                      className="text-gray-500 hover:text-red-400 flex-shrink-0"
+                      title="Cancel"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Ready LoRAs */}
+      {loras.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Trained LoRAs — Ready to Use</h4>
+          {loras.map(lora => (
+            <div key={lora.filename} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg border border-green-800/40">
+              <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-200 truncate">{lora.filename}</div>
+                <div className="text-xs text-gray-500">{lora.size_mb} MB</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <code className="text-xs text-purple-300 bg-gray-700 px-2 py-1 rounded font-mono">
+                  {lora.trigger}
+                </code>
+                <button
+                  onClick={() => copyTrigger(lora.trigger)}
+                  className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors"
+                  title="Copy trigger word"
+                >
+                  {copiedTrigger === lora.trigger
+                    ? <CheckCheck className="w-3.5 h-3.5 text-green-400" />
+                    : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {jobs.length === 0 && loras.length === 0 && (
+        <div className="flex flex-col items-center justify-center p-8 text-gray-500 gap-3">
+          <Cpu className="w-10 h-10 opacity-30" />
+          <div className="text-center">
+            <p className="text-sm font-medium">No trained LoRAs yet</p>
+            <p className="text-xs mt-1">Fill in the form above to train your first face LoRA</p>
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs text-gray-500 space-y-1">
+        <p>🧠 Base model: JuggernautXL — works with all SDXL generation modes.</p>
+        <p>⏱️ ~{Math.ceil(1000 / 60)} min for 1000 steps · ~{Math.ceil(2000 / 60)} min for 2000 steps (on RTX 5060 Ti).</p>
+        <p>📽️ For video: use the <strong>Lynx / Face Profiles</strong> system instead — face LoRAs don't transfer to Wan2.2.</p>
+      </div>
     </div>
   )
 }

@@ -86,6 +86,13 @@ except ImportError as e:
     print(f"⚠️ face_service import failed (insightface not available?): {e}")
     face_service = None
 
+try:
+    import face_train_service
+    print("✅ face_train_service imported successfully")
+except ImportError as e:
+    print(f"⚠️ face_train_service import failed: {e}")
+    face_train_service = None
+
 # ComfyUI Client for all image/video generation
 try:
     from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
@@ -8518,6 +8525,92 @@ async def face_swap_with_profile(
     except Exception as e:
         logger.error(f"❌ Face swap with profile error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Face LoRA Training endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/face-train")
+async def start_face_training(
+    name: str = Form(...),
+    description: str = Form(""),
+    steps: int = Form(1000),
+    images: list[UploadFile] = File(...),
+):
+    """
+    Start a face LoRA training job.
+
+    Trains a Dreambooth-style SDXL LoRA from uploaded face photos.
+    Training runs in background; poll /api/face-train/{job_id} for status.
+
+    Args:
+        name: Human-readable name (becomes trigger word base, e.g. "John Doe" → ohwx_john_doe)
+        description: Optional description
+        steps: Number of training steps (500–2000; 1000 is a good default)
+        images: 5–20 reference face photos for best results
+    """
+    if not face_train_service:
+        raise HTTPException(status_code=503, detail="face_train_service unavailable")
+
+    if len(images) < 2:
+        raise HTTPException(status_code=400, detail="Upload at least 2 reference photos")
+    if steps < 200 or steps > 3000:
+        raise HTTPException(status_code=400, detail="Steps must be between 200 and 3000")
+
+    try:
+        img_bytes = [await img.read() for img in images]
+        job = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: face_train_service.create_training_job(name, img_bytes, description, steps),
+        )
+        logger.info(f"🎯 Face LoRA training job created: {job['id']} for '{name}'")
+        return job
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Face training create error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/face-train")
+async def list_face_training_jobs():
+    """List all face LoRA training jobs."""
+    if not face_train_service:
+        raise HTTPException(status_code=503, detail="face_train_service unavailable")
+    jobs = face_train_service.list_jobs()
+    return {"jobs": jobs, "total": len(jobs)}
+
+
+@app.get("/api/face-train/loras")
+async def list_face_loras():
+    """List all successfully trained face LoRAs available for use."""
+    if not face_train_service:
+        raise HTTPException(status_code=503, detail="face_train_service unavailable")
+    loras = face_train_service.list_trained_loras()
+    return {"loras": loras, "total": len(loras)}
+
+
+@app.get("/api/face-train/{job_id}")
+async def get_face_training_job(job_id: str):
+    """Get status and progress of a specific training job."""
+    if not face_train_service:
+        raise HTTPException(status_code=503, detail="face_train_service unavailable")
+    job = face_train_service.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return job
+
+
+@app.delete("/api/face-train/{job_id}")
+async def cancel_face_training_job(job_id: str):
+    """Cancel a pending or running training job."""
+    if not face_train_service:
+        raise HTTPException(status_code=503, detail="face_train_service unavailable")
+    cancelled = face_train_service.cancel_job(job_id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found or already finished")
+    return {"status": "cancelled", "job_id": job_id}
 
 
 if __name__ == "__main__":
