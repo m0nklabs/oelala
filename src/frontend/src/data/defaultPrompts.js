@@ -46,8 +46,30 @@ export const SFW_PROMPTS = [
 ]
 
 export const NSFW_PROMPTS = [
-  // These would be adult prompts - only shown when logged in with NSFW enabled
-  // Keeping empty for now - to be populated based on content policy
+  // Sensual / Artistic
+  "A confident woman posing in elegant lingerie, soft studio lighting, silk sheets, artistic boudoir photography style",
+  "A couple sharing an intimate slow dance, close embrace, candlelight atmosphere, romantic mood",
+  "A woman undressing slowly by a rain-streaked window, city lights behind her, cinematic shadows",
+  "Soft romantic scene, two lovers intertwined on white linen, golden hour light, tender intimacy",
+  "A sensual model in sheer fabric, wind blowing softly, dramatic backlit silhouette",
+
+  // Fashion / Adult editorial
+  "High-fashion editorial shoot, model in revealing designer outfit, bold dramatic lighting, fierce energy",
+  "A glamorous woman in a sheer evening gown, champagne glass in hand, rooftop penthouse setting",
+  "Artistic nude photography, female figure, black and white, strong side lighting, museum quality",
+  "A seductive burlesque performer, feather boa, stage lights, confident playful expression",
+
+  // Fantasy / Sci-Fi (adult)
+  "A powerful succubus emerging from smoke, revealing dark fantasy armor, otherworldly glow, fierce eyes",
+  "An ethereal fae queen in minimal gossamer robes, enchanted forest, magic light surrounding her",
+  "A cyberpunk femme fatale in tight tech wear, neon-lit rain-soaked alley, fierce and dangerous",
+  "A warrior goddess, minimal ceremonial armor, mythological setting, wind in her hair, commanding presence",
+
+  // Mood / atmosphere
+  "Two people in post-coital serenity, tangled sheets, morning light, peaceful and intimate",
+  "A woman in a steamy outdoor hot tub, night sky above, relaxed expression, steam rising around her",
+  "A bold confident woman in an open-back dress posing before a hotel mirror, luxury setting",
+  "Vintage Playboy-style centerfold aesthetic, soft-focus 70s lighting, confident relaxed pose, tasteful",
 ]
 
 /**
