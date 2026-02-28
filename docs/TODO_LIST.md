@@ -1,6 +1,36 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-01-15
+> Active development tasks. Updated: 2026-02-28
+
+---
+
+## 🎭 Face System (Active Sprint)
+
+See [docs/FACE_SYSTEM.md](FACE_SYSTEM.md) for full architecture.
+
+### Implementation Status
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Image face swap (direct) | ✅ Done | `/face-swap` endpoint |
+| Image face swap (profile) | ✅ Done | `/face-swap/profile` endpoint |
+| Video face swap (direct) | ✅ Done | `/face-swap-video` endpoint |
+| Video face swap (profile) | ✅ Done | `/face-swap-video/profile` endpoint |
+| Face profiles (create/list/delete) | ✅ Done | `/api/face-profiles` CRUD |
+| Face LoRA training UI | ✅ Done | Tab 3 in FaceSwapTool |
+| FaceSwapTool.jsx (image + video UI) | ✅ Done | 3-tab component |
+| insightface buffalo_l pre-loaded | ✅ Done | CUDA warm |
+
+### Still TODO — Face System
+| Priority | Task | Notes |
+|----------|------|-------|
+| HIGH | Test image swap end-to-end via UI | Needs real photos |
+| HIGH | Test video swap end-to-end via UI | Needs a test video |
+| HIGH | Test face profile create + swap via UI | Multi-photo profile |
+| HIGH | Test LoRA training (200 steps, 2 photos) | `torchao` may need install |
+| MED | `pip install torchao==0.10.0` in gpu venv | Required for ai-toolkit |
+| MED | GFPGAN face enhancement (image quality post-swap) | Separate model needed |
+| MED | Use trained face LoRA in ComfyUI T2I/T2V workflow | Integration missing |
+| LOW | Face swap in generated video (auto after I2V job) | UX feature |
 
 ---
 
