@@ -271,7 +271,7 @@ export default function Dashboard() {
         return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
 
       case TOOL_IDS.IMAGE_TO_TEXT:
-        return wrapWithSuspense(<ImageToTextTool />)
+        return wrapWithSuspense(<ImageToTextTool pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.PROMPT_GENERATOR:
         return wrapWithSuspense(<PromptGeneratorTool />)
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video, Wand2, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, getMediaUrl } from '../../config'
+import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
 import { listUserMedia, listUnifiedMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
@@ -183,7 +184,7 @@ const saveFavorites = (favorites) => {
   }
 }
 
-export default function MyMediaTool({ filter = 'all', selectionMode = false, onSelectItem = null }) {
+export default function MyMediaTool({ filter = 'all', selectionMode = false, onSelectItem = null, onSendToTool = null }) {
   const [mediaList, setMediaList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -203,6 +204,20 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
   const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
   const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
+
+  // "Use in tool" state
+  const [send2ToolLoading, setSend2ToolLoading] = useState(false)
+  const [send2ToolMenu, setSend2ToolMenu] = useState(false)
+  const SEND_TO_TOOLS = [
+    { id: 'image-to-video', label: '🎬 Image to Video' },
+    { id: 'text-to-video',  label: '📝 Text to Video' },
+    { id: 'text-to-image',  label: '🖼️ Text to Image' },
+    { id: 'image-to-image', label: '🔄 Image to Image' },
+    { id: 'image-to-text',  label: '📷 Image to Text' },
+  ]
+
+  // Close the dropdown when the lightbox switches items
+  useEffect(() => { setSend2ToolMenu(false) }, [selectedIndex])
 
   // Admin-specific state
   const [sourceStats, setSourceStats] = useState({}) // { user: 10, generated: 5, ... }
@@ -2030,15 +2045,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   </div>
                 </div>
                 <div className="overlay-buttons">
-                  {item.metadata?.has_metadata && (
-                    <button
-                      className="overlay-btn"
-                      onClick={(e) => handleDownloadMetadata(item, e)}
-                      title="Download metadata JSON"
-                    >
-                      <FileJson size={14} />
-                    </button>
-                  )}
+                  <button
+                    className="overlay-btn"
+                    onClick={(e) => handleDownloadMetadata(item, e)}
+                    title="Download metadata JSON"
+                  >
+                    <FileJson size={14} />
+                  </button>
                   <button
                     className="overlay-btn"
                     onClick={(e) => handleDownload(item, e)}
@@ -2191,15 +2204,13 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   <ImageIcon size={16} />
                 </button>
               )}
-              {selectedItem.metadata?.has_metadata && (
-                <button
-                  className="overlay-btn"
-                  onClick={(e) => handleDownloadMetadata(selectedItem, e)}
-                  title="Download metadata JSON"
-                >
-                  <FileJson size={16} />
-                </button>
-              )}
+              <button
+                className="overlay-btn"
+                onClick={(e) => handleDownloadMetadata(selectedItem, e)}
+                title="Download metadata JSON"
+              >
+                <FileJson size={16} />
+              </button>
               <button
                 className="overlay-btn"
                 onClick={(e) => handleDownload(selectedItem, e)}
@@ -2207,6 +2218,84 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               >
                 <Download size={16} />
               </button>
+              {/* Use in tool button - only if Dashboard provided onSendToTool */}
+              {onSendToTool && (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className="overlay-btn"
+                    disabled={send2ToolLoading}
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      setSend2ToolMenu(prev => !prev)
+                    }}
+                    title="Use in tool"
+                    style={{ background: 'rgba(167,139,250,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Wand2 size={16} />
+                    <ChevronDown size={12} />
+                  </button>
+                  {send2ToolMenu && (
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        position: 'absolute',
+                        bottom: '110%',
+                        right: 0,
+                        background: '#1e1e2e',
+                        border: '1px solid #333',
+                        borderRadius: '8px',
+                        minWidth: '170px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        zIndex: 10,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {send2ToolLoading && (
+                        <div style={{ padding: '10px 14px', color: '#a78bfa', fontSize: '0.8rem' }}>Fetching metadata…</div>
+                      )}
+                      {!send2ToolLoading && SEND_TO_TOOLS.map(tool => (
+                        <button
+                          key={tool.id}
+                          onClick={async () => {
+                            setSend2ToolMenu(false)
+                            setSend2ToolLoading(true)
+                            try {
+                              let workflowData = {}
+                              try {
+                                const res = await fetch(`${BACKEND_BASE}/comfyui-metadata/${selectedItem.filename}`)
+                                if (res.ok) {
+                                  const json = await res.json()
+                                  workflowData = parseComfyWorkflow(json.metadata || {})
+                                }
+                              } catch (_) { /* no metadata, that's fine */ }
+                              onSendToTool(tool.id, { item: selectedItem, workflow: workflowData })
+                              setSelectedIndex(null)
+                            } finally {
+                              setSend2ToolLoading(false)
+                            }
+                          }}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '9px 14px',
+                            background: 'none',
+                            border: 'none',
+                            color: '#e2e8f0',
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #2d2d3d',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(167,139,250,0.15)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        >
+                          {tool.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
