@@ -342,6 +342,22 @@ async def list_published_media(
 
         result = query.execute()
 
+        # Batch-fetch user likes for all items in this page (authenticated users only)
+        liked_ids: set = set()
+        if user and result.data:
+            item_ids = [item["id"] for item in result.data]
+            try:
+                likes_result = (
+                    supabase.table("published_media_likes")
+                    .select("media_id")
+                    .eq("user_id", user.id)
+                    .in_("media_id", item_ids)
+                    .execute()
+                )
+                liked_ids = {r["media_id"] for r in likes_result.data}
+            except Exception as e:
+                logger.warning(f"Failed to batch-fetch user likes: {e}")
+
         items = []
         for item in result.data:
             items.append(
@@ -358,6 +374,7 @@ async def list_published_media(
                     metadata=item.get("metadata", {}),
                     view_count=item.get("view_count", 0),
                     like_count=item.get("like_count", 0),
+                    user_liked=(item["id"] in liked_ids) if user else None,
                     created_at=item["created_at"],
                     updated_at=item["updated_at"],
                 )
@@ -691,15 +708,40 @@ async def toggle_like(media_id: str, user: User = Depends(get_current_user)):
         if not media_check.data:
             raise HTTPException(status_code=404, detail="Media not found")
 
-        # Call the toggle_like function (now only requires media_id, uses auth.uid() internally)
-        result = supabase.rpc("toggle_like", {"p_media_id": media_id}).execute()
+        # Check if user already liked this item
+        existing = (
+            supabase.table("published_media_likes")
+            .select("id")
+            .eq("media_id", media_id)
+            .eq("user_id", user.id)
+            .execute()
+        )
 
-        if not result.data:
-            raise HTTPException(status_code=500, detail="Failed to toggle like")
+        if existing.data:
+            # Already liked — remove like
+            supabase.table("published_media_likes").delete().eq(
+                "media_id", media_id
+            ).eq("user_id", user.id).execute()
+            liked = False
+        else:
+            # Not yet liked — add like
+            supabase.table("published_media_likes").insert(
+                {"media_id": media_id, "user_id": user.id}
+            ).execute()
+            liked = True
 
-        data = result.data[0]
-        liked = data["liked"]
-        like_count = data["like_count"]
+        # Count actual likes and sync to published_media
+        count_result = (
+            supabase.table("published_media_likes")
+            .select("id", count="exact")
+            .eq("media_id", media_id)
+            .execute()
+        )
+        like_count = count_result.count or 0
+
+        supabase.table("published_media").update({"like_count": like_count}).eq(
+            "id", media_id
+        ).execute()
 
         debug_log(f"Like toggled: liked={liked}, count={like_count}")
 

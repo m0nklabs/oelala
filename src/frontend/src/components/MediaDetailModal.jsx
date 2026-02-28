@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
@@ -8,11 +8,32 @@ export default function MediaDetailModal({ item, onClose, onRemix = null }) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(item.user_liked || false)
   const [likeCount, setLikeCount] = useState(item.like_count || 0)
+  const [viewCount, setViewCount] = useState(item.view_count || 0)
   const [copying, setCopying] = useState(false)
   const [copied, setCopied] = useState(false)
   const [likeError, setLikeError] = useState('')
   const [downloadingWorkflow, setDownloadingWorkflow] = useState(false)
   const [workflowError, setWorkflowError] = useState('')
+
+  // Fetch fresh item data on open — gets accurate user_liked + triggers view increment
+  useEffect(() => {
+    const fetchFresh = async () => {
+      try {
+        const response = await apiFetch(`/api/gallery/${item.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.user_liked !== undefined && data.user_liked !== null) {
+            setLiked(data.user_liked)
+          }
+          if (data.like_count !== undefined) setLikeCount(data.like_count)
+          if (data.view_count !== undefined) setViewCount(data.view_count)
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to refresh media data:', err)
+      }
+    }
+    fetchFresh()
+  }, [item.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Download workflow JSON from media file via backend API
   const handleDownloadWorkflow = async () => {
@@ -219,7 +240,7 @@ export default function MediaDetailModal({ item, onClose, onRemix = null }) {
               }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <Eye size={16} />
-                  {item.view_count} views
+                  {viewCount} views
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <Heart size={16} />
