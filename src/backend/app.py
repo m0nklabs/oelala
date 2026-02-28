@@ -7,12 +7,41 @@ FastAPI application for AI Video Generation Pipeline
 import io
 import os
 import sys
+import time
 
 # Load environment variables from .env file BEFORE any other imports
 # This must happen early so other modules get the env vars
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="/home/flip/oelala/.env")
+
+# ── Sentry SDK (must init before FastAPI) ────────────────────────────
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+
+_sentry_dsn = os.getenv("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.2")),
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+        send_default_pii=False,
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            StarletteIntegration(transaction_style="endpoint"),
+            LoggingIntegration(level=None, event_level="ERROR"),
+        ],
+        # Filter out health check noise
+        before_send_transaction=lambda event, hint: (
+            None if event.get("transaction") in ("/health", "/health/") else event
+        ),
+    )
+    print(f"✅ Sentry initialized (env={os.getenv('SENTRY_ENVIRONMENT', 'production')})")
+else:
+    print("ℹ️  Sentry disabled (SENTRY_DSN not set)")
 
 import uvicorn
 import threading
@@ -434,6 +463,55 @@ async def cache_control_middleware(request, call_next):
         response.headers["Vary"] = "Accept-Encoding"
 
     return response
+
+
+# ── Request timing & metrics middleware ──────────────────────────────
+# Tracks request counts, latencies, and error rates per endpoint.
+# Stored in-memory; exposed via /api/admin/metrics.
+from collections import Counter
+
+_request_metrics = {
+    "total_requests": 0,
+    "total_errors": 0,  # 5xx responses
+    "status_counts": Counter(),  # status code → count
+    "endpoint_latencies": {},    # path → list of recent ms values (capped)
+    "started_at": datetime.now().isoformat(),
+}
+_LATENCY_CAP = 200  # keep last N measurements per path
+
+
+@app.middleware("http")
+async def request_metrics_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        _request_metrics["total_requests"] += 1
+        _request_metrics["total_errors"] += 1
+        _request_metrics["status_counts"]["500"] += 1
+        if _sentry_dsn:
+            sentry_sdk.capture_exception(exc)
+        raise
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+
+    status = response.status_code
+    _request_metrics["total_requests"] += 1
+    _request_metrics["status_counts"][str(status)] += 1
+    if status >= 500:
+        _request_metrics["total_errors"] += 1
+
+    # Track latency for API endpoints only (skip static files)
+    path = request.url.path
+    if path.startswith("/api/"):
+        bucket = _request_metrics["endpoint_latencies"]
+        if path not in bucket:
+            bucket[path] = deque(maxlen=_LATENCY_CAP)
+        bucket[path].append(elapsed_ms)
+
+    # Header for debugging
+    response.headers["X-Response-Time"] = f"{elapsed_ms}ms"
+    return response
+
 
 # API v1 router (programmatic access)
 from api_v1 import router as api_v1_router
@@ -2588,6 +2666,109 @@ async def health_check():
         "comfyui_available": comfyui_available,
         "upload_dir": str(UPLOAD_DIR),
         "output_dir": str(OUTPUT_DIR),
+    }
+
+
+@app.get("/health/deep")
+async def deep_health_check():
+    """Extended health check — tests ComfyUI, storage, and Supabase connectivity."""
+    checks = {}
+
+    # ComfyUI
+    try:
+        if get_comfyui_client:
+            client = get_comfyui_client()
+            checks["comfyui"] = {"ok": client.is_available() if client else False}
+        else:
+            checks["comfyui"] = {"ok": False, "error": "client not loaded"}
+    except Exception as e:
+        checks["comfyui"] = {"ok": False, "error": str(e)}
+
+    # oelala-storage
+    try:
+        import httpx as _hx
+
+        async with _hx.AsyncClient(timeout=3) as hc:
+            r = await hc.get(f"{os.getenv('STORAGE_URL', 'http://localhost:7990')}/health")
+            checks["storage"] = {"ok": r.status_code == 200}
+    except Exception as e:
+        checks["storage"] = {"ok": False, "error": str(e)}
+
+    # Supabase
+    try:
+        import httpx as _hx
+
+        _sb_url = os.getenv("SUPABASE_URL", "")
+        _sb_key = os.getenv("SUPABASE_ANON_KEY", "")
+        if _sb_url and _sb_key:
+            async with _hx.AsyncClient(timeout=3) as hc:
+                r = await hc.get(
+                    f"{_sb_url}/rest/v1/",
+                    headers={"apikey": _sb_key, "Authorization": f"Bearer {_sb_key}"},
+                )
+                checks["supabase"] = {"ok": r.status_code in (200, 401, 406)}
+        else:
+            checks["supabase"] = {"ok": False, "error": "not configured"}
+    except Exception as e:
+        checks["supabase"] = {"ok": False, "error": str(e)}
+
+    # Disk space
+    try:
+        disk = shutil.disk_usage("/home/flip/oelala")
+        checks["disk"] = {
+            "ok": disk.free > 1_000_000_000,  # >1 GB free
+            "total_gb": round(disk.total / 1e9, 1),
+            "free_gb": round(disk.free / 1e9, 1),
+            "used_pct": round(disk.used / disk.total * 100, 1),
+        }
+    except Exception as e:
+        checks["disk"] = {"ok": False, "error": str(e)}
+
+    all_ok = all(c.get("ok", False) for c in checks.values())
+    return {
+        "status": "healthy" if all_ok else "degraded",
+        "timestamp": datetime.now().isoformat(),
+        "checks": checks,
+    }
+
+
+@app.get("/api/admin/metrics")
+async def get_metrics(user: User = Depends(get_current_user)):
+    """Admin-only request metrics dashboard data."""
+    await check_admin(user)
+
+    # Compute per-endpoint latency summaries
+    latency_summary = {}
+    for path, values in _request_metrics["endpoint_latencies"].items():
+        if values:
+            vals = sorted(values)
+            n = len(vals)
+            latency_summary[path] = {
+                "count": n,
+                "avg_ms": round(sum(vals) / n, 1),
+                "p50_ms": round(vals[n // 2], 1),
+                "p95_ms": round(vals[int(n * 0.95)], 1) if n >= 2 else round(vals[-1], 1),
+                "max_ms": round(vals[-1], 1),
+            }
+
+    # Sort by request count descending
+    latency_summary = dict(
+        sorted(latency_summary.items(), key=lambda kv: kv[1]["count"], reverse=True)
+    )
+
+    return {
+        "total_requests": _request_metrics["total_requests"],
+        "total_errors": _request_metrics["total_errors"],
+        "error_rate_pct": (
+            round(_request_metrics["total_errors"] / max(_request_metrics["total_requests"], 1) * 100, 2)
+        ),
+        "status_counts": dict(_request_metrics["status_counts"]),
+        "started_at": _request_metrics["started_at"],
+        "uptime_seconds": round(
+            (datetime.now() - datetime.fromisoformat(_request_metrics["started_at"])).total_seconds()
+        ),
+        "endpoint_latencies": latency_summary,
+        "sentry_enabled": bool(_sentry_dsn),
     }
 
 
