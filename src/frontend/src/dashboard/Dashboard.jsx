@@ -32,6 +32,7 @@ const AudioGenerationTool = lazy(() => import('./tools/AudioGenerationTool'))
 const VoiceCloningTool = lazy(() => import('./tools/VoiceCloningTool'))
 const LipSyncTool = lazy(() => import('./tools/LipSyncTool'))
 const ReframeTool = lazy(() => import('./tools/ReframeTool'))
+const InpaintTool = lazy(() => import('./tools/InpaintTool'))
 const FaceSwapTool = lazy(() => import('./tools/FaceSwapTool'))
 const ComingSoonTool = lazy(() => import('./tools/ComingSoonTool'))
 const MyMediaTool = lazy(() => import('./tools/MyMediaTool'))
@@ -200,6 +201,8 @@ export default function Dashboard() {
         return 'Text to Image'
       case TOOL_IDS.IMAGE_TO_IMAGE:
         return 'Image to Image'
+      case TOOL_IDS.INPAINT:
+        return 'Inpaint'
       case TOOL_IDS.REFRAME:
         return 'Reframe'
       case TOOL_IDS.FACE_SWAP:
@@ -322,6 +325,8 @@ export default function Dashboard() {
 
       case TOOL_IDS.REFRAME:
         return wrapWithSuspense(<ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+      case TOOL_IDS.INPAINT:
+        return wrapWithSuspense(<InpaintTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.FACE_SWAP:
         return wrapWithSuspense(<FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 

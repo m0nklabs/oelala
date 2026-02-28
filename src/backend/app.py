@@ -8671,6 +8671,223 @@ async def train_lora_placeholder(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Inpainting via ComfyUI (canvas-based mask + SDXL)
+# ─────────────────────────────────────────────────────────────────────────────
+
+INPAINT_CREDITS = 8  # Per inpaint generation
+
+
+@app.post("/inpaint")
+async def inpaint_image(
+    image: UploadFile = File(...),
+    mask: UploadFile = File(...),
+    prompt: str = Form("high quality, detailed"),
+    negative_prompt: str = Form("ugly, blurry, watermark, text, artifacts"),
+    model: str = Form("dreamshaperXL_lightningDPMSDE.safetensors"),
+    steps: int = Form(20),
+    cfg: float = Form(7.0),
+    denoise: float = Form(0.85),
+    feathering: int = Form(16),
+    seed: int = Form(-1),
+    user: User = Depends(get_current_user),
+):
+    """
+    Inpaint masked region of an image using SDXL.
+
+    Upload the source image and a mask image (white = area to regenerate,
+    black = keep). The mask is typically drawn on a canvas in the frontend.
+    """
+    import random
+
+    logger.info(
+        f"🎨 Inpaint: prompt={prompt[:50]}..., model={model}, denoise={denoise}"
+    )
+
+    # Credit check
+    credits = await get_credit_balance(user)
+    if credits < INPAINT_CREDITS:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits. Need {INPAINT_CREDITS}, have {credits}",
+        )
+
+    client = get_comfyui_client()
+    if not client or not client.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
+
+    if seed < 0:
+        seed = random.randint(0, 2**32 - 1)
+
+    # Validate model exists
+    available_models = client.get_models("checkpoints") or []
+    if model not in available_models:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model}' not found. Available: {available_models[:5]}",
+        )
+
+    # Save uploaded files
+    img_filename = f"inpaint_src_{uuid.uuid4().hex[:8]}.png"
+    mask_filename = f"inpaint_mask_{uuid.uuid4().hex[:8]}.png"
+    img_path = UPLOAD_DIR / img_filename
+    mask_path = UPLOAD_DIR / mask_filename
+
+    try:
+        img_content = await image.read()
+        with open(img_path, "wb") as f:
+            f.write(img_content)
+
+        mask_content = await mask.read()
+        with open(mask_path, "wb") as f:
+            f.write(mask_content)
+
+        # Upload to ComfyUI
+        comfyui_img = client.upload_image(str(img_path))
+        comfyui_mask = client.upload_image(str(mask_path))
+        if not comfyui_img or not comfyui_mask:
+            raise HTTPException(
+                status_code=500, detail="Failed to upload files to ComfyUI"
+            )
+
+        # Clamp params
+        steps = max(1, min(steps, 50))
+        cfg = max(1.0, min(cfg, 20.0))
+        denoise = max(0.1, min(denoise, 1.0))
+        feathering = max(0, min(feathering, 64))
+
+        # Build inpainting workflow using SetLatentNoiseMask approach
+        workflow = {
+            # Load SDXL checkpoint
+            "1": {
+                "inputs": {"ckpt_name": model},
+                "class_type": "CheckpointLoaderSimple",
+            },
+            # Load source image
+            "2": {
+                "inputs": {"image": comfyui_img, "upload": "image"},
+                "class_type": "LoadImage",
+            },
+            # Load mask image
+            "3": {
+                "inputs": {"image": comfyui_mask, "upload": "image"},
+                "class_type": "LoadImage",
+            },
+            # Convert mask to proper mask format (use red/intensity channel)
+            "4": {
+                "inputs": {"image": ["3", 0], "method": "intensity"},
+                "class_type": "ImageToMask",
+            },
+            # Grow/feather mask for smooth blending
+            "5": {
+                "inputs": {
+                    "mask": ["4", 0],
+                    "expand": feathering,
+                    "tapered_corners": True,
+                },
+                "class_type": "GrowMask",
+            },
+            # Encode positive prompt
+            "6": {
+                "inputs": {"text": prompt, "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            # Encode negative prompt
+            "7": {
+                "inputs": {"text": negative_prompt, "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            # VAE encode source image
+            "8": {
+                "inputs": {"pixels": ["2", 0], "vae": ["1", 2]},
+                "class_type": "VAEEncode",
+            },
+            # Apply mask to latent for inpainting
+            "9": {
+                "inputs": {"samples": ["8", 0], "mask": ["5", 0]},
+                "class_type": "SetLatentNoiseMask",
+            },
+            # KSampler — generates only in masked area
+            "10": {
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": "dpmpp_2m",
+                    "scheduler": "karras",
+                    "denoise": denoise,
+                    "model": ["1", 0],
+                    "positive": ["6", 0],
+                    "negative": ["7", 0],
+                    "latent_image": ["9", 0],
+                },
+                "class_type": "KSampler",
+            },
+            # VAE decode
+            "11": {
+                "inputs": {"samples": ["10", 0], "vae": ["1", 2]},
+                "class_type": "VAEDecode",
+            },
+            # Save result
+            "12": {
+                "inputs": {
+                    "filename_prefix": "oelala_inpaint",
+                    "images": ["11", 0],
+                },
+                "class_type": "SaveImage",
+            },
+        }
+
+        prompt_id = client.queue_prompt(workflow)
+        if not prompt_id:
+            raise HTTPException(
+                status_code=500, detail="Failed to queue inpaint workflow"
+            )
+
+        # Register job for progress tracking
+        comfyui.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            prompt=prompt,
+            settings={"model": model, "steps": steps, "denoise": denoise, "seed": seed},
+        )
+        if ws_manager and job_queue_manager:
+            ws_manager.register_job(prompt_id, user_id=user.id)
+            job_queue_manager.register_job(
+                prompt_id=prompt_id,
+                user_id=user.id,
+                job_type="inpaint",
+                metadata={"model": model, "denoise": denoise},
+            )
+            if progress_monitor:
+                progress_monitor.register_callback(
+                    prompt_id, create_progress_callback(prompt_id)
+                )
+
+        # Deduct credits
+        await deduct_credits(user, INPAINT_CREDITS, prompt_id, f"Inpaint ({model})")
+        logger.info(f"   💰 -{INPAINT_CREDITS} credits for inpaint")
+
+        return {
+            "status": "queued",
+            "prompt_id": prompt_id,
+            "credits_used": INPAINT_CREDITS,
+            "meta": {
+                "model": model,
+                "prompt": prompt,
+                "steps": steps,
+                "denoise": denoise,
+                "seed": seed,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Inpaint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Reframe / Outpainting via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
 

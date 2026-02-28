@@ -8,6 +8,7 @@ export const TOOL_IDS = {
   SPEECH_TO_VIDEO: 'speech-to-video',
   // Image Tools
   IMAGE_TO_IMAGE: 'image-to-image',
+  INPAINT: 'inpaint',
   REFRAME: 'reframe',
   FACE_SWAP: 'face-swap',
   // Prompt Tools
@@ -56,6 +57,7 @@ export const NAV_GROUPS = [
     items: [
       { id: TOOL_IDS.TEXT_TO_IMAGE, label: 'Text to Image', status: 'ready' },
       { id: TOOL_IDS.IMAGE_TO_IMAGE, label: 'Image to Image', status: 'ready' },
+      { id: TOOL_IDS.INPAINT, label: 'Inpaint', status: 'new' },
       { id: TOOL_IDS.REFRAME, label: 'Reframe', status: 'new' },
       { id: TOOL_IDS.FACE_SWAP, label: 'Face Swap', status: 'new' },
     ],
