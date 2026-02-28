@@ -9,6 +9,8 @@ import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateI2VTime } from '../../utils/timeEstimates'
 import PresetSelector from '../../components/PresetSelector'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
+import MediaImportModal from '../../components/MediaImportModal'
+import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
 import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
@@ -66,7 +68,7 @@ const RESOLUTION_PRESETS = {
 // Aspect ratio options
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
-export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted }) {
+export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { nsfwEnabled } = useNSFW()
   const { user, requestLogin } = useAuth()
   const fileInputRef = useRef(null)
@@ -98,6 +100,43 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [cameraMotion, setCameraMotion] = useState('')
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
+
+  // Pending import modal state
+  const [importModal, setImportModal] = useState(null)  // { item, workflow }
+
+  // When Dashboard sends a new pendingImport (from MyMedia "Use in tool")
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = (selected) => {
+    if (selected.image && importModal?.item) {
+      // The item reference is in importModal; Dashboard already navigated here,
+      // image loading happens via selectCreation below or caller side.
+      // If we have the item, load it as input image via fetch.
+      const item = importModal.item
+      const imageUrl = getMediaUrl(item.url, item.signed_url)
+      fetch(imageUrl)
+        .then(r => r.blob())
+        .then(blob => {
+          const filename = item.filename || imageUrl.split('/').pop()
+          const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+          setFile(fileObj)
+          setPreviewUrl(imageUrl)
+          setUploadTab('file')
+        })
+        .catch(() => {})
+    }
+    if (selected.positive)  setPrompt(selected.positive)
+    if (selected.negative)  setNegativePrompt(selected.negative)
+    if (selected.steps)     setSteps(selected.steps)
+    if (selected.cfg)       setCfg(selected.cfg)
+    if (selected.seed)      setSeed(selected.seed)
+    setImportModal(null)
+  }
   const [imageDescription, setImageDescription] = useState('')  // Store vision analysis result
 
   // LoRA state - now supports multiple LoRAs with individual strengths
@@ -155,6 +194,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           include_negative: true,
           include_motion: true,
           use_llm: true,
+          model: enhanceModel,
         }),
       })
 
@@ -387,6 +427,19 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       })
 
       if (DEBUG) console.debug('🐛 selected creation:', filename)
+
+      // Fetch metadata and show import modal so user can optionally reuse prompts
+      try {
+        const metaRes = await fetch(`${BACKEND_BASE}/comfyui-metadata/${filename}`)
+        if (metaRes.ok) {
+          const metaJson = await metaRes.json()
+          const workflowData = parseComfyWorkflow(metaJson.metadata || {})
+          // Only show modal if there's something useful to import
+          if (workflowData.positive || workflowData.steps) {
+            setImportModal({ item, workflow: workflowData })
+          }
+        }
+      } catch (_) { /* no metadata — silently skip */ }
     } catch (e) {
       setError('Failed to load selected image')
       console.error('Error selecting creation:', e)
@@ -585,6 +638,17 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   return (
     <div className="tool-container">
+      {/* Import from previous generation modal */}
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow}
+          availableFields={['image', 'positive', 'negative', 'steps', 'cfg', 'seed']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
+
       <style>{`
         .animate-spin {
           animation: spin 1s linear infinite;
@@ -840,6 +904,22 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
+            <select
+              value={enhanceModel}
+              onChange={(e) => setEnhanceModel(e.target.value)}
+              style={{ fontSize: '10px', height: '24px', padding: '0 4px',
+                background: 'var(--bg-secondary, #1a1a1a)',
+                border: '1px solid var(--border-color, #444)',
+                borderRadius: '4px', color: 'var(--text-muted, #aaa)',
+                cursor: 'pointer', maxWidth: '120px' }}
+              title="LLM model for prompt enhancement"
+            >
+              <option value="GLM-4.7-Flash-Claude-Opus-Reasoning">GLM+Claude ✨</option>
+              <option value="GLM-4.7-Flash">GLM Flash</option>
+              <option value="GLM-4.7-Flash-Uncensored-Balanced">GLM Uncensored</option>
+              <option value="Qwen3-30B-A3B-Thinking-2507">Qwen3 30B</option>
+              <option value="gemma-3-27b-it">Gemma 27B</option>
+            </select>
             <button
               className="icon-btn"
               style={{ width: '24px', height: '24px', padding: '4px' }}

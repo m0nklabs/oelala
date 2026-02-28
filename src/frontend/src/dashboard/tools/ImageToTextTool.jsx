@@ -10,15 +10,17 @@ const CAPTION_MODES = [
 ]
 
 const MODELS = [
-  { id: 'florence2', label: 'Florence-2', description: 'Fast & accurate (Microsoft)' },
-  { id: 'blip2', label: 'BLIP-2', description: 'Detailed descriptions' },
-  { id: 'cogvlm', label: 'CogVLM', description: 'High quality (slower)' },
+  { id: 'Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking', label: 'Qwen3-VL 32B Heretic', description: 'Best quality · uncensored · slow' },
+  { id: 'Gemma3-27B-it-vl-GLM-4.7-Uncensored-Heretic', label: 'Gemma3 27B VL Heretic', description: 'Vision + reasoning · uncensored' },
+  { id: 'Qwen3-VL-30B-A3B-Thinking', label: 'Qwen3-VL 30B MoE', description: 'MoE · thinking mode · fast' },
+  { id: 'Step3-VL-10B', label: 'Step3-VL 10B', description: 'Fast · good quality' },
+  { id: 'moondream', label: 'Moondream', description: 'Ultra-light · fastest' },
 ]
 
 export default function ImageToTextTool({ onSendToPrompt }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [model, setModel] = useState('florence2')
+  const [model, setModel] = useState('Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking')
   const [mode, setMode] = useState('detailed')
   const [caption, setCaption] = useState('')
   const [loading, setLoading] = useState(false)

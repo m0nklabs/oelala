@@ -7,6 +7,7 @@ import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu, Zap
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
+import MediaImportModal from '../../components/MediaImportModal'
 
 // Resolution presets
 const RESOLUTION_PRESETS = [
@@ -35,7 +36,7 @@ const T2V_MODELS = {
   },
 }
 
-export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted }) {
+export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { user, requestLogin } = useAuth()
 
   const [prompt, setPrompt] = useState(() => {
@@ -50,6 +51,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [fps, setFps] = useState(16)
   const [cameraMotion, setCameraMotion] = useState('')
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -63,6 +65,24 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
   const [availableModels, setAvailableModels] = useState(T2V_MODELS)
+
+  // Pending import modal state
+  const [importModal, setImportModal] = useState(null)  // { item, workflow }
+
+  // When Dashboard sends a new pendingImport, show the modal
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = (selected) => {
+    if (selected.positive) setPrompt(selected.positive)
+    if (selected.steps)    setSteps(selected.steps)
+    if (selected.cfg)      setCfg(selected.cfg)
+    if (selected.seed)     setSeed(selected.seed)
+    setImportModal(null)
+  }
 
   // Post-processing options (chained jobs after generation)
   const [showPostProcessing, setShowPostProcessing] = useState(false)
@@ -132,6 +152,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           include_negative: true,
           include_motion: true,
           use_llm: true,
+          model: enhanceModel,
         }),
       })
 
@@ -246,6 +267,17 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
   return (
     <div className="tool-container">
+      {/* Import from previous generation modal */}
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow}
+          availableFields={['positive', 'steps', 'cfg', 'seed']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
+
       {/* Prompt Card */}
       <div className="tool-section">
         <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -254,6 +286,22 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             Video Prompt
           </span>
           <div style={{ display: 'flex', gap: '4px' }}>
+            <select
+              value={enhanceModel}
+              onChange={(e) => setEnhanceModel(e.target.value)}
+              style={{ fontSize: '10px', height: '24px', padding: '0 4px',
+                background: 'var(--bg-secondary, #1a1a1a)',
+                border: '1px solid var(--border-color, #444)',
+                borderRadius: '4px', color: 'var(--text-muted, #aaa)',
+                cursor: 'pointer', maxWidth: '120px' }}
+              title="LLM model for prompt enhancement"
+            >
+              <option value="GLM-4.7-Flash-Claude-Opus-Reasoning">GLM+Claude ✨</option>
+              <option value="GLM-4.7-Flash">GLM Flash</option>
+              <option value="GLM-4.7-Flash-Uncensored-Balanced">GLM Uncensored</option>
+              <option value="Qwen3-30B-A3B-Thinking-2507">Qwen3 30B</option>
+              <option value="gemma-3-27b-it">Gemma 27B</option>
+            </select>
             <button
               className="icon-btn"
               style={{ width: '24px', height: '24px', padding: '4px' }}
