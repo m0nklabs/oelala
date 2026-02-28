@@ -647,27 +647,47 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     link.click()
   }
 
-  // Batch download selected items
+  // Batch download selected items as a ZIP archive
   const handleBatchDownload = async () => {
     if (selectedItems.size === 0) return
 
-    // selectedItems contains indices, not filenames
     const items = Array.from(selectedItems)
       .map(idx => sortedMediaList[idx])
       .filter(Boolean)
+      .map(item => ({
+        url: item.url || item.signed_url || '',
+        filename: item.filename || item.name || 'file',
+      }))
+      .filter(item => item.url)
 
-    // Download one by one with small delay to avoid browser blocking
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      const link = document.createElement('a')
-      link.href = getMediaUrl(item.url, item.signed_url)
-      link.download = item.filename
-      link.click()
+    if (items.length === 0) return
 
-      // Small delay between downloads
-      if (i < items.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300))
+    try {
+      const response = await apiFetch('/api/media/batch-download-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Download failed' }))
+        setError(`Batch download failed: ${err.detail || 'Unknown error'}`)
+        return
       }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const ts = new Date().toISOString().replace(/[:.T]/g, '-').slice(0, 19)
+      a.download = `oelala_selection_${ts}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('❌ Batch download error:', err)
+      setError(`Batch download failed: ${err.message}`)
     }
   }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Filter, Image as ImageIcon, Video, RefreshCw, Eye, Heart } from 'lucide-react'
+import { Filter, Image as ImageIcon, Video, RefreshCw, Eye, Heart, Check, Download, CheckSquare, Square, X as XIcon } from 'lucide-react'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,7 +8,7 @@ import MediaDetailModal from '../components/MediaDetailModal'
 import { TOOL_IDS } from '../dashboard/nav'
 
 // Lazy loaded media item - only loads src when in viewport
-const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick }) => {
+const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick, selected = false, selectMode = false }) => {
   const ref = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -49,17 +49,42 @@ const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick })
         overflow: 'hidden',
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
-        border: '1px solid #333',
+        border: selected ? '2px solid #3b82f6' : '1px solid #333',
+        boxShadow: selected ? '0 0 0 2px rgba(59,130,246,0.3)' : 'none',
+        position: 'relative',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-4px)'
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)'
+        if (!selectMode) {
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)'
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = 'none'
+        if (!selectMode) {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = selected ? '0 0 0 2px rgba(59,130,246,0.3)' : 'none'
+        }
       }}
     >
+      {/* Selection indicator */}
+      {selectMode && (
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          zIndex: 10,
+          background: selected ? '#3b82f6' : 'rgba(0,0,0,0.6)',
+          border: `2px solid ${selected ? '#3b82f6' : '#aaa'}`,
+          borderRadius: '6px',
+          width: '24px',
+          height: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          {selected && <Check size={14} color="#fff" />}
+        </div>
+      )}
       {/* Media Preview */}
       <div style={{
         aspectRatio: '9/16',
@@ -285,6 +310,68 @@ export default function Gallery({ onRemix = null }) {
   const [selectedItem, setSelectedItem] = useState(null)
   const PAGE_SIZE = 12 // Items per page
 
+  // Multi-select state
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [batchDownloading, setBatchDownloading] = useState(false)
+
+  const toggleSelectMode = () => {
+    setSelectMode(prev => !prev)
+    setSelectedIds(new Set()) // clear selection when toggling
+  }
+
+  const toggleSelectItem = (itemId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+  }
+
+  const selectAll = () => setSelectedIds(new Set(items.map(i => i.id)))
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const handleBatchDownload = async () => {
+    if (selectedIds.size === 0) return
+    setBatchDownloading(true)
+    try {
+      const batchItems = items
+        .filter(i => selectedIds.has(i.id))
+        .map(i => ({
+          url: `/api/gallery/${i.id}/file`,
+          filename: `${i.title?.replace(/[^a-z0-9]/gi, '_') || i.id}.${i.media_type === 'video' ? 'mp4' : i.media_type === 'audio' ? 'mp3' : 'png'}`,
+        }))
+
+      const response = await apiFetch('/api/media/batch-download-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: batchItems }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Download failed' }))
+        setError(`Batch download failed: ${err.detail || 'Unknown error'}`)
+        return
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `oelala_gallery_${new Date().toISOString().slice(0, 10)}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('❌ Gallery batch download error:', err)
+      setError(`Batch download failed: ${err.message}`)
+    } finally {
+      setBatchDownloading(false)
+    }
+  }
+
   // Fetch gallery items
   const fetchGallery = useCallback(async (resetPage = false) => {
     setLoading(true)
@@ -505,6 +592,28 @@ export default function Gallery({ onRemix = null }) {
           >
             <RefreshCw size={16} className={loading ? 'spinning' : ''} />
           </button>
+
+          {/* Select mode toggle (logged-in users only) */}
+          {user && (
+            <button
+              onClick={toggleSelectMode}
+              style={{
+                padding: '8px 12px',
+                background: selectMode ? '#3b82f6' : '#2a2a2a',
+                border: `1px solid ${selectMode ? '#3b82f6' : '#444'}`,
+                borderRadius: '6px',
+                color: '#fff',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+              }}
+            >
+              {selectMode ? <CheckSquare size={14} /> : <Square size={14} />}
+              {selectMode ? 'Cancel' : 'Select'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -538,6 +647,83 @@ export default function Gallery({ onRemix = null }) {
         </div>
       )}
 
+      {/* Batch action bar (visible in select mode) */}
+      {selectMode && (
+        <div style={{
+          margin: '0 24px 8px',
+          padding: '10px 16px',
+          background: '#1e3a5f',
+          border: '1px solid #3b82f6',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ color: '#93c5fd', fontSize: '14px', fontWeight: 500 }}>
+            {selectedIds.size} selected
+          </span>
+
+          <button
+            onClick={selectAll}
+            style={{
+              padding: '6px 12px',
+              background: 'transparent',
+              border: '1px solid #3b82f6',
+              borderRadius: '6px',
+              color: '#93c5fd',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            Select all ({items.length})
+          </button>
+
+          {selectedIds.size > 0 && (
+            <button
+              onClick={clearSelection}
+              style={{
+                padding: '6px 12px',
+                background: 'transparent',
+                border: '1px solid #666',
+                borderRadius: '6px',
+                color: '#aaa',
+                cursor: 'pointer',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <XIcon size={12} /> Clear
+            </button>
+          )}
+
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBatchDownload}
+              disabled={batchDownloading}
+              style={{
+                padding: '6px 14px',
+                background: batchDownloading ? '#1e3a5f' : '#3b82f6',
+                border: '1px solid #3b82f6',
+                borderRadius: '6px',
+                color: '#fff',
+                cursor: batchDownloading ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 500,
+              }}
+            >
+              <Download size={14} />
+              {batchDownloading ? 'Preparing ZIP…' : `Download ZIP (${selectedIds.size})`}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Gallery Grid */}
       <div
         ref={containerRef}
@@ -558,7 +744,15 @@ export default function Gallery({ onRemix = null }) {
             item={item}
             getMediaUrl={getMediaUrl}
             getPreviewUrl={getPreviewUrl}
-            onClick={() => setSelectedItem(item)}
+            selected={selectedIds.has(item.id)}
+            selectMode={selectMode}
+            onClick={() => {
+              if (selectMode) {
+                toggleSelectItem(item.id)
+              } else {
+                setSelectedItem(item)
+              }
+            }}
           />
         ))}
 

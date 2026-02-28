@@ -2937,6 +2937,123 @@ async def get_user_media_workflow(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/media/batch-download-zip")
+async def batch_download_zip(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """
+    Create a ZIP archive of selected media files for batch download.
+    Accepts JSON body: { "items": [{ "url": string, "filename": string }] }
+    Supports: /user/media/<type>/<path>, /media/generated/<fn>, /comfyui/output/<fn>
+    Max 50 items per request.
+    """
+    import zipfile
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    items = body.get("items", [])
+
+    if not items:
+        raise HTTPException(status_code=400, detail="No items specified")
+
+    if len(items) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 items per batch download")
+
+    debug_log(f"Batch ZIP download: {len(items)} items for user {user.id}")
+
+    zip_buffer = io.BytesIO()
+    seen_names: set = set()
+    added = 0
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for item in items:
+            url = item.get("url", "")
+            filename = item.get("filename", "file")
+
+            # Deduplicate filenames
+            base_fn = filename
+            counter = 1
+            while filename in seen_names:
+                parts = base_fn.rsplit(".", 1)
+                filename = f"{parts[0]}_{counter}.{parts[1]}" if len(parts) == 2 else f"{base_fn}_{counter}"
+                counter += 1
+            seen_names.add(filename)
+
+            try:
+                # User storage items: /user/media/<type>/<filename>
+                if url.startswith("/user/media/"):
+                    parts = url.split("/", 4)  # ['', 'user', 'media', <type>, <path>]
+                    if len(parts) == 5:
+                        media_type, filepath = parts[3], parts[4]
+                        storage = get_storage_client()
+                        data = storage.get_user_media(user.id, media_type, filepath)
+                        zf.writestr(filename, data)
+                        added += 1
+
+                # Generated media: /media/generated/<filename>
+                elif url.startswith("/media/generated/"):
+                    fn = url.split("/media/generated/", 1)[1]
+                    file_path = Path("/home/flip/oelala/media/generated") / fn
+                    if file_path.exists() and file_path.is_file():
+                        zf.write(str(file_path), filename)
+                        added += 1
+
+                # ComfyUI output: /comfyui/output/<filename>
+                elif url.startswith("/comfyui/output/"):
+                    fn = url.split("/comfyui/output/", 1)[1]
+                    file_path = Path("/home/flip/oelala/ComfyUI/output") / fn
+                    if file_path.exists() and file_path.is_file():
+                        zf.write(str(file_path), filename)
+                        added += 1
+
+                # Public gallery item: /api/gallery/<id>/file
+                elif "/api/gallery/" in url and url.endswith("/file"):
+                    from supabase_utils import get_supabase_client as _get_sb
+                    media_id = url.split("/api/gallery/", 1)[1].replace("/file", "")
+                    sb = _get_sb()
+                    if sb:
+                        row = (
+                            sb.table("published_media")
+                            .select("user_id,storage_path")
+                            .eq("id", media_id)
+                            .execute()
+                        )
+                        if row.data:
+                            pub = row.data[0]
+                            pub_parts = pub["storage_path"].split("/", 1)
+                            if len(pub_parts) == 2:
+                                pub_type, pub_filename = pub_parts
+                                storage = get_storage_client()
+                                data = storage.get_user_media(pub["user_id"], pub_type, pub_filename)
+                                zf.writestr(filename or pub_filename, data)
+                                added += 1
+
+                else:
+                    logger.warning(f"⚠️ Unrecognized URL for batch ZIP: {url}")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to add {filename} to ZIP: {e}")
+                continue
+
+    if added == 0:
+        raise HTTPException(status_code=400, detail="No files could be added to ZIP")
+
+    zip_buffer.seek(0)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="oelala_selection_{timestamp}.zip"'
+        },
+    )
+
+
 @app.post("/user/media/{media_type}")
 async def upload_user_media(
     media_type: str,
