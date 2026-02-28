@@ -396,6 +396,42 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+
+# Cache control middleware — sets appropriate headers based on path
+@app.middleware("http")
+async def cache_control_middleware(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+
+    # Skip if Cache-Control already set (e.g. by endpoint)
+    if "cache-control" not in response.headers:
+        if path.startswith("/avatars/"):
+            # Avatars can change — cache 1 day
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        elif path.startswith("/comfyui-output/"):
+            # Immutable generated content
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.startswith("/static/assets/"):
+            # Vite hashed assets — immutable
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.startswith("/static/"):
+            # Non-hashed static (index.html etc) — revalidate
+            response.headers["Cache-Control"] = "no-cache"
+        elif path.startswith("/api/loras") and request.method == "GET":
+            # LoRA list changes rarely
+            response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=600"
+        elif path.startswith("/api/gallery") and request.method == "GET":
+            # Gallery listings — short CDN cache
+            response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=300"
+        elif request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            response.headers["Cache-Control"] = "private, no-store"
+
+    # Ensure Vary header for compressed content
+    if "Vary" not in response.headers:
+        response.headers["Vary"] = "Accept-Encoding"
+
+    return response
+
 # API v1 router (programmatic access)
 from api_v1 import router as api_v1_router
 
@@ -2101,7 +2137,13 @@ async def get_comfyui_output(filename: str):
     output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Output file not found")
-    return FileResponse(output_path)
+    return FileResponse(
+        output_path,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "CDN-Cache-Control": "public, max-age=31536000",
+        },
+    )
 
 
 @app.get("/media/generated/{filename}")
@@ -2111,7 +2153,13 @@ async def get_generated_media(filename: str):
     media_path = Path("/home/flip/oelala/media/generated") / filename
     if not media_path.exists():
         raise HTTPException(status_code=404, detail="Media file not found")
-    return FileResponse(media_path)
+    return FileResponse(
+        media_path,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "CDN-Cache-Control": "public, max-age=31536000",
+        },
+    )
 
 
 @app.get("/comfyui-metadata/{filename}")
