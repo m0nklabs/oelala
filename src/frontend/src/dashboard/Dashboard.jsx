@@ -265,7 +265,7 @@ export default function Dashboard() {
       case TOOL_IDS.MY_MEDIA_PROMPTS:
         return wrapWithSuspense(<MyMediaTool filter="prompts" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.GALLERY:
-        return wrapWithSuspense(<Gallery />)
+        return wrapWithSuspense(<Gallery onRemix={handleSendToTool} />)
 
       case TOOL_IDS.TEXT_TO_IMAGE:
         return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)

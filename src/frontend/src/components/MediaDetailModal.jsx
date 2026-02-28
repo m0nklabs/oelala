@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson } from 'lucide-react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 
-export default function MediaDetailModal({ item, onClose }) {
+export default function MediaDetailModal({ item, onClose, onRemix = null }) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(item.user_liked || false)
   const [likeCount, setLikeCount] = useState(item.like_count || 0)
@@ -514,6 +514,40 @@ export default function MediaDetailModal({ item, onClose }) {
                   </>
                 )}
               </button>
+
+              {/* Remix Button — only shown when prompt metadata is available */}
+              {onRemix && (item.metadata?.positive_prompt || item.metadata?.prompt) && (
+                <button
+                  onClick={() => {
+                    onRemix({
+                      positive: item.metadata?.positive_prompt || item.metadata?.prompt,
+                      negative: item.metadata?.negative_prompt,
+                      steps: item.metadata?.steps,
+                      cfg: item.metadata?.cfg_scale,
+                      seed: item.metadata?.seed,
+                    })
+                    onClose()
+                  }}
+                  title="Open in generator with these settings"
+                  style={{
+                    padding: '10px 16px',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Shuffle size={16} />
+                  Remix
+                </button>
+              )}
 
               {/* Workflow Download Button */}
               {item.metadata && (

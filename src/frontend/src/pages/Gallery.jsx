@@ -5,6 +5,7 @@ import { BACKEND_BASE } from '../config'
 import { useAuth } from '../contexts/AuthContext'
 import { useNSFW } from '../contexts/NSFWContext'
 import MediaDetailModal from '../components/MediaDetailModal'
+import { TOOL_IDS } from '../dashboard/nav'
 
 // Lazy loaded media item - only loads src when in viewport
 const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick }) => {
@@ -259,7 +260,7 @@ const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick })
 
 LazyMediaItem.displayName = 'LazyMediaItem'
 
-export default function Gallery() {
+export default function Gallery({ onRemix = null }) {
   const DEBUG = true // Enable debug for troubleshooting
   const debugLog = (message, data = null) => {
     if (!DEBUG) return
@@ -607,6 +608,13 @@ export default function Gallery() {
         <MediaDetailModal
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
+          onRemix={onRemix ? (settings) => {
+            const toolId = selectedItem.media_type === 'video'
+              ? TOOL_IDS.TEXT_TO_VIDEO
+              : TOOL_IDS.TEXT_TO_IMAGE
+            onRemix(toolId, settings)
+            setSelectedItem(null)
+          } : null}
         />
       )}
     </div>
