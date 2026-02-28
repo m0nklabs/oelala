@@ -8540,6 +8540,121 @@ async def face_swap_with_profile(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Video face swap endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/face-swap-video")
+async def face_swap_video(
+    video: UploadFile = File(..., description="Input video file"),
+    source: UploadFile = File(..., description="Source image with reference face"),
+    face_indices: str = Form("0", description="Comma-separated face indices or '-1' for all"),
+):
+    """
+    Apply face swap to every frame of a video.
+
+    Frame-by-frame insightface swap using inswapper_128.onnx.
+    Audio is preserved via ffmpeg remux.
+
+    Args:
+        video: Input video (mp4/mov/webm/mkv)
+        source: Reference image with the donor face
+        face_indices: Which face indices in each frame to replace ("0", "0,1", "-1"=all)
+
+    Returns:
+        MP4 video bytes with swapped faces.
+    """
+    logger.info(f"🎬 Video face swap: {video.filename}, source={source.filename}, indices={face_indices}")
+
+    if not face_service:
+        raise HTTPException(status_code=503, detail="face_service unavailable (insightface not installed)")
+
+    try:
+        if face_indices.strip() == "-1":
+            indices = list(range(10))
+        else:
+            indices = [int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()]
+        if not indices:
+            indices = [0]
+
+        source_bytes = await source.read()
+        video_bytes = await video.read()
+
+        result_bytes = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: face_service.swap_faces_in_video(source_bytes, video_bytes, indices),
+        )
+
+        filename = f"faceswap_{Path(video.filename).stem}.mp4"
+        logger.info(f"✅ Video face swap complete → {len(result_bytes) // 1024}KB")
+        return StreamingResponse(
+            io.BytesIO(result_bytes),
+            media_type="video/mp4",
+            headers={"Content-Disposition": f"inline; filename={filename}"},
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Video face swap error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/face-swap-video/profile")
+async def face_swap_video_with_profile(
+    video: UploadFile = File(..., description="Input video file"),
+    profile_id: str = Form(..., description="Saved face profile ID"),
+    face_indices: str = Form("0", description="Comma-separated face indices or '-1' for all"),
+):
+    """
+    Apply face swap to every frame of a video using a saved face profile.
+
+    Same as /face-swap-video but uses a pre-saved identity profile.
+
+    Args:
+        video: Input video (mp4/mov/webm/mkv)
+        profile_id: ID of the saved face profile
+        face_indices: Which face indices in each frame to replace
+
+    Returns:
+        MP4 video bytes with swapped faces, audio preserved.
+    """
+    logger.info(f"🎬 Video face swap (profile): {video.filename}, profile={profile_id}")
+
+    if not face_service:
+        raise HTTPException(status_code=503, detail="face_service unavailable")
+
+    try:
+        if face_indices.strip() == "-1":
+            indices = list(range(10))
+        else:
+            indices = [int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()]
+        if not indices:
+            indices = [0]
+
+        video_bytes = await video.read()
+
+        result_bytes = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: face_service.swap_faces_in_video_with_profile(profile_id, video_bytes, indices),
+        )
+
+        filename = f"faceswap_{Path(video.filename).stem}.mp4"
+        logger.info(f"✅ Video face swap (profile {profile_id}) complete → {len(result_bytes) // 1024}KB")
+        return StreamingResponse(
+            io.BytesIO(result_bytes),
+            media_type="video/mp4",
+            headers={"Content-Disposition": f"inline; filename={filename}"},
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Video face swap with profile error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Face LoRA Training endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 
