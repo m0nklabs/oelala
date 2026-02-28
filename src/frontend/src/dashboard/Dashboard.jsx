@@ -90,6 +90,15 @@ export default function Dashboard() {
   const [i2vCreationsMode, setI2vCreationsMode] = useState(false)
   const [i2vOnSelectImage, setI2vOnSelectImage] = useState(null)
 
+  // Pending import: { item, workflow } - set when user picks "Use in tool" from MyMedia
+  const [pendingImport, setPendingImport] = useState(null)
+
+  // Send media item to a tool for import (component-level so all MyMediaTool instances can use it)
+  const handleSendToTool = (toolId, importData) => {
+    setPendingImport(importData)
+    setActiveToolId(toolId)
+  }
+
   // Legal modal state
   const [legalType, setLegalType] = useState(null)
 
@@ -235,9 +244,9 @@ export default function Dashboard() {
 
     switch (activeToolId) {
       case TOOL_IDS.TEXT_TO_VIDEO:
-        return wrapWithSuspense(<TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<TextToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.IMAGE_TO_VIDEO:
-        return wrapWithSuspense(<ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
         return wrapWithSuspense(<TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
       case TOOL_IDS.PIPELINE:
@@ -246,20 +255,20 @@ export default function Dashboard() {
         return wrapWithSuspense(<LoRATrainingTool onOutput={setOutput} />)
 
       case TOOL_IDS.MY_MEDIA_ALL:
-        return wrapWithSuspense(<MyMediaTool filter="all" />)
+        return wrapWithSuspense(<MyMediaTool filter="all" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.MY_MEDIA_VIDEOS:
-        return wrapWithSuspense(<MyMediaTool filter="video" />)
+        return wrapWithSuspense(<MyMediaTool filter="video" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.MY_MEDIA_IMAGES:
-        return wrapWithSuspense(<MyMediaTool filter="image" />)
+        return wrapWithSuspense(<MyMediaTool filter="image" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.MY_MEDIA_AUDIO:
-        return wrapWithSuspense(<MyMediaTool filter="audio" />)
+        return wrapWithSuspense(<MyMediaTool filter="audio" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.MY_MEDIA_PROMPTS:
-        return wrapWithSuspense(<MyMediaTool filter="prompts" />)
+        return wrapWithSuspense(<MyMediaTool filter="prompts" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.GALLERY:
         return wrapWithSuspense(<Gallery />)
 
       case TOOL_IDS.TEXT_TO_IMAGE:
-        return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
 
       case TOOL_IDS.IMAGE_TO_TEXT:
         return wrapWithSuspense(<ImageToTextTool />)
@@ -267,7 +276,7 @@ export default function Dashboard() {
         return wrapWithSuspense(<PromptGeneratorTool />)
 
       case TOOL_IDS.IMAGE_TO_IMAGE:
-        return wrapWithSuspense(<ImageToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<ImageToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
 
       case TOOL_IDS.VIDEO_TO_VIDEO:
         return wrapWithSuspense(<VideoToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
@@ -559,6 +568,7 @@ export default function Dashboard() {
                     filter="all"
                     selectionMode={i2vCreationsMode}
                     onSelectItem={i2vOnSelectImage}
+                    onSendToTool={handleSendToTool}
                   />
                 </div>
               </section>
