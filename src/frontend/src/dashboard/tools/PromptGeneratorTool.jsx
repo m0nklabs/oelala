@@ -21,6 +21,14 @@ const ENHANCEMENT_MODES = [
   { id: 'variations', label: 'Variations', description: 'Generate 3 alternatives' },
 ]
 
+const PROMPT_LLM_MODELS = [
+  { id: 'GLM-4.7-Flash-Claude-Opus-Reasoning', label: 'GLM-4.7 + Claude Opus ✨', description: 'Default · Claude Opus reasoning distillation · best quality' },
+  { id: 'GLM-4.7-Flash', label: 'GLM-4.7 Flash', description: 'Fast · compact · good for simple prompts' },
+  { id: 'GLM-4.7-Flash-Uncensored-Balanced', label: 'GLM-4.7 Uncensored', description: 'No content filters · balanced output' },
+  { id: 'Qwen3-30B-A3B-Thinking-2507', label: 'Qwen3 30B Thinking', description: 'High quality · reasoning mode · slower' },
+  { id: 'gemma-3-27b-it', label: 'Gemma 3 27B', description: 'Google · strong creative writing' },
+]
+
 export default function PromptGeneratorTool({ onSendToTool }) {
   const [input, setInput] = useState('')
   const [style, setStyle] = useState('')
@@ -31,6 +39,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
 
   const handleGenerate = async () => {
     if (!input.trim()) return
@@ -48,6 +57,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
           mode: enhanceMode,
           include_negative: includeNegative,
           include_motion: includeMotion,
+          model: enhanceModel,
         }),
       })
 
@@ -149,6 +159,25 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             Include motion prompts (for video)
           </label>
         </div>
+      </div>
+
+      <div className="tool-section">
+        <h3>AI Model</h3>
+        <select
+          value={enhanceModel}
+          onChange={(e) => setEnhanceModel(e.target.value)}
+          style={{ width: '100%', padding: '10px 12px', borderRadius: '8px',
+            border: '1px solid var(--border-color, #444)',
+            background: 'var(--bg-secondary, #1a1a1a)', color: 'var(--text-color, #fff)',
+            fontSize: '14px', cursor: 'pointer' }}
+        >
+          {PROMPT_LLM_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
+        </select>
+        <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-muted, #888)' }}>
+          {PROMPT_LLM_MODELS.find((m) => m.id === enhanceModel)?.description}
+        </p>
       </div>
 
       <div className="button-row">

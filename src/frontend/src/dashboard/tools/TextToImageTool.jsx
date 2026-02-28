@@ -5,6 +5,7 @@ import { postForm } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import CameraPositionSelector, { getCameraPositionPrefix } from '../../components/CameraPositionSelector'
+import MediaImportModal from '../../components/MediaImportModal'
 
 // Models grouped by category
 const MODEL_GROUPS = {
@@ -61,7 +62,7 @@ const getModelType = (modelValue) => {
   return 'sdxl'
 }
 
-export default function TextToImageTool({ onOutput, onJobSubmitted }) {
+export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { nsfwEnabled } = useNSFW()
   const { user, requestLogin } = useAuth()
 
@@ -72,6 +73,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [batchCount, setBatchCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
   const [error, setError] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
@@ -92,6 +94,27 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
   const [seed, setSeed] = useState(-1)
   const [sampler, setSampler] = useState('dpmpp_2m')
   const [scheduler, setScheduler] = useState('karras')
+
+  // Pending import modal state
+  const [importModal, setImportModal] = useState(null)  // { item, workflow }
+
+  // When Dashboard sends a new pendingImport, show the modal
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = (selected) => {
+    if (selected.positive)  setPrompt(selected.positive)
+    if (selected.negative)  setNegativePrompt(selected.negative)
+    if (selected.steps)     setSteps(selected.steps)
+    if (selected.cfg)       setCfg(selected.cfg)
+    if (selected.sampler)   setSampler(selected.sampler)
+    if (selected.scheduler) setScheduler(selected.scheduler)
+    if (selected.seed)      setSeed(selected.seed)
+    setImportModal(null)
+  }
 
   // Random subjects for empty prompt generation
   const randomSubjects = [
@@ -132,6 +155,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
           include_negative: true,
           include_motion: false,
           use_llm: true,
+          model: enhanceModel,
         }),
       })
 
@@ -298,6 +322,17 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
 
   return (
     <div className="tool-container">
+      {/* Import from previous generation modal */}
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow}
+          availableFields={['positive', 'negative', 'steps', 'cfg', 'sampler', 'scheduler', 'seed']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
+
       {/* Model Selection - Grouped with hover info */}
       <div className="grok-card">
         <div className="grok-card-header">
@@ -344,6 +379,22 @@ export default function TextToImageTool({ onOutput, onJobSubmitted }) {
         <div className="grok-card-header">
           <div className="grok-card-title">Positive Prompt</div>
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <select
+              value={enhanceModel}
+              onChange={(e) => setEnhanceModel(e.target.value)}
+              style={{ fontSize: '10px', height: '24px', padding: '0 4px',
+                background: 'var(--bg-secondary, #1a1a1a)',
+                border: '1px solid var(--border-color, #444)',
+                borderRadius: '4px', color: 'var(--text-muted, #aaa)',
+                cursor: 'pointer', maxWidth: '120px' }}
+              title="LLM model for prompt enhancement"
+            >
+              <option value="GLM-4.7-Flash-Claude-Opus-Reasoning">GLM+Claude ✨</option>
+              <option value="GLM-4.7-Flash">GLM Flash</option>
+              <option value="GLM-4.7-Flash-Uncensored-Balanced">GLM Uncensored</option>
+              <option value="Qwen3-30B-A3B-Thinking-2507">Qwen3 30B</option>
+              <option value="gemma-3-27b-it">Gemma 27B</option>
+            </select>
             <button
               className="icon-btn"
               style={{ width: '24px', height: '24px', padding: '4px' }}
