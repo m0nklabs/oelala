@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
+import MediaImportModal from '../../components/MediaImportModal'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary' },
@@ -17,7 +18,7 @@ const MODELS = [
   { id: 'moondream', label: 'Moondream', description: 'Ultra-light · fastest' },
 ]
 
-export default function ImageToTextTool({ onSendToPrompt }) {
+export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [model, setModel] = useState('Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking')
@@ -25,6 +26,39 @@ export default function ImageToTextTool({ onSendToPrompt }) {
   const [caption, setCaption] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [importModal, setImportModal] = useState(null)  // { item, workflow }
+
+  // Auto-open import modal when Dashboard sends a pendingImport
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = async (selected) => {
+    if (selected.image && importModal?.item) {
+      const item = importModal.item
+      const imageUrl = getMediaUrl(item.url, item.signed_url)
+      // Use relative URL for fetch to go through Vite proxy (avoids CORS).
+      // Signed URLs (http://...) are used as-is; relative paths (/comfyui/...) go through proxy.
+      const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+      try {
+        const response = await fetch(fetchUrl)
+        const blob = await response.blob()
+        const filename = item.filename || item.url?.split('/').pop() || 'image.png'
+        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+        setFile(fileObj)
+        setPreview(imageUrl)
+        setCaption('')
+        setError(null)
+        if (DEBUG) console.log('🖼️ Imported image from creations:', filename)
+      } catch (e) {
+        console.error('Failed to load image from import:', e)
+        setError('⚠️ Failed to load image from import')
+      }
+    }
+    setImportModal(null)
+  }
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
@@ -95,6 +129,17 @@ export default function ImageToTextTool({ onSendToPrompt }) {
 
   return (
     <div className="tool-container">
+      {/* Import from previous generation modal */}
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow}
+          availableFields={['image']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
+
       <div className="tool-section">
         <h3>
           <ImageIcon size={18} />

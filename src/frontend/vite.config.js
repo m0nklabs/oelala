@@ -12,6 +12,14 @@ export default defineConfig({
       '/api': {
         target: 'http://192.168.1.2:7998',
         changeOrigin: true
+      },
+      '/comfyui': {
+        target: 'http://192.168.1.2:7998',
+        changeOrigin: true
+      },
+      '/media': {
+        target: 'http://192.168.1.2:7998',
+        changeOrigin: true
       }
     }
   }
