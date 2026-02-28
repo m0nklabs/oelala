@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle, User } from 'lucide-react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle, User, Flag } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,6 +14,12 @@ export default function MediaDetailModal({ item, onClose, onRemix = null, onView
   const [likeError, setLikeError] = useState('')
   const [downloadingWorkflow, setDownloadingWorkflow] = useState(false)
   const [workflowError, setWorkflowError] = useState('')
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDescription, setReportDescription] = useState('')
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [reportSuccess, setReportSuccess] = useState(false)
+  const [reportError, setReportError] = useState('')
 
   // Fetch fresh item data on open — gets accurate user_liked + triggers view increment
   useEffect(() => {
@@ -141,6 +147,47 @@ export default function MediaDetailModal({ item, onClose, onRemix = null, onView
       console.error('Failed to copy prompt:', err)
     }
   }
+
+  const handleReport = async () => {
+    if (!reportReason) return
+    setReportSubmitting(true)
+    setReportError('')
+    try {
+      const resp = await apiFetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          media_id: item.id,
+          reason: reportReason,
+          description: reportDescription || null,
+        }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: 'Report failed' }))
+        throw new Error(err.detail || 'Report failed')
+      }
+      setReportSuccess(true)
+      setTimeout(() => {
+        setShowReportModal(false)
+        setReportSuccess(false)
+        setReportReason('')
+        setReportDescription('')
+      }, 2000)
+    } catch (err) {
+      setReportError(err.message)
+    } finally {
+      setReportSubmitting(false)
+    }
+  }
+
+  const REPORT_REASONS = [
+    { value: 'inappropriate', label: 'Inappropriate content' },
+    { value: 'copyright', label: 'Copyright violation' },
+    { value: 'spam', label: 'Spam or misleading' },
+    { value: 'harassment', label: 'Harassment or bullying' },
+    { value: 'underage', label: 'Underage content' },
+    { value: 'other', label: 'Other' },
+  ]
 
   const mediaUrl = getMediaUrl()
 
@@ -649,10 +696,184 @@ export default function MediaDetailModal({ item, onClose, onRemix = null, onView
                   WF
                 </button>
               )}
+
+              {/* Report Button — not shown for own content */}
+              {user && item.user_id !== user.id && (
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  title="Report this content"
+                  style={{
+                    padding: '10px 16px',
+                    background: '#2a2a2a',
+                    border: '1px solid #444',
+                    borderRadius: '8px',
+                    color: '#ef4444',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Flag size={16} />
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div
+          onClick={(e) => { e.stopPropagation(); setShowReportModal(false) }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: '12px',
+              width: '100%',
+              maxWidth: '420px',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #333',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <h3 style={{ margin: 0, fontSize: '16px', color: '#fff' }}>
+                <Flag size={16} style={{ marginRight: '8px', verticalAlign: 'middle', color: '#ef4444' }} />
+                Report Content
+              </h3>
+              <button
+                onClick={() => setShowReportModal(false)}
+                style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 20px' }}>
+              {reportSuccess ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '24px 0',
+                  color: '#10b981',
+                  fontSize: '15px',
+                }}>
+                  <Check size={32} style={{ marginBottom: '8px' }} />
+                  <p>Report submitted. Thank you.</p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ color: '#aaa', fontSize: '13px', margin: '0 0 12px' }}>
+                    Why are you reporting this content?
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+                    {REPORT_REASONS.map(r => (
+                      <label
+                        key={r.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '8px 12px',
+                          background: reportReason === r.value ? '#2a2a2a' : 'transparent',
+                          border: `1px solid ${reportReason === r.value ? '#6366f1' : '#333'}`,
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          color: '#ddd',
+                          fontSize: '14px',
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="report_reason"
+                          value={r.value}
+                          checked={reportReason === r.value}
+                          onChange={(e) => setReportReason(e.target.value)}
+                          style={{ accentColor: '#6366f1' }}
+                        />
+                        {r.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  <textarea
+                    placeholder="Additional details (optional)"
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    maxLength={500}
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      background: '#2a2a2a',
+                      border: '1px solid #444',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      resize: 'vertical',
+                      marginBottom: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+
+                  {reportError && (
+                    <div style={{
+                      padding: '8px 12px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      borderRadius: '6px',
+                      color: '#ef4444',
+                      fontSize: '13px',
+                      marginBottom: '12px',
+                    }}>
+                      {reportError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleReport}
+                    disabled={!reportReason || reportSubmitting}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      background: reportReason ? '#ef4444' : '#333',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: reportReason && !reportSubmitting ? 'pointer' : 'not-allowed',
+                      opacity: !reportReason || reportSubmitting ? 0.5 : 1,
+                    }}
+                  >
+                    {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

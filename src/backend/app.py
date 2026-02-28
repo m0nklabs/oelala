@@ -78,6 +78,9 @@ from lora_api import router as lora_router
 
 # Webhooks system
 from webhooks_api import router as webhooks_router
+
+# Content moderation
+from moderation_api import public_router as moderation_public_router, admin_router as moderation_admin_router
 from webhook_service import webhook_service
 
 # Face swap / face profile service (insightface-based, no ComfyUI)
@@ -448,6 +451,8 @@ app.include_router(profile_router)  # User profiles at /api/profile/*
 app.include_router(admin_router)  # Admin panel at /api/admin/*
 app.include_router(lora_router)  # LoRA browser at /api/loras/*
 app.include_router(webhooks_router)  # Webhooks at /webhooks/*
+app.include_router(moderation_public_router)  # Content reports at /api/report/*
+app.include_router(moderation_admin_router)  # Admin moderation at /api/admin/moderation/*
 
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")

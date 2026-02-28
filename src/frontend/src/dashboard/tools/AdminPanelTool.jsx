@@ -4,14 +4,15 @@ import { BACKEND_BASE } from '../../config'
 import {
   Users, Search, Coins, Shield, Crown,
   ChevronDown, ChevronUp,
-  TrendingUp, Server, Activity
+  TrendingUp, Server, Activity, Flag
 } from 'lucide-react'
 import AdminSystemTab from './AdminSystemTab'
 import AdminAnalyticsTab from './AdminAnalyticsTab'
+import AdminModerationTab from './AdminModerationTab'
 
 export default function AdminPanel() {
   const { session, isAdmin } = useAuth()
-  const [activeMainTab, setActiveMainTab] = useState('users')  // 'users', 'system', or 'analytics'
+  const [activeMainTab, setActiveMainTab] = useState('users')  // 'users', 'system', 'analytics', or 'moderation'
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
@@ -356,6 +357,26 @@ export default function AdminPanel() {
           <TrendingUp size={18} />
           Analytics
         </button>
+        <button
+          onClick={() => setActiveMainTab('moderation')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1.25rem',
+            background: activeMainTab === 'moderation' ? 'var(--accent-color)' : 'transparent',
+            border: 'none',
+            borderRadius: '8px 8px 0 0',
+            color: activeMainTab === 'moderation' ? 'white' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontWeight: activeMainTab === 'moderation' ? 600 : 400,
+            fontSize: '1rem',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Flag size={18} />
+          Moderation
+        </button>
       </div>
 
       {/* Render tab content */}
@@ -363,6 +384,8 @@ export default function AdminPanel() {
         <AdminSystemTab />
       ) : activeMainTab === 'analytics' ? (
         <AdminAnalyticsTab />
+      ) : activeMainTab === 'moderation' ? (
+        <AdminModerationTab />
       ) : (
         <>
           {/* Stats Cards */}
