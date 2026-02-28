@@ -121,18 +121,32 @@ class GuardianVRAMClient:
 
     def unload_sync(self) -> bool:
         """
-        Synchronous version of unload() for use in non-async contexts.
-        Spins up a short-lived event loop internally.
+        Synchronous version of unload() for use in sync/mixed contexts (e.g.
+        from comfyui_client.queue_prompt which is called from async FastAPI handlers).
+        Uses sync httpx directly to avoid RuntimeError from nested event loops.
         """
         if not self._enabled:
             return False
 
-        import asyncio
         try:
-            loop = asyncio.new_event_loop()
-            return loop.run_until_complete(self.unload())
-        finally:
-            loop.close()
+            resp = httpx.post(
+                f"{self.base_url}/admin/unload",
+                headers=self._headers,
+                timeout=self.timeout,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.info(f"🛡️ Guardian: LLM unloaded — {data.get('message', 'VRAM free')}")
+                return True
+            else:
+                logger.warning(f"⚠️ [guardian] Unload returned {resp.status_code}: {resp.text}")
+                return False
+        except httpx.ConnectError:
+            logger.warning("⚠️ [guardian] Cannot reach Guardian proxy — skipping unload")
+            return False
+        except Exception as exc:
+            logger.warning(f"⚠️ [guardian] Unload error: {exc}")
+            return False
 
 
 # Module-level singleton — import and use directly
