@@ -437,3 +437,176 @@ def swap_with_profile(
         source_bytes = f.read()
 
     return swap_faces(source_bytes, target_img, face_indices)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Video face swap (frame-by-frame using cv2 + ffmpeg audio mux)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def swap_faces_in_video(
+    source_img: bytes,
+    video_bytes: bytes,
+    face_indices: list[int] | None = None,
+    output_format: str = "mp4",
+    progress_callback=None,
+) -> bytes:
+    """
+    Apply face swap to every frame of a video.
+
+    Uses cv2 for frame extraction/writing and ffmpeg to remux audio.
+    No ComfyUI required — pure CPU/GPU insightface.
+
+    Args:
+        source_img: Reference image with the source face (bytes).
+        video_bytes: Input video as bytes (mp4/mov/webm/etc.).
+        face_indices: Which face indices in each frame to swap (None = [0]).
+        output_format: Output container format (default: "mp4").
+        progress_callback: Optional callable(current_frame, total_frames).
+
+    Returns:
+        Video bytes with swapped faces, audio preserved.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    if face_indices is None:
+        face_indices = [0]
+
+    analyser = _get_analyser()
+    swapper = _get_swapper()
+
+    # Get source face embedding once
+    source_pil = Image.open(io.BytesIO(source_img)).convert("RGB")
+    cv_source = _pil_to_bgr(source_pil)
+    source_face = _get_face_single(analyser, cv_source, face_index=0)
+    if source_face is None:
+        raise ValueError("No face detected in source image")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_path = Path(tmpdir) / "input_video"
+        raw_output_path = Path(tmpdir) / "raw_output.mp4"
+        final_output_path = Path(tmpdir) / f"output.{output_format}"
+
+        # Write input video to disk
+        input_path.write_bytes(video_bytes)
+
+        # Open with cv2
+        cap = cv2.VideoCapture(str(input_path))
+        if not cap.isOpened():
+            raise ValueError("Cannot open video — unsupported format or corrupt file")
+
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        logger.info(
+            f"🎬 Video face swap: {total_frames} frames @ {fps:.1f}fps "
+            f"({width}x{height})"
+        )
+
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(str(raw_output_path), fourcc, fps, (width, height))
+
+        frame_idx = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            try:
+                result = frame.copy()
+                for face_idx in face_indices:
+                    target_face = _get_face_single(analyser, frame, face_index=face_idx)
+                    if target_face is None:
+                        continue
+                    sys.stdout = _NullWriter()
+                    try:
+                        result = swapper.get(result, target_face, source_face, paste_back=True)
+                    finally:
+                        sys.stdout = sys.__stdout__
+            except Exception as e:
+                logger.warning(f"⚠️ Frame {frame_idx} swap failed: {e} — using original")
+                result = frame
+
+            out.write(result)
+            frame_idx += 1
+
+            if progress_callback and frame_idx % 10 == 0:
+                progress_callback(frame_idx, total_frames)
+
+        cap.release()
+        out.release()
+
+        logger.info(f"✅ Processed {frame_idx}/{total_frames} frames")
+
+        # Remux: copy audio from input onto swapped video
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", str(raw_output_path),   # swapped video (no audio)
+            "-i", str(input_path),         # original (has audio)
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-map", "0:v:0",
+            "-map", "1:a:0?",             # "?" = audio optional (silent source ok)
+            "-shortest",
+            str(final_output_path),
+        ]
+
+        try:
+            subprocess.run(
+                ffmpeg_cmd,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=300,
+            )
+            output_path = final_output_path
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            logger.warning("⚠️ ffmpeg audio mux failed — returning video without audio")
+            output_path = raw_output_path
+
+        return output_path.read_bytes()
+
+
+def swap_faces_in_video_with_profile(
+    profile_id: str,
+    video_bytes: bytes,
+    face_indices: list[int] | None = None,
+    output_format: str = "mp4",
+    progress_callback=None,
+) -> bytes:
+    """
+    Apply face swap to every frame of a video using a saved face profile.
+
+    Args:
+        profile_id: ID of the saved face profile.
+        video_bytes: Input video bytes.
+        face_indices: Which face indices in each frame to swap.
+        output_format: Output container format.
+        progress_callback: Optional callable(current_frame, total_frames).
+
+    Returns:
+        Video bytes with swapped faces, audio preserved.
+    """
+    profile = get_face_profile(profile_id)
+    if not profile:
+        raise ValueError(f"Face profile '{profile_id}' not found")
+
+    if not profile["images"]:
+        raise ValueError(f"Face profile '{profile_id}' has no reference images")
+
+    source_path = (
+        FACE_PROFILES_DIR / profile_id / "images" / profile["images"][0]
+    )
+    source_bytes = source_path.read_bytes()
+
+    return swap_faces_in_video(
+        source_img=source_bytes,
+        video_bytes=video_bytes,
+        face_indices=face_indices,
+        output_format=output_format,
+        progress_callback=progress_callback,
+    )
