@@ -1,0 +1,237 @@
+{
+  "info": {
+    "_postman_id": "oelala-api-collection",
+    "name": "Oelala API",
+    "description": "Official Postman collection for the Oelala AI generation API.\n\n## Setup\n1. Set the `base_url` variable (default: `https://api.oelala.xyz`)\n2. Set the `api_key` variable to your Oelala API key\n3. Start with **Health Check** to verify connectivity\n\n## Authentication\nAll `/api/v1/*` endpoints require an API key via the `X-API-Key` header.\n\nGet your API key at https://oelala.xyz → Settings → API Keys.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-Key", "type": "string" },
+      { "key": "value", "value": "{{api_key}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://api.oelala.xyz", "type": "string" },
+    { "key": "api_key", "value": "oelala_your_key_here", "type": "string" },
+    { "key": "job_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/v1/health", "host": ["{{base_url}}"], "path": ["api", "v1", "health"] },
+            "auth": { "type": "noauth" },
+            "description": "Basic health check. No authentication required."
+          }
+        },
+        {
+          "name": "Deep Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/health/deep", "host": ["{{base_url}}"], "path": ["health", "deep"] },
+            "auth": { "type": "noauth" },
+            "description": "Deep health check with service connectivity status for ComfyUI, storage, Supabase, and disk space."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generation",
+      "item": [
+        {
+          "name": "Generate: Text-to-Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('job_id', json.job_id);",
+                  "    pm.test('Job created', function() {",
+                  "        pm.expect(json.job_id).to.be.a('string');",
+                  "        pm.expect(json.status).to.equal('queued');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"text-to-image\",\n  \"prompt\": \"a beautiful sunset over mountains with vibrant colors\",\n  \"width\": 1024,\n  \"height\": 1024,\n  \"steps\": 20,\n  \"cfg\": 7.5,\n  \"seed\": -1\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "generate"] },
+            "description": "Generate an image from a text prompt.\n\n**Credits:** ~10 credits per image.\n\nThe response includes a `job_id` which is automatically saved for the status/download requests."
+          }
+        },
+        {
+          "name": "Generate: Text-to-Video",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('job_id', json.job_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"text-to-video\",\n  \"prompt\": \"a timelapse of flowers blooming in a garden\",\n  \"width\": 848,\n  \"height\": 480,\n  \"duration_seconds\": 5,\n  \"steps\": 6,\n  \"cfg\": 7.5\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "generate"] },
+            "description": "Generate a video from a text prompt.\n\n**Credits:** ~50-200 credits depending on duration and resolution.\n**Duration:** 1-30 seconds."
+          }
+        },
+        {
+          "name": "Generate: Image-to-Video",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('job_id', json.job_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"image-to-video\",\n  \"prompt\": \"gentle wind blowing through the scene\",\n  \"image_url\": \"https://example.com/your-image.jpg\",\n  \"width\": 848,\n  \"height\": 480,\n  \"duration_seconds\": 5\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "generate"] },
+            "description": "Animate an existing image into a video.\n\n**Requires:** `image_url` pointing to a publicly accessible image.\n**Credits:** ~50-200 credits."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Get Job Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.test('Valid job status', function() {",
+                  "        pm.expect(['queued','running','completed','failed']).to.include(json.status);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/v1/jobs/{{job_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "jobs", "{{job_id}}"] },
+            "description": "Check the status of a generation job.\n\n**Statuses:**\n- `queued` — waiting to start\n- `running` — currently processing\n- `completed` — done, ready to download\n- `failed` — failed with error\n\n**Tip:** Poll every 5-10 seconds until status is `completed` or `failed`."
+          }
+        },
+        {
+          "name": "Download Job Result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/v1/jobs/{{job_id}}/download", "host": ["{{base_url}}"], "path": ["api", "v1", "jobs", "{{job_id}}", "download"] },
+            "description": "Download the generated file (image or video) of a completed job.\n\nReturns binary data with appropriate Content-Type header."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Credits",
+      "item": [
+        {
+          "name": "Get Credit Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/v1/credits", "host": ["{{base_url}}"], "path": ["api", "v1", "credits"] },
+            "description": "Get your current credit balance, lifetime purchased, and lifetime used."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "description": "Webhook management endpoints. These use JWT authentication (Bearer token), not API keys.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{jwt_token}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "List Webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/webhooks", "host": ["{{base_url}}"], "path": ["webhooks"] },
+            "description": "List all configured webhooks."
+          }
+        },
+        {
+          "name": "Create Webhook",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Webhook\",\n  \"url\": \"https://example.com/webhook\",\n  \"events\": [\"job.completed\", \"job.failed\"],\n  \"enabled\": true\n}"
+            },
+            "url": { "raw": "{{base_url}}/webhooks", "host": ["{{base_url}}"], "path": ["webhooks"] },
+            "description": "Create a new webhook. The response includes the `secret` (shown only once!).\n\n**Events:** `job.queued`, `job.started`, `job.completed`, `job.failed`"
+          }
+        },
+        {
+          "name": "Test Webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{base_url}}/webhooks/{{webhook_id}}/test", "host": ["{{base_url}}"], "path": ["webhooks", "{{webhook_id}}", "test"] },
+            "description": "Send a test event to verify webhook connectivity."
+          }
+        },
+        {
+          "name": "Get Event Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/webhooks/events/types", "host": ["{{base_url}}"], "path": ["webhooks", "events", "types"] },
+            "description": "List all available webhook event types."
+          }
+        }
+      ]
+    }
+  ]
+}
