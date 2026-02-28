@@ -414,8 +414,10 @@ UPLOAD_DIR = Path("/home/flip/oelala/uploads")
 OUTPUT_DIR = Path("/home/flip/oelala/generated")
 FRONTEND_DIR = Path("/home/flip/oelala/src/frontend")
 COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
+AVATARS_DIR = Path("/home/flip/oelala/media/avatars")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount static files after CORS
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
@@ -427,6 +429,9 @@ if COMFYUI_OUTPUT_DIR.exists():
         StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)),
         name="comfyui_output",
     )
+
+# Mount avatars directory (public, no auth required)
+app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
 
 
 # =============================================================================

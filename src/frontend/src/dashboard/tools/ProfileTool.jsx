@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { User, Save, RefreshCw, CheckCircle, AlertCircle, Twitter, Instagram, Youtube, Github, Globe, Link2, Camera } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
@@ -13,6 +13,8 @@ export default function ProfileTool() {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [stats, setStats] = useState(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef(null)
 
   // Profile form state
   const [profile, setProfile] = useState({
@@ -33,6 +35,36 @@ export default function ProfileTool() {
     fetchProfile()
     fetchStats()
   }, [user, token])
+
+  async function handleAvatarUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    setError(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${BACKEND_BASE}/api/profile/me/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || 'Upload failed')
+      }
+      const data = await res.json()
+      setProfile((p) => ({ ...p, avatar_url: data.avatar_url }))
+      setSuccess('Avatar updated!')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploadingAvatar(false)
+      // reset so same file can trigger onChange again
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
 
   async function fetchProfile() {
     try {
@@ -195,17 +227,22 @@ export default function ProfileTool() {
                   <User size={48} />
                 </div>
               )}
-              <button style={styles.avatarEditButton} title="Upload avatar (coming soon)">
-                <Camera size={14} />
+              <button
+                style={styles.avatarEditButton}
+                title={uploadingAvatar ? 'Uploading…' : 'Upload avatar'}
+                disabled={uploadingAvatar}
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {uploadingAvatar ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Camera size={14} />}
               </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                style={{ display: 'none' }}
+                onChange={handleAvatarUpload}
+              />
             </div>
-            <input
-              type="text"
-              value={profile.avatar_url}
-              onChange={(e) => handleInputChange('avatar_url', e.target.value)}
-              placeholder="Avatar URL"
-              style={styles.avatarUrlInput}
-            />
           </div>
 
           {/* Stats */}

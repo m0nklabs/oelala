@@ -5,15 +5,23 @@ Handles user profile CRUD operations and lookups
 """
 
 import os
+import io
 import logging
 import re
 import random
 import string
+from pathlib import Path
 import httpx
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, File, UploadFile
 from pydantic import BaseModel, Field, validator
+from PIL import Image
 from auth import get_current_user, get_optional_user, User
+
+AVATARS_DIR = Path("/home/flip/oelala/media/avatars")
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+AVATAR_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+AVATAR_SIZE = 256  # square px
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -394,6 +402,71 @@ async def delete_my_profile(user: User = Depends(get_current_user)):
 
         debug_log(f"Deleted profile for user {user.id}")
         return {"success": True, "message": "Profile deleted successfully"}
+
+
+# =============================================================================
+# Avatar Upload
+# =============================================================================
+
+
+@router.post("/me/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """
+    Upload a profile avatar image.
+    Accepts JPEG/PNG/WebP/GIF, max 5 MB.
+    Image is cropped to a centered square and saved as 256×256 JPEG.
+    """
+    # Validate content type
+    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    if file.content_type not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file.content_type}'. Use JPEG, PNG, WebP or GIF.",
+        )
+
+    # Read and size-check
+    data = await file.read()
+    if len(data) > AVATAR_MAX_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large ({len(data) // 1024} KB). Max 5 MB.",
+        )
+
+    # Open + crop to centered square + resize
+    try:
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        w, h = img.size
+        short = min(w, h)
+        left = (w - short) // 2
+        top = (h - short) // 2
+        img = img.crop((left, top, left + short, top + short))
+        img = img.resize((AVATAR_SIZE, AVATAR_SIZE), Image.LANCZOS)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not process image: {exc}")
+
+    # Save to disk
+    dest = AVATARS_DIR / f"{user.id}.jpg"
+    img.save(str(dest), "JPEG", quality=85, optimize=True)
+    debug_log(f"👤 Saved avatar for user {user.id} → {dest}")
+
+    # Build public URL (served via /avatars/ static mount)
+    avatar_url = f"/avatars/{user.id}.jpg"
+
+    # Persist in Supabase
+    async with await get_supabase_client() as client:
+        resp = await client.patch(
+            "/profiles",
+            params={"id": f"eq.{user.id}"},
+            json={"avatar_url": avatar_url},
+        )
+        if resp.status_code not in (200, 204):
+            logger.error(f"Failed to update avatar_url in Supabase: {resp.text}")
+            raise HTTPException(status_code=500, detail="Saved image but failed to update profile")
+
+    return {"avatar_url": avatar_url}
 
 
 # =============================================================================
