@@ -1,0 +1,11 @@
+### Added
+- Comprehensive mobile CSS overrides for tool panels (`.tool-container`, `.tool-section`, `.form-group`, `.button-group`, `.btn-option`, `.form-row`)
+- Touch-friendly button targets (min 44px height) for all option buttons
+- Vertical stacking of `.form-row` inputs on mobile (instead of side-by-side)
+- Button group wrapping with `flex-wrap` for overflow prevention
+- Increased font sizes (15-16px) for all tool inputs, selects, and textareas
+- Compact tool section spacing optimized for mobile viewports
+- Body scroll lock when mobile parameters panel is open
+- Visual drag indicator bar on tool container
+- Larger upload/drop zone areas (min 120px) for easy tapping
+- Generate button minimum height (50px) for prominent CTA
