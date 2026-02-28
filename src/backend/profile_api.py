@@ -506,7 +506,9 @@ async def upload_avatar(
         )
         if resp.status_code not in (200, 204):
             logger.error(f"Failed to update avatar_url in Supabase: {resp.text}")
-            raise HTTPException(status_code=500, detail="Saved image but failed to update profile")
+            raise HTTPException(
+                status_code=500, detail="Saved image but failed to update profile"
+            )
 
     return {"avatar_url": avatar_url}
 
@@ -556,7 +558,11 @@ async def follow_user(user_id: str, user: User = Depends(get_current_user)):
             "/profiles",
             params={"id": f"eq.{user_id}", "select": "follower_count,following_count"},
         )
-        counts = profile_resp.json()[0] if profile_resp.status_code == 200 and profile_resp.json() else {}
+        counts = (
+            profile_resp.json()[0]
+            if profile_resp.status_code == 200 and profile_resp.json()
+            else {}
+        )
 
         debug_log(f"User {user.id} followed {user_id}")
         return FollowResponse(
@@ -590,7 +596,11 @@ async def unfollow_user(user_id: str, user: User = Depends(get_current_user)):
             "/profiles",
             params={"id": f"eq.{user_id}", "select": "follower_count,following_count"},
         )
-        counts = profile_resp.json()[0] if profile_resp.status_code == 200 and profile_resp.json() else {}
+        counts = (
+            profile_resp.json()[0]
+            if profile_resp.status_code == 200 and profile_resp.json()
+            else {}
+        )
 
         debug_log(f"User {user.id} unfollowed {user_id}")
         return FollowResponse(

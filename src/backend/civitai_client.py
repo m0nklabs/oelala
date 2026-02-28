@@ -108,7 +108,7 @@ class CivitaiClient:
         # Fallback: pick the largest file (often the actual checkpoint)
         choices_sorted = sorted(
             choices,
-            key=lambda c: (c.size_kb or 0),
+            key=lambda c: c.size_kb or 0,
             reverse=True,
         )
         return choices_sorted[0]

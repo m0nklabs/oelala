@@ -21,7 +21,6 @@ import os
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -75,9 +74,7 @@ def _get_analyser():
         import insightface
 
         INSIGHTFACE_MODEL_ROOT.mkdir(parents=True, exist_ok=True)
-        logger.info(
-            f"🐛 Loading insightface buffalo_l from {INSIGHTFACE_MODEL_ROOT}"
-        )
+        logger.info(f"🐛 Loading insightface buffalo_l from {INSIGHTFACE_MODEL_ROOT}")
         _face_analyser = insightface.app.FaceAnalysis(
             name="buffalo_l",
             root=INSIGHTFACE_MODEL_ROOT.as_posix(),
@@ -346,9 +343,7 @@ def create_face_profile(
             logger.warning(f"⚠️ Failed to process image {i}: {e}")
 
     if not embeddings:
-        raise ValueError(
-            "No valid faces detected in any of the provided images"
-        )
+        raise ValueError("No valid faces detected in any of the provided images")
 
     # Average embeddings across all images for stable identity
     avg_embedding = np.mean(embeddings, axis=0)
@@ -430,9 +425,7 @@ def swap_with_profile(
         raise ValueError(f"Face profile '{profile_id}' has no reference images")
 
     # Load first reference image as source
-    source_path = (
-        FACE_PROFILES_DIR / profile_id / "images" / profile["images"][0]
-    )
+    source_path = FACE_PROFILES_DIR / profile_id / "images" / profile["images"][0]
     with open(source_path, "rb") as f:
         source_bytes = f.read()
 
@@ -467,7 +460,6 @@ def swap_faces_in_video(
     Returns:
         Video bytes with swapped faces, audio preserved.
     """
-    import shutil
     import subprocess
     import tempfile
 
@@ -524,7 +516,9 @@ def swap_faces_in_video(
                         continue
                     sys.stdout = _NullWriter()
                     try:
-                        result = swapper.get(result, target_face, source_face, paste_back=True)
+                        result = swapper.get(
+                            result, target_face, source_face, paste_back=True
+                        )
                     finally:
                         sys.stdout = sys.__stdout__
             except Exception as e:
@@ -544,13 +538,20 @@ def swap_faces_in_video(
 
         # Remux: copy audio from input onto swapped video
         ffmpeg_cmd = [
-            "ffmpeg", "-y",
-            "-i", str(raw_output_path),   # swapped video (no audio)
-            "-i", str(input_path),         # original (has audio)
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-map", "0:v:0",
-            "-map", "1:a:0?",             # "?" = audio optional (silent source ok)
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(raw_output_path),  # swapped video (no audio)
+            "-i",
+            str(input_path),  # original (has audio)
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0?",  # "?" = audio optional (silent source ok)
             "-shortest",
             str(final_output_path),
         ]
@@ -598,9 +599,7 @@ def swap_faces_in_video_with_profile(
     if not profile["images"]:
         raise ValueError(f"Face profile '{profile_id}' has no reference images")
 
-    source_path = (
-        FACE_PROFILES_DIR / profile_id / "images" / profile["images"][0]
-    )
+    source_path = FACE_PROFILES_DIR / profile_id / "images" / profile["images"][0]
     source_bytes = source_path.read_bytes()
 
     return swap_faces_in_video(
