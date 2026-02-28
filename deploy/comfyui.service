@@ -12,9 +12,32 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+
+# ── CPU / scheduling ───────────────────────────────────────────────
+# Hard-pin ComfyUI to cores 0-23, reserving cores 24-25 for OS/other services
+AllowedCPUs=0-23
+# Soft quota: max 9200% = 24 cores worth of CPU time (belt + suspenders)
+CPUQuota=9200%
+# Lower scheduling priority so interactive processes always preempt ComfyUI
+Nice=10
+# Batch scheduling: yields CPU to SCHED_OTHER tasks faster under load
+CPUSchedulingPolicy=batch
+# Lower I/O priority so disk/nvme stays responsive for other processes
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# OOM killer targets ComfyUI first if RAM is tight
+OOMScoreAdjust=300
+
+# ── Environment ────────────────────────────────────────────────────
 Environment=PATH=/home/flip/venvs/gpu/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=PYTHONUNBUFFERED=1
 Environment=CUDA_VISIBLE_DEVICES=0,1
+# Limit CPU thread pools to 24 (leaves 2 cores free for OS / other services)
+Environment=OMP_NUM_THREADS=24
+Environment=MKL_NUM_THREADS=24
+Environment=OPENBLAS_NUM_THREADS=24
+Environment=NUMEXPR_NUM_THREADS=24
+Environment=VECLIB_MAXIMUM_THREADS=24
 
 [Install]
 WantedBy=multi-user.target
