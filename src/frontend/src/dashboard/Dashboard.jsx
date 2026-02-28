@@ -22,6 +22,7 @@ const VideoToVideoTool = lazy(() => import('./tools/VideoToVideoTool'))
 const VideoToTextTool = lazy(() => import('./tools/VideoToTextTool'))
 const SpeechToVideoTool = lazy(() => import('./tools/SpeechToVideoTool'))
 const PostProcessingTool = lazy(() => import('./tools/PostProcessingTool'))
+const VideoUpscalerTool = lazy(() => import('./tools/VideoUpscalerTool'))
 const PipelineTool = lazy(() => import('./tools/PipelineTool'))
 const LoRATrainingTool = lazy(() => import('./tools/LoRATrainingTool'))
 const ImageToTextTool = lazy(() => import('./tools/ImageToTextTool'))
@@ -195,6 +196,8 @@ export default function Dashboard() {
         return 'Face Swap'
       case TOOL_IDS.UPSCALER:
         return 'Upscaler'
+      case TOOL_IDS.VIDEO_UPSCALER:
+        return 'Video Upscaler'
       case TOOL_IDS.IMAGE_TO_TEXT:
         return 'Image to Text'
       case TOOL_IDS.PROMPT_GENERATOR:
@@ -314,6 +317,9 @@ export default function Dashboard() {
 
       case TOOL_IDS.POST_PROCESSING:
         return wrapWithSuspense(<PostProcessingTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+
+      case TOOL_IDS.VIDEO_UPSCALER:
+        return wrapWithSuspense(<VideoUpscalerTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.API_KEYS:
         return wrapWithSuspense(<APIKeysTool />)

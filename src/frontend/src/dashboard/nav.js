@@ -6,6 +6,7 @@ export const TOOL_IDS = {
   TEXT_TO_IMAGE_TO_VIDEO: 'text-to-image-to-video',
   VIDEO_TO_VIDEO: 'video-to-video',
   SPEECH_TO_VIDEO: 'speech-to-video',
+  VIDEO_UPSCALER: 'video-upscaler',
   // Image Tools
   IMAGE_TO_IMAGE: 'image-to-image',
   REFRAME: 'reframe',
@@ -46,6 +47,7 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.TEXT_TO_VIDEO, label: 'Text to Video', status: 'ready' },
       { id: TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO, label: 'Text to Image to Video', status: 'ready' },
       { id: TOOL_IDS.VIDEO_TO_VIDEO, label: 'Video to Video', status: 'ready' },
+      { id: TOOL_IDS.VIDEO_UPSCALER, label: 'Video Upscaler', status: 'new' },
       { id: TOOL_IDS.SPEECH_TO_VIDEO, label: 'Speech to Video', status: 'new' },
     ],
   },

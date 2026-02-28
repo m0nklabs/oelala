@@ -6,8 +6,16 @@ import { useAuth } from '../../contexts/AuthContext'
 
 // Video upscaling models
 const UPSCALE_MODELS = [
-  { value: 'realesrgan-video', label: 'Real-ESRGAN Video', desc: 'AI-enhanced video upscaling', scale: [2, 4] },
-  { value: 'basic-lanczos', label: 'Basic Lanczos', desc: 'Fast traditional upscaling', scale: [2, 4] },
+  { value: 'realesrgan', label: 'Real-ESRGAN', desc: 'AI-enhanced video upscaling (GPU)', scale: [2, 4] },
+  { value: 'lanczos', label: 'Lanczos', desc: 'Fast traditional upscaling', scale: [2, 4] },
+  { value: 'seedvr2', label: 'SeedVR2', desc: 'Best quality AI upscaler (slow)', scale: [2, 4] },
+]
+
+// Quality presets
+const QUALITY_PRESETS = [
+  { value: 'fast', label: '⚡ Fast', desc: 'Lower quality, faster encoding' },
+  { value: 'balanced', label: '⚖️ Balanced', desc: 'Good quality/speed balance' },
+  { value: 'quality', label: '💎 Quality', desc: 'Best quality, larger file' },
 ]
 
 export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
@@ -17,7 +25,9 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
 
-  const [model, setModel] = useState('realesrgan-video')
+  const [model, setModel] = useState('realesrgan')
+  const [scale, setScale] = useState(2)
+  const [qualityPreset, setQualityPreset] = useState('balanced')
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -29,7 +39,6 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       setFile(f)
       const url = URL.createObjectURL(f)
       setPreview(url)
-      setResult(null)
       setError(null)
       setLastQueued(null)
 
@@ -85,8 +94,10 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('model', model)
+      formData.append('scale', String(scale))
+      formData.append('quality_preset', qualityPreset)
 
-      if (DEBUG) console.debug('🔍 Video upscale request:', { model })
+      if (DEBUG) console.debug('🔍 Video upscale request:', { model, scale, qualityPreset })
 
       const res = await postForm(`${BACKEND_BASE}/upscale-video`, formData)
 
@@ -103,6 +114,8 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       setLastQueued({
         promptId,
         model: UPSCALE_MODELS.find(m => m.value === model)?.label || model,
+        scale,
+        qualityPreset,
       })
 
       if (DEBUG) console.debug('📋 Video upscale queued:', promptId)
@@ -194,9 +207,63 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
               </option>
             ))}
           </select>
-          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Note: Currently uses fixed 4x upscaling with RealESRGAN. Custom resolution and quality settings coming soon.
-          </p>
+        </div>
+
+        {/* Scale Factor */}
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
+            Scale Factor
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {[2, 4].map(s => (
+              <button
+                key={s}
+                onClick={() => setScale(s)}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: scale === s ? 'var(--accent-color)' : 'var(--bg-tertiary)',
+                  border: scale === s ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  color: scale === s ? '#fff' : 'var(--text-primary)',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                }}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Quality Preset */}
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
+            Quality Preset
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {QUALITY_PRESETS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => setQualityPreset(p.value)}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  backgroundColor: qualityPreset === p.value ? 'var(--accent-color)' : 'var(--bg-tertiary)',
+                  border: qualityPreset === p.value ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  color: qualityPreset === p.value ? '#fff' : 'var(--text-primary)',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  textAlign: 'center',
+                }}
+                title={p.desc}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -211,7 +278,7 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
       {lastQueued && (
         <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '6px' }}>
           <p style={{ fontSize: '0.85rem', color: '#22c55e' }}>
-            ✓ Video upscale queued! ({lastQueued.model})
+            ✓ Video upscale queued! ({lastQueued.model}, {lastQueued.scale}x, {lastQueued.qualityPreset})
           </p>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Job ID: {lastQueued.promptId}

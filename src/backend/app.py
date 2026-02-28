@@ -7562,6 +7562,7 @@ async def upscale_video(
     file: UploadFile = File(...),
     model: str = Form("lanczos"),
     scale: float = Form(2.0),
+    quality_preset: str = Form("balanced"),
 ):
     """
     Upscale video using various methods.
@@ -7571,21 +7572,34 @@ async def upscale_video(
         model: Upscale method:
             - lanczos: High-quality lanczos interpolation (fast, no AI)
             - bicubic: Bicubic interpolation (fast, no AI)
+            - realesrgan: Real-ESRGAN AI upscaler (GPU, high quality)
             - seedvr2: SeedVR2 AI upscaler (slow, requires GPU, best quality)
         scale: Upscale factor (2.0 = double resolution)
-
-    Note: AI upscale models (realesrgan) are not currently installed.
-    Use 'lanczos' for reliable basic upscaling.
+        quality_preset: Quality preset (fast, balanced, quality)
+            - fast: Lower quality, faster encoding (CRF 28)
+            - balanced: Good quality/speed balance (CRF 19)
+            - quality: Best quality, larger file (CRF 14)
     """
-    logger.info(f"🎬 Video upscale request: model={model}, scale={scale}x")
+    logger.info(f"🎬 Video upscale request: model={model}, scale={scale}x, quality={quality_preset}")
 
     # Validate model
-    valid_models = ["lanczos", "bicubic", "bilinear", "nearest-exact", "area"]
+    valid_models = ["lanczos", "bicubic", "bilinear", "nearest-exact", "area", "realesrgan"]
     if model not in valid_models and model != "seedvr2":
         raise HTTPException(
             status_code=400,
             detail=f"Invalid model '{model}'. Available: {valid_models + ['seedvr2']}",
         )
+
+    # Validate quality preset
+    valid_presets = ["fast", "balanced", "quality"]
+    if quality_preset not in valid_presets:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid quality_preset '{quality_preset}'. Available: {valid_presets}",
+        )
+
+    # Map quality preset to CRF value
+    crf_map = {"fast": 28, "balanced": 19, "quality": 14}
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -7608,6 +7622,8 @@ async def upscale_video(
             )
 
         logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
+
+        crf = crf_map[quality_preset]
 
         if model == "seedvr2":
             # SeedVR2 AI video upscaler workflow
@@ -7663,11 +7679,57 @@ async def upscale_video(
                         "filename_prefix": "oelala_upscale_seedvr2",
                         "format": "video/h264-mp4",
                         "pix_fmt": "yuv420p",
-                        "crf": 19,
+                        "crf": crf,
                         "save_metadata": True,
                         "pingpong": False,
                         "save_output": True,
                         "images": ["4", 0],
+                    },
+                    "class_type": "VHS_VideoCombine",
+                },
+            }
+        elif model == "realesrgan":
+            # Real-ESRGAN AI video upscaler (frame-by-frame upscaling)
+            # Select model file based on scale factor
+            esrgan_model = "RealESRGAN_x4plus.pth" if scale >= 4 else "RealESRGAN_x2plus.pth"
+            workflow = {
+                "1": {
+                    "inputs": {
+                        "video": comfyui_filename,
+                        "force_rate": 0,
+                        "force_size": "Disabled",
+                        "custom_width": 0,
+                        "custom_height": 0,
+                        "frame_load_cap": 0,
+                        "skip_first_frames": 0,
+                        "select_every_nth": 1,
+                    },
+                    "class_type": "VHS_LoadVideo",
+                },
+                "2": {
+                    "inputs": {
+                        "model_name": esrgan_model,
+                    },
+                    "class_type": "UpscaleModelLoader",
+                },
+                "3": {
+                    "inputs": {
+                        "upscale_model": ["2", 0],
+                        "image": ["1", 0],
+                    },
+                    "class_type": "ImageUpscaleWithModel",
+                },
+                "4": {
+                    "inputs": {
+                        "frame_rate": ["1", 2],
+                        "loop_count": 0,
+                        "filename_prefix": "oelala_upscale_realesrgan",
+                        "format": "video/h264-mp4",
+                        "pix_fmt": "yuv420p",
+                        "crf": crf,
+                        "save_metadata": True,
+                        "images": ["3", 0],
+                        "audio": ["1", 1],
                     },
                     "class_type": "VHS_VideoCombine",
                 },
@@ -7711,7 +7773,7 @@ async def upscale_video(
                         "filename_prefix": f"oelala_upscale_{model}",
                         "format": "video/h264-mp4",
                         "pix_fmt": "yuv420p",
-                        "crf": 19,
+                        "crf": crf,
                         "save_metadata": True,
                         "pingpong": False,
                         "save_output": True,
@@ -7733,6 +7795,7 @@ async def upscale_video(
             "meta": {
                 "model": model,
                 "scale": scale,
+                "quality_preset": quality_preset,
                 "source_video": comfyui_filename,
             },
         }

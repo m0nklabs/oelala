@@ -214,6 +214,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
     { id: 'text-to-image',  label: '🖼️ Text to Image' },
     { id: 'image-to-image', label: '🔄 Image to Image' },
     { id: 'image-to-text',  label: '📷 Image to Text' },
+    { id: 'post-processing', label: '📈 Upscale Video' },
   ]
 
   // Close the dropdown when the lightbox switches items

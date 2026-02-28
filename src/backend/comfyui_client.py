@@ -4001,6 +4001,7 @@ class ComfyUIClient:
         scale: int = 2,
         output_prefix: str = "upscaled",
         model: str = "realesrgan-x4plus",
+        quality_preset: str = "balanced",
     ) -> Optional[Dict]:
         """
         Build a video upscaling workflow using Real-ESRGAN.
@@ -4010,6 +4011,7 @@ class ComfyUIClient:
             scale: Upscale factor (2 or 4)
             output_prefix: Prefix for output filename
             model: Upscale model to use
+            quality_preset: Quality preset (fast, balanced, quality)
             
         Returns:
             ComfyUI workflow dict or None if video doesn't exist
@@ -4023,6 +4025,10 @@ class ComfyUIClient:
         if not video_name:
             logger.error("Failed to upload video for upscaling")
             return None
+
+        # Map quality preset to CRF value
+        crf_map = {"fast": 28, "balanced": 19, "quality": 14}
+        crf = crf_map.get(quality_preset, 19)
 
         workflow = {
             "1": {
@@ -4058,7 +4064,7 @@ class ComfyUIClient:
                     "filename_prefix": output_prefix,
                     "format": "video/h264-mp4",
                     "pix_fmt": "yuv420p",
-                    "crf": 19,
+                    "crf": crf,
                     "save_metadata": True,
                     "images": ["3", 0],
                     "audio": ["1", 1],
@@ -4067,7 +4073,7 @@ class ComfyUIClient:
             },
         }
 
-        logger.info(f"🔧 Built video upscale workflow: {scale}x with {model}")
+        logger.info(f"🔧 Built video upscale workflow: {scale}x with {model}, quality={quality_preset}")
         return workflow
 
     def build_rife_workflow(

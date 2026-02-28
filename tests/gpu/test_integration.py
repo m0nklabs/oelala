@@ -156,7 +156,7 @@ class TestAdvancedVideoEndpoints:
         resp = requests.post(
             f"{BACKEND_URL}/upscale-video",
             files={"file": ("test.mp4", test_video, "video/mp4")},
-            data={"model": "realesrgan-video"},
+            data={"model": "realesrgan"},
             timeout=10
         )
 
@@ -216,12 +216,49 @@ class TestAdvancedVideoEndpoints:
         resp = requests.post(
             f"{BACKEND_URL}/upscale-video",
             files={"file": ("test.mp4", test_video, "video/mp4")},
-            data={"model": "realesrgan-video"},
+            data={"model": "realesrgan"},
             timeout=10
         )
 
         # Should at least parse the request
         assert resp.status_code in [200, 400, 422, 500, 503]
+
+    def test_upscale_video_quality_preset(self):
+        """Upscale endpoint should accept quality_preset parameter."""
+        test_video = io.BytesIO(b'\x00' * 100)
+        test_video.seek(0)
+
+        resp = requests.post(
+            f"{BACKEND_URL}/upscale-video",
+            files={"file": ("test.mp4", test_video, "video/mp4")},
+            data={
+                "model": "realesrgan",
+                "scale": "4",
+                "quality_preset": "quality",
+            },
+            timeout=10
+        )
+
+        # Should at least parse the request (not 422 validation error)
+        assert resp.status_code in [200, 400, 500, 503]
+
+    def test_upscale_video_invalid_quality_preset(self):
+        """Upscale endpoint should reject invalid quality_preset."""
+        test_video = io.BytesIO(b'\x00' * 100)
+        test_video.seek(0)
+
+        resp = requests.post(
+            f"{BACKEND_URL}/upscale-video",
+            files={"file": ("test.mp4", test_video, "video/mp4")},
+            data={
+                "model": "lanczos",
+                "quality_preset": "invalid_preset",
+            },
+            timeout=10
+        )
+
+        # Should return 400 for invalid preset
+        assert resp.status_code in [400, 422, 500, 503]
 
     def test_interpolate_video_validates_model_param(self):
         """Interpolate endpoint should validate model parameter."""
