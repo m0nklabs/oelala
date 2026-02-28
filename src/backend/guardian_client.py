@@ -159,3 +159,57 @@ def get_guardian() -> GuardianVRAMClient:
     if _guardian is None:
         _guardian = GuardianVRAMClient()
     return _guardian
+
+
+# ---------------------------------------------------------------------------
+# ComfyUI VRAM helpers — free loaded models before LLM inference
+# ---------------------------------------------------------------------------
+
+async def free_comfyui_vram(comfyui_url: str | None = None) -> bool:
+    """
+    POST to ComfyUI /free to unload all models from VRAM.
+
+    Call this before any LLM inference so the GPU has headroom.
+    ComfyUI will reload models automatically on the next queue submission.
+    Returns True on success, False if ComfyUI is unreachable (non-fatal).
+    """
+    url = comfyui_url or os.getenv("COMFYUI_BASE_URL", "http://localhost:8188")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{url}/free",
+                json={"unload_models": True, "free_memory": True},
+            )
+            if resp.status_code == 200:
+                logger.info("🖥️ [guardian] ComfyUI VRAM freed before LLM call")
+                return True
+            logger.warning(f"⚠️ [guardian] ComfyUI /free returned {resp.status_code}")
+            return False
+    except httpx.ConnectError:
+        logger.warning("⚠️ [guardian] Cannot reach ComfyUI to free VRAM — skipping")
+        return False
+    except Exception as exc:
+        logger.warning(f"⚠️ [guardian] ComfyUI free_vram error: {exc}")
+        return False
+
+
+def free_comfyui_vram_sync(comfyui_url: str | None = None) -> bool:
+    """Sync version of free_comfyui_vram for use in non-async contexts."""
+    url = comfyui_url or os.getenv("COMFYUI_BASE_URL", "http://localhost:8188")
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                f"{url}/free",
+                json={"unload_models": True, "free_memory": True},
+            )
+            if resp.status_code == 200:
+                logger.info("🖥️ [guardian] ComfyUI VRAM freed before LLM call (sync)")
+                return True
+            logger.warning(f"⚠️ [guardian] ComfyUI /free returned {resp.status_code} (sync)")
+            return False
+    except httpx.ConnectError:
+        logger.warning("⚠️ [guardian] Cannot reach ComfyUI to free VRAM (sync) — skipping")
+        return False
+    except Exception as exc:
+        logger.warning(f"⚠️ [guardian] ComfyUI free_vram_sync error: {exc}")
+        return False

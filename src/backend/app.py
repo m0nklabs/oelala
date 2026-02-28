@@ -5841,6 +5841,10 @@ IMPORTANT: Do NOT use sunbeams, golden hour, or cozy clichés. Be WILD and creat
 
 Generate as JSON."""
 
+    # Free ComfyUI VRAM before LLM inference so GPU has headroom
+    from guardian_client import free_comfyui_vram as _free_comfy_vram
+    await _free_comfy_vram()
+
     try:
         async with httpx.AsyncClient(timeout=30.0, headers=_guardian_headers()) as client:
             response = await client.post(
@@ -6026,6 +6030,10 @@ async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None
     except Exception:
         img_mime = "image/jpeg"
 
+    # Free ComfyUI VRAM before vision LLM inference
+    from guardian_client import free_comfyui_vram as _free_comfy_vram
+    await _free_comfy_vram()
+
     try:
         async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
             response = await client.post(
@@ -6150,6 +6158,10 @@ Creative direction: {direction}
 Seed: {random_seed}
 
 Generate a compelling video scene as JSON. Include what happens, how things move, and the mood."""
+
+    # Free ComfyUI VRAM before LLM inference
+    from guardian_client import free_comfyui_vram as _free_comfy_vram
+    await _free_comfy_vram()
 
     try:
         async with httpx.AsyncClient(timeout=30.0, headers=_guardian_headers()) as client:
