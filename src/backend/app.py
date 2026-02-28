@@ -5686,12 +5686,21 @@ async def caption_image(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Prompt Enhancement with Local LLM (Ollama)
+# Prompt Enhancement with Local LLM (Guardian proxy)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Ollama configuration
-OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:9b")  # Fast and good quality
+# Guardian proxy configuration (llama_cpp_guardian at localhost:11434)
+# Env var priority: GUARDIAN_BASE_URL (matches guardian_client.py) > GUARDIAN_BASE > OLLAMA_BASE
+GUARDIAN_BASE = os.getenv("GUARDIAN_BASE_URL", os.getenv("GUARDIAN_BASE", os.getenv("OLLAMA_BASE", "http://localhost:11434"))).rstrip("/")
+GUARDIAN_MODEL = os.getenv("GUARDIAN_MODEL", os.getenv("OLLAMA_MODEL", ""))  # Pinned model in Guardian config
+GUARDIAN_API_KEY = os.getenv("GUARDIAN_API_KEY", "")  # Bearer token for Guardian inference
+
+
+def _guardian_headers() -> dict:
+    """HTTP headers for Guardian proxy requests (Bearer token auth)."""
+    if GUARDIAN_API_KEY:
+        return {"Authorization": f"Bearer {GUARDIAN_API_KEY}"}
+    return {}
 
 # AI Settings file (admin-editable)
 AI_SETTINGS_FILE = Path("/home/flip/oelala/data/ai_settings.json")
@@ -5723,7 +5732,7 @@ def load_ai_settings() -> dict:
             logger.warning(f"Failed to load AI settings: {e}")
     return {
         "prompt_system": DEFAULT_PROMPT_SYSTEM,
-        "ollama_model": OLLAMA_MODEL,
+        "llm_model": GUARDIAN_MODEL,
     }
 
 
@@ -5776,7 +5785,8 @@ async def generate_prompt_with_llm(
     # Load admin-configurable settings
     ai_settings = load_ai_settings()
     system_prompt = ai_settings.get("prompt_system", DEFAULT_PROMPT_SYSTEM)
-    model = model_override or ai_settings.get("ollama_model", OLLAMA_MODEL)
+    # Support legacy 'ollama_model' key during migration
+    model = model_override or ai_settings.get("llm_model") or ai_settings.get("ollama_model") or GUARDIAN_MODEL
 
     style_desc = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
     style_context = f"Style requested: {style} ({style_desc})" if style else "No specific style"
@@ -5815,26 +5825,26 @@ IMPORTANT: Do NOT use sunbeams, golden hour, or cozy clichés. Be WILD and creat
 Generate as JSON."""
 
     try:
-        async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers=_guardian_headers()) as client:
             response = await client.post(
-                f"{OLLAMA_BASE}/api/generate",
+                f"{GUARDIAN_BASE}/v1/chat/completions",
                 json={
                     "model": model,
-                    "prompt": user_prompt,
-                    "system": system_prompt,
-                    "stream": False,
-                    "keep_alive": "0",  # Unload immediately to free VRAM
-                    "options": {
-                        "temperature": 1.2,  # VERY high for maximum creativity
-                        "num_predict": 500,
-                        "seed": random_seed,
-                        "top_p": 0.95,  # Nucleus sampling for variety
-                    },
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": 2048,  # Reasoning models need budget for CoT + output
+                    "temperature": 1.2,
+                    "seed": random_seed,
+                    "top_p": 0.95,
                 },
             )
             response.raise_for_status()
             result = response.json()
-            llm_output = result.get("response", "").strip()
+            msg = result["choices"][0]["message"]
+            # Reasoning models put CoT in reasoning_content and answer in content
+            llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
 
             # Parse JSON from LLM output
             # Try to extract JSON if it's wrapped in markdown
@@ -5853,7 +5863,7 @@ Generate as JSON."""
             }
 
     except httpx.ConnectError:
-        logger.warning("Ollama not available, falling back to template mode")
+        logger.warning("Guardian not available, falling back to template mode")
         return None
     except json.JSONDecodeError as e:
         logger.warning(f"LLM returned invalid JSON: {e}")
@@ -5960,7 +5970,7 @@ async def generate_prompt(request: Request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Image Analysis with Vision LLM (Moondream)
+# Image Analysis with Vision LLM (via Guardian proxy)
 # ─────────────────────────────────────────────────────────────────────────────
 
 VISION_MODEL = os.getenv("VISION_MODEL", "Step3-VL-10B")
@@ -5968,7 +5978,8 @@ VISION_MODEL = os.getenv("VISION_MODEL", "Step3-VL-10B")
 
 async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None, model_override: Optional[str] = None) -> str:
     """
-    Use a vision LLM via Guardian to analyze an image and return a description.
+    Use a vision LLM via Guardian proxy to analyze an image and return a description.
+    Uses OpenAI /v1/chat/completions multimodal format (required for llama.cpp).
 
     Args:
         image_base64: Base64 encoded image data
@@ -5984,26 +5995,38 @@ async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None
     vision_model = model_override or VISION_MODEL
 
     try:
-        async with httpx.AsyncClient(timeout=60.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(timeout=60.0, headers=_guardian_headers()) as client:
             response = await client.post(
-                f"{OLLAMA_BASE}/api/generate",
+                f"{GUARDIAN_BASE}/v1/chat/completions",
                 json={
                     "model": vision_model,
-                    "prompt": analysis_prompt,
-                    "images": [image_base64],
-                    "stream": False,
-                    "keep_alive": "0",  # Unload immediately to free VRAM for video gen
-                    "options": {
-                        "temperature": 0.3,  # Lower temp for accurate description
-                        "num_predict": 500,
-                    },
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{image_base64}"
+                                    },
+                                },
+                                {
+                                    "type": "text",
+                                    "text": analysis_prompt,
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": 1024,
+                    "temperature": 0.3,
                 },
             )
             response.raise_for_status()
             result = response.json()
-            return result.get("response", "").strip()
+            msg = result["choices"][0]["message"]
+            return (msg.get("content") or msg.get("reasoning_content", "")).strip()
     except httpx.ConnectError:
-        logger.warning("Ollama not available for vision analysis")
+        logger.warning("Guardian not available for vision analysis")
         raise HTTPException(status_code=503, detail="Vision model not available")
     except Exception as e:
         logger.error(f"Vision analysis failed: {e}")
@@ -6055,7 +6078,8 @@ async def generate_i2v_prompt_from_description(
     import random
     
     ai_settings = load_ai_settings()
-    model = ai_settings.get("ollama_model", OLLAMA_MODEL)
+    # Support legacy 'ollama_model' key during migration
+    model = ai_settings.get("llm_model") or ai_settings.get("ollama_model") or GUARDIAN_MODEL
     
     system_prompt = I2V_NSFW_SCENE_SYSTEM_PROMPT if nsfw else I2V_SCENE_SYSTEM_PROMPT
     
@@ -6096,26 +6120,25 @@ Seed: {random_seed}
 Generate a compelling video scene as JSON. Include what happens, how things move, and the mood."""
 
     try:
-        async with httpx.AsyncClient(timeout=30.0, auth=("oelala-backend", "")) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers=_guardian_headers()) as client:
             response = await client.post(
-                f"{OLLAMA_BASE}/api/generate",
+                f"{GUARDIAN_BASE}/v1/chat/completions",
                 json={
                     "model": model,
-                    "prompt": user_prompt,
-                    "system": system_prompt,
-                    "stream": False,
-                    "keep_alive": "0",  # Unload immediately to free VRAM for video gen
-                    "options": {
-                        "temperature": 1.1,  # High creativity
-                        "num_predict": 400,
-                        "seed": random_seed,
-                        "top_p": 0.95,
-                    },
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": 2048,  # Reasoning models need budget for CoT + output
+                    "temperature": 1.1,
+                    "seed": random_seed,
+                    "top_p": 0.95,
                 },
             )
             response.raise_for_status()
             result = response.json()
-            llm_output = result.get("response", "").strip()
+            msg = result["choices"][0]["message"]
+            llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
             
             # Parse JSON from LLM output
             if "```json" in llm_output:
@@ -6213,36 +6236,39 @@ async def analyze_and_generate(request: AnalyzeAndGenerateRequest):
     }
 
 
-@app.get("/ollama/status")
-async def ollama_status():
-    """Check if Ollama is available and what model is configured"""
+@app.get("/guardian/status")
+async def guardian_status():
+    """Check Guardian proxy availability and available models"""
     import httpx
 
     try:
-        async with httpx.AsyncClient(timeout=5.0, auth=("oelala-backend", "")) as client:
-            response = await client.get(f"{OLLAMA_BASE}/api/tags")
+        async with httpx.AsyncClient(timeout=5.0, headers=_guardian_headers()) as client:
+            response = await client.get(f"{GUARDIAN_BASE}/v1/models")
             response.raise_for_status()
-            models = response.json().get("models", [])
-            model_names = [m.get("name", "") for m in models]
-
-            configured_available = OLLAMA_MODEL in model_names or any(
-                OLLAMA_MODEL.split(":")[0] in m for m in model_names
-            )
+            models = response.json().get("data", [])
+            model_ids = [m.get("id", "") for m in models]
 
             return {
                 "available": True,
-                "base_url": OLLAMA_BASE,
-                "configured_model": OLLAMA_MODEL,
-                "model_available": configured_available,
-                "models": model_names[:10],  # First 10 models
+                "base_url": GUARDIAN_BASE,
+                "configured_model": GUARDIAN_MODEL,
+                "model_available": GUARDIAN_MODEL in model_ids,
+                "models": model_ids[:20],
             }
     except Exception as e:
         return {
             "available": False,
-            "base_url": OLLAMA_BASE,
-            "configured_model": OLLAMA_MODEL,
+            "base_url": GUARDIAN_BASE,
+            "configured_model": GUARDIAN_MODEL,
             "error": str(e),
         }
+
+
+# Keep the old /ollama/status route as an alias for backward compat
+@app.get("/ollama/status")
+async def ollama_status():
+    """Deprecated: use /guardian/status instead"""
+    return await guardian_status()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

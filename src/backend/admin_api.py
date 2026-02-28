@@ -1157,7 +1157,8 @@ class AISettingsUpdate(BaseModel):
     """AI settings update request"""
 
     prompt_system: Optional[str] = None
-    ollama_model: Optional[str] = None
+    llm_model: Optional[str] = None
+    ollama_model: Optional[str] = None  # Deprecated alias, use llm_model
 
 
 @router.get("/ai-settings")
@@ -1168,29 +1169,36 @@ async def get_ai_settings(user: User = Depends(get_current_user)):
 
     import json
 
+    _guardian_base = os.getenv("GUARDIAN_BASE_URL", os.getenv("GUARDIAN_BASE", os.getenv("OLLAMA_BASE", "http://localhost:11434"))).rstrip("/")
+    _default_model = os.getenv("GUARDIAN_MODEL", os.getenv("OLLAMA_MODEL", ""))
     settings = {
         "prompt_system": DEFAULT_PROMPT_SYSTEM,
-        "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
+        "llm_model": _default_model,
     }
 
     if AI_SETTINGS_FILE.exists():
         try:
             with open(AI_SETTINGS_FILE, "r") as f:
                 saved = json.load(f)
+                # Migrate legacy key
+                if "ollama_model" in saved and "llm_model" not in saved:
+                    saved["llm_model"] = saved.pop("ollama_model")
                 settings.update(saved)
         except Exception as e:
             logger.warning(f"Failed to load AI settings: {e}")
 
-    # Also get available Ollama models
+    # Fetch available Guardian models via OpenAI /v1/models (Bearer token auth)
+    _guardian_api_key = os.getenv("GUARDIAN_API_KEY", "")
+    _auth_headers = {"Authorization": f"Bearer {_guardian_api_key}"} if _guardian_api_key else {}
     available_models = []
     try:
         async with httpx.AsyncClient(
-            timeout=5.0, auth=("oelala-backend", "")
+            timeout=5.0, headers=_auth_headers
         ) as client:
-            res = await client.get("http://localhost:11434/api/tags")
+            res = await client.get(f"{_guardian_base}/v1/models")
             if res.status_code == 200:
-                models = res.json().get("models", [])
-                available_models = [m.get("name", "") for m in models]
+                models = res.json().get("data", [])
+                available_models = [m.get("id", "") for m in models]
     except Exception:
         pass
 
@@ -1212,23 +1220,30 @@ async def update_ai_settings(
     import json
 
     # Load existing settings
+    _default_model = os.getenv("GUARDIAN_MODEL", os.getenv("OLLAMA_MODEL", ""))
     settings = {
         "prompt_system": DEFAULT_PROMPT_SYSTEM,
-        "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
+        "llm_model": _default_model,
     }
 
     if AI_SETTINGS_FILE.exists():
         try:
             with open(AI_SETTINGS_FILE, "r") as f:
-                settings.update(json.load(f))
+                saved = json.load(f)
+                # Migrate legacy key
+                if "ollama_model" in saved and "llm_model" not in saved:
+                    saved["llm_model"] = saved.pop("ollama_model")
+                settings.update(saved)
         except Exception:
             pass
 
     # Update with new values
     if update.prompt_system is not None:
         settings["prompt_system"] = update.prompt_system
-    if update.ollama_model is not None:
-        settings["ollama_model"] = update.ollama_model
+    # Support both new llm_model and deprecated ollama_model
+    new_model = update.llm_model or update.ollama_model
+    if new_model is not None:
+        settings["llm_model"] = new_model
 
     # Save
     try:
@@ -1258,7 +1273,7 @@ async def reset_ai_settings(user: User = Depends(get_current_user)):
             "success": True,
             "settings": {
                 "prompt_system": DEFAULT_PROMPT_SYSTEM,
-                "ollama_model": os.getenv("OLLAMA_MODEL", "gemma2:9b"),
+                "llm_model": os.getenv("GUARDIAN_MODEL", os.getenv("OLLAMA_MODEL", "")),
             },
         }
     except Exception as e:
