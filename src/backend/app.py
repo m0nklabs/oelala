@@ -5578,7 +5578,7 @@ async def generate_pose_video(
 @app.post("/caption-image")
 async def caption_image(
     file: UploadFile = File(...),
-    model: str = Form("Step3-VL-10B", description="Guardian vision model ID"),
+    model: Optional[str] = Form(None, description="Guardian vision model ID (default: VISION_MODEL env)"),
     mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured"),
 ):
     """
@@ -5682,7 +5682,7 @@ async def caption_image(
         image_b64 = _b64.b64encode(f.read()).decode("utf-8")
 
     description = await analyze_image_with_vision(image_b64, custom_prompt=custom_prompt, model_override=model)
-    return {"caption": description, "model": model, "mode": mode}
+    return {"caption": description, "model": model or VISION_MODEL, "mode": mode}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5973,7 +5973,7 @@ async def generate_prompt(request: Request):
 # Image Analysis with Vision LLM (via Guardian proxy)
 # ─────────────────────────────────────────────────────────────────────────────
 
-VISION_MODEL = os.getenv("VISION_MODEL", "Step3-VL-10B")
+VISION_MODEL = os.getenv("VISION_MODEL", "Gemma3-27B-it-vl-GLM-4.7-Uncensored-Heretic")
 
 
 async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None, model_override: Optional[str] = None) -> str:
@@ -5994,8 +5994,23 @@ async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None
     analysis_prompt = custom_prompt or "Describe this image in detail. Focus on: the main subject, their appearance, clothing, pose, expression, the setting/background, lighting, colors, and overall mood. Be specific and descriptive."
     vision_model = model_override or VISION_MODEL
 
+    # Detect actual image MIME type from base64 header bytes
+    import base64 as _b64detect
     try:
-        async with httpx.AsyncClient(timeout=60.0, headers=_guardian_headers()) as client:
+        raw_header = _b64detect.b64decode(image_base64[:16])
+        if raw_header[:8] == b'\x89PNG\r\n\x1a\n':
+            img_mime = "image/png"
+        elif raw_header[:3] == b'\xff\xd8\xff':
+            img_mime = "image/jpeg"
+        elif raw_header[:4] == b'RIFF' and raw_header[8:12] == b'WEBP':
+            img_mime = "image/webp"
+        else:
+            img_mime = "image/jpeg"  # safe default
+    except Exception:
+        img_mime = "image/jpeg"
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
             response = await client.post(
                 f"{GUARDIAN_BASE}/v1/chat/completions",
                 json={
@@ -6007,7 +6022,7 @@ async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None
                                 {
                                     "type": "image_url",
                                     "image_url": {
-                                        "url": f"data:image/jpeg;base64,{image_base64}"
+                                        "url": f"data:{img_mime};base64,{image_base64}"
                                     },
                                 },
                                 {
