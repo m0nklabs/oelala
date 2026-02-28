@@ -4,10 +4,12 @@ FastAPI endpoints for admin user management.
 """
 
 import os
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
+from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, validator
@@ -140,9 +142,30 @@ class AdminStats(BaseModel):
 # Helper Functions
 # =============================================================================
 
+# TTL cache for admin status (60 seconds, max 128 users)
+_admin_cache: TTLCache = TTLCache(maxsize=128, ttl=60)
+
+# Shared httpx client for Supabase requests (connection pooling)
+_admin_http_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_admin_client() -> httpx.AsyncClient:
+    """Get or create shared httpx client for admin API."""
+    global _admin_http_client
+    if _admin_http_client is None or _admin_http_client.is_closed:
+        _admin_http_client = httpx.AsyncClient(
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=30.0,
+        )
+    return _admin_http_client
+
 
 async def check_admin(user: User) -> bool:
-    """Check if user is an admin by querying user_credits table."""
+    """Check if user is an admin. Results cached for 60s."""
     # TEMPORARY BYPASS: All authenticated users are admin until DB is set up
     if ADMIN_BYPASS:
         debug_log(f"ADMIN_BYPASS enabled - user {user.id} granted admin access")
@@ -152,23 +175,24 @@ async def check_admin(user: User) -> bool:
         debug_log("SUPABASE_SERVICE_KEY not configured")
         return False
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        }
+    # Check cache first
+    cached = _admin_cache.get(user.id)
+    if cached is not None:
+        return cached
 
-        response = await client.get(
-            f"{SUPABASE_URL}/rest/v1/user_credits",
-            headers=headers,
-            params={"user_id": f"eq.{user.id}", "select": "is_admin"},
-        )
+    client = _get_admin_client()
+    response = await client.get(
+        f"{SUPABASE_URL}/rest/v1/user_credits",
+        params={"user_id": f"eq.{user.id}", "select": "is_admin"},
+    )
 
-        if response.status_code == 200 and response.json():
-            data = response.json()[0]
-            return data.get("is_admin", False)
+    is_admin = False
+    if response.status_code == 200 and response.json():
+        data = response.json()[0]
+        is_admin = data.get("is_admin", False)
 
-    return False
+    _admin_cache[user.id] = is_admin
+    return is_admin
 
 
 async def get_admin_user(user: User = Depends(get_current_user)) -> User:
@@ -214,91 +238,92 @@ async def list_users(
     """
     debug_log(f"Listing users: page={page}, per_page={per_page}, search={search}")
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        }
+    client = _get_admin_client()
 
-        # Build query params
-        params = {
-            "select": "user_id,balance,tier,is_vip,is_admin,lifetime_purchased,lifetime_used,created_at",
-            "order": "created_at.desc",
-            "limit": per_page,
-            "offset": (page - 1) * per_page,
-        }
+    # Build query params — include count in the same request
+    params = {
+        "select": "user_id,balance,tier,is_vip,is_admin,lifetime_purchased,lifetime_used,created_at,is_suspended,suspended_at,suspension_reason",
+        "order": "created_at.desc",
+        "limit": per_page,
+        "offset": (page - 1) * per_page,
+    }
 
-        if tier:
-            params["tier"] = f"eq.{tier}"
+    if tier:
+        params["tier"] = f"eq.{tier}"
 
-        # Get user_credits data
-        response = await client.get(
-            f"{SUPABASE_URL}/rest/v1/user_credits",
-            headers=headers,
-            params=params,
+    # Single request with count=exact header (eliminates separate count query)
+    response = await client.get(
+        f"{SUPABASE_URL}/rest/v1/user_credits",
+        headers={
+            **client.headers,
+            "Prefer": "count=exact",
+        },
+        params=params,
+    )
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch users")
+
+    credits_data = response.json()
+
+    # Parse total from Content-Range header
+    total = 0
+    content_range = response.headers.get("Content-Range", "")
+    if "/" in content_range:
+        try:
+            total = int(content_range.split("/")[1])
+        except (ValueError, IndexError):
+            total = len(credits_data)
+
+    # Get auth.users data for emails — only for users on this page
+    user_ids = [u["user_id"] for u in credits_data]
+    email_map = {}
+    if user_ids:
+        # Fetch individual users in parallel (instead of fetching ALL users)
+        async def fetch_user_email(uid: str):
+            try:
+                resp = await client.get(
+                    f"{SUPABASE_URL}/auth/v1/admin/users/{uid}",
+                )
+                if resp.status_code == 200:
+                    return uid, resp.json().get("email")
+            except Exception:
+                pass
+            return uid, None
+
+        results = await asyncio.gather(
+            *[fetch_user_email(uid) for uid in user_ids],
+            return_exceptions=True,
         )
+        for result in results:
+            if not isinstance(result, Exception) and result:
+                email_map[result[0]] = result[1]
 
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to fetch users")
-
-        credits_data = response.json()
-
-        # Get auth.users data for emails
-        user_ids = [u["user_id"] for u in credits_data]
-
-        # Fetch emails from auth.users
-        email_map = {}
-        if user_ids:
-            auth_response = await client.get(
-                f"{SUPABASE_URL}/auth/v1/admin/users",
-                headers={
-                    "apikey": SUPABASE_SERVICE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-                },
-            )
-
-            if auth_response.status_code == 200:
-                auth_users = auth_response.json().get("users", [])
-                email_map = {u["id"]: u.get("email") for u in auth_users}
-
-        # Get total count
-        count_response = await client.get(
-            f"{SUPABASE_URL}/rest/v1/user_credits",
-            headers={**headers, "Prefer": "count=exact"},
-            params={"select": "user_id"},
+    # Combine data
+    users = [
+        UserInfo(
+            user_id=u["user_id"],
+            email=email_map.get(u["user_id"]),
+            created_at=u["created_at"],
+            balance=u["balance"],
+            tier=u["tier"],
+            is_vip=u["is_vip"],
+            is_admin=u["is_admin"],
+            is_suspended=u.get("is_suspended", False),
+            suspended_at=u.get("suspended_at"),
+            suspension_reason=u.get("suspension_reason"),
+            lifetime_purchased=u["lifetime_purchased"],
+            lifetime_used=u["lifetime_used"],
         )
+        for u in credits_data
+    ]
 
-        total = 0
-        if count_response.status_code == 200:
-            content_range = count_response.headers.get("Content-Range", "")
-            if "/" in content_range:
-                total = int(content_range.split("/")[1])
-
-        # Combine data
-        users = [
-            UserInfo(
-                user_id=u["user_id"],
-                email=email_map.get(u["user_id"]),
-                created_at=u["created_at"],
-                balance=u["balance"],
-                tier=u["tier"],
-                is_vip=u["is_vip"],
-                is_admin=u["is_admin"],
-                is_suspended=u.get("is_suspended", False),
-                suspended_at=u.get("suspended_at"),
-                suspension_reason=u.get("suspension_reason"),
-                lifetime_purchased=u["lifetime_purchased"],
-                lifetime_used=u["lifetime_used"],
-            )
-            for u in credits_data
-        ]
-
-        return UserListResponse(
-            users=users,
-            total=total,
-            page=page,
-            per_page=per_page,
-        )
+    return UserListResponse(
+        users=users,
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/users/{user_id}", response_model=UserInfo)
@@ -309,51 +334,38 @@ async def get_user(user_id: str, admin: User = Depends(get_admin_user)):
     """
     debug_log(f"Fetching user {user_id}")
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        }
+    client = _get_admin_client()
 
-        # Get user_credits
-        response = await client.get(
-            f"{SUPABASE_URL}/rest/v1/user_credits",
-            headers=headers,
-            params={"user_id": f"eq.{user_id}", "select": "*"},
-        )
+    # Parallel fetch: user_credits + auth email
+    credits_task = client.get(
+        f"{SUPABASE_URL}/rest/v1/user_credits",
+        params={"user_id": f"eq.{user_id}", "select": "*"},
+    )
+    auth_task = client.get(
+        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+    )
+    response, auth_response = await asyncio.gather(credits_task, auth_task)
 
-        if response.status_code != 200 or not response.json():
-            raise HTTPException(status_code=404, detail="User not found")
+    if response.status_code != 200 or not response.json():
+        raise HTTPException(status_code=404, detail="User not found")
 
-        data = response.json()[0]
+    data = response.json()[0]
+    email = auth_response.json().get("email") if auth_response.status_code == 200 else None
 
-        # Get email from auth.users
-        auth_response = await client.get(
-            f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
-            headers={
-                "apikey": SUPABASE_SERVICE_KEY,
-                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            },
-        )
-
-        email = None
-        if auth_response.status_code == 200:
-            email = auth_response.json().get("email")
-
-        return UserInfo(
-            user_id=data["user_id"],
-            email=email,
-            created_at=data["created_at"],
-            balance=data["balance"],
-            tier=data["tier"],
-            is_vip=data["is_vip"],
-            is_admin=data["is_admin"],
-            is_suspended=data.get("is_suspended", False),
-            suspended_at=data.get("suspended_at"),
-            suspension_reason=data.get("suspension_reason"),
-            lifetime_purchased=data["lifetime_purchased"],
-            lifetime_used=data["lifetime_used"],
-        )
+    return UserInfo(
+        user_id=data["user_id"],
+        email=email,
+        created_at=data["created_at"],
+        balance=data["balance"],
+        tier=data["tier"],
+        is_vip=data["is_vip"],
+        is_admin=data["is_admin"],
+        is_suspended=data.get("is_suspended", False),
+        suspended_at=data.get("suspended_at"),
+        suspension_reason=data.get("suspension_reason"),
+        lifetime_purchased=data["lifetime_purchased"],
+        lifetime_used=data["lifetime_used"],
+    )
 
 
 @router.post("/credits/adjust")
@@ -368,43 +380,37 @@ async def adjust_credits(
         f"Adjusting credits for {adjustment.user_id}: {adjustment.amount} ({adjustment.reason})"
     )
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json",
-        }
+    client = _get_admin_client()
 
-        # Call admin_grant_credits function
-        response = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/admin_grant_credits",
-            headers=headers,
-            json={
-                "p_user_id": adjustment.user_id,
-                "p_amount": adjustment.amount,
-                "p_description": adjustment.reason,
-                "p_admin_id": admin.id,
-            },
+    # Call admin_grant_credits function
+    response = await client.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/admin_grant_credits",
+        json={
+            "p_user_id": adjustment.user_id,
+            "p_amount": adjustment.amount,
+            "p_description": adjustment.reason,
+            "p_admin_id": admin.id,
+        },
+    )
+
+    if response.status_code != 200:
+        logger.error(f"Failed to adjust credits: {response.text}")
+        raise HTTPException(status_code=500, detail="Failed to adjust credits")
+
+    result = response.json()
+    if isinstance(result, list) and result:
+        result = result[0]
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to adjust credits")
         )
 
-        if response.status_code != 200:
-            logger.error(f"Failed to adjust credits: {response.text}")
-            raise HTTPException(status_code=500, detail="Failed to adjust credits")
-
-        result = response.json()
-        if isinstance(result, list) and result:
-            result = result[0]
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400, detail=result.get("error", "Failed to adjust credits")
-            )
-
-        return {
-            "success": True,
-            "new_balance": result.get("new_balance"),
-            "message": f"Credits adjusted by {adjustment.amount}",
-        }
+    return {
+        "success": True,
+        "new_balance": result.get("new_balance"),
+        "message": f"Credits adjusted by {adjustment.amount}",
+    }
 
 
 @router.post("/tier/update")
@@ -418,38 +424,31 @@ async def update_tier(tier_update: TierUpdate, admin: User = Depends(get_admin_u
     if tier_update.tier not in ["free", "pro", "vip"]:
         raise HTTPException(status_code=400, detail="Invalid tier value")
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json",
-        }
+    client = _get_admin_client()
 
-        # Call admin_update_tier function
-        response = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/admin_update_tier",
-            headers=headers,
-            json={
-                "p_user_id": tier_update.user_id,
-                "p_tier": tier_update.tier,
-                "p_admin_id": admin.id,
-            },
+    response = await client.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/admin_update_tier",
+        json={
+            "p_user_id": tier_update.user_id,
+            "p_tier": tier_update.tier,
+            "p_admin_id": admin.id,
+        },
+    )
+
+    if response.status_code != 200:
+        logger.error(f"Failed to update tier: {response.text}")
+        raise HTTPException(status_code=500, detail="Failed to update tier")
+
+    result = response.json()
+    if isinstance(result, list) and result:
+        result = result[0]
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to update tier")
         )
 
-        if response.status_code != 200:
-            logger.error(f"Failed to update tier: {response.text}")
-            raise HTTPException(status_code=500, detail="Failed to update tier")
-
-        result = response.json()
-        if isinstance(result, list) and result:
-            result = result[0]
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400, detail=result.get("error", "Failed to update tier")
-            )
-
-        return {"success": True, "message": f"Tier updated to {tier_update.tier}"}
+    return {"success": True, "message": f"Tier updated to {tier_update.tier}"}
 
 
 @router.post("/status/toggle")
@@ -462,38 +461,31 @@ async def toggle_status(status: StatusToggle, admin: User = Depends(get_admin_us
         f"Toggling status for {status.user_id}: admin={status.is_admin}, vip={status.is_vip}"
     )
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json",
-        }
+    client = _get_admin_client()
 
-        # Call admin_toggle_status function
-        response = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/admin_toggle_status",
-            headers=headers,
-            json={
-                "p_user_id": status.user_id,
-                "p_is_admin": status.is_admin,
-                "p_is_vip": status.is_vip,
-            },
+    response = await client.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/admin_toggle_status",
+        json={
+            "p_user_id": status.user_id,
+            "p_is_admin": status.is_admin,
+            "p_is_vip": status.is_vip,
+        },
+    )
+
+    if response.status_code != 200:
+        logger.error(f"Failed to toggle status: {response.text}")
+        raise HTTPException(status_code=500, detail="Failed to toggle status")
+
+    result = response.json()
+    if isinstance(result, list) and result:
+        result = result[0]
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to toggle status")
         )
 
-        if response.status_code != 200:
-            logger.error(f"Failed to toggle status: {response.text}")
-            raise HTTPException(status_code=500, detail="Failed to toggle status")
-
-        result = response.json()
-        if isinstance(result, list) and result:
-            result = result[0]
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400, detail=result.get("error", "Failed to toggle status")
-            )
-
-        return {"success": True, "message": "Status updated successfully"}
+    return {"success": True, "message": "Status updated successfully"}
 
 
 @router.post("/suspension/toggle")
@@ -509,40 +501,33 @@ async def toggle_suspension(
         f"Toggling suspension for {suspension.user_id}: suspended={suspension.is_suspended}, reason={suspension.reason}"
     )
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json",
-        }
+    client = _get_admin_client()
 
-        # Call admin_toggle_suspension function
-        response = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/admin_toggle_suspension",
-            headers=headers,
-            json={
-                "p_user_id": suspension.user_id,
-                "p_is_suspended": suspension.is_suspended,
-                "p_reason": suspension.reason,
-            },
+    response = await client.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/admin_toggle_suspension",
+        json={
+            "p_user_id": suspension.user_id,
+            "p_is_suspended": suspension.is_suspended,
+            "p_reason": suspension.reason,
+        },
+    )
+
+    if response.status_code != 200:
+        logger.error(f"Failed to toggle suspension: {response.text}")
+        raise HTTPException(status_code=500, detail="Failed to toggle suspension")
+
+    result = response.json()
+    if isinstance(result, list) and result:
+        result = result[0]
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "Failed to toggle suspension"),
         )
 
-        if response.status_code != 200:
-            logger.error(f"Failed to toggle suspension: {response.text}")
-            raise HTTPException(status_code=500, detail="Failed to toggle suspension")
-
-        result = response.json()
-        if isinstance(result, list) and result:
-            result = result[0]
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400,
-                detail=result.get("error", "Failed to toggle suspension"),
-            )
-
-        action = "suspended" if suspension.is_suspended else "unsuspended"
-        return {"success": True, "message": f"User {action} successfully"}
+    action = "suspended" if suspension.is_suspended else "unsuspended"
+    return {"success": True, "message": f"User {action} successfully"}
 
 
 @router.get("/transactions/{user_id}", response_model=List[TransactionInfo])
@@ -557,40 +542,33 @@ async def get_user_transactions(
     """
     debug_log(f"Fetching transactions for {user_id}")
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        }
+    client = _get_admin_client()
 
-        response = await client.get(
-            f"{SUPABASE_URL}/rest/v1/credit_transactions",
-            headers=headers,
-            params={
-                "user_id": f"eq.{user_id}",
-                "select": "*",
-                "order": "created_at.desc",
-                "limit": limit,
-            },
+    response = await client.get(
+        f"{SUPABASE_URL}/rest/v1/credit_transactions",
+        params={
+            "user_id": f"eq.{user_id}",
+            "select": "id,user_id,amount,type,description,reference_id,created_at",
+            "order": "created_at.desc",
+            "limit": limit,
+        },
+    )
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch transactions")
+
+    return [
+        TransactionInfo(
+            id=t["id"],
+            user_id=t["user_id"],
+            amount=t["amount"],
+            type=t["type"],
+            description=t.get("description"),
+            reference_id=t.get("reference_id"),
+            created_at=t["created_at"],
         )
-
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to fetch transactions")
-
-        transactions = [
-            TransactionInfo(
-                id=t["id"],
-                user_id=t["user_id"],
-                amount=t["amount"],
-                type=t["type"],
-                description=t.get("description"),
-                reference_id=t.get("reference_id"),
-                created_at=t["created_at"],
-            )
-            for t in response.json()
-        ]
-
-        return transactions
+        for t in response.json()
+    ]
 
 
 @router.get("/stats", response_model=AdminStats)
@@ -601,77 +579,70 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
     """
     debug_log("Fetching admin stats")
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        }
+    client = _get_admin_client()
 
-        # Use PostgreSQL aggregation via Supabase RPC for efficiency
-        response = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/get_admin_stats",
-            headers=headers,
-            json={},
-        )
+    # Use PostgreSQL aggregation via Supabase RPC for efficiency
+    response = await client.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_admin_stats",
+        json={},
+    )
 
-        # Fallback to simple query if RPC doesn't exist
-        if response.status_code != 200:
-            # Get aggregated data directly
-            response = await client.get(
-                f"{SUPABASE_URL}/rest/v1/user_credits",
-                headers=headers,
-                params={
-                    "select": "tier,is_admin,is_vip,lifetime_purchased,lifetime_used",
-                },
-            )
-
-            if response.status_code != 200:
-                raise HTTPException(status_code=500, detail="Failed to fetch stats")
-
-            users = response.json()
-
-            tier_counts = {"free": 0, "pro": 0, "vip": 0}
-            total_purchased = 0
-            total_used = 0
-            admin_count = 0
-            vip_count = 0
-
-            for user in users:
-                tier = user.get("tier", "free")
-                tier_counts[tier] = tier_counts.get(tier, 0) + 1
-                total_purchased += user.get("lifetime_purchased", 0)
-                total_used += user.get("lifetime_used", 0)
-                if user.get("is_admin"):
-                    admin_count += 1
-                if user.get("is_vip"):
-                    vip_count += 1
-
-            return AdminStats(
-                total_users=len(users),
-                total_credits_issued=total_purchased,
-                total_credits_used=total_used,
-                total_admins=admin_count,
-                total_vips=vip_count,
-                tier_counts=tier_counts,
-            )
-
-        # Use RPC result if available
-        result = response.json()
-        if isinstance(result, list) and result:
-            result = result[0]
-
-        return AdminStats(
-            total_users=result.get("total_users", 0),
-            total_credits_issued=result.get("total_purchased", 0),
-            total_credits_used=result.get("total_used", 0),
-            total_admins=result.get("admin_count", 0),
-            total_vips=result.get("vip_count", 0),
-            tier_counts={
-                "free": result.get("free_count", 0),
-                "pro": result.get("pro_count", 0),
-                "vip": result.get("vip_tier_count", 0),
+    # Fallback to simple query if RPC doesn't exist
+    if response.status_code != 200:
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/user_credits",
+            params={
+                "select": "tier,is_admin,is_vip,lifetime_purchased,lifetime_used",
             },
         )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch stats")
+
+        users = response.json()
+
+        tier_counts = {"free": 0, "pro": 0, "vip": 0}
+        total_purchased = 0
+        total_used = 0
+        admin_count = 0
+        vip_count = 0
+
+        for user in users:
+            tier = user.get("tier", "free")
+            tier_counts[tier] = tier_counts.get(tier, 0) + 1
+            total_purchased += user.get("lifetime_purchased", 0)
+            total_used += user.get("lifetime_used", 0)
+            if user.get("is_admin"):
+                admin_count += 1
+            if user.get("is_vip"):
+                vip_count += 1
+
+        return AdminStats(
+            total_users=len(users),
+            total_credits_issued=total_purchased,
+            total_credits_used=total_used,
+            total_admins=admin_count,
+            total_vips=vip_count,
+            tier_counts=tier_counts,
+        )
+
+    # Use RPC result if available
+    result = response.json()
+    if isinstance(result, list) and result:
+        result = result[0]
+
+    return AdminStats(
+        total_users=result.get("total_users", 0),
+        total_credits_issued=result.get("total_purchased", 0),
+        total_credits_used=result.get("total_used", 0),
+        total_admins=result.get("admin_count", 0),
+        total_vips=result.get("vip_count", 0),
+        tier_counts={
+            "free": result.get("free_count", 0),
+            "pro": result.get("pro_count", 0),
+            "vip": result.get("vip_tier_count", 0),
+        },
+    )
 
 
 # =============================================================================

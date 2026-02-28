@@ -10,6 +10,8 @@ import logging
 import re
 import random
 import string
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 import httpx
 from typing import Optional
@@ -148,18 +150,29 @@ router = APIRouter(prefix="/api/profile", tags=["profile"])
 # =============================================================================
 
 
-async def get_supabase_client() -> httpx.AsyncClient:
-    """Get Supabase REST API client"""
-    return httpx.AsyncClient(
-        base_url=f"{SUPABASE_URL}/rest/v1",
-        headers={
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "return=representation",
-        },
-        timeout=30.0,
-    )
+# Shared httpx client singleton (connection pooling, reuse across requests)
+_supabase_client: Optional[httpx.AsyncClient] = None
+
+
+@asynccontextmanager
+async def get_supabase_client():
+    """Get shared Supabase REST API client (singleton with connection pooling).
+    Used as: async with get_supabase_client() as client:
+    The client is NOT closed when the context exits — it's reused across requests.
+    """
+    global _supabase_client
+    if _supabase_client is None or _supabase_client.is_closed:
+        _supabase_client = httpx.AsyncClient(
+            base_url=f"{SUPABASE_URL}/rest/v1",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            timeout=30.0,
+        )
+    yield _supabase_client
 
 
 # =============================================================================
@@ -173,7 +186,7 @@ async def get_my_profile(user: User = Depends(get_current_user)):
     Get authenticated user's profile.
     Creates profile if it doesn't exist.
     """
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         # Try to get existing profile
         response = await client.get(
             "/profiles",
@@ -247,7 +260,7 @@ async def update_my_profile(
     """
     Update authenticated user's profile.
     """
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         # Prepare update data (only include non-None fields)
         update_data = {k: v for k, v in profile_data.dict().items() if v is not None}
 
@@ -301,7 +314,7 @@ async def get_profile_by_username(
     Get user profile by username.
     Only public profiles are visible to non-owners.
     """
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         response = await client.get(
             "/profiles",
             params={"username": f"eq.{username.lower()}", "select": "*"},
@@ -332,7 +345,7 @@ async def get_profile_by_id(
     Get user profile by user ID.
     Only public profiles are visible to non-owners.
     """
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         response = await client.get(
             "/profiles",
             params={"id": f"eq.{user_id}", "select": "*"},
@@ -358,63 +371,65 @@ async def get_profile_by_id(
 async def get_my_stats(user: User = Depends(get_current_user)):
     """
     Get statistics for authenticated user's content.
+    Runs all 3 queries in parallel for speed.
     """
-    async with await get_supabase_client() as client:
-        # Get total media count
-        media_response = await client.get(
+    async with get_supabase_client() as client:
+        # Run all 3 independent queries in parallel
+        media_task = client.get(
             "/user_media",
             params={
                 "user_id": f"eq.{user.id}",
                 "select": "id,is_published",
             },
         )
-
-        total_media = 0
-        published_media = 0
-        if media_response.status_code == 200:
-            media_list = media_response.json()
-            total_media = len(media_list)
-            published_media = sum(1 for m in media_list if m.get("is_published"))
-
-        # Get likes and views from published media
-        published_response = await client.get(
+        published_task = client.get(
             "/published_media",
             params={
                 "user_id": f"eq.{user.id}",
                 "select": "like_count,view_count",
             },
         )
+        profile_task = client.get(
+            "/profiles",
+            params={
+                "id": f"eq.{user.id}",
+                "select": "follower_count,following_count",
+            },
+        )
 
+        media_response, published_response, profile_response = await asyncio.gather(
+            media_task, published_task, profile_task, return_exceptions=True
+        )
+
+        # Parse media counts
+        total_media = 0
+        published_media = 0
+        if not isinstance(media_response, Exception) and media_response.status_code == 200:
+            media_list = media_response.json()
+            total_media = len(media_list)
+            published_media = sum(1 for m in media_list if m.get("is_published"))
+
+        # Parse likes/views
         total_likes = 0
         total_views = 0
-        if published_response.status_code == 200:
+        if not isinstance(published_response, Exception) and published_response.status_code == 200:
             published_list = published_response.json()
             total_likes = sum(p.get("like_count", 0) for p in published_list)
             total_views = sum(p.get("view_count", 0) for p in published_list)
 
+        # Parse follower/following counts (graceful if columns don't exist)
+        follower_count = 0
+        following_count = 0
+        if not isinstance(profile_response, Exception) and profile_response.status_code == 200:
+            profiles = profile_response.json()
+            if profiles:
+                p = profiles[0]
+                follower_count = p.get("follower_count", 0)
+                following_count = p.get("following_count", 0)
+
         debug_log(
             f"Stats for user {user.id}: {total_media} media, {published_media} published"
         )
-
-        # Get follower/following counts from profile
-        follower_count = 0
-        following_count = 0
-        try:
-            profile_response = await client.get(
-                "/profiles",
-                params={
-                    "id": f"eq.{user.id}",
-                    "select": "follower_count,following_count",
-                },
-            )
-
-            if profile_response.status_code == 200 and profile_response.json():
-                p = profile_response.json()[0]
-                follower_count = p.get("follower_count", 0)
-                following_count = p.get("following_count", 0)
-        except Exception:
-            # Columns may not exist yet (migration 009 not applied)
-            pass
 
         return ProfileStats(
             total_media=total_media,
@@ -432,7 +447,7 @@ async def delete_my_profile(user: User = Depends(get_current_user)):
     Delete authenticated user's profile.
     WARNING: This does not delete the auth user, only the profile data.
     """
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         response = await client.delete(
             "/profiles",
             params={"id": f"eq.{user.id}"},
@@ -498,7 +513,7 @@ async def upload_avatar(
     avatar_url = f"/avatars/{user.id}.jpg"
 
     # Persist in Supabase
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         resp = await client.patch(
             "/profiles",
             params={"id": f"eq.{user.id}"},
@@ -522,16 +537,12 @@ async def follow_user(user_id: str, user: User = Depends(get_current_user)):
     if user.id == user_id:
         raise HTTPException(status_code=400, detail="Cannot follow yourself")
 
-    async with await get_supabase_client() as client:
-        # Check target user exists
-        target = await client.get(
+    async with get_supabase_client() as client:
+        # Check target user exists AND if already following in parallel
+        target_task = client.get(
             "/profiles", params={"id": f"eq.{user_id}", "select": "id"}
         )
-        if target.status_code != 200 or not target.json():
-            raise HTTPException(status_code=404, detail="User not found")
-
-        # Check if already following
-        existing = await client.get(
+        existing_task = client.get(
             "/follows",
             params={
                 "follower_id": f"eq.{user.id}",
@@ -539,6 +550,10 @@ async def follow_user(user_id: str, user: User = Depends(get_current_user)):
                 "select": "follower_id",
             },
         )
+        target, existing = await asyncio.gather(target_task, existing_task)
+
+        if target.status_code != 200 or not target.json():
+            raise HTTPException(status_code=404, detail="User not found")
         if existing.status_code == 200 and existing.json():
             raise HTTPException(status_code=409, detail="Already following this user")
 
@@ -572,7 +587,7 @@ async def unfollow_user(user_id: str, user: User = Depends(get_current_user)):
     if user.id == user_id:
         raise HTTPException(status_code=400, detail="Cannot unfollow yourself")
 
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         # Delete follow (trigger auto-updates counts)
         resp = await client.delete(
             "/follows",
@@ -608,7 +623,7 @@ async def get_followers(
     _current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get user's followers list."""
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         # Get follower IDs
         resp = await client.get(
             "/follows",
@@ -650,7 +665,7 @@ async def get_following(
     _current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get list of users this user follows."""
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         resp = await client.get(
             "/follows",
             params={
@@ -688,7 +703,7 @@ async def check_is_following(
     user: User = Depends(get_current_user),
 ):
     """Check if the authenticated user is following a specific user."""
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         resp = await client.get(
             "/follows",
             params={
@@ -716,7 +731,7 @@ async def list_all_profiles(
     List all user profiles (admin only).
     """
     # Check if user is admin
-    async with await get_supabase_client() as client:
+    async with get_supabase_client() as client:
         admin_check = await client.get(
             "/user_credits",
             params={"user_id": f"eq.{user.id}", "select": "is_admin"},
