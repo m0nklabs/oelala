@@ -1,0 +1,12 @@
+### Added
+- Email notification service (`email_service.py`) with Resend API and SMTP backends
+- Users can opt-in to receive email when generation jobs complete or fail
+- Beautiful HTML email templates with download links, thumbnails, and processing time
+- Notification preferences UI in Profile settings (toggles for job complete / job failed)
+- `GET /api/profile/me/notifications` — fetch notification preferences
+- `PUT /api/profile/me/notifications` — update notification preferences
+- Email notification audit log table (`email_notifications`) in Supabase
+- `notification_preferences` JSONB column on profiles table
+- Database migration `011_notification_preferences.sql`
+- Email triggers hooked into `broadcast_job_complete` and `broadcast_job_failed` (fire-and-forget)
+- New env vars: `RESEND_API_KEY`, `EMAIL_FROM`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`

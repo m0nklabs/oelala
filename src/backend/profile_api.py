@@ -768,3 +768,64 @@ async def list_all_profiles(
             "limit": limit,
             "offset": offset,
         }
+
+
+# =============================================================================
+# Notification Preferences
+# =============================================================================
+
+
+class NotificationPrefsRequest(BaseModel):
+    email_on_job_complete: Optional[bool] = None
+    email_on_job_failed: Optional[bool] = None
+
+
+@router.get("/me/notifications")
+async def get_notification_preferences(user: User = Depends(get_current_user)):
+    """Get current user's notification preferences."""
+    from email_service import get_user_notification_prefs
+
+    prefs = await get_user_notification_prefs(user.id)
+    return prefs
+
+
+@router.put("/me/notifications")
+async def update_notification_preferences(
+    body: NotificationPrefsRequest,
+    user: User = Depends(get_current_user),
+):
+    """Update notification preferences (partial merge into JSONB column)."""
+    # Build update dict — only include provided fields
+    updates = {}
+    if body.email_on_job_complete is not None:
+        updates["email_on_job_complete"] = body.email_on_job_complete
+    if body.email_on_job_failed is not None:
+        updates["email_on_job_failed"] = body.email_on_job_failed
+
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+
+    # Fetch current prefs, merge, write back
+    from email_service import get_user_notification_prefs
+
+    current = await get_user_notification_prefs(user.id)
+    merged = {**current, **updates}
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/profiles",
+            params={"id": f"eq.{user.id}"},
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json={"notification_preferences": merged},
+        )
+        if resp.status_code not in (200, 204):
+            logger.error(f"Failed to update notification prefs: {resp.text}")
+            raise HTTPException(500, "Failed to update preferences")
+
+    debug_log(f"Updated notification prefs for {user.id}: {merged}")
+    return merged

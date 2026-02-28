@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { User, Save, RefreshCw, CheckCircle, AlertCircle, Twitter, Instagram, Youtube, Github, Globe, Link2, Camera } from 'lucide-react'
+import { User, Save, RefreshCw, CheckCircle, AlertCircle, Twitter, Instagram, Youtube, Github, Globe, Link2, Camera, Bell } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
 
@@ -26,6 +26,13 @@ export default function ProfileTool() {
     is_public: true,
   })
 
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState({
+    email_on_job_complete: false,
+    email_on_job_failed: false,
+  })
+  const [notifSaving, setNotifSaving] = useState(false)
+
   // Fetch profile on mount
   useEffect(() => {
     if (!user || !token) {
@@ -34,6 +41,7 @@ export default function ProfileTool() {
     }
     fetchProfile()
     fetchStats()
+    fetchNotifPrefs()
   }, [user, token])
 
   async function handleAvatarUpload(e) {
@@ -103,6 +111,46 @@ export default function ProfileTool() {
       }
     } catch (err) {
       console.error('Failed to fetch stats:', err)
+    }
+  }
+
+  async function fetchNotifPrefs() {
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/profile/me/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setNotifPrefs(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch notification prefs:', err)
+    }
+  }
+
+  async function toggleNotifPref(key) {
+    const newValue = !notifPrefs[key]
+    setNotifPrefs((p) => ({ ...p, [key]: newValue }))
+    setNotifSaving(true)
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/profile/me/notifications`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ [key]: newValue }),
+      })
+      if (!res.ok) {
+        // revert on failure
+        setNotifPrefs((p) => ({ ...p, [key]: !newValue }))
+        setError('Failed to update notification preference')
+      }
+    } catch (err) {
+      setNotifPrefs((p) => ({ ...p, [key]: !newValue }))
+      console.error('Failed to update notif pref:', err)
+    } finally {
+      setNotifSaving(false)
     }
   }
 
@@ -328,6 +376,42 @@ export default function ProfileTool() {
                 Public profile
               </label>
               <span style={styles.hint}>Allow others to see your profile and published works</span>
+            </div>
+          </div>
+
+          {/* Notification Preferences */}
+          <div style={styles.section}>
+            <h3 style={styles.sectionTitle}>
+              <Bell size={16} />
+              Email Notifications
+            </h3>
+
+            <div style={styles.formGroup}>
+              <label style={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.email_on_job_complete}
+                  onChange={() => toggleNotifPref('email_on_job_complete')}
+                  disabled={notifSaving}
+                  style={styles.checkbox}
+                />
+                Job completed
+              </label>
+              <span style={styles.hint}>Receive an email when your generation finishes (with download link)</span>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.email_on_job_failed}
+                  onChange={() => toggleNotifPref('email_on_job_failed')}
+                  disabled={notifSaving}
+                  style={styles.checkbox}
+                />
+                Job failed
+              </label>
+              <span style={styles.hint}>Receive an email when a generation fails</span>
             </div>
           </div>
 

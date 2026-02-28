@@ -342,6 +342,23 @@ class WebSocketManager:
             except Exception as e:
                 logger.warning(f"Failed to trigger job.completed webhook: {e}")
 
+        # Trigger email notification (fire-and-forget)
+        if user_id and user_id != "anonymous":
+            try:
+                from email_service import notify_job_completed
+
+                asyncio.create_task(
+                    notify_job_completed(
+                        user_id=user_id,
+                        job_id=job_id,
+                        job_type=job_type,
+                        output_url=output_url,
+                        processing_time_seconds=processing_time,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Failed to trigger email notification: {e}")
+
         self.unregister_job(job_id)
 
     async def broadcast_job_failed(
@@ -388,6 +405,22 @@ class WebSocketManager:
                 )
             except Exception as e:
                 logger.warning(f"Failed to trigger job.failed webhook: {e}")
+
+        # Trigger email notification for failure (fire-and-forget)
+        if user_id and user_id != "anonymous":
+            try:
+                from email_service import notify_job_failed
+
+                asyncio.create_task(
+                    notify_job_failed(
+                        user_id=user_id,
+                        job_id=job_id,
+                        job_type=job_type,
+                        error=error,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Failed to trigger failure email notification: {e}")
 
         self.unregister_job(job_id)
 
