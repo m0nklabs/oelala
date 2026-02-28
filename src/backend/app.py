@@ -28,7 +28,7 @@ from fastapi import (
     Depends,
     Request,
 )
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
@@ -437,6 +437,89 @@ app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
+
+# =============================================================================
+# Share Link Endpoint  (must be declared before static mounts take effect)
+# =============================================================================
+
+SITE_URL = os.getenv("SITE_URL", "http://localhost:5174")
+
+
+@app.get("/share/{media_id}", response_class=HTMLResponse, include_in_schema=False)
+async def share_media(media_id: str, request: Request):
+    """
+    Social-share page for a published gallery item.
+    Returns HTML with Open Graph / Twitter Card meta tags and a JS redirect
+    to the main SPA with ?openItem={media_id} so the gallery auto-opens it.
+    """
+    from gallery_api import get_supabase_client  # local import to avoid circular
+
+    supabase = get_supabase_client()
+    title = "Oelala – AI-generated media"
+    description = "Check out this AI-generated creation on Oelala."
+    og_image = f"{SITE_URL}/og-default.jpg"
+    media_type_str = "video"
+
+    if supabase:
+        try:
+            result = (
+                supabase.table("published_media")
+                .select("id,title,description,thumbnail_url,media_type,is_nsfw")
+                .eq("id", media_id)
+                .single()
+                .execute()
+            )
+            if result.data:
+                item = result.data
+                if item.get("is_nsfw"):
+                    description = "⚠️ This content is marked NSFW and requires login to view."
+                else:
+                    title = item.get("title") or title
+                    description = item.get("description") or description
+                media_type_str = item.get("media_type", "video")
+                thumb = item.get("thumbnail_url")
+                if thumb:
+                    og_image = thumb if thumb.startswith("http") else f"{SITE_URL}{thumb}"
+                elif media_type_str == "image":
+                    og_image = f"{SITE_URL}/api/gallery/{media_id}/file"
+        except Exception as exc:
+            logger.warning(f"⚠️ Share page: failed to fetch media {media_id}: {exc}")
+
+    redirect_url = f"{SITE_URL}/?openItem={media_id}"
+    og_type = "video.other" if media_type_str == "video" else "website"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="{title}">
+  <meta property="og:description" content="{description}">
+  <meta property="og:image" content="{og_image}">
+  <meta property="og:url" content="{SITE_URL}/share/{media_id}">
+  <meta property="og:type" content="{og_type}">
+  <meta property="og:site_name" content="Oelala">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{title}">
+  <meta name="twitter:description" content="{description}">
+  <meta name="twitter:image" content="{og_image}">
+
+  <!-- Redirect humans to the SPA -->
+  <meta http-equiv="refresh" content="0;url={redirect_url}">
+  <link rel="canonical" href="{SITE_URL}/share/{media_id}">
+</head>
+<body>
+  <p>Redirecting… <a href="{redirect_url}">Click here if not redirected.</a></p>
+  <script>window.location.replace("{redirect_url}");</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 def create_progress_callback(prompt_id: str):

@@ -112,17 +112,19 @@ export default function MediaDetailModal({ item, onClose, onRemix = null }) {
     }
   }
 
-  // Copy share link
-  // TODO: Implement proper deep linking when URL routing is added to the app
-  // For now, this shares the gallery URL but won't deep link to specific items
+  // Copy share link  — points to /share/{id} for social preview support
   const handleShare = async () => {
-    const url = `${window.location.origin}/gallery/${item.id}`
+    const shareUrl = `${window.location.origin}/share/${item.id}`
     try {
-      await navigator.clipboard.writeText(url)
+      if (navigator.share) {
+        await navigator.share({ title: item.title, url: shareUrl })
+        return
+      }
+      await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error('Failed to copy:', err)
+      if (err.name !== 'AbortError') console.error('Failed to share:', err)
     }
   }
 

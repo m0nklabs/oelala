@@ -310,6 +310,21 @@ export default function Gallery({ onRemix = null }) {
   const [selectedItem, setSelectedItem] = useState(null)
   const PAGE_SIZE = 12 // Items per page
 
+  // Deep-link: ?openItem=<media_id> — fetch + auto-open that item
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const itemId = params.get('openItem')
+    if (!itemId) return
+    apiFetch(`/api/gallery/${itemId}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data) setSelectedItem(data) })
+      .catch((err) => console.warn('⚠️ [Gallery] deep-link fetch failed:', err))
+    // Remove the param so refresh doesn't re-open
+    const url = new URL(window.location.href)
+    url.searchParams.delete('openItem')
+    window.history.replaceState({}, '', url.toString())
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())

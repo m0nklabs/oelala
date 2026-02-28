@@ -63,6 +63,14 @@ export default function Dashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [paramsCollapsed, setParamsCollapsed] = useState(false)
 
+  // Deep-link: ?openItem=<media_id> → switch to gallery
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('openItem')) {
+      setActiveToolId(TOOL_IDS.GALLERY)
+    }
+  }, [])
+
   // Mobile parameters panel state
   const [mobileParamsOpen, setMobileParamsOpen] = useState(false)
 
