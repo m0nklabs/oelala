@@ -152,6 +152,8 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
     }
   }
 
+  const isVideoTarget = targetFile?.type?.startsWith('video/')
+
   const handleSwap = async () => {
     if (!user) { requestLogin('Log in om face swap te gebruiken'); return }
     if (!targetFile) { setError('Upload a target image or video first'); return }
@@ -165,18 +167,31 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
     try {
       const idx = swapAllFaces ? '-1' : String(faceIndex)
       const fd = new FormData()
-      fd.append('target', targetFile)
       fd.append('face_indices', idx)
 
-      let endpoint = `${BACKEND_BASE}/face-swap`
-      if (sourceMode === 'profile') {
-        fd.append('profile_id', selectedProfileId)
-        endpoint = `${BACKEND_BASE}/face-swap/profile`
+      let endpoint
+      if (isVideoTarget) {
+        // Video endpoints use field name 'video' instead of 'target'
+        fd.append('video', targetFile)
+        if (sourceMode === 'profile') {
+          fd.append('profile_id', selectedProfileId)
+          endpoint = `${BACKEND_BASE}/face-swap-video/profile`
+        } else {
+          fd.append('source', sourceFile)
+          endpoint = `${BACKEND_BASE}/face-swap-video`
+        }
       } else {
-        fd.append('source', sourceFile)
+        fd.append('target', targetFile)
+        if (sourceMode === 'profile') {
+          fd.append('profile_id', selectedProfileId)
+          endpoint = `${BACKEND_BASE}/face-swap/profile`
+        } else {
+          fd.append('source', sourceFile)
+          endpoint = `${BACKEND_BASE}/face-swap`
+        }
       }
 
-      if (DEBUG) console.log('👤 FaceSwap →', endpoint, 'indices:', idx)
+      if (DEBUG) console.log('👤 FaceSwap →', endpoint, 'indices:', idx, 'video:', isVideoTarget)
 
       const res = await fetch(endpoint, { method: 'POST', body: fd })
 
@@ -185,10 +200,9 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
         throw new Error(err.detail || 'Face swap failed')
       }
 
-      // Backend returns PNG bytes directly via StreamingResponse
       const blob = await res.blob()
       const objectUrl = URL.createObjectURL(blob)
-      setResult({ objectUrl })
+      setResult({ objectUrl, isVideo: isVideoTarget })
 
     } catch (err) {
       console.error('❌ FaceSwap error:', err)
@@ -202,7 +216,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
     if (!result?.objectUrl) return
     const a = document.createElement('a')
     a.href = result.objectUrl
-    a.download = `faceswap_${Date.now()}.png`
+    a.download = result.isVideo ? `faceswap_${Date.now()}.mp4` : `faceswap_${Date.now()}.png`
     a.click()
   }
 
@@ -348,9 +362,9 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
         className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
       >
         {isLoading ? (
-          <><Loader2 className="w-5 h-5 animate-spin" /> Swapping...</>
+          <><Loader2 className="w-5 h-5 animate-spin" /> {isVideoTarget ? 'Processing video...' : 'Swapping...'}</>
         ) : (
-          <><User className="w-5 h-5" /> Swap Face {detectedFaces ? `(${indicesLabel})` : ''}</>
+          <><User className="w-5 h-5" /> {isVideoTarget ? 'Swap Face in Video' : `Swap Face${detectedFaces ? ` (${indicesLabel})` : ''}`}</>
         )}
       </button>
 
@@ -364,22 +378,35 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
       {/* Result */}
       {result && (
         <div className="space-y-3">
-          <div className="rounded-lg overflow-hidden border border-gray-700">
-            <img src={result.objectUrl} alt="Face swap result" className="w-full" />
+          <div className="rounded-lg overflow-hidden border border-gray-700 bg-black">
+            {result.isVideo ? (
+              <video
+                src={result.objectUrl}
+                controls
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full max-h-[480px]"
+              />
+            ) : (
+              <img src={result.objectUrl} alt="Face swap result" className="w-full" />
+            )}
           </div>
           <button
             onClick={handleDownload}
             className="w-full py-2 bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
-            Download Result
+            Download {result.isVideo ? 'Video' : 'Image'}
           </button>
         </div>
       )}
 
       <div className="text-xs text-gray-500 space-y-1">
         <p>📸 Best results: clear frontal face photo, good lighting, no obstructions.</p>
-        <p>⚡ Runs directly — no queue, result appears in seconds.</p>
+        <p>⚡ Images run directly — result in seconds. Videos process frame-by-frame (may take a minute).</p>
+        <p>🎬 Supports MP4, MOV, WebM — audio is preserved in the output.</p>
         <p>💾 Reuse faces often? Save them as a <strong>Face Profile</strong> in the Profiles tab.</p>
       </div>
     </div>
