@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle, User, Flag } from 'lucide-react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle, User, Flag, ZoomIn } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,6 +20,8 @@ export default function MediaDetailModal({ item, onClose, onRemix = null, onView
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [reportSuccess, setReportSuccess] = useState(false)
   const [reportError, setReportError] = useState('')
+  const [upscaling, setUpscaling] = useState(false)
+  const [upscaleResult, setUpscaleResult] = useState(null)
 
   // Fetch fresh item data on open — gets accurate user_liked + triggers view increment
   useEffect(() => {
@@ -694,6 +696,59 @@ export default function MediaDetailModal({ item, onClose, onRemix = null, onView
                 >
                   <FileJson size={16} />
                   WF
+                </button>
+              )}
+
+              {/* Upscale Button — only for video items owned by current user */}
+              {user && item.media_type === 'video' && item.user_id === user.id && (
+                <button
+                  onClick={async () => {
+                    if (upscaling) return
+                    setUpscaling(true)
+                    setUpscaleResult(null)
+                    try {
+                      const formData = new FormData()
+                      // Fetch the video file and upload it
+                      const videoResp = await fetch(mediaUrl)
+                      const videoBlob = await videoResp.blob()
+                      formData.append('file', videoBlob, 'video.mp4')
+                      formData.append('preset', 'balanced')
+                      const res = await apiFetch('/upscale-video', {
+                        method: 'POST',
+                        body: formData,
+                      })
+                      const data = await res.json()
+                      if (res.ok) {
+                        setUpscaleResult({ success: true, prompt_id: data.prompt_id, credits: data.credits_used })
+                      } else {
+                        setUpscaleResult({ success: false, error: data.detail || 'Upscale failed' })
+                      }
+                    } catch (err) {
+                      setUpscaleResult({ success: false, error: err.message })
+                    } finally {
+                      setUpscaling(false)
+                    }
+                  }}
+                  disabled={upscaling}
+                  title="Upscale video with AI (costs credits)"
+                  style={{
+                    padding: '10px 16px',
+                    background: upscaleResult?.success ? '#059669' : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: upscaling ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    opacity: upscaling ? 0.7 : 1,
+                  }}
+                >
+                  <ZoomIn size={16} />
+                  {upscaling ? 'Upscaling...' : upscaleResult?.success ? 'Queued!' : 'Upscale'}
                 </button>
               )}
 

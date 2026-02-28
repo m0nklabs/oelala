@@ -7688,11 +7688,27 @@ UPSCALE_MODELS = [
     "4x_NMKD-Siax_200k.pth",
 ]
 
+# Credit costs for upscale operations
+UPSCALE_CREDITS = {
+    "image_esrgan": 5,       # Quick per-frame AI upscale
+    "video_lanczos": 5,      # Fast interpolation (no GPU)
+    "video_bicubic": 5,      # Fast interpolation (no GPU)
+    "video_esrgan": 15,      # AI per-frame upscale
+    "video_seedvr2": 30,     # Full AI video upscaler (slow, best quality)
+}
+
 
 @app.get("/upscale/models")
 def list_upscale_models():
-    """List available upscale models"""
-    return {"models": UPSCALE_MODELS}
+    """List available upscale models and quality presets"""
+    return {
+        "models": UPSCALE_MODELS,
+        "presets": {
+            "fast": {"method": "lanczos", "description": "Lanczos interpolation — instant, no GPU", "credits": 5},
+            "balanced": {"method": "realesrgan", "description": "RealESRGAN 4x — AI per-frame upscale", "credits": 15},
+            "quality": {"method": "seedvr2", "description": "SeedVR2 3B — AI video upscaler, best quality", "credits": 30},
+        },
+    }
 
 
 @app.post("/upscale")
@@ -7701,6 +7717,7 @@ async def upscale_image(
     model: str = Form("RealESRGAN_x4plus.pth"),
     scale: int = Form(4),
     face_enhance: bool = Form(False),
+    user: User = Depends(get_current_user),
 ):
     """
     Upscale image using Real-ESRGAN via ComfyUI.
@@ -7712,8 +7729,17 @@ async def upscale_image(
         face_enhance: Apply GFPGAN face enhancement
     """
     logger.info(
-        f"🔍 Upscale request: model={model}, scale={scale}x, face_enhance={face_enhance}"
+        f"🔍 Upscale request: model={model}, scale={scale}x, face_enhance={face_enhance}, user={user.id}"
     )
+
+    # Check credits
+    credits_required = UPSCALE_CREDITS["image_esrgan"]
+    balance = await get_credit_balance(user)
+    if balance < credits_required:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits. Need {credits_required}, have {balance}.",
+        )
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -7753,7 +7779,6 @@ async def upscale_image(
 
         # Add face enhancement if requested (requires ComfyUI-GFPGAN extension)
         if face_enhance:
-            # Try with GFPGAN - falls back gracefully if not installed
             workflow["4"] = {
                 "inputs": {
                     "image": ["3", 0],
@@ -7778,9 +7803,34 @@ async def upscale_image(
                 status_code=500, detail="Failed to queue upscale workflow"
             )
 
+        # Register job for progress tracking
+        comfyui.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            prompt=f"Upscale image ({model}, {scale}x)",
+            settings={"model": model, "scale": scale, "face_enhance": face_enhance},
+        )
+        if ws_manager and job_queue_manager:
+            ws_manager.register_job(prompt_id, user_id=user.id)
+            job_queue_manager.register_job(
+                prompt_id=prompt_id,
+                user_id=user.id,
+                job_type="upscale_image",
+                metadata={"model": model, "scale": scale},
+            )
+            if progress_monitor:
+                progress_monitor.register_callback(
+                    prompt_id, create_progress_callback(prompt_id)
+                )
+
+        # Deduct credits
+        await deduct_credits(user, credits_required, prompt_id, f"Image upscale ({model})")
+        logger.info(f"   💰 -{credits_required} credits")
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "credits_used": credits_required,
             "meta": {
                 "model": model,
                 "scale": scale,
@@ -7789,6 +7839,8 @@ async def upscale_image(
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Upscale error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -7804,25 +7856,51 @@ async def upscale_video(
     file: UploadFile = File(...),
     model: str = Form("lanczos"),
     scale: float = Form(2.0),
+    preset: str = Form("", description="Quality preset: fast, balanced, quality (overrides model)"),
+    user: User = Depends(get_current_user),
 ):
     """
     Upscale video using various methods.
 
     Args:
         file: Source video
-        model: Upscale method:
-            - lanczos: High-quality lanczos interpolation (fast, no AI)
-            - bicubic: Bicubic interpolation (fast, no AI)
-            - seedvr2: SeedVR2 AI upscaler (slow, requires GPU, best quality)
+        preset: Quality preset (fast/balanced/quality) — overrides model param
+        model: Upscale method (lanczos, bicubic, seedvr2, realesrgan)
         scale: Upscale factor (2.0 = double resolution)
 
-    Note: AI upscale models (realesrgan) are not currently installed.
-    Use 'lanczos' for reliable basic upscaling.
+    Presets:
+        - fast: Lanczos interpolation (instant, no GPU)
+        - balanced: RealESRGAN 4x per-frame AI upscale
+        - quality: SeedVR2 3B AI video upscaler (slow, best quality)
     """
-    logger.info(f"🎬 Video upscale request: model={model}, scale={scale}x")
+    # Apply preset overrides
+    if preset == "fast":
+        model = "lanczos"
+    elif preset == "balanced":
+        model = "realesrgan"
+    elif preset == "quality":
+        model = "seedvr2"
+
+    logger.info(f"🎬 Video upscale request: model={model}, scale={scale}x, preset={preset}, user={user.id}")
+
+    # Determine credit cost
+    if model == "seedvr2":
+        credits_required = UPSCALE_CREDITS["video_seedvr2"]
+    elif model == "realesrgan":
+        credits_required = UPSCALE_CREDITS["video_esrgan"]
+    else:
+        credits_required = UPSCALE_CREDITS["video_lanczos"]
+
+    # Check credits
+    balance = await get_credit_balance(user)
+    if balance < credits_required:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits. Need {credits_required}, have {balance}.",
+        )
 
     # Validate model
-    valid_models = ["lanczos", "bicubic", "bilinear", "nearest-exact", "area"]
+    valid_models = ["lanczos", "bicubic", "bilinear", "nearest-exact", "area", "realesrgan"]
     if model not in valid_models and model != "seedvr2":
         raise HTTPException(
             status_code=400,
@@ -7914,6 +7992,47 @@ async def upscale_video(
                     "class_type": "VHS_VideoCombine",
                 },
             }
+        elif model == "realesrgan":
+            # RealESRGAN AI per-frame upscale
+            # Load video → upscale each frame with ESRGAN → re-encode
+            workflow = {
+                "1": {
+                    "inputs": {
+                        "video": comfyui_filename,
+                        "force_rate": 0,
+                        "force_size": "Disabled",
+                        "custom_width": 512,
+                        "custom_height": 512,
+                        "frame_load_cap": 0,
+                        "skip_first_frames": 0,
+                        "select_every_nth": 1,
+                    },
+                    "class_type": "VHS_LoadVideo",
+                },
+                "2": {
+                    "inputs": {"model_name": "RealESRGAN_x4plus.pth"},
+                    "class_type": "UpscaleModelLoader",
+                },
+                "3": {
+                    "inputs": {"upscale_model": ["2", 0], "image": ["1", 0]},
+                    "class_type": "ImageUpscaleWithModel",
+                },
+                "4": {
+                    "inputs": {
+                        "frame_rate": 30,
+                        "loop_count": 0,
+                        "filename_prefix": "oelala_upscale_esrgan",
+                        "format": "video/h264-mp4",
+                        "pix_fmt": "yuv420p",
+                        "crf": 19,
+                        "save_metadata": True,
+                        "pingpong": False,
+                        "save_output": True,
+                        "images": ["3", 0],
+                    },
+                    "class_type": "VHS_VideoCombine",
+                },
+            }
         else:
             # Basic upscaling with ImageScale (lanczos, bicubic, etc.)
             # Note: ImageScale requires explicit width/height, not scale factor
@@ -7969,16 +8088,45 @@ async def upscale_video(
                 status_code=500, detail="Failed to queue video upscale workflow"
             )
 
+        # Register job for progress tracking
+        job_type = f"upscale_video_{model}"
+        comfyui.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            prompt=f"Video upscale ({model}, {scale}x)",
+            settings={"model": model, "scale": scale, "preset": preset},
+        )
+        if ws_manager and job_queue_manager:
+            ws_manager.register_job(prompt_id, user_id=user.id)
+            job_queue_manager.register_job(
+                prompt_id=prompt_id,
+                user_id=user.id,
+                job_type=job_type,
+                metadata={"model": model, "scale": scale},
+            )
+            if progress_monitor:
+                progress_monitor.register_callback(
+                    prompt_id, create_progress_callback(prompt_id)
+                )
+
+        # Deduct credits
+        await deduct_credits(user, credits_required, prompt_id, f"Video upscale ({model})")
+        logger.info(f"   💰 -{credits_required} credits")
+
         return {
             "status": "queued",
             "prompt_id": prompt_id,
+            "credits_used": credits_required,
             "meta": {
                 "model": model,
                 "scale": scale,
+                "preset": preset or model,
                 "source_video": comfyui_filename,
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Video upscale error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
