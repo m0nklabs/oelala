@@ -12,7 +12,7 @@
 # Install separately with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 # Or for CUDA 12.4: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 torch==2.10.0
-torchvision==0.24.1
+torchvision==0.25.0
 torchaudio==2.10.0
 torchsde==0.2.6
 
@@ -32,7 +32,7 @@ llama-cpp-python==0.3.16
 # Video processing
 imageio==2.37.2
 imageio-ffmpeg==0.6.0
-opencv-python==4.12.0.88
+opencv-python==4.13.0.90
 opencv-python-headless==4.13.0.92
 
 # Dynamic prompts
