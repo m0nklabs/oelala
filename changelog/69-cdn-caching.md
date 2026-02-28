@@ -1,0 +1,11 @@
+### Added
+- Cache-Control headers on media file endpoints (immutable, 1 year TTL)
+- CDN-Cache-Control header for Cloudflare edge caching
+- HTTP caching middleware with path-based cache policies:
+  - `/avatars/*` — 1 day cache
+  - `/static/assets/*` — immutable (hashed filenames)
+  - `/static/*` — no-cache (revalidate index.html)
+  - `/api/loras` GET — 5 min CDN cache
+  - `/api/gallery` GET — 1 min CDN cache
+  - POST/PUT/DELETE — no-store
+- Vary: Accept-Encoding headers for proper compressed content caching
