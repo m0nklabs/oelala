@@ -114,6 +114,26 @@ class ProfileStats(BaseModel):
     published_media: int
     total_likes_received: int
     total_views_received: int
+    follower_count: int = 0
+    following_count: int = 0
+
+
+class FollowResponse(BaseModel):
+    """Follow action response"""
+
+    followed: bool
+    follower_count: int
+    following_count: int
+
+
+class FollowListItem(BaseModel):
+    """User in a followers/following list"""
+
+    id: str
+    username: Optional[str] = None
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 
 # =============================================================================
@@ -376,11 +396,33 @@ async def get_my_stats(user: User = Depends(get_current_user)):
             f"Stats for user {user.id}: {total_media} media, {published_media} published"
         )
 
+        # Get follower/following counts from profile
+        follower_count = 0
+        following_count = 0
+        try:
+            profile_response = await client.get(
+                "/profiles",
+                params={
+                    "id": f"eq.{user.id}",
+                    "select": "follower_count,following_count",
+                },
+            )
+
+            if profile_response.status_code == 200 and profile_response.json():
+                p = profile_response.json()[0]
+                follower_count = p.get("follower_count", 0)
+                following_count = p.get("following_count", 0)
+        except Exception:
+            # Columns may not exist yet (migration 009 not applied)
+            pass
+
         return ProfileStats(
             total_media=total_media,
             published_media=published_media,
             total_likes_received=total_likes,
             total_views_received=total_views,
+            follower_count=follower_count,
+            following_count=following_count,
         )
 
 
@@ -467,6 +509,196 @@ async def upload_avatar(
             raise HTTPException(status_code=500, detail="Saved image but failed to update profile")
 
     return {"avatar_url": avatar_url}
+
+
+# =============================================================================
+# Follow / Unfollow
+# =============================================================================
+
+
+@router.post("/{user_id}/follow", response_model=FollowResponse)
+async def follow_user(user_id: str, user: User = Depends(get_current_user)):
+    """Follow another user."""
+    if user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+
+    async with await get_supabase_client() as client:
+        # Check target user exists
+        target = await client.get(
+            "/profiles", params={"id": f"eq.{user_id}", "select": "id"}
+        )
+        if target.status_code != 200 or not target.json():
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check if already following
+        existing = await client.get(
+            "/follows",
+            params={
+                "follower_id": f"eq.{user.id}",
+                "following_id": f"eq.{user_id}",
+                "select": "follower_id",
+            },
+        )
+        if existing.status_code == 200 and existing.json():
+            raise HTTPException(status_code=409, detail="Already following this user")
+
+        # Insert follow (trigger auto-updates counts)
+        resp = await client.post(
+            "/follows",
+            json={"follower_id": user.id, "following_id": user_id},
+        )
+        if resp.status_code not in (200, 201):
+            logger.error(f"Failed to follow: {resp.text}")
+            raise HTTPException(status_code=500, detail="Failed to follow user")
+
+        # Fetch updated counts
+        profile_resp = await client.get(
+            "/profiles",
+            params={"id": f"eq.{user_id}", "select": "follower_count,following_count"},
+        )
+        counts = profile_resp.json()[0] if profile_resp.status_code == 200 and profile_resp.json() else {}
+
+        debug_log(f"User {user.id} followed {user_id}")
+        return FollowResponse(
+            followed=True,
+            follower_count=counts.get("follower_count", 0),
+            following_count=counts.get("following_count", 0),
+        )
+
+
+@router.delete("/{user_id}/follow", response_model=FollowResponse)
+async def unfollow_user(user_id: str, user: User = Depends(get_current_user)):
+    """Unfollow a user."""
+    if user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot unfollow yourself")
+
+    async with await get_supabase_client() as client:
+        # Delete follow (trigger auto-updates counts)
+        resp = await client.delete(
+            "/follows",
+            params={
+                "follower_id": f"eq.{user.id}",
+                "following_id": f"eq.{user_id}",
+            },
+        )
+        if resp.status_code not in (200, 204):
+            logger.error(f"Failed to unfollow: {resp.text}")
+            raise HTTPException(status_code=500, detail="Failed to unfollow user")
+
+        # Fetch updated counts
+        profile_resp = await client.get(
+            "/profiles",
+            params={"id": f"eq.{user_id}", "select": "follower_count,following_count"},
+        )
+        counts = profile_resp.json()[0] if profile_resp.status_code == 200 and profile_resp.json() else {}
+
+        debug_log(f"User {user.id} unfollowed {user_id}")
+        return FollowResponse(
+            followed=False,
+            follower_count=counts.get("follower_count", 0),
+            following_count=counts.get("following_count", 0),
+        )
+
+
+@router.get("/{user_id}/followers")
+async def get_followers(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    _current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Get user's followers list."""
+    async with await get_supabase_client() as client:
+        # Get follower IDs
+        resp = await client.get(
+            "/follows",
+            params={
+                "following_id": f"eq.{user_id}",
+                "select": "follower_id,created_at",
+                "order": "created_at.desc",
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to get followers")
+
+        follows = resp.json()
+        if not follows:
+            return {"followers": [], "count": 0}
+
+        # Get profiles for these follower IDs
+        follower_ids = [f["follower_id"] for f in follows]
+        ids_filter = ",".join(follower_ids)
+        profiles_resp = await client.get(
+            "/profiles",
+            params={
+                "id": f"in.({ids_filter})",
+                "select": "id,username,display_name,avatar_url,bio",
+            },
+        )
+        profiles = profiles_resp.json() if profiles_resp.status_code == 200 else []
+
+        return {"followers": profiles, "count": len(profiles)}
+
+
+@router.get("/{user_id}/following")
+async def get_following(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    _current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Get list of users this user follows."""
+    async with await get_supabase_client() as client:
+        resp = await client.get(
+            "/follows",
+            params={
+                "follower_id": f"eq.{user_id}",
+                "select": "following_id,created_at",
+                "order": "created_at.desc",
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to get following")
+
+        follows = resp.json()
+        if not follows:
+            return {"following": [], "count": 0}
+
+        following_ids = [f["following_id"] for f in follows]
+        ids_filter = ",".join(following_ids)
+        profiles_resp = await client.get(
+            "/profiles",
+            params={
+                "id": f"in.({ids_filter})",
+                "select": "id,username,display_name,avatar_url,bio",
+            },
+        )
+        profiles = profiles_resp.json() if profiles_resp.status_code == 200 else []
+
+        return {"following": profiles, "count": len(profiles)}
+
+
+@router.get("/{user_id}/is-following")
+async def check_is_following(
+    user_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Check if the authenticated user is following a specific user."""
+    async with await get_supabase_client() as client:
+        resp = await client.get(
+            "/follows",
+            params={
+                "follower_id": f"eq.{user.id}",
+                "following_id": f"eq.{user_id}",
+                "select": "follower_id",
+            },
+        )
+        is_following = resp.status_code == 200 and bool(resp.json())
+        return {"is_following": is_following}
 
 
 # =============================================================================

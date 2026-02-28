@@ -265,6 +265,10 @@ export default function ProfileTool() {
                 <span>Followers</span>
                 <strong>{stats.follower_count || 0}</strong>
               </div>
+              <div style={styles.statRow}>
+                <span>Following</span>
+                <strong>{stats.following_count || 0}</strong>
+              </div>
             </div>
           )}
         </div>

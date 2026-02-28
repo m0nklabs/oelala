@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle } from 'lucide-react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle, User } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 
-export default function MediaDetailModal({ item, onClose, onRemix = null }) {
+export default function MediaDetailModal({ item, onClose, onRemix = null, onViewProfile = null }) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(item.user_liked || false)
   const [likeCount, setLikeCount] = useState(item.like_count || 0)
@@ -232,6 +232,57 @@ export default function MediaDetailModal({ item, onClose, onRemix = null }) {
               }}>
                 {item.title}
               </h2>
+
+              {/* Creator Info */}
+              {(item.creator_username || item.creator_display_name) && (
+                <button
+                  onClick={() => onViewProfile && onViewProfile(item.user_id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '10px',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: onViewProfile ? 'pointer' : 'default',
+                    color: '#ccc'
+                  }}
+                >
+                  {item.creator_avatar_url ? (
+                    <img
+                      src={item.creator_avatar_url}
+                      alt=""
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <User size={14} color="#fff" />
+                    </div>
+                  )}
+                  <span style={{ fontSize: '14px', fontWeight: 500 }}>
+                    {item.creator_display_name || `@${item.creator_username}`}
+                  </span>
+                  {item.creator_display_name && item.creator_username && (
+                    <span style={{ fontSize: '13px', color: '#666' }}>
+                      @{item.creator_username}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {/* Stats */}
               <div style={{

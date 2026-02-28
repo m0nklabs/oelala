@@ -101,6 +101,10 @@ class PublishedMediaResponse(BaseModel):
     # Additional fields for frontend
     user_email: Optional[str] = None
     user_liked: Optional[bool] = None
+    # Creator info (from profiles table)
+    creator_username: Optional[str] = None
+    creator_display_name: Optional[str] = None
+    creator_avatar_url: Optional[str] = None
 
 
 class GalleryListResponse(BaseModel):
@@ -358,8 +362,24 @@ async def list_published_media(
             except Exception as e:
                 logger.warning(f"Failed to batch-fetch user likes: {e}")
 
+        # Batch-fetch creator profiles for all user_ids in this page
+        creator_profiles: dict = {}
+        if result.data:
+            user_ids = list({item["user_id"] for item in result.data})
+            try:
+                profiles_result = (
+                    supabase.table("profiles")
+                    .select("id,username,display_name,avatar_url")
+                    .in_("id", user_ids)
+                    .execute()
+                )
+                creator_profiles = {p["id"]: p for p in profiles_result.data}
+            except Exception as e:
+                logger.warning(f"Failed to batch-fetch creator profiles: {e}")
+
         items = []
         for item in result.data:
+            creator = creator_profiles.get(item["user_id"], {})
             items.append(
                 PublishedMediaResponse(
                     id=item["id"],
@@ -377,6 +397,9 @@ async def list_published_media(
                     user_liked=(item["id"] in liked_ids) if user else None,
                     created_at=item["created_at"],
                     updated_at=item["updated_at"],
+                    creator_username=creator.get("username"),
+                    creator_display_name=creator.get("display_name"),
+                    creator_avatar_url=creator.get("avatar_url"),
                 )
             )
 
@@ -458,6 +481,20 @@ async def get_published_media(
             except Exception as e:
                 logger.warning(f"Failed to check like status: {e}")
 
+        # Fetch creator profile
+        creator = {}
+        try:
+            profile_result = (
+                supabase.table("profiles")
+                .select("id,username,display_name,avatar_url")
+                .eq("id", item["user_id"])
+                .execute()
+            )
+            if profile_result.data:
+                creator = profile_result.data[0]
+        except Exception as e:
+            logger.warning(f"Failed to fetch creator profile: {e}")
+
         return PublishedMediaResponse(
             id=item["id"],
             user_id=item["user_id"],
@@ -474,6 +511,9 @@ async def get_published_media(
             created_at=item["created_at"],
             updated_at=item["updated_at"],
             user_liked=user_liked,
+            creator_username=creator.get("username"),
+            creator_display_name=creator.get("display_name"),
+            creator_avatar_url=creator.get("avatar_url"),
         )
 
     except HTTPException:

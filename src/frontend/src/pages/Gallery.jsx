@@ -285,7 +285,7 @@ const LazyMediaItem = React.memo(({ item, getMediaUrl, getPreviewUrl, onClick, s
 
 LazyMediaItem.displayName = 'LazyMediaItem'
 
-export default function Gallery({ onRemix = null }) {
+export default function Gallery({ onRemix = null, onViewProfile = null }) {
   const DEBUG = true // Enable debug for troubleshooting
   const debugLog = (message, data = null) => {
     if (!DEBUG) return
@@ -817,6 +817,7 @@ export default function Gallery({ onRemix = null }) {
         <MediaDetailModal
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
+          onViewProfile={onViewProfile}
           onRemix={onRemix ? (settings) => {
             const toolId = selectedItem.media_type === 'video'
               ? TOOL_IDS.TEXT_TO_VIDEO

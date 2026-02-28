@@ -38,6 +38,7 @@ const Gallery = lazy(() => import('../pages/Gallery'))
 const AdminPanelTool = lazy(() => import('./tools/AdminPanelTool'))
 const APIKeysTool = lazy(() => import('./tools/APIKeysTool'))
 const ProfileTool = lazy(() => import('./tools/ProfileTool'))
+const UserProfilePage = lazy(() => import('../pages/UserProfilePage'))
 import LogViewer from '../components/LogViewer'
 import { sendClientLog } from '../logging'
 
@@ -100,6 +101,9 @@ export default function Dashboard() {
 
   // Pending import: { item, workflow } - set when user picks "Use in tool" from MyMedia
   const [pendingImport, setPendingImport] = useState(null)
+
+  // User profile view state — userId of profile being viewed
+  const [viewingProfile, setViewingProfile] = useState(null)
 
   // Send media item to a tool for import (component-level so all MyMediaTool instances can use it)
   const handleSendToTool = (toolId, importData) => {
@@ -273,7 +277,7 @@ export default function Dashboard() {
       case TOOL_IDS.MY_MEDIA_PROMPTS:
         return wrapWithSuspense(<MyMediaTool filter="prompts" onSendToTool={handleSendToTool} />)
       case TOOL_IDS.GALLERY:
-        return wrapWithSuspense(<Gallery onRemix={handleSendToTool} />)
+        return wrapWithSuspense(<Gallery onRemix={handleSendToTool} onViewProfile={(userId) => setViewingProfile(userId)} />)
 
       case TOOL_IDS.TEXT_TO_IMAGE:
         return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
@@ -475,8 +479,23 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Full-width layout for My Media tools and Gallery */}
-        {(activeToolId === TOOL_IDS.MY_MEDIA_ALL ||
+        {/* User Profile overlay */}
+        {viewingProfile ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {wrapWithSuspense(
+              <UserProfilePage
+                userId={viewingProfile}
+                onBack={() => setViewingProfile(null)}
+                onOpenItem={(item) => {
+                  // Return to gallery and open the item
+                  setViewingProfile(null)
+                  setActiveToolId(TOOL_IDS.GALLERY)
+                }}
+              />
+            )}
+          </div>
+        ) : /* Full-width layout for My Media tools and Gallery */
+        (activeToolId === TOOL_IDS.MY_MEDIA_ALL ||
           activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS ||
           activeToolId === TOOL_IDS.MY_MEDIA_IMAGES ||
           activeToolId === TOOL_IDS.MY_MEDIA_AUDIO ||
