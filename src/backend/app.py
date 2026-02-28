@@ -4,6 +4,7 @@ Oelala Web Interface Backend
 FastAPI application for AI Video Generation Pipeline
 """
 
+import io
 import os
 import sys
 
@@ -75,6 +76,15 @@ from admin_api import router as admin_router, check_admin
 # Webhooks system
 from webhooks_api import router as webhooks_router
 from webhook_service import webhook_service
+
+# Face swap / face profile service (insightface-based, no ComfyUI)
+try:
+    import face_service
+
+    print("✅ face_service imported successfully")
+except ImportError as e:
+    print(f"⚠️ face_service import failed (insightface not available?): {e}")
+    face_service = None
 
 # ComfyUI Client for all image/video generation
 try:
@@ -8279,55 +8289,32 @@ async def reframe_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Face Swap via ComfyUI (ReActor / InsightFace)
+# Face Swap & Face Profiles (insightface-based, direct Python — no ComfyUI)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @app.post("/detect-faces")
-async def detect_faces(image: UploadFile = File(...)):
+async def detect_faces_endpoint(image: UploadFile = File(...)):
     """
-    Detect faces in an image for face swap.
-    Returns list of detected face bounding boxes.
+    Detect faces in an image using InsightFace (buffalo_l).
+    Returns list of detected faces with bounding boxes and confidence scores.
     """
-    import cv2
-    import numpy as np
-
     logger.info(f"👤 Detecting faces in {image.filename}...")
+
+    if not face_service:
+        raise HTTPException(
+            status_code=503,
+            detail="face_service unavailable (insightface not installed)",
+        )
 
     try:
         content = await image.read()
-        nparr = np.frombuffer(content, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        if img is None:
-            raise HTTPException(status_code=400, detail="Could not decode image")
-
-        # Use OpenCV's built-in face detector
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        faces = await asyncio.get_event_loop().run_in_executor(
+            None, face_service.detect_faces, content
         )
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-
-        face_list = []
-        for i, (x, y, w, h) in enumerate(faces):
-            face_list.append(
-                {
-                    "index": i,
-                    "bbox": {
-                        "x": int(x),
-                        "y": int(y),
-                        "width": int(w),
-                        "height": int(h),
-                    },
-                    "confidence": 0.9,  # OpenCV doesn't provide confidence, placeholder
-                }
-            )
-
-        logger.info(f"👤 Detected {len(face_list)} face(s)")
-
-        return {"faces": face_list, "total": len(face_list)}
+        return {"faces": faces, "total": len(faces)}
 
     except Exception as e:
         logger.error(f"❌ Face detection error: {e}")
@@ -8338,124 +8325,198 @@ async def detect_faces(image: UploadFile = File(...)):
 async def face_swap(
     target: UploadFile = File(...),
     source: UploadFile = File(...),
-    model: str = Form("inswapper"),
-    enhance: str = Form("gfpgan"),
-    strength: float = Form(1.0),
-    blend: float = Form(0.8),
-    face_index: int = Form(0),  # -1 = all faces
+    face_indices: str = Form("0"),  # comma-separated e.g. "0,1" or "-1" for all
+    enhance: str = Form("none"),  # none (gfpgan requires extra package)
 ):
     """
-    Face swap using ComfyUI ReActor node.
+    Face swap: replace face(s) in target image with face from source image.
+
+    Uses insightface inswapper_128.onnx directly (synchronous, no ComfyUI queue).
+    Returns swapped image as PNG bytes.
 
     Args:
-        target: Image/video with face(s) to replace
-        source: Image with source face
-        model: Face swap model (inswapper, simswap)
-        enhance: Post-processing (none, gfpgan, codeformer, both)
-        strength: Swap strength 0-1
-        blend: Edge blend amount
-        face_index: Which face to swap (-1 for all)
+        target: Image with face(s) to replace
+        source: Reference image with source face
+        face_indices: Comma-separated face indices in target ("0", "0,1", "-1"=all)
+        enhance: Post-processing enhancement (none supported currently)
     """
-    logger.info(f"👤 Face swap: model={model}, enhance={enhance}, strength={strength}")
+    logger.info(f"👤 Face swap: face_indices={face_indices}, enhance={enhance}")
 
-    client = get_comfyui_client()
-    if not client or not client.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-
-    # Save files
-    target_filename = f"faceswap_target_{uuid.uuid4().hex[:8]}"
-    source_filename = f"faceswap_source_{uuid.uuid4().hex[:8]}.png"
-
-    is_video = target.content_type and target.content_type.startswith("video/")
-    target_filename += ".mp4" if is_video else ".png"
-
-    target_path = UPLOAD_DIR / target_filename
-    source_path = UPLOAD_DIR / source_filename
+    if not face_service:
+        raise HTTPException(
+            status_code=503,
+            detail="face_service unavailable (insightface not installed)",
+        )
 
     try:
-        # Save target
-        content = await target.read()
-        with open(target_path, "wb") as f:
-            f.write(content)
+        # Parse face indices
+        if face_indices.strip() == "-1":
+            indices = list(range(10))  # try up to 10 faces
+        else:
+            indices = [int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()]
+            if not indices:
+                indices = [0]
 
-        # Save source
-        content = await source.read()
-        with open(source_path, "wb") as f:
-            f.write(content)
+        source_bytes = await source.read()
+        target_bytes = await target.read()
 
-        # Upload images to ComfyUI
-        target_comfy = client.upload_image(str(target_path))
-        source_comfy = client.upload_image(str(source_path))
+        # Run in thread pool (CPU-bound)
+        result_bytes = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: face_service.swap_faces_to_bytes(
+                source_bytes, target_bytes, indices
+            ),
+        )
 
-        if not target_comfy or not source_comfy:
-            raise HTTPException(
-                status_code=500, detail="Failed to upload images to ComfyUI"
-            )
+        logger.info("✅ Face swap complete")
+        return StreamingResponse(
+            io.BytesIO(result_bytes),
+            media_type="image/png",
+            headers={"Content-Disposition": "inline; filename=faceswap_result.png"},
+        )
 
-        # Build ReActor workflow
-        # Requires ComfyUI-ReActor custom node: https://github.com/Gourieff/comfyui-reactor-node
-        workflow = {
-            # Load target image
-            "1": {
-                "inputs": {"image": target_comfy, "upload": "image"},
-                "class_type": "LoadImage",
-            },
-            # Load source face
-            "2": {
-                "inputs": {"image": source_comfy, "upload": "image"},
-                "class_type": "LoadImage",
-            },
-            # ReActor face swap
-            "3": {
-                "inputs": {
-                    "input_image": ["1", 0],
-                    "source_image": ["2", 0],
-                    "swap_model": "inswapper_128.onnx",
-                    "facedetection": "retinaface_resnet50",
-                    "face_restore_model": "GFPGANv1.4.pth"
-                    if enhance in ["gfpgan", "both"]
-                    else "none",
-                    "face_restore_visibility": blend,
-                    "codeformer_weight": 0.5
-                    if enhance in ["codeformer", "both"]
-                    else 0,
-                    "console_log_level": 1,
-                    "detect_gender_source": "no",
-                    "detect_gender_input": "no",
-                    "source_faces_index": "0",
-                    "input_faces_index": str(face_index)
-                    if face_index >= 0
-                    else "0,1,2,3,4",
-                },
-                "class_type": "ReActorFaceSwap",
-            },
-            # Save result
-            "4": {
-                "inputs": {"filename_prefix": "oelala_faceswap", "images": ["3", 0]},
-                "class_type": "SaveImage",
-            },
-        }
-
-        prompt_id = client.queue_prompt(workflow)
-        if not prompt_id:
-            raise HTTPException(
-                status_code=500, detail="Failed to queue face swap workflow"
-            )
-
-        return {
-            "status": "queued",
-            "prompt_id": prompt_id,
-            "meta": {
-                "model": model,
-                "enhance": enhance,
-                "strength": strength,
-                "face_index": face_index,
-                "is_video": is_video,
-            },
-        }
-
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Face swap error: {e}")
+        logger.error(f"❌ Face swap error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Face Profiles API
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/face-profiles")
+async def list_face_profiles():
+    """List all saved face profiles."""
+    if not face_service:
+        raise HTTPException(
+            status_code=503, detail="face_service unavailable"
+        )
+    profiles = face_service.list_face_profiles()
+    return {"profiles": profiles, "total": len(profiles)}
+
+
+@app.get("/api/face-profiles/{profile_id}")
+async def get_face_profile(profile_id: str):
+    """Get a single face profile by ID."""
+    if not face_service:
+        raise HTTPException(status_code=503, detail="face_service unavailable")
+    profile = face_service.get_face_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    return profile
+
+
+@app.post("/api/face-profiles")
+async def create_face_profile(
+    name: str = Form(...),
+    description: str = Form(""),
+    images: list[UploadFile] = File(...),
+):
+    """
+    Create a new face profile from one or more reference images.
+
+    Extracts and averages face embeddings for stable identity representation.
+    Profile can then be used as source for face swap operations.
+
+    Args:
+        name: Display name for the profile (e.g. "John Doe")
+        description: Optional description
+        images: One or more reference photos (JPEG/PNG)
+    """
+    if not face_service:
+        raise HTTPException(status_code=503, detail="face_service unavailable")
+
+    if not images:
+        raise HTTPException(
+            status_code=400, detail="At least one reference image required"
+        )
+
+    logger.info(f"👤 Creating face profile '{name}' from {len(images)} image(s)")
+
+    try:
+        image_bytes_list = [await img.read() for img in images]
+
+        profile = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: face_service.create_face_profile(
+                name=name,
+                images=image_bytes_list,
+                description=description,
+            ),
+        )
+        return profile
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Create face profile error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/face-profiles/{profile_id}")
+async def delete_face_profile(profile_id: str):
+    """Delete a face profile and all its reference images."""
+    if not face_service:
+        raise HTTPException(status_code=503, detail="face_service unavailable")
+    deleted = face_service.delete_face_profile(profile_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    return {"status": "deleted", "profile_id": profile_id}
+
+
+@app.post("/face-swap/profile")
+async def face_swap_with_profile(
+    target: UploadFile = File(...),
+    profile_id: str = Form(...),
+    face_indices: str = Form("0"),
+):
+    """
+    Face swap using a saved face profile as source.
+
+    Same as /face-swap but uses a pre-saved profile instead of uploading
+    a source image each time.
+
+    Args:
+        target: Image with face(s) to replace
+        profile_id: ID of the saved face profile to use as source
+        face_indices: Comma-separated face indices in target
+    """
+    if not face_service:
+        raise HTTPException(status_code=503, detail="face_service unavailable")
+
+    try:
+        if face_indices.strip() == "-1":
+            indices = list(range(10))
+        else:
+            indices = [int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()]
+            if not indices:
+                indices = [0]
+
+        target_bytes = await target.read()
+
+        result_img = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: face_service.swap_with_profile(target_bytes, profile_id, indices),
+        )
+
+        buf = io.BytesIO()
+        result_img.save(buf, format="PNG")
+        buf.seek(0)
+
+        logger.info(f"✅ Face swap with profile {profile_id} complete")
+        return StreamingResponse(
+            buf,
+            media_type="image/png",
+            headers={"Content-Disposition": "inline; filename=faceswap_result.png"},
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Face swap with profile error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
