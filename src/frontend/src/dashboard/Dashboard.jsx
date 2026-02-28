@@ -76,6 +76,16 @@ export default function Dashboard() {
   // Mobile parameters panel state
   const [mobileParamsOpen, setMobileParamsOpen] = useState(false)
 
+  // Body scroll lock when mobile params panel is open
+  useEffect(() => {
+    if (mobileParamsOpen) {
+      document.body.classList.add('mobile-params-open')
+    } else {
+      document.body.classList.remove('mobile-params-open')
+    }
+    return () => document.body.classList.remove('mobile-params-open')
+  }, [mobileParamsOpen])
+
   // Mobile navigation menu state
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
