@@ -7691,7 +7691,7 @@ async def upscale_video(
         elif model == "realesrgan":
             # Real-ESRGAN AI video upscaler (frame-by-frame upscaling)
             # Select model file based on scale factor
-            esrgan_model = "RealESRGAN_x4plus.pth" if scale >= 4 else "RealESRGAN_x2plus.pth"
+            esrgan_model = "RealESRGAN_x4plus.pth" if scale == 4 else "RealESRGAN_x2plus.pth"
             workflow = {
                 "1": {
                     "inputs": {
