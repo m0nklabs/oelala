@@ -110,7 +110,7 @@ def _get_swapper():
             str(INSWAPPER_PATH),
             download=False,
         )
-        _face_swapper.prepare(ctx_id=0)
+        # INSwapper does not have a prepare() method — ready to use directly
         logger.info("✅ Face swapper (inswapper_128) loaded")
         return _face_swapper
     except Exception as e:
