@@ -73,6 +73,9 @@ from profile_api import router as profile_router
 # Admin system
 from admin_api import router as admin_router, check_admin
 
+# LoRA browser
+from lora_api import router as lora_router
+
 # Webhooks system
 from webhooks_api import router as webhooks_router
 from webhook_service import webhook_service
@@ -407,6 +410,7 @@ app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
 app.include_router(gallery_router)
 app.include_router(profile_router)  # User profiles at /api/profile/*
 app.include_router(admin_router)  # Admin panel at /api/admin/*
+app.include_router(lora_router)  # LoRA browser at /api/loras/*
 app.include_router(webhooks_router)  # Webhooks at /webhooks/*
 
 # Create directories
@@ -1422,8 +1426,11 @@ async def list_loras():
     Includes NSFW detection based on filename patterns.
     """
     loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
+    ssd_loras_dir = Path("/mnt/ssd/loras")
 
-    if not loras_dir.exists():
+    lora_dirs = [d for d in [loras_dir, ssd_loras_dir] if d.exists()]
+
+    if not lora_dirs:
         return {
             "loras": [],
             "high_noise": [],
@@ -1512,13 +1519,14 @@ async def list_loras():
     general = []
     by_category = {}  # Group by subdirectory
 
-    for lora_path in loras_dir.rglob("*.safetensors"):
+    for scan_dir in lora_dirs:
+      for lora_path in scan_dir.rglob("*.safetensors"):
         # Get relative path from loras folder
-        rel_path = str(lora_path.relative_to(loras_dir))
+        rel_path = str(lora_path.relative_to(scan_dir))
         name = lora_path.stem
 
         # Get category (subdirectory name, or "root" for top-level files)
-        parent = lora_path.parent.relative_to(loras_dir)
+        parent = lora_path.parent.relative_to(scan_dir)
         category = str(parent) if str(parent) != "." else "root"
 
         # Detect NSFW

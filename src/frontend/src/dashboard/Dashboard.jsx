@@ -24,6 +24,7 @@ const SpeechToVideoTool = lazy(() => import('./tools/SpeechToVideoTool'))
 const PostProcessingTool = lazy(() => import('./tools/PostProcessingTool'))
 const PipelineTool = lazy(() => import('./tools/PipelineTool'))
 const LoRATrainingTool = lazy(() => import('./tools/LoRATrainingTool'))
+const LoRABrowserTool = lazy(() => import('./tools/LoRABrowserTool'))
 const ImageToTextTool = lazy(() => import('./tools/ImageToTextTool'))
 const PromptGeneratorTool = lazy(() => import('./tools/PromptGeneratorTool'))
 const ImageToImageTool = lazy(() => import('./tools/ImageToImageTool'))
@@ -265,6 +266,8 @@ export default function Dashboard() {
         return wrapWithSuspense(<PipelineTool />)
       case TOOL_IDS.LORA_TRAINING:
         return wrapWithSuspense(<LoRATrainingTool onOutput={setOutput} />)
+      case TOOL_IDS.LORA_BROWSER:
+        return wrapWithSuspense(<LoRABrowserTool />)
 
       case TOOL_IDS.MY_MEDIA_ALL:
         return wrapWithSuspense(<MyMediaTool filter="all" onSendToTool={handleSendToTool} />)

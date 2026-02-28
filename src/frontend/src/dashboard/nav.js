@@ -21,6 +21,7 @@ export const TOOL_IDS = {
   // Advanced
   PIPELINE: 'pipeline',
   LORA_TRAINING: 'lora-training',
+  LORA_BROWSER: 'lora-browser',
   POST_PROCESSING: 'post-processing',  // New: standalone post-processing tool
   // Community
   GALLERY: 'gallery',
@@ -84,6 +85,7 @@ export const NAV_GROUPS = [
       { id: TOOL_IDS.POST_PROCESSING, label: 'Post-Processing', status: 'new', emoji: '⚙️' },
       { id: TOOL_IDS.PIPELINE, label: 'Pipeline', status: 'ready' },
       { id: TOOL_IDS.LORA_TRAINING, label: 'LoRA Training', status: 'ready' },
+      { id: TOOL_IDS.LORA_BROWSER, label: 'LoRA Browser', status: 'new', emoji: '🔍' },
     ],
   },
   {
