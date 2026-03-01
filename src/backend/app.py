@@ -937,8 +937,9 @@ async def list_comfyui_media(
     grouped: bool = False,
     include_metadata: bool = False,
     hide_start_images: bool = True,
+    user: User = Depends(get_current_user),
 ):
-    """List media files from ComfyUI output directory
+    """List media files from ComfyUI output directory (admin only)
 
     Args:
         type: Filter by media type ('all', 'video', 'image', 'audio')
@@ -946,6 +947,10 @@ async def list_comfyui_media(
         include_metadata: Include PNG metadata in response
         hide_start_images: Hide images that are start frames for videos (default True)
     """
+    # Admin-only: these are shared server directories
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
 
     if not comfyui_output.exists():
@@ -2232,9 +2237,12 @@ async def get_comfyui_output(filename: str):
 
 
 @app.get("/media/generated/{filename}")
-async def get_generated_media(filename: str):
-    """Serve files from media/generated/ directory (public for now, will be auth-gated later)"""
-    # TODO: Add proper auth once user-scoped storage is implemented
+async def get_generated_media(filename: str, user: User = Depends(get_current_user)):
+    """Serve files from media/generated/ directory (admin only)"""
+    # Admin-only: shared server directory, non-admin users access via oelala-storage signed URLs
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     media_path = Path("/home/flip/oelala/media/generated") / filename
     if not media_path.exists():
         raise HTTPException(status_code=404, detail="Media file not found")
@@ -8927,8 +8935,12 @@ async def get_image(filename: str):
 
 
 @app.get("/list-videos")
-async def list_videos():
-    """List all generated videos from both output directories"""
+async def list_videos(user: User = Depends(get_current_user)):
+    """List all generated videos from both output directories (admin only)"""
+    # Admin-only: these are shared server directories
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     videos = []
 
     # Scan OUTPUT_DIR (generated/)
