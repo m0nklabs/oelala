@@ -927,7 +927,26 @@ TTS Modes
 │   DO NOT USE for video generation - use 480p or 576p instead        │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
-│ 🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B                                  │
+│ � IMAGE-TO-VIDEO (I2V) - WAN2.2 14B Q8_0 GGUF (DisTorch2)        │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ 480×848 Portrait - Q8 EXPERIMENTAL                                   │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 81 (~5 sec) | VRAM: ~26GB | Time: ~24 min                 │
+│   Allocation: cuda:1,11gb;cuda:0,14.5gb;cpu,*                       │
+│   Models:                                                            │
+│     - wan2.2_i2v_high_noise_14B_Q8_0.gguf                           │
+│     - wan2.2_i2v_low_noise_14B_Q8_0.gguf                            │
+│   CLIP: umt5_xxl_fp8_e4m3fn_scaled.safetensors                      │
+│   VAE: wan_2.1_vae.safetensors                                      │
+│   Workflow: wan22_i2v_distorch2_q8_api.json                         │
+│   Sampler: uni_pc | Steps: 8 | CFG: 1.0                             │
+│   ⚠️ CLIP must use device=cuda:0 (5060 Ti), NOT cuda:1!             │
+│   Previously OOM'd due to reversed CLIP device/donor (fixed 2026-03) │
+│   Tested: 2026-03-01 ✅                                              │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ �🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B                                  │
 │ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
 │ 768×512 Landscape                                                    │
