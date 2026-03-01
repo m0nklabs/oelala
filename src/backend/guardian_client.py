@@ -165,6 +165,59 @@ def get_guardian() -> GuardianVRAMClient:
 # ComfyUI VRAM helpers — free loaded models before LLM inference
 # ---------------------------------------------------------------------------
 
+
+async def is_comfyui_busy(comfyui_url: str | None = None) -> bool:
+    """
+    Check if ComfyUI has any running or pending jobs.
+    Returns True if busy, False if idle.
+    """
+    url = comfyui_url or os.getenv("COMFYUI_BASE_URL", "http://localhost:8188")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{url}/queue")
+            if resp.status_code == 200:
+                data = resp.json()
+                running = len(data.get("queue_running", []))
+                pending = len(data.get("queue_pending", []))
+                return running > 0 or pending > 0
+    except Exception:
+        pass
+    return False
+
+
+async def wait_for_comfyui_idle(
+    comfyui_url: str | None = None,
+    poll_interval: float = 5.0,
+    max_wait: float = 1800.0,  # 30 min max
+) -> bool:
+    """
+    Poll ComfyUI queue until no jobs are running or pending.
+    Returns True when idle, False if timed out.
+    """
+    import asyncio
+
+    url = comfyui_url or os.getenv("COMFYUI_BASE_URL", "http://localhost:8188")
+    elapsed = 0.0
+
+    if not await is_comfyui_busy(url):
+        return True
+
+    logger.info("⏳ [guardian] ComfyUI is busy — waiting for generation to complete before LLM call...")
+
+    while elapsed < max_wait:
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+
+        if not await is_comfyui_busy(url):
+            logger.info(f"✅ [guardian] ComfyUI idle after {elapsed:.0f}s — proceeding with LLM call")
+            return True
+
+        if int(elapsed) % 30 == 0:
+            _debug(f"Still waiting for ComfyUI... ({elapsed:.0f}s elapsed)")
+
+    logger.warning(f"⚠️ [guardian] Timed out waiting for ComfyUI after {max_wait:.0f}s")
+    return False
+
 async def free_comfyui_vram(comfyui_url: str | None = None) -> bool:
     """
     POST to ComfyUI /free to unload all models from VRAM.

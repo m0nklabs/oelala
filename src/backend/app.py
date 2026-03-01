@@ -6785,57 +6785,79 @@ IMPORTANT: Do NOT use sunbeams, golden hour, or cozy clichés. Be WILD and creat
 
 Generate as JSON."""
 
-    # Free ComfyUI VRAM before LLM inference so GPU has headroom
-    from guardian_client import free_comfyui_vram as _free_comfy_vram
+    # Wait for ComfyUI to finish any active generation before LLM call
+    from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+    await wait_for_comfyui_idle()
     await _free_comfy_vram()
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0, headers=_guardian_headers()) as client:
-            response = await client.post(
-                f"{GUARDIAN_BASE}/v1/chat/completions",
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "max_tokens": 2048,  # Reasoning models need budget for CoT + output
-                    "temperature": 1.2,
-                    "seed": random_seed,
-                    "top_p": 0.95,
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            msg = result["choices"][0]["message"]
-            # Reasoning models put CoT in reasoning_content and answer in content
-            llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+    llm_request_body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 2048,
+        "temperature": 1.2,
+        "seed": random_seed,
+        "top_p": 0.95,
+    }
 
-            # Parse JSON from LLM output
-            # Try to extract JSON if it's wrapped in markdown
-            if "```json" in llm_output:
-                llm_output = llm_output.split("```json")[1].split("```")[0].strip()
-            elif "```" in llm_output:
-                llm_output = llm_output.split("```")[1].split("```")[0].strip()
+    # Retry loop for 503 (Guardian loading model after VRAM free)
+    max_retries = 3
+    retry_delay = 15  # seconds between retries
 
-            parsed = json.loads(llm_output)
-            return {
-                "prompt": parsed.get("prompt", base_input),
-                "negative_prompt": parsed.get("negative_prompt", ""),
-                "motion_prompt": parsed.get("motion_prompt", ""),
-                "llm_model": model,
-                "llm_used": True,
-            }
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=60.0, headers=_guardian_headers()) as client:
+                response = await client.post(
+                    f"{GUARDIAN_BASE}/v1/chat/completions",
+                    json=llm_request_body,
+                )
 
-    except httpx.ConnectError:
-        logger.warning("Guardian not available, falling back to template mode")
-        return None
-    except json.JSONDecodeError as e:
-        logger.warning(f"LLM returned invalid JSON: {e}")
-        return None
-    except Exception as e:
-        logger.warning(f"LLM prompt generation failed: {e}")
-        return None
+                if response.status_code == 503 and attempt < max_retries - 1:
+                    logger.info(f"⏳ Guardian 503 (model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                    import asyncio
+                    await asyncio.sleep(retry_delay)
+                    continue
+
+                response.raise_for_status()
+                result = response.json()
+                msg = result["choices"][0]["message"]
+                # Reasoning models put CoT in reasoning_content and answer in content
+                llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+
+                # Parse JSON from LLM output
+                if "```json" in llm_output:
+                    llm_output = llm_output.split("```json")[1].split("```")[0].strip()
+                elif "```" in llm_output:
+                    llm_output = llm_output.split("```")[1].split("```")[0].strip()
+
+                parsed = json.loads(llm_output)
+                return {
+                    "prompt": parsed.get("prompt", base_input),
+                    "negative_prompt": parsed.get("negative_prompt", ""),
+                    "motion_prompt": parsed.get("motion_prompt", ""),
+                    "llm_model": model,
+                    "llm_used": True,
+                }
+
+        except httpx.ConnectError:
+            logger.warning("Guardian not available, falling back to template mode")
+            return None
+        except json.JSONDecodeError as e:
+            logger.warning(f"LLM returned invalid JSON: {e}")
+            return None
+        except Exception as e:
+            if "503" in str(e) and attempt < max_retries - 1:
+                logger.info(f"⏳ Guardian 503, retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                import asyncio
+                await asyncio.sleep(retry_delay)
+                continue
+            logger.warning(f"LLM prompt generation failed: {e}")
+            return None
+
+    logger.warning("Guardian still 503 after all retries, falling back to template mode")
+    return None
 
 
 def generate_prompt_template(
@@ -6975,47 +6997,70 @@ async def analyze_image_with_vision(image_base64: str, custom_prompt: str = None
     except Exception:
         img_mime = "image/jpeg"
 
-    # Free ComfyUI VRAM before vision LLM inference
-    from guardian_client import free_comfyui_vram as _free_comfy_vram
+    # Wait for ComfyUI to finish any active generation before vision LLM call
+    from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+    await wait_for_comfyui_idle()
     await _free_comfy_vram()
 
-    try:
-        async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
-            response = await client.post(
-                f"{GUARDIAN_BASE}/v1/chat/completions",
-                json={
-                    "model": vision_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{img_mime};base64,{image_base64}"
-                                    },
-                                },
-                                {
-                                    "type": "text",
-                                    "text": analysis_prompt,
-                                },
-                            ],
-                        }
-                    ],
-                    "max_tokens": 1024,
-                    "temperature": 0.3,
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            msg = result["choices"][0]["message"]
-            return (msg.get("content") or msg.get("reasoning_content", "")).strip()
-    except httpx.ConnectError:
-        logger.warning("Guardian not available for vision analysis")
-        raise HTTPException(status_code=503, detail="Vision model not available")
-    except Exception as e:
-        logger.error(f"Vision analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Vision analysis failed: {str(e)}")
+    vision_request_body = {
+        "model": vision_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{img_mime};base64,{image_base64}"
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": analysis_prompt,
+                    },
+                ],
+            }
+        ],
+        "max_tokens": 1024,
+        "temperature": 0.3,
+    }
+
+    # Retry loop for 503 (Guardian loading model after VRAM free)
+    max_retries = 3
+    retry_delay = 15
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
+                response = await client.post(
+                    f"{GUARDIAN_BASE}/v1/chat/completions",
+                    json=vision_request_body,
+                )
+
+                if response.status_code == 503 and attempt < max_retries - 1:
+                    logger.info(f"⏳ Guardian 503 (vision model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                    import asyncio
+                    await asyncio.sleep(retry_delay)
+                    continue
+
+                response.raise_for_status()
+                result = response.json()
+                msg = result["choices"][0]["message"]
+                return (msg.get("content") or msg.get("reasoning_content", "")).strip()
+
+        except httpx.ConnectError:
+            logger.warning("Guardian not available for vision analysis")
+            raise HTTPException(status_code=503, detail="Vision model not available")
+        except Exception as e:
+            if "503" in str(e) and attempt < max_retries - 1:
+                logger.info(f"⏳ Guardian 503 (vision), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                import asyncio
+                await asyncio.sleep(retry_delay)
+                continue
+            logger.error(f"Vision analysis failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Vision analysis failed: {str(e)}")
+
+    raise HTTPException(status_code=503, detail="Vision model still loading after retries — try again in a moment")
 
 
 # System prompt specifically for I2V creative scene generation
@@ -7104,54 +7149,75 @@ Seed: {random_seed}
 
 Generate a compelling video scene as JSON. Include what happens, how things move, and the mood."""
 
-    # Free ComfyUI VRAM before LLM inference
-    from guardian_client import free_comfyui_vram as _free_comfy_vram
+    # Wait for ComfyUI to finish any active generation, then free VRAM
+    from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+    await wait_for_comfyui_idle()
     await _free_comfy_vram()
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0, headers=_guardian_headers()) as client:
-            response = await client.post(
-                f"{GUARDIAN_BASE}/v1/chat/completions",
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "max_tokens": 2048,  # Reasoning models need budget for CoT + output
-                    "temperature": 1.1,
-                    "seed": random_seed,
-                    "top_p": 0.95,
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            msg = result["choices"][0]["message"]
-            llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
-            
-            # Parse JSON from LLM output
-            if "```json" in llm_output:
-                llm_output = llm_output.split("```json")[1].split("```")[0].strip()
-            elif "```" in llm_output:
-                llm_output = llm_output.split("```")[1].split("```")[0].strip()
-            
-            parsed = json.loads(llm_output)
+    i2v_request_body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 2048,
+        "temperature": 1.1,
+        "seed": random_seed,
+        "top_p": 0.95,
+    }
+
+    max_retries = 3
+    retry_delay = 15
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=60.0, headers=_guardian_headers()) as client:
+                response = await client.post(
+                    f"{GUARDIAN_BASE}/v1/chat/completions",
+                    json=i2v_request_body,
+                )
+
+                if response.status_code == 503 and attempt < max_retries - 1:
+                    logger.info(f"⏳ Guardian 503 (I2V prompt model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                    import asyncio
+                    await asyncio.sleep(retry_delay)
+                    continue
+
+                response.raise_for_status()
+                result = response.json()
+                msg = result["choices"][0]["message"]
+                llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+
+                # Parse JSON from LLM output
+                if "```json" in llm_output:
+                    llm_output = llm_output.split("```json")[1].split("```")[0].strip()
+                elif "```" in llm_output:
+                    llm_output = llm_output.split("```")[1].split("```")[0].strip()
+
+                parsed = json.loads(llm_output)
+                return {
+                    "prompt": parsed.get("prompt", ""),
+                    "negative_prompt": parsed.get("negative_prompt", "low quality, blurry, artifacts, distortion"),
+                    "motion_prompt": parsed.get("motion_prompt", ""),
+                }
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"I2V LLM returned invalid JSON: {e}")
             return {
-                "prompt": parsed.get("prompt", ""),
-                "negative_prompt": parsed.get("negative_prompt", "low quality, blurry, artifacts, distortion"),
-                "motion_prompt": parsed.get("motion_prompt", ""),
+                "prompt": f"{image_description}, cinematic motion, masterpiece quality",
+                "negative_prompt": "low quality, blurry, artifacts, distortion, jitter",
+                "motion_prompt": "smooth cinematic motion",
             }
-    except json.JSONDecodeError as e:
-        logger.warning(f"I2V LLM returned invalid JSON: {e}")
-        # Return a basic prompt based on description
-        return {
-            "prompt": f"{image_description}, cinematic motion, masterpiece quality",
-            "negative_prompt": "low quality, blurry, artifacts, distortion, jitter",
-            "motion_prompt": "smooth cinematic motion",
-        }
-    except Exception as e:
-        logger.error(f"I2V prompt generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prompt generation failed: {str(e)}")
+        except Exception as e:
+            if "503" in str(e) and attempt < max_retries - 1:
+                logger.info(f"⏳ Guardian 503 (I2V), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                import asyncio
+                await asyncio.sleep(retry_delay)
+                continue
+            logger.error(f"I2V prompt generation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Prompt generation failed: {str(e)}")
+
+    raise HTTPException(status_code=503, detail="LLM still loading after retries — try again")
 
 
 class AnalyzeImageRequest(BaseModel):
