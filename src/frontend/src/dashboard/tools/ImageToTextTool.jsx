@@ -1,14 +1,19 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon } from 'lucide-react'
+import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import MediaImportModal from '../../components/MediaImportModal'
 
 const CAPTION_MODES = [
-  { id: 'brief', label: 'Brief', description: '1-line summary' },
-  { id: 'detailed', label: 'Detailed', description: 'Full paragraph' },
-  { id: 'tags', label: 'Tags', description: 'Comma-separated keywords' },
-  { id: 'structured', label: 'Structured', description: 'Subject, style, mood' },
+  { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
+  { id: 'detailed', label: 'Detailed', description: 'Full paragraph', group: 'caption' },
+  { id: 'tags', label: 'Tags', description: 'Comma-separated keywords', group: 'caption' },
+  { id: 'structured', label: 'Structured', description: 'Subject, style, mood', group: 'caption' },
+  { id: 'prompt_i2v', label: '🎬 I2V Prompt', description: 'Motion & activity for video gen', group: 'prompt' },
+  { id: 'prompt_t2i', label: '🖼️ T2I Prompt', description: 'Tag-style for image gen', group: 'prompt' },
+  { id: 'prompt_nsfw', label: '🔞 NSFW Prompt', description: 'Explicit & uncensored', group: 'prompt' },
 ]
+
+const isPromptMode = (m) => m.startsWith('prompt_')
 
 const MODELS = [
   { id: 'Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking', label: 'Qwen3-VL 32B Heretic', description: 'Best quality · uncensored · slow' },
@@ -26,6 +31,9 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [caption, setCaption] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [isRefining, setIsRefining] = useState(false)
+  const [showRefineInput, setShowRefineInput] = useState(false)
+  const [refineInstruction, setRefineInstruction] = useState('')
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
 
   // Auto-open import modal when Dashboard sends a pendingImport
@@ -115,6 +123,45 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
     }
   }
 
+  // Refine/improve caption with LLM — preserves original intent
+  const handleRefineCaption = async () => {
+    if (!caption.trim() || isRefining) return
+    setIsRefining(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: caption.trim(),
+          style: null,
+          mode: 'refine',
+          include_negative: false,
+          include_motion: isPromptMode(mode),
+          use_llm: true,
+          refine_instruction: refineInstruction.trim() || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Refine failed')
+      }
+
+      const data = await res.json()
+      if (DEBUG) console.log('✏️ Refined caption:', data)
+      setCaption(data.prompt)
+      setRefineInstruction('')
+      setShowRefineInput(false)
+    } catch (err) {
+      console.error('Refine error:', err)
+      setError(`Refine failed: ${err.message}`)
+    } finally {
+      setIsRefining(false)
+    }
+  }
+
   const handleCopy = () => {
     if (caption) {
       navigator.clipboard.writeText(caption)
@@ -190,10 +237,23 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         <div className="form-group">
           <label>Caption Mode</label>
           <div className="button-group">
-            {CAPTION_MODES.map((m) => (
+            {CAPTION_MODES.filter(m => m.group === 'caption').map((m) => (
               <button
                 key={m.id}
                 className={`btn-option ${mode === m.id ? 'active' : ''}`}
+                onClick={() => setMode(m.id)}
+                title={m.description}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <label style={{ marginTop: '12px' }}>Prompt Generator</label>
+          <div className="button-group">
+            {CAPTION_MODES.filter(m => m.group === 'prompt').map((m) => (
+              <button
+                key={m.id}
+                className={`btn-option ${mode === m.id ? 'active' : ''} ${m.id === 'prompt_nsfw' ? 'btn-option--nsfw' : ''}`}
                 onClick={() => setMode(m.id)}
                 title={m.description}
               >
@@ -212,12 +272,12 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         {loading ? (
           <>
             <Loader2 size={18} className="spin" />
-            Generating caption...
+            {isPromptMode(mode) ? 'Generating prompt...' : 'Generating caption...'}
           </>
         ) : (
           <>
             <Wand2 size={18} />
-            Generate Caption
+            {isPromptMode(mode) ? 'Generate Prompt' : 'Generate Caption'}
           </>
         )}
       </button>
@@ -230,12 +290,87 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
 
       {caption && (
         <div className="tool-section result-section">
-          <h3>Generated Caption</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3>{isPromptMode(mode) ? '🎯 Generated Prompt' : 'Generated Caption'}</h3>
+            <button
+              className="icon-btn"
+              style={{
+                width: '28px', height: '28px', padding: '6px',
+                background: showRefineInput ? 'var(--accent-color, #8b5cf6)' : undefined,
+                color: showRefineInput ? 'white' : undefined,
+                borderRadius: '6px',
+                border: '1px solid var(--border-color, #444)',
+                cursor: 'pointer',
+              }}
+              onClick={() => setShowRefineInput(!showRefineInput)}
+              disabled={!caption.trim()}
+              title="Refine/improve with AI (keeps original intent)"
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
+
+          {/* Refine instruction input */}
+          {showRefineInput && (
+            <div style={{
+              marginTop: '8px',
+              padding: '8px 12px',
+              backgroundColor: 'rgba(139, 92, 246, 0.08)',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+            }}>
+              <Pencil size={14} style={{ color: '#a78bfa', flexShrink: 0 }} />
+              <input
+                type="text"
+                value={refineInstruction}
+                onChange={(e) => setRefineInstruction(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && caption.trim()) handleRefineCaption() }}
+                placeholder="What to improve? (e.g., more detail, different style...) — leave empty for general polish"
+                style={{
+                  flex: 1,
+                  background: 'var(--bg-input, #1a1a1a)',
+                  border: '1px solid var(--border-color, #444)',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-primary, #eee)',
+                  outline: 'none',
+                }}
+              />
+              <button
+                className="icon-btn"
+                style={{
+                  height: '28px',
+                  padding: '4px 12px',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: isRefining ? 'var(--bg-input)' : 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                }}
+                onClick={handleRefineCaption}
+                disabled={isRefining || !caption.trim()}
+                title="Refine with AI"
+              >
+                {isRefining ? <Loader2 size={12} className="spin" /> : <Pencil size={12} />}
+                <span>{isRefining ? 'Refining...' : 'Refine'}</span>
+              </button>
+            </div>
+          )}
+
           <div className="caption-result">
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              rows={4}
+              rows={isPromptMode(mode) ? 6 : 4}
             />
             <div className="caption-actions">
               <button className="btn-secondary" onClick={handleCopy}>
@@ -243,12 +378,17 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
                 Copy
               </button>
               {onSendToPrompt && (
-                <button className="btn-primary" onClick={handleSendToPrompt}>
+                <button className={isPromptMode(mode) ? 'btn-primary btn-glow' : 'btn-primary'} onClick={handleSendToPrompt}>
                   <Send size={16} />
                   Use as Prompt
                 </button>
               )}
             </div>
+            {isPromptMode(mode) && (
+              <p className="prompt-hint">
+                💡 Edit the prompt above, then send it directly to Image-to-Video or Text-to-Image
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -328,6 +468,18 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
           border-radius: 8px;
           color: #ef4444;
           margin-top: 12px;
+        }
+        .btn-option--nsfw.active {
+          background: #dc2626;
+          border-color: #dc2626;
+        }
+        .btn-glow {
+          box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+        }
+        .prompt-hint {
+          margin-top: 8px;
+          font-size: 0.85em;
+          color: var(--text-muted, #888);
         }
         .spin {
           animation: spin 1s linear infinite;
