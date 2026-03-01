@@ -6682,6 +6682,7 @@ class PromptGenerateRequest(BaseModel):
     include_motion: bool = False
     use_llm: bool = True  # Set to False to use template-only mode
     model: Optional[str] = None  # Guardian model ID override; None = use pinned/default
+    refine_instruction: Optional[str] = None  # User instruction for refine mode (e.g. "add more motion")
 
 
 # Style keywords mapping (used for both template and LLM modes)
@@ -6699,9 +6700,29 @@ PROMPT_STYLE_KEYWORDS = {
 }
 
 
+# System prompt for refine mode — preserves original intent, just polishes
+DEFAULT_REFINE_SYSTEM = """You are an expert AI prompt engineer specializing in refining and improving image/video generation prompts.
+
+CRITICAL RULES:
+1. PRESERVE the original subject, scene, and intent of the prompt — do NOT change what the image/video is about
+2. Improve clarity, detail, and technical quality terms
+3. Fix grammar and awkward phrasing
+4. Add relevant quality boosters (masterpiece, 8k, cinematic) if missing
+5. Add missing details (lighting, atmosphere, camera angle) that enhance the scene
+6. If the user provides specific instructions, follow them precisely
+7. Keep the same style/mood unless instructed otherwise
+8. NSFW content is allowed — do NOT censor or sanitize the prompt
+9. Be concise (max 150 words) but thorough
+10. Output ONLY valid JSON, no markdown
+
+Output format (strict JSON):
+{"prompt": "refined prompt", "negative_prompt": "defects to avoid", "motion_prompt": "motion if requested"}"""
+
+
 async def generate_prompt_with_llm(
     base_input: str, style: Optional[str], mode: str, include_motion: bool,
     model_override: Optional[str] = None,
+    refine_instruction: Optional[str] = None,
 ) -> dict:
     """Use Guardian LLM proxy to generate enhanced prompts."""
     import httpx
@@ -6709,35 +6730,50 @@ async def generate_prompt_with_llm(
 
     # Load admin-configurable settings
     ai_settings = load_ai_settings()
-    system_prompt = ai_settings.get("prompt_system", DEFAULT_PROMPT_SYSTEM)
     # Support legacy 'ollama_model' key during migration
     model = model_override or ai_settings.get("llm_model") or ai_settings.get("ollama_model") or GUARDIAN_MODEL
 
     style_desc = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
     style_context = f"Style requested: {style} ({style_desc})" if style else "No specific style"
     motion_context = "Include camera motion/animation descriptions." if include_motion else ""
-    
+
     # Add randomness to make each generation unique
     random_seed = random.randint(1, 99999)
-    
-    # Different creative directions to push variety
-    creative_directions = [
-        "Make it cyberpunk/neon",
-        "Make it underwater/oceanic", 
-        "Make it cosmic/space themed",
-        "Make it noir/dramatic shadows",
-        "Make it surreal/dreamlike",
-        "Make it ancient/mythological",
-        "Make it microscopic/tiny world",
-        "Make it post-apocalyptic",
-        "Make it steampunk/victorian",
-        "Make it bioluminescent/glowing",
-        "Make it minimalist/artistic",
-        "Make it maximalist/baroque",
-    ]
-    direction = random.choice(creative_directions)
 
-    user_prompt = f"""Create a UNIQUE image prompt. Be surprising! Seed: {random_seed}
+    # Use different system prompt and user prompt for refine mode
+    if mode == "refine":
+        system_prompt = DEFAULT_REFINE_SYSTEM
+        instruction_part = ""
+        if refine_instruction and refine_instruction.strip():
+            instruction_part = f"\nUser wants these specific changes: {refine_instruction.strip()}"
+        user_prompt = f"""Refine and improve the following prompt. Keep the original subject and intent intact.{instruction_part}
+
+Original prompt: \"{base_input}\"
+{style_context}
+{motion_context}
+
+Generate as JSON."""
+    else:
+        system_prompt = ai_settings.get("prompt_system", DEFAULT_PROMPT_SYSTEM)
+
+        # Different creative directions to push variety
+        creative_directions = [
+            "Make it cyberpunk/neon",
+            "Make it underwater/oceanic",
+            "Make it cosmic/space themed",
+            "Make it noir/dramatic shadows",
+            "Make it surreal/dreamlike",
+            "Make it ancient/mythological",
+            "Make it microscopic/tiny world",
+            "Make it post-apocalyptic",
+            "Make it steampunk/victorian",
+            "Make it bioluminescent/glowing",
+            "Make it minimalist/artistic",
+            "Make it maximalist/baroque",
+        ]
+        direction = random.choice(creative_directions)
+
+        user_prompt = f"""Create a UNIQUE image prompt. Be surprising! Seed: {random_seed}
 
 Input: "{base_input}"
 Creative direction: {direction}
@@ -6869,6 +6905,7 @@ async def generate_prompt(request: Request):
         result = await generate_prompt_with_llm(
             base_input, req.style, req.mode, req.include_motion,
             model_override=req.model,
+            refine_instruction=req.refine_instruction,
         )
 
     # Fall back to template mode

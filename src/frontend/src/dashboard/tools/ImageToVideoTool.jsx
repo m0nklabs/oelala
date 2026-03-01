@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2 } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, uploadUserMedia, apiFetch, getUserMediaUrl } from '../../api'
 import { sendClientLog } from '../../logging'
@@ -209,6 +209,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [cameraMotion, setCameraMotion] = useState('')
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isRefining, setIsRefining] = useState(false)
+  const [showRefineInput, setShowRefineInput] = useState(false)
+  const [refineInstruction, setRefineInstruction] = useState('')
   const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
 
   // Pending import modal state
@@ -381,6 +384,51 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       setError(`Enhance failed: ${err.message}`)
     } finally {
       setIsEnhancing(false)
+    }
+  }
+
+  // Refine/improve prompt with LLM — preserves original intent
+  const handleRefinePrompt = async () => {
+    if (!prompt.trim() || isRefining) return
+    setIsRefining(true)
+    setError('')
+
+    try {
+      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: prompt.trim(),
+          style: null,
+          mode: 'refine',
+          include_negative: true,
+          include_motion: true,
+          use_llm: true,
+          model: enhanceModel,
+          refine_instruction: refineInstruction.trim() || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Refine failed')
+      }
+
+      const data = await res.json()
+      if (DEBUG) console.log('✏️ Refined prompt:', data)
+
+      setPrompt(data.prompt)
+      if (data.negative_prompt) {
+        setNegativePrompt(data.negative_prompt)
+      }
+      // Clear instruction after successful refine
+      setRefineInstruction('')
+      setShowRefineInput(false)
+    } catch (err) {
+      console.error('Refine error:', err)
+      setError(`Refine failed: ${err.message}`)
+    } finally {
+      setIsRefining(false)
     }
   }
 
@@ -1406,9 +1454,22 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               style={{ width: '24px', height: '24px', padding: '4px' }}
               onClick={handleEnhancePrompt}
               disabled={isEnhancing || !prompt.trim()}
-              title="Enhance prompt with AI"
+              title="Enhance prompt with AI (reimagines creatively)"
             >
               {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
+            </button>
+            <button
+              className="icon-btn"
+              style={{
+                width: '24px', height: '24px', padding: '4px',
+                background: showRefineInput ? 'var(--accent-color, #8b5cf6)' : undefined,
+                color: showRefineInput ? 'white' : undefined,
+              }}
+              onClick={() => setShowRefineInput(!showRefineInput)}
+              disabled={!prompt.trim()}
+              title="Refine/improve prompt (keeps original intent)"
+            >
+              <Pencil size={12} />
             </button>
             <button
               className="icon-btn"
@@ -1491,6 +1552,61 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             )}
           </div>
         </div>
+
+        {/* Refine Prompt - inline instruction input */}
+        {showRefineInput && (
+          <div style={{
+            marginTop: '8px',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(139, 92, 246, 0.08)',
+            border: '1px solid rgba(139, 92, 246, 0.25)',
+            borderRadius: '8px',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center',
+          }}>
+            <Pencil size={14} style={{ color: '#a78bfa', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={refineInstruction}
+              onChange={(e) => setRefineInstruction(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && prompt.trim()) handleRefinePrompt() }}
+              placeholder="What to improve? (e.g., add more motion, better lighting...) — leave empty for general polish"
+              style={{
+                flex: 1,
+                background: 'var(--bg-input, #1a1a1a)',
+                border: '1px solid var(--border-color, #444)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '0.8rem',
+                color: 'var(--text-primary, #eee)',
+                outline: 'none',
+              }}
+            />
+            <button
+              className="icon-btn"
+              style={{
+                height: '28px',
+                padding: '4px 12px',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: isRefining ? 'var(--bg-input)' : 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                whiteSpace: 'nowrap',
+              }}
+              onClick={handleRefinePrompt}
+              disabled={isRefining || !prompt.trim()}
+              title="Refine prompt with AI"
+            >
+              {isRefining ? <Loader2 size={12} className="spin" /> : <Pencil size={12} />}
+              <span>{isRefining ? 'Refining...' : 'Refine'}</span>
+            </button>
+          </div>
+        )}
 
         {/* Image Description - show if we have one from analysis */}
         {imageDescription && (
