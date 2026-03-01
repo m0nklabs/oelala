@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, uploadUserMedia, apiFetch } from '../../api'
+import { postForm, uploadUserMedia, apiFetch, getUserMediaUrl } from '../../api'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -107,12 +107,14 @@ const I2V_DEFAULT_SETTINGS = {
   postInterpolate: false,
   postInterpolateFps: 60,
   enhanceModel: 'GLM-4.7-Flash-Claude-Opus-Reasoning',
+  sourceImageName: null,
 }
 
 export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { nsfwEnabled } = useNSFW()
   const { user, requestLogin } = useAuth()
   const fileInputRef = useRef(null)
+  const pendingImageRestore = useRef(null)
 
   // ── Profile persistence (auto-save on every change) ──────────────────
   const applyProfileSettings = useCallback((s) => {
@@ -144,6 +146,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (s.postInterpolate !== undefined) setPostInterpolate(s.postInterpolate)
     if (s.postInterpolateFps !== undefined) setPostInterpolateFps(s.postInterpolateFps)
     if (s.enhanceModel) setEnhanceModel(s.enhanceModel)
+    // Queue source image restore (handled by useEffect below)
+    if (s.sourceImageName) {
+      pendingImageRestore.current = s.sourceImageName
+    }
   }, [])
 
   const {
@@ -168,6 +174,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
   const [uploadTab, setUploadTab] = useState('file') // 'file', 'url', 'creations', 'library'
+  const [restoringImage, setRestoringImage] = useState(false)
   const [userUploads, setUserUploads] = useState([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
 
@@ -282,6 +289,32 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   const canSubmit = useMemo(() => !!file && !busy, [file, busy])
 
+  // ── Restore source image from profile on load ─────────────────────────
+  useEffect(() => {
+    if (!pendingImageRestore.current || !profileLoaded) return
+    const imageName = pendingImageRestore.current
+    pendingImageRestore.current = null
+
+    async function restore() {
+      setRestoringImage(true)
+      try {
+        const resp = await apiFetch(`/user/media/uploads/${encodeURIComponent(imageName)}`)
+        if (!resp.ok) throw new Error('Image not found in storage')
+        const blob = await resp.blob()
+        const fileObj = new File([blob], imageName, { type: blob.type || 'image/png' })
+        setFile(fileObj)
+        setPreviewUrl(URL.createObjectURL(blob))
+        if (DEBUG) console.debug('📁 Restored source image from profile:', imageName)
+      } catch (err) {
+        if (DEBUG) console.debug('📁 Failed to restore source image:', imageName, err.message)
+        // Non-fatal: profile loads without image, user can re-upload
+      } finally {
+        setRestoringImage(false)
+      }
+    }
+    restore()
+  }, [profileLoaded])
+
   // ── Auto-save settings to profile on every change ─────────────────────
   const settingsSnapshot = useMemo(() => ({
     prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
@@ -292,6 +325,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     extendMode, clipCount,
     postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
     enhanceModel,
+    sourceImageName: file?.name || null,
   }), [
     prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
     aspectRatio, fps, steps, cfg, seed, cameraMotion,
@@ -300,7 +334,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     loraConfigs, unetHighNoise, unetLowNoise,
     extendMode, clipCount,
     postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
-    enhanceModel,
+    enhanceModel, file,
   ])
 
   useEffect(() => {
@@ -646,7 +680,19 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       const resp = await apiFetch('/user/media?type=uploads')
       if (resp.ok) {
         const data = await resp.json()
-        setUserUploads(data.media || [])
+        const items = data.media || []
+        // Pre-fetch authenticated thumbnails as blob URLs
+        const enriched = await Promise.all(items.map(async (item) => {
+          try {
+            const imgResp = await apiFetch(item.url)
+            if (imgResp.ok) {
+              const blob = await imgResp.blob()
+              return { ...item, blobUrl: URL.createObjectURL(blob) }
+            }
+          } catch { /* non-blocking */ }
+          return item
+        }))
+        setUserUploads(enriched)
       }
     } catch (err) {
       if (DEBUG) console.debug('📁 Failed to load uploads library:', err.message)
@@ -665,14 +711,19 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const selectFromLibrary = useCallback(async (item) => {
     setError('')
     try {
+      // Use apiFetch for authenticated user media, bare fetch for signed/external URLs
       const imageUrl = getMediaUrl(item.url, item.signed_url)
-      const response = await fetch(imageUrl)
+      const isUserMedia = item.url && item.url.startsWith('/user/media/')
+      const response = isUserMedia
+        ? await apiFetch(item.url)
+        : await fetch(imageUrl)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
       const filename = item.name || item.url.split('/').pop()
       const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
 
       setFile(fileObj)
-      setPreviewUrl(imageUrl)
+      setPreviewUrl(URL.createObjectURL(blob))
       setUploadTab('file')
       setSelectedCreation(null)
 
@@ -1633,7 +1684,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         />
 
         {/* Tab Content: File Upload */}
-        {uploadTab === 'file' && !file && (
+        {uploadTab === 'file' && !file && !restoringImage && (
           <div className="upload-box" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer', borderStyle: 'dashed', minHeight: '200px', justifyContent: 'center' }}>
             <Upload size={48} className="text-muted" style={{ opacity: 0.2 }} />
             <div style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
@@ -1645,6 +1696,19 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               Minimum size: 300x300px
             </div>
+          </div>
+        )}
+
+        {/* Restoring image from profile */}
+        {restoringImage && !file && (
+          <div style={{
+            padding: '32px', textAlign: 'center', color: 'var(--text-muted)',
+            backgroundColor: 'var(--bg-secondary)', borderRadius: '8px',
+            border: '1px dashed var(--border-color)', minHeight: '200px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Loader2 size={32} className="animate-spin" style={{ marginBottom: '12px', opacity: 0.5 }} />
+            <div style={{ fontSize: '0.9rem' }}>Restoring source image from profile...</div>
           </div>
         )}
 
@@ -1757,7 +1821,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.querySelector('.lib-del-btn').style.opacity = '0' }}
                   >
                     <img
-                      src={getMediaUrl(item.url, item.signed_url)}
+                      src={item.blobUrl || getMediaUrl(item.url, item.signed_url)}
                       alt={item.name}
                       loading="lazy"
                       style={{

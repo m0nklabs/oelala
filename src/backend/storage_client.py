@@ -206,13 +206,23 @@ class StorageClient:
         List objects in a bucket.
 
         Args:
-            bucket: Bucket name
+            bucket: Bucket name (may contain '/' for nested paths like 'users/{id}')
             prefix: Optional prefix filter
 
         Returns:
             List of object metadata dicts
         """
-        url = f"/{bucket}"
+        # Handle compound bucket names (e.g., "users/{user_id}").
+        # Fiber routes GET /:bucket to listObjects, but compound paths
+        # would match GET /:bucket/* (getObject) instead.  Split the
+        # bucket and merge the sub-path into the prefix.
+        if "/" in bucket:
+            top, sub = bucket.split("/", 1)
+            url = f"/{top}"
+            prefix = f"{sub}/{prefix}" if prefix else f"{sub}/"
+        else:
+            url = f"/{bucket}"
+
         params = {}
         if prefix:
             params["prefix"] = prefix
@@ -326,7 +336,7 @@ class StorageClient:
 
         Args:
             user_id: Supabase user ID
-            media_type: Optional filter ('images', 'videos', 'audio')
+            media_type: Optional filter ('images', 'videos', 'audio', 'uploads')
 
         Returns:
             List of object metadata
@@ -335,10 +345,18 @@ class StorageClient:
         prefix = f"{media_type}/" if media_type else ""
         objects = self.list(bucket, prefix)
 
+        # Because list() merges compound bucket paths into the prefix,
+        # returned keys may include the user_id sub-path (e.g.,
+        # "{user_id}/uploads/file.png").  Strip it so downstream
+        # consumers see clean keys like "uploads/file.png".
+        user_prefix = f"{user_id}/"
+
         # Enrich with user info and parsed media type
         for obj in objects:
             obj["user_id"] = user_id
             key = obj.get("key", "")
+            if key.startswith(user_prefix):
+                key = key[len(user_prefix):]
             parts = key.split("/", 1)
             if len(parts) >= 1:
                 obj["media_type"] = parts[0]
