@@ -2122,6 +2122,8 @@ async def get_job_status(prompt_id: str):
                                 break
 
                 # Auto-upload to user storage if this is a registered job
+                storage_path = None
+                signed_url = None
                 comfyui = get_comfyui_client()
                 if comfyui and (output_video or output_image or output_audio):
                     # Determine output type and path
@@ -2159,10 +2161,6 @@ async def get_job_status(prompt_id: str):
                             user_id=job_info.get("user_id", "unknown"),
                             post_audio_path=job_info.get("post_audio_path"),
                         )
-
-                    # Trigger async auto-upload with MediaService (storage + Supabase sync)
-                    storage_path = None
-                    signed_url = None
                     if output_path.exists():
                         storage_path = await comfyui.on_job_complete_async(
                             prompt_id, str(output_path), output_type
