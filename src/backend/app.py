@@ -532,6 +532,10 @@ app.include_router(webhooks_router)  # Webhooks at /webhooks/*
 app.include_router(moderation_public_router)  # Content reports at /api/report/*
 app.include_router(moderation_admin_router)  # Admin moderation at /api/admin/moderation/*
 
+# Tool profiles (per-user settings persistence)
+from tool_profiles_api import router as tool_profiles_router
+app.include_router(tool_profiles_router)  # Tool settings at /api/settings/*
+
 # Create directories
 UPLOAD_DIR = Path("/home/flip/oelala/uploads")
 OUTPUT_DIR = Path("/home/flip/oelala/generated")
@@ -3072,7 +3076,7 @@ async def list_user_media(type: str = "all", user: User = Depends(get_current_us
         # Map frontend types to storage types
         media_type = None
         if type != "all":
-            type_map = {"video": "videos", "image": "images", "audio": "audio"}
+            type_map = {"video": "videos", "image": "images", "audio": "audio", "uploads": "uploads"}
             media_type = type_map.get(type, type)
 
         objects = storage.list_user_media(user.id, media_type)
@@ -3397,7 +3401,7 @@ async def upload_user_media(
         media_type: 'images', 'videos', or 'audio'
         file: The file to upload
     """
-    if media_type not in ("images", "videos", "audio"):
+    if media_type not in ("images", "videos", "audio", "uploads"):
         raise HTTPException(status_code=400, detail="Invalid media type")
 
     try:
@@ -5320,6 +5324,432 @@ async def generate_wan22_async(
 
 
 # =============================================================================
+# BlockSwap Q8 Experimental I2V Async Endpoint
+# =============================================================================
+
+
+@app.post("/generate-blockswap-q8-async")
+async def generate_blockswap_q8_async(
+    file: UploadFile = File(...),
+    prompt: str = Form("Motion, subject moving naturally"),
+    negative_prompt: str = Form(
+        "low quality, blurry, distorted, artifacts",
+        description="Negative prompt",
+    ),
+    num_frames: int = Form(121, description="Number of frames (4k+1 format)"),
+    resolution: str = Form("720p", description="Video resolution: 480p, 576p, 720p"),
+    fps: int = Form(24, description="Frames per second"),
+    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
+    steps: int = Form(8, description="Sampling steps (4-12)"),
+    cfg: float = Form(3.5, description="CFG guidance scale"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    high_noise_steps: int = Form(5, description="Steps for high noise model"),
+    shift: float = Form(8.0, description="ModelSamplingSD3 shift"),
+    nag_scale: float = Form(11.0, description="NAG guidance scale"),
+    enable_upscale: bool = Form(False, description="Enable 4x upscale"),
+    enable_interpolation: bool = Form(False, description="Enable RIFE 2x interpolation"),
+    enable_florence2: bool = Form(True, description="Enable Florence2 auto-captioning"),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
+    ),
+    user: User = Depends(get_current_user),
+):
+    """
+    Queue BlockSwap Q8 experimental I2V video generation.
+
+    Uses Q8_0 GGUF models with BlockSwap VRAM optimization, Lightning LoRA,
+    NAG guidance, TorchCompile, and optional Florence2 auto-captioning.
+    Higher quality than standard Q6 mode with experimental optimizations.
+    """
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+
+    comfyui = get_comfyui_client()
+    if not comfyui.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ComfyUI not running",
+        )
+
+    # Wan2.2 requires num_frames in format 4k+1
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+
+    # Calculate dimensions for credit check
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    duration_seconds = num_frames / fps if fps > 0 else 5
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 BlockSwap Q8 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+
+    # Validate file type
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    # Save + upload image
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"comfyui_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"📤 Saved input image: {input_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+    image_name = comfyui.upload_image(str(input_path))
+    if not image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+
+    # Parse LoRA configs
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
+
+    # Map resolution to long_edge
+    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
+    long_edge = resolution_map.get(resolution, 720)
+
+    # Generate output prefix
+    output_prefix = f"oelala_bsq8_{timestamp}"
+    actual_seed = (
+        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    )
+
+    # Build workflow
+    workflow = comfyui.build_blockswap_q8_workflow(
+        image_name=image_name,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        num_frames=num_frames,
+        fps=fps,
+        steps=steps,
+        cfg=cfg,
+        seed=actual_seed,
+        output_prefix=output_prefix,
+        high_noise_steps=high_noise_steps,
+        shift=shift,
+        nag_scale=nag_scale,
+        enhance_weight=1.0,
+        enable_upscale=enable_upscale,
+        enable_interpolation=enable_interpolation,
+        enable_florence2=enable_florence2,
+        lora_configs=parsed_lora_configs,
+        aspect_ratio=aspect_ratio,
+        long_edge=long_edge,
+    )
+
+    if not workflow:
+        raise HTTPException(
+            status_code=500, detail="Failed to build BlockSwap Q8 workflow"
+        )
+
+    # Queue workflow
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(
+            status_code=500, detail="Failed to queue workflow to ComfyUI"
+        )
+
+    job_id = str(uuid.uuid4())
+
+    # Register job
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+        },
+    )
+
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="blockswap_q8_i2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+                "steps": steps,
+                "model_mode": "blockswap_q8",
+            },
+        )
+
+    # Track job
+    job_info = {
+        "prompt_id": prompt_id,
+        "user_id": user.id,
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "seed": actual_seed,
+        "output_prefix": output_prefix,
+        "input_image": input_filename,
+        "created_at": timestamp,
+        "lora_count": len(parsed_lora_configs),
+        "job_type": "blockswap_q8_i2v",
+        "cfg": cfg,
+        "shift": shift,
+        "nag_scale": nag_scale,
+        "model_mode": "blockswap_q8",
+        "enable_florence2": enable_florence2,
+        "enable_upscale": enable_upscale,
+        "enable_interpolation": enable_interpolation,
+    }
+    active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
+
+    logger.info(f"🧪 Queued BlockSwap Q8 job: {prompt_id}")
+    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
+    logger.info(f"   🧪 shift={shift}, NAG={nag_scale}, florence2={enable_florence2}")
+    logger.info(f"   📝 {prompt[:50]}...")
+
+    await deduct_credits(user, credits_required, prompt_id, "BlockSwap Q8 I2V (async)")
+    logger.info(f"   💰 -{credits_required} credits")
+
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "job_id": job_id,
+        "status": "queued",
+        "credits_used": credits_required,
+        "message": "BlockSwap Q8 job queued. Poll /comfyui/job/{prompt_id} for status.",
+        **job_info,
+    }
+
+
+# =============================================================================
+# DisTorch2 Q8 Experimental I2V Async Endpoint
+# =============================================================================
+
+
+@app.post("/generate-distorch2-q8-async")
+async def generate_distorch2_q8_async(
+    file: UploadFile = File(...),
+    prompt: str = Form("Motion, subject moving naturally"),
+    negative_prompt: str = Form(
+        "low quality, blurry, distorted, artifacts",
+        description="Negative prompt",
+    ),
+    num_frames: int = Form(121, description="Number of frames (4k+1 format)"),
+    resolution: str = Form("720p", description="Video resolution: 480p, 576p, 720p"),
+    fps: int = Form(24, description="Frames per second"),
+    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
+    steps: int = Form(8, description="Sampling steps (4-12)"),
+    cfg: float = Form(3.5, description="CFG guidance scale"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    high_noise_steps: int = Form(5, description="Steps for high noise model"),
+    shift: float = Form(8.0, description="ModelSamplingSD3 shift"),
+    nag_scale: float = Form(11.0, description="NAG guidance scale"),
+    enable_upscale: bool = Form(False, description="Enable 4x upscale"),
+    enable_interpolation: bool = Form(False, description="Enable RIFE 2x interpolation"),
+    enable_florence2: bool = Form(True, description="Enable Florence2 auto-captioning"),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
+    ),
+    user: User = Depends(get_current_user),
+):
+    """
+    Queue DisTorch2 Q8 experimental I2V video generation.
+
+    Same processing chain as BlockSwap Q8 (NAG, EnhanceAVideo, CFGZeroStar,
+    TorchCompile, Florence2) but uses DisTorch2 multi-GPU distribution.
+    No forced Lightning LoRA — all LoRAs are user-selectable.
+    """
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+
+    comfyui = get_comfyui_client()
+    if not comfyui.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI not running")
+
+    # Wan2.2 requires num_frames in format 4k+1
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    duration_seconds = num_frames / fps if fps > 0 else 5
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 DisTorch2 Q8 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"comfyui_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"📤 Saved input image: {input_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+    image_name = comfyui.upload_image(str(input_path))
+    if not image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
+
+    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
+    long_edge = resolution_map.get(resolution, 720)
+
+    output_prefix = f"oelala_dt2q8_{timestamp}"
+    actual_seed = (
+        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    )
+
+    workflow = comfyui.build_distorch2_q8_workflow(
+        image_name=image_name,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        num_frames=num_frames,
+        fps=fps,
+        steps=steps,
+        cfg=cfg,
+        seed=actual_seed,
+        output_prefix=output_prefix,
+        high_noise_steps=high_noise_steps,
+        shift=shift,
+        nag_scale=nag_scale,
+        enhance_weight=1.0,
+        enable_upscale=enable_upscale,
+        enable_interpolation=enable_interpolation,
+        enable_florence2=enable_florence2,
+        lora_configs=parsed_lora_configs,
+        aspect_ratio=aspect_ratio,
+        long_edge=long_edge,
+    )
+
+    if not workflow:
+        raise HTTPException(
+            status_code=500, detail="Failed to build DisTorch2 Q8 workflow"
+        )
+
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(
+            status_code=500, detail="Failed to queue workflow to ComfyUI"
+        )
+
+    job_id = str(uuid.uuid4())
+
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+        },
+    )
+
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="distorch2_q8_i2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+                "steps": steps,
+                "model_mode": "distorch2_q8",
+            },
+        )
+
+    job_info = {
+        "prompt_id": prompt_id,
+        "user_id": user.id,
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "seed": actual_seed,
+        "output_prefix": output_prefix,
+        "input_image": input_filename,
+        "created_at": timestamp,
+        "lora_count": len(parsed_lora_configs),
+        "job_type": "distorch2_q8_i2v",
+        "cfg": cfg,
+        "shift": shift,
+        "nag_scale": nag_scale,
+        "model_mode": "distorch2_q8",
+        "enable_florence2": enable_florence2,
+        "enable_upscale": enable_upscale,
+        "enable_interpolation": enable_interpolation,
+    }
+    active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
+
+    logger.info(f"🧪 Queued DisTorch2 Q8 job: {prompt_id}")
+    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
+    logger.info(f"   🧪 shift={shift}, NAG={nag_scale}, florence2={enable_florence2}")
+    logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs selected")
+    logger.info(f"   📝 {prompt[:50]}...")
+
+    await deduct_credits(user, credits_required, prompt_id, "DisTorch2 Q8 I2V (async)")
+    logger.info(f"   💰 -{credits_required} credits")
+
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "job_id": job_id,
+        "status": "queued",
+        "credits_used": credits_required,
+        "message": "DisTorch2 Q8 job queued. Poll /comfyui/job/{prompt_id} for status.",
+        **job_info,
+    }
+
+
+# =============================================================================
 # LTX-2 Image-to-Video Async Endpoint
 # =============================================================================
 
@@ -5827,12 +6257,11 @@ async def generate_text_video(
         if not workflow:
             raise HTTPException(status_code=500, detail="Failed to build LTX-2 workflow")
     else:
-        # Wan2.2: Adjust num_frames to 4k+1 format
-        k = round((num_frames - 1) / 4)
-        k = max(1, k)
-        num_frames = 4 * k + 1
+        # Wan2.2: Native T2V with DisTorch2 dual-pass Q6_K
+        # Frame adjustment to 4k+1 handled inside build_t2v_q6_workflow
+        long_edge = 480 if resolution == "480p" else 720
         
-        workflow = comfyui.build_t2v_workflow(
+        workflow = comfyui.build_t2v_q6_workflow(
             prompt=prompt,
             width=width,
             height=height,
@@ -5842,6 +6271,8 @@ async def generate_text_video(
             cfg=mode_config["default_cfg"],
             seed=seed,
             output_prefix=f"oelala_t2v_{timestamp}",
+            aspect_ratio=aspect_ratio,
+            long_edge=long_edge,
         )
 
     # Queue workflow
@@ -6138,6 +6569,30 @@ async def caption_image(
         "detailed": "Describe this image in rich detail: the main subject, their appearance, clothing, pose, expression, the background, lighting, colors, and overall mood.",
         "tags": "List comma-separated keywords that describe this image (subjects, style, colors, mood, technical details). Output only the comma-separated list.",
         "structured": "Describe this image using this exact format — Subject: ..., Style: ..., Mood: ..., Setting: ..., Colors: ...",
+        "prompt_i2v": (
+            "You are a prompt engineer for AI video generation (image-to-video). "
+            "Describe the activity, motion, and action happening in this image as a video generation prompt. "
+            "Focus on: what the subject is DOING, the movement/gesture, camera angle, and how the scene would continue as a video. "
+            "Write in present tense, comma-separated cinematic style. "
+            "Example format: 'woman walking through rain, slow motion, hair flowing, puddle reflections, cinematic tracking shot, moody blue lighting'. "
+            "Output ONLY the prompt text, no explanations."
+        ),
+        "prompt_t2i": (
+            "You are a prompt engineer for AI image generation (Stable Diffusion / SDXL / Flux). "
+            "Describe this image as a detailed text-to-image prompt. "
+            "Include: subject description, pose, clothing/appearance, setting, lighting, art style, camera angle, quality tags. "
+            "Write in comma-separated tag style with quality boosters. "
+            "Example format: 'beautiful woman, red dress, standing in garden, golden hour, bokeh, soft lighting, masterpiece, 8k, photorealistic'. "
+            "Output ONLY the prompt text, no explanations."
+        ),
+        "prompt_nsfw": (
+            "You are an uncensored prompt engineer for AI image/video generation. "
+            "Describe this image explicitly and in full anatomical detail as a generation prompt. "
+            "Include: exact body positions, physical actions, expressions, body types, clothing state, camera angle, lighting. "
+            "Be specific about the sexual activity, positions, and interactions shown. Do not censor or euphemize. "
+            "Write in comma-separated cinematic prompt style. "
+            "Output ONLY the prompt text, no explanations."
+        ),
     }
     custom_prompt = caption_prompts.get(mode, caption_prompts["detailed"])
 

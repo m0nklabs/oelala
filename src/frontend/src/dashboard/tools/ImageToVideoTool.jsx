@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check } from 'lucide-react'
+import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm } from '../../api'
+import { postForm, uploadUserMedia, apiFetch } from '../../api'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -167,7 +167,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
-  const [uploadTab, setUploadTab] = useState('file') // 'file', 'url', 'creations'
+  const [uploadTab, setUploadTab] = useState('file') // 'file', 'url', 'creations', 'library'
+  const [userUploads, setUserUploads] = useState([])
+  const [uploadsLoading, setUploadsLoading] = useState(false)
 
   const [prompt, setPrompt] = useState(() => {
     // Load saved prompt or generate a random default for new users
@@ -623,7 +625,76 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       // Metadata extraction is optional, don't fail the upload
       if (DEBUG) console.debug('🐛 no metadata extracted:', e.message)
     }
+
+    // Sidecar: persist to user's upload library (fire-and-forget)
+    if (user && picked) {
+      uploadUserMedia('uploads', picked).then(() => {
+        if (DEBUG) console.debug('📁 Image persisted to upload library:', picked.name)
+        // Refresh library if it's loaded
+        loadUserUploads()
+      }).catch(err => {
+        if (DEBUG) console.debug('📁 Sidecar upload failed (non-blocking):', err.message)
+      })
+    }
   }
+
+  // ── User Uploads Library ────────────────────────────────────────────
+  const loadUserUploads = useCallback(async () => {
+    if (!user) return
+    setUploadsLoading(true)
+    try {
+      const resp = await apiFetch('/user/media?type=uploads')
+      if (resp.ok) {
+        const data = await resp.json()
+        setUserUploads(data.media || [])
+      }
+    } catch (err) {
+      if (DEBUG) console.debug('📁 Failed to load uploads library:', err.message)
+    } finally {
+      setUploadsLoading(false)
+    }
+  }, [user])
+
+  // Load library when tab is selected
+  useEffect(() => {
+    if (uploadTab === 'library' && user && userUploads.length === 0) {
+      loadUserUploads()
+    }
+  }, [uploadTab, user, userUploads.length, loadUserUploads])
+
+  const selectFromLibrary = useCallback(async (item) => {
+    setError('')
+    try {
+      const imageUrl = getMediaUrl(item.url, item.signed_url)
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const filename = item.name || item.url.split('/').pop()
+      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+
+      setFile(fileObj)
+      setPreviewUrl(imageUrl)
+      setUploadTab('file')
+      setSelectedCreation(null)
+
+      if (DEBUG) console.debug('📁 Selected from library:', filename)
+    } catch (err) {
+      setError('Failed to load image from library')
+      if (DEBUG) console.debug('📁 Library select failed:', err.message)
+    }
+  }, [])
+
+  const deleteFromLibrary = useCallback(async (item, e) => {
+    e.stopPropagation()
+    if (!user) return
+    try {
+      const filename = item.name || item.url.split('/').pop()
+      await apiFetch(`/user/media/uploads/${encodeURIComponent(filename)}`, { method: 'DELETE' })
+      setUserUploads(prev => prev.filter(u => u.name !== item.name))
+      if (DEBUG) console.debug('📁 Deleted from library:', filename)
+    } catch (err) {
+      if (DEBUG) console.debug('📁 Delete failed:', err.message)
+    }
+  }, [user])
 
   const clearFile = () => {
     setFile(null)
@@ -957,7 +1028,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </div>
             )}
             {/* Factory Presets */}
-            {factoryPresets.length > 0 && (
+            {factoryPresets?.length > 0 && (
               <div style={{ marginTop: '10px', borderTop: '1px solid var(--border-subtle, #333)', paddingTop: '8px' }}>
                 <div style={{ fontSize: '11px', color: 'var(--text-secondary, #999)', marginBottom: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                   ⚡ Factory Presets
@@ -1542,6 +1613,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           >
             <FolderOpen size={14} /> From My Creations
           </button>
+          <button
+            className={`grok-tab ${uploadTab === 'library' ? 'active' : ''}`}
+            onClick={() => setUploadTab('library')}
+          >
+            <Grid size={14} /> My Uploads
+            {userUploads.length > 0 && (
+              <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: '4px' }}>({userUploads.length})</span>
+            )}
+          </button>
         </div>
 
         <input
@@ -1623,6 +1703,125 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>
               Browse your generated images
             </div>
+          </div>
+        )}
+
+        {/* Tab Content: My Uploads Library */}
+        {uploadTab === 'library' && !file && (
+          <div style={{ padding: '8px 0' }}>
+            {uploadsLoading ? (
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px' }} />
+                <div style={{ fontSize: '0.85rem' }}>Loading your uploads...</div>
+              </div>
+            ) : userUploads.length === 0 ? (
+              <div style={{
+                padding: '24px 16px',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: '8px',
+                border: '1px dashed var(--border-color)'
+              }}>
+                <ImageIcon size={32} style={{ opacity: 0.5, marginBottom: '12px' }} />
+                <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
+                  No uploaded images yet
+                </div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                  Upload an image via the Upload File tab — it will appear here for reuse
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                gap: '8px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                padding: '4px'
+              }}>
+                {userUploads.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => selectFromLibrary(item)}
+                    style={{
+                      position: 'relative',
+                      aspectRatio: '1',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      border: '2px solid transparent',
+                      transition: 'border-color 0.2s, transform 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-color, #6366f1)'; e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.querySelector('.lib-del-btn').style.opacity = '1' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.querySelector('.lib-del-btn').style.opacity = '0' }}
+                  >
+                    <img
+                      src={getMediaUrl(item.url, item.signed_url)}
+                      alt={item.name}
+                      loading="lazy"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: '6px',
+                      }}
+                    />
+                    <button
+                      className="lib-del-btn"
+                      onClick={(e) => deleteFromLibrary(item, e)}
+                      title="Remove from library"
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        background: 'rgba(0,0,0,0.7)',
+                        border: 'none',
+                        color: '#ff6b6b',
+                        borderRadius: '50%',
+                        width: '22px',
+                        height: '22px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        opacity: 0,
+                        transition: 'opacity 0.2s',
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 0, left: 0, right: 0,
+                      background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                      padding: '12px 6px 4px',
+                      fontSize: '0.65rem',
+                      color: '#fff',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {item.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {userUploads.length > 0 && (
+              <div style={{ textAlign: 'right', marginTop: '6px' }}>
+                <button
+                  onClick={loadUserUploads}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--text-muted)',
+                    fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline',
+                  }}
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+            )}
           </div>
         )}
 
