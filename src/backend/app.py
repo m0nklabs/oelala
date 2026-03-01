@@ -6484,7 +6484,7 @@ async def caption_image(
 ):
     """
     Generate a caption/description for an uploaded image.
-    Uses ComfyUI Florence2 node or falls back to template response.
+    Uses Guardian vision LLM for high-quality captioning.
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -6500,73 +6500,6 @@ async def caption_image(
     except Exception as e:
         logger.error(f"Error saving file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-
-    # Try ComfyUI Florence2 if available
-    if get_comfyui_client:
-        comfyui = get_comfyui_client()
-        if comfyui.is_available():
-            try:
-                # Upload image to ComfyUI
-                comfyui_image = comfyui.upload_image(str(input_path))
-                if comfyui_image:
-                    # Build Florence2 workflow
-                    workflow = {
-                        "1": {
-                            "class_type": "LoadImage",
-                            "inputs": {"image": comfyui_image},
-                        },
-                        "2": {
-                            "class_type": "Florence2Run",
-                            "inputs": {
-                                "image": ["1", 0],
-                                "florence2_model": ["3", 0],
-                                "text_input": "",
-                                "task": "detailed_caption"
-                                if mode == "detailed"
-                                else "caption",
-                                "fill_mask": False,
-                                "keep_model_loaded": True,
-                                "max_new_tokens": 1024,
-                                "num_beams": 3,
-                                "do_sample": False,
-                                "output_mask_select": "",
-                            },
-                        },
-                        "3": {
-                            "class_type": "DownloadAndLoadFlorence2Model",
-                            "inputs": {
-                                "model": "microsoft/Florence-2-large",
-                                "precision": "fp16",
-                                "attention": "sdpa",
-                            },
-                        },
-                    }
-
-                    # Queue and wait for result
-                    prompt_id = comfyui.queue_prompt(workflow)
-                    if prompt_id:
-                        # Wait for completion (max 60s)
-                        import time
-
-                        for _ in range(60):
-                            history = comfyui.get_history(prompt_id)
-                            if history and prompt_id in history:
-                                outputs = history[prompt_id].get("outputs", {})
-                                # Florence2Run outputs text
-                                for node_id, output in outputs.items():
-                                    if "text" in output:
-                                        caption = output["text"]
-                                        if isinstance(caption, list):
-                                            caption = caption[0] if caption else ""
-                                        return {
-                                            "caption": caption,
-                                            "model": "florence2",
-                                            "mode": mode,
-                                        }
-                                break
-                            time.sleep(1)
-            except Exception as e:
-                logger.warning(f"Florence2 captioning failed: {e}")
 
     # Route through Guardian vision LLM
     logger.info(f"🔮 Captioning with Guardian vision model: {model}...")
