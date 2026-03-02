@@ -130,6 +130,10 @@ try:
     import face_train_service
 
     print("✅ face_train_service imported successfully")
+    # Recover any training jobs orphaned by previous backend restarts
+    recovered = face_train_service.recover_stuck_jobs()
+    if recovered:
+        print(f"🔄 Recovered {recovered} orphaned training job(s)")
 except ImportError as e:
     print(f"⚠️ face_train_service import failed: {e}")
     face_train_service = None

@@ -103,6 +103,95 @@ def _save_index(data: dict) -> None:
         json.dump(data, f, indent=2)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Startup recovery — mark orphaned 'running' jobs as failed
+# ─────────────────────────────────────────────────────────────────────────────
+
+def recover_stuck_jobs() -> int:
+    """
+    Called at backend startup. Any job with status 'running' is orphaned
+    because daemon training threads don't survive process restarts.
+    Mark them as 'failed' so users can retry.
+    Returns the number of recovered jobs.
+    """
+    index = _load_index()
+    recovered = 0
+    for job_id, job in index.items():
+        if job.get("status") == "running":
+            # Try to extract last known step from log
+            log_path = JOBS_DIR / job_id / "training.log"
+            last_step = _extract_last_step(log_path) if log_path.exists() else 0
+            job["status"] = "failed"
+            job["error"] = (
+                f"Backend restarted during training "
+                f"(orphaned at step ~{last_step}/{job.get('steps_total', '?')})"
+            )
+            if last_step > job.get("steps_done", 0):
+                job["steps_done"] = last_step
+            job["finished_at"] = time.time()
+            recovered += 1
+            logger.warning(
+                f"🔄 Recovered orphaned training job {job_id} "
+                f"(was at step {last_step})"
+            )
+    if recovered:
+        _save_index(index)
+    return recovered
+
+
+def _extract_last_step(log_path: Path) -> int:
+    """Parse the training log to find the highest step reached."""
+    try:
+        with open(log_path) as f:
+            lines = f.readlines()
+        step = 0
+        for line in reversed(lines[-100:]):
+            m = re.search(r"(\d+)/\d+.*lr:", line)
+            if m:
+                step = max(step, int(m.group(1)))
+                break
+        return step
+    except Exception:
+        return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GPU device selection
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _select_training_device() -> str:
+    """
+    Pick the best CUDA device for training.
+    Prefers the GPU with the most free VRAM.
+    Falls back to cuda:0 if torch is unavailable.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            logger.warning("⚠️ No CUDA available, training will be very slow on CPU")
+            return "cpu"
+
+        best_device = "cuda:0"
+        best_free = 0
+        for i in range(torch.cuda.device_count()):
+            free, total = torch.cuda.mem_get_info(i)
+            name = torch.cuda.get_device_name(i)
+            free_gb = free / (1024 ** 3)
+            total_gb = total / (1024 ** 3)
+            logger.info(
+                f"🔍 GPU {i} ({name}): {free_gb:.1f}GB free / {total_gb:.1f}GB total"
+            )
+            if free > best_free:
+                best_free = free
+                best_device = f"cuda:{i}"
+
+        logger.info(f"✅ Selected training device: {best_device} ({best_free / (1024**3):.1f}GB free)")
+        return best_device
+    except Exception as e:
+        logger.warning(f"⚠️ GPU detection failed ({e}), defaulting to cuda:0")
+        return "cuda:0"
+
+
 def _sanitize_trigger(name: str) -> str:
     """Convert name to a safe Dreambooth trigger word like ohwx_john_doe."""
     slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
@@ -122,6 +211,7 @@ def _build_training_config(
     steps: int = 1000,
 ) -> dict:
     """Build an ai-toolkit YAML config dict for SDXL face LoRA."""
+    device = _select_training_device()
     return {
         "job": "extension",
         "config": {
@@ -130,7 +220,7 @@ def _build_training_config(
                 {
                     "type": "sd_trainer",
                     "training_folder": str(output_dir),
-                    "device": "cuda:0",
+                    "device": device,
                     "trigger_word": trigger,
                     "network": {
                         "type": "lora",
