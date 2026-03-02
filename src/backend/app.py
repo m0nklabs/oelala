@@ -2358,11 +2358,16 @@ async def get_comfyui_output(filename: str):
     output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="Output file not found")
+
+    # Use ETag based on file mtime+size so browsers revalidate after file changes
+    stat = output_path.stat()
+    etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
+
     return FileResponse(
         output_path,
         headers={
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "CDN-Cache-Control": "public, max-age=31536000",
+            "Cache-Control": "public, max-age=3600, must-revalidate",
+            "ETag": etag,
         },
     )
 
