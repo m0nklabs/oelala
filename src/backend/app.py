@@ -463,9 +463,21 @@ app = FastAPI(
 )
 
 # CRITICAL: Add CORS middleware FIRST, before any mounts or routes
+# NOTE: allow_origins=["*"] + allow_credentials=True is INVALID per CORS spec.
+# Starlette returns 'Access-Control-Allow-Origin: *' on non-preflight requests,
+# which browsers reject when credentials/Authorization headers are sent.
+# Must list specific origins for credentialed requests to work.
+ALLOWED_ORIGINS = [
+    "https://oelala.xyz",
+    "http://oelala.xyz",
+    "http://localhost:5174",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://192.168.1.26:5174",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -2353,7 +2365,7 @@ async def get_job_status(prompt_id: str):
 
 
 @app.get("/comfyui/output/{filename}")
-async def get_comfyui_output(filename: str):
+async def get_comfyui_output(filename: str, request: Request):
     """Serve ComfyUI output files (videos/images)"""
     output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
     if not output_path.exists():
@@ -2363,13 +2375,21 @@ async def get_comfyui_output(filename: str):
     stat = output_path.stat()
     etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
 
-    return FileResponse(
-        output_path,
-        headers={
-            "Cache-Control": "public, max-age=3600, must-revalidate",
-            "ETag": etag,
-        },
-    )
+    # Add CORS headers directly — CORSMiddleware depends on request Origin,
+    # but Cloudflare may cache a non-CORS response and serve it to browsers.
+    # By always setting Vary: Origin + explicit CORS headers, we ensure CF
+    # caches separate versions and browsers always get valid CORS responses.
+    headers = {
+        "Cache-Control": "public, max-age=3600, must-revalidate",
+        "ETag": etag,
+        "Vary": "Origin",
+    }
+    origin = request.headers.get("origin")
+    if origin and origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    return FileResponse(output_path, headers=headers)
 
 
 @app.get("/media/generated/{filename}")

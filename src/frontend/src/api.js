@@ -58,11 +58,17 @@ export async function apiFetch(endpoint, options = {}) {
 
   const url = endpoint.startsWith('http') ? endpoint : `${BACKEND_BASE}${endpoint}`
 
+  // Bust Cloudflare cache for static media files that may have been cached
+  // without CORS headers (before the Vary: Origin fix was deployed)
+  const fetchUrl = (url.includes('/comfyui/output/') || url.includes('/media/generated/'))
+    ? url + (url.includes('?') ? '&' : '?') + '_cors=1'
+    : url
+
   if (DEBUG) {
     console.log(`🔐 API: ${options.method || 'GET'} ${endpoint}`, token ? '(authenticated)' : '(anonymous)')
   }
 
-  return fetch(url, {
+  return fetch(fetchUrl, {
     ...options,
     headers,
     credentials: 'same-origin',
