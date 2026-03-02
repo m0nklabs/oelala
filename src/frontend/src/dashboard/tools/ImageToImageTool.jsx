@@ -49,6 +49,17 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     if (onImportConsumed) onImportConsumed()
   }, [pendingImport])
 
+  // Helper: set file in both state (for UI) and ref (for submission)
+  const updateFile = useCallback((f, previewUrl) => {
+    fileRef.current = f
+    setFile(f)
+    setPreview(previewUrl || (f ? URL.createObjectURL(f) : null))
+    setResult(null)
+    setError(null)
+    setLastQueued(null)
+    console.warn(`🖼️ I2I file set: ${f?.name || 'null'} (${f ? (f.size / 1024).toFixed(0) + 'KB' : '-'}, type=${f?.type || '-'})`)
+  }, [])
+
   const handleApplyImport = async (selected) => {
     if (selected.image && importModal?.item) {
       const item = importModal.item
@@ -105,17 +116,6 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       setError('⚠️ Failed to load image from My Creations')
     }
   }, [updateFile])
-
-  // Helper: set file in both state (for UI) and ref (for submission)
-  const updateFile = useCallback((f, previewUrl) => {
-    fileRef.current = f
-    setFile(f)
-    setPreview(previewUrl || (f ? URL.createObjectURL(f) : null))
-    setResult(null)
-    setError(null)
-    setLastQueued(null)
-    console.warn(`🖼️ I2I file set: ${f?.name || 'null'} (${f ? (f.size / 1024).toFixed(0) + 'KB' : '-'}, type=${f?.type || '-'})`)
-  }, [])
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
