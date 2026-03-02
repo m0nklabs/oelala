@@ -917,7 +917,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
         .prompt-bubble-btn {
           position: absolute;
           top: 6px;
-          right: 6px;
+          right: 34px;
           width: 24px;
           height: 24px;
           border-radius: 4px;
@@ -945,8 +945,8 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
         /* ========== RESOLUTION BADGE ========== */
         .resolution-badge {
           position: absolute;
-          top: 34px;
-          right: 6px;
+          top: 8px;
+          right: 8px;
           padding: 2px 6px;
           border-radius: 4px;
           background: rgba(0,0,0,0.75);
