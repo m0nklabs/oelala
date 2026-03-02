@@ -9,7 +9,7 @@ import { getAccessToken } from '../../api'
 import { getMediaType } from '../../utils/mediaUtils'
 
 // Lazy loading media component - only loads when in viewport
-const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurations }) => {
+const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurations, mediaResolutions, setMediaResolutions }) => {
   const ref = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
 
@@ -37,9 +37,21 @@ const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurat
   const mediaUrl = getMediaUrl(item.url, item.signed_url)
 
   const handleLoadedMetadata = (e) => {
-    const duration = e.target.duration
+    const el = e.target
+    const duration = el.duration
     if (duration && !videoDurations[item.filename]) {
       setVideoDurations(prev => ({ ...prev, [item.filename]: duration }))
+    }
+    // Capture native video resolution
+    if (el.videoWidth && el.videoHeight && !mediaResolutions?.[item.filename]) {
+      setMediaResolutions?.(prev => ({ ...prev, [item.filename]: { w: el.videoWidth, h: el.videoHeight } }))
+    }
+  }
+
+  const handleImageLoad = (e) => {
+    const el = e.target
+    if (el.naturalWidth && el.naturalHeight && !mediaResolutions?.[item.filename]) {
+      setMediaResolutions?.(prev => ({ ...prev, [item.filename]: { w: el.naturalWidth, h: el.naturalHeight } }))
     }
   }
 
@@ -97,6 +109,7 @@ const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurat
           src={mediaUrl}
           alt={item.filename}
           loading="lazy"
+          onLoad={handleImageLoad}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       ) : (
@@ -258,6 +271,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   const [visibleCount, setVisibleCount] = useState(100)
   const [thumbHeight, setThumbHeight] = useState(320)
   const [videoDurations, setVideoDurations] = useState({}) // filename -> duration in seconds
+  const [mediaResolutions, setMediaResolutions] = useState({}) // filename -> { w, h }
   const containerRef = useRef(null)
 
   // Get auth context for user-scoped fetching (must be declared before use in other hooks)
@@ -926,6 +940,28 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
         }
         .prompt-bubble-btn:hover {
           transform: scale(1.2);
+        }
+
+        /* ========== RESOLUTION BADGE ========== */
+        .resolution-badge {
+          position: absolute;
+          top: 34px;
+          right: 6px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: rgba(0,0,0,0.75);
+          color: rgba(255,255,255,0.85);
+          font-size: 0.6rem;
+          font-weight: 500;
+          letter-spacing: 0.3px;
+          opacity: 0;
+          transition: opacity 0.15s;
+          z-index: 19;
+          pointer-events: none;
+          white-space: nowrap;
+        }
+        .thumb-card:hover .resolution-badge {
+          opacity: 1;
         }
 
         /* ========== PROMPT POPUP ========== */
@@ -2093,7 +2129,16 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                 getMediaUrl={getMediaUrl}
                 videoDurations={videoDurations}
                 setVideoDurations={setVideoDurations}
+                mediaResolutions={mediaResolutions}
+                setMediaResolutions={setMediaResolutions}
               />
+
+              {/* Resolution badge (on hover, top-right) */}
+              {(() => {
+                const w = item.metadata?.width || mediaResolutions[item.filename]?.w
+                const h = item.metadata?.height || mediaResolutions[item.filename]?.h
+                return w && h ? <div className="resolution-badge">{w}×{h}</div> : null
+              })()}
 
               <div className="media-overlay" onClick={(e) => e.stopPropagation()}>
                 <div style={{ minWidth: 0, overflow: 'hidden' }}>
