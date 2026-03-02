@@ -13,6 +13,14 @@ const CAPTION_MODES = [
   { id: 'prompt_nsfw', label: '🔞 NSFW Prompt', description: 'Explicit & uncensored', group: 'prompt' },
 ]
 
+const NSFW_LEVELS = [
+  { value: 1, label: 'Sensual', emoji: '💋', description: 'Suggestive poses, lingerie, soft lighting' },
+  { value: 2, label: 'Softcore', emoji: '🔥', description: 'Partial nudity, erotic posing, teasing' },
+  { value: 3, label: 'Nude', emoji: '🍑', description: 'Full nudity, explicit body details' },
+  { value: 4, label: 'Hardcore', emoji: '🍆', description: 'Explicit sexual acts, positions' },
+  { value: 5, label: 'Extreme', emoji: '⛓️', description: 'Rough, aggressive, extreme acts' },
+]
+
 const isPromptMode = (m) => m.startsWith('prompt_')
 
 const MODELS = [
@@ -35,6 +43,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
+  const [nsfwIntensity, setNsfwIntensity] = useState(3)  // 1-5 NSFW intensity scale
 
   // Auto-open import modal when Dashboard sends a pendingImport
   useEffect(() => {
@@ -46,14 +55,26 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const handleApplyImport = async (selected) => {
     if (selected.image && importModal?.item) {
       const item = importModal.item
-      const imageUrl = getMediaUrl(item.url, item.signed_url)
-      // Use relative URL for fetch to go through Vite proxy (avoids CORS).
-      // Signed URLs (http://...) are used as-is; relative paths (/comfyui/...) go through proxy.
-      const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+
+      // If item is a video, use the companion .png (first frame) instead
+      let imageUrl, fetchUrl, imageFilename
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        const pngFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
+        const pngUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        imageUrl = pngUrl
+        fetchUrl = pngUrl
+        imageFilename = pngFilename
+        console.debug('🎬 I2T: video detected, using companion image:', pngFilename)
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+        fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+        imageFilename = item.filename || item.url?.split('/').pop() || 'image.png'
+      }
+
       try {
         const response = await fetch(fetchUrl)
         const blob = await response.blob()
-        const filename = item.filename || item.url?.split('/').pop() || 'image.png'
+        const filename = imageFilename
         const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
         setFile(fileObj)
         setPreview(imageUrl)
@@ -100,6 +121,9 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       formData.append('file', file)
       formData.append('model', model)
       formData.append('mode', mode)
+      if (mode === 'prompt_nsfw') {
+        formData.append('nsfw_intensity', nsfwIntensity.toString())
+      }
 
       const res = await fetch(`${BACKEND_BASE}/caption-image`, {
         method: 'POST',
@@ -137,6 +161,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
           input: caption.trim(),
           style: null,
           mode: 'refine',
+          model: model,
           include_negative: false,
           include_motion: isPromptMode(mode),
           use_llm: true,
@@ -261,6 +286,42 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               </button>
             ))}
           </div>
+
+          {/* NSFW Intensity Slider */}
+          {mode === 'prompt_nsfw' && (
+            <div className="nsfw-intensity-section">
+              <div className="nsfw-intensity-header">
+                <label>Intensity</label>
+                <span className="nsfw-intensity-badge">
+                  {NSFW_LEVELS.find(l => l.value === nsfwIntensity)?.emoji}{' '}
+                  {NSFW_LEVELS.find(l => l.value === nsfwIntensity)?.label}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={nsfwIntensity}
+                onChange={(e) => setNsfwIntensity(Number(e.target.value))}
+                className="nsfw-slider"
+              />
+              <div className="nsfw-intensity-labels">
+                {NSFW_LEVELS.map((level) => (
+                  <span
+                    key={level.value}
+                    className={`nsfw-label ${nsfwIntensity === level.value ? 'active' : ''}`}
+                    onClick={() => setNsfwIntensity(level.value)}
+                  >
+                    {level.emoji}
+                  </span>
+                ))}
+              </div>
+              <p className="nsfw-intensity-desc">
+                {NSFW_LEVELS.find(l => l.value === nsfwIntensity)?.description}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -472,6 +533,90 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         .btn-option--nsfw.active {
           background: #dc2626;
           border-color: #dc2626;
+        }
+        .nsfw-intensity-section {
+          margin-top: 12px;
+          padding: 12px 16px;
+          background: rgba(220, 38, 38, 0.06);
+          border: 1px solid rgba(220, 38, 38, 0.2);
+          border-radius: 10px;
+        }
+        .nsfw-intensity-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 8px;
+        }
+        .nsfw-intensity-header label {
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: var(--text-primary, #eee);
+        }
+        .nsfw-intensity-badge {
+          font-size: 0.8rem;
+          padding: 2px 10px;
+          border-radius: 12px;
+          background: rgba(220, 38, 38, 0.15);
+          color: #f87171;
+          font-weight: 600;
+        }
+        .nsfw-slider {
+          width: 100%;
+          height: 6px;
+          -webkit-appearance: none;
+          appearance: none;
+          background: linear-gradient(90deg, #f97316 0%, #dc2626 50%, #7f1d1d 100%);
+          border-radius: 3px;
+          outline: none;
+          cursor: pointer;
+        }
+        .nsfw-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #ef4444;
+          border: 2px solid #fff;
+          box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+          cursor: pointer;
+        }
+        .nsfw-slider::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #ef4444;
+          border: 2px solid #fff;
+          box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+          cursor: pointer;
+        }
+        .nsfw-intensity-labels {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 6px;
+          padding: 0 2px;
+        }
+        .nsfw-label {
+          cursor: pointer;
+          font-size: 1rem;
+          opacity: 0.4;
+          transition: all 0.2s;
+          user-select: none;
+        }
+        .nsfw-label:hover {
+          opacity: 0.8;
+          transform: scale(1.2);
+        }
+        .nsfw-label.active {
+          opacity: 1;
+          transform: scale(1.3);
+        }
+        .nsfw-intensity-desc {
+          margin-top: 6px;
+          font-size: 0.78rem;
+          color: var(--text-muted, #888);
+          text-align: center;
+          font-style: italic;
         }
         .btn-glow {
           box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);

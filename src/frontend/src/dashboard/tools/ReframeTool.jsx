@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { Frame, Upload, Loader2, Download, Copy, Move, ChevronDown } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, getJson } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import MediaImportModal from '../../components/MediaImportModal'
 
 const ASPECT_RATIOS = [
   { id: '1:1', label: '1:1 (Square)', width: 1024, height: 1024 },
@@ -32,11 +33,12 @@ const MODELS = [
   { id: 'flux', label: 'Flux (Fast)', file: 'flux1-dev-bnb-nf4.safetensors' },
 ]
 
-export default function ReframeTool({ onJobSubmitted }) {
+export default function ReframeTool({ onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
+  const [importModal, setImportModal] = useState(null)
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0])
   const [position, setPosition] = useState('center')
@@ -52,6 +54,53 @@ export default function ReframeTool({ onJobSubmitted }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
   const fileInputRef = useRef(null)
+
+  // Auto-open import modal when Dashboard sends a pendingImport
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = async (selected) => {
+    if (selected.image && importModal?.item) {
+      const item = importModal.item
+
+      // If item is a video, use the companion .png (first frame) instead
+      let imageUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        console.debug('🎬 Reframe: video detected, using companion image')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+      }
+
+      try {
+        const response = await fetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+        const blob = await response.blob()
+        const filename = imageUrl.split('/').pop() || 'image.png'
+        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+        const url = URL.createObjectURL(fileObj)
+        const img = new Image()
+        img.onload = () => {
+          setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight })
+          setPreview(url)
+          setFile(fileObj)
+          setResult(null)
+          setError(null)
+          setLastQueued(null)
+          if (DEBUG) console.log('🖼️ Reframe imported image:', filename)
+        }
+        img.src = url
+      } catch (e) {
+        console.error('Failed to load image from import:', e)
+        setError('⚠️ Failed to load image from import')
+      }
+    }
+    if (selected.positive)  setPrompt(String(selected.positive))
+    setImportModal(null)
+  }
 
   const handleFileDrop = useCallback((e) => {
     e.preventDefault()
@@ -183,6 +232,16 @@ export default function ReframeTool({ onJobSubmitted }) {
 
   return (
     <div className="space-y-4">
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow || {}}
+          availableFields={['image', 'positive']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
+
       {/* Image Upload */}
       <div
         onClick={() => fileInputRef.current?.click()}

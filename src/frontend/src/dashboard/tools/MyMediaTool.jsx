@@ -184,7 +184,7 @@ const saveFavorites = (favorites) => {
   }
 }
 
-export default function MyMediaTool({ filter = 'all', selectionMode = false, onSelectItem = null, onSendToTool = null }) {
+export default function MyMediaTool({ filter: filterProp = 'all', selectionMode = false, onSelectItem = null, onSendToTool = null }) {
   const [mediaList, setMediaList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -202,22 +202,45 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
   const [searchQuery, setSearchQuery] = useState('') // Search by filename or prompt
   const [hideStartImages, setHideStartImages] = useState(true)  // Hide start images by default
   const [profile, setProfile] = useState(loadProfile) // 'auto', '1280x1024', '1080p', '1440p', '4k'
+  const [filter, setFilter] = useState(() => {
+    const saved = localStorage.getItem('oelala_media_type_filter')
+    return saved && ['all', 'video', 'image', 'audio', 'prompts'].includes(saved) ? saved : filterProp
+  }) // 'all', 'video', 'image', 'audio', 'prompts' — internal state from dropdown
   const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
   const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
 
   // "Use in tool" state
   const [send2ToolLoading, setSend2ToolLoading] = useState(false)
   const [send2ToolMenu, setSend2ToolMenu] = useState(false)
+  // Grid-level tool menu: stores the item object (or null) to show dropdown on
+  const [gridToolMenuItem, setGridToolMenuItem] = useState(null)
+  const [gridToolMenuData, setGridToolMenuData] = useState(null)
   const SEND_TO_TOOLS = [
     { id: 'image-to-video', label: '🎬 Image to Video' },
     { id: 'text-to-video',  label: '📝 Text to Video' },
     { id: 'text-to-image',  label: '🖼️ Text to Image' },
     { id: 'image-to-image', label: '🔄 Image to Image' },
     { id: 'image-to-text',  label: '📷 Image to Text' },
+    { id: 'inpaint',        label: '🎨 Inpaint' },
+    { id: 'reframe',        label: '📐 Reframe' },
+    { id: 'face-swap',      label: '👤 Face Swap' },
   ]
 
   // Close the dropdown when the lightbox switches items
   useEffect(() => { setSend2ToolMenu(false) }, [selectedIndex])
+
+  // Close grid tool menu on outside click
+  useEffect(() => {
+    if (!gridToolMenuItem) return
+    const handler = (e) => {
+      if (!e.target.closest('.grid-tool-menu-container')) {
+        setGridToolMenuItem(null)
+        setGridToolMenuData(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [gridToolMenuItem])
 
   // Admin-specific state
   const [sourceStats, setSourceStats] = useState({}) // { user: 10, generated: 5, ... }
@@ -1093,6 +1116,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
+          gap: 4px;
         }
         .thumb-card:hover .media-overlay {
           opacity: 1;
@@ -1103,7 +1127,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          max-width: 70%;
+          min-width: 0;
         }
         .media-size {
           font-size: 0.65rem;
@@ -1123,6 +1147,7 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         .overlay-buttons {
           display: flex;
           gap: 4px;
+          flex-shrink: 0;
         }
         .overlay-btn {
           padding: 4px;
@@ -1134,6 +1159,12 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         }
         .overlay-btn:hover {
           background: rgba(255,255,255,0.3);
+        }
+        .overlay-btn.use-in-tool {
+          background: rgba(167,139,250,0.3);
+        }
+        .overlay-btn.use-in-tool:hover {
+          background: rgba(167,139,250,0.55);
         }
 
         /* ========== LIGHTBOX ========== */
@@ -1310,10 +1341,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         flexWrap: 'wrap',
         gap: '10px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-            {filter === 'all' ? 'All Media' : filter === 'video' ? 'Videos' : filter === 'image' ? 'Images' : filter === 'audio' ? 'Audio' : 'Prompts'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>My Media</span>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             {filter === 'prompts' ? (
               <>💬 {sortedMediaList.length} items with prompts</>
@@ -1325,6 +1354,24 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Media type dropdown */}
+          <select
+            className="sort-select"
+            value={filter}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              localStorage.setItem('oelala_media_type_filter', e.target.value)
+              setSelectedItems(new Set())
+            }}
+            style={{ fontWeight: 500 }}
+          >
+            <option value="all">📁 All Media</option>
+            <option value="video">🎞️ Videos</option>
+            <option value="image">🖼️ Images</option>
+            <option value="audio">🎵 Audio</option>
+            <option value="prompts">📝 Prompts</option>
+          </select>
+
           {/* Search input */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
             <Search size={14} style={{ color: 'var(--text-muted)', position: 'absolute', left: '8px' }} />
@@ -1428,27 +1475,24 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
           {/* Divider */}
           <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
 
-          {/* Monitor profile selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginRight: '4px' }}>Profile:</span>
-            {['auto', '1280x1024', '1080p', '1440p', '4k'].map((p) => (
-              <button
-                key={p}
-                className="sort-btn"
-                onClick={() => { setProfile(p); saveProfile(p); }}
-                title={p === 'auto' ? `Auto-detect (currently ${detectProfile()})` : MONITOR_PROFILES[p]?.label || p}
-                style={{
-                  background: profile === p ? 'var(--accent-color, #a855f7)' : undefined,
-                  color: profile === p ? '#fff' : undefined,
-                  fontSize: '0.7rem',
-                  padding: '4px 6px'
-                }}
-              >
-                {p === 'auto' ? '⚡Auto' : (MONITOR_PROFILES[p]?.label || p)}
-              </button>
-            ))}
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginLeft: '8px' }}>
-              {gridSize} cols
+          {/* Monitor profile dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>🖥️</span>
+            <select
+              className="sort-select"
+              value={profile}
+              onChange={(e) => { setProfile(e.target.value); saveProfile(e.target.value); }}
+              title={`Grid: ${gridSize} columns`}
+              style={{ fontSize: '0.8rem' }}
+            >
+              <option value="auto">⚡ Auto ({detectProfile()})</option>
+              <option value="1280x1024">1280×1024</option>
+              <option value="1080p">1080p</option>
+              <option value="1440p">1440p</option>
+              <option value="4k">4K</option>
+            </select>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+              {gridSize}col
             </span>
           </div>
 
@@ -2051,8 +2095,8 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                 setVideoDurations={setVideoDurations}
               />
 
-              <div className="media-overlay">
-                <div>
+              <div className="media-overlay" onClick={(e) => e.stopPropagation()}>
+                <div style={{ minWidth: 0, overflow: 'hidden' }}>
                   <div className="media-filename">{item.filename}</div>
                   <div className="media-size">
                     {formatSize(item.size)}
@@ -2065,6 +2109,90 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
                   </div>
                 </div>
                 <div className="overlay-buttons">
+                  {onSendToTool && (
+                    <div className="grid-tool-menu-container" style={{ position: 'relative' }}>
+                      <button
+                        className="overlay-btn use-in-tool"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          // Toggle: if already open for this item, close it
+                          if (gridToolMenuItem && gridToolMenuItem.filename === item.filename) {
+                            setGridToolMenuItem(null)
+                            setGridToolMenuData(null)
+                            return
+                          }
+                          setSend2ToolLoading(true)
+                          try {
+                            let workflowData = {}
+                            try {
+                              const res = await fetch(`${BACKEND_BASE}/comfyui-metadata/${item.filename}`)
+                              if (res.ok) {
+                                const json = await res.json()
+                                workflowData = parseComfyWorkflow(json.metadata || {})
+                              }
+                            } catch (_) { /* no metadata */ }
+                            // If only one tool, send directly
+                            if (SEND_TO_TOOLS.length === 1) {
+                              onSendToTool(SEND_TO_TOOLS[0].id, { item, workflow: workflowData })
+                            } else {
+                              setGridToolMenuItem(item)
+                              setGridToolMenuData(workflowData)
+                            }
+                          } finally {
+                            setSend2ToolLoading(false)
+                          }
+                        }}
+                        title="Use in tool"
+                      >
+                        <Wand2 size={14} />
+                      </button>
+                      {gridToolMenuItem && gridToolMenuItem.filename === item.filename && (
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            position: 'absolute',
+                            bottom: '110%',
+                            right: 0,
+                            background: '#1e1e2e',
+                            border: '1px solid #333',
+                            borderRadius: '8px',
+                            minWidth: '170px',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                            zIndex: 100,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {SEND_TO_TOOLS.map(tool => (
+                            <button
+                              key={tool.id}
+                              onClick={() => {
+                                setGridToolMenuItem(null)
+                                onSendToTool(tool.id, { item, workflow: gridToolMenuData || {} })
+                                setGridToolMenuData(null)
+                              }}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '9px 14px',
+                                background: 'none',
+                                border: 'none',
+                                color: '#e2e8f0',
+                                fontSize: '0.85rem',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #2d2d3d',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(167,139,250,0.15)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                            >
+                              {tool.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     className="overlay-btn"
                     onClick={(e) => handleDownloadMetadata(item, e)}
@@ -2242,14 +2370,14 @@ export default function MyMediaTool({ filter = 'all', selectionMode = false, onS
               {onSendToTool && (
                 <div style={{ position: 'relative' }}>
                   <button
-                    className="overlay-btn"
+                    className="overlay-btn use-in-tool"
                     disabled={send2ToolLoading}
                     onClick={async (e) => {
                       e.stopPropagation()
                       setSend2ToolMenu(prev => !prev)
                     }}
                     title="Use in tool"
-                    style={{ background: 'rgba(167,139,250,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <Wand2 size={16} />
                     <ChevronDown size={12} />

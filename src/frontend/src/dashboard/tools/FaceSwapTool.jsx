@@ -4,14 +4,15 @@ import {
   Smile, RefreshCw, Trash2, Plus, Check, Image as ImageIcon,
   Cpu, Zap, Clock, Copy, CheckCheck
 } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'
+import MediaImportModal from '../../components/MediaImportModal'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FaceSwapTool
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function FaceSwapTool({ onJobSubmitted }) {
+export default function FaceSwapTool({ onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
   const [tab, setTab] = useState('swap') // 'swap' | 'profiles' | 'train'
 
@@ -55,7 +56,7 @@ export default function FaceSwapTool({ onJobSubmitted }) {
       </div>
 
       {tab === 'swap' && (
-        <SwapPanel user={user} requestLogin={requestLogin} onJobSubmitted={onJobSubmitted} />
+        <SwapPanel user={user} requestLogin={requestLogin} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={onImportConsumed} />
       )}
       {tab === 'profiles' && (
         <ProfilesPanel user={user} requestLogin={requestLogin} />
@@ -80,7 +81,7 @@ export default function FaceSwapTool({ onJobSubmitted }) {
 // SwapPanel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SwapPanel({ user, requestLogin, onJobSubmitted }) {
+function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImportConsumed }) {
   const [sourceMode, setSourceMode] = useState('upload') // 'upload' | 'profile'
   const [profiles, setProfiles] = useState([])
   const [selectedProfileId, setSelectedProfileId] = useState(null)
@@ -89,6 +90,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
   const [targetPreview, setTargetPreview] = useState(null)
   const [sourceFile, setSourceFile] = useState(null)
   const [sourcePreview, setSourcePreview] = useState(null)
+  const [importModal, setImportModal] = useState(null)
 
   const [swapAllFaces, setSwapAllFaces] = useState(false)
   const [detectedFaces, setDetectedFaces] = useState(null)
@@ -108,6 +110,46 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
       .then(d => setProfiles(d.profiles || []))
       .catch(() => {})
   }, [])
+
+  // Auto-open import modal when Dashboard sends a pendingImport
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = async (selected) => {
+    if (selected.image && importModal?.item) {
+      const item = importModal.item
+
+      // If item is a video, use the companion .png (first frame) instead
+      let imageUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        console.debug('🎬 FaceSwap: video detected, using companion image')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+      }
+
+      try {
+        const response = await fetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+        const blob = await response.blob()
+        const filename = imageUrl.split('/').pop() || 'image.png'
+        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+        setTargetFile(fileObj)
+        setTargetPreview(URL.createObjectURL(fileObj))
+        setResult(null)
+        setError(null)
+        setDetectedFaces(null)
+        if (DEBUG) console.log('👤 FaceSwap imported target:', filename)
+      } catch (e) {
+        console.error('Failed to load image from import:', e)
+        setError('⚠️ Failed to load image from import')
+      }
+    }
+    setImportModal(null)
+  }
 
   const handleDragOver = (e) => e.preventDefault()
 
@@ -231,6 +273,16 @@ function SwapPanel({ user, requestLogin, onJobSubmitted }) {
 
   return (
     <div className="space-y-4">
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow || {}}
+          availableFields={['image']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
+
       {/* Source mode toggle */}
       <div>
         <label className="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wide">

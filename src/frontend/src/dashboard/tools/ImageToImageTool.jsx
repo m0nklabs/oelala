@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import MediaImportModal from '../../components/MediaImportModal'
 
 const ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4']
 
@@ -13,11 +14,12 @@ const CHECKPOINTS = [
   { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious (Anime)' },
 ]
 
-export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
+export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
+  const [importModal, setImportModal] = useState(null)
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark')
   const [denoise, setDenoise] = useState(0.6)
@@ -35,6 +37,54 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
+
+  // Auto-open import modal when Dashboard sends a pendingImport
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = async (selected) => {
+    if (selected.image && importModal?.item) {
+      const item = importModal.item
+
+      // If item is a video, use the companion .png (first frame) instead
+      let imageUrl, imageFilename
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        const pngFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
+        const pngUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        imageUrl = pngUrl
+        imageFilename = pngFilename
+        console.debug('🎬 I2I: video detected, using companion image:', pngFilename)
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+        imageFilename = item.filename || imageUrl.split('/').pop()
+      }
+
+      try {
+        const response = await fetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+        const blob = await response.blob()
+        const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
+        setFile(fileObj)
+        setPreview(imageUrl)
+        setResult(null)
+        setError(null)
+        setLastQueued(null)
+        if (DEBUG) console.log('🖼️ I2I imported image:', imageFilename)
+      } catch (e) {
+        console.error('Failed to load image from import:', e)
+        setError('⚠️ Failed to load image from import')
+      }
+    }
+    if (selected.positive)  setPrompt(String(selected.positive))
+    if (selected.negative)  setNegativePrompt(String(selected.negative))
+    if (selected.steps)     setSteps(Number(selected.steps) || steps)
+    if (selected.cfg)       setCfg(Number(selected.cfg) || cfg)
+    if (selected.seed)      setSeed(Number(selected.seed) || seed)
+    setImportModal(null)
+  }
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
@@ -326,6 +376,16 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted }) {
             </div>
           </div>
         </div>
+      )}
+
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow || {}}
+          availableFields={['image', 'positive', 'negative', 'steps', 'cfg', 'seed']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
       )}
 
       <style>{`

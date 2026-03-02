@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Paintbrush, Eraser, Undo2, Redo2, Loader2, Upload, Wand2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import MediaImportModal from '../../components/MediaImportModal'
 
 const MODELS = [
   { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', desc: 'Fast, artistic' },
@@ -12,8 +13,11 @@ const MODELS = [
   { value: 'ultraRealisticByStable_v20FP16.safetensors', label: 'Ultra Realistic', desc: 'Hyperrealistic' },
 ]
 
-export default function InpaintTool({ onOutput, onJobSubmitted }) {
+export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
+
+  // Import modal state
+  const [importModal, setImportModal] = useState(null)
 
   // Image state
   const [sourceImage, setSourceImage] = useState(null) // { url, width, height, file }
@@ -46,6 +50,52 @@ export default function InpaintTool({ onOutput, onJobSubmitted }) {
 
   // Canvas zoom/pan
   const [zoom, setZoom] = useState(1)
+
+  // Auto-open import modal when Dashboard sends a pendingImport
+  useEffect(() => {
+    if (!pendingImport) return
+    setImportModal(pendingImport)
+    if (onImportConsumed) onImportConsumed()
+  }, [pendingImport])
+
+  const handleApplyImport = async (selected) => {
+    if (selected.image && importModal?.item) {
+      const item = importModal.item
+
+      // If item is a video, use the companion .png (first frame) instead
+      let imageUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        console.debug('🎬 Inpaint: video detected, using companion image')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+      }
+
+      try {
+        const response = await fetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+        const blob = await response.blob()
+        const filename = imageUrl.split('/').pop() || 'image.png'
+        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+        const url = URL.createObjectURL(fileObj)
+        const img = new Image()
+        img.onload = () => {
+          setSourceImage({ url, width: img.width, height: img.height, file: fileObj })
+          setHistory([])
+          setHistoryIndex(-1)
+          setZoom(1)
+          if (DEBUG) console.log('🎨 Inpaint imported image:', filename)
+        }
+        img.src = url
+      } catch (e) {
+        console.error('Failed to load image from import:', e)
+        setError('⚠️ Failed to load image from import')
+      }
+    }
+    if (selected.positive)  setPrompt(String(selected.positive))
+    if (selected.negative)  setNegativePrompt(String(selected.negative))
+    setImportModal(null)
+  }
 
   // Initialize canvas when image is loaded
   useEffect(() => {
@@ -398,6 +448,16 @@ export default function InpaintTool({ onOutput, onJobSubmitted }) {
           font-size: 11px; color: #555; text-align: center; padding: 2px 0;
         }
       `}</style>
+
+      {importModal && (
+        <MediaImportModal
+          item={importModal.item}
+          parsedData={importModal.workflow || {}}
+          availableFields={['image', 'positive', 'negative']}
+          onApply={handleApplyImport}
+          onClose={() => setImportModal(null)}
+        />
+      )}
 
       <div className="inpaint-tool" style={{ display: 'flex', gap: '16px', height: '100%' }}>
         {/* Left: Canvas area */}

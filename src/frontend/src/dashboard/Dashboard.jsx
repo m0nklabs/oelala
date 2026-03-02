@@ -222,13 +222,7 @@ export default function Dashboard() {
       case TOOL_IDS.SPEECH_TO_VIDEO:
         return 'Speech to Video'
       case TOOL_IDS.MY_MEDIA_ALL:
-        return 'My Media - All'
-      case TOOL_IDS.MY_MEDIA_VIDEOS:
-        return 'My Media - Videos'
-      case TOOL_IDS.MY_MEDIA_IMAGES:
-        return 'My Media - Images'
-      case TOOL_IDS.MY_MEDIA_PROMPTS:
-        return 'My Media - Prompts'
+        return 'My Media'
       case TOOL_IDS.GALLERY:
         return 'Community Gallery'
       case TOOL_IDS.MY_PROFILE:
@@ -283,15 +277,7 @@ export default function Dashboard() {
         return wrapWithSuspense(<LoRABrowserTool />)
 
       case TOOL_IDS.MY_MEDIA_ALL:
-        return wrapWithSuspense(<MyMediaTool filter="all" onSendToTool={handleSendToTool} />)
-      case TOOL_IDS.MY_MEDIA_VIDEOS:
-        return wrapWithSuspense(<MyMediaTool filter="video" onSendToTool={handleSendToTool} />)
-      case TOOL_IDS.MY_MEDIA_IMAGES:
-        return wrapWithSuspense(<MyMediaTool filter="image" onSendToTool={handleSendToTool} />)
-      case TOOL_IDS.MY_MEDIA_AUDIO:
-        return wrapWithSuspense(<MyMediaTool filter="audio" onSendToTool={handleSendToTool} />)
-      case TOOL_IDS.MY_MEDIA_PROMPTS:
-        return wrapWithSuspense(<MyMediaTool filter="prompts" onSendToTool={handleSendToTool} />)
+        return wrapWithSuspense(<MyMediaTool onSendToTool={handleSendToTool} />)
       case TOOL_IDS.GALLERY:
         return wrapWithSuspense(<Gallery onRemix={handleSendToTool} onViewProfile={(userId) => setViewingProfile(userId)} />)
 
@@ -324,11 +310,11 @@ export default function Dashboard() {
         return wrapWithSuspense(<SpeechToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.REFRAME:
-        return wrapWithSuspense(<ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<ReframeTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.INPAINT:
-        return wrapWithSuspense(<InpaintTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<InpaintTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.FACE_SWAP:
-        return wrapWithSuspense(<FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
+        return wrapWithSuspense(<FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
 
       case TOOL_IDS.POST_PROCESSING:
         return wrapWithSuspense(<PostProcessingTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
@@ -514,10 +500,6 @@ export default function Dashboard() {
           </div>
         ) : /* Full-width layout for My Media tools and Gallery */
         (activeToolId === TOOL_IDS.MY_MEDIA_ALL ||
-          activeToolId === TOOL_IDS.MY_MEDIA_VIDEOS ||
-          activeToolId === TOOL_IDS.MY_MEDIA_IMAGES ||
-          activeToolId === TOOL_IDS.MY_MEDIA_AUDIO ||
-          activeToolId === TOOL_IDS.MY_MEDIA_PROMPTS ||
           activeToolId === TOOL_IDS.GALLERY) ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderControls()}
