@@ -7,6 +7,7 @@ import {
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
+import CreationsPickerModal from '../../components/CreationsPickerModal'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FaceSwapTool
@@ -91,6 +92,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
   const [sourceFile, setSourceFile] = useState(null)
   const [sourcePreview, setSourcePreview] = useState(null)
   const [importModal, setImportModal] = useState(null)
+  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
   const [swapAllFaces, setSwapAllFaces] = useState(false)
   const [detectedFaces, setDetectedFaces] = useState(null)
@@ -150,6 +152,31 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
     }
     setImportModal(null)
   }
+
+  const handleCreationsSelect = useCallback(async (item) => {
+    try {
+      let mediaUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        mediaUrl = getMediaUrl(item.url, item.signed_url)
+      } else {
+        mediaUrl = getMediaUrl(item.url, item.signed_url)
+      }
+      const response = await fetch(mediaUrl)
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+      const blob = await response.blob()
+      const filename = item.filename || mediaUrl.split('/').pop()
+      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+      setTargetFile(fileObj)
+      setTargetPreview(URL.createObjectURL(fileObj))
+      setResult(null)
+      setError(null)
+      setDetectedFaces(null)
+      if (DEBUG) console.log('\ud83d\udcc1 FaceSwap: loaded target from creations:', filename)
+    } catch (e) {
+      console.error('Failed to load from creations:', e)
+      setError('\u26a0\ufe0f Failed to load from My Creations')
+    }
+  }, [])
 
   const handleDragOver = (e) => e.preventDefault()
 
@@ -283,6 +310,13 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
         />
       )}
 
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        title="Select Target for Face Swap"
+      />
+
       {/* Source mode toggle */}
       <div>
         <label className="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wide">
@@ -345,6 +379,13 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
           />
         )}
       </div>
+
+      <button
+        onClick={() => setShowCreationsPicker(true)}
+        className="w-full py-2.5 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer text-gray-300 hover:border-purple-500 transition-colors text-sm"
+      >
+        📁 Target from My Creations
+      </button>
 
       {/* Swap target↔source */}
       {sourceMode === 'upload' && (targetFile || sourceFile) && (

@@ -1470,6 +1470,24 @@ input:checked + .grok-slider:before {
   border: 1px solid var(--border-color);
 }
 
+/* ========== FROM MY CREATIONS BUTTON ========== */
+.btn-creations-picker {
+  width: 100%;
+  padding: 10px 16px;
+  margin-top: 8px;
+  background-color: var(--bg-tertiary, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-primary, #eee);
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.btn-creations-picker:hover {
+  border-color: var(--accent-color, #7c3aed);
+  background-color: rgba(124, 58, 237, 0.08);
+}
+
 /* ========== ANIMATIONS ========== */
 .spinning {
   animation: spin 1s linear infinite;

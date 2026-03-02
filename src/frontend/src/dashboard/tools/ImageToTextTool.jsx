@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import MediaImportModal from '../../components/MediaImportModal'
+import CreationsPickerModal from '../../components/CreationsPickerModal'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
@@ -43,6 +44,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
+  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [nsfwIntensity, setNsfwIntensity] = useState(3)  // 1-5 NSFW intensity scale
 
   // Auto-open import modal when Dashboard sends a pendingImport
@@ -88,6 +90,30 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
     }
     setImportModal(null)
   }
+
+  const handleCreationsSelect = useCallback(async (item) => {
+    try {
+      let imageUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+      }
+      const response = await fetch(imageUrl)
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+      const blob = await response.blob()
+      const filename = imageUrl.split('/').pop() || 'image.png'
+      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+      setFile(fileObj)
+      setPreview(imageUrl)
+      setCaption('')
+      setError(null)
+      if (DEBUG) console.log('\ud83d\udcc1 I2T: loaded from creations:', filename)
+    } catch (e) {
+      console.error('Failed to load from creations:', e)
+      setError('\u26a0\ufe0f Failed to load image from My Creations')
+    }
+  }, [])
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
@@ -201,6 +227,14 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
 
   return (
     <div className="tool-container">
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        filter="image"
+        title="Select Image for Captioning"
+      />
+
       {/* Import from previous generation modal */}
       {importModal && (
         <MediaImportModal
@@ -240,6 +274,13 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
             style={{ display: 'none' }}
           />
         </div>
+
+        <button
+          onClick={() => setShowCreationsPicker(true)}
+          className="btn-creations-picker"
+        >
+          {'📁'} From My Creations
+        </button>
       </div>
 
       <div className="tool-section">

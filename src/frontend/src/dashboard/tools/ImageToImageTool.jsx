@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
+import CreationsPickerModal from '../../components/CreationsPickerModal'
 
 const ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4']
 
@@ -20,6 +21,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [importModal, setImportModal] = useState(null)
+  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark')
   const [denoise, setDenoise] = useState(0.6)
@@ -85,6 +87,31 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     if (selected.seed)      setSeed(Number(selected.seed) || seed)
     setImportModal(null)
   }
+
+  const handleCreationsSelect = useCallback(async (item) => {
+    try {
+      let imageUrl, imageFilename
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        imageFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+        imageFilename = item.filename || imageUrl.split('/').pop()
+      }
+      const response = await fetch(imageUrl)
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+      const blob = await response.blob()
+      const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
+      setFile(fileObj)
+      setPreview(imageUrl)
+      setResult(null)
+      setError(null)
+      if (DEBUG) console.log('📁 I2I: loaded from creations:', imageFilename)
+    } catch (e) {
+      console.error('Failed to load from creations:', e)
+      setError('⚠️ Failed to load image from My Creations')
+    }
+  }, [])
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
@@ -199,6 +226,13 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             style={{ display: 'none' }}
           />
         </div>
+
+        <button
+          onClick={() => setShowCreationsPicker(true)}
+          className="btn-creations-picker"
+        >
+          📁 From My Creations
+        </button>
       </div>
 
       <div className="tool-section">
@@ -377,6 +411,14 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           </div>
         </div>
       )}
+
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        filter="image"
+        title="Select Image from My Creations"
+      />
 
       {importModal && (
         <MediaImportModal

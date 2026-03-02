@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, getJson } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
+import CreationsPickerModal from '../../components/CreationsPickerModal'
 
 const ASPECT_RATIOS = [
   { id: '1:1', label: '1:1 (Square)', width: 1024, height: 1024 },
@@ -39,6 +40,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [importModal, setImportModal] = useState(null)
+  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0])
   const [position, setPosition] = useState('center')
@@ -101,6 +103,37 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
     if (selected.positive)  setPrompt(String(selected.positive))
     setImportModal(null)
   }
+
+  const handleCreationsSelect = useCallback(async (item) => {
+    try {
+      let imageUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+      }
+      const response = await fetch(imageUrl)
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+      const blob = await response.blob()
+      const filename = imageUrl.split('/').pop() || 'image.png'
+      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+      const url = URL.createObjectURL(fileObj)
+      const img = new Image()
+      img.onload = () => {
+        setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight })
+        setPreview(url)
+        setFile(fileObj)
+        setResult(null)
+        setError(null)
+        setLastQueued(null)
+        if (DEBUG) console.log('\ud83d\udcc1 Reframe: loaded from creations:', filename)
+      }
+      img.src = url
+    } catch (e) {
+      console.error('Failed to load from creations:', e)
+      setError('\u26a0\ufe0f Failed to load image from My Creations')
+    }
+  }, [])
 
   const handleFileDrop = useCallback((e) => {
     e.preventDefault()
@@ -242,6 +275,14 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
         />
       )}
 
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        filter="image"
+        title="Select Image for Reframe"
+      />
+
       {/* Image Upload */}
       <div
         onClick={() => fileInputRef.current?.click()}
@@ -271,6 +312,13 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
           </div>
         )}
       </div>
+
+      <button
+        onClick={() => setShowCreationsPicker(true)}
+        className="w-full py-2.5 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer text-gray-300 hover:border-purple-500 transition-colors text-sm"
+      >
+        📁 From My Creations
+      </button>
 
       {/* Target Aspect Ratio */}
       <div>

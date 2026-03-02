@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
+import CreationsPickerModal from '../../components/CreationsPickerModal'
 
 const MODELS = [
   { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', desc: 'Fast, artistic' },
@@ -18,6 +19,7 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
 
   // Import modal state
   const [importModal, setImportModal] = useState(null)
+  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
   // Image state
   const [sourceImage, setSourceImage] = useState(null) // { url, width, height, file }
@@ -273,6 +275,35 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
     }
   }, [saveHistory])
 
+  const handleCreationsSelect = useCallback(async (item) => {
+    try {
+      let imageUrl
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+      }
+      const response = await fetch(imageUrl)
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+      const blob = await response.blob()
+      const filename = imageUrl.split('/').pop() || 'image.png'
+      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+      const url = URL.createObjectURL(fileObj)
+      const img = new Image()
+      img.onload = () => {
+        setSourceImage({ url, width: img.width, height: img.height, file: fileObj })
+        setHistory([])
+        setHistoryIndex(-1)
+        setZoom(1)
+        if (DEBUG) console.log('\ud83d\udcc1 Inpaint: loaded from creations:', filename)
+      }
+      img.src = url
+    } catch (e) {
+      console.error('Failed to load from creations:', e)
+      setError('\u26a0\ufe0f Failed to load image from My Creations')
+    }
+  }, [])
+
   // Handle image upload
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0]
@@ -449,6 +480,14 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
         }
       `}</style>
 
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        filter="image"
+        title="Select Image for Inpainting"
+      />
+
       {importModal && (
         <MediaImportModal
           item={importModal.item}
@@ -548,6 +587,18 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
                   <input type="file" accept="image/*" onChange={handleImageUpload}
                     style={{ display: 'none' }} />
                 </label>
+                <button
+                  onClick={() => setShowCreationsPicker(true)}
+                  style={{
+                    marginTop: 12, padding: '8px 16px',
+                    backgroundColor: 'var(--bg-tertiary, #2a2a2a)',
+                    border: '1px solid var(--border-color, #444)',
+                    borderRadius: 8, cursor: 'pointer',
+                    color: 'var(--text-primary, #eee)', fontSize: 13,
+                  }}
+                >
+                  {'\ud83d\udcc1'} From My Creations
+                </button>
                 <p style={{ marginTop: 16, fontSize: 12 }}>
                   Paint over the areas you want to regenerate, then describe what should appear.
                 </p>

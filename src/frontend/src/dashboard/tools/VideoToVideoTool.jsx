@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { Upload, Video, Loader2, Settings, ChevronDown, Wand2 } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import CreationsPickerModal from '../../components/CreationsPickerModal'
 
 // Style presets for V2V
 const STYLE_PRESETS = [
@@ -34,6 +35,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
+  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
   const [style, setStyle] = useState('none')
   const [prompt, setPrompt] = useState('')
@@ -74,6 +76,37 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         })
       }
       video.src = url
+    }
+  }, [])
+
+  const handleCreationsSelect = useCallback(async (item) => {
+    try {
+      const mediaUrl = getMediaUrl(item.url, item.signed_url)
+      const response = await fetch(mediaUrl)
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+      const blob = await response.blob()
+      const filename = item.filename || mediaUrl.split('/').pop()
+      const fileObj = new File([blob], filename, { type: blob.type || 'video/mp4' })
+      const url = URL.createObjectURL(fileObj)
+      setFile(fileObj)
+      setPreview(url)
+      setResult(null)
+      setError(null)
+      setLastQueued(null)
+      // Get video info
+      const video = document.createElement('video')
+      video.onloadedmetadata = () => {
+        setVideoInfo({
+          duration: video.duration.toFixed(1),
+          width: video.videoWidth,
+          height: video.videoHeight,
+        })
+      }
+      video.src = url
+      if (DEBUG) console.log('\ud83d\udcc1 V2V: loaded from creations:', filename)
+    } catch (e) {
+      console.error('Failed to load from creations:', e)
+      setError('\u26a0\ufe0f Failed to load video from My Creations')
     }
   }, [])
 
@@ -171,6 +204,14 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
   return (
     <div className="tool-container">
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        filter="video"
+        title="Select Video from My Creations"
+      />
+
       <div className="tool-section">
         <h3>
           <Video size={18} />
@@ -208,6 +249,13 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
             style={{ display: 'none' }}
           />
         </div>
+
+        <button
+          onClick={() => setShowCreationsPicker(true)}
+          className="btn-creations-picker"
+        >
+          {'📁'} From My Creations
+        </button>
 
         {videoInfo && (
           <div className="video-info">
