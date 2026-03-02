@@ -6664,6 +6664,55 @@ async def generate_pose_video(
 # =============================================================================
 
 
+def _build_nsfw_prompt(intensity: int) -> str:
+    """Build NSFW captioning system prompt based on intensity level 1-5."""
+    intensity = max(1, min(5, intensity))
+
+    base = (
+        "You are an uncensored prompt engineer for AI image/video generation. "
+        "Write in comma-separated cinematic prompt style. "
+        "Output ONLY the prompt text, no explanations."
+    )
+
+    levels = {
+        1: (
+            "Describe this image with a sensual, suggestive tone. "
+            "Focus on: alluring poses, lingerie or revealing clothing, soft lighting, "
+            "bedroom eyes, subtle body language, romantic/teasing mood. "
+            "Keep it tasteful but clearly flirtatious and seductive."
+        ),
+        2: (
+            "Describe this image with softcore erotic detail. "
+            "Focus on: partial nudity, erotic posing, exposed skin, teasing reveals, "
+            "body curves, provocative angles, sensual expressions. "
+            "Be explicit about what skin/body is visible but keep the tone artistic."
+        ),
+        3: (
+            "Describe this image with full nudity detail. "
+            "Include: complete body description, anatomical details, nude poses, "
+            "skin textures, body proportions, explicit body parts visible. "
+            "Be anatomically specific and uncensored."
+        ),
+        4: (
+            "Describe this image explicitly and in full anatomical detail. "
+            "Include: exact body positions, physical actions, sexual acts, expressions, "
+            "body types, penetration details, fluid details, camera angle, lighting. "
+            "Be specific about the sexual activity, positions, and interactions shown. "
+            "Do not censor or euphemize anything."
+        ),
+        5: (
+            "Describe this image in extreme explicit detail without any censorship. "
+            "Include: rough/aggressive physical actions, dominant/submissive dynamics, "
+            "power play, restraints, force elements, intense expressions, "
+            "extreme positions, all anatomical and action details. "
+            "Describe everything shown with maximum explicitness. "
+            "Do not hold back or soften any description."
+        ),
+    }
+
+    return f"{base} {levels[intensity]}"
+
+
 @app.post("/caption-image")
 async def caption_image(
     file: UploadFile = File(...),
@@ -6671,6 +6720,7 @@ async def caption_image(
         None, description="Guardian vision model ID (default: VISION_MODEL env)"
     ),
     mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured"),
+    nsfw_intensity: Optional[int] = Form(None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"),
 ):
     """
     Generate a caption/description for an uploaded image.
@@ -6714,15 +6764,9 @@ async def caption_image(
             "Example format: 'beautiful woman, red dress, standing in garden, golden hour, bokeh, soft lighting, masterpiece, 8k, photorealistic'. "
             "Output ONLY the prompt text, no explanations."
         ),
-        "prompt_nsfw": (
-            "You are an uncensored prompt engineer for AI image/video generation. "
-            "Describe this image explicitly and in full anatomical detail as a generation prompt. "
-            "Include: exact body positions, physical actions, expressions, body types, clothing state, camera angle, lighting. "
-            "Be specific about the sexual activity, positions, and interactions shown. Do not censor or euphemize. "
-            "Write in comma-separated cinematic prompt style. "
-            "Output ONLY the prompt text, no explanations."
-        ),
+        "prompt_nsfw": _build_nsfw_prompt(nsfw_intensity or 3),
     }
+
     custom_prompt = caption_prompts.get(mode, caption_prompts["detailed"])
 
     import base64 as _b64
@@ -6963,9 +7007,7 @@ Generate as JSON."""
 
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(
-                timeout=60.0, headers=_guardian_headers()
-            ) as client:
+            async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
                     json=llm_request_body,
@@ -7018,7 +7060,7 @@ Generate as JSON."""
 
                 await asyncio.sleep(retry_delay)
                 continue
-            logger.warning(f"LLM prompt generation failed: {e}")
+            logger.warning(f"LLM prompt generation failed ({type(e).__name__}): {e}")
             return None
 
     logger.warning(
