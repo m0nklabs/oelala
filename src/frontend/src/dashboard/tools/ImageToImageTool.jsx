@@ -21,6 +21,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const fileInputKey = useRef(0)
+  const fileRef = useRef(null)  // Authoritative file reference (bypasses React state batching)
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [prompt, setPrompt] = useState('')
@@ -70,12 +71,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
         const blob = await response.blob()
         const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
-        setFile(fileObj)
-        setPreview(imageUrl)
-        setResult(null)
-        setError(null)
-        setLastQueued(null)
-        if (DEBUG) console.log('🖼️ I2I imported image:', imageFilename)
+        updateFile(fileObj, imageUrl)
       } catch (e) {
         console.error('Failed to load image from import:', e)
         setError('⚠️ Failed to load image from import')
@@ -103,54 +99,46 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
-      setFile(fileObj)
-      setPreview(imageUrl)
-      setResult(null)
-      setError(null)
-      if (DEBUG) console.log('📁 I2I: loaded from creations:', imageFilename)
+      updateFile(fileObj, imageUrl)
     } catch (e) {
       console.error('Failed to load from creations:', e)
       setError('⚠️ Failed to load image from My Creations')
     }
+  }, [updateFile])
+
+  // Helper: set file in both state (for UI) and ref (for submission)
+  const updateFile = useCallback((f, previewUrl) => {
+    fileRef.current = f
+    setFile(f)
+    setPreview(previewUrl || (f ? URL.createObjectURL(f) : null))
+    setResult(null)
+    setError(null)
+    setLastQueued(null)
+    console.warn(`🖼️ I2I file set: ${f?.name || 'null'} (${f ? (f.size / 1024).toFixed(0) + 'KB' : '-'}, type=${f?.type || '-'})`)
   }, [])
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files?.[0]
     if (f) {
-      setFile(f)
-      setPreview(URL.createObjectURL(f))
-      setResult(null)
-      setError(null)
-      setLastQueued(null)
-      if (DEBUG) console.log('🖼️ I2I file selected:', f.name, `(${(f.size / 1024).toFixed(0)}KB)`)
+      updateFile(f, URL.createObjectURL(f))
     }
     // Reset input value so re-selecting the same file triggers onChange
     e.target.value = ''
-  }, [])
+  }, [updateFile])
 
   const handleClearImage = useCallback((e) => {
     e?.stopPropagation()
-    setFile(null)
-    setPreview(null)
-    setResult(null)
-    setError(null)
-    setLastQueued(null)
+    updateFile(null, null)
     fileInputKey.current += 1
-    if (DEBUG) console.log('🗑️ I2I image cleared')
-  }, [])
+  }, [updateFile])
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
     const f = e.dataTransfer.files?.[0]
     if (f && f.type.startsWith('image/')) {
-      setFile(f)
-      setPreview(URL.createObjectURL(f))
-      setResult(null)
-      setError(null)
-      setLastQueued(null)
-      if (DEBUG) console.log('🖼️ I2I file dropped:', f.name, `(${(f.size / 1024).toFixed(0)}KB)`)
+      updateFile(f, URL.createObjectURL(f))
     }
-  }, [])
+  }, [updateFile])
 
   const handleGenerate = async () => {
     // Check if user is logged in
@@ -166,8 +154,29 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     setLastQueued(null)
 
     try {
+      // Use ref for the file — guaranteed fresh, not subject to React state batching
+      const currentFile = fileRef.current
+      if (!currentFile) {
+        setError('No file selected')
+        setSubmitting(false)
+        return
+      }
+
+      // ALWAYS compute and log hash for debugging
+      const buf = await currentFile.arrayBuffer()
+      const hashBuf = await crypto.subtle.digest('SHA-256', buf)
+      const hashHex = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16)
+      console.warn(`🔐 I2I SENDING: hash=${hashHex} | name=${currentFile.name} | size=${currentFile.size} | type=${currentFile.type}`)
+
+      // Re-create File from the arrayBuffer we just read (guarantees fresh copy)
+      const freshBlob = new Blob([buf], { type: currentFile.type || 'image/png' })
+      const freshFile = new File([freshBlob], currentFile.name, {
+        type: currentFile.type || 'image/png',
+        lastModified: currentFile.lastModified
+      })
+
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', freshFile)
       formData.append('prompt', prompt || 'high quality, detailed')
       formData.append('negative_prompt', negativePrompt)
       formData.append('denoise', String(denoise))
@@ -178,7 +187,14 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       formData.append('sampler_name', sampler)
       formData.append('scheduler', scheduler)
 
-      if (DEBUG) console.debug('🖼️ I2I request:', { denoise, checkpoint, steps })
+      if (DEBUG) console.debug('🖼️ I2I request:', {
+        fileName: file?.name,
+        fileSize: file?.size,
+        fileType: file?.type,
+        fileLastModified: file?.lastModified,
+        denoise, checkpoint, steps,
+        previewUrl: preview?.substring?.(0, 80)
+      })
 
       const res = await postForm(`${BACKEND_BASE}/generate-i2i`, formData)
 
