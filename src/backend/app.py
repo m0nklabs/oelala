@@ -8562,9 +8562,17 @@ async def generate_i2i(
     upload_path = UPLOAD_DIR / upload_filename
 
     try:
+        content = await file.read()
         with open(upload_path, "wb") as f:
-            content = await file.read()
             f.write(content)
+
+        # Log file identity for debugging (detect duplicate uploads)
+        import hashlib
+        file_hash = hashlib.md5(content).hexdigest()[:12]
+        logger.info(
+            f"🔍 I2I source: {file.filename} → {upload_filename} "
+            f"({len(content)} bytes, md5={file_hash})"
+        )
 
         # Upload to ComfyUI
         comfyui_filename = client.upload_image(str(upload_path))

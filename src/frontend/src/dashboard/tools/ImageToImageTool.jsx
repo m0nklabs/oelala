@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react'
-import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders } from 'lucide-react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
+import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
@@ -20,6 +20,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
+  const fileInputKey = useRef(0)
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [prompt, setPrompt] = useState('')
@@ -127,6 +128,17 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     e.target.value = ''
   }, [])
 
+  const handleClearImage = useCallback((e) => {
+    e?.stopPropagation()
+    setFile(null)
+    setPreview(null)
+    setResult(null)
+    setError(null)
+    setLastQueued(null)
+    fileInputKey.current += 1
+    if (DEBUG) console.log('🗑️ I2I image cleared')
+  }, [])
+
   const handleDrop = useCallback((e) => {
     e.preventDefault()
     const f = e.dataTransfer.files?.[0]
@@ -217,6 +229,13 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           {preview ? (
             <>
               <img src={preview} alt="Preview" className="upload-preview" />
+              <button
+                className="btn-clear-image"
+                onClick={handleClearImage}
+                title="Clear image"
+              >
+                <X size={16} />
+              </button>
               {file && (
                 <div className="upload-filename">
                   📎 {file.name} ({(file.size / 1024).toFixed(0)}KB)
@@ -230,6 +249,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             </div>
           )}
           <input
+            key={fileInputKey.current}
             id="i2i-file-input"
             type="file"
             accept="image/*"
@@ -461,12 +481,33 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         .upload-dropzone.has-preview {
           padding: 8px;
           flex-direction: column;
+          position: relative;
         }
         .upload-preview {
           max-width: 100%;
           max-height: 300px;
           border-radius: 8px;
           object-fit: contain;
+        }
+        .btn-clear-image {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          background: rgba(0, 0, 0, 0.6);
+          color: white;
+          border: none;
+          border-radius: 50%;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          padding: 0;
+          z-index: 2;
+        }
+        .btn-clear-image:hover {
+          background: rgba(220, 50, 50, 0.8);
         }
         .upload-filename {
           margin-top: 6px;
