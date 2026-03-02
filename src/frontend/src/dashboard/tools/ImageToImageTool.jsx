@@ -121,7 +121,10 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       setResult(null)
       setError(null)
       setLastQueued(null)
+      if (DEBUG) console.log('🖼️ I2I file selected:', f.name, `(${(f.size / 1024).toFixed(0)}KB)`)
     }
+    // Reset input value so re-selecting the same file triggers onChange
+    e.target.value = ''
   }, [])
 
   const handleDrop = useCallback((e) => {
@@ -133,6 +136,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       setResult(null)
       setError(null)
       setLastQueued(null)
+      if (DEBUG) console.log('🖼️ I2I file dropped:', f.name, `(${(f.size / 1024).toFixed(0)}KB)`)
     }
   }, [])
 
@@ -211,7 +215,14 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           onClick={() => document.getElementById('i2i-file-input').click()}
         >
           {preview ? (
-            <img src={preview} alt="Preview" className="upload-preview" />
+            <>
+              <img src={preview} alt="Preview" className="upload-preview" />
+              {file && (
+                <div className="upload-filename">
+                  📎 {file.name} ({(file.size / 1024).toFixed(0)}KB)
+                </div>
+              )}
+            </>
           ) : (
             <div className="upload-placeholder">
               <Upload size={32} />
@@ -449,12 +460,21 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         }
         .upload-dropzone.has-preview {
           padding: 8px;
+          flex-direction: column;
         }
         .upload-preview {
           max-width: 100%;
           max-height: 300px;
           border-radius: 8px;
           object-fit: contain;
+        }
+        .upload-filename {
+          margin-top: 6px;
+          font-size: 11px;
+          color: var(--text-muted, #888);
+          text-align: center;
+          word-break: break-all;
+          max-width: 100%;
         }
         .upload-placeholder {
           color: var(--text-muted, #888);
