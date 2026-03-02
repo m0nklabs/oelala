@@ -61,28 +61,25 @@ export default function TextToImageToVideoTool({ onOutput }) {
             onChange={(e) => setT2iPrompt(e.target.value)}
             placeholder="Describe the image you want to generate..."
             rows={3}
-            style={{ backgroundColor: '#0f0f0f', border: 'none', resize: 'none' }}
+            style={{ minHeight: '70px' }}
           />
         </div>
 
         <div className="form-group">
           <label className="grok-section-label">Aspect Ratio</label>
-          <div className="aspect-grid">
+          <div className="grok-toggle-group">
             {[
-              { label: '16:9', icon: <div style={{ width: '24px', height: '14px', border: '2px solid currentColor', borderRadius: '2px' }} /> },
-              { label: '9:16', icon: <div style={{ width: '14px', height: '24px', border: '2px solid currentColor', borderRadius: '2px' }} /> },
-              { label: '1:1', icon: <div style={{ width: '20px', height: '20px', border: '2px solid currentColor', borderRadius: '2px' }} /> },
-              { label: '21:9', icon: <div style={{ width: '28px', height: '12px', border: '2px solid currentColor', borderRadius: '2px' }} /> },
+              { label: '16:9' },
+              { label: '9:16' },
+              { label: '1:1' },
+              { label: '21:9' },
             ].map((ratio) => (
               <button
                 key={ratio.label}
-                className={`aspect-btn ${aspectRatio === ratio.label ? 'active' : ''}`}
+                className={`grok-toggle-btn ${aspectRatio === ratio.label ? 'active' : ''}`}
                 onClick={() => setAspectRatio(ratio.label)}
               >
-                <div className="aspect-icon" style={{ background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {ratio.icon}
-                </div>
-                <span className="aspect-label">{ratio.label}</span>
+                {ratio.label}
               </button>
             ))}
           </div>
@@ -128,22 +125,46 @@ export default function TextToImageToVideoTool({ onOutput }) {
             placeholder="Describe how the image should move..."
             rows={2}
             disabled={!generatedImage}
-            style={{ backgroundColor: '#0f0f0f', border: 'none', resize: 'none' }}
+            style={{ minHeight: '50px' }}
           />
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Duration ({numFrames} frames)</label>
-          <input
-            type="range"
-            min="8"
-            max="481"
-            step="4"
-            value={numFrames}
-            onChange={(e) => setNumFrames(parseInt(e.target.value, 10))}
-            disabled={!generatedImage}
-            style={{ width: '100%', accentColor: 'var(--text-primary)' }}
-          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Duration</label>
+            <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{numFrames} frames</span>
+          </div>
+          <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
+            <input
+              type="range"
+              min="8"
+              max="481"
+              step="4"
+              value={numFrames}
+              onChange={(e) => setNumFrames(parseInt(e.target.value, 10))}
+              disabled={!generatedImage}
+              style={{ width: '100%', opacity: 0, position: 'absolute', zIndex: 2, cursor: generatedImage ? 'pointer' : 'not-allowed' }}
+            />
+            <div style={{
+              position: 'absolute', top: '10px', left: 0, right: 0,
+              height: '4px', backgroundColor: '#333', borderRadius: '2px'
+            }}>
+              <div style={{
+                width: `${((numFrames - 8) / (481 - 8)) * 100}%`,
+                height: '100%', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '2px'
+              }} />
+            </div>
+            <div style={{
+              position: 'absolute', top: '2px',
+              left: `calc(${((numFrames - 8) / (481 - 8)) * 100}% - 10px)`,
+              width: '20px', height: '20px', backgroundColor: 'white',
+              borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            <span>8 frames</span>
+            <span>481 frames</span>
+          </div>
         </div>
 
         <button

@@ -223,202 +223,253 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   }
 
   return (
-    <div className="tool-container space-y-4 p-4">
-      {/* Header */}
-      <div className="text-center mb-4">
-        <h2 className="text-xl font-bold text-white flex items-center justify-center gap-2">
-          <MessageSquare className="w-6 h-6 text-purple-400" />
-          Speech to Video
-        </h2>
-        <p className="text-gray-400 text-sm mt-1">
-          Generate speech from text and sync it to a video
-        </p>
-      </div>
-
+    <div className="tool-container">
       {/* Video Upload */}
-      <div
-        onClick={() => videoInputRef.current?.click()}
-        onDrop={handleVideoDrop}
-        onDragOver={(e) => e.preventDefault()}
-        className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500 transition-colors"
-      >
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/*"
-          onChange={handleVideoDrop}
-          className="hidden"
-        />
-        {videoUrl ? (
-          <div className="space-y-2">
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="max-h-40 mx-auto rounded"
-              controls
-              muted
-            />
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-sm text-gray-400">{videoFile?.name}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); clearVideo() }}
-                className="p-1 text-red-400 hover:text-red-300"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <MessageSquare size={16} />
+            Speech to Video
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-gray-400">
-            <Video className="w-10 h-10" />
-            <span>Drop video here or click to upload</span>
-            <span className="text-xs">MP4, WebM supported</span>
-          </div>
-        )}
-      </div>
-
-      {/* Text Input */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          <MessageSquare className="w-4 h-4 inline mr-1" />
-          Text to Speak
-        </label>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Enter the text you want the character to say..."
-          className="w-full px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 resize-none"
-          rows={4}
-        />
-        <div className="text-xs text-gray-500 mt-1 text-right">
-          {text.length} characters
         </div>
-      </div>
 
-      {/* TTS Model Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          TTS Model
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          {TTS_MODELS.map(model => (
-            <button
-              key={model.id}
-              onClick={() => setTtsModel(model.id)}
-              className={`px-3 py-2 text-sm rounded transition-colors text-left ${
-                ttsModel === model.id
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              <div className="font-medium">{model.label}</div>
-              <div className="text-xs opacity-70">{model.description}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Voice Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          <Mic className="w-4 h-4 inline mr-1" />
-          Voice
-        </label>
-        <select
-          value={voicePreset}
-          onChange={(e) => setVoicePreset(e.target.value)}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"
-        >
-          {VOICE_PRESETS.map(voice => (
-            <option key={voice.id} value={voice.id}>
-              {voice.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Custom Voice Sample */}
-      {voicePreset === 'custom' && (
         <div
-          onClick={() => voiceInputRef.current?.click()}
-          onDrop={handleVoiceSampleDrop}
+          className="upload-box"
+          onClick={() => videoInputRef.current?.click()}
+          onDrop={handleVideoDrop}
           onDragOver={(e) => e.preventDefault()}
-          className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-purple-500 transition-colors"
+          style={{ cursor: 'pointer' }}
         >
           <input
-            ref={voiceInputRef}
+            ref={videoInputRef}
             type="file"
-            accept="audio/*"
-            onChange={handleVoiceSampleDrop}
-            className="hidden"
+            accept="video/*"
+            onChange={handleVideoDrop}
+            style={{ display: 'none' }}
           />
-          {voiceSampleUrl ? (
-            <div className="space-y-2">
-              <audio src={voiceSampleUrl} controls className="mx-auto" />
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-sm text-gray-400">{voiceSampleFile?.name}</span>
+          {videoUrl ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                controls
+                muted
+                style={{ maxHeight: '160px', borderRadius: '8px', maxWidth: '100%' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{videoFile?.name}</span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); clearVoiceSample() }}
-                  className="p-1 text-red-400 hover:text-red-300"
+                  onClick={(e) => { e.stopPropagation(); clearVideo() }}
+                  className="icon-btn"
+                  style={{ width: '24px', height: '24px', padding: '4px', color: '#ef4444' }}
                 >
-                  <X className="w-4 h-4" />
+                  <X size={14} />
                 </button>
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-2 text-gray-400">
-              <Volume2 className="w-6 h-6" />
-              <span className="text-sm">Upload voice sample (5-15 sec recommended)</span>
-            </div>
+            <>
+              <Video size={32} className="text-muted" />
+              <div className="text-muted">Drop video here or click to upload</div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MP4, WebM supported</span>
+            </>
           )}
+        </div>
+      </div>
+
+      {/* Text Input */}
+      <div className="grok-card">
+        <div className="form-group">
+          <label className="grok-section-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <MessageSquare size={14} />
+            Text to Speak
+          </label>
+          <textarea
+            className="form-textarea"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Enter the text you want the character to say..."
+            rows={4}
+            style={{ minHeight: '80px' }}
+          />
+          <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            {text.length} characters
+          </div>
+        </div>
+      </div>
+
+      {/* TTS Model Selection */}
+      <div className="grok-card">
+        <div className="form-group">
+          <label className="grok-section-label">TTS Model</label>
+          <div className="grok-toggle-group">
+            {TTS_MODELS.map(model => (
+              <button
+                key={model.id}
+                onClick={() => setTtsModel(model.id)}
+                className={`grok-toggle-btn ${ttsModel === model.id ? 'active' : ''}`}
+              >
+                <div style={{ fontWeight: 500 }}>{model.label}</div>
+                <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>{model.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Voice Selection */}
+        <div className="form-group">
+          <label className="grok-section-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Mic size={14} />
+            Voice
+          </label>
+          <select
+            className="form-input"
+            value={voicePreset}
+            onChange={(e) => setVoicePreset(e.target.value)}
+            style={{ cursor: 'pointer' }}
+          >
+            {VOICE_PRESETS.map(voice => (
+              <option key={voice.id} value={voice.id}>
+                {voice.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Custom Voice Sample */}
+      {voicePreset === 'custom' && (
+        <div className="grok-card">
+          <div
+            className="upload-box"
+            onClick={() => voiceInputRef.current?.click()}
+            onDrop={handleVoiceSampleDrop}
+            onDragOver={(e) => e.preventDefault()}
+            style={{ cursor: 'pointer', padding: '20px' }}
+          >
+            <input
+              ref={voiceInputRef}
+              type="file"
+              accept="audio/*"
+              onChange={handleVoiceSampleDrop}
+              style={{ display: 'none' }}
+            />
+            {voiceSampleUrl ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <audio src={voiceSampleUrl} controls style={{ maxWidth: '100%' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{voiceSampleFile?.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); clearVoiceSample() }}
+                    className="icon-btn"
+                    style={{ width: '24px', height: '24px', padding: '4px', color: '#ef4444' }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Volume2 size={24} className="text-muted" />
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Upload voice sample (5-15 sec recommended)</span>
+              </>
+            )}
+          </div>
         </div>
       )}
 
       {/* Advanced Settings */}
-      <div className="border border-gray-700 rounded-lg overflow-hidden">
-        <button
+      <div className="grok-card" style={{ padding: 0 }}>
+        <div
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full px-4 py-2 bg-gray-800 flex items-center justify-between text-gray-300 hover:bg-gray-750"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '16px 20px', cursor: 'pointer',
+            color: 'var(--text-secondary)',
+          }}
         >
-          <span className="text-sm font-medium flex items-center gap-2">
-            <Settings2 className="w-4 h-4" />
-            Lip Sync Settings
-          </span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-        </button>
+          <Settings2 size={16} />
+          <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Lip Sync Settings</span>
+          <ChevronDown size={16} style={{
+            marginLeft: 'auto',
+            transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s'
+          }} />
+        </div>
 
         {showAdvanced && (
-          <div className="p-4 space-y-4 bg-gray-850">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Lips Expression: {lipsExpression.toFixed(1)}
-              </label>
-              <input
-                type="range"
-                min={0.5}
-                max={3}
-                step={0.1}
-                value={lipsExpression}
-                onChange={(e) => setLipsExpression(parseFloat(e.target.value))}
-                className="w-full accent-purple-500"
-              />
-              <span className="text-xs text-gray-500">Higher = more pronounced lip movement</span>
+          <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-color)' }}>
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label className="grok-section-label" style={{ marginBottom: 0 }}>Lips Expression</label>
+                <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{lipsExpression.toFixed(1)}</span>
+              </div>
+              <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={3}
+                  step={0.1}
+                  value={lipsExpression}
+                  onChange={(e) => setLipsExpression(parseFloat(e.target.value))}
+                  style={{ width: '100%', opacity: 0, position: 'absolute', zIndex: 2, cursor: 'pointer' }}
+                />
+                <div style={{
+                  position: 'absolute', top: '10px', left: 0, right: 0,
+                  height: '4px', backgroundColor: '#333', borderRadius: '2px'
+                }}>
+                  <div style={{
+                    width: `${((lipsExpression - 0.5) / 2.5) * 100}%`,
+                    height: '100%', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '2px'
+                  }} />
+                </div>
+                <div style={{
+                  position: 'absolute', top: '2px',
+                  left: `calc(${((lipsExpression - 0.5) / 2.5) * 100}% - 10px)`,
+                  width: '20px', height: '20px', backgroundColor: 'white',
+                  borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                }} />
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Higher = more pronounced lip movement
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Inference Steps: {inferenceSteps}
-              </label>
-              <input
-                type="range"
-                min={10}
-                max={50}
-                step={5}
-                value={inferenceSteps}
-                onChange={(e) => setInferenceSteps(parseInt(e.target.value))}
-                className="w-full accent-purple-500"
-              />
-              <span className="text-xs text-gray-500">Higher = better quality, slower</span>
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label className="grok-section-label" style={{ marginBottom: 0 }}>Inference Steps</label>
+                <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{inferenceSteps}</span>
+              </div>
+              <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
+                <input
+                  type="range"
+                  min={10}
+                  max={50}
+                  step={5}
+                  value={inferenceSteps}
+                  onChange={(e) => setInferenceSteps(parseInt(e.target.value))}
+                  style={{ width: '100%', opacity: 0, position: 'absolute', zIndex: 2, cursor: 'pointer' }}
+                />
+                <div style={{
+                  position: 'absolute', top: '10px', left: 0, right: 0,
+                  height: '4px', backgroundColor: '#333', borderRadius: '2px'
+                }}>
+                  <div style={{
+                    width: `${((inferenceSteps - 10) / 40) * 100}%`,
+                    height: '100%', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '2px'
+                  }} />
+                </div>
+                <div style={{
+                  position: 'absolute', top: '2px',
+                  left: `calc(${((inferenceSteps - 10) / 40) * 100}% - 10px)`,
+                  width: '20px', height: '20px', backgroundColor: 'white',
+                  borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <span>10 (fast)</span>
+                <span>50 (quality)</span>
+              </div>
             </div>
           </div>
         )}
@@ -426,18 +477,19 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
 
       {/* Generate Button */}
       <button
+        className="primary-btn"
         onClick={handleGenerate}
         disabled={submitting || !videoFile || !text.trim()}
-        className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
       >
         {submitting ? (
           <>
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 size={18} className="animate-spin" />
             {currentStep || 'Processing...'}
           </>
         ) : (
           <>
-            <MessageSquare className="w-5 h-5" />
+            <MessageSquare size={18} />
             Generate Speech Video
           </>
         )}
@@ -445,20 +497,28 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
 
       {/* Queued confirmation */}
       {lastQueued && (
-        <div className="p-3 bg-green-900/50 border border-green-700 rounded-lg text-green-200 text-sm">
+        <div style={{
+          padding: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px',
+          color: '#22c55e', marginTop: '12px', fontSize: '0.85rem',
+        }}>
           ✅ Speech-to-Video queued! "{lastQueued.text}" - Check queue panel for progress
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
+        <div style={{
+          padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px',
+          color: '#ef4444', marginTop: '12px', fontSize: '0.85rem',
+        }}>
           {error}
         </div>
       )}
 
       {/* Info */}
-      <div className="text-xs text-gray-500 text-center">
+      <div className="info-badge" style={{ marginTop: '12px', textAlign: 'center' }}>
         This tool generates speech from your text using TTS, then applies lip sync to match the video.
       </div>
     </div>

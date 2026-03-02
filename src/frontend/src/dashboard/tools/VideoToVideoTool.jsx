@@ -212,34 +212,37 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         title="Select Video from My Creations"
       />
 
-      <div className="tool-section">
-        <h3>
-          <Video size={18} />
-          Source Video
-        </h3>
+      {/* Source Video */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Video size={16} />
+            Source Video
+          </div>
+        </div>
 
         <div
-          className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
+          className="upload-box"
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
           onClick={() => document.getElementById('v2v-file-input').click()}
+          style={{ cursor: 'pointer' }}
         >
           {preview ? (
             <video
               ref={videoRef}
               src={preview}
-              className="upload-preview"
               controls
               muted
               loop
-              style={{ maxHeight: '250px' }}
+              style={{ maxHeight: '250px', maxWidth: '100%', borderRadius: '8px' }}
             />
           ) : (
-            <div className="upload-placeholder">
-              <Upload size={32} />
-              <p>Drop video here or click to upload</p>
-              <span style={{ fontSize: '12px', opacity: 0.6 }}>MP4, WebM, MOV</span>
-            </div>
+            <>
+              <Upload size={32} className="text-muted" />
+              <div className="text-muted">Drop video here or click to upload</div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MP4, WebM, MOV</span>
+            </>
           )}
           <input
             id="v2v-file-input"
@@ -258,7 +261,10 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         </button>
 
         {videoInfo && (
-          <div className="video-info">
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: '16px', marginTop: '12px', fontSize: '0.8rem', color: 'var(--text-muted)',
+          }}>
             <span>📐 {videoInfo.width} × {videoInfo.height}px</span>
             <span>⏱️ {videoInfo.duration}s</span>
           </div>
@@ -266,93 +272,131 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
       </div>
 
       {/* Style Selection */}
-      <div className="tool-section">
-        <h3>
-          <Wand2 size={18} />
-          Style Transform
-        </h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Wand2 size={16} />
+            Style Transform
+          </div>
+        </div>
 
-        <div className="style-grid">
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px',
+        }}>
           {STYLE_PRESETS.map((preset) => (
             <button
               key={preset.value}
-              className={`style-btn ${style === preset.value ? 'active' : ''}`}
               onClick={() => setStyle(preset.value)}
+              style={{
+                padding: '12px', textAlign: 'left',
+                border: `1px solid ${style === preset.value ? 'var(--text-primary)' : 'var(--border-color)'}`,
+                borderRadius: '8px', cursor: 'pointer',
+                backgroundColor: style === preset.value ? '#262626' : 'var(--bg-input)',
+                transition: 'all 0.15s',
+              }}
             >
-              <span className="style-name">{preset.label}</span>
-              <span className="style-desc">{preset.desc}</span>
+              <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)' }}>{preset.label}</span>
+              <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>{preset.desc}</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Prompt */}
-      <div className="tool-section">
-        <h3>Prompt {style !== 'none' && <span className="hint">(optional - adds to style)</span>}</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Prompt {style !== 'none' && <span style={{ fontWeight: 400, fontSize: '0.8rem', color: 'var(--text-muted)' }}>(optional - adds to style)</span>}</div>
+        </div>
         <textarea
+          className="form-textarea"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder={style !== 'none'
             ? 'Add extra details to the style...'
             : 'Describe the desired look...'}
           rows={3}
-          className="prompt-textarea"
+          style={{ minHeight: '70px' }}
         />
       </div>
 
-      {/* Strength */}
-      <div className="tool-section">
-        <h3>Transform Strength</h3>
-        <div className="slider-row">
-          <input
-            type="range"
-            min="0.1"
-            max="1"
-            step="0.05"
-            value={denoise}
-            onChange={(e) => setDenoise(parseFloat(e.target.value))}
-          />
-          <span className="slider-value">{(denoise * 100).toFixed(0)}%</span>
-        </div>
-        <div className="slider-labels">
-          <span>Subtle</span>
-          <span>Complete</span>
+      {/* Transform Strength */}
+      <div className="grok-card">
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Transform Strength</label>
+            <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{(denoise * 100).toFixed(0)}%</span>
+          </div>
+          <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={denoise}
+              onChange={(e) => setDenoise(parseFloat(e.target.value))}
+              style={{ width: '100%', opacity: 0, position: 'absolute', zIndex: 2, cursor: 'pointer' }}
+            />
+            <div style={{
+              position: 'absolute', top: '10px', left: 0, right: 0,
+              height: '4px', backgroundColor: '#333', borderRadius: '2px'
+            }}>
+              <div style={{
+                width: `${((denoise - 0.1) / 0.9) * 100}%`,
+                height: '100%', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '2px'
+              }} />
+            </div>
+            <div style={{
+              position: 'absolute', top: '2px',
+              left: `calc(${((denoise - 0.1) / 0.9) * 100}% - 10px)`,
+              width: '20px', height: '20px', backgroundColor: 'white',
+              borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            <span>Subtle</span>
+            <span>Complete</span>
+          </div>
         </div>
       </div>
 
-      {/* Advanced */}
-      <div className="tool-section collapsible">
-        <h3
+      {/* Advanced Settings */}
+      <div className="grok-card" style={{ padding: 0 }}>
+        <div
           onClick={() => setShowAdvanced(!showAdvanced)}
-          style={{ cursor: 'pointer' }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '16px 20px', cursor: 'pointer',
+            color: 'var(--text-secondary)',
+          }}
         >
           <Settings size={16} />
-          Advanced Settings
-          <ChevronDown
-            size={16}
-            style={{
-              marginLeft: 'auto',
-              transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s'
-            }}
-          />
-        </h3>
+          <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Advanced Settings</span>
+          <ChevronDown size={16} style={{
+            marginLeft: 'auto',
+            transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s'
+          }} />
+        </div>
 
         {showAdvanced && (
-          <div className="advanced-content">
-            <div className="form-row">
-              <label>Output FPS</label>
-              <select value={fps} onChange={(e) => setFps(parseInt(e.target.value))}>
-                <option value={8}>8 fps</option>
-                <option value={12}>12 fps</option>
-                <option value={16}>16 fps</option>
-                <option value={24}>24 fps</option>
-              </select>
+          <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-color)' }}>
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label className="grok-section-label">Output FPS</label>
+              <div className="grok-toggle-group">
+                {[8, 12, 16, 24].map((f) => (
+                  <button key={f} className={`grok-toggle-btn ${fps === f ? 'active' : ''}`} onClick={() => setFps(f)}>{f}</button>
+                ))}
+              </div>
             </div>
 
-            <div className="form-row">
-              <label>Max Frames</label>
-              <select value={maxFrames} onChange={(e) => setMaxFrames(parseInt(e.target.value))}>
+            <div className="form-group">
+              <label className="grok-section-label">Max Frames</label>
+              <select
+                className="form-input"
+                value={maxFrames}
+                onChange={(e) => setMaxFrames(parseInt(e.target.value))}
+                style={{ cursor: 'pointer' }}
+              >
                 <option value={16}>16 frames (~2s @8fps)</option>
                 <option value={32}>32 frames (~4s @8fps)</option>
                 <option value={48}>48 frames (~6s @8fps)</option>
@@ -365,45 +409,55 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
               </select>
             </div>
 
-            <div className="form-row">
-              <label>Steps</label>
-              <input
-                type="number"
-                min={10}
-                max={50}
-                value={steps}
-                onChange={(e) => setSteps(parseInt(e.target.value))}
-              />
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="grok-section-label">Steps</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={10}
+                  max={50}
+                  value={steps}
+                  onChange={(e) => setSteps(parseInt(e.target.value))}
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="grok-section-label">CFG Scale</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={1}
+                  max={15}
+                  step={0.5}
+                  value={cfg}
+                  onChange={(e) => setCfg(parseFloat(e.target.value))}
+                />
+              </div>
             </div>
 
-            <div className="form-row">
-              <label>CFG Scale</label>
-              <input
-                type="number"
-                min={1}
-                max={15}
-                step={0.5}
-                value={cfg}
-                onChange={(e) => setCfg(parseFloat(e.target.value))}
-              />
+            <div className="form-group">
+              <label className="grok-section-label">Seed</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  className="form-input"
+                  type="number"
+                  value={seed}
+                  onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
+                  placeholder="-1 for random"
+                  style={{ flex: 1 }}
+                />
+                <button className="icon-btn" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap', width: 'auto', padding: '0 12px', fontSize: '0.8rem' }}>Random</button>
+              </div>
             </div>
 
-            <div className="form-row">
-              <label>Seed (-1 = random)</label>
-              <input
-                type="number"
-                value={seed}
-                onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
-              />
-            </div>
-
-            <div className="form-row">
-              <label>Negative Prompt</label>
+            <div className="form-group">
+              <label className="grok-section-label">Negative Prompt</label>
               <textarea
+                className="form-textarea"
                 value={negativePrompt}
                 onChange={(e) => setNegativePrompt(e.target.value)}
                 rows={2}
-                style={{ fontSize: '12px' }}
+                style={{ minHeight: '50px' }}
               />
             </div>
           </div>
@@ -412,22 +466,35 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
       {/* Queued notification */}
       {lastQueued && (
-        <div className="queued-notice">
+        <div style={{
+          padding: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px',
+          color: '#22c55e', marginBottom: '12px', fontSize: '0.85rem',
+        }}>
           ✅ Job queued! Check the Queue panel for progress.
-          <span className="queued-mode">{lastQueued.style.toUpperCase()}</span>
+          <span style={{ marginLeft: '8px', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.75rem' }}>{lastQueued.style}</span>
         </div>
       )}
 
-      {error && <div className="error-message">⚠️ {error}</div>}
+      {error && (
+        <div style={{
+          padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px',
+          color: '#ef4444', marginBottom: '12px', fontSize: '0.85rem',
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
 
       <button
-        className="btn-primary btn-large"
+        className="primary-btn"
         onClick={handleTransform}
         disabled={!file || submitting}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
       >
         {submitting ? (
           <>
-            <Loader2 size={18} className="spin" />
+            <Loader2 size={18} className="animate-spin" />
             Queueing...
           </>
         ) : (
@@ -440,236 +507,19 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
       {/* Result */}
       {result && (
-        <div className="result-section">
-          <h3>Result</h3>
-          <video src={result} controls className="result-video" />
+        <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
+          <div className="grok-section-label">Result</div>
+          <video src={result} controls style={{ width: '100%', borderRadius: '8px', marginTop: '12px' }} />
           <a
             href={result}
             download
-            className="btn-secondary"
-            style={{ marginTop: 12 }}
+            className="primary-btn"
+            style={{ marginTop: 12, textAlign: 'center', textDecoration: 'none', display: 'block' }}
           >
             Download Video
           </a>
         </div>
       )}
-
-      <style>{`
-        .tool-section {
-          margin-bottom: 20px;
-        }
-        .tool-section h3 {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          font-weight: 500;
-          margin-bottom: 12px;
-          color: var(--text-color, #fff);
-        }
-        .tool-section h3 .hint {
-          font-weight: 400;
-          font-size: 12px;
-          color: var(--text-muted, #666);
-        }
-        .upload-dropzone {
-          border: 2px dashed var(--border-color, #444);
-          border-radius: 12px;
-          padding: 40px;
-          text-align: center;
-          cursor: pointer;
-          transition: all 0.2s;
-          min-height: 150px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .upload-dropzone:hover {
-          border-color: var(--accent-color, #7c3aed);
-          background: rgba(124, 58, 237, 0.05);
-        }
-        .upload-dropzone.has-preview {
-          padding: 8px;
-        }
-        .upload-preview {
-          max-width: 100%;
-          border-radius: 8px;
-        }
-        .upload-placeholder {
-          color: var(--text-muted, #888);
-        }
-        .upload-placeholder p {
-          margin-top: 12px;
-          margin-bottom: 4px;
-        }
-        .video-info {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 16px;
-          margin-top: 12px;
-          font-size: 13px;
-          color: var(--text-muted, #888);
-        }
-        .style-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 8px;
-        }
-        .style-btn {
-          padding: 12px;
-          border: 1px solid var(--border-color, #444);
-          border-radius: 8px;
-          background: var(--bg-secondary, #1a1a1a);
-          cursor: pointer;
-          transition: all 0.2s;
-          text-align: left;
-        }
-        .style-btn:hover {
-          border-color: var(--accent-color, #7c3aed);
-        }
-        .style-btn.active {
-          background: rgba(124, 58, 237, 0.2);
-          border-color: var(--accent-color, #7c3aed);
-        }
-        .style-name {
-          display: block;
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-color, #fff);
-        }
-        .style-desc {
-          display: block;
-          font-size: 11px;
-          color: var(--text-muted, #888);
-          margin-top: 4px;
-        }
-        .prompt-textarea {
-          width: 100%;
-          padding: 12px;
-          border-radius: 8px;
-          border: 1px solid var(--border-color, #444);
-          background: var(--bg-secondary, #1a1a1a);
-          color: var(--text-color, #fff);
-          font-size: 13px;
-          resize: none;
-        }
-        .slider-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .slider-row input[type="range"] {
-          flex: 1;
-        }
-        .slider-value {
-          min-width: 45px;
-          text-align: right;
-          font-weight: 500;
-          color: var(--accent-color, #7c3aed);
-        }
-        .slider-labels {
-          display: flex;
-          justify-content: space-between;
-          font-size: 11px;
-          color: var(--text-muted, #666);
-          margin-top: 4px;
-        }
-        .collapsible h3 {
-          padding: 12px;
-          margin: -12px -12px 0;
-          border-radius: 8px;
-        }
-        .collapsible h3:hover {
-          background: var(--bg-secondary, #1a1a1a);
-        }
-        .advanced-content {
-          margin-top: 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        .form-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .form-row label {
-          min-width: 120px;
-          font-size: 13px;
-          color: var(--text-secondary, #aaa);
-        }
-        .form-row select, .form-row input {
-          flex: 1;
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: 1px solid var(--border-color, #444);
-          background: var(--bg-secondary, #1a1a1a);
-          color: var(--text-color, #fff);
-          font-size: 13px;
-        }
-        .form-row textarea {
-          flex: 1;
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: 1px solid var(--border-color, #444);
-          background: var(--bg-secondary, #1a1a1a);
-          color: var(--text-color, #fff);
-          resize: none;
-        }
-        .progress-section {
-          margin: 16px 0;
-        }
-        .progress-bar {
-          height: 4px;
-          background: var(--bg-secondary, #333);
-          border-radius: 2px;
-          overflow: hidden;
-        }
-        .progress-fill {
-          height: 100%;
-          background: var(--accent-color, #7c3aed);
-          transition: width 0.3s;
-        }
-        .progress-status {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 8px;
-          font-size: 13px;
-          color: var(--text-secondary, #aaa);
-        }
-        .error-message {
-          padding: 12px;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 8px;
-          color: #ef4444;
-          margin: 12px 0;
-        }
-        .result-section {
-          margin-top: 24px;
-          padding-top: 24px;
-          border-top: 1px solid var(--border-color, #333);
-        }
-        .result-video {
-          width: 100%;
-          border-radius: 8px;
-          margin-top: 12px;
-        }
-        .spin {
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @media (max-width: 600px) {
-          .style-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-      `}</style>
     </div>
   )
 }

@@ -152,22 +152,41 @@ export default function LoRATrainingTool({ onOutput }) {
             value={modelName}
             onChange={(e) => setModelName(e.target.value)}
             placeholder="e.g. my-style-v1"
-            style={{ backgroundColor: '#0f0f0f' }}
           />
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Training Epochs ({numEpochs})</label>
-          <input
-            type="range"
-            min="5"
-            max="50"
-            step="5"
-            value={numEpochs}
-            onChange={(e) => setNumEpochs(parseInt(e.target.value, 10))}
-            style={{ width: '100%', accentColor: 'var(--text-primary)' }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Training Epochs</label>
+            <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{numEpochs}</span>
+          </div>
+          <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
+            <input
+              type="range"
+              min="5"
+              max="50"
+              step="5"
+              value={numEpochs}
+              onChange={(e) => setNumEpochs(parseInt(e.target.value, 10))}
+              style={{ width: '100%', opacity: 0, position: 'absolute', zIndex: 2, cursor: 'pointer' }}
+            />
+            <div style={{
+              position: 'absolute', top: '10px', left: 0, right: 0,
+              height: '4px', backgroundColor: '#333', borderRadius: '2px'
+            }}>
+              <div style={{
+                width: `${((numEpochs - 5) / 45) * 100}%`,
+                height: '100%', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '2px'
+              }} />
+            </div>
+            <div style={{
+              position: 'absolute', top: '2px',
+              left: `calc(${((numEpochs - 5) / 45) * 100}% - 10px)`,
+              width: '20px', height: '20px', backgroundColor: 'white',
+              borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             <span>Fast (5)</span>
             <span>Quality (50)</span>
           </div>
@@ -181,7 +200,6 @@ export default function LoRATrainingTool({ onOutput }) {
             step="0.00001"
             value={learningRate}
             onChange={(e) => setLearningRate(parseFloat(e.target.value || '0'))}
-            style={{ backgroundColor: '#0f0f0f' }}
           />
         </div>
       </div>
