@@ -1,18 +1,27 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
-import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X } from 'lucide-react'
+import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 
-const ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4']
-
 const CHECKPOINTS = [
   { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony' },
   { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning' },
   { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL' },
+  { value: 'Realistic_Vision_V5.1.safetensors', label: 'Realistic Vision V5.1' },
   { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious (Anime)' },
+  { value: 'ponyDiffusionV6XL_v6StartWithThisOne.safetensors', label: 'Pony Diffusion V6' },
+  { value: 'illustriousRealismBy_v10VAE.safetensors', label: 'Illustrious Realism' },
+  { value: 'reapony_v90.safetensors', label: 'ReaPony V9' },
+]
+
+const PRESETS = [
+  { value: 'fast', label: 'Fast', icon: '⚡', desc: 'Quick transform, no face processing', color: '#22c55e' },
+  { value: 'balanced', label: 'Balanced', icon: '⚖️', desc: 'Good quality + face refinement', color: '#3b82f6' },
+  { value: 'face_preserve', label: 'Face Preserve', icon: '🛡️', desc: 'Best for keeping faces consistent', color: '#a855f7' },
+  { value: 'custom', label: 'Custom', icon: '🔧', desc: 'Full manual control', color: '#f59e0b' },
 ]
 
 export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
@@ -29,6 +38,15 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const [denoise, setDenoise] = useState(0.6)
   const [checkpoint, setCheckpoint] = useState('CyberRealistic_Pony_v14.1_FP16.safetensors')
 
+  // Preset
+  const [preset, setPreset] = useState('balanced')
+
+  // Face processing
+  const [faceId, setFaceId] = useState(false)
+  const [faceDetailer, setFaceDetailer] = useState(true)
+  const [faceRestore, setFaceRestore] = useState(true)
+  const [faceIdWeight, setFaceIdWeight] = useState(0.85)
+
   // Advanced
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [steps, setSteps] = useState(25)
@@ -41,6 +59,21 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
+
+  // Update settings when preset changes
+  useEffect(() => {
+    if (preset === 'fast') {
+      setSteps(15); setCfg(7.0); setSampler('dpmpp_2m'); setScheduler('karras')
+      setFaceId(false); setFaceDetailer(false); setFaceRestore(false)
+    } else if (preset === 'balanced') {
+      setSteps(25); setCfg(7.0); setSampler('dpmpp_2m'); setScheduler('karras')
+      setFaceId(false); setFaceDetailer(true); setFaceRestore(true)
+    } else if (preset === 'face_preserve') {
+      setSteps(30); setCfg(7.5); setSampler('dpmpp_2m_sde'); setScheduler('karras')
+      setFaceId(true); setFaceDetailer(true); setFaceRestore(true)
+    }
+    // custom = no auto-change
+  }, [preset])
 
   // Auto-open import modal when Dashboard sends a pendingImport
   useEffect(() => {
@@ -186,6 +219,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       formData.append('seed', String(seed))
       formData.append('sampler_name', sampler)
       formData.append('scheduler', scheduler)
+      formData.append('preset', preset)
+      formData.append('face_id', String(faceId))
+      formData.append('face_detailer', String(faceDetailer))
+      formData.append('face_restore', String(faceRestore))
+      formData.append('face_id_weight', String(faceIdWeight))
 
       if (DEBUG) console.debug('🖼️ I2I request:', {
         fileName: file?.name,
@@ -334,6 +372,98 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
       </div>
 
+      {/* Quality Preset */}
+      <div className="tool-section">
+        <h3>
+          <Zap size={18} />
+          Quality Preset
+        </h3>
+        <div className="preset-grid">
+          {PRESETS.map((p) => (
+            <button
+              key={p.value}
+              className={`preset-card ${preset === p.value ? 'active' : ''}`}
+              onClick={() => setPreset(p.value)}
+              style={preset === p.value ? { borderColor: p.color, boxShadow: `0 0 12px ${p.color}33` } : {}}
+            >
+              <span className="preset-icon">{p.icon}</span>
+              <span className="preset-label">{p.label}</span>
+              <span className="preset-desc">{p.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Face Processing */}
+      <div className="tool-section">
+        <h3>
+          <UserIcon size={18} />
+          Face Processing
+        </h3>
+
+        <div className="face-toggles">
+          <label className="toggle-row" title="IP-Adapter FaceID: Extracts face identity from source image and preserves it during generation">
+            <div className="toggle-info">
+              <span className="toggle-label">🛡️ Face Identity (IP-Adapter)</span>
+              <span className="toggle-desc">Preserves face from source image</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={faceId}
+              onChange={(e) => { setFaceId(e.target.checked); if (preset !== 'custom') setPreset('custom') }}
+            />
+            <span className="toggle-slider" />
+          </label>
+
+          {faceId && (
+            <div className="form-group face-weight-slider">
+              <label>
+                FaceID Strength
+                <span className="label-value">{faceIdWeight.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0.3"
+                max="1.0"
+                step="0.05"
+                value={faceIdWeight}
+                onChange={(e) => setFaceIdWeight(parseFloat(e.target.value))}
+              />
+              <div className="range-labels">
+                <span>Subtle (0.3)</span>
+                <span>Strong (1.0)</span>
+              </div>
+            </div>
+          )}
+
+          <label className="toggle-row" title="FaceDetailer: Auto-detects faces and refines them with a second pass using YOLO + SAM">
+            <div className="toggle-info">
+              <span className="toggle-label">✨ Face Detailer</span>
+              <span className="toggle-desc">Auto-detect &amp; refine faces</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={faceDetailer}
+              onChange={(e) => { setFaceDetailer(e.target.checked); if (preset !== 'custom') setPreset('custom') }}
+            />
+            <span className="toggle-slider" />
+          </label>
+
+          <label className="toggle-row" title="GFPGAN v1.4: Final face quality enhancement pass for photorealistic faces">
+            <div className="toggle-info">
+              <span className="toggle-label">💎 Face Restore (GFPGAN)</span>
+              <span className="toggle-desc">Final polish on face quality</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={faceRestore}
+              onChange={(e) => { setFaceRestore(e.target.checked); if (preset !== 'custom') setPreset('custom') }}
+            />
+            <span className="toggle-slider" />
+          </label>
+        </div>
+      </div>
+
       {/* Advanced Settings */}
       <div className="tool-section collapsible">
         <button
@@ -438,6 +568,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           <>
             <Wand2 size={18} />
             Transform Image
+            {(faceId || faceDetailer || faceRestore) && (
+              <span className="btn-badge">
+                {[faceId && '🛡️', faceDetailer && '✨', faceRestore && '💎'].filter(Boolean).join('')}
+              </span>
+            )}
           </>
         )}
       </button>
@@ -539,6 +674,130 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         .upload-placeholder p {
           margin-top: 12px;
         }
+
+        /* Preset Grid */
+        .preset-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .preset-card {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          padding: 12px 8px;
+          border: 1px solid var(--border-color, #333);
+          border-radius: 10px;
+          background: var(--bg-secondary, #1a1a1a);
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: center;
+        }
+        .preset-card:hover {
+          border-color: var(--text-muted, #666);
+          background: var(--bg-tertiary, #222);
+        }
+        .preset-card.active {
+          background: var(--bg-tertiary, #252525);
+        }
+        .preset-icon {
+          font-size: 20px;
+        }
+        .preset-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-color, #fff);
+        }
+        .preset-desc {
+          font-size: 10px;
+          color: var(--text-muted, #888);
+          line-height: 1.3;
+        }
+
+        /* Face Processing Toggles */
+        .face-toggles {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 12px;
+          border: 1px solid var(--border-color, #333);
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.15s;
+          background: var(--bg-secondary, #1a1a1a);
+        }
+        .toggle-row:hover {
+          border-color: var(--text-muted, #555);
+        }
+        .toggle-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .toggle-label {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-color, #fff);
+        }
+        .toggle-desc {
+          font-size: 11px;
+          color: var(--text-muted, #888);
+        }
+        .toggle-row input[type="checkbox"] {
+          appearance: none;
+          -webkit-appearance: none;
+          width: 40px;
+          height: 22px;
+          background: var(--border-color, #444);
+          border-radius: 12px;
+          position: relative;
+          cursor: pointer;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+        .toggle-row input[type="checkbox"]:checked {
+          background: var(--accent-color, #7c3aed);
+        }
+        .toggle-row input[type="checkbox"]::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 16px;
+          height: 16px;
+          background: white;
+          border-radius: 50%;
+          transition: transform 0.2s;
+        }
+        .toggle-row input[type="checkbox"]:checked::after {
+          transform: translateX(18px);
+        }
+        .toggle-row .toggle-slider {
+          display: none;
+        }
+        .face-weight-slider {
+          margin: 0 0 4px 0;
+          padding: 8px 12px;
+          background: var(--bg-tertiary, #1e1e1e);
+          border-radius: 8px;
+          border: 1px solid var(--border-color, #333);
+        }
+        .face-weight-slider label {
+          margin-bottom: 6px !important;
+        }
+
+        /* Button Badge */
+        .btn-badge {
+          margin-left: 8px;
+          font-size: 14px;
+        }
+
         .form-group {
           margin-bottom: 16px;
         }
@@ -669,6 +928,13 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         .comparison-item img {
           width: 100%;
           border-radius: 8px;
+        }
+        .queued-notice .queued-features {
+          display: flex;
+          gap: 6px;
+          margin-top: 4px;
+          font-size: 11px;
+          color: var(--text-muted, #888);
         }
         .spin {
           animation: spin 1s linear infinite;

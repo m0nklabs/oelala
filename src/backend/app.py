@@ -8508,8 +8508,281 @@ async def generate_lip_sync(request: LipSyncRequest):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Image-to-Image (I2I) via ComfyUI
+# Image-to-Image (I2I) via ComfyUI — Enhanced Pipeline
+# Supports: IP-Adapter FaceID, FaceDetailer, Face Restore (GFPGAN)
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Available I2I quality presets
+I2I_PRESETS = {
+    "fast": {
+        "steps": 15,
+        "cfg": 7.0,
+        "sampler": "dpmpp_2m",
+        "scheduler": "karras",
+        "face_id": False,
+        "face_detailer": False,
+        "face_restore": False,
+        "description": "Quick transform, no face processing",
+    },
+    "balanced": {
+        "steps": 25,
+        "cfg": 7.0,
+        "sampler": "dpmpp_2m",
+        "scheduler": "karras",
+        "face_id": False,
+        "face_detailer": True,
+        "face_restore": True,
+        "description": "Good quality with face refinement",
+    },
+    "face_preserve": {
+        "steps": 30,
+        "cfg": 7.5,
+        "sampler": "dpmpp_2m_sde",
+        "scheduler": "karras",
+        "face_id": True,
+        "face_detailer": True,
+        "face_restore": True,
+        "description": "Best for keeping faces consistent",
+    },
+    "custom": {
+        "description": "Manual settings",
+    },
+}
+
+
+def _build_i2i_workflow(
+    comfyui_filename: str,
+    prompt: str,
+    negative_prompt: str,
+    checkpoint: str,
+    denoise: float,
+    steps: int,
+    cfg: float,
+    seed: int,
+    sampler_name: str,
+    scheduler: str,
+    face_id: bool = False,
+    face_detailer: bool = False,
+    face_restore: bool = False,
+    face_id_weight: float = 0.85,
+) -> dict:
+    """Build the I2I ComfyUI workflow with optional face processing nodes."""
+    node_id = 1
+    nodes = {}
+
+    # --- Node 1: Checkpoint Loader ---
+    ckpt_id = str(node_id)
+    nodes[ckpt_id] = {
+        "inputs": {"ckpt_name": checkpoint},
+        "class_type": "CheckpointLoaderSimple",
+    }
+    model_ref = [ckpt_id, 0]
+    clip_ref = [ckpt_id, 1]
+    vae_ref = [ckpt_id, 2]
+    node_id += 1
+
+    # --- Node 2: Load Source Image ---
+    img_id = str(node_id)
+    nodes[img_id] = {
+        "inputs": {"image": comfyui_filename, "upload": "image"},
+        "class_type": "LoadImage",
+    }
+    image_ref = [img_id, 0]
+    node_id += 1
+
+    # --- Node 3: VAE Encode ---
+    vae_enc_id = str(node_id)
+    nodes[vae_enc_id] = {
+        "inputs": {"pixels": image_ref, "vae": vae_ref},
+        "class_type": "VAEEncode",
+    }
+    latent_ref = [vae_enc_id, 0]
+    node_id += 1
+
+    # --- Node 4: Positive Prompt ---
+    pos_id = str(node_id)
+    nodes[pos_id] = {
+        "inputs": {"text": prompt, "clip": clip_ref},
+        "class_type": "CLIPTextEncode",
+    }
+    positive_ref = [pos_id, 0]
+    node_id += 1
+
+    # --- Node 5: Negative Prompt ---
+    neg_id = str(node_id)
+    nodes[neg_id] = {
+        "inputs": {"text": negative_prompt, "clip": clip_ref},
+        "class_type": "CLIPTextEncode",
+    }
+    negative_ref = [neg_id, 0]
+    node_id += 1
+
+    # --- Optional: IP-Adapter FaceID (preserves face identity from source) ---
+    if face_id:
+        # Unified loader - handles IP-Adapter model + InsightFace in one node
+        ipadapter_loader_id = str(node_id)
+        nodes[ipadapter_loader_id] = {
+            "inputs": {
+                "model": model_ref,
+                "preset": "FACEID PLUS V2",
+                "lora_strength": 0.6,
+                "provider": "CPU",
+            },
+            "class_type": "IPAdapterUnifiedLoaderFaceID",
+        }
+        node_id += 1
+
+        # IP-Adapter FaceID apply
+        ipadapter_apply_id = str(node_id)
+        nodes[ipadapter_apply_id] = {
+            "inputs": {
+                "weight": face_id_weight,
+                "weight_faceidv2": face_id_weight,
+                "weight_type": "linear",
+                "combine_embeds": "concat",
+                "start_at": 0.0,
+                "end_at": 1.0,
+                "embeds_scaling": "V only",
+                "model": [ipadapter_loader_id, 0],
+                "ipadapter": [ipadapter_loader_id, 1],
+                "image": image_ref,
+            },
+            "class_type": "IPAdapterFaceID",
+        }
+        model_ref = [ipadapter_apply_id, 0]
+        node_id += 1
+
+    # --- Node 6: KSampler ---
+    sampler_id = str(node_id)
+    nodes[sampler_id] = {
+        "inputs": {
+            "seed": seed,
+            "steps": steps,
+            "cfg": cfg,
+            "sampler_name": sampler_name,
+            "scheduler": scheduler,
+            "denoise": denoise,
+            "model": model_ref,
+            "positive": positive_ref,
+            "negative": negative_ref,
+            "latent_image": latent_ref,
+        },
+        "class_type": "KSampler",
+    }
+    node_id += 1
+
+    # --- Node 7: VAE Decode ---
+    vae_dec_id = str(node_id)
+    nodes[vae_dec_id] = {
+        "inputs": {"samples": [sampler_id, 0], "vae": vae_ref},
+        "class_type": "VAEDecode",
+    }
+    final_image_ref = [vae_dec_id, 0]
+    node_id += 1
+
+    # --- Optional: FaceDetailer (auto-detects and refines faces) ---
+    if face_detailer:
+        bbox_id = str(node_id)
+        nodes[bbox_id] = {
+            "inputs": {
+                "model_name": "bbox/face_yolov8m.pt",
+            },
+            "class_type": "UltralyticsDetectorProvider",
+        }
+        node_id += 1
+
+        sam_id = str(node_id)
+        nodes[sam_id] = {
+            "inputs": {
+                "model_name": "sam_vit_b_01ec64.pth",
+                "device_mode": "AUTO",
+            },
+            "class_type": "SAMLoader",
+        }
+        node_id += 1
+
+        detailer_id = str(node_id)
+        nodes[detailer_id] = {
+            "inputs": {
+                "guide_size": 384,
+                "guide_size_for": True,
+                "max_size": 1024,
+                "seed": seed,
+                "steps": max(15, steps // 2),
+                "cfg": cfg,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+                "denoise": min(0.4, denoise * 0.6),
+                "feather": 5,
+                "noise_mask": True,
+                "force_inpaint": True,
+                "bbox_threshold": 0.5,
+                "bbox_dilation": 10,
+                "bbox_crop_factor": 3.0,
+                "sam_detection_hint": "center-1",
+                "sam_dilation": 0,
+                "sam_threshold": 0.93,
+                "sam_bbox_expansion": 0,
+                "sam_mask_hint_threshold": 0.7,
+                "sam_mask_hint_use_negative": "False",
+                "drop_size": 10,
+                "wildcard": "",
+                "cycle": 1,
+                "image": final_image_ref,
+                "model": [ckpt_id, 0],
+                "clip": clip_ref,
+                "vae": vae_ref,
+                "positive": positive_ref,
+                "negative": negative_ref,
+                "bbox_detector": [bbox_id, 0],
+                "sam_model_opt": [sam_id, 0],
+            },
+            "class_type": "FaceDetailer",
+        }
+        final_image_ref = [detailer_id, 0]
+        node_id += 1
+
+    # --- Optional: Face Restore (GFPGAN via mtb) ---
+    if face_restore:
+        face_model_loader_id = str(node_id)
+        nodes[face_model_loader_id] = {
+            "inputs": {
+                "model_name": "GFPGANv1.4.pth",
+                "upscale": 1,
+            },
+            "class_type": "Load Face Enhance Model (mtb)",
+        }
+        node_id += 1
+
+        restore_id = str(node_id)
+        nodes[restore_id] = {
+            "inputs": {
+                "image": final_image_ref,
+                "model": [face_model_loader_id, 0],
+                "aligned": False,
+                "only_center_face": False,
+                "weight": 0.7,
+                "save_tmp_steps": False,
+            },
+            "class_type": "Restore Face (mtb)",
+        }
+        final_image_ref = [restore_id, 0]
+        node_id += 1
+
+    # --- Final: Save Image ---
+    save_id = str(node_id)
+    nodes[save_id] = {
+        "inputs": {"filename_prefix": "oelala_i2i", "images": final_image_ref},
+        "class_type": "SaveImage",
+    }
+
+    return nodes
+
+
+@app.get("/i2i/presets")
+def list_i2i_presets():
+    """List available I2I quality presets."""
+    return {"presets": I2I_PRESETS}
 
 
 @app.post("/generate-i2i")
@@ -8526,12 +8799,20 @@ async def generate_i2i(
     seed: int = Form(-1),
     sampler_name: str = Form("dpmpp_2m"),
     scheduler: str = Form("karras"),
-    user: User = Depends(get_current_user),  # Require authenticated user
+    preset: str = Form("custom"),
+    face_id: bool = Form(False),
+    face_detailer: bool = Form(False),
+    face_restore: bool = Form(False),
+    face_id_weight: float = Form(0.85),
+    user: User = Depends(get_current_user),
 ):
     """
-    Image-to-Image generation via ComfyUI.
-    Uploads source image, applies style transfer / modification.
-    Requires authentication and credits.
+    Enhanced Image-to-Image generation via ComfyUI.
+
+    Features:
+        - IP-Adapter FaceID: Preserves face identity from source image
+        - FaceDetailer: Auto-detects and refines faces after generation
+        - Face Restore (GFPGAN): Final polish on face quality
 
     Args:
         file: Source image file
@@ -8539,17 +8820,46 @@ async def generate_i2i(
         negative_prompt: What to avoid
         denoise: 0.0 = keep source, 1.0 = ignore source (typical: 0.4-0.7)
         checkpoint: SDXL checkpoint to use
+        preset: Quality preset (fast/balanced/face_preserve/custom)
+        face_id: Enable IP-Adapter FaceID identity preservation
+        face_detailer: Enable automatic face detection + refinement
+        face_restore: Enable GFPGAN face restoration
+        face_id_weight: IP-Adapter FaceID strength (0.0-1.0)
     """
     import random
 
+    # Apply preset settings (override individual params unless preset=custom)
+    if preset != "custom" and preset in I2I_PRESETS:
+        p = I2I_PRESETS[preset]
+        steps = p.get("steps", steps)
+        cfg = p.get("cfg", cfg)
+        sampler_name = p.get("sampler", sampler_name)
+        scheduler = p.get("scheduler", scheduler)
+        face_id = p.get("face_id", face_id)
+        face_detailer = p.get("face_detailer", face_detailer)
+        face_restore = p.get("face_restore", face_restore)
+
+    features = []
+    if face_id:
+        features.append("FaceID")
+    if face_detailer:
+        features.append("FaceDetailer")
+    if face_restore:
+        features.append("GFPGAN")
+    feature_str = f" [{'+'.join(features)}]" if features else ""
+
     logger.info(
-        f"🎨 I2I request: {prompt[:50]}... (denoise={denoise}, checkpoint={checkpoint})"
+        f"🎨 I2I request: {prompt[:50]}... "
+        f"(denoise={denoise}, checkpoint={checkpoint}, preset={preset}{feature_str})"
     )
 
-    # Calculate and check credits (image-to-image is similar to T2I)
-    credits_required = calculate_credits("sdxl", width=1024, height=1024, steps=steps)
+    # Calculate credits — face processing adds extra cost
+    base_credits = calculate_credits("sdxl", width=1024, height=1024, steps=steps)
+    face_credits = (3 if face_id else 0) + (2 if face_detailer else 0) + (1 if face_restore else 0)
+    credits_required = base_credits + face_credits
     logger.info(
-        f"💰 I2I generation costs {credits_required} credits (denoise={denoise}) [user={user.id}]"
+        f"💰 I2I costs {credits_required} credits "
+        f"(base={base_credits}, face={face_credits}) [user={user.id}]"
     )
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
@@ -8588,52 +8898,23 @@ async def generate_i2i(
 
         logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
 
-        # Build I2I workflow
-        workflow = {
-            "1": {
-                "inputs": {"ckpt_name": checkpoint},
-                "class_type": "CheckpointLoaderSimple",
-            },
-            "2": {
-                "inputs": {"image": comfyui_filename, "upload": "image"},
-                "class_type": "LoadImage",
-            },
-            "3": {
-                "inputs": {"pixels": ["2", 0], "vae": ["1", 2]},
-                "class_type": "VAEEncode",
-            },
-            "4": {
-                "inputs": {"text": prompt, "clip": ["1", 1]},
-                "class_type": "CLIPTextEncode",
-            },
-            "5": {
-                "inputs": {"text": negative_prompt, "clip": ["1", 1]},
-                "class_type": "CLIPTextEncode",
-            },
-            "6": {
-                "inputs": {
-                    "seed": seed,
-                    "steps": steps,
-                    "cfg": cfg,
-                    "sampler_name": sampler_name,
-                    "scheduler": scheduler,
-                    "denoise": denoise,
-                    "model": ["1", 0],
-                    "positive": ["4", 0],
-                    "negative": ["5", 0],
-                    "latent_image": ["3", 0],
-                },
-                "class_type": "KSampler",
-            },
-            "7": {
-                "inputs": {"samples": ["6", 0], "vae": ["1", 2]},
-                "class_type": "VAEDecode",
-            },
-            "8": {
-                "inputs": {"filename_prefix": "oelala_i2i", "images": ["7", 0]},
-                "class_type": "SaveImage",
-            },
-        }
+        # Build enhanced I2I workflow
+        workflow = _build_i2i_workflow(
+            comfyui_filename=comfyui_filename,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            checkpoint=checkpoint,
+            denoise=denoise,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            face_id=face_id,
+            face_detailer=face_detailer,
+            face_restore=face_restore,
+            face_id_weight=face_id_weight,
+        )
 
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
@@ -8641,7 +8922,7 @@ async def generate_i2i(
 
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
-        logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits)")
+        logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits){feature_str}")
 
         return {
             "status": "queued",
@@ -8653,7 +8934,14 @@ async def generate_i2i(
                 "denoise": denoise,
                 "checkpoint": checkpoint,
                 "seed": seed,
+                "preset": preset,
                 "source_image": comfyui_filename,
+                "features": {
+                    "face_id": face_id,
+                    "face_detailer": face_detailer,
+                    "face_restore": face_restore,
+                    "face_id_weight": face_id_weight if face_id else None,
+                },
             },
         }
 
