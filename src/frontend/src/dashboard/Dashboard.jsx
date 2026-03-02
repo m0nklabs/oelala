@@ -34,6 +34,7 @@ const LipSyncTool = lazy(() => import('./tools/LipSyncTool'))
 const ReframeTool = lazy(() => import('./tools/ReframeTool'))
 const InpaintTool = lazy(() => import('./tools/InpaintTool'))
 const FaceSwapTool = lazy(() => import('./tools/FaceSwapTool'))
+const UpscaleTool = lazy(() => import('./tools/UpscaleTool'))
 const ComingSoonTool = lazy(() => import('./tools/ComingSoonTool'))
 const MyMediaTool = lazy(() => import('./tools/MyMediaTool'))
 const Gallery = lazy(() => import('../pages/Gallery'))
@@ -209,6 +210,8 @@ export default function Dashboard() {
         return 'Face Swap'
       case TOOL_IDS.UPSCALER:
         return 'Upscaler'
+      case TOOL_IDS.UPSCALE:
+        return 'Upscale'
       case TOOL_IDS.IMAGE_TO_TEXT:
         return 'Image to Text'
       case TOOL_IDS.PROMPT_GENERATOR:
@@ -315,6 +318,9 @@ export default function Dashboard() {
         return wrapWithSuspense(<InpaintTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.FACE_SWAP:
         return wrapWithSuspense(<FaceSwapTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
+
+      case TOOL_IDS.UPSCALE:
+        return wrapWithSuspense(<UpscaleTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)
 
       case TOOL_IDS.POST_PROCESSING:
         return wrapWithSuspense(<PostProcessingTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} />)

@@ -14,6 +14,7 @@ const ICONS = {
   // Image Tools
   'text-to-image': '🖼️',
   'image-to-image': '🎨',
+  'upscale': '🔍',
   'upscaler': '🔍',
   'reframe': '📐',
   'face-swap': '🎭',
@@ -30,10 +31,6 @@ const ICONS = {
   'lora-training': '🧠',
   // My Media
   'my-media-all': '📁',
-  'my-media-videos': '🎞️',
-  'my-media-images': '🖼️',
-  'my-media-audio': '🎵',
-  'my-media-prompts': '📝',
   // Admin
   'admin-panel': '👑',
 }

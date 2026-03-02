@@ -8,6 +8,7 @@ export const TOOL_IDS = {
   SPEECH_TO_VIDEO: 'speech-to-video',
   // Image Tools
   IMAGE_TO_IMAGE: 'image-to-image',
+  UPSCALE: 'upscale',
   INPAINT: 'inpaint',
   REFRAME: 'reframe',
   FACE_SWAP: 'face-swap',
@@ -57,6 +58,7 @@ export const NAV_GROUPS = [
     items: [
       { id: TOOL_IDS.TEXT_TO_IMAGE, label: 'Text to Image', status: 'ready' },
       { id: TOOL_IDS.IMAGE_TO_IMAGE, label: 'Image to Image', status: 'ready' },
+      { id: TOOL_IDS.UPSCALE, label: 'Upscale', status: 'new', emoji: '🔍' },
       { id: TOOL_IDS.INPAINT, label: 'Inpaint', status: 'new' },
       { id: TOOL_IDS.REFRAME, label: 'Reframe', status: 'new' },
       { id: TOOL_IDS.FACE_SWAP, label: 'Face Swap', status: 'new' },
@@ -101,11 +103,7 @@ export const NAV_GROUPS = [
     id: 'my-media',
     title: 'My Media',
     items: [
-      { id: TOOL_IDS.MY_MEDIA_ALL, label: 'All', status: 'ready' },
-      { id: TOOL_IDS.MY_MEDIA_VIDEOS, label: 'Videos', status: 'ready' },
-      { id: TOOL_IDS.MY_MEDIA_IMAGES, label: 'Images', status: 'ready' },
-      { id: TOOL_IDS.MY_MEDIA_AUDIO, label: 'Audio', status: 'ready' },
-      { id: TOOL_IDS.MY_MEDIA_PROMPTS, label: 'Prompts', status: 'ready' },
+      { id: TOOL_IDS.MY_MEDIA_ALL, label: 'My Media', status: 'ready' },
     ],
   },
   {
