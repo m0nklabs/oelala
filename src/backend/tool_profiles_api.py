@@ -12,7 +12,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
 import httpx
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from auth import get_current_user, User
 
@@ -262,10 +262,10 @@ FACTORY_PRESETS: dict[str, list[dict]] = {
             },
         },
     ],
-    "text_to_video": [],   # TODO: add when T2V tool is ready
-    "text_to_image": [],   # TODO: add when T2I presets are defined
-    "image_upscale": [],   # TODO: add when upscale presets are defined
-    "video_extend": [],    # TODO: add when extend presets are defined
+    "text_to_video": [],  # TODO: add when T2V tool is ready
+    "text_to_image": [],  # TODO: add when T2I presets are defined
+    "image_upscale": [],  # TODO: add when upscale presets are defined
+    "video_extend": [],  # TODO: add when extend presets are defined
 }
 
 
@@ -287,20 +287,29 @@ def debug_log(msg: str):
 
 class ToolProfileSettings(BaseModel):
     """Auto-save settings payload (any JSON object)"""
-    settings: dict = Field(default_factory=dict, description="Tool settings as JSON object")
+
+    settings: dict = Field(
+        default_factory=dict, description="Tool settings as JSON object"
+    )
 
 
 class ToolProfileCreate(BaseModel):
     """Create a named profile snapshot"""
+
     profile_name: str = Field(
-        ..., min_length=1, max_length=50,
-        description="Profile name (e.g., 'my_best_settings', 'test_run_3')"
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Profile name (e.g., 'my_best_settings', 'test_run_3')",
     )
-    settings: dict = Field(default_factory=dict, description="Tool settings as JSON object")
+    settings: dict = Field(
+        default_factory=dict, description="Tool settings as JSON object"
+    )
 
 
 class ToolProfileResponse(BaseModel):
     """Single profile response"""
+
     id: str
     tool_name: str
     profile_name: str
@@ -312,12 +321,14 @@ class ToolProfileResponse(BaseModel):
 
 class ToolProfileListResponse(BaseModel):
     """List of profiles for a tool"""
+
     profiles: List[ToolProfileResponse]
     active_profile: Optional[str] = None
 
 
 class FactoryPreset(BaseModel):
     """A built-in preset with best-tested settings"""
+
     name: str
     description: str
     mode: str
@@ -326,6 +337,7 @@ class FactoryPreset(BaseModel):
 
 class FactoryPresetsResponse(BaseModel):
     """List of factory presets for a tool"""
+
     presets: List[FactoryPreset]
 
 
@@ -366,7 +378,7 @@ def _validate_tool_name(tool_name: str) -> str:
     if tool_name not in VALID_TOOLS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid tool name '{tool_name}'. Valid tools: {sorted(VALID_TOOLS)}"
+            detail=f"Invalid tool name '{tool_name}'. Valid tools: {sorted(VALID_TOOLS)}",
         )
     return tool_name
 
@@ -374,11 +386,12 @@ def _validate_tool_name(tool_name: str) -> str:
 def _validate_settings_size(settings: dict):
     """Prevent oversized settings payloads."""
     import json
+
     size = len(json.dumps(settings))
     if size > MAX_SETTINGS_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"Settings payload too large ({size} bytes, max {MAX_SETTINGS_SIZE})"
+            detail=f"Settings payload too large ({size} bytes, max {MAX_SETTINGS_SIZE})",
         )
 
 
@@ -411,7 +424,9 @@ async def get_active_profile(tool_name: str, user: User = Depends(get_current_us
 
         if response.status_code == 200 and response.json():
             profile = response.json()[0]
-            debug_log(f"Active profile for {user.id}/{tool_name}: {profile['profile_name']}")
+            debug_log(
+                f"Active profile for {user.id}/{tool_name}: {profile['profile_name']}"
+            )
             return ToolProfileResponse(**profile)
 
         # Fallback to 'default' profile
@@ -444,9 +459,7 @@ async def get_factory_presets(tool_name: str):
     _validate_tool_name(tool_name)
     presets = FACTORY_PRESETS.get(tool_name, [])
     debug_log(f"Factory presets for {tool_name}: {len(presets)} available")
-    return FactoryPresetsResponse(
-        presets=[FactoryPreset(**p) for p in presets]
-    )
+    return FactoryPresetsResponse(presets=[FactoryPreset(**p) for p in presets])
 
 
 @router.put("/{tool_name}", response_model=ToolProfileResponse)
@@ -493,7 +506,9 @@ async def save_active_profile(
                 debug_log(f"Updated profile {existing['profile_name']} for {tool_name}")
                 return ToolProfileResponse(**profile)
             else:
-                logger.error(f"Failed to update profile: {update_resp.status_code} {update_resp.text}")
+                logger.error(
+                    f"Failed to update profile: {update_resp.status_code} {update_resp.text}"
+                )
                 raise HTTPException(status_code=500, detail="Failed to update profile")
         else:
             # Create default profile
@@ -513,7 +528,9 @@ async def save_active_profile(
                 debug_log(f"Created default profile for {tool_name}")
                 return ToolProfileResponse(**profile)
             else:
-                logger.error(f"Failed to create profile: {create_resp.status_code} {create_resp.text}")
+                logger.error(
+                    f"Failed to create profile: {create_resp.status_code} {create_resp.text}"
+                )
                 raise HTTPException(status_code=500, detail="Failed to create profile")
 
 
@@ -556,7 +573,10 @@ async def create_profile(
     _validate_settings_size(body.settings)
 
     if body.profile_name.lower() == "default":
-        raise HTTPException(status_code=400, detail="Cannot create profile named 'default'. Use PUT /{tool_name} instead.")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot create profile named 'default'. Use PUT /{tool_name} instead.",
+        )
 
     async with get_supabase_client() as client:
         # Check profile count
@@ -571,12 +591,16 @@ async def create_profile(
         )
         # Parse count from content-range header
         content_range = count_resp.headers.get("content-range", "")
-        total = int(content_range.split("/")[-1]) if "/" in content_range else len(count_resp.json())
+        total = (
+            int(content_range.split("/")[-1])
+            if "/" in content_range
+            else len(count_resp.json())
+        )
 
         if total >= MAX_PROFILES_PER_TOOL:
             raise HTTPException(
                 status_code=400,
-                detail=f"Maximum {MAX_PROFILES_PER_TOOL} profiles per tool reached"
+                detail=f"Maximum {MAX_PROFILES_PER_TOOL} profiles per tool reached",
             )
 
         # Upsert profile (Supabase ON CONFLICT)
@@ -599,11 +623,15 @@ async def create_profile(
             debug_log(f"Created profile '{body.profile_name}' for {tool_name}")
             return ToolProfileResponse(**profile)
         else:
-            logger.error(f"Failed to create profile: {create_resp.status_code} {create_resp.text}")
+            logger.error(
+                f"Failed to create profile: {create_resp.status_code} {create_resp.text}"
+            )
             raise HTTPException(status_code=500, detail="Failed to create profile")
 
 
-@router.put("/{tool_name}/profiles/{profile_name}/activate", response_model=ToolProfileResponse)
+@router.put(
+    "/{tool_name}/profiles/{profile_name}/activate", response_model=ToolProfileResponse
+)
 async def activate_profile(
     tool_name: str,
     profile_name: str,
@@ -626,7 +654,9 @@ async def activate_profile(
         )
 
         if response.status_code != 200 or not response.json():
-            raise HTTPException(status_code=404, detail=f"Profile '{profile_name}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Profile '{profile_name}' not found"
+            )
 
         profile_id = response.json()[0]["id"]
 
