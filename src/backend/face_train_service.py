@@ -32,6 +32,28 @@ logger = logging.getLogger(__name__)
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Progress callback (set by app.py to broadcast via WebSocket)
+# ─────────────────────────────────────────────────────────────────────────────
+# Signature: callback(job_id: str, event: str, data: dict) -> None
+# event: "started" | "progress" | "completed" | "failed"
+_progress_callback = None
+
+
+def set_progress_callback(callback):
+    """Set a callback for training progress events (called from app.py)."""
+    global _progress_callback
+    _progress_callback = callback
+
+
+def _emit_event(job_id: str, event: str, data: dict):
+    """Emit a progress event if a callback is registered."""
+    if _progress_callback:
+        try:
+            _progress_callback(job_id, event, data)
+        except Exception as e:
+            logger.warning(f"Progress callback error: {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -293,6 +315,12 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
         job["started_at"] = time.time()
         _save_index({**index, job_id: job})
 
+        _emit_event(job_id, "started", {
+            "name": job.get("name", ""),
+            "trigger": job.get("trigger", ""),
+            "steps_total": job.get("steps_total", 0),
+        })
+
         try:
             env = os.environ.copy()
             env["PYTHONPATH"] = str(TOOLKIT_DIR) + ":" + env.get("PYTHONPATH", "")
@@ -325,18 +353,25 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
                     job["lora_path"] = str(dest)
                     job["status"] = "done"
                     logger.info(f"✅ Face LoRA training done: {dest}")
+                    _emit_event(job_id, "completed", {
+                        "lora_path": str(dest),
+                        "trigger": trigger,
+                    })
                 else:
                     job["status"] = "failed"
                     job["error"] = "Training finished but no output LoRA found"
+                    _emit_event(job_id, "failed", {"error": job["error"]})
             else:
                 job["status"] = "failed"
                 job["error"] = f"Process exited with code {ret}"
                 logger.error(f"❌ Face LoRA training failed (code {ret}): {job_id}")
+                _emit_event(job_id, "failed", {"error": job["error"]})
 
         except Exception as e:
             job["status"] = "failed"
             job["error"] = str(e)
             logger.exception(f"❌ Face LoRA training exception: {job_id}")
+            _emit_event(job_id, "failed", {"error": str(e)})
 
         job["finished_at"] = time.time()
         index = _load_index()
@@ -369,6 +404,14 @@ def _update_progress_from_log(job_id: str, log_path: Path) -> None:
             if job.get("steps_done", 0) != step:
                 job["steps_done"] = step
                 _save_index({**index, job_id: job})
+                # Broadcast progress via WebSocket
+                steps_total = job.get("steps_total", 0)
+                progress = round((step / steps_total) * 100) if steps_total else 0
+                _emit_event(job_id, "progress", {
+                    "steps_done": step,
+                    "steps_total": steps_total,
+                    "progress": progress,
+                })
     except Exception:
         pass
 

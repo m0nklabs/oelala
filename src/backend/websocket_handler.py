@@ -164,6 +164,15 @@ class WebSocketManager:
                 f"📡 Removed {len(disconnected)} dead connections for user {user_key}"
             )
 
+    async def broadcast_to_all(self, event_type: str, data: Dict[str, Any]):
+        """
+        Broadcast an event to ALL connected users.
+
+        Used for system-wide events like training progress that aren't user-specific.
+        """
+        for user_key in list(self.connections.keys()):
+            await self.broadcast_to_user(user_key, event_type, data)
+
     async def broadcast_queue_update(
         self,
         job_id: str,

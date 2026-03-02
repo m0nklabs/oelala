@@ -170,6 +170,31 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ─── Wire face_train_service into WebSocket progress broadcasts ──────────────
+if face_train_service and ws_manager:
+    import asyncio as _asyncio
+
+    def _training_progress_callback(job_id: str, event: str, data: dict):
+        """Bridge face training thread events to async WebSocket broadcasts."""
+        prompt_id = f"train_{job_id}"
+        try:
+            loop = _asyncio.get_event_loop()
+        except RuntimeError:
+            return  # No event loop available
+
+        payload = {"job_id": job_id, "prompt_id": prompt_id, "status": event, **data}
+        if event == "started":
+            payload["status"] = "running"
+        elif event == "progress":
+            payload["status"] = "running"
+        # "completed" and "failed" map directly
+
+        coro = ws_manager.broadcast_to_all("training_update", payload)
+        _asyncio.run_coroutine_threadsafe(coro, loop)
+
+    face_train_service.set_progress_callback(_training_progress_callback)
+    print("✅ face_train_service wired to WebSocket broadcasts")
+
 # Log Buffer for UI
 log_buffer = deque(maxlen=1000)  # Increased buffer size for shell output
 progress_store = {}  # job_id -> {progress, status, message, updated_at}
@@ -2131,11 +2156,40 @@ async def get_comfyui_queue():
                     job_info.update(active_jobs[prompt_id])
                 pending.append(job_info)
 
+        # Include face LoRA training jobs in the queue
+        training = []
+        if face_train_service:
+            for job in face_train_service.list_jobs():
+                if job.get("status") in ("pending", "running"):
+                    progress = 0
+                    if job.get("steps_total", 0) > 0:
+                        progress = round(
+                            (job.get("steps_done", 0) / job["steps_total"]) * 100
+                        )
+                    training.append(
+                        {
+                            "prompt_id": f"train_{job['id']}",
+                            "job_id": job["id"],
+                            "status": job["status"],
+                            "job_type": "face_lora_training",
+                            "name": job.get("name", ""),
+                            "trigger": job.get("trigger", ""),
+                            "steps_done": job.get("steps_done", 0),
+                            "steps_total": job.get("steps_total", 0),
+                            "progress": progress,
+                            "images_count": job.get("images_count", 0),
+                            "created_at": job.get("created_at"),
+                            "started_at": job.get("started_at"),
+                        }
+                    )
+
         return {
             "running": running,
             "pending": pending,
+            "training": training,
             "total_running": len(running),
             "total_pending": len(pending),
+            "total_training": len(training),
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to get ComfyUI queue: {e}")

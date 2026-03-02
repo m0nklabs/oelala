@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Clock, Play, Loader2, X, CheckCircle, RefreshCw } from 'lucide-react'
+import { Clock, Play, Loader2, X, CheckCircle, RefreshCw, Brain } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import ProgressTracker from './ProgressTracker'
 
@@ -8,7 +8,7 @@ import ProgressTracker from './ProgressTracker'
  * Shows running count and pending count, click for popup with details
  */
 export default function QueueIndicator({ onJobComplete, refreshToken }) {
-  const [queue, setQueue] = useState({ running: [], pending: [], total_running: 0, total_pending: 0 })
+  const [queue, setQueue] = useState({ running: [], pending: [], training: [], total_running: 0, total_pending: 0, total_training: 0 })
   const [completedJobs, setCompletedJobs] = useState([])
   const [showPopup, setShowPopup] = useState(false)
   const [notifiedIds, setNotifiedIds] = useState(new Set())
@@ -91,7 +91,8 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   }
 
   const isRunning = queue.total_running > 0
-  const totalJobs = queue.total_running + queue.total_pending
+  const isTraining = (queue.total_training || 0) > 0
+  const totalJobs = queue.total_running + queue.total_pending + (queue.total_training || 0)
 
   return (
     <div style={{ position: 'relative' }} ref={popupRef}>
@@ -103,23 +104,32 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
           alignItems: 'center',
           gap: '6px',
           padding: '6px 10px',
-          backgroundColor: isRunning ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-          border: `1px solid ${isRunning ? '#22c55e' : 'var(--border-color)'}`,
+          backgroundColor: isRunning ? 'rgba(34, 197, 94, 0.15)' : isTraining ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+          border: `1px solid ${isRunning ? '#22c55e' : isTraining ? '#a855f7' : 'var(--border-color)'}`,
           borderRadius: '6px',
           cursor: 'pointer',
           color: 'var(--text-primary)',
           fontSize: '0.8rem',
         }}
-        title={isRunning ? `${queue.total_running} running, ${queue.total_pending} queued` : 'No active jobs'}
+        title={
+          isRunning
+            ? `${queue.total_running} running, ${queue.total_pending} queued${isTraining ? `, ${queue.total_training} training` : ''}`
+            : isTraining
+              ? `${queue.total_training} training`
+              : 'No active jobs'
+        }
       >
         <span style={{ fontSize: '14px' }}>
-          {isRunning ? '⏳' : '🕐'}
+          {isRunning ? '⏳' : isTraining ? '🧠' : '🕐'}
         </span>
         <span style={{ fontWeight: 500 }}>
           {isRunning ? queue.total_running : 0}
         </span>
         {queue.total_pending > 0 && (
           <span style={{ color: 'var(--text-muted)' }}>+{queue.total_pending}</span>
+        )}
+        {isTraining && (
+          <span style={{ color: '#a855f7', fontSize: '0.7rem' }}>🧠{queue.total_training}</span>
         )}
       </button>
 
@@ -192,6 +202,18 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
                 </div>
                 {queue.pending.map((job) => (
                   <JobRow key={job.prompt_id} job={job} status="pending" onCancel={cancelJob} />
+                ))}
+              </div>
+            )}
+
+            {/* Training */}
+            {(queue.training || []).length > 0 && (
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                  LoRA Training
+                </div>
+                {queue.training.map((job) => (
+                  <TrainingJobRow key={job.job_id} job={job} />
                 ))}
               </div>
             )}
@@ -290,6 +312,70 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+function TrainingJobRow({ job }) {
+  const progress = job.progress || 0
+  const isRunning = job.status === 'running'
+
+  return (
+    <div style={{ marginBottom: '4px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 8px',
+          backgroundColor: 'var(--bg-input)',
+          borderRadius: '4px',
+          fontSize: '0.8rem',
+        }}
+      >
+        <Brain size={12} color="#a855f7" className={isRunning ? 'spin' : ''} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              fontWeight: 500,
+            }}
+          >
+            {job.name || job.trigger || 'Training'}
+          </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+            {job.trigger} • {job.images_count} photos • {job.steps_done}/{job.steps_total} steps
+          </div>
+          {isRunning && (
+            <div style={{ marginTop: '4px' }}>
+              <div
+                style={{
+                  width: '100%',
+                  height: '4px',
+                  backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                  borderRadius: '2px',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${progress}%`,
+                    height: '100%',
+                    backgroundColor: '#a855f7',
+                    borderRadius: '2px',
+                    transition: 'width 0.5s ease-out',
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: '0.65rem', color: '#a855f7', marginTop: '2px' }}>
+                {progress}%
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
