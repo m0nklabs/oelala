@@ -62,6 +62,43 @@ I2V_GENERATION_MODES = {
         "default_steps": 6,
         "default_cfg": 1.0,
     },
+    "blockswap_q8": {
+        "name": "BlockSwap Q8 Experimental",
+        "description": "Q8_0 quality with BlockSwap VRAM optimization, Lightning LoRA, NAG, MagCache, TorchCompile, Florence2 auto-captioning",
+        "workflow_file": "ImageToVideo/wan22_i2v_blockswap_q8_api.json",
+        "default_steps": 8,
+        "default_cfg": 1.0,
+        "features": [
+            "Q8_0 dual-pass (higher quality than Q6_K)",
+            "BlockSwap VRAM reduction",
+            "Lightning LoRA (4-8 step fast generation)",
+            "NAG (Normalized Attention Guidance)",
+            "MagCache (magnitude-aware caching)",
+            "TorchCompile JIT compilation",
+            "Florence2 auto-captioning",
+            "EnhanceAVideo quality boost",
+            "CFGZeroStar guidance trick",
+            "Optional 4x upscale + RIFE 2x interpolation",
+        ],
+    },
+    "distorch2_q8": {
+        "name": "DisTorch2 Q8 Experimental",
+        "description": "Q8_0 quality with DisTorch2 multi-GPU distribution, user-selectable LoRAs, NAG, TorchCompile, Florence2",
+        "workflow_file": "ImageToVideo/wan22_i2v_distorch2_q8_api.json",
+        "default_steps": 8,
+        "default_cfg": 1.0,
+        "features": [
+            "Q8_0 dual-pass (higher quality than Q6_K)",
+            "DisTorch2 multi-GPU (cuda:1,11gb;cuda:0,14.5gb;cpu,*)",
+            "User-selectable LoRAs (no forced Lightning)",
+            "NAG (Normalized Attention Guidance)",
+            "TorchCompile JIT compilation",
+            "Florence2 auto-captioning",
+            "EnhanceAVideo quality boost",
+            "CFGZeroStar guidance trick",
+            "Optional 4x upscale + RIFE 2x interpolation",
+        ],
+    },
 }
 
 # Available T2V (Text-to-Video) generation modes - different base models
@@ -73,7 +110,7 @@ T2V_GENERATION_MODES = {
         "model_type": "wan22",
         "default_steps": 6,
         "default_cfg": 1.0,
-        "max_frames": 81,
+        "max_frames": 481,
         "default_frames": 41,
     },
     "ltx2": {
@@ -83,7 +120,7 @@ T2V_GENERATION_MODES = {
         "model_type": "ltx2",
         "default_steps": 8,
         "default_cfg": 1.0,
-        "max_frames": 97,
+        "max_frames": 481,
         "default_frames": 25,
     },
 }
@@ -572,6 +609,182 @@ WAN22_I2V_Q6_API_WORKFLOW = {
             "frame_rate": 16,
             "loop_count": 0,
             "filename_prefix": "oelala_distorch2",
+            "format": "video/h264-mp4",
+            "pix_fmt": "yuv420p",
+            "crf": 19,
+            "save_metadata": True,
+            "trim_to_audio": False,
+            "pingpong": False,
+            "save_output": True,
+            "images": ["15", 0],
+        },
+    },
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T2V (Text-to-Video) DisTorch2 Dual-Pass Q6_K workflow
+# Identical architecture to I2V Q6 but WITHOUT image conditioning:
+#   - Uses T2V GGUF models (16 in_channels, pure text-to-video)
+#   - WanImageToVideo without start_image creates empty 5D video latent
+#   - No LoadImage/ImageResize nodes needed
+#   - Same dual-pass KSamplerAdvanced: High noise → Low noise
+# ─────────────────────────────────────────────────────────────────────────────
+WAN22_T2V_Q6_API_WORKFLOW = {
+    # Node 1: High Noise GGUF Model Loader (DisTorch2) — T2V model
+    "1": {
+        "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+        "inputs": {
+            "unet_name": "wan2.2_t2v_high_noise_14B_Q6_K.gguf",
+            "dequant_dtype": "default",
+            "patch_dtype": "default",
+            "patch_on_device": False,
+            "compute_device": "cuda:0",
+            "virtual_vram_gb": 16,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "eject_models": True,
+        },
+    },
+    # Node 2: Low Noise GGUF Model Loader (DisTorch2) — T2V model
+    "2": {
+        "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+        "inputs": {
+            "unet_name": "wan2.2_t2v_low_noise_14B_Q6_K.gguf",
+            "dequant_dtype": "default",
+            "patch_dtype": "default",
+            "patch_on_device": False,
+            "compute_device": "cuda:0",
+            "virtual_vram_gb": 16,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "eject_models": True,
+        },
+    },
+    # Node 3: VAE Loader (DisTorch2)
+    "3": {
+        "class_type": "VAELoaderDisTorch2MultiGPU",
+        "inputs": {
+            "vae_name": "wan_2.1_vae.safetensors",
+            "compute_device": "cuda:0",
+            "virtual_vram_gb": 16,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "eject_models": True,
+        },
+    },
+    # Node 4: T5-XXL CLIP Loader (DisTorch2)
+    "4": {
+        "class_type": "CLIPLoaderDisTorch2MultiGPU",
+        "inputs": {
+            "clip_name": "umt5-xxl-enc-bf16.safetensors",
+            "type": "wan",
+            "device": "cuda:0",
+            "virtual_vram_gb": 16,
+            "donor_device": "cuda:1",
+            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "eject_models": True,
+        },
+    },
+    # Node 5: ModelSamplingSD3 for High Noise model (shift=8)
+    "5": {"class_type": "ModelSamplingSD3", "inputs": {"shift": 8, "model": ["1", 0]}},
+    # Node 6: ModelSamplingSD3 for Low Noise model (shift=8)
+    "6": {"class_type": "ModelSamplingSD3", "inputs": {"shift": 8, "model": ["2", 0]}},
+    # Node 7: SageAttention for High Noise model
+    "7": {
+        "class_type": "PathchSageAttentionKJ",
+        "inputs": {
+            "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+            "allow_compile": False,
+            "model": ["5", 0],
+        },
+    },
+    # Node 8: SageAttention for Low Noise model
+    "8": {
+        "class_type": "PathchSageAttentionKJ",
+        "inputs": {
+            "sage_attention": "sageattn_qk_int8_pv_fp16_triton",
+            "allow_compile": False,
+            "model": ["6", 0],
+        },
+    },
+    # Node 9: Positive Prompt (CLIPTextEncode)
+    "9": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {"text": "smooth motion, cinematic", "clip": ["4", 0]},
+    },
+    # Node 10: Negative Prompt (CLIPTextEncode)
+    "10": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, visual glitches",
+            "clip": ["4", 0],
+        },
+    },
+    # Node 12: WanImageToVideo — T2V mode (NO start_image)
+    # Without start_image this creates an empty 5D video latent [1, 16, F, H/8, W/8]
+    # and passes through text conditioning unchanged
+    "12": {
+        "class_type": "WanImageToVideo",
+        "inputs": {
+            "width": 480,
+            "height": 848,
+            "length": 41,
+            "batch_size": 1,
+            "positive": ["9", 0],
+            "negative": ["10", 0],
+            "vae": ["3", 0],
+        },
+    },
+    # Node 13: KSamplerAdvanced - Pass 1 (High Noise) steps 0-3
+    "13": {
+        "class_type": "KSamplerAdvanced",
+        "inputs": {
+            "add_noise": "enable",
+            "noise_seed": 42,
+            "steps": 6,
+            "cfg": 1.0,
+            "sampler_name": "uni_pc",
+            "scheduler": "normal",
+            "start_at_step": 0,
+            "end_at_step": 3,
+            "return_with_leftover_noise": "enable",
+            "model": ["7", 0],
+            "positive": ["12", 0],
+            "negative": ["12", 1],
+            "latent_image": ["12", 2],
+        },
+    },
+    # Node 14: KSamplerAdvanced - Pass 2 (Low Noise) steps 3+
+    "14": {
+        "class_type": "KSamplerAdvanced",
+        "inputs": {
+            "add_noise": "disable",
+            "noise_seed": 0,
+            "steps": 6,
+            "cfg": 1.0,
+            "sampler_name": "uni_pc",
+            "scheduler": "normal",
+            "start_at_step": 3,
+            "end_at_step": 10000,
+            "return_with_leftover_noise": "disable",
+            "model": ["8", 0],
+            "positive": ["12", 0],
+            "negative": ["12", 1],
+            "latent_image": ["13", 0],
+        },
+    },
+    # Node 15: VAE Decode
+    "15": {
+        "class_type": "VAEDecode",
+        "inputs": {"samples": ["14", 0], "vae": ["3", 0]},
+    },
+    # Node 16: Save Video (VHS_VideoCombine)
+    "16": {
+        "class_type": "VHS_VideoCombine",
+        "inputs": {
+            "frame_rate": 16,
+            "loop_count": 0,
+            "filename_prefix": "oelala_t2v",
             "format": "video/h264-mp4",
             "pix_fmt": "yuv420p",
             "crf": 19,
@@ -1352,6 +1565,200 @@ class ComfyUIClient:
             t2i_scheduler="normal",
         )
 
+    def build_t2v_q6_workflow(
+        self,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, visual glitches",
+        width: int = 480,
+        height: int = 848,
+        num_frames: int = 41,
+        fps: int = 16,
+        steps: int = 6,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_t2v",
+        high_noise_steps: int = 3,
+        sampler_name: str = "uni_pc",
+        scheduler: str = "normal",
+        aspect_ratio: str = "9:16",
+        long_edge: int = 480,
+        unet_high_noise: str = "wan2.2_t2v_high_noise_14B_Q6_K.gguf",
+        unet_low_noise: str = "wan2.2_t2v_low_noise_14B_Q6_K.gguf",
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build native Text-to-Video DisTorch2 dual-pass Q6_K workflow.
+
+        Pure T2V — no image conditioning, no T2I step. Uses WanImageToVideo
+        without start_image to create empty 5D video latent, then dual-pass
+        sampling with high noise (steps 0→N) and low noise (steps N→end).
+
+        Same proven architecture as I2V Q6 (build_q6_workflow) but with
+        T2V-specific GGUF models and no image loading nodes.
+
+        Args:
+            prompt: Text description of the video to generate.
+            negative_prompt: What to avoid in the video.
+            width: Video width in pixels.
+            height: Video height in pixels.
+            num_frames: Number of frames (will be adjusted to 4k+1 format).
+            fps: Frames per second for output video.
+            steps: Total sampling steps (split between high/low noise).
+            cfg: Classifier-free guidance scale.
+            seed: Random seed (-1 for random).
+            output_prefix: Filename prefix for output video.
+            high_noise_steps: Step at which to switch from high to low noise model.
+            sampler_name: Sampler algorithm (uni_pc, euler, dpmpp_2m, etc.).
+            scheduler: Noise scheduler (normal, simple, karras, etc.).
+            aspect_ratio: Video aspect ratio (9:16, 16:9, 1:1, etc.).
+            long_edge: Resolution for the short side (480, 720).
+            unet_high_noise: T2V GGUF model for high noise pass.
+            unet_low_noise: T2V GGUF model for low noise pass.
+            lora_configs: Optional LoRA configs [{high, low, strength}, ...].
+        """
+        workflow = copy.deepcopy(WAN22_T2V_Q6_API_WORKFLOW)
+
+        # Wan2.2 requires num_frames in format 4k+1
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+
+        # Node 1 & 2: Unet Loaders - set model names
+        workflow["1"]["inputs"]["unet_name"] = unet_high_noise
+        workflow["2"]["inputs"]["unet_name"] = unet_low_noise
+        logger.info(f"🔧 T2V Unet High: {unet_high_noise}, Low: {unet_low_noise}")
+
+        # Node 9: Positive Prompt
+        workflow["9"]["inputs"]["text"] = prompt
+
+        # Node 10: Negative Prompt
+        workflow["10"]["inputs"]["text"] = negative_prompt
+
+        # Calculate width/height from aspect ratio and long_edge
+        aspect_ratios = {
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            # Landscape or square
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            # Portrait
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        # Ensure dimensions are multiples of 8 for VAE
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+
+        # Node 12: WanImageToVideo (T2V mode — no start_image)
+        workflow["12"]["inputs"]["width"] = width
+        workflow["12"]["inputs"]["height"] = height
+        workflow["12"]["inputs"]["length"] = num_frames
+        logger.info(
+            f"📐 T2V Resolution: {width}x{height} (aspect {aspect_ratio}, long_edge {long_edge})"
+        )
+
+        # Handle LoRA loading — same pattern as I2V Q6
+        if lora_configs and len(lora_configs) > 0:
+            high_loras = []
+            low_loras = []
+            for config in lora_configs:
+                if config.get("high"):
+                    high_loras.append(
+                        {"name": config["high"], "strength": config.get("strength", 1.0)}
+                    )
+                if config.get("low"):
+                    low_loras.append(
+                        {"name": config["low"], "strength": config.get("strength", 1.0)}
+                    )
+                elif config.get("high"):
+                    low_loras.append(
+                        {"name": config["high"], "strength": config.get("strength", 1.0)}
+                    )
+
+            # High noise LoRAs
+            if high_loras:
+                current_high_model = ["7", 0]
+                high_node_id = 170
+                for i, lora in enumerate(high_loras):
+                    node_id = str(high_node_id + i)
+                    workflow[node_id] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": lora["name"],
+                            "strength_model": lora["strength"],
+                            "model": current_high_model,
+                        },
+                    }
+                    current_high_model = [node_id, 0]
+                    logger.info(f"🎨 T2V High LoRA #{i + 1}: {lora['name']} @ {lora['strength']}")
+                workflow["13"]["inputs"]["model"] = current_high_model
+            else:
+                workflow["13"]["inputs"]["model"] = ["7", 0]
+
+            # Low noise LoRAs
+            if low_loras:
+                current_low_model = ["8", 0]
+                low_node_id = 180
+                for i, lora in enumerate(low_loras):
+                    node_id = str(low_node_id + i)
+                    workflow[node_id] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": lora["name"],
+                            "strength_model": lora["strength"],
+                            "model": current_low_model,
+                        },
+                    }
+                    current_low_model = [node_id, 0]
+                    logger.info(f"🎨 T2V Low LoRA #{i + 1}: {lora['name']} @ {lora['strength']}")
+                workflow["14"]["inputs"]["model"] = current_low_model
+            else:
+                workflow["14"]["inputs"]["model"] = ["8", 0]
+        else:
+            # No LoRAs — connect samplers directly to SageAttn
+            workflow["13"]["inputs"]["model"] = ["7", 0]
+            workflow["14"]["inputs"]["model"] = ["8", 0]
+
+        # Node 13: Sampler 1 (High Noise) — steps 0 to high_noise_steps
+        workflow["13"]["inputs"]["noise_seed"] = seed if seed >= 0 else 42
+        workflow["13"]["inputs"]["steps"] = steps
+        workflow["13"]["inputs"]["cfg"] = cfg
+        workflow["13"]["inputs"]["sampler_name"] = sampler_name
+        workflow["13"]["inputs"]["scheduler"] = scheduler
+        workflow["13"]["inputs"]["end_at_step"] = high_noise_steps
+
+        # Node 14: Sampler 2 (Low Noise) — steps high_noise_steps to end
+        workflow["14"]["inputs"]["steps"] = steps
+        workflow["14"]["inputs"]["cfg"] = cfg
+        workflow["14"]["inputs"]["sampler_name"] = sampler_name
+        workflow["14"]["inputs"]["scheduler"] = scheduler
+        workflow["14"]["inputs"]["start_at_step"] = high_noise_steps
+
+        # Node 16: Video output
+        workflow["16"]["inputs"]["frame_rate"] = fps
+        workflow["16"]["inputs"]["filename_prefix"] = output_prefix
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+        logger.info(
+            f"🔧 Built T2V DisTorch2 workflow: {aspect_ratio}@{long_edge}, {num_frames}f, "
+            f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}"
+        )
+        return workflow
+
     def build_enhanced_workflow(
         self,
         image_name: str,
@@ -1634,6 +2041,448 @@ class ComfyUIClient:
             lora_info = f", {lora_count} LoRA{'s' if lora_count > 1 else ''}"
         logger.info(
             f"🔧 Built DisTorch2 workflow: {aspect_ratio}@{long_edge}, {num_frames}f, {steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}"
+        )
+        return workflow
+
+    def build_blockswap_q8_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts",
+        width: int = 720,
+        height: int = 1280,
+        num_frames: int = 121,
+        fps: int = 24,
+        steps: int = 8,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_blockswap_q8",
+        high_noise_steps: int = 4,
+        shift: float = 9.0,
+        nag_scale: float = 11.0,
+        nag_alpha: float = 0.25,
+        nag_tau: float = 2.373,
+        enhance_weight: float = 1.0,
+        enable_upscale: bool = False,
+        enable_interpolation: bool = False,
+        enable_florence2: bool = True,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        aspect_ratio: str = "9:16",
+        long_edge: int = 720,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build BlockSwap Q8 experimental workflow.
+
+        Uses Q8_0 GGUF models with BlockSwap VRAM optimization, Lightning LoRA,
+        NAG, TorchCompile, EnhanceAVideo, CFGZeroStar, and optional Florence2
+        auto-captioning + post-processing (upscale/interpolation).
+
+        Key differences from standard Q6 mode:
+        - Q8_0 models (higher quality, larger)
+        - BlockSwap VRAM reduction (enables Q8 on limited VRAM)
+        - Lightning LoRA always-on (4-8 step fast generation)
+        - NAG (Normalized Attention Guidance) for better coherence
+        - TorchCompile JIT for speed
+        - MagCache for caching optimization
+        - Florence2 auto-captioning of input image
+        - EnhanceAVideo quality enhancement
+        - CFGZeroStar guidance trick
+        - Optional 4x upscale + RIFE 2x frame interpolation
+
+        Args:
+            high_noise_steps: Steps where high noise model switches to low noise
+            shift: ModelSamplingSD3 shift parameter (higher = more creative)
+            nag_scale: NAG guidance scale
+            nag_alpha: NAG alpha parameter
+            nag_tau: NAG tau parameter
+            enhance_weight: EnhanceAVideo weight (0 to disable)
+            enable_upscale: Enable 4x upscale post-processing
+            enable_interpolation: Enable RIFE 2x frame interpolation
+            enable_florence2: Enable Florence2 auto-captioning
+            lora_configs: Additional LoRAs [{high, low, strength}, ...]
+        """
+        # Load template
+        workflow = load_workflow_from_file("ImageToVideo/wan22_i2v_blockswap_q8_api.json")
+        if not workflow:
+            logger.error("❌ Failed to load BlockSwap Q8 workflow template")
+            return None
+
+        workflow = copy.deepcopy(workflow)
+
+        # Wan2.2 requires num_frames in format 4k+1
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # ─── Calculate dimensions from aspect ratio ───
+        aspect_ratios = {
+            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
+            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
+            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+
+        logger.info(
+            f"🧪 Building BlockSwap Q8 workflow: {width}x{height}, {num_frames}f, "
+            f"{steps} steps, cfg={cfg}, shift={shift}, NAG={nag_scale}"
+        )
+
+        # ─── Input Image ───
+        workflow["88"]["inputs"]["image"] = image_name
+
+        # ─── Image Resize ───
+        workflow["401"]["inputs"]["width"] = width
+        workflow["401"]["inputs"]["height"] = height
+
+        # ─── WanImageToVideo ───
+        workflow["464"]["inputs"]["width"] = width
+        workflow["464"]["inputs"]["height"] = height
+        workflow["464"]["inputs"]["length"] = num_frames
+
+        # ─── Florence2 captioning ───
+        if enable_florence2:
+            # Florence2 captions the image, output goes through text replacements
+            # to StringConcatenate which combines with user prompt
+            workflow["451"]["inputs"]["string_b"] = prompt
+        else:
+            # Bypass Florence2: feed prompt directly to positive encode
+            workflow["462"]["inputs"]["text"] = prompt
+            # Remove Florence2 nodes to save VRAM
+            for nid in list(workflow.keys()):
+                ct = workflow[nid].get("class_type", "")
+                if ct in ("DownloadAndLoadFlorence2Model", "Florence2Run",
+                          "Text Find and Replace", "StringConcatenate"):
+                    del workflow[nid]
+            # Connect positive encode directly to prompt string
+            workflow["462"]["inputs"].pop("text", None)  # Remove connection
+            workflow["462"]["inputs"]["text"] = prompt
+
+        # ─── Negative Prompt ───
+        workflow["463"]["inputs"]["text"] = negative_prompt
+
+        # ─── Seed ───
+        workflow["73"]["inputs"]["noise_seed"] = seed
+        workflow["466"]["inputs"]["noise_seed"] = seed
+        workflow["465"]["inputs"]["noise_seed"] = seed
+
+        # ─── Sampling Parameters ───
+        workflow["466"]["inputs"]["steps"] = steps
+        workflow["466"]["inputs"]["cfg"] = cfg
+        workflow["466"]["inputs"]["end_at_step"] = high_noise_steps
+        workflow["465"]["inputs"]["steps"] = steps
+        workflow["465"]["inputs"]["cfg"] = cfg
+        workflow["465"]["inputs"]["start_at_step"] = high_noise_steps
+
+        # ─── Model Sampling Shift ───
+        workflow["467"]["inputs"]["shift"] = shift
+        workflow["468"]["inputs"]["shift"] = shift
+
+        # ─── NAG Parameters ───
+        workflow["485"]["inputs"]["nag_scale"] = nag_scale
+        workflow["485"]["inputs"]["nag_alpha"] = nag_alpha
+        workflow["485"]["inputs"]["nag_tau"] = nag_tau
+        workflow["486"]["inputs"]["nag_scale"] = nag_scale
+        workflow["486"]["inputs"]["nag_alpha"] = nag_alpha
+        workflow["486"]["inputs"]["nag_tau"] = nag_tau
+
+        # ─── EnhanceAVideo ───
+        workflow["481"]["inputs"]["weight"] = enhance_weight
+        workflow["482"]["inputs"]["weight"] = enhance_weight
+
+        # ─── LoRAs via Power Lora Loader (rgthree) ───
+        # Nodes 416 (high noise) and 471 (low noise) are Power Lora Loader nodes
+        # with up to 6 slots each. Template has them all off by default.
+        if lora_configs and len(lora_configs) > 0:
+            for i, config in enumerate(lora_configs[:6], 1):
+                # High noise LoRA slot
+                high_name = config.get("high", "")
+                if high_name:
+                    workflow["416"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": high_name,
+                        "strength": config.get("strength", 1.0),
+                    }
+                    logger.info(f"🎨 BS-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}")
+
+                # Low noise LoRA slot (falls back to high if not specified)
+                low_name = config.get("low", high_name)
+                if low_name:
+                    workflow["471"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": low_name,
+                        "strength": config.get("strength", 1.0),
+                    }
+        # Chain: UnetLoader(495/496) → PowerLora(416/471) → EnhanceAVideo(481/482)
+
+        # ─── Output ───
+        workflow["398"]["inputs"]["frame_rate"] = fps
+        workflow["398"]["inputs"]["filename_prefix"] = output_prefix
+
+        # ─── Post-processing (upscale + interpolation) ───
+        if not enable_upscale:
+            # Remove upscale nodes
+            for nid in ["384", "385", "418", "419"]:
+                if nid in workflow:
+                    del workflow[nid]
+
+        if not enable_interpolation:
+            # Remove interpolation nodes
+            for nid in ["431", "433"]:
+                if nid in workflow:
+                    del workflow[nid]
+        else:
+            # Set interpolated output frame rate
+            workflow["433"]["inputs"]["frame_rate"] = fps * 2
+
+        if enable_upscale:
+            workflow["419"]["inputs"]["frame_rate"] = fps
+            workflow["419"]["inputs"]["filename_prefix"] = f"{output_prefix}_upscaled"
+
+        if enable_interpolation:
+            workflow["433"]["inputs"]["filename_prefix"] = f"{output_prefix}_interpolated"
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} extra LoRAs"
+        pp_info = []
+        if enable_upscale:
+            pp_info.append("upscale")
+        if enable_interpolation:
+            pp_info.append("interpolate")
+        if enable_florence2:
+            pp_info.append("florence2")
+        pp_str = f", post=[{','.join(pp_info)}]" if pp_info else ""
+
+        logger.info(
+            f"🧪 Built BlockSwap Q8: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
+            f"shift={shift}, NAG={nag_scale}{lora_info}{pp_str}"
+        )
+        return workflow
+
+    def build_distorch2_q8_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts",
+        width: int = 720,
+        height: int = 1280,
+        num_frames: int = 121,
+        fps: int = 24,
+        steps: int = 8,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_distorch2_q8",
+        high_noise_steps: int = 4,
+        shift: float = 9.0,
+        nag_scale: float = 11.0,
+        nag_alpha: float = 0.25,
+        nag_tau: float = 2.373,
+        enhance_weight: float = 1.0,
+        enable_upscale: bool = False,
+        enable_interpolation: bool = False,
+        enable_florence2: bool = True,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        aspect_ratio: str = "9:16",
+        long_edge: int = 720,
+        distorch2_alloc: str = "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build DisTorch2 Q8 experimental workflow.
+
+        Same processing chain as BlockSwap Q8 (NAG, EnhanceAVideo, CFGZeroStar,
+        TorchCompile, Florence2) but uses DisTorch2 multi-GPU distribution
+        instead of BlockSwap VRAM offloading. No forced Lightning LoRA —
+        all LoRAs are user-selectable.
+
+        Key differences from BlockSwap Q8:
+        - DisTorch2 multi-GPU loaders (UnetGGUFAdvanced, CLIP, VAE)
+        - No wanBlockSwap nodes (DisTorch2 handles VRAM)
+        - No forced Lightning LoRA (user chooses all LoRAs)
+        - Configurable allocation string
+
+        Args:
+            distorch2_alloc: DisTorch2 expert_mode_allocations string
+            (all other args same as build_blockswap_q8_workflow)
+        """
+        workflow = load_workflow_from_file("ImageToVideo/wan22_i2v_distorch2_q8_api.json")
+        if not workflow:
+            logger.error("❌ Failed to load DisTorch2 Q8 workflow template")
+            return None
+
+        workflow = copy.deepcopy(workflow)
+
+        # Wan2.2 requires num_frames in format 4k+1
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # ─── Calculate dimensions from aspect ratio ───
+        aspect_ratios = {
+            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
+            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
+            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+
+        logger.info(
+            f"🧪 Building DisTorch2 Q8 workflow: {width}x{height}, {num_frames}f, "
+            f"{steps} steps, cfg={cfg}, shift={shift}, NAG={nag_scale}, alloc={distorch2_alloc}"
+        )
+
+        # ─── DisTorch2 allocation on all loader nodes ───
+        for loader_id in ["495", "496", "460", "461"]:
+            if loader_id in workflow:
+                workflow[loader_id]["inputs"]["expert_mode_allocations"] = distorch2_alloc
+
+        # ─── Input Image ───
+        workflow["88"]["inputs"]["image"] = image_name
+
+        # ─── Image Resize ───
+        workflow["401"]["inputs"]["width"] = width
+        workflow["401"]["inputs"]["height"] = height
+
+        # ─── WanImageToVideo ───
+        workflow["464"]["inputs"]["width"] = width
+        workflow["464"]["inputs"]["height"] = height
+        workflow["464"]["inputs"]["length"] = num_frames
+
+        # ─── Florence2 captioning ───
+        if enable_florence2:
+            workflow["451"]["inputs"]["string_b"] = prompt
+        else:
+            workflow["462"]["inputs"]["text"] = prompt
+            for nid in list(workflow.keys()):
+                ct = workflow[nid].get("class_type", "")
+                if ct in ("DownloadAndLoadFlorence2Model", "Florence2Run",
+                          "Text Find and Replace", "StringConcatenate"):
+                    del workflow[nid]
+            workflow["462"]["inputs"].pop("text", None)
+            workflow["462"]["inputs"]["text"] = prompt
+
+        # ─── Negative Prompt ───
+        workflow["463"]["inputs"]["text"] = negative_prompt
+
+        # ─── Seed ───
+        workflow["73"]["inputs"]["noise_seed"] = seed
+        workflow["466"]["inputs"]["noise_seed"] = seed
+        workflow["465"]["inputs"]["noise_seed"] = seed
+
+        # ─── Sampling Parameters ───
+        workflow["466"]["inputs"]["steps"] = steps
+        workflow["466"]["inputs"]["cfg"] = cfg
+        workflow["466"]["inputs"]["end_at_step"] = high_noise_steps
+        workflow["465"]["inputs"]["steps"] = steps
+        workflow["465"]["inputs"]["cfg"] = cfg
+        workflow["465"]["inputs"]["start_at_step"] = high_noise_steps
+
+        # ─── Model Sampling Shift ───
+        workflow["467"]["inputs"]["shift"] = shift
+        workflow["468"]["inputs"]["shift"] = shift
+
+        # ─── NAG Parameters ───
+        workflow["485"]["inputs"]["nag_scale"] = nag_scale
+        workflow["485"]["inputs"]["nag_alpha"] = nag_alpha
+        workflow["485"]["inputs"]["nag_tau"] = nag_tau
+        workflow["486"]["inputs"]["nag_scale"] = nag_scale
+        workflow["486"]["inputs"]["nag_alpha"] = nag_alpha
+        workflow["486"]["inputs"]["nag_tau"] = nag_tau
+
+        # ─── EnhanceAVideo ───
+        workflow["481"]["inputs"]["weight"] = enhance_weight
+        workflow["482"]["inputs"]["weight"] = enhance_weight
+
+        # ─── LoRAs via Power Lora Loader (rgthree) ───
+        # Nodes 416 (high noise) and 471 (low noise) are Power Lora Loader nodes
+        # with up to 6 slots each. Template has them all off by default.
+        if lora_configs and len(lora_configs) > 0:
+            for i, config in enumerate(lora_configs[:6], 1):
+                # High noise LoRA slot
+                high_name = config.get("high", "")
+                if high_name:
+                    workflow["416"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": high_name,
+                        "strength": config.get("strength", 1.0),
+                    }
+                    logger.info(f"🎨 DT2-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}")
+
+                # Low noise LoRA slot (falls back to high if not specified)
+                low_name = config.get("low", high_name)
+                if low_name:
+                    workflow["471"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": low_name,
+                        "strength": config.get("strength", 1.0),
+                    }
+        # Chain: UnetLoader(495/496) → PowerLora(416/471) → EnhanceAVideo(481/482)
+
+        # ─── Output ───
+        workflow["398"]["inputs"]["frame_rate"] = fps
+        workflow["398"]["inputs"]["filename_prefix"] = output_prefix
+
+        # ─── Post-processing (upscale + interpolation) ───
+        if not enable_upscale:
+            for nid in ["384", "385", "418", "419"]:
+                if nid in workflow:
+                    del workflow[nid]
+
+        if not enable_interpolation:
+            for nid in ["431", "433"]:
+                if nid in workflow:
+                    del workflow[nid]
+        else:
+            workflow["433"]["inputs"]["frame_rate"] = fps * 2
+
+        if enable_upscale:
+            workflow["419"]["inputs"]["frame_rate"] = fps
+            workflow["419"]["inputs"]["filename_prefix"] = f"{output_prefix}_upscaled"
+
+        if enable_interpolation:
+            workflow["433"]["inputs"]["filename_prefix"] = f"{output_prefix}_interpolated"
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} LoRAs"
+        pp_info = []
+        if enable_upscale:
+            pp_info.append("upscale")
+        if enable_interpolation:
+            pp_info.append("interpolate")
+        if enable_florence2:
+            pp_info.append("florence2")
+        pp_str = f", post=[{','.join(pp_info)}]" if pp_info else ""
+
+        logger.info(
+            f"🧪 Built DisTorch2 Q8: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
+            f"shift={shift}, NAG={nag_scale}, alloc={distorch2_alloc}{lora_info}{pp_str}"
         )
         return workflow
 

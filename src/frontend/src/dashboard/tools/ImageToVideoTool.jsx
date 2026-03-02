@@ -38,11 +38,11 @@ const RESOLUTION_PRESETS = {
       '4:3': '640×480',
       '3:4': '480×640',
     },
-    // Tested: 321 frames @ 16fps = 20.06 sec, ~26GB VRAM
-    max_duration_wan22: 20,
-    max_duration_ltx2: 12,  // LTX-2 uses more VRAM per frame
-    max_duration_blockswap_q8: 15,  // Q8_0 uses more VRAM (BlockSwap helps)
-    max_duration_distorch2_q8: 15,  // DisTorch2 Q8 same VRAM as blockswap
+    // Max 30s for all models (VRAM will be the practical limit)
+    max_duration_wan22: 30,
+    max_duration_ltx2: 30,
+    max_duration_blockswap_q8: 30,
+    max_duration_distorch2_q8: 30,
   },
   '576p': {
     label: '576p',
@@ -53,11 +53,11 @@ const RESOLUTION_PRESETS = {
       '4:3': '768×576',
       '3:4': '576×768',
     },
-    // Tested: 81 frames @ 16fps = 5.06 sec, ~24GB VRAM
-    max_duration_wan22: 7,
-    max_duration_ltx2: 8,
-    max_duration_blockswap_q8: 5,  // Q8_0 more VRAM, shorter clips at higher res
-    max_duration_distorch2_q8: 5,  // DisTorch2 Q8 same limits
+    // Max 30s for all models (VRAM will be the practical limit)
+    max_duration_wan22: 30,
+    max_duration_ltx2: 30,
+    max_duration_blockswap_q8: 30,
+    max_duration_distorch2_q8: 30,
   },
   '720p': {
     label: '720p',
@@ -68,11 +68,11 @@ const RESOLUTION_PRESETS = {
       '4:3': '960×720',
       '3:4': '720×960',
     },
-    // Tested: 41 frames @ 16fps = 2.56 sec, ~27GB VRAM - too short for production
-    max_duration_wan22: 4,
-    max_duration_ltx2: 5,
-    max_duration_blockswap_q8: 5,  // BlockSwap Q8 original workflow: 121 frames @ 720p
-    max_duration_distorch2_q8: 5,  // DisTorch2 Q8 same limits
+    // Max 30s for all models (VRAM will be the practical limit)
+    max_duration_wan22: 30,
+    max_duration_ltx2: 30,
+    max_duration_blockswap_q8: 30,
+    max_duration_distorch2_q8: 30,
   },
 }
 
@@ -489,17 +489,17 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   // Calculate max duration based on resolution and model mode
   const maxDuration = useMemo(() => {
     const preset = RESOLUTION_PRESETS[resolution]
-    if (!preset) return 15
+    if (!preset) return 30
     if (modelMode === 'ltx2') {
-      return preset.max_duration_ltx2 || 12
+      return preset.max_duration_ltx2 || 30
     }
     if (modelMode === 'blockswap_q8') {
-      return preset.max_duration_blockswap_q8 || 10
+      return preset.max_duration_blockswap_q8 || 30
     }
     if (modelMode === 'distorch2_q8') {
-      return preset.max_duration_distorch2_q8 || 10
+      return preset.max_duration_distorch2_q8 || 30
     }
-    return preset.max_duration_wan22 || 15
+    return preset.max_duration_wan22 || 30
   }, [resolution, modelMode])
 
   // Clamp duration when max changes
@@ -1223,7 +1223,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div className="info-badge" style={{ marginTop: '8px' }}>
               <span style={{ fontWeight: 600 }}>🎬 Wan2.2 14B Q6</span> • <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Dual-pass (high/low noise) • 480p max 20s • 576p max 7s • 720p max 4s
+                Dual-pass (high/low noise) • All resolutions up to 30s
               </div>
             </div>
           ) : modelMode === 'blockswap_q8' ? (
@@ -1233,7 +1233,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 Lightning LoRA + NAG + MagCache + EnhanceAVideo • Florence2 captioning • BlockSwap VRAM optimization
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                480p max 15s • 576p max 5s • 720p max 5s
+                All resolutions up to 30s
               </div>
             </div>
           ) : modelMode === 'distorch2_q8' ? (
@@ -1243,7 +1243,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 DisTorch2 Dual-GPU • NAG + EnhanceAVideo • Selectable LoRAs • Florence2 captioning
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                480p max 15s • 576p max 5s • 720p max 5s
+                All resolutions up to 30s
               </div>
             </div>
           ) : (

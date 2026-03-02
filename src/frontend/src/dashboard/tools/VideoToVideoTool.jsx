@@ -357,6 +357,11 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 <option value={32}>32 frames (~4s @8fps)</option>
                 <option value={48}>48 frames (~6s @8fps)</option>
                 <option value={64}>64 frames (~8s @8fps)</option>
+                <option value={96}>96 frames (~12s @8fps)</option>
+                <option value={128}>128 frames (~16s @8fps)</option>
+                <option value={160}>160 frames (~20s @8fps)</option>
+                <option value={192}>192 frames (~24s @8fps)</option>
+                <option value={240}>240 frames (~30s @8fps)</option>
               </select>
             </div>
 

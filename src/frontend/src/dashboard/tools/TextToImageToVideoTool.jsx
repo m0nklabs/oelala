@@ -137,7 +137,7 @@ export default function TextToImageToVideoTool({ onOutput }) {
           <input
             type="range"
             min="8"
-            max="32"
+            max="481"
             step="4"
             value={numFrames}
             onChange={(e) => setNumFrames(parseInt(e.target.value, 10))}

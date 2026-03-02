@@ -25,14 +25,14 @@ const T2V_MODELS = {
   wan22: {
     name: 'Wan2.2 14B',
     description: 'High quality T2V with T2I pipeline',
-    maxFrames: 81,
+    maxFrames: 481,
     defaultFrames: 41,
     frameStep: 4,
   },
   ltx2: {
     name: 'LTX-2 19B',
     description: 'Fast direct text-to-video',
-    maxFrames: 97,
+    maxFrames: 481,
     defaultFrames: 25,
     frameStep: 1,
   },
