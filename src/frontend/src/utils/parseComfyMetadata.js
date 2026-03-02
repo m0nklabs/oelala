@@ -1,6 +1,12 @@
 /**
  * Parse a raw ComfyUI API-format workflow JSON and extract human-useful settings.
  *
+ * Supports:
+ *  - Standard ComfyUI workflows (CLIPTextEncode + KSampler)
+ *  - DisTorch2 multi-GPU workflows
+ *  - Kijai WanVideoWrapper multi-GPU workflows (WanVideoTextEncodeMultiGPU etc.)
+ *  - Generic fallback for unknown workflow types
+ *
  * Returns an object with any of:
  *   positive  : string  - positive prompt text
  *   negative  : string  - negative prompt text
@@ -26,7 +32,7 @@ export function parseComfyWorkflow(workflow) {
   for (const [, node] of Object.entries(nodes)) {
     if (node.class_type !== 'CLIPTextEncode') continue
     const text = node.inputs?.text
-    if (!text) continue
+    if (!text || typeof text !== 'string') continue
     const title = (node._meta?.title || '').toLowerCase()
     if (!result.positive && (title.includes('positive') || title === 'pos')) {
       result.positive = text
@@ -52,17 +58,55 @@ export function parseComfyWorkflow(workflow) {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // 2. Sampler settings — from the "primary" (first-pass) sampler
+  //    Strategy C: Kijai WanVideoWrapper nodes
+  //    (WanVideoTextEncodeMultiGPU has positive_prompt / negative_prompt)
   // ─────────────────────────────────────────────────────────────────
-  const sampler = _findPrimarySampler(nodes)
+  if (!result.positive || !result.negative) {
+    for (const [, node] of Object.entries(nodes)) {
+      if (node.class_type !== 'WanVideoTextEncodeMultiGPU') continue
+      const inp = node.inputs || {}
+      if (!result.positive && typeof inp.positive_prompt === 'string') {
+        result.positive = inp.positive_prompt
+      }
+      if (!result.negative && typeof inp.negative_prompt === 'string') {
+        result.negative = inp.negative_prompt
+      }
+      break
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //    Strategy D: Generic fallback — scan all nodes for prompt-like
+  //    text input keys (works for unknown/future node types)
+  // ─────────────────────────────────────────────────────────────────
+  if (!result.positive || !result.negative) {
+    const POS_KEYS = ['positive_prompt', 'text_positive', 'prompt']
+    const NEG_KEYS = ['negative_prompt', 'text_negative']
+    for (const [, node] of Object.entries(nodes)) {
+      const inp = node.inputs || {}
+      for (const [key, value] of Object.entries(inp)) {
+        if (typeof value !== 'string' || value.length < 5) continue
+        const k = key.toLowerCase()
+        if (!result.positive && POS_KEYS.includes(k)) result.positive = value
+        if (!result.negative && NEG_KEYS.includes(k)) result.negative = value
+      }
+      if (result.positive && result.negative) break
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // 2. Sampler settings — from the "primary" (first-pass) sampler
+  //    Checks standard KSampler first, then WanVideoSamplerMultiGPU
+  // ─────────────────────────────────────────────────────────────────
+  const sampler = _findPrimarySampler(nodes) || _findWanVideoSampler(nodes)
   if (sampler) {
     const inp = sampler.inputs || {}
-    if (inp.steps !== undefined)       result.steps     = inp.steps
-    if (inp.cfg   !== undefined)       result.cfg       = inp.cfg
-    if (inp.sampler_name)              result.sampler   = inp.sampler_name
-    if (inp.scheduler)                 result.scheduler = inp.scheduler
-    if (inp.noise_seed !== undefined)  result.seed      = inp.noise_seed
-    else if (inp.seed !== undefined)   result.seed      = inp.seed
+    if (typeof inp.steps === 'number')        result.steps     = inp.steps
+    if (typeof inp.cfg === 'number')          result.cfg       = inp.cfg
+    if (typeof inp.sampler_name === 'string') result.sampler   = inp.sampler_name
+    if (typeof inp.scheduler === 'string')    result.scheduler = inp.scheduler
+    if (typeof inp.noise_seed === 'number')   result.seed      = inp.noise_seed
+    else if (typeof inp.seed === 'number')    result.seed      = inp.seed
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -71,13 +115,13 @@ export function parseComfyWorkflow(workflow) {
   const LATENT_TYPES = new Set([
     'EmptyLatentImage', 'EmptySD3LatentImage', 'EmptyHunyuanLatentVideo',
     'EmptyMochiLatentVideo', 'EmptyLTXVLatentVideo', 'WanImageToVideo',
-    'WanFirstAndLastFrameToVideo',
+    'WanFirstAndLastFrameToVideo', 'WanVideoImageToVideoEncodeMultiGPU',
   ])
   for (const [, node] of Object.entries(nodes)) {
     if (!LATENT_TYPES.has(node.class_type)) continue
     const inp = node.inputs || {}
-    if (inp.width)  result.width  = inp.width
-    if (inp.height) result.height = inp.height
+    if (typeof inp.width === 'number')  result.width  = inp.width
+    if (typeof inp.height === 'number') result.height = inp.height
     break
   }
 
@@ -88,11 +132,13 @@ export function parseComfyWorkflow(workflow) {
     'CheckpointLoaderSimple', 'CheckpointLoader',
     'UnetLoaderGGUF', 'UnetLoaderGGUFAdvanced',
     'UnetLoaderGGUFAdvancedDisTorch2MultiGPU',
+    'WanVideoModelLoaderMultiGPU',
   ])
   for (const [, node] of Object.entries(nodes)) {
     if (!LOADER_TYPES.has(node.class_type)) continue
-    result.model = node.inputs?.ckpt_name || node.inputs?.unet_name
-    break
+    result.model = node.inputs?.ckpt_name || node.inputs?.unet_name || node.inputs?.model
+    if (typeof result.model === 'string') break
+    delete result.model // was an array ref, not a filename
   }
 
   return result
@@ -119,6 +165,21 @@ function _findPrimarySampler(nodes) {
   return fallback
 }
 
+/** Return the primary WanVideoSamplerMultiGPU: the one with denoise_strength=1
+ *  or the first one without a samples input (= first-pass, not refinement). */
+function _findWanVideoSampler(nodes) {
+  let fallback = null
+  for (const [, node] of Object.entries(nodes)) {
+    if (node.class_type !== 'WanVideoSamplerMultiGPU') continue
+    const inp = node.inputs || {}
+    // Primary sampler: denoise 1.0, no samples input (not a refinement pass)
+    if (inp.denoise_strength === 1 || inp.denoise_strength === 1.0) return node
+    if (!inp.samples) return node
+    fallback = fallback ?? node
+  }
+  return fallback
+}
+
 /**
  * Follow a node-link chain until we reach a CLIPTextEncode and return its text.
  * Handles intermediate nodes (e.g. WanImageToVideo) by following the same
@@ -129,7 +190,10 @@ function _traceToText(nodes, startNodeId, inputKey, depth = 0) {
   const node = nodes[String(startNodeId)]
   if (!node) return null
 
-  if (node.class_type === 'CLIPTextEncode') return node.inputs?.text ?? null
+  if (node.class_type === 'CLIPTextEncode') {
+    const text = node.inputs?.text
+    return typeof text === 'string' ? text : null
+  }
 
   // Follow the same key deeper
   const nextRef = node.inputs?.[inputKey]

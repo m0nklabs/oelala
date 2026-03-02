@@ -317,7 +317,7 @@ async def broadcast_log(log_entry: dict):
         return
     message = json.dumps(log_entry)
     disconnected = set()
-    for ws in log_subscribers:
+    for ws in set(log_subscribers):
         try:
             await ws.send_text(message)
         except Exception:
