@@ -39,6 +39,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
 
 TOOLKIT_RUN = BASE_DIR / "external" / "ai-toolkit" / "run.py"
 TOOLKIT_DIR = BASE_DIR / "external" / "ai-toolkit"
+TOOLKIT_PYTHON = TOOLKIT_DIR / ".venv" / "bin" / "python"  # isolated venv
 JOBS_DIR = BASE_DIR / "data" / "face_train_jobs"
 JOBS_INDEX = JOBS_DIR / "index.json"
 LORAS_OUTPUT_DIR = BASE_DIR / "ComfyUI" / "models" / "loras" / "face_loras"
@@ -212,6 +213,12 @@ def create_training_job(
         )
     if not TOOLKIT_RUN.exists():
         raise ValueError(f"ai-toolkit not found at {TOOLKIT_DIR}")
+    if not TOOLKIT_PYTHON.exists():
+        raise ValueError(
+            f"ai-toolkit venv not found at {TOOLKIT_PYTHON}. "
+            "Run: python3.12 -m venv external/ai-toolkit/.venv && "
+            "external/ai-toolkit/.venv/bin/pip install -r external/ai-toolkit/requirements.txt"
+        )
 
     job_id = str(uuid.uuid4())[:8]
     trigger = _sanitize_trigger(name)
@@ -272,7 +279,8 @@ def create_training_job(
 
 def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
     """Launch ai-toolkit training as a background subprocess."""
-    python_bin = sys.executable
+    # Use ai-toolkit's own isolated venv to avoid dependency conflicts
+    python_bin = str(TOOLKIT_PYTHON) if TOOLKIT_PYTHON.exists() else sys.executable
     log_path = job_dir / "training.log"
     lora_dest = LORAS_OUTPUT_DIR  # ai-toolkit writes to output/ inside job_dir
 
@@ -400,6 +408,35 @@ def cancel_job(job_id: str) -> bool:
         _save_index({**index, job_id: job})
         return True
     return False
+
+
+def retry_job(job_id: str) -> dict | None:
+    """Retry a failed training job by resetting status and re-launching."""
+    index = _load_index()
+    job = index.get(job_id)
+    if not job:
+        return None
+    if job["status"] not in ("failed", "cancelled"):
+        return None
+
+    job_dir = JOBS_DIR / job_id
+    config_path = job_dir / "config.yaml"
+    if not config_path.exists():
+        return None
+
+    # Reset job state
+    job["status"] = "pending"
+    job["steps_done"] = 0
+    job["error"] = None
+    job["lora_path"] = None
+    job["started_at"] = None
+    job["finished_at"] = None
+    _save_index({**index, job_id: job})
+
+    # Re-launch
+    _launch_training(job_id, job_dir, config_path)
+    logger.info(f"🔄 Retrying face LoRA training: {job_id}")
+    return job
 
 
 def list_trained_loras() -> list[dict]:

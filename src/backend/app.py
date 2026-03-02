@@ -10527,5 +10527,19 @@ async def cancel_face_training_job(job_id: str):
     return {"status": "cancelled", "job_id": job_id}
 
 
+@app.post("/api/face-train/{job_id}/retry")
+async def retry_face_training_job(job_id: str):
+    """Retry a failed or cancelled training job."""
+    if not face_train_service:
+        raise HTTPException(status_code=503, detail="face_train_service unavailable")
+    job = face_train_service.retry_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job '{job_id}' not found, not failed, or missing config",
+        )
+    return job
+
+
 if __name__ == "__main__":
     uvicorn.run("app:app", host="192.168.1.2", port=7998, reload=True, log_level="info")
