@@ -21,10 +21,24 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://nsbjwhxdkxnyggtuxjjp.supabase.
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 # Valid report reasons
-REPORT_REASONS = ["inappropriate", "copyright", "spam", "harassment", "underage", "other"]
+REPORT_REASONS = [
+    "inappropriate",
+    "copyright",
+    "spam",
+    "harassment",
+    "underage",
+    "other",
+]
 
 # Valid moderation actions
-MODERATION_ACTIONS = ["approve", "reject", "hide", "unhide", "warn_user", "dismiss_report"]
+MODERATION_ACTIONS = [
+    "approve",
+    "reject",
+    "hide",
+    "unhide",
+    "warn_user",
+    "dismiss_report",
+]
 
 
 def debug_log(msg: str):
@@ -62,13 +76,17 @@ def _get_client() -> httpx.AsyncClient:
 
 class ReportRequest(BaseModel):
     """User content report request."""
+
     media_id: str = Field(..., description="UUID of the published media item")
     reason: str = Field(..., description="Report reason category")
-    description: Optional[str] = Field(None, max_length=500, description="Additional details")
+    description: Optional[str] = Field(
+        None, max_length=500, description="Additional details"
+    )
 
 
 class ReportResponse(BaseModel):
     """Response after creating a report."""
+
     id: str
     media_id: str
     reason: str
@@ -78,13 +96,17 @@ class ReportResponse(BaseModel):
 
 class ModerationActionRequest(BaseModel):
     """Admin moderation action request."""
+
     action: str = Field(..., description="Moderation action to take")
     reason: Optional[str] = Field(None, max_length=500, description="Reason for action")
-    report_id: Optional[str] = Field(None, description="Associated report ID to resolve")
+    report_id: Optional[str] = Field(
+        None, description="Associated report ID to resolve"
+    )
 
 
 class BulkActionRequest(BaseModel):
     """Bulk moderation action."""
+
     media_ids: List[str] = Field(..., min_length=1, max_length=50)
     action: str = Field(..., description="Action to apply to all items")
     reason: Optional[str] = None
@@ -92,6 +114,7 @@ class BulkActionRequest(BaseModel):
 
 class QueueItem(BaseModel):
     """A moderation queue item with report details."""
+
     media_id: str
     title: str
     media_type: str
@@ -107,6 +130,7 @@ class QueueItem(BaseModel):
 
 class ModerationStats(BaseModel):
     """Moderation statistics."""
+
     pending_reports: int
     reviewed_today: int
     total_hidden: int
@@ -118,9 +142,11 @@ class ModerationStats(BaseModel):
 # Admin dependency (reuse from admin_api)
 # =============================================================================
 
+
 async def _check_admin(user: User) -> bool:
     """Check if user is admin via user_credits table."""
     from admin_api import check_admin
+
     return await check_admin(user)
 
 
@@ -172,7 +198,9 @@ async def report_content(
     debug_log(f"User {user.id} reporting media {report.media_id} for: {report.reason}")
 
     if report.reason not in REPORT_REASONS:
-        raise HTTPException(status_code=400, detail=f"Invalid reason. Must be one of: {REPORT_REASONS}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid reason. Must be one of: {REPORT_REASONS}"
+        )
 
     client = _get_client()
 
@@ -201,7 +229,9 @@ async def report_content(
         },
     )
     if existing_resp.status_code == 200 and existing_resp.json():
-        raise HTTPException(status_code=409, detail="You have already reported this content")
+        raise HTTPException(
+            status_code=409, detail="You have already reported this content"
+        )
 
     # Create the report
     report_data = {
@@ -338,18 +368,20 @@ async def get_moderation_queue(
     for mid in page_ids:
         media = media_by_id.get(mid, {})
         reports = media_reports[mid]
-        items.append({
-            "media_id": mid,
-            "title": media.get("title", "Unknown"),
-            "media_type": media.get("media_type", "unknown"),
-            "storage_path": media.get("storage_path", ""),
-            "is_nsfw": media.get("is_nsfw", False),
-            "moderation_status": media.get("moderation_status", "approved"),
-            "creator_id": media.get("user_id", ""),
-            "report_count": len(reports),
-            "reports": reports,
-            "created_at": media.get("created_at", ""),
-        })
+        items.append(
+            {
+                "media_id": mid,
+                "title": media.get("title", "Unknown"),
+                "media_type": media.get("media_type", "unknown"),
+                "storage_path": media.get("storage_path", ""),
+                "is_nsfw": media.get("is_nsfw", False),
+                "moderation_status": media.get("moderation_status", "approved"),
+                "creator_id": media.get("user_id", ""),
+                "report_count": len(reports),
+                "reports": reports,
+                "created_at": media.get("created_at", ""),
+            }
+        )
 
     return {"items": items, "total": total, "page": page, "per_page": per_page}
 
@@ -383,7 +415,9 @@ async def get_moderation_stats(admin: User = Depends(get_admin_user)):
         params={"created_at": f"gte.{today}", "select": "id"},
         headers={**client.headers, "Prefer": "count=exact"},
     )
-    reviewed_today = int(reviewed_resp.headers.get("content-range", "0-0/0").split("/")[-1])
+    reviewed_today = int(
+        reviewed_resp.headers.get("content-range", "0-0/0").split("/")[-1]
+    )
 
     # Hidden media count
     hidden_resp = await client.get(
@@ -399,7 +433,9 @@ async def get_moderation_stats(admin: User = Depends(get_admin_user)):
         params={"moderation_status": "eq.rejected", "select": "id"},
         headers={**client.headers, "Prefer": "count=exact"},
     )
-    total_rejected = int(rejected_resp.headers.get("content-range", "0-0/0").split("/")[-1])
+    total_rejected = int(
+        rejected_resp.headers.get("content-range", "0-0/0").split("/")[-1]
+    )
 
     return {
         "pending_reports": pending,
@@ -471,7 +507,10 @@ async def take_moderation_action(
     debug_log(f"Admin {admin.id} action '{req.action}' on {media_id}")
 
     if req.action not in MODERATION_ACTIONS:
-        raise HTTPException(status_code=400, detail=f"Invalid action. Must be one of: {MODERATION_ACTIONS}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action. Must be one of: {MODERATION_ACTIONS}",
+        )
 
     client = _get_client()
 
@@ -540,7 +579,12 @@ async def take_moderation_action(
     )
 
     debug_log(f"Action '{req.action}' completed on {media_id}")
-    return {"success": True, "action": req.action, "media_id": media_id, "new_status": new_status}
+    return {
+        "success": True,
+        "action": req.action,
+        "media_id": media_id,
+        "new_status": new_status,
+    }
 
 
 @admin_router.post("/bulk-action")
@@ -549,10 +593,15 @@ async def bulk_moderation_action(
     admin: User = Depends(get_admin_user),
 ):
     """Apply a moderation action to multiple media items at once."""
-    debug_log(f"Admin {admin.id} bulk action '{req.action}' on {len(req.media_ids)} items")
+    debug_log(
+        f"Admin {admin.id} bulk action '{req.action}' on {len(req.media_ids)} items"
+    )
 
     if req.action not in MODERATION_ACTIONS:
-        raise HTTPException(status_code=400, detail=f"Invalid action. Must be one of: {MODERATION_ACTIONS}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action. Must be one of: {MODERATION_ACTIONS}",
+        )
 
     client = _get_client()
     results = {"success": 0, "failed": 0, "errors": []}

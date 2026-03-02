@@ -234,7 +234,9 @@ class LoRACache:
         all_loras.sort(key=lambda x: x.name.lower())
         self._cache = all_loras
         self._last_scan = time.time()
-        debug_log(f"LoRA scan complete: {len(all_loras)} total in {time.time() - start:.2f}s")
+        debug_log(
+            f"LoRA scan complete: {len(all_loras)} total in {time.time() - start:.2f}s"
+        )
 
     def search(self, query: str) -> List[LoRAInfo]:
         """Search LoRAs by name, tags, or category."""
@@ -275,7 +277,10 @@ class LoRACache:
         for lora in self.get_all():
             for tag in lora.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
-        return [{"name": k, "count": v} for k, v in sorted(tag_counts.items(), key=lambda x: -x[1])]
+        return [
+            {"name": k, "count": v}
+            for k, v in sorted(tag_counts.items(), key=lambda x: -x[1])
+        ]
 
     def to_dict(self, lora: LoRAInfo) -> Dict:
         """Convert LoRAInfo to API-friendly dict."""

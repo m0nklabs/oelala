@@ -25,7 +25,6 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Literal
 
 import yaml
 
@@ -43,7 +42,13 @@ TOOLKIT_DIR = BASE_DIR / "external" / "ai-toolkit"
 JOBS_DIR = BASE_DIR / "data" / "face_train_jobs"
 JOBS_INDEX = JOBS_DIR / "index.json"
 LORAS_OUTPUT_DIR = BASE_DIR / "ComfyUI" / "models" / "loras" / "face_loras"
-BASE_MODEL = BASE_DIR / "ComfyUI" / "models" / "checkpoints" / "juggernautXL_ragnarok.safetensors"
+BASE_MODEL = (
+    BASE_DIR
+    / "ComfyUI"
+    / "models"
+    / "checkpoints"
+    / "juggernautXL_ragnarok.safetensors"
+)
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 LORAS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -61,6 +66,7 @@ CAPTION_TEMPLATES = [
 # ─────────────────────────────────────────────────────────────────────────────
 # Index helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _load_index() -> dict:
     if not JOBS_INDEX.exists():
@@ -83,6 +89,7 @@ def _sanitize_trigger(name: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Config generation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _build_training_config(
     job_id: str,
@@ -150,8 +157,8 @@ def _build_training_config(
                         "width": 1024,
                         "height": 1024,
                         "prompts": [
-                            f"professional portrait photo of [trigger] person, sharp focus, detailed face, natural lighting",
-                            f"candid photo of [trigger] person, realistic, natural expression",
+                            "professional portrait photo of [trigger] person, sharp focus, detailed face, natural lighting",
+                            "candid photo of [trigger] person, realistic, natural expression",
                         ],
                         "neg": "blurry, deformed face, bad anatomy, extra limbs",
                         "seed": 42,
@@ -185,6 +192,7 @@ def _write_captions(images_dir: Path, trigger: str) -> None:
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def create_training_job(
     name: str,
     images: list,  # list of PIL Image or bytes, saved to disk
@@ -216,6 +224,7 @@ def create_training_job(
     # Save images to training dataset dir
     from PIL import Image as PILImage
     import io
+
     for idx, img_data in enumerate(images):
         img_path = images_dir / f"face_{idx:03d}.png"
         if isinstance(img_data, bytes):
@@ -269,6 +278,7 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
 
     def _run():
         import subprocess as sp
+
         index = _load_index()
         job = index.get(job_id, {})
         job["status"] = "running"
@@ -325,6 +335,7 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
         _save_index({**index, job_id: job})
 
     import threading
+
     t = threading.Thread(target=_run, daemon=True, name=f"face-train-{job_id}")
     t.start()
     logger.info(f"🎯 Face LoRA training started: job={job_id}, log={log_path}")
@@ -368,6 +379,7 @@ def _find_output_lora(job_dir: Path, trigger: str) -> Path | None:
 # Status / list
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def get_job(job_id: str) -> dict | None:
     return _load_index().get(job_id)
 
@@ -395,11 +407,13 @@ def list_trained_loras() -> list[dict]:
     loras = []
     for f in sorted(LORAS_OUTPUT_DIR.glob("*.safetensors")):
         stat = f.stat()
-        loras.append({
-            "filename": f.name,
-            "path": str(f),
-            "size_mb": round(stat.st_size / 1024 / 1024, 1),
-            "trigger": f.stem,  # e.g. ohwx_john_doe
-            "modified": stat.st_mtime,
-        })
+        loras.append(
+            {
+                "filename": f.name,
+                "path": str(f),
+                "size_mb": round(stat.st_size / 1024 / 1024, 1),
+                "trigger": f.stem,  # e.g. ohwx_john_doe
+                "modified": stat.st_mtime,
+            }
+        )
     return loras

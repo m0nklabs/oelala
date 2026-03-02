@@ -27,8 +27,9 @@ from guardian_client import get_guardian
 # Import MediaService for async uploads with Supabase sync
 try:
     from media_service import MediaService
+
     _media_service: Optional[MediaService] = None
-    
+
     def get_media_service() -> MediaService:
         """Get or create the global MediaService instance."""
         global _media_service
@@ -55,7 +56,7 @@ I2V_GENERATION_MODES = {
         "default_cfg": 1.0,
     },
     "nsfw_lora": {
-        "name": "NSFW LoRA Preset", 
+        "name": "NSFW LoRA Preset",
         "description": "Standard workflow with NSFW LoRAs pre-configured",
         "workflow_file": "ImageToVideo/wan22_i2v_ltx2_audio_api.json",
         "default_steps": 6,
@@ -125,7 +126,7 @@ def build_ltx2_t2v_workflow(
 ) -> Optional[Dict]:
     """
     Build LTX-2 T2V workflow by loading template and injecting parameters.
-    
+
     LTX-2 19B distilled - faster inference, good quality for T2V.
     Uses DisTorch2 multi-GPU distribution.
     """
@@ -133,37 +134,39 @@ def build_ltx2_t2v_workflow(
     if not workflow:
         logger.error("❌ Failed to load LTX-2 T2V workflow template")
         return None
-    
+
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
-    
-    logger.info(f"🎬 Building LTX-2 T2V workflow: {width}x{height}, {num_frames} frames, {steps} steps")
-    
+
+    logger.info(
+        f"🎬 Building LTX-2 T2V workflow: {width}x{height}, {num_frames} frames, {steps} steps"
+    )
+
     # Update prompts (nodes 4 and 5 are CLIPTextEncode)
     if "4" in workflow:
         workflow["4"]["inputs"]["text"] = prompt
     if "5" in workflow:
         workflow["5"]["inputs"]["text"] = negative_prompt
-    
+
     # Update dimensions and frame count (node 7: EmptyLTXVLatentVideo)
     if "7" in workflow:
         workflow["7"]["inputs"]["width"] = width
         workflow["7"]["inputs"]["height"] = height
         workflow["7"]["inputs"]["length"] = num_frames
-    
+
     # Update scheduler steps (node 8: LTXVScheduler)
     if "8" in workflow:
         workflow["8"]["inputs"]["steps"] = steps
-    
+
     # Update sampler seed and cfg (node 9: SamplerCustom)
     if "9" in workflow:
         workflow["9"]["inputs"]["noise_seed"] = seed
         workflow["9"]["inputs"]["cfg"] = cfg
-    
+
     # Update output filename (node 12: VHS_VideoCombine)
     if "12" in workflow:
         workflow["12"]["inputs"]["filename_prefix"] = filename_prefix
-    
+
     logger.debug(f"✅ LTX-2 T2V workflow built: seed={seed}")
     return workflow
 
@@ -183,7 +186,7 @@ def build_ltx2_i2v_workflow(
 ) -> Optional[Dict]:
     """
     Build LTX-2 I2V workflow by loading template and injecting parameters.
-    
+
     LTX-2 19B - single model (no high/low noise), uses Gemma text encoder.
     Uses LTXVImgToVideo node for image conditioning.
     """
@@ -191,47 +194,49 @@ def build_ltx2_i2v_workflow(
     if not workflow:
         logger.error("❌ Failed to load LTX-2 I2V workflow template")
         return None
-    
+
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
-    
-    logger.info(f"🎬 Building LTX-2 I2V workflow: {width}x{height}, {num_frames} frames, {steps} steps")
-    
+
+    logger.info(
+        f"🎬 Building LTX-2 I2V workflow: {width}x{height}, {num_frames} frames, {steps} steps"
+    )
+
     # Update input image (node 4: LoadImage)
     if "4" in workflow:
         workflow["4"]["inputs"]["image"] = image_name
-    
+
     # Update prompts (nodes 5 and 6 are CLIPTextEncode)
     if "5" in workflow:
         workflow["5"]["inputs"]["text"] = prompt
     if "6" in workflow:
         workflow["6"]["inputs"]["text"] = negative_prompt
-    
+
     # Update dimensions, frame count and strength (node 7: LTXVImgToVideo)
     if "7" in workflow:
         workflow["7"]["inputs"]["width"] = width
         workflow["7"]["inputs"]["height"] = height
         workflow["7"]["inputs"]["length"] = num_frames
         workflow["7"]["inputs"]["strength"] = 1.0
-    
+
     # Update frame rate (node 8: LTXVConditioning)
     if "8" in workflow:
         workflow["8"]["inputs"]["frame_rate"] = float(fps)
-    
+
     # Update scheduler steps (node 9: LTXVScheduler)
     if "9" in workflow:
         workflow["9"]["inputs"]["steps"] = steps
-    
+
     # Update sampler seed and cfg (node 11: SamplerCustom)
     if "11" in workflow:
         workflow["11"]["inputs"]["noise_seed"] = seed
         workflow["11"]["inputs"]["cfg"] = cfg
-    
+
     # Update output filename and fps (node 13: VHS_VideoCombine)
     if "13" in workflow:
         workflow["13"]["inputs"]["filename_prefix"] = filename_prefix
         workflow["13"]["inputs"]["frame_rate"] = fps
-    
+
     logger.debug(f"✅ LTX-2 I2V workflow built: image={image_name}, seed={seed}")
     return workflow
 
@@ -2008,7 +2013,7 @@ class ComfyUIClient:
     ) -> Optional[str]:
         """
         Async version of on_job_complete that uses MediaService for upload + Supabase sync.
-        
+
         This should be called from async contexts (like FastAPI endpoints) for better
         integration with Supabase metadata tracking and signed URL generation.
 
@@ -2027,7 +2032,9 @@ class ComfyUIClient:
         # Get job metadata
         metadata = self.get_job_metadata(prompt_id)
         if not metadata:
-            logger.warning(f"⚠️ No job metadata found for {prompt_id}, skipping auto-upload")
+            logger.warning(
+                f"⚠️ No job metadata found for {prompt_id}, skipping auto-upload"
+            )
             return None
 
         user_id = metadata.get("user_id")
@@ -2080,7 +2087,9 @@ class ComfyUIClient:
                 extra_metadata=extra_metadata,
             )
 
-            logger.info(f"✅ Async uploaded to storage: {record.storage_path} ({len(file_data)} bytes)")
+            logger.info(
+                f"✅ Async uploaded to storage: {record.storage_path} ({len(file_data)} bytes)"
+            )
 
             # Clear job metadata after successful upload
             self.clear_job_metadata(prompt_id)
@@ -3002,7 +3011,7 @@ class ComfyUIClient:
         """
         Full pipeline: upload image → build workflow → execute → return video path
         Now uses DisTorch2 dual-pass workflow with optional LoRA support.
-        
+
         Args:
             generation_mode: Which workflow preset to use ("standard", "nsfw_lora")
         """
@@ -3095,8 +3104,10 @@ class ComfyUIClient:
             loaded_workflow = load_workflow_from_file(mode_config["workflow_file"])
             if loaded_workflow:
                 workflow = copy.deepcopy(loaded_workflow)
-                logger.info(f"📂 Loaded preset workflow: {mode_config['workflow_file']}")
-                
+                logger.info(
+                    f"📂 Loaded preset workflow: {mode_config['workflow_file']}"
+                )
+
                 # Update dynamic parameters in the loaded workflow
                 # Find and update image node
                 for node_id, node in workflow.items():
@@ -3112,13 +3123,15 @@ class ComfyUIClient:
                         node["inputs"]["frame_rate"] = fps
                         node["inputs"]["filename_prefix"] = output_prefix
                     elif node.get("class_type") == "KSamplerAdvanced":
-                        node["inputs"]["noise_seed"] = seed if seed >= 0 else random.randint(0, 2**32 - 1)
+                        node["inputs"]["noise_seed"] = (
+                            seed if seed >= 0 else random.randint(0, 2**32 - 1)
+                        )
                         node["inputs"]["cfg"] = cfg
                     elif node.get("class_type") == "WanImageToVideo":
                         node["inputs"]["length"] = num_frames
             else:
                 # Fallback to standard build if file not found
-                logger.warning(f"⚠️ Preset workflow not found, using standard build")
+                logger.warning("⚠️ Preset workflow not found, using standard build")
                 workflow = self.build_q6_workflow(
                     image_name=image_name,
                     prompt=prompt,
@@ -3771,16 +3784,20 @@ class ComfyUIClient:
         import copy
 
         # Load workflow from file based on generation mode
-        mode_config = I2V_GENERATION_MODES.get(generation_mode, I2V_GENERATION_MODES["standard"])
+        mode_config = I2V_GENERATION_MODES.get(
+            generation_mode, I2V_GENERATION_MODES["standard"]
+        )
         loaded_workflow = load_workflow_from_file(mode_config["workflow_file"])
-        
+
         if loaded_workflow:
             workflow = copy.deepcopy(loaded_workflow)
             logger.info(f"📂 Loaded workflow from file: {mode_config['workflow_file']}")
         else:
             # Fallback to hardcoded workflow
             workflow = copy.deepcopy(WAN22_I2V_DISTORCH2_API_WORKFLOW)
-            logger.warning(f"⚠️ Using fallback hardcoded workflow (mode: {generation_mode})")
+            logger.warning(
+                f"⚠️ Using fallback hardcoded workflow (mode: {generation_mode})"
+            )
 
         # Set seed
         if seed == -1:
@@ -4004,13 +4021,13 @@ class ComfyUIClient:
     ) -> Optional[Dict]:
         """
         Build a video upscaling workflow using Real-ESRGAN.
-        
+
         Args:
             video_path: Path to input video
             scale: Upscale factor (2 or 4)
             output_prefix: Prefix for output filename
             model: Upscale model to use
-            
+
         Returns:
             ComfyUI workflow dict or None if video doesn't exist
         """
@@ -4079,13 +4096,13 @@ class ComfyUIClient:
     ) -> Optional[Dict]:
         """
         Build a RIFE frame interpolation workflow.
-        
+
         Args:
             video_path: Path to input video
             target_fps: Target framerate
             output_prefix: Prefix for output filename
             multiplier: Frame multiplier (2 = double frames, 4 = quadruple)
-            
+
         Returns:
             ComfyUI workflow dict or None if video doesn't exist
         """
@@ -4152,12 +4169,12 @@ class ComfyUIClient:
     ) -> Optional[Dict]:
         """
         Build a video concatenation workflow to join multiple videos.
-        
+
         Args:
             video_paths: List of video paths to concatenate
             output_prefix: Prefix for output filename
             transition: Transition type between clips ("none", "crossfade")
-            
+
         Returns:
             ComfyUI workflow dict or None
         """
@@ -4207,7 +4224,7 @@ class ComfyUIClient:
             "class_type": "ImageBatch",
         }
         batch_node = str(node_id)
-        
+
         # Chain additional videos
         for ln in load_nodes[1:]:
             node_id += 1
@@ -4219,7 +4236,7 @@ class ComfyUIClient:
                 "class_type": "ImageBatch",
             }
             batch_node = str(node_id)
-        
+
         node_id += 1
 
         # Output combined video

@@ -404,7 +404,10 @@ async def get_my_stats(user: User = Depends(get_current_user)):
         # Parse media counts
         total_media = 0
         published_media = 0
-        if not isinstance(media_response, Exception) and media_response.status_code == 200:
+        if (
+            not isinstance(media_response, Exception)
+            and media_response.status_code == 200
+        ):
             media_list = media_response.json()
             total_media = len(media_list)
             published_media = sum(1 for m in media_list if m.get("is_published"))
@@ -412,7 +415,10 @@ async def get_my_stats(user: User = Depends(get_current_user)):
         # Parse likes/views
         total_likes = 0
         total_views = 0
-        if not isinstance(published_response, Exception) and published_response.status_code == 200:
+        if (
+            not isinstance(published_response, Exception)
+            and published_response.status_code == 200
+        ):
             published_list = published_response.json()
             total_likes = sum(p.get("like_count", 0) for p in published_list)
             total_views = sum(p.get("view_count", 0) for p in published_list)
@@ -420,7 +426,10 @@ async def get_my_stats(user: User = Depends(get_current_user)):
         # Parse follower/following counts (graceful if columns don't exist)
         follower_count = 0
         following_count = 0
-        if not isinstance(profile_response, Exception) and profile_response.status_code == 200:
+        if (
+            not isinstance(profile_response, Exception)
+            and profile_response.status_code == 200
+        ):
             profiles = profile_response.json()
             if profiles:
                 p = profiles[0]
@@ -521,7 +530,9 @@ async def upload_avatar(
         )
         if resp.status_code not in (200, 204):
             logger.error(f"Failed to update avatar_url in Supabase: {resp.text}")
-            raise HTTPException(status_code=500, detail="Saved image but failed to update profile")
+            raise HTTPException(
+                status_code=500, detail="Saved image but failed to update profile"
+            )
 
     return {"avatar_url": avatar_url}
 
@@ -571,7 +582,11 @@ async def follow_user(user_id: str, user: User = Depends(get_current_user)):
             "/profiles",
             params={"id": f"eq.{user_id}", "select": "follower_count,following_count"},
         )
-        counts = profile_resp.json()[0] if profile_resp.status_code == 200 and profile_resp.json() else {}
+        counts = (
+            profile_resp.json()[0]
+            if profile_resp.status_code == 200 and profile_resp.json()
+            else {}
+        )
 
         debug_log(f"User {user.id} followed {user_id}")
         return FollowResponse(
@@ -605,7 +620,11 @@ async def unfollow_user(user_id: str, user: User = Depends(get_current_user)):
             "/profiles",
             params={"id": f"eq.{user_id}", "select": "follower_count,following_count"},
         )
-        counts = profile_resp.json()[0] if profile_resp.status_code == 200 and profile_resp.json() else {}
+        counts = (
+            profile_resp.json()[0]
+            if profile_resp.status_code == 200 and profile_resp.json()
+            else {}
+        )
 
         debug_log(f"User {user.id} unfollowed {user_id}")
         return FollowResponse(

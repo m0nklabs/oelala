@@ -47,12 +47,16 @@ class GuardianVRAMClient:
         admin_token: str | None = None,
         timeout: float = 10.0,
     ) -> None:
-        self.base_url = (base_url or os.getenv("GUARDIAN_BASE_URL", "http://localhost:11434")).rstrip("/")
+        self.base_url = (
+            base_url or os.getenv("GUARDIAN_BASE_URL", "http://localhost:11434")
+        ).rstrip("/")
         self.admin_token = admin_token or os.getenv("GUARDIAN_API_KEY", "")
         self.timeout = timeout
 
         if not self.admin_token:
-            logger.warning("⚠️ [guardian] GUARDIAN_API_KEY not set — VRAM management disabled")
+            logger.warning(
+                "⚠️ [guardian] GUARDIAN_API_KEY not set — VRAM management disabled"
+            )
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -73,15 +77,21 @@ class GuardianVRAMClient:
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(f"{self.base_url}/admin/unload", headers=self._headers)
+                resp = await client.post(
+                    f"{self.base_url}/admin/unload", headers=self._headers
+                )
 
             if resp.status_code == 200:
                 data = resp.json()
-                logger.info(f"🛡️ Guardian: LLM unloaded — {data.get('message', 'VRAM free')}")
+                logger.info(
+                    f"🛡️ Guardian: LLM unloaded — {data.get('message', 'VRAM free')}"
+                )
                 _debug(f"unload response: {data}")
                 return True
             else:
-                logger.warning(f"⚠️ [guardian] Unload returned {resp.status_code}: {resp.text}")
+                logger.warning(
+                    f"⚠️ [guardian] Unload returned {resp.status_code}: {resp.text}"
+                )
                 return False
 
         except httpx.ConnectError:
@@ -101,7 +111,9 @@ class GuardianVRAMClient:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(f"{self.base_url}/admin/load", headers=self._headers)
+                resp = await client.post(
+                    f"{self.base_url}/admin/load", headers=self._headers
+                )
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -109,7 +121,9 @@ class GuardianVRAMClient:
                 _debug(f"load response: {data}")
                 return True
             else:
-                logger.warning(f"⚠️ [guardian] Load returned {resp.status_code}: {resp.text}")
+                logger.warning(
+                    f"⚠️ [guardian] Load returned {resp.status_code}: {resp.text}"
+                )
                 return False
 
         except httpx.ConnectError:
@@ -136,10 +150,14 @@ class GuardianVRAMClient:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                logger.info(f"🛡️ Guardian: LLM unloaded — {data.get('message', 'VRAM free')}")
+                logger.info(
+                    f"🛡️ Guardian: LLM unloaded — {data.get('message', 'VRAM free')}"
+                )
                 return True
             else:
-                logger.warning(f"⚠️ [guardian] Unload returned {resp.status_code}: {resp.text}")
+                logger.warning(
+                    f"⚠️ [guardian] Unload returned {resp.status_code}: {resp.text}"
+                )
                 return False
         except httpx.ConnectError:
             logger.warning("⚠️ [guardian] Cannot reach Guardian proxy — skipping unload")
@@ -202,14 +220,18 @@ async def wait_for_comfyui_idle(
     if not await is_comfyui_busy(url):
         return True
 
-    logger.info("⏳ [guardian] ComfyUI is busy — waiting for generation to complete before LLM call...")
+    logger.info(
+        "⏳ [guardian] ComfyUI is busy — waiting for generation to complete before LLM call..."
+    )
 
     while elapsed < max_wait:
         await asyncio.sleep(poll_interval)
         elapsed += poll_interval
 
         if not await is_comfyui_busy(url):
-            logger.info(f"✅ [guardian] ComfyUI idle after {elapsed:.0f}s — proceeding with LLM call")
+            logger.info(
+                f"✅ [guardian] ComfyUI idle after {elapsed:.0f}s — proceeding with LLM call"
+            )
             return True
 
         if int(elapsed) % 30 == 0:
@@ -217,6 +239,7 @@ async def wait_for_comfyui_idle(
 
     logger.warning(f"⚠️ [guardian] Timed out waiting for ComfyUI after {max_wait:.0f}s")
     return False
+
 
 async def free_comfyui_vram(comfyui_url: str | None = None) -> bool:
     """
@@ -258,10 +281,14 @@ def free_comfyui_vram_sync(comfyui_url: str | None = None) -> bool:
             if resp.status_code == 200:
                 logger.info("🖥️ [guardian] ComfyUI VRAM freed before LLM call (sync)")
                 return True
-            logger.warning(f"⚠️ [guardian] ComfyUI /free returned {resp.status_code} (sync)")
+            logger.warning(
+                f"⚠️ [guardian] ComfyUI /free returned {resp.status_code} (sync)"
+            )
             return False
     except httpx.ConnectError:
-        logger.warning("⚠️ [guardian] Cannot reach ComfyUI to free VRAM (sync) — skipping")
+        logger.warning(
+            "⚠️ [guardian] Cannot reach ComfyUI to free VRAM (sync) — skipping"
+        )
         return False
     except Exception as exc:
         logger.warning(f"⚠️ [guardian] ComfyUI free_vram_sync error: {exc}")
