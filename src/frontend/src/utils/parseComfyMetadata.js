@@ -184,6 +184,10 @@ function _findWanVideoSampler(nodes) {
  * Follow a node-link chain until we reach a CLIPTextEncode and return its text.
  * Handles intermediate nodes (e.g. WanImageToVideo) by following the same
  * "positive" / "negative" input key further up the graph.
+ *
+ * When CLIPTextEncode.text is a reference (array) instead of a string, we
+ * resolve it via _resolveTextRef, which can trace through StringConcatenate,
+ * Text Find and Replace, and similar text-manipulation nodes.
  */
 function _traceToText(nodes, startNodeId, inputKey, depth = 0) {
   if (depth > 6 || !startNodeId) return null
@@ -192,12 +196,71 @@ function _traceToText(nodes, startNodeId, inputKey, depth = 0) {
 
   if (node.class_type === 'CLIPTextEncode') {
     const text = node.inputs?.text
-    return typeof text === 'string' ? text : null
+    if (typeof text === 'string') return text
+    // text is a reference (e.g. ['451', 0]) — resolve it
+    if (Array.isArray(text)) return _resolveTextRef(nodes, text[0])
+    return null
   }
 
   // Follow the same key deeper
   const nextRef = node.inputs?.[inputKey]
   if (Array.isArray(nextRef)) return _traceToText(nodes, nextRef[0], inputKey, depth + 1)
 
+  return null
+}
+
+/**
+ * Resolve a text reference chain through text-manipulation nodes.
+ * Handles: StringConcatenate, Text Find and Replace, and other nodes
+ * that produce text output from text inputs.
+ *
+ * For StringConcatenate: returns string_b preferentially (user prompt),
+ * falling back to string_a (often auto-caption), with delimiter between
+ * if both are resolvable strings.
+ */
+function _resolveTextRef(nodes, nodeId, depth = 0) {
+  if (depth > 12 || !nodeId) return null
+  const node = nodes[String(nodeId)]
+  if (!node) return null
+
+  const ct = node.class_type || ''
+  const inp = node.inputs || {}
+
+  // StringConcatenate: has string_a, string_b, delimiter
+  if (ct === 'StringConcatenate') {
+    const a = _resolveInputText(nodes, inp.string_a, depth)
+    const b = _resolveInputText(nodes, inp.string_b, depth)
+    const delim = typeof inp.delimiter === 'string' ? inp.delimiter : ' '
+    if (a && b) return a + delim + b
+    return b || a || null
+  }
+
+  // Text Find and Replace: passes text through with replacements
+  if (ct === 'Text Find and Replace') {
+    return _resolveInputText(nodes, inp.text, depth)
+  }
+
+  // CLIPTextEncode hit again (shouldn't happen, but handle it)
+  if (ct === 'CLIPTextEncode') {
+    return _resolveInputText(nodes, inp.text, depth)
+  }
+
+  // Generic: try common text output keys
+  for (const key of ['text', 'string', 'output', 'result', 'text_output']) {
+    const val = inp[key]
+    if (typeof val === 'string' && val.length > 0) return val
+    if (Array.isArray(val)) {
+      const resolved = _resolveTextRef(nodes, val[0], depth + 1)
+      if (resolved) return resolved
+    }
+  }
+
+  return null
+}
+
+/** Resolve a single input value: if string return it, if array ref follow it. */
+function _resolveInputText(nodes, value, depth) {
+  if (typeof value === 'string' && value.length > 0) return value
+  if (Array.isArray(value)) return _resolveTextRef(nodes, value[0], depth + 1)
   return null
 }
