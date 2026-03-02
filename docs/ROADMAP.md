@@ -1,7 +1,7 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-01-06
-> **Version**: 0.3.0 (Alpha)
+> **Last Updated**: 2026-03-02
+> **Version**: 0.10.0 (Alpha)
 
 ## Vision
 
@@ -86,6 +86,8 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Custom LoRA training interface | ⏳ Todo | Medium |
 | Inpainting/outpainting tools | ⏳ Todo | Medium |
 | Face swap (InSwapper) | ✅ Done | Medium |
+| I2I face processing (IP-Adapter FaceID, FaceDetailer, GFPGAN) | ✅ Done | High |
+| I2I preset system (Portrait, Character, Stylized) | ✅ Done | Medium |
 
 ### Phase 8: Content Filtering & Moderation
 | Global NSFW toggle in header | ✅ Done | High |
@@ -275,6 +277,7 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | 0.1.0 | Nov 2025 | Initial release, T2V/I2V working |
 | 0.1.5 | Dec 2025 | Web interface, ComfyUI integration |
 | 0.2.0 | Jan 2026 | Audio pipeline, voice cloning, lip sync |
+| 0.10.0 | Mar 2026 | I2I face processing, CORS fix, CreationsPickerModal inline |
 
 ---
 

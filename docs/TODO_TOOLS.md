@@ -79,25 +79,34 @@ Dit document beschrijft alle tools die geïmplementeerd moeten worden in de Oela
 - [ ] Image size presets
 - [ ] Seed history/favorites
 
-### 🔴 Image to Image (I2I) - ✅ DONE
+### 🔴 Image to Image (I2I) - ✅ DONE (Enhanced 2026-03-02)
 - [x] Upload source image
 - [x] Denoise strength slider (0.0-1.0)
 - [x] Prompt input
 - [x] Negative prompt
 - [x] Model selector
 - [x] LoRA support
+- [x] **IP-Adapter FaceID** (face identity preservation)
+- [x] **FaceDetailer** (YOLO face detection + SAM segmentation + re-render)
+- [x] **GFPGAN Face Restore** (face enhancement post-processing)
+- [x] **Preset system** (fast, balanced, face_preserve, custom)
+- [x] **From My Creations** picker (inline, no overlay)
 - [ ] Mask painting (inpainting)
 - [ ] Outpainting support
 
 **Backend implemented:**
-- `/generate-i2i` endpoint ✅
-- VAE encode → KSampler → VAE decode
-- Mask handling
+- `/generate-i2i` endpoint ✅ (enhanced with face params)
+- `/i2i/presets` endpoint ✅
+- Dynamic workflow builder `_build_i2i_workflow()` ✅
+- IP-Adapter FaceID Plus V2 SDXL + CLIP Vision ✅
+- FaceDetailer with face_yolov8m + SAM ✅
+- GFPGAN v1.4 via mtb nodes ✅
 
-**ComfyUI workflow:**
-- LoadImage node
-- VAE encode
-- KSampler with denoise < 1.0
+**ComfyUI workflow (dynamic):**
+- LoadImage → VAE encode → KSampler → VAE decode
+- Optional: IPAdapterFaceID (2 nodes) → face identity transfer
+- Optional: FaceDetailer (YOLO + SAM) → face re-rendering
+- Optional: RestoreFace (mtb) → GFPGAN enhancement
 - VAE decode
 
 ### 🔴 Reframe - ✅ DONE

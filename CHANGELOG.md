@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.0] - 2026-03-02
+
+### Added
+- **I2I Face Processing Pipeline**: Enhanced Image-to-Image with IP-Adapter FaceID, FaceDetailer (YOLO + SAM), and GFPGAN face restore
+  - 4 presets: Fast, Balanced, Face Preserve, Custom
+  - `/i2i/presets` endpoint for preset discovery
+  - Dynamic ComfyUI workflow builder (`_build_i2i_workflow()`)
+- **ComfyUI Impact-Subpack**: Installed for UltralyticsDetectorProvider
+  - face_yolov8m.pt YOLO model for face detection
+
+### Changed
+- **CreationsPickerModal**: Refactored from full-screen overlay to inline expandable panel
+  - CSS slide-in animation, compact header with X close
+  - Applied to all 7 tool files (I2I, V2V, I2T, Inpaint, FaceSwap, Reframe, V2T)
+- **CORS Configuration**: Fixed spec violation (`allow_origins=["*"]` + credentials)
+  - Explicit origins list for credentialed requests
+  - `/comfyui/output/` endpoint adds `Vary: Origin` for Cloudflare CDN cache correctness
+  - `apiFetch` adds `?_cors=1` cache-bust for stale CF entries
+- **Image loading**: All 7 tools migrated from raw `fetch()` to `apiFetch()` for authenticated My Creations loading
+
+### Fixed
+- **CORS on media files**: Browser rejected `Access-Control-Allow-Origin: *` with `Authorization` header
+- **Cloudflare cache**: Old responses without `Vary: Origin` caused CORS failures for new requests
+
+---
+
 ## [0.9.0] - 2026-01-17
 
 ### Added
@@ -106,7 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[0.9.0]: https://github.com/m0nklabs/oelala/compare/v0.8.0...HEAD
+[0.10.0]: https://github.com/m0nklabs/oelala/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/m0nklabs/oelala/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/m0nklabs/oelala/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/m0nklabs/oelala/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/m0nklabs/oelala/compare/v0.5.0...v0.6.0

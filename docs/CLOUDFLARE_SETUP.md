@@ -2,6 +2,21 @@
 
 This document describes how to set up Cloudflare Tunnel and CDN caching for oelala-storage.
 
+## ⚠️ CORS & Caching Gotcha (CRITICAL)
+
+Cloudflare caches responses **including CORS headers**. If a non-browser request (no `Origin`) hits CF first, the cached response **won't have CORS headers**, and all subsequent browser requests will fail.
+
+**Solution applied (2026-03-02):**
+1. Backend sends `Vary: Origin` on all `/comfyui/output/` responses
+2. Backend adds explicit `Access-Control-Allow-Origin` headers directly on the endpoint
+3. Frontend adds `?_cors=1` cache-bust to media URLs fetched via `apiFetch`
+4. `CORSMiddleware` uses **explicit origins list** (NOT `allow_origins=["*"]`)
+
+**Why `allow_origins=["*"]` + `allow_credentials=True` breaks:**
+- Starlette CORSMiddleware returns `Access-Control-Allow-Origin: *` on non-preflight requests
+- Per CORS spec, `*` is invalid when `Access-Control-Allow-Credentials: true` is set
+- Browsers silently reject the response
+
 ## Architecture Overview
 
 ```

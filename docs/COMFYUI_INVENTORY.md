@@ -1,7 +1,7 @@
 # ComfyUI Server Inventory
 
 Complete inventory of available resources on the self-hosted GPU runner.
-**Last updated**: 2026-01-05
+**Last updated**: 2026-03-02
 
 ---
 
@@ -252,8 +252,17 @@ Available categories:
 - `Comfyui-ColorMatchNodes` - Color matching
 - `ComfyUI-WarperNodes` - Image warping
 
+### Face Processing (Added 2026-03-02)
+- `ComfyUI-Impact-Pack` - Detection, masking, FaceDetailer
+- `ComfyUI-Impact-Subpack` - UltralyticsDetectorProvider (face_yolov8m.pt)
+- **IP-Adapter FaceID Plus V2 SDXL** (`ComfyUI/models/ipadapter/ip-adapter-faceid-plusv2_sdxl.bin`)
+- **CLIP Vision ViT-H** (`ComfyUI/models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors`)
+- **InsightFace buffalo_l** (`ComfyUI/models/insightface/models/buffalo_l/`)
+- **GFPGAN v1.4** (`ComfyUI/models/facerestore_models/GFPGANv1.4.pth`)
+- **SAM ViT-B** (`ComfyUI/models/sams/sam_vit_b_01ec64.pth`)
+- **face_yolov8m.pt** (`ComfyUI/models/ultralytics/bbox/face_yolov8m.pt`)
+
 ### Utilities
-- `ComfyUI-Impact-Pack` - Detection, masking
 - `ComfyUI-Inspire-Pack` - Inspiration tools
 - `ComfyUI-KJNodes` - KJ utilities
 - `ComfyUI_essentials` - Essential nodes

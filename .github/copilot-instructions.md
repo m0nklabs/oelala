@@ -250,7 +250,35 @@ systemctl is-enabled oelala-backend oelala-frontend comfyui oelala-storage
 - **NEVER run `uvicorn` manually** - use `sudo systemctl restart oelala-backend`
 - **NEVER run `python main.py` for ComfyUI** - use `sudo systemctl restart comfyui`
 - **Dev mode exception**: Only for oelala-storage during active development: `cd /home/flip/oelala-storage && ./bin/oelala-storage serve`
+## Cloudflare & CORS Configuration (CRITICAL)
 
+- **Cloudflare Tunnels**: `api.oelala.xyz` → `localhost:7998`, `oelala.xyz` → `localhost:5174`
+- **CORS Origins**: Explicit list in `src/backend/app.py` — NEVER use `allow_origins=["*"]` with `allow_credentials=True` (violates CORS spec, browsers reject it)
+- **Allowed Origins**:
+  ```python
+  ["https://oelala.xyz", "http://oelala.xyz", "http://localhost:5174",
+   "http://localhost:5173", "http://localhost:3000", "http://192.168.1.26:5174"]
+  ```
+- **Cloudflare Cache Gotcha**: CF caches responses WITHOUT `Vary: Origin`, so the first CORS response gets served to all origins. Fix: add `Vary: Origin` header to all CORS-sensitive endpoints.
+- **Static File CORS**: The `/comfyui/output/` endpoint has explicit CORS headers + `Vary: Origin` because CF caches aggressively.
+- **Cache Busting**: Frontend uses `?_cors=1` query param to bypass stale CF cache when fetching images cross-origin.
+- **Full Details**: See `docs/CLOUDFLARE_SETUP.md` for comprehensive Cloudflare + CORS documentation.
+
+## I2I Face Processing Pipeline
+
+- **Dynamic Workflow**: `_build_i2i_workflow()` in `comfyui_client.py` builds I2I ComfyUI workflows dynamically based on enabled features.
+- **Face Features** (all optional, toggled per-request):
+  - **IP-Adapter FaceID Plus V2**: Transfers face identity from source to generation (strength 0.0-1.0)
+  - **FaceDetailer**: Detects + refines faces using face_yolov8m + SAM (denoise 0.0-1.0)
+  - **GFPGAN Face Restore**: Restores/enhances facial details post-generation (via mtb nodes)
+- **Presets**: `/i2i/presets` endpoint returns named presets (e.g., "Portrait", "Character", "Stylized")
+- **Models Required** (see `docs/COMFYUI_INVENTORY.md`):
+  - `ip-adapter-faceid-plusv2_sdxl.bin`
+  - `ip-adapter-faceid-plusv2_sdxl_lora.safetensors`
+  - `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors`
+  - `buffalo_l/` (InsightFace analyzer)
+  - `face_yolov8m.pt`, `sam_vit_b_01ec64.pth`
+  - `GFPGANv1.4.pth`
 ## Safety & secrets
 
 - **Secrets**: Never commit secrets (API keys, credentials, private keys). Use environment variables and `.env.example` only.
@@ -408,6 +436,19 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 
 ### Tool Usage
 - **`manage_todo_list` Tool**: This tool is **MANDATORY** for managing tasks. It must be updated immediately upon any status change.
+
+## Frontend API Calls (apiFetch)
+
+- **NEVER use raw `fetch()` for backend API calls** — always use `apiFetch()` from `src/frontend/src/utils/api.ts`.
+- `apiFetch` automatically adds credentials, auth headers, and CORS cache-busting (`?_cors=1`).
+- All 7 tool files (`T2I`, `I2V`, `T2V`, `V2V`, `FaceSwap`, `Upscale`, `I2I`) must use `apiFetch` for image/video fetching.
+- When adding a new tool, import and use `apiFetch` — never raw `fetch`.
+
+## CreationsPickerModal (Inline Panel)
+
+- The "From My Creations" picker is an **inline panel** (not a modal overlay) embedded in each tool's form.
+- Uses `CreationsPickerModal` component but renders inline with `position: relative` styling.
+- Each tool manages its own picker state via `showCreationsPicker` / `setShowCreationsPicker`.
 
 ## Technical Stack Reference
 

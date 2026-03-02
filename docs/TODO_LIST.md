@@ -1,6 +1,6 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-02-28
+> Active development tasks. Updated: 2026-03-02
 
 ---
 
@@ -113,6 +113,13 @@ The main functionality is complete! All MEGA issues for core features are done:
 ---
 
 ## ✅ Recently Completed
+
+### 2026-03-02
+- [x] I2I Face Processing Pipeline (IP-Adapter FaceID, FaceDetailer, GFPGAN)
+- [x] CreationsPickerModal refactored from overlay to inline panel (all 7 tools)
+- [x] CORS fix: explicit origins + Vary:Origin + CF cache bust
+- [x] apiFetch migration for image loading in all 7 tools
+- [x] ComfyUI Impact-Subpack + face_yolov8m.pt installed
 
 ### 2026-01-15
 - [x] Retention policy business logic (#71)
