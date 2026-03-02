@@ -157,6 +157,15 @@ except ImportError as e:
     job_queue_manager = None
     progress_monitor = None
 
+# LLM prompt enhancement queue
+try:
+    from llm_queue import llm_queue_manager
+
+    print("✅ LLM queue manager imported successfully")
+except ImportError as e:
+    print(f"❌ Failed to import LLM queue manager: {e}")
+    llm_queue_manager = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -904,6 +913,14 @@ async def startup_event():
         logger.warning(
             "⚠️ WebSocket progress modules not available - real-time updates disabled"
         )
+
+    # Start LLM queue worker
+    if llm_queue_manager:
+        logger.info("🔄 Starting LLM queue worker...")
+        asyncio.create_task(llm_queue_manager.start_worker(_process_llm_job))
+        logger.info("✅ LLM queue worker started!")
+    else:
+        logger.warning("⚠️ LLM queue not available — prompt enhancement will use sync fallback")
 
     # Start webhook retry worker
     logger.info("🪝 Starting webhook retry worker...")
@@ -7101,12 +7118,69 @@ def generate_prompt_template(
     }
 
 
+async def _process_llm_job(request_data: dict) -> dict | None:
+    """
+    Process a single LLM prompt enhancement job.
+    Called by the LLM queue worker. Handles VRAM coordination.
+
+    Returns result dict on success, None on failure.
+    """
+    base_input = request_data["input"]
+    style = request_data.get("style")
+    mode = request_data.get("mode", "expand")
+    include_negative = request_data.get("include_negative", True)
+    include_motion = request_data.get("include_motion", False)
+    use_llm = request_data.get("use_llm", True)
+    model_override = request_data.get("model")
+    refine_instruction = request_data.get("refine_instruction")
+
+    # Try LLM first if enabled
+    result = None
+    if use_llm:
+        result = await generate_prompt_with_llm(
+            base_input,
+            style,
+            mode,
+            include_motion,
+            model_override=model_override,
+            refine_instruction=refine_instruction,
+        )
+
+    # Fall back to template mode
+    if result is None:
+        result = generate_prompt_template(
+            base_input, style, mode, include_negative, include_motion
+        )
+
+    # Generate variations if requested
+    variations = None
+    if mode == "variations":
+        variations = [
+            f"{base_input}, dramatic lighting, masterpiece, best quality",
+            f"{base_input}, soft natural light, masterpiece, best quality",
+            f"{base_input}, studio lighting, professional, masterpiece, best quality",
+        ]
+        style_part = PROMPT_STYLE_KEYWORDS.get(style, "")
+        if style_part:
+            variations = [f"{v}, {style_part}" for v in variations]
+
+    return {
+        **result,
+        "variations": variations,
+        "input": base_input,
+        "style": style,
+        "mode": mode,
+    }
+
+
 @app.post("/generate-prompt")
 async def generate_prompt(request: Request):
     """
     Generate enhanced prompts from basic input.
-    Accepts both JSON body and form data.
-    Uses Ollama LLM when available, falls back to templates.
+    Submits the request to the LLM queue and returns a job_id immediately.
+    Frontend polls /llm-job/{job_id} for the result.
+
+    Falls back to synchronous processing if LLM queue is not available.
     """
     # Parse request - accept both JSON and form data
     content_type = request.headers.get("content-type", "")
@@ -7134,43 +7208,55 @@ async def generate_prompt(request: Request):
 
     base_input = req.input.strip()
 
-    # Try LLM first if enabled
-    result = None
-    if req.use_llm:
-        result = await generate_prompt_with_llm(
-            base_input,
-            req.style,
-            req.mode,
-            req.include_motion,
-            model_override=req.model,
-            refine_instruction=req.refine_instruction,
-        )
-
-    # Fall back to template mode
-    if result is None:
-        result = generate_prompt_template(
-            base_input, req.style, req.mode, req.include_negative, req.include_motion
-        )
-
-    # Generate variations if requested
-    variations = None
-    if req.mode == "variations":
-        variations = [
-            f"{base_input}, dramatic lighting, masterpiece, best quality",
-            f"{base_input}, soft natural light, masterpiece, best quality",
-            f"{base_input}, studio lighting, professional, masterpiece, best quality",
-        ]
-        style_part = PROMPT_STYLE_KEYWORDS.get(req.style, "")
-        if style_part:
-            variations = [f"{v}, {style_part}" for v in variations]
-
-    return {
-        **result,
-        "variations": variations,
+    # Build request data dict for the queue
+    request_data = {
         "input": base_input,
         "style": req.style,
         "mode": req.mode,
+        "include_negative": req.include_negative,
+        "include_motion": req.include_motion,
+        "use_llm": req.use_llm,
+        "model": req.model,
+        "refine_instruction": req.refine_instruction,
     }
+
+    # Async queue path (preferred)
+    if llm_queue_manager:
+        job = llm_queue_manager.submit(request_data)
+        return {
+            "status": "queued",
+            "job_id": job.job_id,
+            "queue_position": job.queue_position,
+        }
+
+    # Sync fallback (if LLM queue module not available)
+    logger.warning("LLM queue not available, processing synchronously")
+    result = await _process_llm_job(request_data)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Prompt generation failed")
+    return {"status": "completed", "job_id": "sync", "queue_position": 0, **result}
+
+
+@app.get("/llm-job/{job_id}")
+async def get_llm_job(job_id: str):
+    """
+    Poll LLM job status and result.
+    Frontend calls this every 1-2s after submitting to /generate-prompt.
+
+    Returns:
+        - status: queued | processing | completed | failed
+        - queue_position: position in queue (0-based, -1 if processing)
+        - result: prompt enhancement result (only when status=completed)
+        - error: error message (only when status=failed)
+    """
+    if not llm_queue_manager:
+        raise HTTPException(status_code=503, detail="LLM queue not available")
+
+    job = llm_queue_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
+
+    return job.to_dict()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

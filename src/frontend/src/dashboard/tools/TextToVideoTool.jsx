@@ -8,6 +8,8 @@ import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/Ca
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
 import MediaImportModal from '../../components/MediaImportModal'
+import useLLMEnhance from '../../hooks/useLLMEnhance'
+import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 
 // Resolution presets
 const RESOLUTION_PRESETS = [
@@ -138,90 +140,56 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     localStorage.setItem('t2v_prompt', value)
   }
 
-  // Enhance prompt with LLM
+  // LLM prompt enhancement queue
+  const llm = useLLMEnhance()
+
+  // Enhance prompt with LLM (via async queue)
   const handleEnhancePrompt = async () => {
     if (!prompt.trim() || isEnhancing) return
     setIsEnhancing(true)
     setError('')
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: prompt.trim(),
-          style: null,
-          mode: 'expand',
-          include_negative: true,
-          include_motion: true,
-          use_llm: true,
-          model: enhanceModel,
-        }),
-      })
+    const result = await llm.enhance({
+      input: prompt.trim(),
+      mode: 'expand',
+      include_negative: true,
+      include_motion: true,
+      model: enhanceModel,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Enhancement failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('✨ Enhanced prompt:', data)
-
-      // Update prompts
-      handlePromptChange(data.prompt)
-      if (data.negative_prompt) {
-        setNegativePrompt(data.negative_prompt)
-      }
-    } catch (err) {
-      console.error('Enhance error:', err)
-      setError(`Enhance failed: ${err.message}`)
-    } finally {
-      setIsEnhancing(false)
+    if (result) {
+      handlePromptChange(result.prompt)
+      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
+    } else if (llm.error) {
+      setError(`Enhance failed: ${llm.error}`)
     }
+    setIsEnhancing(false)
   }
 
-  // Refine/improve prompt with LLM — preserves original intent
+  // Refine/improve prompt with LLM — preserves original intent (via async queue)
   const handleRefinePrompt = async () => {
     if (!prompt.trim() || isRefining) return
     setIsRefining(true)
     setError('')
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: prompt.trim(),
-          style: null,
-          mode: 'refine',
-          include_negative: true,
-          include_motion: true,
-          use_llm: true,
-          model: enhanceModel,
-          refine_instruction: refineInstruction.trim() || null,
-        }),
-      })
+    const result = await llm.enhance({
+      input: prompt.trim(),
+      mode: 'refine',
+      include_negative: true,
+      include_motion: true,
+      model: enhanceModel,
+      refine_instruction: refineInstruction.trim() || null,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Refine failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('✏️ Refined prompt:', data)
-
-      handlePromptChange(data.prompt)
-      if (data.negative_prompt) {
-        setNegativePrompt(data.negative_prompt)
-      }
+    if (result) {
+      handlePromptChange(result.prompt)
+      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
       setRefineInstruction('')
       setShowRefineInput(false)
-    } catch (err) {
-      console.error('Refine error:', err)
-      setError(`Refine failed: ${err.message}`)
-    } finally {
-      setIsRefining(false)
+    } else if (llm.error) {
+      setError(`Refine failed: ${llm.error}`)
     }
+    setIsRefining(false)
   }
 
   const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting, [prompt, submitting])
@@ -358,6 +326,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             >
               {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
             </button>
+            <LLMQueueIndicator queuePosition={llm.queuePosition} isLoading={llm.isLoading} />
             <button
               className="icon-btn"
               style={{

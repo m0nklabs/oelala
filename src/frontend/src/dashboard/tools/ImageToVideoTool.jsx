@@ -12,6 +12,8 @@ import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/Ca
 import MediaImportModal from '../../components/MediaImportModal'
 import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
 import { useToolProfile } from '../../hooks/useToolProfile'
+import useLLMEnhance from '../../hooks/useLLMEnhance'
+import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
@@ -230,23 +232,44 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       // image loading happens via selectCreation below or caller side.
       // If we have the item, load it as input image via fetch.
       const item = importModal.item
-      const imageUrl = getMediaUrl(item.url, item.signed_url)
+
+      // If item is a video, use the corresponding .png thumbnail instead
+      let imageUrl, imageFilename
+      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+        const pngFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
+        // Use relative path — Vite proxy handles /comfyui-output/ in dev,
+        // avoids CORS issues with StaticFiles mount not having CORS headers
+        const pngUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        imageUrl = pngUrl  // relative path, proxied by Vite
+        imageFilename = pngFilename
+        console.debug('🎬 Use in tool: video detected, using companion image:', pngFilename)
+      } else {
+        imageUrl = getMediaUrl(item.url, item.signed_url)
+        imageFilename = item.filename || imageUrl.split('/').pop()
+      }
+
       fetch(imageUrl)
-        .then(r => r.blob())
+        .then(r => {
+          if (!r.ok) throw new Error(`Failed to fetch image: ${r.status}`)
+          return r.blob()
+        })
         .then(blob => {
-          const filename = item.filename || imageUrl.split('/').pop()
+          const filename = imageFilename || imageUrl.split('/').pop()
           const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
           setFile(fileObj)
           setPreviewUrl(imageUrl)
           setUploadTab('file')
         })
-        .catch(() => {})
+        .catch((err) => {
+          console.warn('⚠️ Use in tool: failed to load image', err)
+        })
     }
-    if (selected.positive)  setPrompt(selected.positive)
-    if (selected.negative)  setNegativePrompt(selected.negative)
-    if (selected.steps)     setSteps(selected.steps)
-    if (selected.cfg)       setCfg(selected.cfg)
-    if (selected.seed)      setSeed(selected.seed)
+    // Coerce all values to proper types — metadata may have numbers instead of strings
+    if (selected.positive)  setPrompt(String(selected.positive))
+    if (selected.negative)  setNegativePrompt(String(selected.negative))
+    if (selected.steps)     setSteps(Number(selected.steps) || selected.steps)
+    if (selected.cfg)       setCfg(Number(selected.cfg) || selected.cfg)
+    if (selected.seed)      setSeed(String(selected.seed))
     setImportModal(null)
   }
   const [imageDescription, setImageDescription] = useState('')  // Store vision analysis result
@@ -345,91 +368,56 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     updateProfile(settingsSnapshot)
   }, [settingsSnapshot, profileLoaded, user, updateProfile])
 
-  // Enhance prompt with LLM
+  // LLM prompt enhancement queue
+  const llm = useLLMEnhance()
+
+  // Enhance prompt with LLM (via async queue)
   const handleEnhancePrompt = async () => {
     if (!prompt.trim() || isEnhancing) return
     setIsEnhancing(true)
     setError('')
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: prompt.trim(),
-          style: null,
-          mode: 'expand',
-          include_negative: true,
-          include_motion: true,
-          use_llm: true,
-          model: enhanceModel,
-        }),
-      })
+    const result = await llm.enhance({
+      input: prompt.trim(),
+      mode: 'expand',
+      include_negative: true,
+      include_motion: true,
+      model: enhanceModel,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Enhancement failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('✨ Enhanced prompt:', data)
-
-      // Update prompts
-      setPrompt(data.prompt)
-      if (data.negative_prompt) {
-        setNegativePrompt(data.negative_prompt)
-      }
-    } catch (err) {
-      console.error('Enhance error:', err)
-      setError(`Enhance failed: ${err.message}`)
-    } finally {
-      setIsEnhancing(false)
+    if (result) {
+      setPrompt(result.prompt)
+      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
+    } else if (llm.error) {
+      setError(`Enhance failed: ${llm.error}`)
     }
+    setIsEnhancing(false)
   }
 
-  // Refine/improve prompt with LLM — preserves original intent
+  // Refine/improve prompt with LLM — preserves original intent (via async queue)
   const handleRefinePrompt = async () => {
     if (!prompt.trim() || isRefining) return
     setIsRefining(true)
     setError('')
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: prompt.trim(),
-          style: null,
-          mode: 'refine',
-          include_negative: true,
-          include_motion: true,
-          use_llm: true,
-          model: enhanceModel,
-          refine_instruction: refineInstruction.trim() || null,
-        }),
-      })
+    const result = await llm.enhance({
+      input: prompt.trim(),
+      mode: 'refine',
+      include_negative: true,
+      include_motion: true,
+      model: enhanceModel,
+      refine_instruction: refineInstruction.trim() || null,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Refine failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('✏️ Refined prompt:', data)
-
-      setPrompt(data.prompt)
-      if (data.negative_prompt) {
-        setNegativePrompt(data.negative_prompt)
-      }
-      // Clear instruction after successful refine
+    if (result) {
+      setPrompt(result.prompt)
+      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
       setRefineInstruction('')
       setShowRefineInput(false)
-    } catch (err) {
-      console.error('Refine error:', err)
-      setError(`Refine failed: ${err.message}`)
-    } finally {
-      setIsRefining(false)
+    } else if (llm.error) {
+      setError(`Refine failed: ${llm.error}`)
     }
+    setIsRefining(false)
   }
 
   // Analyze image with vision model and generate creative video prompts
@@ -1458,6 +1446,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             >
               {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
             </button>
+            <LLMQueueIndicator queuePosition={llm.queuePosition} isLoading={llm.isLoading} />
             <button
               className="icon-btn"
               style={{
@@ -1702,7 +1691,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Prompt Strength
+                Prompt Strength / CFG
               </label>
               <span
                 title="How strictly the video follows your prompt. Low = subtle movement, High = dramatic action (may cause artifacts)"
@@ -1727,7 +1716,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               type="range"
               min="1"
               max="5"
-              step="0.5"
+              step="0.1"
               value={cfg}
               onChange={(e) => setCfg(parseFloat(e.target.value))}
               style={{ flex: 1 }}
@@ -2309,20 +2298,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   </div>
                 </div>
 
-                {/* CFG */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">CFG Guidance</label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range" min="1.0" max="10.0" step="0.5"
-                    value={cfg}
-                    onChange={(e) => setCfg(parseFloat(e.target.value))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                </div>
-
                 {/* Shift */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -2724,28 +2699,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                     <span>4 (fast)</span>
                     <span>6 (rec)</span>
                     <span>20 (quality)</span>
-                  </div>
-                </div>
-
-                {/* CFG */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">CFG Guidance</label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
-                  </div>
-                  <input
-                  type="range"
-                    min="1.0"
-                    max="10.0"
-                    step="0.5"
-                    value={cfg}
-                    onChange={(e) => setCfg(parseFloat(e.target.value))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>1.0 (rec)</span>
-                    <span>5.0</span>
-                    <span>10.0</span>
                   </div>
                 </div>
 

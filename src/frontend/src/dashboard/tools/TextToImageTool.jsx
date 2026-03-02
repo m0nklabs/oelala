@@ -6,6 +6,8 @@ import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import CameraPositionSelector, { getCameraPositionPrefix } from '../../components/CameraPositionSelector'
 import MediaImportModal from '../../components/MediaImportModal'
+import useLLMEnhance from '../../hooks/useLLMEnhance'
+import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 
 // Models grouped by category
 const MODEL_GROUPS = {
@@ -135,7 +137,10 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
     'steampunk airship',
   ]
 
-  // Enhance prompt with LLM
+  // LLM prompt enhancement queue
+  const llm = useLLMEnhance()
+
+  // Enhance prompt with LLM (via async queue)
   const handleEnhancePrompt = async () => {
     if (isEnhancing) return
     setIsEnhancing(true)
@@ -144,40 +149,21 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
     // If empty, pick a random subject
     const inputPrompt = prompt.trim() || randomSubjects[Math.floor(Math.random() * randomSubjects.length)]
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: inputPrompt,
-          style: null,
-          mode: 'expand',
-          include_negative: true,
-          include_motion: false,
-          use_llm: true,
-          model: enhanceModel,
-        }),
-      })
+    const result = await llm.enhance({
+      input: inputPrompt,
+      mode: 'expand',
+      include_negative: true,
+      include_motion: false,
+      model: enhanceModel,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Enhancement failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('✨ Enhanced prompt:', data)
-
-      // Update prompts
-      setPrompt(data.prompt)
-      if (data.negative_prompt) {
-        setNegativePrompt(data.negative_prompt)
-      }
-    } catch (err) {
-      console.error('Enhance error:', err)
-      setError(`Enhance failed: ${err.message}`)
-    } finally {
-      setIsEnhancing(false)
+    if (result) {
+      setPrompt(result.prompt)
+      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
+    } else if (llm.error) {
+      setError(`Enhance failed: ${llm.error}`)
     }
+    setIsEnhancing(false)
   }
 
   // Fetch available LoRAs on mount
@@ -404,6 +390,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
             >
               {isEnhancing ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />}
             </button>
+            <LLMQueueIndicator queuePosition={llm.queuePosition} isLoading={llm.isLoading} />
           </div>
         </div>
         <textarea

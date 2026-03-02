@@ -3,6 +3,8 @@ import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil } from '
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import useLLMEnhance from '../../hooks/useLLMEnhance'
+import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
@@ -173,44 +175,32 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
     }
   }
 
-  // Refine/improve caption with LLM — preserves original intent
+  // LLM prompt enhancement queue
+  const llm = useLLMEnhance()
+
+  // Refine/improve caption with LLM — preserves original intent (via async queue)
   const handleRefineCaption = async () => {
     if (!caption.trim() || isRefining) return
     setIsRefining(true)
     setError(null)
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: caption.trim(),
-          style: null,
-          mode: 'refine',
-          model: model,
-          include_negative: false,
-          include_motion: isPromptMode(mode),
-          use_llm: true,
-          refine_instruction: refineInstruction.trim() || null,
-        }),
-      })
+    const result = await llm.enhance({
+      input: caption.trim(),
+      mode: 'refine',
+      model: model,
+      include_negative: false,
+      include_motion: isPromptMode(mode),
+      refine_instruction: refineInstruction.trim() || null,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Refine failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('✏️ Refined caption:', data)
-      setCaption(data.prompt)
+    if (result) {
+      setCaption(result.prompt)
       setRefineInstruction('')
       setShowRefineInput(false)
-    } catch (err) {
-      console.error('Refine error:', err)
-      setError(`Refine failed: ${err.message}`)
-    } finally {
-      setIsRefining(false)
+    } else if (llm.error) {
+      setError(`Refine failed: ${llm.error}`)
     }
+    setIsRefining(false)
   }
 
   const handleCopy = () => {
@@ -464,6 +454,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               >
                 {isRefining ? <Loader2 size={12} className="spin" /> : <Pencil size={12} />}
                 <span>{isRefining ? 'Refining...' : 'Refine'}</span>
+                <LLMQueueIndicator queuePosition={llm.queuePosition} isLoading={llm.isLoading} />
               </button>
             </div>
           )}

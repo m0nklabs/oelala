@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react'
 import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
+import useLLMEnhance from '../../hooks/useLLMEnhance'
+import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 
 const STYLE_PRESETS = [
   { id: 'cinematic', label: '🎬 Cinematic', keywords: 'cinematic lighting, film grain, dramatic shadows, professional photography' },
@@ -41,41 +43,31 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [error, setError] = useState(null)
   const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
 
+  // LLM prompt enhancement queue
+  const llm = useLLMEnhance()
+
   const handleGenerate = async () => {
     if (!input.trim()) return
 
     setLoading(true)
     setError(null)
 
-    try {
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: input.trim(),
-          style: style || null,
-          mode: enhanceMode,
-          include_negative: includeNegative,
-          include_motion: includeMotion,
-          model: enhanceModel,
-        }),
-      })
+    const result = await llm.enhance({
+      input: input.trim(),
+      style: style || null,
+      mode: enhanceMode,
+      include_negative: includeNegative,
+      include_motion: includeMotion,
+      model: enhanceModel,
+    })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Generation failed')
-      }
-
-      const data = await res.json()
-      setResult(data)
-
-      if (DEBUG) console.log('✨ Prompt result:', data)
-    } catch (err) {
-      console.error('Prompt generation error:', err)
-      setError(err.message)
-    } finally {
-      setLoading(false)
+    if (result) {
+      setResult(result)
+      if (DEBUG) console.log('✨ Prompt result:', result)
+    } else if (llm.error) {
+      setError(llm.error)
     }
+    setLoading(false)
   }
 
   // Quick template-based generation (no API needed)
@@ -199,6 +191,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             <>
               <Loader2 size={18} className="spin" />
               Generating...
+              <LLMQueueIndicator queuePosition={llm.queuePosition} isLoading={llm.isLoading} />
             </>
           ) : (
             <>
