@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { Frame, Upload, Loader2, Download, Copy, Move, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, getJson } from '../../api'
+import { postForm, getJson, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -78,7 +78,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
       }
 
       try {
-        const response = await fetch(imageUrl)
+        const response = await apiFetch(imageUrl)
         if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
         const blob = await response.blob()
         const filename = imageUrl.split('/').pop() || 'image.png'
@@ -112,7 +112,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
       } else {
         imageUrl = getMediaUrl(item.url, item.signed_url)
       }
-      const response = await fetch(imageUrl)
+      const response = await apiFetch(imageUrl)
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const filename = imageUrl.split('/').pop() || 'image.png'
@@ -275,14 +275,6 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
         />
       )}
 
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="image"
-        title="Select Image for Reframe"
-      />
-
       {/* Image Upload */}
       <div
         onClick={() => fileInputRef.current?.click()}
@@ -319,6 +311,14 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
       >
         📁 From My Creations
       </button>
+
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        filter="image"
+        title="Select Image for Reframe"
+      />
 
       {/* Target Aspect Ratio */}
       <div>

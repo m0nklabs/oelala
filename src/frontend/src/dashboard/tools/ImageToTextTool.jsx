@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
+import { apiFetch } from '../../api'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
@@ -101,7 +102,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       } else {
         imageUrl = getMediaUrl(item.url, item.signed_url)
       }
-      const response = await fetch(imageUrl)
+      const response = await apiFetch(imageUrl)
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const filename = imageUrl.split('/').pop() || 'image.png'
@@ -217,13 +218,6 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
 
   return (
     <div className="tool-container">
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="image"
-        title="Select Image for Captioning"
-      />
 
       {/* Import from previous generation modal */}
       {importModal && (
@@ -271,6 +265,14 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         >
           {'📁'} From My Creations
         </button>
+
+        <CreationsPickerModal
+          show={showCreationsPicker}
+          onClose={() => setShowCreationsPicker(false)}
+          onSelect={handleCreationsSelect}
+          filter="image"
+          title="Select Image for Captioning"
+        />
       </div>
 
       <div className="tool-section">

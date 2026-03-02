@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Paintbrush, Eraser, Undo2, Redo2, Loader2, Upload, Wand2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm } from '../../api'
+import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -74,7 +74,7 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
       }
 
       try {
-        const response = await fetch(imageUrl)
+        const response = await apiFetch(imageUrl)
         if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
         const blob = await response.blob()
         const filename = imageUrl.split('/').pop() || 'image.png'
@@ -283,7 +283,7 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
       } else {
         imageUrl = getMediaUrl(item.url, item.signed_url)
       }
-      const response = await fetch(imageUrl)
+      const response = await apiFetch(imageUrl)
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const filename = imageUrl.split('/').pop() || 'image.png'
@@ -480,14 +480,6 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
         }
       `}</style>
 
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="image"
-        title="Select Image for Inpainting"
-      />
-
       {importModal && (
         <MediaImportModal
           item={importModal.item}
@@ -599,6 +591,15 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
                 >
                   {'\ud83d\udcc1'} From My Creations
                 </button>
+
+                <CreationsPickerModal
+                  show={showCreationsPicker}
+                  onClose={() => setShowCreationsPicker(false)}
+                  onSelect={handleCreationsSelect}
+                  filter="image"
+                  title="Select Image for Inpainting"
+                />
+
                 <p style={{ marginTop: 16, fontSize: 12 }}>
                   Paint over the areas you want to regenerate, then describe what should appear.
                 </p>

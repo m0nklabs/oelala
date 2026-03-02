@@ -204,13 +204,6 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
   return (
     <div className="tool-container">
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="video"
-        title="Select Video from My Creations"
-      />
 
       {/* Source Video */}
       <div className="grok-card">
@@ -259,6 +252,14 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         >
           {'📁'} From My Creations
         </button>
+
+        <CreationsPickerModal
+          show={showCreationsPicker}
+          onClose={() => setShowCreationsPicker(false)}
+          onSelect={handleCreationsSelect}
+          filter="video"
+          title="Select Video from My Creations"
+        />
 
         {videoInfo && (
           <div style={{

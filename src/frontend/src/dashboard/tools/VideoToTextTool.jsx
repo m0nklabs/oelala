@@ -248,13 +248,6 @@ export default function VideoToTextTool() {
 
   return (
     <div className="tool-container">
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="video"
-        title="Select Video for Captioning"
-      />
 
       <div className="tool-section">
         <h3>
@@ -319,6 +312,14 @@ export default function VideoToTextTool() {
         >
           {'📁'} From My Creations
         </button>
+
+        <CreationsPickerModal
+          show={showCreationsPicker}
+          onClose={() => setShowCreationsPicker(false)}
+          onSelect={handleCreationsSelect}
+          filter="video"
+          title="Select Video for Captioning"
+        />
 
         {/* YouTube Tab */}
         {sourceTab === 'youtube' && (

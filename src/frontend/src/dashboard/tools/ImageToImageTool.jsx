@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm } from '../../api'
+import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -111,7 +111,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       }
 
       try {
-        const response = await fetch(imageUrl)
+        const response = await apiFetch(imageUrl)
         if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
         const blob = await response.blob()
         const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
@@ -139,7 +139,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         imageUrl = getMediaUrl(item.url, item.signed_url)
         imageFilename = item.filename || imageUrl.split('/').pop()
       }
-      const response = await fetch(imageUrl)
+      const response = await apiFetch(imageUrl)
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
@@ -318,6 +318,14 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         >
           📁 From My Creations
         </button>
+
+        <CreationsPickerModal
+          show={showCreationsPicker}
+          onClose={() => setShowCreationsPicker(false)}
+          onSelect={handleCreationsSelect}
+          filter="image"
+          title="Select Image from My Creations"
+        />
       </div>
 
       <div className="tool-section">
@@ -593,14 +601,6 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           </div>
         </div>
       )}
-
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="image"
-        title="Select Image from My Creations"
-      />
 
       {importModal && (
         <MediaImportModal

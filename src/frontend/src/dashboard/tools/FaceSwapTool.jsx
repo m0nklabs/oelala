@@ -5,6 +5,7 @@ import {
   Cpu, Zap, Clock, Copy, CheckCheck
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
+import { apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -134,7 +135,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       }
 
       try {
-        const response = await fetch(imageUrl)
+        const response = await apiFetch(imageUrl)
         if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
         const blob = await response.blob()
         const filename = imageUrl.split('/').pop() || 'image.png'
@@ -310,13 +311,6 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
         />
       )}
 
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        title="Select Target for Face Swap"
-      />
-
       {/* Source mode toggle */}
       <div>
         <label className="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wide">
@@ -386,6 +380,13 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       >
         📁 Target from My Creations
       </button>
+
+      <CreationsPickerModal
+        show={showCreationsPicker}
+        onClose={() => setShowCreationsPicker(false)}
+        onSelect={handleCreationsSelect}
+        title="Select Target for Face Swap"
+      />
 
       {/* Swap target↔source */}
       {sourceMode === 'upload' && (targetFile || sourceFile) && (
