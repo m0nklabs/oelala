@@ -356,7 +356,7 @@ class StorageClient:
             obj["user_id"] = user_id
             key = obj.get("key", "")
             if key.startswith(user_prefix):
-                key = key[len(user_prefix):]
+                key = key[len(user_prefix) :]
             parts = key.split("/", 1)
             if len(parts) >= 1:
                 obj["media_type"] = parts[0]

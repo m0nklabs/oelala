@@ -350,7 +350,9 @@ async def get_user(user_id: str, admin: User = Depends(get_admin_user)):
         raise HTTPException(status_code=404, detail="User not found")
 
     data = response.json()[0]
-    email = auth_response.json().get("email") if auth_response.status_code == 200 else None
+    email = (
+        auth_response.json().get("email") if auth_response.status_code == 200 else None
+    )
 
     return UserInfo(
         user_id=data["user_id"],
@@ -1140,7 +1142,10 @@ async def get_ai_settings(user: User = Depends(get_current_user)):
 
     import json
 
-    _guardian_base = os.getenv("GUARDIAN_BASE_URL", os.getenv("GUARDIAN_BASE", os.getenv("OLLAMA_BASE", "http://localhost:11434"))).rstrip("/")
+    _guardian_base = os.getenv(
+        "GUARDIAN_BASE_URL",
+        os.getenv("GUARDIAN_BASE", os.getenv("OLLAMA_BASE", "http://localhost:11434")),
+    ).rstrip("/")
     _default_model = os.getenv("GUARDIAN_MODEL", os.getenv("OLLAMA_MODEL", ""))
     settings = {
         "prompt_system": DEFAULT_PROMPT_SYSTEM,
@@ -1160,12 +1165,12 @@ async def get_ai_settings(user: User = Depends(get_current_user)):
 
     # Fetch available Guardian models via OpenAI /v1/models (Bearer token auth)
     _guardian_api_key = os.getenv("GUARDIAN_API_KEY", "")
-    _auth_headers = {"Authorization": f"Bearer {_guardian_api_key}"} if _guardian_api_key else {}
+    _auth_headers = (
+        {"Authorization": f"Bearer {_guardian_api_key}"} if _guardian_api_key else {}
+    )
     available_models = []
     try:
-        async with httpx.AsyncClient(
-            timeout=5.0, headers=_auth_headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=5.0, headers=_auth_headers) as client:
             res = await client.get(f"{_guardian_base}/v1/models")
             if res.status_code == 200:
                 models = res.json().get("data", [])
