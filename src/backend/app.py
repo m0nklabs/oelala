@@ -3251,6 +3251,22 @@ async def list_unified_media(
         # Sort by mtime (newest first)
         all_media.sort(key=lambda x: x.get("mtime", 0), reverse=True)
 
+        # Enrich items with generation time from lookup
+        try:
+            from websocket_handler import load_generation_times
+
+            gen_times = load_generation_times()
+            if gen_times:
+                for item in all_media:
+                    fname = item.get("filename", "")
+                    # Also check just the basename (filename might have path prefix)
+                    basename = fname.split("/")[-1] if "/" in fname else fname
+                    gt = gen_times.get(basename) or gen_times.get(fname)
+                    if gt:
+                        item["generation_time"] = gt
+        except Exception as e:
+            logger.debug(f"Generation times enrichment skipped: {e}")
+
         # Count stats by source for admin
         stats = {
             "videos": sum(1 for m in all_media if m["type"] == "video"),

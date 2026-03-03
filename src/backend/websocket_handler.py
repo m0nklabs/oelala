@@ -26,6 +26,62 @@ def debug_log(message: str):
 # Lazy import to avoid circular dependency
 _webhook_triggers = None
 
+# Generation times lookup file
+_GENERATION_TIMES_FILE = "/home/flip/oelala/data/generation_times.json"
+
+
+def _store_generation_time(output_url: str, processing_time: float):
+    """
+    Persist generation time keyed by filename for media listing.
+
+    Stored in a JSON file so it survives restarts.
+    """
+    import os
+    from pathlib import Path
+
+    try:
+        filename = output_url.split("/")[-1] if "/" in output_url else output_url
+        if not filename:
+            return
+
+        path = Path(_GENERATION_TIMES_FILE)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing
+        times: Dict[str, float] = {}
+        if path.exists():
+            try:
+                times = json.loads(path.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        times[filename] = round(processing_time, 1)
+
+        # Keep max 5000 entries to avoid unbounded growth
+        if len(times) > 5000:
+            # Remove oldest entries (by smallest value, assuming older gens had shorter times)
+            sorted_keys = sorted(times, key=lambda k: times[k])
+            for k in sorted_keys[: len(times) - 5000]:
+                del times[k]
+
+        path.write_text(json.dumps(times))
+        debug_log(f"Stored generation time: {filename} = {processing_time:.1f}s")
+    except Exception as e:
+        logger.warning(f"Failed to store generation time: {e}")
+
+
+def load_generation_times() -> Dict[str, float]:
+    """Load generation times lookup. Used by unified media endpoint."""
+    from pathlib import Path
+
+    try:
+        path = Path(_GENERATION_TIMES_FILE)
+        if path.exists():
+            return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to load generation times: {e}")
+    return {}
+
 
 def _get_webhook_triggers():
     """Lazy load webhook trigger functions to avoid circular imports."""
@@ -330,6 +386,12 @@ class WebSocketManager:
             data["output_url"] = output_url
         if metadata:
             data["metadata"] = metadata
+        if processing_time is not None:
+            data["processing_time_seconds"] = round(processing_time, 1)
+
+        # Persist generation time for media listing
+        if processing_time is not None and output_url:
+            _store_generation_time(output_url, processing_time)
 
         await self.broadcast_to_user(user_id, "job_complete", data)
         logger.info(f"✅ Job complete: {job_id}")

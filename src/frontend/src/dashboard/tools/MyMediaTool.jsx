@@ -2137,7 +2137,19 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
               {(() => {
                 const w = item.metadata?.width || mediaResolutions[item.filename]?.w
                 const h = item.metadata?.height || mediaResolutions[item.filename]?.h
-                return w && h ? <div className="resolution-badge">{w}×{h}</div> : null
+                const genTime = item.generation_time
+                const hasInfo = (w && h) || genTime
+                if (!hasInfo) return null
+                return (
+                  <div className="resolution-badge">
+                    {w && h && <span>{w}×{h}</span>}
+                    {genTime && (
+                      <span style={{ display: 'block', fontSize: '0.55rem', opacity: 0.8 }}>
+                        ⏱ {genTime >= 60 ? `${Math.floor(genTime / 60)}m ${Math.round(genTime % 60)}s` : `${Math.round(genTime)}s`}
+                      </span>
+                    )}
+                  </div>
+                )
               })()}
 
               <div className="media-overlay" onClick={(e) => e.stopPropagation()}>
