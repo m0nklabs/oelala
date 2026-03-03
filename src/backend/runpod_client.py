@@ -94,8 +94,8 @@ class RunPodClient:
         self._endpoints: Dict[str, RunPodEndpoint] = {}
         # Active jobs — job_id -> RunPodJob
         self._active_jobs: Dict[str, RunPodJob] = {}
-        # Default endpoint (set via configure or auto-detected)
-        self.default_endpoint_id: Optional[str] = None
+        # Default endpoint (set via env var, configure, or auto-detected)
+        self.default_endpoint_id: Optional[str] = os.getenv("RUNPOD_ENDPOINT_ID")
 
     @property
     def http(self) -> httpx.AsyncClient:

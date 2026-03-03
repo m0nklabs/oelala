@@ -5,6 +5,11 @@ RunPod Serverless Handler for Oelala ComfyUI Worker
 Receives ComfyUI workflow JSON via RunPod API, executes it on the
 local ComfyUI instance, and returns the output (images/videos).
 
+Supports two model loading strategies:
+1. Network Volume — models pre-loaded, symlinked at startup (fast)
+2. Download-at-startup — models downloaded from HuggingFace on first boot
+   (slower cold start but no monthly Network Volume cost)
+
 Input format:
 {
     "input": {
@@ -52,39 +57,200 @@ OUTPUT_DIR = "/comfyui/output"
 INPUT_DIR = "/comfyui/input"
 MODEL_VOLUME = os.getenv("RUNPOD_VOLUME_PATH", "/runpod-volume")
 
-# ---- Model symlinks ----
+# ---- Cloud Max model definitions ----
+# Source: Comfy-Org/Wan_2.1_ComfyUI_repackaged on HuggingFace
+HF_REPO = "Comfy-Org/Wan_2.1_ComfyUI_repackaged"
+CLOUD_MAX_MODELS = [
+    {
+        "hf_path": "split_files/diffusion_models/wan2.1_i2v_720p_14B_bf16.safetensors",
+        "local_dir": "unet",
+        "filename": "wan2.1_i2v_720p_14B_bf16.safetensors",
+        "size_gb": 32.8,
+        "description": "I2V 720p bf16 diffusion model",
+    },
+    {
+        "hf_path": "split_files/diffusion_models/wan2.1_t2v_14B_bf16.safetensors",
+        "local_dir": "unet",
+        "filename": "wan2.1_t2v_14B_bf16.safetensors",
+        "size_gb": 28.6,
+        "description": "T2V bf16 diffusion model",
+    },
+    {
+        "hf_path": "split_files/text_encoders/umt5_xxl_fp16.safetensors",
+        "local_dir": "clip",
+        "filename": "umt5_xxl_fp16.safetensors",
+        "size_gb": 11.4,
+        "description": "UMT5-XXL fp16 text encoder",
+    },
+    {
+        "hf_path": "split_files/vae/wan_2.1_vae.safetensors",
+        "local_dir": "vae",
+        "filename": "wan_2.1_vae.safetensors",
+        "size_gb": 0.25,
+        "description": "Wan 2.1 VAE",
+    },
+    {
+        "hf_path": "split_files/clip_vision/clip_vision_h.safetensors",
+        "local_dir": "clip_vision",
+        "filename": "clip_vision_h.safetensors",
+        "size_gb": 1.26,
+        "description": "CLIP Vision H (I2V conditioning)",
+    },
+]
+
+
+# ---- Model Setup ----
 
 def setup_model_links():
     """
     Create symlinks from network volume models to ComfyUI model dirs.
-    This allows models to be shared across workers without baking into the image.
+    Fallback for deployments using RunPod Network Volume.
     """
     volume_models = Path(MODEL_VOLUME) / "models"
     comfyui_models = Path("/comfyui/models")
 
     if not volume_models.exists():
-        logger.warning(f"⚠️ No network volume at {volume_models}, using built-in models only")
-        return
+        logger.info(f"ℹ️ No network volume at {volume_models}")
+        return False
 
-    # Map volume subdirs to ComfyUI model dirs
     model_dirs = [
-        "checkpoints", "diffusion_models", "vae", "text_encoders",
+        "checkpoints", "diffusion_models", "unet", "vae", "text_encoders",
         "clip", "loras", "upscale_models", "clip_vision",
     ]
 
+    linked = 0
     for d in model_dirs:
         src = volume_models / d
         dst = comfyui_models / d
         if src.exists():
-            # Symlink individual files (don't replace entire dirs)
             dst.mkdir(parents=True, exist_ok=True)
             for f in src.iterdir():
                 target = dst / f.name
                 if not target.exists():
                     target.symlink_to(f)
-                    logger.info(f"🔗 Linked model: {d}/{f.name}")
+                    logger.info(f"🔗 Linked: {d}/{f.name}")
+                    linked += 1
 
-    logger.info("✅ Model symlinks configured")
+    logger.info(f"✅ Model symlinks: {linked} files linked")
+    return linked > 0
+
+
+def download_models():
+    """
+    Download Cloud Max bf16 models from HuggingFace if not already present.
+    Uses huggingface_hub for efficient downloading with resume support.
+
+    Downloads to Network Volume if mounted (persistent), otherwise to
+    container disk (lost on restart).
+    """
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        logger.error("❌ huggingface_hub not installed, cannot download models")
+        return False
+
+    # Determine target: prefer Network Volume (persistent) over container disk
+    volume_models = Path(MODEL_VOLUME) / "models"
+    comfyui_models = Path("/comfyui/models")
+
+    if Path(MODEL_VOLUME).exists():
+        target_base = volume_models
+        logger.info(f"📁 Downloading to Network Volume: {target_base}")
+    else:
+        target_base = comfyui_models
+        logger.info(f"📁 Downloading to container disk: {target_base} (NOT persistent!)")
+
+    total_to_download = 0
+    models_needed = []
+
+    # Check which models are missing (check both volume and comfyui dirs)
+    for model in CLOUD_MAX_MODELS:
+        dest_vol = volume_models / model["local_dir"] / model["filename"]
+        dest_local = comfyui_models / model["local_dir"] / model["filename"]
+        if dest_vol.exists() or dest_local.exists():
+            logger.info(f"✅ {model['filename']} ({model['size_gb']}GB) — already present")
+        else:
+            models_needed.append(model)
+            total_to_download += model["size_gb"]
+
+    if not models_needed:
+        logger.info("✅ All Cloud Max models already downloaded")
+        return True
+
+    logger.info(f"📦 Downloading {len(models_needed)} models ({total_to_download:.1f}GB total)...")
+    start = time.time()
+
+    for i, model in enumerate(models_needed, 1):
+        dest_dir = target_base / model["local_dir"]
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / model["filename"]
+
+        logger.info(f"⬇️ [{i}/{len(models_needed)}] {model['description']} "
+                    f"({model['size_gb']}GB)...")
+
+        try:
+            dl_start = time.time()
+            downloaded_path = hf_hub_download(
+                repo_id=HF_REPO,
+                filename=model["hf_path"],
+                local_dir="/tmp/hf_cache",
+                local_dir_use_symlinks=False,
+            )
+            # Move to ComfyUI model dir
+            import shutil
+            shutil.move(downloaded_path, str(dest))
+            elapsed = time.time() - dl_start
+            speed = model["size_gb"] / elapsed * 1024 if elapsed > 0 else 0
+            logger.info(f"✅ {model['filename']} downloaded in {elapsed:.0f}s "
+                       f"({speed:.0f} MB/s)")
+        except Exception as e:
+            logger.error(f"❌ Failed to download {model['filename']}: {e}")
+            return False
+
+    # Clean up HF cache
+    import shutil
+    shutil.rmtree("/tmp/hf_cache", ignore_errors=True)
+
+    total_elapsed = time.time() - start
+    logger.info(f"✅ All models downloaded in {total_elapsed:.0f}s "
+               f"({total_to_download:.1f}GB)")
+    return True
+
+
+def ensure_models():
+    """
+    Ensure all required models are available. Tries strategies in order:
+    1. Network Volume symlinks (instant, if volume has models)
+    2. Download from HuggingFace to Network Volume (persistent, slow first time)
+    3. Download from HuggingFace to container disk (non-persistent fallback)
+    """
+    comfyui_models = Path("/comfyui/models")
+    volume_path = Path(MODEL_VOLUME)
+    volume_models = volume_path / "models"
+
+    # Strategy 1: Network Volume already has models
+    if volume_path.exists() and volume_models.exists():
+        logger.info("📁 Network Volume detected, setting up symlinks...")
+        if setup_model_links():
+            # Verify at least the diffusion model is available
+            i2v = comfyui_models / "unet" / "wan2.1_i2v_720p_14B_bf16.safetensors"
+            if not i2v.exists():
+                i2v = comfyui_models / "diffusion_models" / "wan2.1_i2v_720p_14B_bf16.safetensors"
+            if i2v.exists():
+                logger.info("✅ Models loaded from Network Volume")
+                return True
+            logger.warning("⚠️ Network Volume found but missing Cloud Max models, will download")
+
+    # Strategy 2: Download from HuggingFace (to volume if available, else container)
+    logger.info("📥 Downloading models from HuggingFace...")
+    if not download_models():
+        return False
+
+    # If downloaded to volume, set up symlinks to ComfyUI dirs
+    if volume_path.exists() and volume_models.exists():
+        setup_model_links()
+
+    return True
 
 
 # ---- ComfyUI Process Management ----
@@ -300,12 +466,14 @@ if __name__ == "__main__":
     logger.info("🎬 Oelala ComfyUI Worker starting...")
     logger.info("=" * 60)
 
-    # Setup model symlinks from network volume
-    setup_model_links()
+    # Ensure models are available (Network Volume or download from HF)
+    if not ensure_models():
+        logger.error("❌ Failed to load models, exiting")
+        sys.exit(1)
 
     # Start ComfyUI
     if not start_comfyui():
-        logger.error("Failed to start ComfyUI, exiting")
+        logger.error("❌ Failed to start ComfyUI, exiting")
         sys.exit(1)
 
     # Start RunPod serverless handler

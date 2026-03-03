@@ -1,23 +1,24 @@
 # ============================================================
 # Oelala ComfyUI Worker for RunPod Serverless
 # ============================================================
-# Builds a ComfyUI container with all custom nodes needed for
-# Wan2.2 I2V/T2V video generation.
+# Lightweight ComfyUI container for Cloud Max bf16 video gen.
+# Models loaded from RunPod Network Volume (~46GB) at startup.
+# Fallback: downloads from HuggingFace if no volume mounted.
 #
-# Models are loaded from a RunPod Network Volume (not baked in)
-# to keep image size manageable (~8GB vs ~30GB+).
+# Image size: ~8GB (no models baked in)
+# Target GPU: A6000/A40/L40S (48GB+ VRAM)
 #
-# Build:   docker build -t oelala-comfyui-worker -f Dockerfile .
-# Push:    docker push <registry>/oelala-comfyui-worker:latest
+# Build:   docker build -t ghcr.io/m0nklabs/oelala-comfyui-worker -f Dockerfile .
+# Push:    docker push ghcr.io/m0nklabs/oelala-comfyui-worker:latest
 # ============================================================
 
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4-devel-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # System deps
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git git-lfs ffmpeg libgl1-mesa-glx libglib2.0-0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -26,44 +27,29 @@ WORKDIR /comfyui
 RUN git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git . && \
     pip install --no-cache-dir -r requirements.txt
 
-# ---- Custom Nodes (only what we need for video gen) ----
+# ---- Custom Nodes ----
 WORKDIR /comfyui/custom_nodes
 
-# GGUF support (quantized models)
-RUN git clone --depth 1 https://github.com/city96/ComfyUI-GGUF.git && \
-    pip install --no-cache-dir -r ComfyUI-GGUF/requirements.txt
-
-# Video Helper Suite (VHS - video output)
+# Video Helper Suite (VHS - video output with h264 mp4)
 RUN git clone --depth 1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     pip install --no-cache-dir -r ComfyUI-VideoHelperSuite/requirements.txt
 
-# KJNodes (ImageResizeKJv2 for upscale target)
+# KJNodes (ImageResizeKJv2 for input image resize)
 RUN git clone --depth 1 https://github.com/kijai/ComfyUI-KJNodes.git && \
     pip install --no-cache-dir -r ComfyUI-KJNodes/requirements.txt 2>/dev/null || true
 
-# SageAttention (VRAM optimization)
-RUN pip install --no-cache-dir sageattention 2>/dev/null || true
+# NOTE: Cloud Max uses native UNETLoader (bf16) — no GGUF node needed
+# NOTE: No MultiGPU/DisTorch2/BlockSwap — single 48GB+ GPU
+# NOTE: No SageAttention — enough VRAM on cloud GPUs
 
-# Florence2 auto-captioning
-RUN git clone --depth 1 https://github.com/kijai/ComfyUI-Florence2.git && \
-    pip install --no-cache-dir -r ComfyUI-Florence2/requirements.txt 2>/dev/null || true
-
-# Frame interpolation (RIFE)
-RUN git clone --depth 1 https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git comfyui-frame-interpolation && \
-    pip install --no-cache-dir -r comfyui-frame-interpolation/requirements.txt 2>/dev/null || true
-
-# NOTE: No MultiGPU/DisTorch2/BlockSwap needed — RunPod = single GPU with 48-80GB VRAM
-# NOTE: No GGUF-VAE needed — RunPod has enough VRAM for fp16 VAE
-
-# ---- RunPod handler ----
+# ---- RunPod handler + HF download fallback ----
 WORKDIR /comfyui
-RUN pip install --no-cache-dir runpod requests
+RUN pip install --no-cache-dir runpod requests httpx huggingface_hub
+
+# Create model directories (will be populated from Network Volume at startup)
+RUN mkdir -p models/unet models/clip models/vae models/clip_vision models/loras
 
 COPY handler.py /comfyui/handler.py
-
-# ---- Network Volume mount point for models ----
-# Models will be symlinked from /runpod-volume/models/ at startup
-# This keeps the Docker image small
 
 # ---- Entrypoint ----
 CMD ["python", "handler.py"]
