@@ -27,7 +27,7 @@
       "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
       "text": "A cat sitting on a windowsill, looking out at a rainy day. The sound of rain on the window.",
       "max_length": 256,
-      "output_device": "cuda:0"
+      "output_device": "cuda:1"
     }
   },
   "5": {
@@ -37,7 +37,7 @@
       "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
       "text": "worst quality, low quality, blurry, distorted, no audio",
       "max_length": 256,
-      "output_device": "cuda:0"
+      "output_device": "cuda:1"
     }
   },
   "10": {

@@ -5,18 +5,18 @@ This directory contains ComfyUI workflow templates for advanced video processing
 ## 🖥️ GPU Configuration (oelala-gpu)
 
 **Hardware:**
-- RTX 5060 Ti 16GB (cuda:1)
-- RTX 3060 12GB (cuda:0)
+- RTX 5060 Ti 16GB (cuda:0)
+- RTX 3060 12GB (cuda:1)
 - Total: 28GB VRAM
 
 **DisTorch2 Allocation:**
 ```
-expert_mode_allocations: "cuda:0,11gb;cuda:1,15gb;cpu,2gb"
+expert_mode_allocations: "cuda:1,11gb;cuda:0,15gb;cpu,2gb"
 ```
 
 This allocation distributes model weights across both GPUs with a small CPU fallback for overflow.
-- 11GB on RTX 3060 (cuda:0)
-- 15GB on RTX 5060 Ti (cuda:1)
+- 11GB on RTX 3060 (cuda:1)
+- 15GB on RTX 5060 Ti (cuda:0)
 - 2GB CPU fallback
 - Total: 26GB allocated out of 28GB available (leaves 2GB headroom for VRAM overhead)
 
@@ -112,9 +112,9 @@ Extend videos forwards or backwards using WAN 2.2 video generation with DisTorch
 **DisTorch2 Configuration:**
 ```json
 {
-  "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,2gb",
-  "compute_device": "cuda:0",
-  "donor_device": "cuda:1",
+  "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,2gb",
+  "compute_device": "cuda:1",
+  "donor_device": "cuda:0",
   "virtual_vram_gb": 16,
   "eject_models": true
 }

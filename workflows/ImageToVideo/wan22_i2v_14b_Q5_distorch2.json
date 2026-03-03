@@ -30,8 +30,8 @@
         {"name": "TEXT_ENCODER", "type": "WANTEXTENCODER", "links": [2], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "LoadWanVideoT5TextEncoderMultiGPU"},
-      "widgets_values": ["umt5-xxl-enc-bf16.safetensors", "bf16", "cuda:0"],
-      "title": "T5 Text Encoder (bf16, cuda:0)"
+      "widgets_values": ["umt5-xxl-enc-bf16.safetensors", "bf16", "cuda:1"],
+      "title": "T5 Text Encoder (bf16, cuda:1)"
     },
     {
       "id": 3,
@@ -63,8 +63,8 @@
         {"name": "VAE", "type": "WANVAE", "links": [3, 12], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "WanVideoVAELoaderMultiGPU"},
-      "widgets_values": ["Wan2.1_VAE.safetensors", "cuda:0", "bf16"],
-      "title": "VAE Loader (cuda:0)"
+      "widgets_values": ["Wan2.1_VAE.safetensors", "cuda:1", "bf16"],
+      "title": "VAE Loader (cuda:1)"
     },
     {
       "id": 5,
@@ -136,11 +136,11 @@
         "bf16",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sageattn",
         "default"
       ],
-      "title": "Q5_K_S Model (SageAttention, cuda:0)"
+      "title": "Q5_K_S Model (SageAttention, cuda:1)"
     },
     {
       "id": 9,

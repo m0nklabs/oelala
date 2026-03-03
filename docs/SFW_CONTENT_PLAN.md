@@ -59,7 +59,7 @@ Use categories to ensure variety:
 | Resolution | 480p (848x480) | Balance quality/speed |
 | Frames | 41 | ~2.5 sec @ 16fps |
 | Model | Wan 2.2 14B Q6_K | Best quality available |
-| GPU | DisTorch2 multi-GPU | cuda:0+cuda:1 |
+| GPU | DisTorch2 multi-GPU | cuda:1+cuda:0 |
 
 ### SFW Prompt Template
 ```

@@ -9,15 +9,15 @@ Complete inventory of available resources on the self-hosted GPU runner.
 
 | Component | Specs | CUDA Device |
 |-----------|-------|-------------|
-| GPU 1 | RTX 3060 12GB | `cuda:0` |
-| GPU 2 | RTX 5060 Ti 16GB | `cuda:1` |
+| GPU 1 | RTX 3060 12GB | `cuda:1` |
+| GPU 2 | RTX 5060 Ti 16GB | `cuda:0` |
 | **Total VRAM** | **28GB** | |
 | RAM | 128GB DDR4 | |
 | Storage | NVMe SSD | |
 
 ### DisTorch2 Allocation
 ```
-cuda:0,11gb;cuda:1,15gb;cpu,2gb
+cuda:1,11gb;cuda:0,15gb;cpu,2gb
 ```
 Safe allocation with 1GB buffer per GPU + 2GB CPU fallback for edge cases.
 
@@ -31,7 +31,7 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 - `VAELoaderDisTorch2MultiGPU`
 - `CLIPLoaderDisTorch2MultiGPU`
 
-**All loader nodes MUST include `expert_mode_allocations: "cuda:0,11gb;cuda:1,15gb;cpu,2gb"`**
+**All loader nodes MUST include `expert_mode_allocations: "cuda:1,11gb;cuda:0,15gb;cpu,2gb"`**
 
 ### Video Generation (Wan 2.2 14B Q6_K)
 
@@ -53,7 +53,7 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 | I2I | SDXL | 1536x1536 | ~10GB |
 | Upscale | 4x | 2048x2048 max | ~8GB |
 
-**Note**: Image gen fits on single GPU. Use `cuda:1` (16GB) for headroom.
+**Note**: Image gen fits on single GPU. Use `cuda:0` (16GB) for headroom.
 
 ### LTX-2 Video Generation (⚠️ Experimental)
 
@@ -83,7 +83,7 @@ With 28GB total VRAM, LTX-2 is **not yet practical** on this setup.
 | Video-to-Audio | MMAudio Large 44k | ~8GB |
 | Synchformer | Sync model | ~2GB |
 
-**Note**: Run on `cuda:0` to keep `cuda:1` free for concurrent image/video.
+**Note**: Run on `cuda:1` to keep `cuda:0` free for concurrent image/video.
 
 ### Text Encoding
 
@@ -99,7 +99,7 @@ With 28GB total VRAM, LTX-2 is **not yet practical** on this setup.
 
 With 28GB total VRAM, you can run:
 - ✅ Image gen + Audio gen (different GPUs)
-- ✅ Multiple image gens (batch on cuda:1)
+- ✅ Multiple image gens (batch on cuda:0)
 - ⚠️ Video gen + anything else (tight, may OOM)
 - ❌ Two video gens simultaneously
 

@@ -74,7 +74,7 @@
       "widgets_values": [
         "umt5_xxl_fp8_e4m3fn.safetensors",
         "bf16",
-        "cuda:0",
+        "cuda:1",
         "fp8_e4m3fn"
       ],
       "inputs": [
@@ -170,7 +170,7 @@
       },
       "widgets_values": [
         "wan_2.1_vae.safetensors",
-        "cuda:0",
+        "cuda:1",
         "bf16"
       ]
     },
@@ -209,7 +209,7 @@
         0,
         0,
         false,
-        "cuda:1"
+        "cuda:0"
       ]
     },
     {
@@ -257,7 +257,7 @@
         "bf16",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sdpa",
         "default"
       ]
@@ -307,7 +307,7 @@
         "bf16",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sdpa",
         "default"
       ]

@@ -76,7 +76,7 @@ const RESOLUTION_PRESETS = {
     max_duration_ltx2: 30,
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
-    max_duration_ultra_q8: 5,  // 720p OOM at 161f, safe at 81f (5s)
+    max_duration_ultra_q8: 8,  // 720p: 15.4GB peak@161f OOM, 14.5GB@129f safe with LoRAs
   },
 }
 

@@ -70,9 +70,9 @@
       "widgets_values": [
         "umt5-xxl-enc-bf16.safetensors",
         "bf16",
-        "cuda:0"
+        "cuda:1"
       ],
-      "title": "T5 Text Encoder (bf16, cuda:0)",
+      "title": "T5 Text Encoder (bf16, cuda:1)",
       "inputs": [
         {
           "name": "text",
@@ -155,10 +155,10 @@
       },
       "widgets_values": [
         "Wan2.1_VAE.safetensors",
-        "cuda:0",
+        "cuda:1",
         "bf16"
       ],
-      "title": "VAE Loader (cuda:0)"
+      "title": "VAE Loader (cuda:1)"
     },
     {
       "id": 5,
@@ -324,11 +324,11 @@
         "bf16",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sageattn",
         "default"
       ],
-      "title": "Q5_K_S Model (SageAttention, cuda:0)"
+      "title": "Q5_K_S Model (SageAttention, cuda:1)"
     },
     {
       "id": 9,

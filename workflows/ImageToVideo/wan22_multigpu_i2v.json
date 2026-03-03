@@ -67,7 +67,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "sageattention appears to have a non-cuda:0 bug?"
+        "sageattention appears to have a non-cuda:1 bug?"
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -155,7 +155,7 @@
         0,
         0,
         false,
-        "cuda:0"
+        "cuda:1"
       ],
       "color": "#008181",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -547,7 +547,7 @@
       "widgets_values": [
         "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
         "bf16",
-        "cuda:0",
+        "cuda:1",
         "disabled"
       ],
       "color": "#008181",
@@ -756,7 +756,7 @@
       },
       "widgets_values": [
         "Wan2.1_VAE.safetensors",
-        "cuda:0",
+        "cuda:1",
         "bf16"
       ],
       "color": "#008181",
@@ -1361,7 +1361,7 @@
       "title": "ComfyUI-MultiGPU Note - ComfyUI-WanVideoWrapper",
       "properties": {},
       "widgets_values": [
-        "These nodes are designed to work with ComfyUI-WanVideoWrapper they enable UNets, CLIPs, and VAEs to be loaded  on any available device. This is a replication of the original workflow by kijai which can be found here: [wanvideo2_2_I2V_A14B_example_WIP.json](https://github.com/kijai/ComfyUI-WanVideoWrapper/blob/main/example_workflows/wanvideo2_2_I2V_A14B_example_WIP.json)\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n- [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper)\n```\n\ud83d\udcc2 ComfyUI/\n\u251c\u2500\u2500 \ud83d\udcc2 custom_nodes/\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 ComfyUI-MultiGPU/\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 ComfyUI-WanVideoWrapper\n```\n## Model links\n\n**Diffusion model**\n- [Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/HighNoise/Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf)\n- [Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/LowNoise/Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf)\n\n**CLIP**\n- [umt5_xxl_enc-bf16.safetensors](https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-bf16.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n\ud83d\udcc2 ComfyUI/\n\u251c\u2500\u2500 \ud83d\udcc2 models/\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 clip/\n\u2502   \u2502   \u2514\u2500\u2500 umt5_xxl_enc-bf16.safetensors\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 unet/\n\u2502   \u2502   \u251c\u2500\u2500 Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u2502   \u251c\u2500\u2500 Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u251c\u2500\u2500\u2500\ud83d\udcc2 loras/\n\u2502   \u251c\u2500\u2500\u2500\u2500\u2500\ud83d\udcc2 Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/\n\u2502   \u2502        \u251c\u2500\u2500\u2500\u2500\u2500\u2500 high_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u2502        \u2514\u2500\u2500\u2500\u2500\u2500\u2500 low_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 vae/\n\u2502   \u2502   \u2514\u2500\u2500 wan_2.1_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n\ud83d\udda5\ufe0f system \n\u251c\u2500\u2500 \ud83d\udfe2 cuda:0\n\u2502       \u2514\u2500\u2500 Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 high_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 low_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 umt5_xxl_fp8_e4m3fn_scaled.safetensors\n\u2502       \u2514\u2500\u2500 wan_2.1_vae.safetensors\n\u251c\u2500\u2500 \ud83d\udfe3 cuda:1\n|     \u2514\u2500\u2500 Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n|      \u2514\u2500\u2500 Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n|      \u2514\u2500\u2500 high_noise_model.safetensors [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n|      \u2514\u2500\u2500 low_noise_model.safetensors [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u251c\u2500\u2500 \u2699\ufe0f cpu\n\n```"
+        "These nodes are designed to work with ComfyUI-WanVideoWrapper they enable UNets, CLIPs, and VAEs to be loaded  on any available device. This is a replication of the original workflow by kijai which can be found here: [wanvideo2_2_I2V_A14B_example_WIP.json](https://github.com/kijai/ComfyUI-WanVideoWrapper/blob/main/example_workflows/wanvideo2_2_I2V_A14B_example_WIP.json)\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n- [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper)\n```\n\ud83d\udcc2 ComfyUI/\n\u251c\u2500\u2500 \ud83d\udcc2 custom_nodes/\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 ComfyUI-MultiGPU/\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 ComfyUI-WanVideoWrapper\n```\n## Model links\n\n**Diffusion model**\n- [Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/HighNoise/Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf)\n- [Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/LowNoise/Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf)\n\n**CLIP**\n- [umt5_xxl_enc-bf16.safetensors](https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-bf16.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n\ud83d\udcc2 ComfyUI/\n\u251c\u2500\u2500 \ud83d\udcc2 models/\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 clip/\n\u2502   \u2502   \u2514\u2500\u2500 umt5_xxl_enc-bf16.safetensors\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 unet/\n\u2502   \u2502   \u251c\u2500\u2500 Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u2502   \u251c\u2500\u2500 Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u251c\u2500\u2500\u2500\ud83d\udcc2 loras/\n\u2502   \u251c\u2500\u2500\u2500\u2500\u2500\ud83d\udcc2 Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/\n\u2502   \u2502        \u251c\u2500\u2500\u2500\u2500\u2500\u2500 high_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u2502        \u2514\u2500\u2500\u2500\u2500\u2500\u2500 low_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u2502   \u251c\u2500\u2500 \ud83d\udcc2 vae/\n\u2502   \u2502   \u2514\u2500\u2500 wan_2.1_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n\ud83d\udda5\ufe0f system \n\u251c\u2500\u2500 \ud83d\udfe2 cuda:1\n\u2502       \u2514\u2500\u2500 Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 high_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 low_noise_model.safetensors [\ud83d\udfe9\ud83d\udfe9\ud83d\udfe9]\n\u2502       \u2514\u2500\u2500 umt5_xxl_fp8_e4m3fn_scaled.safetensors\n\u2502       \u2514\u2500\u2500 wan_2.1_vae.safetensors\n\u251c\u2500\u2500 \ud83d\udfe3 cuda:0\n|     \u2514\u2500\u2500 Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n|      \u2514\u2500\u2500 Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n|      \u2514\u2500\u2500 high_noise_model.safetensors [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n|      \u2514\u2500\u2500 low_noise_model.safetensors [\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea\ud83d\udfea]\n\u251c\u2500\u2500 \u2699\ufe0f cpu\n\n```"
       ],
       "color": "#008181",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -1456,7 +1456,7 @@
         "fp16_fast",
         "disabled",
         "offload_device",
-        "cuda:1",
+        "cuda:0",
         "sdpa",
         "default"
       ],
@@ -1553,7 +1553,7 @@
         "fp16_fast",
         "disabled",
         "offload_device",
-        "cuda:1",
+        "cuda:0",
         "sdpa",
         "default"
       ],

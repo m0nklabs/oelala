@@ -64,7 +64,7 @@
       "widgets_values": [
         "umt5_xxl_fp8_e4m3fn.safetensors",
         "bf16",
-        "cuda:0",
+        "cuda:1",
         "fp8_e4m3fn"
       ],
       "inputs": [
@@ -148,7 +148,7 @@
       },
       "widgets_values": [
         "Wan2.1_VAE.safetensors",
-        "cuda:0",
+        "cuda:1",
         "bf16"
       ]
     },
@@ -261,9 +261,9 @@
         40,
         true,
         true,
-        "cuda:1"
+        "cuda:0"
       ],
-      "title": "BlockSwap \u2192 cuda:1 (5060 Ti)"
+      "title": "BlockSwap \u2192 cuda:0 (5060 Ti)"
     },
     {
       "id": 8,
@@ -314,11 +314,11 @@
         "bf16",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sdpa",
         "default"
       ],
-      "title": "Model Loader (compute: cuda:0)"
+      "title": "Model Loader (compute: cuda:1)"
     },
     {
       "id": 9,

@@ -36,13 +36,13 @@ generator.generate_video_from_image(
 ## Multi-GPU Setup (DisTorch2)
 
 ### Hardware
-- RTX 5060 Ti 16GB (`cuda:1`)
-- RTX 3060 12GB (`cuda:0`)
+- RTX 5060 Ti 16GB (`cuda:0`)
+- RTX 3060 12GB (`cuda:1`)
 - Total: 28GB
 
 ### DisTorch2 Allocation
 ```
-cuda:0,11gb;cuda:1,15gb;cpu,2gb
+cuda:1,11gb;cuda:0,15gb;cpu,2gb
 ```
 
 ### ComfyUI Nodes

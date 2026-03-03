@@ -317,7 +317,7 @@
       "mode": 0,
       "properties": {},
       "widgets_values": [
-        "=== WAN 2.2 14B I2V SECTION ===\nMulti-GPU distributed across cuda:0 + cuda:1"
+        "=== WAN 2.2 14B I2V SECTION ===\nMulti-GPU distributed across cuda:1 + cuda:0"
       ],
       "color": "#008181",
       "bgcolor": "#006666"
@@ -391,7 +391,7 @@
         0,
         0,
         false,
-        "cuda:1"
+        "cuda:0"
       ],
       "color": "#008181",
       "bgcolor": "#006666"
@@ -1031,7 +1031,7 @@
   "groups": [
     {
       "id": 1,
-      "title": "Stage 1: Text-to-Image (ReaPony on cuda:0)",
+      "title": "Stage 1: Text-to-Image (ReaPony on cuda:1)",
       "bounding": [
         80,
         20,

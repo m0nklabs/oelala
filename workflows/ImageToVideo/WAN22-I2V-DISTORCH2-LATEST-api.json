@@ -5,10 +5,10 @@
       "dequant_dtype": "default",
       "patch_dtype": "default",
       "patch_on_device": false,
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 16,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -22,10 +22,10 @@
       "dequant_dtype": "default",
       "patch_dtype": "default",
       "patch_on_device": false,
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 16,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -36,10 +36,10 @@
   "3": {
     "inputs": {
       "vae_name": "Wan2.1_VAE.safetensors",
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 16,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "VAELoaderDisTorch2MultiGPU",
@@ -51,10 +51,10 @@
     "inputs": {
       "clip_name": "umt5-xxl-enc-bf16.safetensors",
       "type": "wan",
-      "device": "cuda:0",
+      "device": "cuda:1",
       "virtual_vram_gb": 16,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
       "eject_models": true
     },
     "class_type": "CLIPLoaderDisTorch2MultiGPU",

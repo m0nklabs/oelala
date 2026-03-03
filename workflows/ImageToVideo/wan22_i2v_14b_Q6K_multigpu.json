@@ -67,7 +67,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "sageattention appears to have a non-cuda:0 bug?"
+        "sageattention appears to have a non-cuda:1 bug?"
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -547,7 +547,7 @@
       "widgets_values": [
         "umt5-xxl-enc-bf16.safetensors",
         "bf16",
-        "cuda:0",
+        "cuda:1",
         "disabled"
       ],
       "color": "#008181",
@@ -756,7 +756,7 @@
       },
       "widgets_values": [
         "wan_2.1_vae.safetensors",
-        "cuda:0",
+        "cuda:1",
         "bf16"
       ],
       "color": "#008181",
@@ -1361,7 +1361,7 @@
       "title": "ComfyUI-MultiGPU Note - ComfyUI-WanVideoWrapper",
       "properties": {},
       "widgets_values": [
-        "These nodes are designed to work with ComfyUI-WanVideoWrapper they enable UNets, CLIPs, and VAEs to be loaded  on any available device. This is a replication of the original workflow by kijai which can be found here: [wanvideo2_2_I2V_A14B_example_WIP.json](https://github.com/kijai/ComfyUI-WanVideoWrapper/blob/main/example_workflows/wanvideo2_2_I2V_A14B_example_WIP.json)\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n- [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper)\n```\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI-MultiGPU/\n│   ├── 📂 ComfyUI-WanVideoWrapper\n```\n## Model links\n\n**Diffusion model**\n- [wan2.2_i2v_high_noise_14B_Q6_K.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/HighNoise/wan2.2_i2v_high_noise_14B_Q6_K.gguf)\n- [wan2.2_i2v_low_noise_14B_Q6_K.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/LowNoise/wan2.2_i2v_low_noise_14B_Q6_K.gguf)\n\n**CLIP**\n- [umt5_xxl_enc-bf16.safetensors](https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-bf16.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 clip/\n│   │   └── umt5_xxl_enc-bf16.safetensors\n│   ├── 📂 unet/\n│   │   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │   ├── wan2.2_i2v_low_noise_14B_Q6_K.gguf [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├───📂 loras/\n│   ├─────📂 Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/\n│   │        ├────── high_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │        └────── low_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├── 📂 vae/\n│   │   └── wan_2.1_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n🖥️ system \n├── 🟢 cuda:0\n│       └── wan2.2_i2v_high_noise_14B_Q6_K.gguf [🟩🟩🟩]\n│       └── wan2.2_i2v_low_noise_14B_Q6_K.gguf [🟩🟩🟩]\n│       └── high_noise_model.safetensors [🟩🟩🟩]\n│       └── low_noise_model.safetensors [🟩🟩🟩]\n│       └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│       └── wan_2.1_vae.safetensors\n├── 🟣 cuda:1\n|     └── wan2.2_i2v_high_noise_14B_Q6_K.gguf [🟪🟪🟪🟪🟪🟪🟪]\n|      └── wan2.2_i2v_low_noise_14B_Q6_K.gguf [🟪🟪🟪🟪🟪🟪🟪]\n|      └── high_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n|      └── low_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n├── ⚙️ cpu\n\n```"
+        "These nodes are designed to work with ComfyUI-WanVideoWrapper they enable UNets, CLIPs, and VAEs to be loaded  on any available device. This is a replication of the original workflow by kijai which can be found here: [wanvideo2_2_I2V_A14B_example_WIP.json](https://github.com/kijai/ComfyUI-WanVideoWrapper/blob/main/example_workflows/wanvideo2_2_I2V_A14B_example_WIP.json)\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n- [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper)\n```\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI-MultiGPU/\n│   ├── 📂 ComfyUI-WanVideoWrapper\n```\n## Model links\n\n**Diffusion model**\n- [wan2.2_i2v_high_noise_14B_Q6_K.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/HighNoise/wan2.2_i2v_high_noise_14B_Q6_K.gguf)\n- [wan2.2_i2v_low_noise_14B_Q6_K.gguf](https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/LowNoise/wan2.2_i2v_low_noise_14B_Q6_K.gguf)\n\n**CLIP**\n- [umt5_xxl_enc-bf16.safetensors](https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-bf16.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 clip/\n│   │   └── umt5_xxl_enc-bf16.safetensors\n│   ├── 📂 unet/\n│   │   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │   ├── wan2.2_i2v_low_noise_14B_Q6_K.gguf [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├───📂 loras/\n│   ├─────📂 Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/\n│   │        ├────── high_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │        └────── low_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├── 📂 vae/\n│   │   └── wan_2.1_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n🖥️ system \n├── 🟢 cuda:1\n│       └── wan2.2_i2v_high_noise_14B_Q6_K.gguf [🟩🟩🟩]\n│       └── wan2.2_i2v_low_noise_14B_Q6_K.gguf [🟩🟩🟩]\n│       └── high_noise_model.safetensors [🟩🟩🟩]\n│       └── low_noise_model.safetensors [🟩🟩🟩]\n│       └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│       └── wan_2.1_vae.safetensors\n├── 🟣 cuda:0\n|     └── wan2.2_i2v_high_noise_14B_Q6_K.gguf [🟪🟪🟪🟪🟪🟪🟪]\n|      └── wan2.2_i2v_low_noise_14B_Q6_K.gguf [🟪🟪🟪🟪🟪🟪🟪]\n|      └── high_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n|      └── low_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n├── ⚙️ cpu\n\n```"
       ],
       "color": "#008181",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -1456,7 +1456,7 @@
         "fp16_fast",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sdpa",
         "default"
       ],
@@ -1553,7 +1553,7 @@
         "fp16_fast",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sdpa",
         "default"
       ],

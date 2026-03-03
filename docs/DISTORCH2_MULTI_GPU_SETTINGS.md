@@ -1,7 +1,7 @@
 # DisTorch2 Multi-GPU Settings Guide
 
 > **Last Updated:** 2026-01-16
-> **Hardware:** RTX 5060 Ti 16GB (cuda:0) + RTX 3060 12GB (cuda:1) = 28GB Total VRAM
+> **Hardware:** RTX 5060 Ti 16GB (cuda:1) + RTX 3060 12GB (cuda:0) = 28GB Total VRAM
 
 ## Overview
 
@@ -13,8 +13,8 @@ DisTorch2 is a multi-GPU model distribution system for ComfyUI that allows split
 
 | nvidia-smi | PyTorch | GPU | VRAM | Role |
 |------------|---------|-----|------|------|
-| 0 | **cuda:1** | RTX 3060 | 12GB | Model storage (donor) |
-| 1 | **cuda:0** | RTX 5060 Ti | 16GB | Primary compute |
+| 0 | **cuda:0** | RTX 3060 | 12GB | Model storage (donor) |
+| 1 | **cuda:1** | RTX 5060 Ti | 16GB | Primary compute |
 
 Always use **PyTorch indices** in allocation strings!
 
@@ -54,9 +54,9 @@ device1,size1;device2,size2;device3,size3;...
 
 ### Examples
 ```
-cuda:0,10gb;cuda:1,4gb;cpu,*     # 10GB on GPU0, 4GB on GPU1, rest on CPU
-cuda:1,11gb;cuda:0,15gb;cpu,*   # 11GB on GPU1 FIRST, then GPU0, rest on CPU
-cuda:0,8gb;cpu,*                 # 8GB on GPU0, rest on CPU (single GPU + offload)
+cuda:1,10gb;cuda:0,4gb;cpu,*     # 10GB on GPU0, 4GB on GPU1, rest on CPU
+cuda:0,10gb;cuda:1,15gb;cpu,*   # 11GB on GPU1 FIRST, then GPU0, rest on CPU
+cuda:1,8gb;cpu,*                 # 8GB on GPU0, rest on CPU (single GPU + offload)
 ```
 
 ### Key Rules
@@ -78,31 +78,31 @@ cuda:0,8gb;cpu,*                 # 8GB on GPU0, rest on CPU (single GPU + offloa
 
 ```json
 {
-  "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
-  "compute_device": "cuda:0",
-  "donor_device": "cuda:1",
+  "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
+  "compute_device": "cuda:1",
+  "donor_device": "cuda:0",
   "virtual_vram_gb": 16,
   "eject_models": true
 }
 ```
 
 **Memory Distribution:**
-| Component | cuda:1 (3060) | cuda:0 (5060 Ti) | CPU |
+| Component | cuda:0 (3060) | cuda:1 (5060 Ti) | CPU |
 |-----------|---------------|------------------|-----|
 | Model Layers | ~11.0 GB (97%) | ~0.3 GB (3%) | 0 GB |
 | Activations | ~0.2 GB | ~15.5 GB | - |
 | **Total** | **11.2 GB / 12 GB** | **15.8 GB / 16 GB** | **0 GB** |
 
 **Why this works:**
-- By putting `cuda:1` (3060) first with 11GB, it receives ~97% of the model
-- `cuda:0` (5060 Ti) keeps only ~3% of model but has 15.5GB free for activations/KV-cache
+- By putting `cuda:0` (3060) first with 11GB, it receives ~97% of the model
+- `cuda:1` (5060 Ti) keeps only ~3% of model but has 15.5GB free for activations/KV-cache
 - The 5060 Ti does ALL computation (100% utilization) while 3060 holds model weights
 
 #### Alternative Allocations
 
 **Balanced (shorter videos, faster):**
 ```
-cuda:0,10gb;cuda:1,4gb;cpu,*
+cuda:1,10gb;cuda:0,4gb;cpu,*
 ```
 - Max frames: ~161 (10 sec)
 - 5060 Ti: ~10GB model + ~5GB activations
@@ -111,7 +111,7 @@ cuda:0,10gb;cuda:1,4gb;cpu,*
 
 **CPU Offload (longer videos, slower):**
 ```
-cuda:1,8gb;cuda:0,12gb;cpu,*
+cuda:0,8gb;cuda:1,12gb;cpu,*
 ```
 - Enables 400+ frames if needed
 - Model partially on CPU
@@ -125,11 +125,11 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 
 | Frames | Duration | Allocation | Status |
 |--------|----------|------------|--------|
-| 161 | ~10 sec | `cuda:0,10gb;cuda:1,4gb;cpu,*` | ✅ Stable |
-| 241 | ~15 sec | `cuda:1,10gb;cuda:0,14gb;cpu,*` | ✅ Stable |
-| 321 | ~20 sec | `cuda:1,11gb;cuda:0,15gb;cpu,*` | ✅ **SAFE MAX** |
-| 341 | ~21 sec | `cuda:1,11gb;cuda:0,15gb;cpu,*` | ✅ Tight |
-| 351-355 | ~22 sec | `cuda:1,11gb;cuda:0,15gb;cpu,*` | ⚠️ OOM risk |
+| 161 | ~10 sec | `cuda:1,10gb;cuda:0,4gb;cpu,*` | ✅ Stable |
+| 241 | ~15 sec | `cuda:0,10gb;cuda:1,14gb;cpu,*` | ✅ Stable |
+| 321 | ~20 sec | `cuda:0,10gb;cuda:1,15gb;cpu,*` | ✅ **SAFE MAX** |
+| 341 | ~21 sec | `cuda:0,10gb;cuda:1,15gb;cpu,*` | ✅ Tight |
+| 351-355 | ~22 sec | `cuda:0,10gb;cuda:1,15gb;cpu,*` | ⚠️ OOM risk |
 | 357+ | ~22.3 sec | Any | ❌ OOM |
 
 ⚠️ **Production recommendation:** Use **321 frames** max for stability.
@@ -138,15 +138,15 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 
 | Frames | Duration | Allocation | Status |
 |--------|----------|------------|--------|
-| 81 | ~5 sec | `cuda:0,10gb;cuda:1,4gb;cpu,*` | ✅ Stable |
-| 121 | ~7.5 sec | `cuda:1,10gb;cuda:0,14gb;cpu,*` | ⚠️ Tight |
+| 81 | ~5 sec | `cuda:1,10gb;cuda:0,4gb;cpu,*` | ✅ Stable |
+| 121 | ~7.5 sec | `cuda:0,10gb;cuda:1,14gb;cpu,*` | ⚠️ Tight |
 | 161 | ~10 sec | Any | ❌ OOM |
 
 ### 720 × 1280 (HD Portrait)
 
 | Frames | Duration | Allocation | Status |
 |--------|----------|------------|--------|
-| 41 | ~2.5 sec | `cuda:1,8gb;cuda:0,12gb;cpu,*` | ✅ With CPU offload |
+| 41 | ~2.5 sec | `cuda:0,8gb;cuda:1,12gb;cpu,*` | ✅ With CPU offload |
 | 81 | ~5 sec | Any | ❌ OOM |
 
 ---
@@ -162,10 +162,10 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
     "dequant_dtype": "default",
     "patch_dtype": "default",
     "patch_on_device": false,
-    "compute_device": "cuda:0",
+    "compute_device": "cuda:1",
     "virtual_vram_gb": 16,
-    "donor_device": "cuda:1",
-    "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+    "donor_device": "cuda:0",
+    "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
     "eject_models": true
   },
   "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU"
@@ -178,10 +178,10 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 {
   "inputs": {
     "vae_name": "Wan2.1_VAE.safetensors",
-    "compute_device": "cuda:0",
+    "compute_device": "cuda:1",
     "virtual_vram_gb": 16,
-    "donor_device": "cuda:1",
-    "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+    "donor_device": "cuda:0",
+    "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
     "eject_models": true
   },
   "class_type": "VAELoaderDisTorch2MultiGPU"
@@ -195,10 +195,10 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
   "inputs": {
     "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
     "type": "wan",
-    "device": "cuda:0",
+    "device": "cuda:1",
     "virtual_vram_gb": 16,
-    "donor_device": "cuda:1",
-    "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
+    "donor_device": "cuda:0",
+    "expert_mode_allocations": "cuda:0,10gb;cuda:1,15gb;cpu,*",
     "eject_models": true
   },
   "class_type": "CLIPLoaderDisTorch2MultiGPU"
@@ -211,7 +211,7 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 
 ### OOM During Sampling
 - **Cause:** Activations/KV-cache too large for remaining VRAM
-- **Fix:** Reduce frames OR put more model on secondary GPU (increase cuda:1 allocation)
+- **Fix:** Reduce frames OR put more model on secondary GPU (increase cuda:0 allocation)
 
 ### OOM During VAE Decode
 - **Cause:** VAE decode needs contiguous memory
@@ -244,8 +244,8 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 ### 2026-01-16 Plafond Test Series
 
 **Hardware:**
-- RTX 5060 Ti 16GB (PyTorch cuda:0, nvidia-smi 1) - PRIMARY COMPUTE
-- RTX 3060 12GB (PyTorch cuda:1, nvidia-smi 0) - MODEL STORAGE
+- RTX 5060 Ti 16GB (PyTorch cuda:1, nvidia-smi 1) - PRIMARY COMPUTE
+- RTX 3060 12GB (PyTorch cuda:0, nvidia-smi 0) - MODEL STORAGE
 - Total: 28GB VRAM
 
 **Configuration:**
@@ -253,7 +253,7 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 - Model: wan2.2_i2v_14B_Q6_K.gguf (~11.5GB)
 - CLIP: umt5-xxl-enc-bf16.safetensors
 - Sampler: uni_pc, 6 steps, CFG 1.0
-- Allocation: `cuda:1,11gb;cuda:0,15gb;cpu,*`
+- Allocation: `cuda:0,10gb;cuda:1,15gb;cpu,*`
 
 **Frame Limit Binary Search:**
 | Frames | Duration | VRAM Total | Time/Step | Result |
@@ -271,8 +271,8 @@ cuda:1,8gb;cuda:0,12gb;cpu,*
 
 **VRAM Usage During 321 Frame Generation:**
 ```
-RTX 3060 (cuda:1):    11,237 MB / 12,288 MB (91%) - holds model
-RTX 5060 Ti (cuda:0): 14,854 MB / 16,311 MB (91%) - activations + 3% model
+RTX 3060 (cuda:0):    11,237 MB / 12,288 MB (91%) - holds model
+RTX 5060 Ti (cuda:1): 14,854 MB / 16,311 MB (91%) - activations + 3% model
 Total:                ~26 GB / 28 GB
 5060 Ti Utilization:  100% (all compute happens here)
 3060 Utilization:     0-2% (model weight storage only)
@@ -286,8 +286,8 @@ Total:                ~26 GB / 28 GB
 ```
 
 **Key Discovery:** Allocation ORDER matters!
-- `cuda:1,11gb;cuda:0,15gb` = 3060 gets model FIRST (97% of weights)
-- `cuda:0,10gb;cuda:1,4gb` = 5060 Ti gets model first, overflow to 3060
+- `cuda:0,10gb;cuda:1,15gb` = 3060 gets model FIRST (97% of weights)
+- `cuda:1,10gb;cuda:0,4gb` = 5060 Ti gets model first, overflow to 3060
 - Putting smaller GPU first with high allocation = optimal for long videos
 
 ---
@@ -315,7 +315,7 @@ For Wan2.2 14B Q6_K:
 
 **576×1024 Recommended Settings:**
 - Frames: 81-121 for safe operation
-- Allocation: same `cuda:1,11gb;cuda:0,15gb;cpu,*`
+- Allocation: same `cuda:0,10gb;cuda:1,15gb;cpu,*`
 - Expected VRAM: ~24-27GB
 
 **Tip:** For higher resolutions, prioritize fewer frames over lower quality.
@@ -329,9 +329,9 @@ Always test with target resolution before production use.
 ┌─────────────────────────────────────────────────────────────┐
 │  OPTIMAL SETTINGS FOR MAX VIDEO LENGTH (480p Portrait)     │
 ├─────────────────────────────────────────────────────────────┤
-│  expert_mode_allocations: cuda:1,11gb;cuda:0,15gb;cpu,*    │
-│  compute_device:          cuda:0                            │
-│  donor_device:            cuda:1                            │
+│  expert_mode_allocations: cuda:0,10gb;cuda:1,15gb;cpu,*    │
+│  compute_device:          cuda:1                            │
+│  donor_device:            cuda:0                            │
 │  virtual_vram_gb:         16                                │
 │  eject_models:            true                              │
 ├─────────────────────────────────────────────────────────────┤

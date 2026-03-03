@@ -57,9 +57,9 @@ VAELoader ─→ VAEDecode
 | Component | Device | VRAM |
 |-----------|--------|------|
 | Gemma-3 12B | CPU | 0 GB VRAM, ~24GB RAM |
-| LTX-2 UNET | cuda:0 | ~11 GB |
-| LTX-2 UNET | cuda:1 | ~1 GB |
-| VAE | cuda:0 | ~2.4 GB |
+| LTX-2 UNET | cuda:1 | ~11 GB |
+| LTX-2 UNET | cuda:0 | ~1 GB |
+| VAE | cuda:1 | ~2.4 GB |
 
 ## Bestanden
 
@@ -70,10 +70,10 @@ VAELoader ─→ VAEDecode
 
 | GPU | VRAM | CUDA |
 |-----|------|------|
-| RTX 5060 Ti | 16GB | cuda:0 |
-| RTX 3060 | 12GB | cuda:1 |
+| RTX 5060 Ti | 16GB | cuda:1 |
+| RTX 3060 | 12GB | cuda:0 |
 
-DisTorch2 allocation: `cuda:0,11gb;cuda:1,14gb;cpu,2gb`
+DisTorch2 allocation: `cuda:1,11gb;cuda:0,14gb;cpu,2gb`
 
 ## Test Commando
 

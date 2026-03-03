@@ -2,7 +2,7 @@
 
 This document provides a comprehensive overview of all available generation modes per tool type, and the sub-models (VAE, text encoders, GGUF models) that can be combined for video/image generation.
 
-**Hardware**: RTX 5060 Ti 16GB (cuda:1) + RTX 3060 12GB (cuda:0) = 28GB total VRAM
+**Hardware**: RTX 5060 Ti 16GB (cuda:0) + RTX 3060 12GB (cuda:1) = 28GB total VRAM
 
 ---
 
@@ -154,17 +154,17 @@ This document provides a comprehensive overview of all available generation mode
 
 ### Default Allocation String
 ```
-cuda:0,12gb;cuda:1,16gb
+cuda:1,12gb;cuda:0,16gb
 ```
 
 ### Per-Model Recommended Allocations
 
 | Model Type | Allocation | Notes |
 |------------|------------|-------|
-| Wan2.2 14B Q6_K | `cuda:0,11gb;cuda:1,15gb;cpu,2gb` | Allow CPU spillover |
-| LTX-2 19B Q4 | `cuda:0,10gb;cuda:1,14gb` | Lighter model |
-| UMT5-XXL | `cuda:0` | Keep on RTX 3060 |
-| VAE | `cuda:0,3gb` | Small, fast |
+| Wan2.2 14B Q6_K | `cuda:1,11gb;cuda:0,15gb;cpu,2gb` | Allow CPU spillover |
+| LTX-2 19B Q4 | `cuda:1,10gb;cuda:0,14gb` | Lighter model |
+| UMT5-XXL | `cuda:1` | Keep on RTX 3060 |
+| VAE | `cuda:1,3gb` | Small, fast |
 
 ### DisTorch2 Loader Nodes
 

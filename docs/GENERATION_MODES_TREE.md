@@ -421,7 +421,7 @@ Sub-Models (Shared Components)
 ```
 Multi-GPU Distribution (28GB Total)
 │
-├── 🎮 cuda:0 (RTX 5060 Ti 16GB) ← PyTorch primary
+├── 🎮 cuda:1 (RTX 5060 Ti 16GB) ← PyTorch primary
 │   │   nvidia-smi shows as GPU 1
 │   │
 │   ├── Typical Load: 12-16GB
@@ -431,14 +431,14 @@ Multi-GPU Distribution (28GB Total)
 │       ├── Main compute (100% GPU utilization)
 │       └── Small model portion (when 3060 holds most)
 │
-├── 🎮 cuda:1 (RTX 3060 12GB) ← PyTorch secondary
+├── 🎮 cuda:0 (RTX 3060 12GB) ← PyTorch secondary
 │   │   nvidia-smi shows as GPU 0
 │   │
 │   ├── Typical Load: 10-12GB
 │   │
 │   └── Best for:
 │       ├── Model weight storage (97% of model)
-│       ├── Freeing cuda:0 for activations
+│       ├── Freeing cuda:1 for activations
 │       └── PUT THIS FIRST in allocation for long videos
 │
 └── 💾 cpu (System RAM - Emergency)
@@ -457,19 +457,19 @@ CRITICAL: Order determines which GPU gets model FIRST!
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ MAX VIDEO LENGTH (480p Portrait, ~22 sec)                           │
-│ cuda:1,11gb;cuda:0,15gb;cpu,*                                       │
+│ cuda:0,11gb;cuda:1,15gb;cpu,*                                       │
 │   → 3060 holds 97% of model (~11GB)                                 │
 │   → 5060 Ti has 15GB free for activations                           │
 │   → Max: 353-355 frames                                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │ BALANCED (faster, 10 sec max)                                       │
-│ cuda:0,10gb;cuda:1,4gb;cpu,*                                        │
+│ cuda:1,10gb;cuda:0,4gb;cpu,*                                        │
 │   → 5060 Ti holds most of model                                     │
 │   → Faster due to less memory transfers                             │
 │   → Max: ~161 frames                                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │ CPU OFFLOAD (longest, slowest)                                      │
-│ cuda:1,8gb;cuda:0,12gb;cpu,*                                        │
+│ cuda:0,8gb;cuda:1,12gb;cpu,*                                        │
 │   → Part of model on CPU RAM                                        │
 │   → Slowest due to PCIe transfers                                   │
 │   → For 400+ frames if needed                                       │
@@ -481,7 +481,7 @@ CRITICAL: Order determines which GPU gets model FIRST!
 ```
 480 × 848 (Portrait) - RECOMMENDED FOR LONG VIDEOS
 │
-├── cuda:1,11gb;cuda:0,15gb;cpu,*
+├── cuda:0,11gb;cuda:1,15gb;cpu,*
 │   ├── 161 frames (~10 sec): ✅ ~22GB SAFE
 │   ├── 241 frames (~15 sec): ✅ ~24GB SAFE
 │   ├── 321 frames (~20 sec): ✅ ~26GB SAFE ← RECOMMENDED MAX
@@ -489,7 +489,7 @@ CRITICAL: Order determines which GPU gets model FIRST!
 │   ├── 351-355 frames: ⚠️ Works sometimes, OOM risk
 │   └── 357+ frames: ❌ OOM
 │
-└── cuda:0,10gb;cuda:1,4gb;cpu,* (balanced)
+└── cuda:1,10gb;cuda:0,4gb;cpu,* (balanced)
     └── 161 frames max: ✅ ~20GB
 
 576 × 1024 (Standard Portrait)
@@ -505,7 +505,7 @@ CRITICAL: Order determines which GPU gets model FIRST!
 
 RECOMMENDED SETTINGS FOR PRODUCTION:
 ├── Maximum video length: 321 frames (~20 sec)
-├── Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*
+├── Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*
 └── Headroom: 1-2GB for stability
 
 GENERATION TIMES (6 steps, uni_pc sampler):
@@ -897,7 +897,7 @@ TTS Modes
 │ [RECOMMENDED] 480×848 Portrait - MAX LENGTH                          │
 │ ─────────────────────────────────────────────────────────────────── │
 │   Frames: 321 (~20 sec) | VRAM: ~26GB | Time: ~23 min               │
-│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*                         │
 │   Models:                                                            │
 │     - wan2.2_i2v_high_noise_14B_Q6_K.gguf                           │
 │     - wan2.2_i2v_low_noise_14B_Q6_K.gguf                            │
@@ -910,14 +910,14 @@ TTS Modes
 │ 480×848 Portrait - SAFE PRODUCTION                                   │
 │ ─────────────────────────────────────────────────────────────────── │
 │   Frames: 161 (~10 sec) | VRAM: ~22GB | Time: ~12 min               │
-│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*                         │
 │   Same models as above                                               │
 │   Tested: 2026-01-16 ✅                                              │
 │                                                                      │
 │ 576×1024 Standard Portrait                                           │
 │ ─────────────────────────────────────────────────────────────────── │
 │   Frames: 81 (~5 sec) | VRAM: ~24GB | Time: ~6 min                  │
-│   Allocation: cuda:1,11gb;cuda:0,15gb;cpu,*                         │
+│   Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*                         │
 │   Same models as above                                               │
 │   Tested: 2026-01-12 ✅                                              │
 │                                                                      │
@@ -933,7 +933,7 @@ TTS Modes
 │ 480×848 Portrait - Q8 EXPERIMENTAL                                   │
 │ ─────────────────────────────────────────────────────────────────── │
 │   Frames: 81 (~5 sec) | VRAM: ~26GB | Time: ~24 min                 │
-│   Allocation: cuda:1,11gb;cuda:0,14.5gb;cpu,*                       │
+│   Allocation: cuda:0,11gb;cuda:1,14.5gb;cpu,*                       │
 │   Models:                                                            │
 │     - wan2.2_i2v_high_noise_14B_Q8_0.gguf                           │
 │     - wan2.2_i2v_low_noise_14B_Q8_0.gguf                            │
@@ -941,7 +941,7 @@ TTS Modes
 │   VAE: wan_2.1_vae.safetensors                                      │
 │   Workflow: wan22_i2v_distorch2_q8_api.json                         │
 │   Sampler: uni_pc | Steps: 8 | CFG: 1.0                             │
-│   ⚠️ CLIP must use device=cuda:0 (5060 Ti), NOT cuda:1!             │
+│   ⚠️ CLIP must use device=cuda:1 (5060 Ti), NOT cuda:0!             │
 │   Previously OOM'd due to reversed CLIP device/donor (fixed 2026-03) │
 │   Tested: 2026-03-01 ✅                                              │
 │                                                                      │
@@ -1072,9 +1072,9 @@ TTS Modes
 
 ```json
 {
-  "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,*",
-  "compute_device": "cuda:0",
-  "donor_device": "cuda:1",
+  "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,*",
+  "compute_device": "cuda:1",
+  "donor_device": "cuda:0",
   "virtual_vram_gb": 16,
   "eject_models": true
 }

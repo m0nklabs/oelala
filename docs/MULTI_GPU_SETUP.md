@@ -67,7 +67,7 @@ if remaining_model_bytes > 0:
 
 ### GPU-Only Mode (Recommended)
 ```
-cuda:0,12gb;cuda:1,16gb
+cuda:1,12gb;cuda:0,16gb
 ```
 - All model on GPUs
 - No CPU RAM usage for model weights
@@ -75,7 +75,7 @@ cuda:0,12gb;cuda:1,16gb
 
 ### CPU Fallback Mode
 ```
-cuda:0,12gb;cuda:1,16gb;cpu,*
+cuda:1,12gb;cuda:0,16gb;cpu,*
 ```
 - Overflow goes to CPU RAM
 - Enables higher resolution/frames
@@ -87,17 +87,17 @@ In your ComfyUI workflow, set these nodes:
 
 ### UnetLoaderGGUFAdvancedDisTorch2MultiGPU
 ```
-expert_mode_allocations: cuda:0,12gb;cuda:1,16gb
+expert_mode_allocations: cuda:1,12gb;cuda:0,16gb
 ```
 
 ### VAELoaderDisTorch2MultiGPU
 ```
-expert_mode_allocations: cuda:0,12gb;cuda:1,16gb
+expert_mode_allocations: cuda:1,12gb;cuda:0,16gb
 ```
 
 ### CLIPLoaderDisTorch2MultiGPU
 ```
-expert_mode_allocations: cuda:0,12gb;cuda:1,16gb
+expert_mode_allocations: cuda:1,12gb;cuda:0,16gb
 ```
 
 ## Verifying GPU Distribution
@@ -115,8 +115,8 @@ Or with CPU fallback:
 ### Expected Distribution (WAN 2.2 14B Q6_K)
 ```
 Device    VRAM GB    Model GB    Dist %
-cuda:0      12.0       14.4       43%
-cuda:1      16.0       19.2       57%
+cuda:1      12.0       14.4       43%
+cuda:0      16.0       19.2       57%
 ```
 
 ## Troubleshooting
@@ -178,7 +178,7 @@ Tested with DisTorch2 on RTX 5060 Ti (16GB) + RTX 3060 (12GB).
 Resolution: 720×1280 (portrait) or 1280×720 (landscape)
 Frames: 81 (5 sec @ 16fps)
 CPU Offload: 6GB
-Allocation: cuda:0,11gb;cuda:1,15gb;cpu,6gb
+Allocation: cuda:1,11gb;cuda:0,15gb;cpu,6gb
 ```
 
 ## References

@@ -89,7 +89,7 @@ I2V_GENERATION_MODES = {
         "default_cfg": 1.0,
         "features": [
             "Q8_0 dual-pass (higher quality than Q6_K)",
-            "DisTorch2 multi-GPU (cuda:1,11gb;cuda:0,14.5gb;cpu,*)",
+            "DisTorch2 multi-GPU (cuda:0,10gb;cuda:1,14.5gb;cpu,*)",
             "User-selectable LoRAs (no forced Lightning)",
             "NAG (Normalized Attention Guidance)",
             "TorchCompile JIT compilation",
@@ -290,7 +290,7 @@ WAN22_ENHANCED_Q4KM_API_WORKFLOW = {
         "inputs": {
             "model_name": "umt5-xxl-enc-bf16.safetensors",
             "precision": "bf16",
-            "device": "cuda:0",
+            "device": "cuda:1",
         },
     },
     "3": {
@@ -306,7 +306,7 @@ WAN22_ENHANCED_Q4KM_API_WORKFLOW = {
         "class_type": "WanVideoVAELoaderMultiGPU",
         "inputs": {
             "model_name": "Wan2.1_VAE.safetensors",
-            "device": "cuda:0",
+            "device": "cuda:1",
             "dtype": "bf16",
         },
     },
@@ -342,7 +342,7 @@ WAN22_ENHANCED_Q4KM_API_WORKFLOW = {
             "base_precision": "bf16",
             "quantization": "disabled",
             "load_device": "offload_device",
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "attention_mode": "sageattn",
             "block_swap_args": ["7", 0],
         },
@@ -424,10 +424,10 @@ WAN22_I2V_Q6_API_WORKFLOW = {
             "dequant_dtype": "default",
             "patch_dtype": "default",
             "patch_on_device": False,
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -439,10 +439,10 @@ WAN22_I2V_Q6_API_WORKFLOW = {
             "dequant_dtype": "default",
             "patch_dtype": "default",
             "patch_on_device": False,
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -451,10 +451,10 @@ WAN22_I2V_Q6_API_WORKFLOW = {
         "class_type": "VAELoaderDisTorch2MultiGPU",
         "inputs": {
             "vae_name": "wan_2.1_vae.safetensors",
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -464,10 +464,10 @@ WAN22_I2V_Q6_API_WORKFLOW = {
         "inputs": {
             "clip_name": "umt5-xxl-enc-bf16.safetensors",
             "type": "wan",
-            "device": "cuda:0",
+            "device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -638,10 +638,10 @@ WAN22_T2V_Q6_API_WORKFLOW = {
             "dequant_dtype": "default",
             "patch_dtype": "default",
             "patch_on_device": False,
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -653,10 +653,10 @@ WAN22_T2V_Q6_API_WORKFLOW = {
             "dequant_dtype": "default",
             "patch_dtype": "default",
             "patch_on_device": False,
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -665,10 +665,10 @@ WAN22_T2V_Q6_API_WORKFLOW = {
         "class_type": "VAELoaderDisTorch2MultiGPU",
         "inputs": {
             "vae_name": "wan_2.1_vae.safetensors",
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -678,10 +678,10 @@ WAN22_T2V_Q6_API_WORKFLOW = {
         "inputs": {
             "clip_name": "umt5-xxl-enc-bf16.safetensors",
             "type": "wan",
-            "device": "cuda:0",
+            "device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,0.25gb;cuda:1,8gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,0.25gb;cuda:0,8gb;cpu,*",
             "eject_models": True,
         },
     },
@@ -808,7 +808,7 @@ WAN22_I2V_Q5_API_WORKFLOW = {
         "inputs": {
             "model_name": "umt5-xxl-enc-bf16.safetensors",
             "precision": "bf16",
-            "device": "cuda:0",
+            "device": "cuda:1",
         },
     },
     "3": {
@@ -824,7 +824,7 @@ WAN22_I2V_Q5_API_WORKFLOW = {
         "class_type": "WanVideoVAELoaderMultiGPU",
         "inputs": {
             "model_name": "Wan2.1_VAE.safetensors",
-            "device": "cuda:0",
+            "device": "cuda:1",
             "dtype": "bf16",
         },
     },
@@ -860,7 +860,7 @@ WAN22_I2V_Q5_API_WORKFLOW = {
             "base_precision": "bf16",
             "quantization": "disabled",
             "load_device": "offload_device",
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "attention_mode": "sageattn",
             "block_swap_args": ["7", 0],
         },
@@ -965,7 +965,7 @@ WAN22_I2V_Q5_WORKFLOW = {
                 }
             ],
             "properties": {"Node name for S&R": "LoadWanVideoT5TextEncoderMultiGPU"},
-            "widgets_values": ["umt5-xxl-enc-bf16.safetensors", "bf16", "cuda:0"],
+            "widgets_values": ["umt5-xxl-enc-bf16.safetensors", "bf16", "cuda:1"],
             "title": "T5 Text Encoder",
         },
         {
@@ -1001,7 +1001,7 @@ WAN22_I2V_Q5_WORKFLOW = {
                 {"name": "VAE", "type": "WANVAE", "links": [3, 12], "slot_index": 0}
             ],
             "properties": {"Node name for S&R": "WanVideoVAELoaderMultiGPU"},
-            "widgets_values": ["Wan2.1_VAE.safetensors", "cuda:0", "bf16"],
+            "widgets_values": ["Wan2.1_VAE.safetensors", "cuda:1", "bf16"],
             "title": "VAE Loader",
         },
         {
@@ -1097,7 +1097,7 @@ WAN22_I2V_Q5_WORKFLOW = {
                 "bf16",
                 "disabled",
                 "offload_device",
-                "cuda:0",
+                "cuda:1",
                 "sageattn",
                 "default",
             ],
@@ -2298,7 +2298,7 @@ class ComfyUIClient:
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 480,
-        distorch2_alloc: str = "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+        distorch2_alloc: str = "cuda:0,10gb;cuda:1,14.5gb;cpu,*",
     ) -> Optional[Dict[str, Any]]:
         """
         Build DisTorch2 Q8 experimental workflow.
@@ -2521,9 +2521,9 @@ class ComfyUIClient:
         allowing higher resolutions and more frames than other modes.
 
         Memory strategy:
-        - UNet: cuda:1(3060)=11GB, cuda:0(5060Ti)=0.5GB, cpu=remainder
+        - UNet: cuda:0(3060)=11GB, cuda:1(5060Ti)=0.5GB, cpu=remainder
         - CLIP: Fully on CPU (saves GPU VRAM)
-        - VAE: On compute device cuda:0 (small, needed for decode)
+        - VAE: On compute device cuda:1 (small, needed for decode)
 
         Same processing chain as BlockSwap/DisTorch2 Q8:
         NAG, EnhanceAVideo, CFGZeroStar, TorchCompile, Florence2,
@@ -3951,9 +3951,9 @@ class ComfyUIClient:
                 "inputs": {
                     "unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
                     "weight_dtype": "default",
-                    "compute_device": "cuda:0",
+                    "compute_device": "cuda:1",
                     "virtual_vram_gb": 5,
-                    "donor_device": "cuda:1",
+                    "donor_device": "cuda:0",
                     "expert_mode_allocations": "",
                     "eject_models": True,
                 },
@@ -3964,7 +3964,7 @@ class ComfyUIClient:
                 "inputs": {
                     "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
                     "type": "wan",
-                    "device": "cuda:0",
+                    "device": "cuda:1",
                 },
                 "class_type": "CLIPLoaderMultiGPU",
                 "_meta": {"title": "CLIPLoaderMultiGPU"},
@@ -3973,9 +3973,9 @@ class ComfyUIClient:
                 "inputs": {
                     "unet_name": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
                     "weight_dtype": "default",
-                    "compute_device": "cuda:0",
+                    "compute_device": "cuda:1",
                     "virtual_vram_gb": 5,
-                    "donor_device": "cuda:1",
+                    "donor_device": "cuda:0",
                     "expert_mode_allocations": "",
                     "eject_models": True,
                 },
@@ -3985,9 +3985,9 @@ class ComfyUIClient:
             "55": {
                 "inputs": {
                     "vae_name": "wan_2.1_vae.safetensors",
-                    "compute_device": "cuda:0",
+                    "compute_device": "cuda:1",
                     "virtual_vram_gb": 0,
-                    "donor_device": "cuda:1",
+                    "donor_device": "cuda:0",
                     "expert_mode_allocations": "",
                     "eject_models": True,
                 },
@@ -4451,10 +4451,10 @@ class ComfyUIClient:
                 "dequant_dtype": "default",
                 "patch_dtype": "default",
                 "patch_on_device": False,
-                "compute_device": "cuda:0",
+                "compute_device": "cuda:1",
                 "virtual_vram_gb": 16,
-                "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "donor_device": "cuda:0",
+                "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,1gb",
                 "eject_models": True,
             },
             "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -4470,10 +4470,10 @@ class ComfyUIClient:
                 "dequant_dtype": "default",
                 "patch_dtype": "default",
                 "patch_on_device": False,
-                "compute_device": "cuda:0",
+                "compute_device": "cuda:1",
                 "virtual_vram_gb": 16,
-                "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "donor_device": "cuda:0",
+                "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,1gb",
                 "eject_models": True,
             },
             "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -4486,10 +4486,10 @@ class ComfyUIClient:
         workflow[str(node_id)] = {
             "inputs": {
                 "vae_name": "wan_2.1_vae.safetensors",
-                "compute_device": "cuda:0",
+                "compute_device": "cuda:1",
                 "virtual_vram_gb": 4,
-                "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "donor_device": "cuda:0",
+                "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,1gb",
                 "eject_models": True,
             },
             "class_type": "VAELoaderDisTorch2MultiGPU",
@@ -4503,10 +4503,10 @@ class ComfyUIClient:
             "inputs": {
                 "clip_name": "umt5-xxl-enc-bf16.safetensors",
                 "type": "wan",
-                "device": "cuda:0",
+                "device": "cuda:1",
                 "virtual_vram_gb": 4,
-                "donor_device": "cuda:1",
-                "expert_mode_allocations": "cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+                "donor_device": "cuda:0",
+                "expert_mode_allocations": "cuda:1,11gb;cuda:0,15gb;cpu,1gb",
                 "eject_models": True,
             },
             "class_type": "CLIPLoaderDisTorch2MultiGPU",
@@ -4966,7 +4966,7 @@ class ComfyUIClient:
         - high_noise model for first half of sampling steps
         - low_noise model for second half
         - Power Lora Loader with configurable LoRAs
-        - DisTorch2 multi-GPU distribution (cuda:0,12gb;cuda:1,16gb;cpu,*)
+        - DisTorch2 multi-GPU distribution (cuda:1,12gb;cuda:0,16gb;cpu,*)
 
         Args:
             lora_config: List of LoRA configs, each with 'high' and 'low' paths
@@ -5317,10 +5317,10 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
             "dequant_dtype": "default",
             "patch_dtype": "default",
             "patch_on_device": False,
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,12gb;cuda:0,16gb;cpu,*",
             "eject_models": True,
         },
         "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -5331,10 +5331,10 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
             "dequant_dtype": "default",
             "patch_dtype": "default",
             "patch_on_device": False,
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 16,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,12gb;cuda:0,16gb;cpu,*",
             "eject_models": True,
         },
         "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
@@ -5342,10 +5342,10 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
     "3": {
         "inputs": {
             "vae_name": "wan_2.1_vae.safetensors",
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "virtual_vram_gb": 4,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,12gb;cuda:0,16gb;cpu,*",
             "eject_models": True,
         },
         "class_type": "VAELoaderDisTorch2MultiGPU",
@@ -5354,10 +5354,10 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
         "inputs": {
             "clip_name": "umt5-xxl-enc-bf16.safetensors",
             "type": "wan",
-            "device": "cuda:0",
+            "device": "cuda:1",
             "virtual_vram_gb": 4,
-            "donor_device": "cuda:1",
-            "expert_mode_allocations": "cuda:0,12gb;cuda:1,16gb;cpu,*",
+            "donor_device": "cuda:0",
+            "expert_mode_allocations": "cuda:1,12gb;cuda:0,16gb;cpu,*",
             "eject_models": True,
         },
         "class_type": "CLIPLoaderDisTorch2MultiGPU",

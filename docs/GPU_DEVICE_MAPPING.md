@@ -15,29 +15,29 @@ CUDA_VISIBLE_DEVICES=GPU-d7034f73-...,GPU-90e13f28-...
 This remaps devices so PyTorch sees:
 | cuda:X | GPU Model | VRAM | Role |
 |--------|-----------|------|------|
-| cuda:0 | RTX 5060 Ti | 16 GB | **Primary Compute** |
-| cuda:1 | RTX 3060 | 12 GB | Donor/Secondary |
+| cuda:1 | RTX 5060 Ti | 16 GB | **Primary Compute** |
+| cuda:0 | RTX 3060 | 12 GB | Donor/Secondary |
 
 ## Workflow Settings
 
 ### For DisTorch2 MultiGPU nodes:
 ```json
 {
-  "compute_device": "cuda:0",
-  "donor_device": "cuda:1",
+  "compute_device": "cuda:1",
+  "donor_device": "cuda:0",
   "virtual_vram_gb": 16,
-  "expert_mode_allocations": "cuda:0,12gb;cuda:1,10gb;cpu,*"
+  "expert_mode_allocations": "cuda:1,12gb;cuda:0,10gb;cpu,*"
 }
 ```
 
 ### Allocation Strategy (34GB GGUF model):
-- **cuda:0 (5060 Ti)**: Up to 14GB allocation
-- **cuda:1 (3060)**: Up to 10GB allocation
+- **cuda:1 (5060 Ti)**: Up to 14GB allocation
+- **cuda:0 (3060)**: Up to 10GB allocation
 - **CPU**: Remainder (~10-14GB)
 
 ### Safe Working Config:
 ```
-expert_mode_allocations: "cuda:0,8gb;cuda:1,12gb;cpu,*"
+expert_mode_allocations: "cuda:1,8gb;cuda:0,12gb;cpu,*"
 ```
 Total: 20GB GPU + ~14GB CPU = 34GB model
 

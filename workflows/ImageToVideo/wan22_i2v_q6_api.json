@@ -8,7 +8,7 @@
         "inputs": {
             "model_name": "umt5-xxl-enc-bf16.safetensors",
             "precision": "bf16",
-            "device": "cuda:0"
+            "device": "cuda:1"
         }
     },
     "3": {
@@ -24,7 +24,7 @@
         "class_type": "WanVideoVAELoaderMultiGPU",
         "inputs": {
             "model_name": "Wan2.1_VAE.safetensors",
-            "device": "cuda:0",
+            "device": "cuda:1",
             "dtype": "bf16"
         }
     },
@@ -60,7 +60,7 @@
             "base_precision": "bf16",
             "quantization": "disabled",
             "load_device": "offload_device",
-            "compute_device": "cuda:0",
+            "compute_device": "cuda:1",
             "attention_mode": "sageattn",
             "block_swap_args": ["7", 0]
         }

@@ -30,6 +30,43 @@ _webhook_triggers = None
 _GENERATION_TIMES_FILE = "/home/flip/oelala/data/generation_times.json"
 
 
+async def _get_comfyui_execution_time(prompt_id: str) -> Optional[float]:
+    """
+    Fetch execution time from ComfyUI history API.
+
+    ComfyUI stores execution_start and execution_success timestamps (ms epoch)
+    in /history/{prompt_id}.  Returns seconds or None on failure.
+    """
+    import httpx
+
+    url = f"http://localhost:8188/history/{prompt_id}"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+
+        history = data.get(prompt_id)
+        if not history:
+            return None
+
+        messages = history.get("status", {}).get("messages", [])
+        start_ts = None
+        end_ts = None
+        for msg_type, payload in messages:
+            if msg_type == "execution_start":
+                start_ts = payload.get("timestamp")
+            elif msg_type in ("execution_success", "execution_error"):
+                end_ts = payload.get("timestamp")
+
+        if start_ts and end_ts:
+            return (end_ts - start_ts) / 1000.0  # ms → seconds
+    except Exception as e:
+        logger.warning(f"Failed to fetch ComfyUI execution time for {prompt_id}: {e}")
+    return None
+
+
 def _store_generation_time(output_url: str, processing_time: float):
     """
     Persist generation time keyed by filename for media listing.
@@ -81,6 +118,62 @@ def load_generation_times() -> Dict[str, float]:
     except (json.JSONDecodeError, OSError) as e:
         logger.warning(f"Failed to load generation times: {e}")
     return {}
+
+
+async def backfill_generation_times_from_comfyui():
+    """
+    One-time backfill: pull all execution times from ComfyUI history
+    and populate generation_times.json for existing media files.
+    """
+    import httpx
+    from pathlib import Path
+
+    url = "http://localhost:8188/history"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                logger.warning(f"ComfyUI history backfill failed: HTTP {resp.status_code}")
+                return 0
+            history = resp.json()
+    except Exception as e:
+        logger.warning(f"ComfyUI history backfill failed: {e}")
+        return 0
+
+    existing = load_generation_times()
+    count = 0
+
+    for prompt_id, entry in history.items():
+        messages = entry.get("status", {}).get("messages", [])
+        start_ts = None
+        end_ts = None
+        for msg_type, payload in messages:
+            if msg_type == "execution_start":
+                start_ts = payload.get("timestamp")
+            elif msg_type in ("execution_success", "execution_error"):
+                end_ts = payload.get("timestamp")
+
+        if not (start_ts and end_ts):
+            continue
+        exec_time = round((end_ts - start_ts) / 1000.0, 1)
+
+        # Extract output filenames from all output nodes
+        outputs = entry.get("outputs", {})
+        for _node_id, node_out in outputs.items():
+            for key in ("gifs", "images"):
+                for item in node_out.get(key, []):
+                    filename = item.get("filename")
+                    if filename and filename not in existing:
+                        existing[filename] = exec_time
+                        count += 1
+
+    if count > 0:
+        path = Path(_GENERATION_TIMES_FILE)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(existing))
+        logger.info(f"⏱ Backfilled {count} generation times from ComfyUI history")
+
+    return count
 
 
 def _get_webhook_triggers():
@@ -376,6 +469,14 @@ class WebSocketManager:
             import time
 
             processing_time = time.time() - started_at
+
+        # Fallback: fetch execution time from ComfyUI history API
+        if processing_time is None:
+            processing_time = await _get_comfyui_execution_time(job_id)
+            if processing_time is not None:
+                logger.info(
+                    f"⏱ Got execution time from ComfyUI history: {processing_time:.1f}s"
+                )
 
         data = {
             "job_id": job_id,

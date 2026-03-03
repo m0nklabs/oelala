@@ -6,9 +6,9 @@
       "dequant_dtype": "bfloat16",
       "patch_dtype": "bfloat16",
       "patch_on_device": false,
-      "compute_device": "cuda:1",
+      "compute_device": "cuda:0",
       "virtual_vram_gb": 14.0,
-      "donor_device": "cuda:0",
+      "donor_device": "cuda:1",
       "expert_mode_allocations": "",
       "eject_models": true
     }
@@ -26,7 +26,7 @@
     "class_type": "VAELoaderDisTorch2MultiGPU",
     "inputs": {
       "vae_name": "LTX2_video_vae_bf16.safetensors",
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 3.0,
       "donor_device": "cpu",
       "expert_mode_allocations": "",

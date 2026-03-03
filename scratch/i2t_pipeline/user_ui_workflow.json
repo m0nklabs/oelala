@@ -1,0 +1,548 @@
+{
+  "prompt_id": "2b3a4786-6613-4663-a3d6-c0863fbecd0e",
+  "prompt": {
+    "88": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "comfyui_20260302_232926_oelala_dt2q8_20260301_212409_00001.png"
+      },
+      "_meta": {
+        "title": "Input Image"
+      }
+    },
+    "401": {
+      "class_type": "ImageResizeKJv2",
+      "inputs": {
+        "image": [
+          "88",
+          0
+        ],
+        "width": 480,
+        "height": 848,
+        "upscale_method": "lanczos",
+        "keep_proportion": "crop",
+        "pad_color": "0, 0, 0",
+        "crop_position": "center",
+        "divisible_by": 8
+      },
+      "_meta": {
+        "title": "Resize Image"
+      }
+    },
+    "460": {
+      "class_type": "CLIPLoaderDisTorch2MultiGPU",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "type": "wan",
+        "device": "cuda:0",
+        "virtual_vram_gb": 4.0,
+        "donor_device": "cuda:1",
+        "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+        "eject_models": false
+      }
+    },
+    "462": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "460",
+          0
+        ],
+        "text": "camera orbiting right around subject, camera orbiting right around subject, 8k, cinematic, top-down full-body view of a young woman with long wavy red hair, blue eyes, fair skin, and freckles, lying supine on white sheets. She is completely nude with large full breasts and a slender waist, legs spread. A man's hairy arms grip her hips roughly while he thrusts hard and fast and rough, deep penetration. Soft diffused lighting highlights skin texture. Mid video, he slaps her face hard. She is screaming from pleasure. Dynamic camera shake captures the rough motion. masterpiece, best quality, highly detailed"
+      },
+      "_meta": {
+        "title": "Positive Encode"
+      }
+    },
+    "463": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "460",
+          0
+        ],
+        "text": "low quality, blurry, distorted, artifacts"
+      },
+      "_meta": {
+        "title": "Negative Encode"
+      }
+    },
+    "461": {
+      "class_type": "VAELoaderDisTorch2MultiGPU",
+      "inputs": {
+        "vae_name": "Wan2.1_VAE.safetensors",
+        "compute_device": "cuda:0",
+        "virtual_vram_gb": 4.0,
+        "donor_device": "cuda:1",
+        "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+        "eject_models": true
+      }
+    },
+    "495": {
+      "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+      "inputs": {
+        "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf",
+        "dequant_dtype": "default",
+        "patch_dtype": "default",
+        "patch_on_device": false,
+        "compute_device": "cuda:0",
+        "virtual_vram_gb": 4.0,
+        "donor_device": "cuda:1",
+        "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+        "eject_models": true
+      }
+    },
+    "496": {
+      "class_type": "UnetLoaderGGUFAdvancedDisTorch2MultiGPU",
+      "inputs": {
+        "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf",
+        "dequant_dtype": "default",
+        "patch_dtype": "default",
+        "patch_on_device": false,
+        "compute_device": "cuda:0",
+        "virtual_vram_gb": 4.0,
+        "donor_device": "cuda:1",
+        "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+        "eject_models": true
+      }
+    },
+    "481": {
+      "class_type": "WanVideoEnhanceAVideoKJ",
+      "inputs": {
+        "model": [
+          "416",
+          0
+        ],
+        "latent": [
+          "464",
+          2
+        ],
+        "weight": 1.0
+      },
+      "_meta": {
+        "title": "Enhance High"
+      }
+    },
+    "483": {
+      "class_type": "CFGZeroStarAndInit",
+      "inputs": {
+        "model": [
+          "481",
+          0
+        ],
+        "use_zero_init": false,
+        "zero_init_steps": 2
+      },
+      "_meta": {
+        "title": "CFG Zero High"
+      }
+    },
+    "467": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "483",
+          0
+        ],
+        "shift": 9.0
+      },
+      "_meta": {
+        "title": "Sampling High"
+      }
+    },
+    "485": {
+      "class_type": "WanVideoNAG",
+      "inputs": {
+        "model": [
+          "467",
+          0
+        ],
+        "conditioning": [
+          "463",
+          0
+        ],
+        "nag_scale": 11.0,
+        "nag_alpha": 0.25,
+        "nag_tau": 2.373,
+        "input_type": "default"
+      },
+      "_meta": {
+        "title": "NAG High"
+      }
+    },
+    "491": {
+      "class_type": "PatchModelPatcherOrder",
+      "inputs": {
+        "model": [
+          "485",
+          0
+        ],
+        "patch_order": "weight_patch_first",
+        "full_load": "auto"
+      },
+      "_meta": {
+        "title": "Patcher High"
+      }
+    },
+    "492": {
+      "class_type": "TorchCompileModelWanVideo",
+      "inputs": {
+        "model": [
+          "491",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "Compile High"
+      }
+    },
+    "482": {
+      "class_type": "WanVideoEnhanceAVideoKJ",
+      "inputs": {
+        "model": [
+          "471",
+          0
+        ],
+        "latent": [
+          "464",
+          2
+        ],
+        "weight": 1.0
+      },
+      "_meta": {
+        "title": "Enhance Low"
+      }
+    },
+    "484": {
+      "class_type": "CFGZeroStarAndInit",
+      "inputs": {
+        "model": [
+          "482",
+          0
+        ],
+        "use_zero_init": false,
+        "zero_init_steps": 2
+      },
+      "_meta": {
+        "title": "CFG Zero Low"
+      }
+    },
+    "468": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "484",
+          0
+        ],
+        "shift": 9.0
+      },
+      "_meta": {
+        "title": "Sampling Low"
+      }
+    },
+    "486": {
+      "class_type": "WanVideoNAG",
+      "inputs": {
+        "model": [
+          "468",
+          0
+        ],
+        "conditioning": [
+          "463",
+          0
+        ],
+        "nag_scale": 11.0,
+        "nag_alpha": 0.25,
+        "nag_tau": 2.373,
+        "input_type": "default"
+      },
+      "_meta": {
+        "title": "NAG Low"
+      }
+    },
+    "493": {
+      "class_type": "PatchModelPatcherOrder",
+      "inputs": {
+        "model": [
+          "486",
+          0
+        ],
+        "patch_order": "weight_patch_first",
+        "full_load": "auto"
+      },
+      "_meta": {
+        "title": "Patcher Low"
+      }
+    },
+    "494": {
+      "class_type": "TorchCompileModelWanVideo",
+      "inputs": {
+        "model": [
+          "493",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "Compile Low"
+      }
+    },
+    "464": {
+      "class_type": "WanImageToVideo",
+      "inputs": {
+        "positive": [
+          "462",
+          0
+        ],
+        "negative": [
+          "463",
+          0
+        ],
+        "vae": [
+          "461",
+          0
+        ],
+        "start_image": [
+          "401",
+          0
+        ],
+        "width": 480,
+        "height": 848,
+        "length": 161,
+        "batch_size": 1
+      },
+      "_meta": {
+        "title": "WanImageToVideo"
+      }
+    },
+    "73": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 820158066
+      },
+      "_meta": {
+        "title": "Noise"
+      }
+    },
+    "466": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "model": [
+          "492",
+          0
+        ],
+        "positive": [
+          "464",
+          0
+        ],
+        "negative": [
+          "464",
+          1
+        ],
+        "latent_image": [
+          "464",
+          2
+        ],
+        "add_noise": "enable",
+        "noise_seed": 820158066,
+        "steps": 8,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "start_at_step": 0,
+        "end_at_step": 4,
+        "return_with_leftover_noise": "enable"
+      },
+      "_meta": {
+        "title": "Sampler High"
+      }
+    },
+    "465": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "model": [
+          "494",
+          0
+        ],
+        "positive": [
+          "464",
+          0
+        ],
+        "negative": [
+          "464",
+          1
+        ],
+        "latent_image": [
+          "466",
+          0
+        ],
+        "add_noise": "disable",
+        "noise_seed": 820158066,
+        "steps": 8,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "start_at_step": 4,
+        "end_at_step": 10000,
+        "return_with_leftover_noise": "disable"
+      },
+      "_meta": {
+        "title": "Sampler Low"
+      }
+    },
+    "469": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "465",
+          0
+        ],
+        "vae": [
+          "461",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "VAE Decode"
+      }
+    },
+    "400": {
+      "class_type": "ColorMatch",
+      "inputs": {
+        "image_ref": [
+          "88",
+          0
+        ],
+        "image_target": [
+          "469",
+          0
+        ],
+        "method": "mkl"
+      },
+      "_meta": {
+        "title": "Color Match"
+      }
+    },
+    "398": {
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "images": [
+          "400",
+          0
+        ],
+        "frame_rate": 16.0,
+        "loop_count": 0,
+        "filename_prefix": "oelala_dt2q8_20260302_232926",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 19,
+        "save_metadata": true,
+        "trim_to_audio": false,
+        "pingpong": false,
+        "save_output": true
+      },
+      "_meta": {
+        "title": "Output Video"
+      }
+    },
+    "416": {
+      "inputs": {
+        "PowerLoraLoaderHeaderWidget": {
+          "type": "PowerLoraLoaderHeaderWidget"
+        },
+        "lora_1": {
+          "on": true,
+          "lora": "Wan2.2_I2V_Lightning_4steps_Seko_HIGH",
+          "strength": 1
+        },
+        "lora_2": {
+          "on": true,
+          "lora": "wan2.2_i2v_highnoise_pov_missionary_v1.0",
+          "strength": 1.5
+        },
+        "lora_3": {
+          "on": true,
+          "lora": "wan_2.2_i2v_slap_high_v2.0",
+          "strength": 1.4
+        },
+        "lora_4": {
+          "on": false,
+          "lora": "None",
+          "strength": 1
+        },
+        "lora_5": {
+          "on": false,
+          "lora": "None",
+          "strength": 1
+        },
+        "lora_6": {
+          "on": false,
+          "lora": "None",
+          "strength": 1
+        },
+        "\u2795 Add Lora": "",
+        "model": [
+          "495",
+          0
+        ],
+        "clip": [
+          "460",
+          0
+        ]
+      },
+      "class_type": "Power Lora Loader (rgthree)",
+      "_meta": {
+        "title": "LoRA - High noise"
+      }
+    },
+    "471": {
+      "inputs": {
+        "PowerLoraLoaderHeaderWidget": {
+          "type": "PowerLoraLoaderHeaderWidget"
+        },
+        "lora_1": {
+          "on": true,
+          "lora": "Wan2.2_I2V_Lightning_4steps_Seko_LOW",
+          "strength": 1
+        },
+        "lora_2": {
+          "on": true,
+          "lora": "wan2.2_i2v_lownoise_pov_missionary_v1.0",
+          "strength": 1.5
+        },
+        "lora_3": {
+          "on": true,
+          "lora": "wan_2.2_i2v_slap_low_v2.0",
+          "strength": 1.4
+        },
+        "lora_4": {
+          "on": false,
+          "lora": "None",
+          "strength": 1
+        },
+        "lora_5": {
+          "on": false,
+          "lora": "None",
+          "strength": 1
+        },
+        "lora_6": {
+          "on": false,
+          "lora": "None",
+          "strength": 1
+        },
+        "\u2795 Add Lora": "",
+        "model": [
+          "496",
+          0
+        ],
+        "clip": [
+          "460",
+          0
+        ]
+      },
+      "class_type": "Power Lora Loader (rgthree)",
+      "_meta": {
+        "title": "LoRA - Low noise"
+      }
+    }
+  }
+}

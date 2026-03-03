@@ -1099,7 +1099,7 @@
       },
       "widgets_values": [
         "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        "cuda:0",
+        "cuda:1",
         32,
         "cpu",
         "",
@@ -1206,7 +1206,7 @@
       "widgets_values": [
         "wan 2.2\\Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors",
         "default",
-        "cuda:0",
+        "cuda:1",
         32,
         "cpu",
         "",
@@ -1313,7 +1313,7 @@
       "widgets_values": [
         "wan 2.2\\Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors",
         "default",
-        "cuda:0",
+        "cuda:1",
         32,
         "cpu",
         "",
@@ -1598,7 +1598,7 @@
       },
       "widgets_values": [
         "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
-        "cuda:0",
+        "cuda:1",
         32,
         "cpu",
         "",

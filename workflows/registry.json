@@ -343,7 +343,7 @@
             "name": "WAN 2.2 I2V DisTorch2 Multi-GPU",
             "file": "ImageToVideo/wan22_i2v_distorch2_api.json",
             "category": "ImageToVideo",
-            "description": "High performance I2V with DisTorch2 multi-GPU distribution. Uses dual UNET (high/low noise) with LoRAs. Allocation: cuda:0,11gb;cuda:1,15gb;cpu,1gb",
+            "description": "High performance I2V with DisTorch2 multi-GPU distribution. Uses dual UNET (high/low noise) with LoRAs. Allocation: cuda:1,11gb;cuda:0,15gb;cpu,1gb",
             "parameters": {
                 "image": {
                     "node_id": "18",

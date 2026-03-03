@@ -7,8 +7,8 @@
 
 | nvidia-smi | PyTorch | GPU | VRAM | Role |
 |------------|---------|-----|------|------|
-| 1 | **cuda:0** | RTX 5060 Ti | 16GB | Primary (compute) |
-| 0 | **cuda:1** | RTX 3060 | 12GB | Secondary (donor) |
+| 1 | **cuda:1** | RTX 5060 Ti | 16GB | Primary (compute) |
+| 0 | **cuda:0** | RTX 3060 | 12GB | Secondary (donor) |
 
 - **Total VRAM**: 28GB
 - **RAM**: 115GB (CPU offload optional)
@@ -22,9 +22,9 @@
 
 ### GPU-Only Mode (Recommended)
 ```
-cuda:0,10gb;cuda:1,4gb
+cuda:1,10gb;cuda:0,4gb
 ```
-- Primary on cuda:0 (5060 Ti), overflow on cuda:1 (3060)
+- Primary on cuda:1 (5060 Ti), overflow on cuda:0 (3060)
 - No CPU fallback
 - Lower RAM usage (~24GB vs ~53GB)
 - Full GPU utilization
@@ -32,7 +32,7 @@ cuda:0,10gb;cuda:1,4gb
 
 ### CPU Fallback Mode
 ```
-cuda:0,10gb;cuda:1,4gb;cpu,*
+cuda:1,10gb;cuda:0,4gb;cpu,*
 ```
 - T5 encoder offloaded to CPU
 - Higher resolution/frames possible
@@ -150,15 +150,15 @@ VAE Decoder                  Dynamic       -
 - Higher resolutions/frames: May OOM
 
 ### Key Finding: GPU-Only Mode Distribution Issue
-When using pure GPU-only allocation (`cuda:0,12gb;cuda:1,16gb` without `cpu,*`),
-DisTorch2 v2.5.9 tends to place 100% of model weights on cuda:0 instead of
+When using pure GPU-only allocation (`cuda:1,12gb;cuda:0,16gb` without `cpu,*`),
+DisTorch2 v2.5.9 tends to place 100% of model weights on cuda:1 instead of
 distributing between both GPUs. This causes:
 - Slower generation (using only RTX 3060 instead of both GPUs)
 - Higher single-GPU VRAM pressure
 - Better dual-GPU distribution occurs with CPU fallback mode
 
 ### Tips
-1. **For max speed**: Use CPU offload mode (`cuda:0,12gb;cuda:1,16gb;cpu,*`) - better distribution
+1. **For max speed**: Use CPU offload mode (`cuda:1,12gb;cuda:0,16gb;cpu,*`) - better distribution
 2. **For lower RAM usage**: GPU-only mode works but may be slower
 3. **Best combo**: 720×400 @ 241 frames (15s video) in ~10 min with proper dual-GPU
 4. Portrait (9:16) uses same VRAM as landscape (16:9) at same pixel count

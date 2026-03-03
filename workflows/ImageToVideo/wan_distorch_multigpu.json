@@ -28,7 +28,7 @@
         {"name": "T5", "type": "WANTEXTENCODER", "links": [2], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "LoadWanVideoT5TextEncoderMultiGPU"},
-      "widgets_values": ["umt5_xxl_fp8_e4m3fn.safetensors", "bf16", "cuda:0", "fp8_e4m3fn"]
+      "widgets_values": ["umt5_xxl_fp8_e4m3fn.safetensors", "bf16", "cuda:1", "fp8_e4m3fn"]
     },
     {
       "id": 3,
@@ -63,7 +63,7 @@
         {"name": "VAE", "type": "WANVAE", "links": [3, 12], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "WanVideoVAELoaderMultiGPU"},
-      "widgets_values": ["Wan2.1_VAE.safetensors", "cuda:0", "bf16"]
+      "widgets_values": ["Wan2.1_VAE.safetensors", "cuda:1", "bf16"]
     },
     {
       "id": 5,
@@ -109,8 +109,8 @@
         {"name": "BLOCK_SWAP_ARGS", "type": "BLOCKSWAPARGS", "links": [7], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "WanVideoBlockSwapMultiGPU"},
-      "widgets_values": [40, true, true, "cuda:1"],
-      "title": "BlockSwap → cuda:1 (5060 Ti)"
+      "widgets_values": [40, true, true, "cuda:0"],
+      "title": "BlockSwap → cuda:0 (5060 Ti)"
     },
     {
       "id": 8,
@@ -133,11 +133,11 @@
         "bf16",
         "disabled",
         "offload_device",
-        "cuda:0",
+        "cuda:1",
         "sdpa",
         "default"
       ],
-      "title": "Model Loader (compute: cuda:0)"
+      "title": "Model Loader (compute: cuda:1)"
     },
     {
       "id": 9,

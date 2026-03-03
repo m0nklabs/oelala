@@ -60,6 +60,15 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Subdirectories**: All other files must be organized in subdirectories with a narrow and deep tree structure.
 - **Todo Location**: Store persistent todos in `docs/TODO_LIST.md`.
 
+## Frigate (HANDS OFF — CRITICAL)
+
+- **NEVER modify Frigate configuration files** (`/home/flip/frigate/config/config.yml`, `/home/flip/frigate/config/docker/docker-compose.gpu.yml`, or any other Frigate config).
+- **NEVER restart, stop, or reconfigure the Frigate Docker container** unless the user EXPLICITLY requests it with full awareness.
+- **Frigate runs 24/7 security cameras** — breaking it means cameras go down. This is unacceptable.
+- **ffmpeg GPU usage is expected** — Frigate's ffmpeg processes use ~1GB on the GPU for hardware-accelerated video decoding. This is normal and must be accounted for in VRAM budgets, NOT "fixed" by modifying Frigate.
+- **If VRAM is tight**: Adjust the ComfyUI/oelala side (model allocations, resolution caps, frame limits), NEVER touch Frigate.
+- **Frigate config location**: `/home/flip/frigate/config/` — treat this entire directory as READ-ONLY.
+
 ## Platform Support Policy
 
 - **Supported Platforms**: Windows and Linux only.
@@ -178,9 +187,9 @@ The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk
 
 ## GPU Configuration & DisTorch2
 
-- **Hardware**: RTX 5060 Ti 16GB (cuda:0) + RTX 3060 12GB (cuda:1) = 28GB total VRAM
-- **⚠️ CRITICAL**: PyTorch indices differ from nvidia-smi! nvidia-smi GPU 0 = PyTorch cuda:1
-- **DisTorch2 Allocation**: `cuda:1,11gb;cuda:0,15gb;cpu,*` (OPTIMAL - puts 3060 first!)
+- **Hardware**: RTX 5060 Ti 16GB (cuda:1) + RTX 3060 12GB (cuda:0) = 28GB total VRAM
+- **GPU ordering pinned**: `CUDA_DEVICE_ORDER=PCI_BUS_ID` set system-wide (`/etc/environment`), nvidia-smi and PyTorch indices are identical
+- **DisTorch2 Allocation**: `cuda:0,10gb;cuda:1,15gb;cpu,*` (OPTIMAL - puts 3060 first!)
 - **Model Inventory**: See `docs/COMFYUI_INVENTORY.md` for complete list of available models and VRAM limits
 - **DisTorch2 Guide**: See `docs/DISTORCH2_MULTI_GPU_SETTINGS.md` for comprehensive configuration
 - **DisTorch2 Nodes** for multi-GPU video generation:
@@ -193,7 +202,7 @@ The SSD at `/mnt/ssd/` is used **exclusively for large model files** due to disk
   - 576×1024 @ 81 frames: ~24GB (GPU-only, safe)
   - 720×1280 @ 41 frames: ~27GB (tight)
 
-**Key Discovery**: Allocation order matters! `cuda:1` first makes 3060 hold 97% of model,
+**Key Discovery**: Allocation order matters! `cuda:0` first makes 3060 hold 97% of model,
 leaving 5060 Ti with 15GB free for activations. 5060 Ti runs at 100% utilization.
 
 ## Ports
@@ -327,20 +336,21 @@ This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct acce
 The server uses **DisTorch2** for multi-GPU model distribution across both GPUs:
 
 ### Hardware
-> **⚠️ CRITICAL**: PyTorch CUDA indices differ from nvidia-smi! Use PyTorch mapping:
+> **GPU ordering pinned** via `CUDA_DEVICE_ORDER=PCI_BUS_ID` (system-wide in `/etc/environment`).  
+> nvidia-smi index = PyTorch cuda index. Stable across reboots.
 
-| nvidia-smi | PyTorch | GPU | VRAM | Role |
-|------------|---------|-----|------|------|
-| 1 | **cuda:0** | RTX 5060 Ti | 16GB | Primary (compute) |
-| 0 | **cuda:1** | RTX 3060 | 12GB | Secondary (donor) |
-| - | **Total** | - | **28GB** | |
+| Index | GPU | VRAM | Role |
+|-------|-----|------|------|
+| cuda:0 | RTX 3060 | 12GB | Secondary (donor) |
+| cuda:1 | RTX 5060 Ti | 16GB | Primary (compute) |
+| Total | - | **28GB** | |
 
 ### DisTorch2 Allocation String
 ```
-cuda:1,11gb;cuda:0,15gb;cpu,*
+cuda:0,10gb;cuda:1,15gb;cpu,*
 ```
-- cuda:1 = 3060 (FIRST - receives 97% of model weights)
-- cuda:0 = 5060 Ti (compute device, 15GB free for activations)
+- cuda:0 = 3060 (FIRST - receives 97% of model weights)
+- cuda:1 = 5060 Ti (compute device, 15GB free for activations)
 - cpu,* = safety fallback (rarely needed)
 - Used in UnetLoaderGGUFAdvancedDisTorch2MultiGPU, VAELoaderDisTorch2MultiGPU, CLIPLoaderDisTorch2MultiGPU
 
@@ -370,7 +380,7 @@ cuda:1,11gb;cuda:0,15gb;cpu,*
 
 ### When modifying video workflows:
 1. Always use DisTorch2 loader nodes for Wan2.2
-2. Use allocation: `cuda:1,11gb;cuda:0,15gb;cpu,*` (3060 FIRST!)
+2. Use allocation: `cuda:0,10gb;cuda:1,15gb;cpu,*` (3060 FIRST!)
 3. Include `expert_mode_allocations` on ALL loader nodes
 4. Test with target resolution before production
 5. Check ComfyUI logs for distribution: `[MultiGPU DisTorch V2]`

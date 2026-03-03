@@ -288,7 +288,7 @@
       "widgets_values": [
         "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
         "wan",
-        "cuda:0"
+        "cuda:1"
       ],
       "color": "#008181",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -324,9 +324,9 @@
       },
       "widgets_values": [
         "wan_2.1_vae.safetensors",
-        "cuda:0",
-        0,
         "cuda:1",
+        0,
+        "cuda:0",
         "",
         true
       ],
@@ -463,9 +463,9 @@
       "widgets_values": [
         "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
         "default",
-        "cuda:0",
-        5,
         "cuda:1",
+        5,
+        "cuda:0",
         "",
         true
       ],
@@ -491,7 +491,7 @@
       "title": "ComfyUI-MultiGPU Note - wan2_2 Double UNet DisTorch2",
       "properties": {},
       "widgets_values": [
-        "A DisTorch2 Wan 2.2 workflow where we eschew our other `gpu`, offloading both UNets by placing blocks on the `cpu`. In this case we are using the DisTorch2 node to statically allocate approximately 70% of the UNet model (13.3G) to the `cpu`, along with a proportional amount of the LoRAs patched to the model. With `eject_models` being `True`, all other models on the `compute` card (`cuda:0`) will be unloaded, regardless of size, ensuring a clean compute card prior to inference.\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n```\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI-MultiGPU/\n```\n## Model links\n\n**Diffusion model**\n- [wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors)\n- [wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors)\n\n**CLIP**\n- [umt5_xxl_fp8_e4m3fn_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 clip/\n│   │   └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│   ├── 📂 unet/\n│   │   ├── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │   ├── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├───📂 loras/\n│   ├─────📂 Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/\n│   │        ├────── high_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │        └────── low_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├── 📂 vae/\n│   │   └── qwen_image_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n🖥️ system \n├── 🟢 cuda:0\n│       └── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟩🟩🟩]\n│       └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟩🟩🟩]\n│       └── high_noise_model.safetensors [🟩🟩🟩]\n│       └── low_noise_model.safetensors [🟩🟩🟩]\n│       └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│       └── wan_2.1_vae.safetensors\n├── 🟣 cuda:1\n│       └── EMPTY\n├── ⚙️ cpu\n       └── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── high_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── low_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n```"
+        "A DisTorch2 Wan 2.2 workflow where we eschew our other `gpu`, offloading both UNets by placing blocks on the `cpu`. In this case we are using the DisTorch2 node to statically allocate approximately 70% of the UNet model (13.3G) to the `cpu`, along with a proportional amount of the LoRAs patched to the model. With `eject_models` being `True`, all other models on the `compute` card (`cuda:1`) will be unloaded, regardless of size, ensuring a clean compute card prior to inference.\n\n## Custom Node\n- [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)\n```\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI-MultiGPU/\n```\n## Model links\n\n**Diffusion model**\n- [wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors)\n- [wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors)\n\n**CLIP**\n- [umt5_xxl_fp8_e4m3fn_scaled.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors)\n\n**VAE**\n- [wan_2.1_vae.safetensors](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/split_files/vae/wan_2.1_vae.safetensors)\n\n**LoRA**\n- [high_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors)\n- [low_noise_model.safetensors](https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors)\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 clip/\n│   │   └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│   ├── 📂 unet/\n│   │   ├── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │   ├── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├───📂 loras/\n│   ├─────📂 Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/\n│   │        ├────── high_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   │        └────── low_noise_model.safetensors [🟩🟩🟩🟪🟪🟪🟪🟪🟪🟪]\n│   ├── 📂 vae/\n│   │   └── qwen_image_vae.safetensors \n```\n## Device Mapping (Example: Two GPUs, 1 CPU)\n```\n🖥️ system \n├── 🟢 cuda:1\n│       └── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟩🟩🟩]\n│       └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟩🟩🟩]\n│       └── high_noise_model.safetensors [🟩🟩🟩]\n│       └── low_noise_model.safetensors [🟩🟩🟩]\n│       └── umt5_xxl_fp8_e4m3fn_scaled.safetensors\n│       └── wan_2.1_vae.safetensors\n├── 🟣 cuda:0\n│       └── EMPTY\n├── ⚙️ cpu\n       └── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── high_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n       └── low_noise_model.safetensors [🟪🟪🟪🟪🟪🟪🟪]\n```"
       ],
       "color": "#008181",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -528,9 +528,9 @@
       "widgets_values": [
         "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
         "default",
-        "cuda:0",
-        5,
         "cuda:1",
+        5,
+        "cuda:0",
         "",
         true
       ],

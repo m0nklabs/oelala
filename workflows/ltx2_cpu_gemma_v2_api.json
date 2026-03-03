@@ -12,7 +12,7 @@
       "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
       "text": "A cat walking on the beach at sunset, cinematic lighting, 4k quality",
       "max_length": 256,
-      "output_device": "cuda:1"
+      "output_device": "cuda:0"
     }
   },
   "2b": {
@@ -22,7 +22,7 @@
       "ltxv_path": "ltx-2-19b-distilled-fp8.safetensors",
       "text": "blurry, low quality, distorted, watermark",
       "max_length": 256,
-      "output_device": "cuda:1"
+      "output_device": "cuda:0"
     }
   },
   "3": {

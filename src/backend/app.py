@@ -968,6 +968,16 @@ async def startup_event():
     await webhook_service.start_retry_worker(interval=30.0)
     logger.info("✅ Webhook retry worker started!")
 
+    # Backfill generation times from ComfyUI history
+    try:
+        from websocket_handler import backfill_generation_times_from_comfyui
+
+        count = await backfill_generation_times_from_comfyui()
+        if count:
+            logger.info(f"⏱ Backfilled {count} generation times from ComfyUI history")
+    except Exception as e:
+        logger.warning(f"Generation time backfill failed: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

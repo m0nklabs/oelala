@@ -191,7 +191,7 @@ De primaire workflow voor image-to-video generatie gebruikt **DisTorch2 dual-pas
 ### Memory Allocation
 
 ```
-expert_mode_allocations: "cuda:0,0.25gb;cuda:1,8gb;cpu,*"
+expert_mode_allocations: "cuda:1,0.25gb;cuda:0,8gb;cpu,*"
 ```
 
 - **GPU 0**: 0.25 GB (control overhead)

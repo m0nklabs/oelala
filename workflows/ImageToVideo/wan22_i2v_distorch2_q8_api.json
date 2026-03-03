@@ -251,10 +251,10 @@
     "inputs": {
       "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
       "type": "wan",
-      "device": "cuda:0",
+      "device": "cuda:1",
       "virtual_vram_gb": 4.0,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,14.5gb;cpu,*",
       "eject_models": false
     }
   },
@@ -291,10 +291,10 @@
     "class_type": "VAELoaderDisTorch2MultiGPU",
     "inputs": {
       "vae_name": "Wan2.1_VAE.safetensors",
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 4.0,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,14.5gb;cpu,*",
       "eject_models": true
     }
   },
@@ -305,10 +305,10 @@
       "dequant_dtype": "default",
       "patch_dtype": "default",
       "patch_on_device": false,
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 4.0,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,14.5gb;cpu,*",
       "eject_models": true
     }
   },
@@ -319,10 +319,10 @@
       "dequant_dtype": "default",
       "patch_dtype": "default",
       "patch_on_device": false,
-      "compute_device": "cuda:0",
+      "compute_device": "cuda:1",
       "virtual_vram_gb": 4.0,
-      "donor_device": "cuda:1",
-      "expert_mode_allocations": "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
+      "donor_device": "cuda:0",
+      "expert_mode_allocations": "cuda:0,10gb;cuda:1,14.5gb;cpu,*",
       "eject_models": true
     }
   },
@@ -690,17 +690,22 @@
     }
   },
   "418": {
-    "class_type": "ImageScaleBy",
+    "class_type": "ImageResizeKJv2",
     "inputs": {
       "image": [
         "385",
         0
       ],
+      "width": 1080,
+      "height": 1920,
       "upscale_method": "lanczos",
-      "scale_by": 0.5
+      "keep_proportion": "crop",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2
     },
     "_meta": {
-      "title": "Scale to 2x"
+      "title": "Scale to 1080p (9:16)"
     }
   },
   "431": {

@@ -1,28 +1,4 @@
 {
-  "_test_info": {
-    "name": "Wan2.2 T2V - Native MultiGPU (Frigate-safe)",
-    "tool": "Text2Video",
-    "mode": "wan22_native_multigpu",
-    "settings": {
-      "resolution": "480x832 (portrait, VRAM-safe)",
-      "duration_sec": 5,
-      "fps": 16,
-      "frames": 81
-    },
-    "memory_config": {
-      "strategy": "native_wanvideo_multigpu_blockswap",
-      "gpu_layout": {
-        "cuda:0 (nvidia GPU1)": "RTX 5060 Ti 16GB — Frigate uses ~1.2GB → ~14.3GB usable",
-        "cuda:1 (nvidia GPU0)": "RTX 3060 12GB — fully free → ~11.9GB usable"
-      },
-      "assignment": {
-        "T5_encoder": "cuda:0 (5060Ti), fp8, force_offload after encoding",
-        "UNET_compute": "cuda:0 (5060Ti), block_swap 25/40 to CPU, load to offload_device first",
-        "VAE_decode": "cuda:0 (5060Ti), tiling enabled for safety"
-      },
-      "notes": "All compute on cuda:0 (5060Ti) to avoid cross-device tensor errors. Block swap 25/40 keeps peak VRAM ~8GB. T5 offloaded before sampling. Frigate ~1.2GB coexists."
-    }
-  },
   "1": {
     "class_type": "LoadWanVideoT5TextEncoderMultiGPU",
     "inputs": {
@@ -56,7 +32,10 @@
       "load_device": "offload_device",
       "compute_device": "cuda:0",
       "attention_mode": "sdpa",
-      "block_swap_args": ["2", 0]
+      "block_swap_args": [
+        "2",
+        0
+      ]
     },
     "_meta": {
       "title": "Wan2.2 T2V UNET (14B fp8, compute cuda:0/5060Ti)"
@@ -78,10 +57,19 @@
     "inputs": {
       "positive_prompt": "A golden retriever puppy running through a sunlit meadow with wildflowers, cinematic lighting, slow motion, 4K quality",
       "negative_prompt": "blurry, low quality, distorted, watermark, artifacts, flickering, static, ugly, deformed",
-      "t5": ["1", 0],
-      "load_device": ["1", 1],
+      "t5": [
+        "1",
+        0
+      ],
+      "load_device": [
+        "1",
+        1
+      ],
       "force_offload": true,
-      "model_to_offload": ["3", 0]
+      "model_to_offload": [
+        "3",
+        0
+      ]
     },
     "_meta": {
       "title": "Text Encode (offload T5 + UNET after)"
@@ -101,10 +89,22 @@
   "7": {
     "class_type": "WanVideoSamplerMultiGPU",
     "inputs": {
-      "model": ["3", 0],
-      "compute_device": ["3", 1],
-      "image_embeds": ["6", 0],
-      "text_embeds": ["5", 0],
+      "model": [
+        "3",
+        0
+      ],
+      "compute_device": [
+        "3",
+        1
+      ],
+      "image_embeds": [
+        "6",
+        0
+      ],
+      "text_embeds": [
+        "5",
+        0
+      ],
       "steps": 20,
       "cfg": 5.0,
       "shift": 5.0,
@@ -121,9 +121,18 @@
   "8": {
     "class_type": "WanVideoDecodeMultiGPU",
     "inputs": {
-      "vae": ["4", 0],
-      "load_device": ["4", 1],
-      "samples": ["7", 0],
+      "vae": [
+        "4",
+        0
+      ],
+      "load_device": [
+        "4",
+        1
+      ],
+      "samples": [
+        "7",
+        0
+      ],
       "enable_vae_tiling": true,
       "tile_x": 272,
       "tile_y": 272,
@@ -137,7 +146,10 @@
   "9": {
     "class_type": "VHS_VideoCombine",
     "inputs": {
-      "images": ["8", 0],
+      "images": [
+        "8",
+        0
+      ],
       "frame_rate": 16,
       "loop_count": 0,
       "filename_prefix": "t2v_wan22_frigate_test",

@@ -91,13 +91,13 @@
 
 | GPU | VRAM | CUDA Device | Role |
 |-----|------|-------------|------|
-| RTX 5060 Ti | 16GB | cuda:1 | Primary generation |
-| RTX 3060 | 12GB | cuda:0 | Secondary/overflow |
+| RTX 5060 Ti | 16GB | cuda:0 | Primary generation |
+| RTX 3060 | 12GB | cuda:1 | Secondary/overflow |
 | **Total** | **28GB** | | DisTorch2 distribution |
 
 ### Multi-GPU Setup (DisTorch2)
 ```
-cuda:0,12gb;cuda:1,16gb
+cuda:1,12gb;cuda:0,16gb
 ```
 
 ---
