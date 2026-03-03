@@ -196,5 +196,3 @@ export function useCredits() {
   }
   return context
 }
-
-export default CreditsContext

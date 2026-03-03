@@ -20,6 +20,21 @@ export default defineConfig({
         ]
       : []),
   ],
+  optimizeDeps: {
+    // Pre-bundle ALL React deps in a single pass to prevent mid-session
+    // re-optimization which causes split module instances (dispatcher=null).
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'lucide-react',
+      'recharts',
+      '@sentry/react',
+      '@supabase/supabase-js',
+    ],
+  },
   server: {
     host: '0.0.0.0',
     port: 5174,

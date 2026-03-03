@@ -106,5 +106,3 @@ export function filterNSFW(items, nsfwEnabled, isNsfwFn = (item) => item.nsfw) {
   }
   return items.filter(item => !isNsfwFn(item))
 }
-
-export default NSFWContext
