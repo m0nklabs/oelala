@@ -11,10 +11,14 @@ import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 
-// Resolution presets
+// Resolution presets with pixel dimensions per aspect ratio
 const RESOLUTION_PRESETS = [
-  { value: '480p', label: '480p', desc: 'Fast' },
-  { value: '720p', label: '720p', desc: 'Balanced' },
+  { value: '480p', label: '480p', desc: 'Fast', dimensions: {
+    '16:9': '848×480', '9:16': '480×848', '1:1': '480×480', '4:3': '640×480', '3:4': '480×640'
+  }},
+  { value: '720p', label: '720p', desc: 'Balanced', dimensions: {
+    '16:9': '1280×720', '9:16': '720×1280', '1:1': '720×720', '4:3': '960×720', '3:4': '720×960'
+  }},
 ]
 
 const FPS_OPTIONS = [8, 12, 16, 24]
@@ -455,6 +459,41 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               </button>
             ))}
           </div>
+
+          {/* Upscale Output */}
+          <div style={{
+            marginTop: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <input
+                type="checkbox"
+                checked={postUpscale}
+                onChange={(e) => setPostUpscale(e.target.checked)}
+                style={{ width: '16px', height: '16px' }}
+              />
+              <span>📈 Upscale</span>
+            </label>
+            {postUpscale && (
+              <>
+                <div className="grok-toggle-group" style={{ width: 'auto' }}>
+                  <button className={`grok-toggle-btn ${postUpscaleScale === 2 ? 'active' : ''}`} onClick={() => setPostUpscaleScale(2)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>2x</button>
+                  <button className={`grok-toggle-btn ${postUpscaleScale === 4 ? 'active' : ''}`} onClick={() => setPostUpscaleScale(4)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>4x</button>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: 600 }}>
+                  → {(() => {
+                    const preset = RESOLUTION_PRESETS.find(p => p.value === resolution)
+                    const dimStr = preset?.dimensions?.[aspectRatio] || preset?.dimensions?.['1:1'] || '480×848'
+                    const [w, h] = dimStr.split('×').map(Number)
+                    return `${w * postUpscaleScale}×${h * postUpscaleScale}`
+                  })()}
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Aspect Ratio */}
@@ -661,23 +700,6 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               These will run automatically after generation completes.
             </div>
 
-            {/* Upscale option */}
-            <div className="form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <label className="grok-switch">
-                  <input type="checkbox" checked={postUpscale} onChange={(e) => setPostUpscale(e.target.checked)} />
-                  <span className="grok-slider"></span>
-                </label>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>Upscale (Real-ESRGAN)</span>
-              </div>
-              {postUpscale && (
-                <div className="grok-toggle-group" style={{ width: 'auto' }}>
-                  <button className={`grok-toggle-btn ${postUpscaleScale === 2 ? 'active' : ''}`} onClick={() => setPostUpscaleScale(2)} style={{ padding: '4px 12px', fontSize: '0.8rem' }}>2x</button>
-                  <button className={`grok-toggle-btn ${postUpscaleScale === 4 ? 'active' : ''}`} onClick={() => setPostUpscaleScale(4)} style={{ padding: '4px 12px', fontSize: '0.8rem' }}>4x</button>
-                </div>
-              )}
-            </div>
-
             {/* Frame interpolation option */}
             <div className="form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -696,9 +718,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               )}
             </div>
 
-            {(postUpscale || postInterpolate) && (
+            {postInterpolate && (
               <div className="info-badge" style={{ marginTop: '8px' }}>
-                ℹ️ Post-processing adds extra credits: {postUpscale ? '+5 upscale' : ''}{postUpscale && postInterpolate ? ', ' : ''}{postInterpolate ? '+3 interpolation' : ''}
+                ℹ️ Post-processing adds extra credits: {postInterpolate ? '+3 interpolation' : ''}
               </div>
             )}
           </div>

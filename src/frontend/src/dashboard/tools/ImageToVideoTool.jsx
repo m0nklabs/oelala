@@ -2100,6 +2100,41 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </button>
             ))}
           </div>
+
+          {/* Upscale Output */}
+          <div style={{
+            marginTop: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <input
+                type="checkbox"
+                checked={postUpscale}
+                onChange={(e) => setPostUpscale(e.target.checked)}
+                style={{ width: '16px', height: '16px' }}
+              />
+              <span>📈 Upscale</span>
+            </label>
+            {postUpscale && (
+              <>
+                <div className="grok-toggle-group" style={{ width: 'auto' }}>
+                  <button className={`grok-toggle-btn ${postUpscaleScale === 2 ? 'active' : ''}`} onClick={() => setPostUpscaleScale(2)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>2x</button>
+                  <button className={`grok-toggle-btn ${postUpscaleScale === 4 ? 'active' : ''}`} onClick={() => setPostUpscaleScale(4)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>4x</button>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: 600 }}>
+                  → {(() => {
+                    const preset = RESOLUTION_PRESETS[resolution]
+                    const dimStr = preset?.dimensions?.[aspectRatio] || preset?.dimensions?.['1:1'] || '480×848'
+                    const [w, h] = dimStr.split('×').map(Number)
+                    return `${w * postUpscaleScale}×${h * postUpscaleScale}`
+                  })()}
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Aspect Ratio */}
@@ -2404,11 +2439,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                     <span>🔍 Florence2 Auto-Caption</span>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(analyzes image for prompt)</span>
                   </label>
-                  {/* Upscale */}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={bsEnableUpscale} onChange={(e) => setBsEnableUpscale(e.target.checked)} style={{ width: '16px', height: '16px' }} />
-                    <span>📈 4x Upscale (RealESRGAN)</span>
-                  </label>
+
                   {/* RIFE Interpolation */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={bsEnableInterpolation} onChange={(e) => setBsEnableInterpolation(e.target.checked)} style={{ width: '16px', height: '16px' }} />
@@ -2799,7 +2830,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Sparkles size={16} />
                   <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Post-Processing</span>
-                  {(postUpscale || postInterpolate || postAudio) && (
+                  {(postInterpolate || postAudio) && (
                     <span style={{
                       fontSize: '0.7rem',
                       backgroundColor: 'var(--success-color)',
@@ -2807,7 +2838,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                       padding: '2px 6px',
                       borderRadius: '4px'
                     }}>
-                      {[postUpscale && 'Upscale', postInterpolate && 'RIFE', postAudio && 'Audio'].filter(Boolean).join(' + ')}
+                      {[postInterpolate && 'RIFE', postAudio && 'Audio'].filter(Boolean).join(' + ')}
                     </span>
                   )}
                 </div>
@@ -2816,43 +2847,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
               {showPostProcessing && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Upscale option */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    backgroundColor: postUpscale ? 'rgba(var(--success-rgb), 0.1)' : 'var(--bg-secondary)',
-                    borderRadius: '8px',
-                    border: postUpscale ? '1px solid var(--success-color)' : '1px solid var(--border-color)'
-                  }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
-                      <input
-                        type="checkbox"
-                        checked={postUpscale}
-                        onChange={(e) => setPostUpscale(e.target.checked)}
-                        style={{ width: '16px', height: '16px' }}
-                      />
-                      <span>📈 Upscale Video</span>
-                    </label>
-                    {postUpscale && (
-                      <select
-                        value={postUpscaleScale}
-                        onChange={(e) => setPostUpscaleScale(parseInt(e.target.value))}
-                        style={{
-                          padding: '4px 8px',
-                          backgroundColor: 'var(--bg-tertiary)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '4px',
-                          color: 'var(--text-primary)'
-                        }}
-                      >
-                        <option value={2}>2x</option>
-                        <option value={4}>4x</option>
-                      </select>
-                    )}
-                  </div>
-
                   {/* Frame Interpolation option */}
                   <div style={{
                     display: 'flex',
