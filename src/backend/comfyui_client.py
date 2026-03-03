@@ -2278,10 +2278,10 @@ class ComfyUIClient:
         image_name: str,
         prompt: str,
         negative_prompt: str = "low quality, blurry, distorted, artifacts",
-        width: int = 720,
-        height: int = 1280,
-        num_frames: int = 121,
-        fps: int = 24,
+        width: int = 0,
+        height: int = 0,
+        num_frames: int = 161,
+        fps: int = 16,
         steps: int = 8,
         cfg: float = 1.0,
         seed: int = -1,
@@ -2297,7 +2297,7 @@ class ComfyUIClient:
         enable_florence2: bool = True,
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         aspect_ratio: str = "9:16",
-        long_edge: int = 720,
+        long_edge: int = 480,
         distorch2_alloc: str = "cuda:1,11gb;cuda:0,14.5gb;cpu,*",
     ) -> Optional[Dict[str, Any]]:
         """
@@ -2483,6 +2483,207 @@ class ComfyUIClient:
             f"🧪 Built DisTorch2 Q8: {width}x{height}, {num_frames}f@{fps}fps, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
             f"shift={shift}, NAG={nag_scale}, alloc={distorch2_alloc}{lora_info}{pp_str}"
+        )
+        return workflow
+
+    def build_ultra_q8_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts",
+        width: int = 0,
+        height: int = 0,
+        num_frames: int = 161,
+        fps: int = 16,
+        steps: int = 8,
+        cfg: float = 1.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_ultra_q8",
+        high_noise_steps: int = 4,
+        shift: float = 9.0,
+        nag_scale: float = 11.0,
+        nag_alpha: float = 0.25,
+        nag_tau: float = 2.373,
+        enhance_weight: float = 1.0,
+        enable_upscale: bool = False,
+        enable_interpolation: bool = False,
+        enable_florence2: bool = True,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        aspect_ratio: str = "9:16",
+        long_edge: int = 576,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build Ultra Q8 workflow — max VRAM + unlimited CPU RAM.
+
+        Uses DisTorch2 with optimized allocation: 3060 as dedicated model cache
+        (11GB), 5060 Ti 100% free for compute (~15.5GB), CPU for overflow.
+        This keeps the compute GPU maximally free for activations/latents,
+        allowing higher resolutions and more frames than other modes.
+
+        Memory strategy:
+        - UNet: cuda:1(3060)=11GB, cuda:0(5060Ti)=0.5GB, cpu=remainder
+        - CLIP: Fully on CPU (saves GPU VRAM)
+        - VAE: On compute device cuda:0 (small, needed for decode)
+
+        Same processing chain as BlockSwap/DisTorch2 Q8:
+        NAG, EnhanceAVideo, CFGZeroStar, TorchCompile, Florence2,
+        Lightning LoRA built-in, optional upscale/interpolation.
+        """
+        workflow = load_workflow_from_file("ImageToVideo/wan22_i2v_ultra_q8_api.json")
+        if not workflow:
+            logger.error("❌ Failed to load Ultra Q8 workflow template")
+            return None
+
+        workflow = copy.deepcopy(workflow)
+
+        # Wan2.2 requires num_frames in format 4k+1
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # ─── Calculate dimensions from aspect ratio ───
+        aspect_ratios = {
+            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
+            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
+            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+
+        logger.info(
+            f"⚡ Building Ultra Q8 workflow: {width}x{height}, {num_frames}f, "
+            f"{steps} steps, cfg={cfg}, shift={shift}, NAG={nag_scale}"
+        )
+
+        # ─── Input Image ───
+        workflow["88"]["inputs"]["image"] = image_name
+
+        # ─── Image Resize ───
+        workflow["401"]["inputs"]["width"] = width
+        workflow["401"]["inputs"]["height"] = height
+
+        # ─── WanImageToVideo ───
+        workflow["464"]["inputs"]["width"] = width
+        workflow["464"]["inputs"]["height"] = height
+        workflow["464"]["inputs"]["length"] = num_frames
+
+        # ─── Florence2 captioning ───
+        if enable_florence2:
+            workflow["451"]["inputs"]["string_b"] = prompt
+        else:
+            workflow["462"]["inputs"]["text"] = prompt
+            for nid in list(workflow.keys()):
+                ct = workflow[nid].get("class_type", "")
+                if ct in ("DownloadAndLoadFlorence2Model", "Florence2Run",
+                          "Text Find and Replace", "StringConcatenate"):
+                    del workflow[nid]
+            workflow["462"]["inputs"].pop("text", None)
+            workflow["462"]["inputs"]["text"] = prompt
+
+        # ─── Negative Prompt ───
+        workflow["463"]["inputs"]["text"] = negative_prompt
+
+        # ─── Seed ───
+        workflow["73"]["inputs"]["noise_seed"] = seed
+        workflow["466"]["inputs"]["noise_seed"] = seed
+        workflow["465"]["inputs"]["noise_seed"] = seed
+
+        # ─── Sampling Parameters ───
+        workflow["466"]["inputs"]["steps"] = steps
+        workflow["466"]["inputs"]["cfg"] = cfg
+        workflow["466"]["inputs"]["end_at_step"] = high_noise_steps
+        workflow["465"]["inputs"]["steps"] = steps
+        workflow["465"]["inputs"]["cfg"] = cfg
+        workflow["465"]["inputs"]["start_at_step"] = high_noise_steps
+
+        # ─── Model Sampling Shift ───
+        workflow["467"]["inputs"]["shift"] = shift
+        workflow["468"]["inputs"]["shift"] = shift
+
+        # ─── NAG Parameters ───
+        workflow["485"]["inputs"]["nag_scale"] = nag_scale
+        workflow["485"]["inputs"]["nag_alpha"] = nag_alpha
+        workflow["485"]["inputs"]["nag_tau"] = nag_tau
+        workflow["486"]["inputs"]["nag_scale"] = nag_scale
+        workflow["486"]["inputs"]["nag_alpha"] = nag_alpha
+        workflow["486"]["inputs"]["nag_tau"] = nag_tau
+
+        # ─── EnhanceAVideo ───
+        workflow["481"]["inputs"]["weight"] = enhance_weight
+        workflow["482"]["inputs"]["weight"] = enhance_weight
+
+        # ─── LoRAs via Power Lora Loader (rgthree) ───
+        if lora_configs and len(lora_configs) > 0:
+            for i, config in enumerate(lora_configs[:6], 1):
+                high_name = config.get("high", "")
+                if high_name:
+                    workflow["416"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": high_name,
+                        "strength": config.get("strength", 1.0),
+                    }
+                    logger.info(f"🎨 Ultra-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}")
+
+                low_name = config.get("low", high_name)
+                if low_name:
+                    workflow["471"]["inputs"][f"lora_{i}"] = {
+                        "on": True,
+                        "lora": low_name,
+                        "strength": config.get("strength", 1.0),
+                    }
+
+        # ─── Output ───
+        workflow["398"]["inputs"]["frame_rate"] = fps
+        workflow["398"]["inputs"]["filename_prefix"] = output_prefix
+
+        # ─── Post-processing (upscale + interpolation) ───
+        if not enable_upscale:
+            for nid in ["384", "385", "418", "419"]:
+                if nid in workflow:
+                    del workflow[nid]
+
+        if not enable_interpolation:
+            for nid in ["431", "433"]:
+                if nid in workflow:
+                    del workflow[nid]
+        else:
+            workflow["433"]["inputs"]["frame_rate"] = fps * 2
+
+        if enable_upscale:
+            workflow["419"]["inputs"]["frame_rate"] = fps
+            workflow["419"]["inputs"]["filename_prefix"] = f"{output_prefix}_upscaled"
+
+        if enable_interpolation:
+            workflow["433"]["inputs"]["filename_prefix"] = f"{output_prefix}_interpolated"
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} LoRAs"
+        pp_info = []
+        if enable_upscale:
+            pp_info.append("upscale")
+        if enable_interpolation:
+            pp_info.append("interpolate")
+        if enable_florence2:
+            pp_info.append("florence2")
+        pp_str = f", post=[{','.join(pp_info)}]" if pp_info else ""
+
+        logger.info(
+            f"⚡ Built Ultra Q8: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
+            f"shift={shift}, NAG={nag_scale}{lora_info}{pp_str}"
         )
         return workflow
 

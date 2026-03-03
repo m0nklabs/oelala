@@ -6023,6 +6023,218 @@ async def generate_distorch2_q8_async(
 
 
 # =============================================================================
+# Ultra Q8 I2V Async Endpoint — Max VRAM + Unlimited CPU RAM
+# =============================================================================
+
+
+@app.post("/generate-ultra-q8-async")
+async def generate_ultra_q8_async(
+    file: UploadFile = File(...),
+    prompt: str = Form("Motion, subject moving naturally"),
+    negative_prompt: str = Form(
+        "low quality, blurry, distorted, artifacts",
+        description="Negative prompt",
+    ),
+    num_frames: int = Form(161, description="Number of frames (4k+1 format)"),
+    resolution: str = Form("576p", description="Video resolution: 480p, 576p, 720p"),
+    fps: int = Form(16, description="Frames per second"),
+    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
+    steps: int = Form(8, description="Sampling steps (4-12)"),
+    cfg: float = Form(1.0, description="CFG guidance scale"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    high_noise_steps: int = Form(4, description="Steps for high noise model"),
+    shift: float = Form(9.0, description="ModelSamplingSD3 shift"),
+    nag_scale: float = Form(11.0, description="NAG guidance scale"),
+    enable_upscale: bool = Form(False, description="Enable 4x upscale"),
+    enable_interpolation: bool = Form(
+        False, description="Enable RIFE 2x interpolation"
+    ),
+    enable_florence2: bool = Form(True, description="Enable Florence2 auto-captioning"),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
+    ),
+    user: User = Depends(get_current_user),
+):
+    """
+    Queue Ultra Q8 I2V video generation — max VRAM + unlimited CPU RAM.
+
+    Uses DisTorch2 with optimized allocation: 3060 as model cache (11GB),
+    5060 Ti fully free for compute (~15.5GB), CPU for overflow.
+    Higher resolution/frames possible due to maximum compute VRAM.
+
+    Same processing chain: NAG, EnhanceAVideo, CFGZeroStar, TorchCompile,
+    Florence2 auto-captioning, Lightning LoRA.
+    """
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+
+    comfyui = get_comfyui_client()
+    if not comfyui.is_available():
+        raise HTTPException(status_code=503, detail="ComfyUI not running")
+
+    # Wan2.2 requires num_frames in format 4k+1
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    duration_seconds = num_frames / fps if fps > 0 else 5
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    logger.info(
+        f"💰 Ultra Q8 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    input_filename = f"comfyui_{timestamp}_{file.filename}"
+    input_path = UPLOAD_DIR / input_filename
+
+    try:
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"📤 Saved input image: {input_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+    image_name = comfyui.upload_image(str(input_path))
+    if not image_name:
+        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
+
+    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
+    long_edge = resolution_map.get(resolution, 576)
+
+    output_prefix = f"oelala_ultra_q8_{timestamp}"
+    actual_seed = (
+        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    )
+
+    workflow = comfyui.build_ultra_q8_workflow(
+        image_name=image_name,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        num_frames=num_frames,
+        fps=fps,
+        steps=steps,
+        cfg=cfg,
+        seed=actual_seed,
+        output_prefix=output_prefix,
+        high_noise_steps=high_noise_steps,
+        shift=shift,
+        nag_scale=nag_scale,
+        enhance_weight=1.0,
+        enable_upscale=enable_upscale,
+        enable_interpolation=enable_interpolation,
+        enable_florence2=enable_florence2,
+        lora_configs=parsed_lora_configs,
+        aspect_ratio=aspect_ratio,
+        long_edge=long_edge,
+    )
+
+    if not workflow:
+        raise HTTPException(
+            status_code=500, detail="Failed to build Ultra Q8 workflow"
+        )
+
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(
+            status_code=500, detail="Failed to queue workflow to ComfyUI"
+        )
+
+    job_id = str(uuid.uuid4())
+
+    comfyui.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+        },
+    )
+
+    if ws_manager and job_queue_manager:
+        ws_manager.register_job(prompt_id, user_id=user.id)
+        job_queue_manager.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            job_type="ultra_q8_i2v",
+            metadata={
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+                "steps": steps,
+                "model_mode": "ultra_q8",
+            },
+        )
+
+    job_info = {
+        "prompt_id": prompt_id,
+        "user_id": user.id,
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "seed": actual_seed,
+        "output_prefix": output_prefix,
+        "input_image": input_filename,
+        "created_at": timestamp,
+        "lora_count": len(parsed_lora_configs),
+        "job_type": "ultra_q8_i2v",
+        "cfg": cfg,
+        "shift": shift,
+        "nag_scale": nag_scale,
+        "model_mode": "ultra_q8",
+        "enable_florence2": enable_florence2,
+        "enable_upscale": enable_upscale,
+        "enable_interpolation": enable_interpolation,
+    }
+    active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
+
+    logger.info(f"⚡ Queued Ultra Q8 job: {prompt_id}")
+    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
+    logger.info(f"   ⚡ shift={shift}, NAG={nag_scale}, florence2={enable_florence2}")
+    logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs selected")
+    logger.info(f"   📝 {prompt[:50]}...")
+
+    await deduct_credits(user, credits_required, prompt_id, "Ultra Q8 I2V (async)")
+    logger.info(f"   💰 -{credits_required} credits")
+
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "job_id": job_id,
+        "status": "queued",
+        "credits_used": credits_required,
+        "message": "Ultra Q8 job queued. Poll /comfyui/job/{prompt_id} for status.",
+        **job_info,
+    }
+
+
+# =============================================================================
 # LTX-2 Image-to-Video Async Endpoint
 # =============================================================================
 

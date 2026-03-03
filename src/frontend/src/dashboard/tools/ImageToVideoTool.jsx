@@ -23,6 +23,7 @@ const MODEL_MODES = [
   { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
   { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality • Single-GPU BlockSwap • Lightning LoRA + NAG + TorchCompile' },
   { value: 'distorch2_q8', label: '🧪 DisTorch2 Q8 Experimental', desc: 'Q8 quality + DisTorch2 Multi-GPU + Selectable LoRAs' },
+  { value: 'ultra_q8', label: '⚡ Ultra Q8 — Max VRAM', desc: 'Q8 quality • 3060 model cache + 5060Ti full compute + CPU overflow' },
   { value: 'ltx2', label: '⚡ LTX-2 19B Distilled', desc: 'Fast single-pass, lower VRAM' },
 ]
 
@@ -43,6 +44,7 @@ const RESOLUTION_PRESETS = {
     max_duration_ltx2: 30,
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
+    max_duration_ultra_q8: 30,
   },
   '576p': {
     label: '576p',
@@ -58,6 +60,7 @@ const RESOLUTION_PRESETS = {
     max_duration_ltx2: 30,
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
+    max_duration_ultra_q8: 30,
   },
   '720p': {
     label: '720p',
@@ -73,6 +76,7 @@ const RESOLUTION_PRESETS = {
     max_duration_ltx2: 30,
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
+    max_duration_ultra_q8: 30,
   },
 }
 
@@ -506,6 +510,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (modelMode === 'distorch2_q8') {
       return preset.max_duration_distorch2_q8 || 30
     }
+    if (modelMode === 'ultra_q8') {
+      return preset.max_duration_ultra_q8 || 30
+    }
     return preset.max_duration_wan22 || 30
   }, [resolution, modelMode])
 
@@ -862,6 +869,21 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       if (loraConfigs.length > 0) {
         formData.append('lora_configs', JSON.stringify(loraConfigs))
       }
+    } else if (modelMode === 'ultra_q8') {
+      // Ultra Q8 — Max VRAM + unlimited CPU RAM
+      endpoint = `${BACKEND_BASE}/generate-ultra-q8-async`
+      formData.append('steps', String(steps))
+      formData.append('cfg', String(cfg))
+      formData.append('seed', String(seed))
+      formData.append('shift', String(bsShift))
+      formData.append('nag_scale', String(bsNagScale))
+      formData.append('high_noise_steps', String(bsHighNoiseSteps))
+      formData.append('enable_florence2', String(bsEnableFlorence2))
+      formData.append('enable_upscale', String(bsEnableUpscale))
+      formData.append('enable_interpolation', String(bsEnableInterpolation))
+      if (loraConfigs.length > 0) {
+        formData.append('lora_configs', JSON.stringify(loraConfigs))
+      }
     } else if (modelMode === 'ltx2') {
       // LTX-2 endpoint
       endpoint = `${BACKEND_BASE}/generate-ltx2-i2v-async`
@@ -1186,6 +1208,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setBsShift(9.0)
                   setBsHighNoiseSteps(4)
                   setBsNagScale(11.0)
+                } else if (newMode === 'ultra_q8') {
+                  setResolution('576p')
+                  setAspectRatio('9:16')
+                  setDuration(10)
+                  setSteps(8)
+                  setCfg(1.0)
+                  setBsShift(9.0)
+                  setBsHighNoiseSteps(4)
+                  setBsNagScale(11.0)
                 }
               }}
               style={{
@@ -1247,6 +1278,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
                 All resolutions up to 30s
+              </div>
+            </div>
+          ) : modelMode === 'ultra_q8' ? (
+            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#22d3ee' }}>
+              <span style={{ fontWeight: 600 }}>⚡ Ultra Q8 — Max VRAM</span> • <span style={{ color: '#67e8f9' }}>Dual-GPU + CPU</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>
+                3060 = model cache (11GB) • 5060 Ti = pure compute (15.5GB free) • CPU = overflow
+              </div>
+              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
+                NAG + EnhanceAVideo + TorchCompile + Florence2 • All resolutions up to 30s
               </div>
             </div>
           ) : (
@@ -2239,7 +2280,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         )}
 
         {/* Advanced Settings for BlockSwap Q8 / DisTorch2 Q8 Experimental */}
-        {(modelMode === 'blockswap_q8' || modelMode === 'distorch2_q8') && (
+        {(modelMode === 'blockswap_q8' || modelMode === 'distorch2_q8' || modelMode === 'ultra_q8') && (
           <div style={{
             backgroundColor: 'var(--bg-tertiary)',
             padding: '16px',
@@ -2260,7 +2301,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 fontWeight: 600,
                 color: 'var(--text-primary)'
               }}>
-                {modelMode === 'blockswap_q8' ? '🧪 BlockSwap Q8 Settings' : '🧪 DisTorch2 Q8 Settings'}
+                {modelMode === 'blockswap_q8' ? '🧪 BlockSwap Q8 Settings' : modelMode === 'ultra_q8' ? '⚡ Ultra Q8 Settings' : '🧪 DisTorch2 Q8 Settings'}
               </div>
               <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
             </div>
