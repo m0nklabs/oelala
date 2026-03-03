@@ -170,6 +170,21 @@ except ImportError as e:
     print(f"❌ Failed to import LLM queue manager: {e}")
     llm_queue_manager = None
 
+# RunPod Serverless client for cloud GPU offloading
+try:
+    from runpod_client import get_runpod_client, RunPodJobStatus
+
+    _runpod = get_runpod_client()
+    if _runpod.is_available():
+        print("✅ RunPod client initialized (cloud GPU available)")
+    else:
+        print("⚠️ RunPod client: no API key (cloud GPU disabled)")
+        _runpod = None
+except ImportError as e:
+    print(f"⚠️ RunPod client not available: {e}")
+    _runpod = None
+    RunPodJobStatus = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -2840,6 +2855,7 @@ async def health_check():
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
         "comfyui_available": comfyui_available,
+        "runpod_available": bool(_runpod and _runpod.is_available()),
         "upload_dir": str(UPLOAD_DIR),
         "output_dir": str(OUTPUT_DIR),
     }
@@ -2960,8 +2976,123 @@ async def get_metrics(user: User = Depends(get_current_user)):
 
 
 # =============================================================================
-# USER MEDIA API (Storage-backed, user-scoped)
+# RUNPOD CLOUD GPU ENDPOINTS
 # =============================================================================
+
+
+@app.get("/runpod/status")
+async def runpod_status(user: User = Depends(get_current_user)):
+    """Check if RunPod cloud GPU is configured and available."""
+    if not _runpod:
+        return {
+            "available": False,
+            "reason": "RunPod not configured (RUNPOD_API_KEY missing)",
+        }
+
+    try:
+        account = await _runpod.get_account_info()
+        endpoints = await _runpod.list_endpoints()
+        return {
+            "available": True,
+            "has_endpoint": _runpod.has_endpoint(),
+            "default_endpoint_id": _runpod.default_endpoint_id,
+            "endpoint_count": len(endpoints),
+            "endpoints": [
+                {"id": ep.get("id"), "name": ep.get("name"), "gpuIds": ep.get("gpuIds")}
+                for ep in endpoints
+            ],
+            "account": {
+                "balance": account.get("clientBalance", 0),
+                "spend_limit": account.get("spendLimit", 0),
+                "current_spend_per_hr": account.get("currentSpendPerHr", 0),
+            },
+            "active_jobs": _runpod.get_job_stats(),
+        }
+    except Exception as e:
+        logger.error(f"RunPod status check failed: {e}")
+        return {"available": False, "reason": str(e)}
+
+
+@app.get("/runpod/health")
+async def runpod_endpoint_health(user: User = Depends(get_current_user)):
+    """Check health of the RunPod serverless endpoint (worker status)."""
+    if not _runpod or not _runpod.has_endpoint():
+        return {"status": "unavailable", "reason": "No RunPod endpoint configured"}
+
+    try:
+        health = await _runpod.get_endpoint_health()
+        return {"status": "ok", "endpoint_id": _runpod.default_endpoint_id, **health}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/runpod/job/{job_id}")
+async def runpod_job_status(job_id: str, user: User = Depends(get_current_user)):
+    """Get status of a specific RunPod job."""
+    if not _runpod:
+        raise HTTPException(status_code=503, detail="RunPod not configured")
+
+    try:
+        job = await _runpod.get_job_status(job_id)
+        return {
+            "job_id": job.id,
+            "status": job.status.value,
+            "output": job.output,
+            "error": job.error,
+            "execution_time_ms": job.execution_time_ms,
+            "created_at": job.created_at,
+            "completed_at": job.completed_at,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/runpod/cancel/{job_id}")
+async def runpod_cancel_job(job_id: str, user: User = Depends(get_current_user)):
+    """Cancel a running RunPod job."""
+    if not _runpod:
+        raise HTTPException(status_code=503, detail="RunPod not configured")
+
+    success = await _runpod.cancel_job(job_id)
+    return {"success": success, "job_id": job_id}
+
+
+@app.post("/runpod/submit")
+async def runpod_submit_workflow(
+    request: Request, user: User = Depends(get_current_user)
+):
+    """
+    Submit a raw ComfyUI workflow to RunPod (admin/advanced use).
+    Body: {"workflow": {...}, "images": {"filename": "<base64>"}}
+    """
+    if not _runpod or not _runpod.has_endpoint():
+        raise HTTPException(
+            status_code=503,
+            detail="RunPod not available or no endpoint deployed",
+        )
+
+    body = await request.json()
+    workflow = body.get("workflow")
+    if not workflow:
+        raise HTTPException(status_code=400, detail="workflow field required")
+
+    images = body.get("images", {})
+    extra = {}
+    if images:
+        extra["images"] = images
+
+    try:
+        job = await _runpod.submit_workflow(workflow, extra_input=extra or None)
+        logger.info(f"☁️ RunPod job submitted: {job.id}")
+        return {
+            "success": True,
+            "job_id": job.id,
+            "status": job.status.value,
+            "endpoint_id": job.endpoint_id,
+        }
+    except Exception as e:
+        logger.error(f"RunPod submit failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/media/unified")
@@ -5332,6 +5463,48 @@ async def generate_wan22_comfyui(
         )
 
 
+# -----------------------------------------------------------------------------
+# Helper: Submit workflow to RunPod cloud GPU
+# -----------------------------------------------------------------------------
+async def _submit_to_runpod(
+    workflow: dict,
+    user_id: str,
+    prompt_id: str,
+    job_info: dict,
+    images: dict = None,
+) -> dict:
+    """Submit a ComfyUI workflow to RunPod cloud GPU instead of local."""
+    if not _runpod or not _runpod.has_endpoint():
+        raise HTTPException(
+            status_code=503,
+            detail="RunPod cloud GPU not available. Deploy an endpoint first.",
+        )
+
+    extra = {}
+    if images:
+        extra["images"] = images
+
+    job = await _runpod.submit_workflow(workflow, extra_input=extra or None)
+    logger.info(f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})")
+
+    # Track RunPod job alongside local job tracking
+    job_info["compute_target"] = "cloud"
+    job_info["runpod_job_id"] = job.id
+    job_info["runpod_endpoint_id"] = job.endpoint_id
+    active_jobs[prompt_id] = job_info
+    record_generation_start(prompt_id, job_info)
+
+    return {
+        "success": True,
+        "prompt_id": prompt_id,
+        "runpod_job_id": job.id,
+        "status": "queued_cloud",
+        "compute_target": "cloud",
+        "message": f"Job submitted to RunPod cloud GPU. Poll /runpod/job/{job.id} for status.",
+        **{k: v for k, v in job_info.items() if not k.startswith("_")},
+    }
+
+
 @app.post("/generate-wan22-async")
 async def generate_wan22_async(
     file: UploadFile = File(...),
@@ -5365,6 +5538,7 @@ async def generate_wan22_async(
     post_audio_file: UploadFile = File(
         None, description="Audio file for add_audio post-processing"
     ),
+    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
@@ -5520,6 +5694,40 @@ async def generate_wan22_async(
             lora_configs=parsed_lora_configs,
         )
 
+    # Route to cloud if requested
+    if compute_target == "cloud":
+        cloud_job_info = {
+            "prompt": prompt[:100],
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames * actual_clip_count if is_extend_mode else num_frames,
+            "frames_per_clip": num_frames,
+            "clip_count": actual_clip_count,
+            "extend_mode": is_extend_mode,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "output_prefix": output_prefix,
+            "output_filename": output_filename,
+            "input_image": input_filename,
+            "created_at": timestamp,
+            "lora_count": len(parsed_lora_configs),
+            "post_processing": parsed_post_processing,
+            "post_audio_path": post_audio_path,
+            "job_type": "wan22_i2v",
+            "cfg": cfg,
+            "model_mode": "wan2.2",
+            "user_id": user.id,
+        }
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=str(uuid.uuid4()),
+            job_info=cloud_job_info,
+        )
+        await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 I2V (cloud)")
+        return result
+
     # Queue the workflow (non-blocking)
     prompt_id = comfyui.queue_prompt(workflow)
 
@@ -5649,6 +5857,7 @@ async def generate_blockswap_q8_async(
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
     ),
+    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
     user: User = Depends(get_current_user),
 ):
     """
@@ -5753,6 +5962,39 @@ async def generate_blockswap_q8_async(
         raise HTTPException(
             status_code=500, detail="Failed to build BlockSwap Q8 workflow"
         )
+
+    # Route to cloud if requested
+    if compute_target == "cloud":
+        cloud_job_info = {
+            "prompt": prompt[:100],
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "output_prefix": output_prefix,
+            "input_image": input_filename,
+            "created_at": timestamp,
+            "lora_count": len(parsed_lora_configs),
+            "job_type": "blockswap_q8_i2v",
+            "cfg": cfg,
+            "shift": shift,
+            "nag_scale": nag_scale,
+            "model_mode": "blockswap_q8",
+            "enable_florence2": enable_florence2,
+            "enable_upscale": enable_upscale,
+            "enable_interpolation": enable_interpolation,
+            "user_id": user.id,
+        }
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=str(uuid.uuid4()),
+            job_info=cloud_job_info,
+        )
+        await deduct_credits(user, credits_required, result["prompt_id"], "BlockSwap Q8 I2V (cloud)")
+        return result
 
     # Queue workflow
     prompt_id = comfyui.queue_prompt(workflow)
@@ -5870,6 +6112,7 @@ async def generate_distorch2_q8_async(
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
     ),
+    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
     user: User = Depends(get_current_user),
 ):
     """
@@ -5964,6 +6207,39 @@ async def generate_distorch2_q8_async(
         raise HTTPException(
             status_code=500, detail="Failed to build DisTorch2 Q8 workflow"
         )
+
+    # Route to cloud if requested
+    if compute_target == "cloud":
+        cloud_job_info = {
+            "prompt": prompt[:100],
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "output_prefix": output_prefix,
+            "input_image": input_filename,
+            "created_at": timestamp,
+            "lora_count": len(parsed_lora_configs),
+            "job_type": "distorch2_q8_i2v",
+            "cfg": cfg,
+            "shift": shift,
+            "nag_scale": nag_scale,
+            "model_mode": "distorch2_q8",
+            "enable_florence2": enable_florence2,
+            "enable_upscale": enable_upscale,
+            "enable_interpolation": enable_interpolation,
+            "user_id": user.id,
+        }
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=str(uuid.uuid4()),
+            job_info=cloud_job_info,
+        )
+        await deduct_credits(user, credits_required, result["prompt_id"], "DisTorch2 Q8 I2V (cloud)")
+        return result
 
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
@@ -6079,6 +6355,7 @@ async def generate_ultra_q8_async(
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
     ),
+    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
     user: User = Depends(get_current_user),
 ):
     """
@@ -6176,6 +6453,39 @@ async def generate_ultra_q8_async(
         raise HTTPException(
             status_code=500, detail="Failed to build Ultra Q8 workflow"
         )
+
+    # Route to cloud if requested
+    if compute_target == "cloud":
+        cloud_job_info = {
+            "prompt": prompt[:100],
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "output_prefix": output_prefix,
+            "input_image": input_filename,
+            "created_at": timestamp,
+            "lora_count": len(parsed_lora_configs),
+            "job_type": "ultra_q8_i2v",
+            "cfg": cfg,
+            "shift": shift,
+            "nag_scale": nag_scale,
+            "model_mode": "ultra_q8",
+            "enable_florence2": enable_florence2,
+            "enable_upscale": enable_upscale,
+            "enable_interpolation": enable_interpolation,
+            "user_id": user.id,
+        }
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=str(uuid.uuid4()),
+            job_info=cloud_job_info,
+        )
+        await deduct_credits(user, credits_required, result["prompt_id"], "Ultra Q8 I2V (cloud)")
+        return result
 
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
@@ -6283,6 +6593,7 @@ async def generate_ltx2_i2v_async(
     post_audio_file: UploadFile = File(
         None, description="Audio file for add_audio post-processing"
     ),
+    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
     user: User = Depends(get_current_user),
 ):
     """
@@ -6398,6 +6709,36 @@ async def generate_ltx2_i2v_async(
         raise HTTPException(
             status_code=500, detail="Failed to build LTX-2 I2V workflow"
         )
+
+    # Route to cloud if requested
+    if compute_target == "cloud":
+        cloud_job_info = {
+            "prompt": prompt[:100],
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "steps": steps,
+            "seed": actual_seed,
+            "output_prefix": output_prefix,
+            "input_image": input_filename,
+            "created_at": timestamp,
+            "model": "ltx2",
+            "post_processing": parsed_post_processing,
+            "post_audio_path": post_audio_path,
+            "job_type": "ltx2_i2v",
+            "cfg": cfg,
+            "model_mode": "ltx2",
+            "user_id": user.id,
+        }
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=str(uuid.uuid4()),
+            job_info=cloud_job_info,
+        )
+        await deduct_credits(user, credits_required, result["prompt_id"], "LTX-2 I2V (cloud)")
+        return result
 
     # Queue the workflow (non-blocking)
     prompt_id = comfyui.queue_prompt(workflow)

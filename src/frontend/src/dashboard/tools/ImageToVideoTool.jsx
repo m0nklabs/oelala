@@ -196,6 +196,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [modelMode, setModelMode] = useState('wan2.2')  // default to Wan2.2 for quality
   const [modelVersion, setModelVersion] = useState('v2')
   const [usePose, setUsePose] = useState(false)
+  const [computeTarget, setComputeTarget] = useState('local')
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [fps, setFps] = useState(16)
   const [steps, setSteps] = useState(6)
@@ -822,6 +823,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     formData.append('resolution', resolution)
     formData.append('fps', String(fps))
     formData.append('aspect_ratio', aspectRatio)
+    formData.append('compute_target', computeTarget)
 
     // Build prompt with camera motion prefix
     if (!usePose) {
@@ -950,7 +952,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
       if (useAsync) {
         // Async mode - job was queued, notify parent to refresh queue panel
-        if (DEBUG) console.debug('🐛 Job queued:', result.data?.prompt_id)
+        const isCloud = result.data?.compute_target === 'cloud'
+        if (DEBUG) console.debug(`🐛 Job queued (${isCloud ? 'cloud' : 'local'}):`, result.data?.prompt_id || result.data?.runpod_job_id)
         if (onJobSubmitted) {
           onJobSubmitted(result.data)
         }
@@ -1298,6 +1301,50 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </div>
             </div>
           )}
+
+          {/* Cloud GPU Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary, #888)', minWidth: '70px' }}>Compute:</span>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setComputeTarget('local')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                  border: '1px solid',
+                  borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
+                  background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
+                  color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                🖥️ Local
+              </button>
+              <button
+                type="button"
+                onClick={() => setComputeTarget('cloud')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                  border: '1px solid',
+                  borderColor: computeTarget === 'cloud' ? '#10b981' : 'var(--border-color, #333)',
+                  background: computeTarget === 'cloud' ? '#10b981' : 'transparent',
+                  color: computeTarget === 'cloud' ? '#fff' : 'var(--text-secondary, #888)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                ☁️ Cloud
+              </button>
+            </div>
+            {computeTarget === 'cloud' && (
+              <span style={{ fontSize: '10px', color: '#10b981' }}>RunPod GPU</span>
+            )}
+          </div>
         </div>
 
         {/* Unet Model Selection - Only for Wan2.2 */}

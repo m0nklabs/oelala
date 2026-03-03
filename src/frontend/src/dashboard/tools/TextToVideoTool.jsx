@@ -70,6 +70,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [t2iSteps, setT2iSteps] = useState(20)
   const [t2iCfg, setT2iCfg] = useState(6.0)
 
+  const [computeTarget, setComputeTarget] = useState('local')
+
   const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
@@ -230,6 +232,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     formData.append('aspect_ratio', aspectRatio)
     formData.append('resolution', resolution)
     formData.append('fps', String(fps))
+    formData.append('compute_target', computeTarget)
 
     // Add post-processing chain if any options selected
     const postProcessingSteps = []
@@ -257,7 +260,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         throw new Error('No prompt_id returned')
       }
 
-      if (DEBUG) console.debug('📋 T2V queued:', promptId)
+      const isCloud = result.data?.compute_target === 'cloud'
+      if (DEBUG) console.debug(`🐛 Job queued (${isCloud ? 'cloud' : 'local'}):`, result.data?.prompt_id || result.data?.runpod_job_id)
 
       // Show queued confirmation
       setLastQueued({
@@ -440,6 +444,50 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', fontStyle: 'italic' }}>
             {availableModels[modelType]?.description}
+          </div>
+
+          {/* Cloud GPU Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary, #888)', minWidth: '70px' }}>Compute:</span>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setComputeTarget('local')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                  border: '1px solid',
+                  borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
+                  background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
+                  color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                🖥️ Local
+              </button>
+              <button
+                type="button"
+                onClick={() => setComputeTarget('cloud')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                  border: '1px solid',
+                  borderColor: computeTarget === 'cloud' ? '#10b981' : 'var(--border-color, #333)',
+                  background: computeTarget === 'cloud' ? '#10b981' : 'transparent',
+                  color: computeTarget === 'cloud' ? '#fff' : 'var(--text-secondary, #888)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                ☁️ Cloud
+              </button>
+            </div>
+            {computeTarget === 'cloud' && (
+              <span style={{ fontSize: '10px', color: '#10b981' }}>RunPod GPU</span>
+            )}
           </div>
         </div>
 
