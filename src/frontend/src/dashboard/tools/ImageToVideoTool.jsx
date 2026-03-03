@@ -20,6 +20,7 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 
 // Model mode options for I2V
 const MODEL_MODES = [
+  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 25 steps • Maximum quality' },
   { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
   { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality • Single-GPU BlockSwap • Lightning LoRA + NAG + TorchCompile' },
   { value: 'distorch2_q8', label: '🧪 DisTorch2 Q8 Experimental', desc: 'Q8 quality + DisTorch2 Multi-GPU + Selectable LoRAs' },
@@ -45,6 +46,7 @@ const RESOLUTION_PRESETS = {
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
     max_duration_ultra_q8: 30,
+    max_duration_cloud_max: 30,
   },
   '576p': {
     label: '576p',
@@ -61,6 +63,7 @@ const RESOLUTION_PRESETS = {
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
     max_duration_ultra_q8: 30,
+    max_duration_cloud_max: 30,
   },
   '720p': {
     label: '720p',
@@ -77,6 +80,7 @@ const RESOLUTION_PRESETS = {
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
     max_duration_ultra_q8: 8,  // 720p: 15.4GB peak@161f OOM, 14.5GB@129f safe with LoRAs
+    max_duration_cloud_max: 30,  // 48GB VRAM on cloud, no limit
   },
 }
 
@@ -886,6 +890,21 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       if (loraConfigs.length > 0) {
         formData.append('lora_configs', JSON.stringify(loraConfigs))
       }
+    } else if (modelMode === 'cloud_max') {
+      // Cloud Max — bf16 full precision on RunPod (cloud only)
+      endpoint = `${BACKEND_BASE}/generate-cloud-max-async`
+      formData.append('mode', 'i2v')
+      formData.append('steps', String(steps))
+      formData.append('cfg', String(cfg))
+      formData.append('seed', String(seed))
+      formData.append('shift', String(bsShift))
+      formData.append('high_noise_steps', String(bsHighNoiseSteps))
+      formData.append('sampler_name', 'dpmpp_2m')
+      formData.append('scheduler', 'beta')
+      formData.append('negative_prompt', negativePrompt)
+      if (loraConfigs.length > 0) {
+        formData.append('lora_configs', JSON.stringify(loraConfigs))
+      }
     } else if (modelMode === 'ltx2') {
       // LTX-2 endpoint
       endpoint = `${BACKEND_BASE}/generate-ltx2-i2v-async`
@@ -1220,6 +1239,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setBsShift(9.0)
                   setBsHighNoiseSteps(4)
                   setBsNagScale(11.0)
+                } else if (newMode === 'cloud_max') {
+                  setResolution('720p')
+                  setAspectRatio('9:16')
+                  setDuration(8)
+                  setSteps(25)
+                  setCfg(3.0)
+                  setBsShift(8.0)
+                  setBsHighNoiseSteps(12)
+                  setComputeTarget('cloud')  // Cloud Max is cloud-only
                 }
               }}
               style={{
@@ -1256,7 +1284,17 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               }}
             />
           </div>
-          {modelMode === 'wan2.2' ? (
+          {modelMode === 'cloud_max' ? (
+            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f472b6' }}>
+              <span style={{ fontWeight: 600 }}>☁️ Cloud Max — bf16 Full Precision</span> • <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>
+                Unquantized bf16 • 48GB VRAM • Dual-pass high/low LoRA • 25 steps • Maximum quality
+              </div>
+              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
+                ~$1.22/hr • Cloud-only • Up to 720p 30s
+              </div>
+            </div>
+          ) : modelMode === 'wan2.2' ? (
             <div className="info-badge" style={{ marginTop: '8px' }}>
               <span style={{ fontWeight: 600 }}>🎬 Wan2.2 14B Q6</span> • <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
@@ -1308,7 +1346,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
-                onClick={() => setComputeTarget('local')}
+                onClick={() => { if (modelMode !== 'cloud_max') setComputeTarget('local') }}
+                disabled={modelMode === 'cloud_max'}
                 style={{
                   padding: '4px 10px',
                   fontSize: '11px',
@@ -1317,7 +1356,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
                   background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
                   color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: 'pointer',
+                  cursor: modelMode === 'cloud_max' ? 'not-allowed' : 'pointer',
+                  opacity: modelMode === 'cloud_max' ? 0.4 : 1,
                   transition: 'all 0.15s ease',
                 }}
               >

@@ -2687,6 +2687,533 @@ class ComfyUIClient:
         )
         return workflow
 
+    def build_cloud_max_i2v_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts, flickering, jitter",
+        width: int = 1280,
+        height: int = 720,
+        num_frames: int = 81,
+        fps: int = 16,
+        steps: int = 25,
+        cfg: float = 3.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_cloud_max",
+        high_noise_steps: int = 12,
+        shift: float = 8.0,
+        sampler_name: str = "dpmpp_2m",
+        scheduler: str = "beta",
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        aspect_ratio: str = "9:16",
+        long_edge: int = 720,
+        diffusion_model: str = "wan2.1_i2v_720p_14B_bf16.safetensors",
+        text_encoder: str = "umt5_xxl_fp16.safetensors",
+        vae_model: str = "wan_2.1_vae.safetensors",
+        clip_vision: str = "clip_vision_h.safetensors",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build Cloud Max I2V workflow — bf16 full precision for cloud GPUs (48GB+).
+
+        Designed for RunPod serverless with A6000/A40/L40S GPUs. Uses native
+        ComfyUI nodes (UNETLoader, not GGUF). Dual-pass sampling to support
+        high/low noise LoRA pairs. No SageAttention, no DisTorch2, no BlockSwap
+        — pure single-GPU bf16 with maximum quality settings.
+
+        Key differences from local modes:
+        - bf16 safetensors (no quantization loss)
+        - Native UNETLoader (no GGUF dependency)
+        - Full precision text encoder (fp16, not fp8)
+        - More sampling steps (25 default vs 6-8 local)
+        - dpmpp_2m + beta scheduler (higher quality)
+        - Higher CFG (3.0 default for stronger prompt adherence)
+        - No multi-GPU nodes (single powerful GPU)
+        - Dual-pass retained for high/low LoRA compatibility
+
+        Args:
+            diffusion_model: bf16 safetensors model filename on Network Volume.
+            text_encoder: Full precision text encoder filename.
+            vae_model: VAE decoder filename.
+            clip_vision: CLIP vision encoder for I2V conditioning.
+            high_noise_steps: Step at which to switch from high to low noise pass.
+            sampler_name: Sampler algorithm (dpmpp_2m recommended for quality).
+            scheduler: Noise scheduler (beta or karras recommended).
+            lora_configs: LoRA configs [{high, low, strength}, ...] — supports
+                          high/low noise split LoRAs.
+        """
+        # Wan2.2/2.1 requires num_frames in format 4k+1
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # ─── Calculate dimensions from aspect ratio ───
+        aspect_ratios = {
+            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
+            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
+            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+
+        logger.info(
+            f"☁️ Building Cloud Max I2V: {width}x{height}, {num_frames}f, "
+            f"{steps} steps, cfg={cfg}, shift={shift}, sampler={sampler_name}, "
+            f"scheduler={scheduler}"
+        )
+
+        # ─── Build workflow dict (native ComfyUI nodes) ───
+        workflow = {}
+
+        # Node 1: Load input image
+        workflow["1"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": image_name},
+        }
+
+        # Node 2: Image resize to target resolution
+        workflow["2"] = {
+            "class_type": "ImageResizeKJv2",
+            "inputs": {
+                "width": width,
+                "height": height,
+                "interpolation": "lanczos",
+                "keep_proportion": False,
+                "divisible_by": 8,
+                "image": ["1", 0],
+            },
+        }
+
+        # Node 3: UNET Loader — bf16 model (native ComfyUI, NOT GGUF)
+        workflow["3"] = {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": diffusion_model,
+                "weight_dtype": "bf16",
+            },
+        }
+
+        # Node 4: CLIP Loader — full precision text encoder
+        workflow["4"] = {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": text_encoder,
+                "type": "wan",
+            },
+        }
+
+        # Node 5: VAE Loader
+        workflow["5"] = {
+            "class_type": "VAELoader",
+            "inputs": {"vae_name": vae_model},
+        }
+
+        # Node 6: CLIP Vision Loader (for I2V conditioning)
+        workflow["6"] = {
+            "class_type": "CLIPVisionLoader",
+            "inputs": {"clip_name": clip_vision},
+        }
+
+        # Node 7: Positive prompt encoding
+        workflow["7"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt, "clip": ["4", 0]},
+        }
+
+        # Node 8: Negative prompt encoding
+        workflow["8"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_prompt, "clip": ["4", 0]},
+        }
+
+        # Node 9: WanImageToVideo — I2V conditioning
+        workflow["9"] = {
+            "class_type": "WanImageToVideo",
+            "inputs": {
+                "width": width,
+                "height": height,
+                "length": num_frames,
+                "batch_size": 1,
+                "positive": ["7", 0],
+                "negative": ["8", 0],
+                "vae": ["5", 0],
+                "clip_vision": ["6", 0],
+                "start_image": ["2", 0],
+            },
+        }
+
+        # Node 10: ModelSamplingSD3 for high noise model
+        workflow["10"] = {
+            "class_type": "ModelSamplingSD3",
+            "inputs": {"shift": shift, "model": ["3", 0]},
+        }
+
+        # Node 11: ModelSamplingSD3 for low noise model (same base model)
+        workflow["11"] = {
+            "class_type": "ModelSamplingSD3",
+            "inputs": {"shift": shift, "model": ["3", 0]},
+        }
+
+        # ─── LoRA Loading (supports high/low split) ───
+        # High noise chain starts from node 10
+        current_high_model = ["10", 0]
+        # Low noise chain starts from node 11
+        current_low_model = ["11", 0]
+
+        if lora_configs and len(lora_configs) > 0:
+            high_node_id = 100
+            low_node_id = 150
+            for i, config in enumerate(lora_configs):
+                strength = config.get("strength", 1.0)
+
+                # High noise LoRA
+                high_name = config.get("high", "")
+                if high_name:
+                    nid = str(high_node_id + i)
+                    workflow[nid] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": high_name,
+                            "strength_model": strength,
+                            "model": current_high_model,
+                        },
+                    }
+                    current_high_model = [nid, 0]
+                    logger.info(f"🎨 Cloud Max High LoRA #{i+1}: {high_name} @ {strength}")
+
+                # Low noise LoRA (falls back to high if not specified)
+                low_name = config.get("low", high_name)
+                if low_name:
+                    nid = str(low_node_id + i)
+                    workflow[nid] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": low_name,
+                            "strength_model": strength,
+                            "model": current_low_model,
+                        },
+                    }
+                    current_low_model = [nid, 0]
+                    logger.info(f"🎨 Cloud Max Low LoRA #{i+1}: {low_name} @ {strength}")
+
+        # Node 20: KSamplerAdvanced — Pass 1 (High Noise)
+        workflow["20"] = {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "enable",
+                "noise_seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+                "start_at_step": 0,
+                "end_at_step": high_noise_steps,
+                "return_with_leftover_noise": "enable",
+                "model": current_high_model,
+                "positive": ["9", 0],
+                "negative": ["9", 1],
+                "latent_image": ["9", 2],
+            },
+        }
+
+        # Node 21: KSamplerAdvanced — Pass 2 (Low Noise)
+        workflow["21"] = {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "disable",
+                "noise_seed": 0,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+                "start_at_step": high_noise_steps,
+                "end_at_step": 10000,
+                "return_with_leftover_noise": "disable",
+                "model": current_low_model,
+                "positive": ["9", 0],
+                "negative": ["9", 1],
+                "latent_image": ["20", 0],
+            },
+        }
+
+        # Node 22: VAE Decode
+        workflow["22"] = {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": ["21", 0], "vae": ["5", 0]},
+        }
+
+        # Node 23: Save Video (VHS_VideoCombine)
+        workflow["23"] = {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {
+                "frame_rate": fps,
+                "loop_count": 0,
+                "filename_prefix": output_prefix,
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 17,  # Higher quality than local (19)
+                "save_metadata": True,
+                "trim_to_audio": False,
+                "pingpong": False,
+                "save_output": True,
+                "images": ["22", 0],
+            },
+        }
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+        logger.info(
+            f"☁️ Built Cloud Max I2V: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
+            f"shift={shift}, {sampler_name}/{scheduler}{lora_info}"
+        )
+        return workflow
+
+    def build_cloud_max_t2v_workflow(
+        self,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts, flickering, jitter",
+        width: int = 1280,
+        height: int = 720,
+        num_frames: int = 81,
+        fps: int = 16,
+        steps: int = 25,
+        cfg: float = 3.0,
+        seed: int = -1,
+        output_prefix: str = "oelala_cloud_max_t2v",
+        high_noise_steps: int = 12,
+        shift: float = 8.0,
+        sampler_name: str = "dpmpp_2m",
+        scheduler: str = "beta",
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        aspect_ratio: str = "9:16",
+        long_edge: int = 720,
+        diffusion_model: str = "wan2.1_t2v_14B_bf16.safetensors",
+        text_encoder: str = "umt5_xxl_fp16.safetensors",
+        vae_model: str = "wan_2.1_vae.safetensors",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build Cloud Max T2V workflow — bf16 full precision for cloud GPUs (48GB+).
+
+        Same architecture as Cloud Max I2V but without image conditioning.
+        Uses WanImageToVideo without start_image to create empty video latent.
+        T2V-specific bf16 model (28.6GB, slightly smaller than I2V 32.8GB).
+        """
+        # Wan2.2/2.1 requires num_frames in format 4k+1
+        k = round((num_frames - 1) / 4)
+        k = max(1, k)
+        num_frames = 4 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # ─── Calculate dimensions from aspect ratio ───
+        aspect_ratios = {
+            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
+            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
+            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        width = (width // 8) * 8
+        height = (height // 8) * 8
+
+        logger.info(
+            f"☁️ Building Cloud Max T2V: {width}x{height}, {num_frames}f, "
+            f"{steps} steps, cfg={cfg}, shift={shift}"
+        )
+
+        workflow = {}
+
+        # Node 1: UNET Loader — bf16 T2V model
+        workflow["1"] = {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": diffusion_model,
+                "weight_dtype": "bf16",
+            },
+        }
+
+        # Node 2: CLIP Loader — full precision text encoder
+        workflow["2"] = {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": text_encoder,
+                "type": "wan",
+            },
+        }
+
+        # Node 3: VAE Loader
+        workflow["3"] = {
+            "class_type": "VAELoader",
+            "inputs": {"vae_name": vae_model},
+        }
+
+        # Node 4: Positive prompt encoding
+        workflow["4"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt, "clip": ["2", 0]},
+        }
+
+        # Node 5: Negative prompt encoding
+        workflow["5"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_prompt, "clip": ["2", 0]},
+        }
+
+        # Node 6: WanImageToVideo — T2V mode (NO start_image, NO clip_vision)
+        workflow["6"] = {
+            "class_type": "WanImageToVideo",
+            "inputs": {
+                "width": width,
+                "height": height,
+                "length": num_frames,
+                "batch_size": 1,
+                "positive": ["4", 0],
+                "negative": ["5", 0],
+                "vae": ["3", 0],
+            },
+        }
+
+        # Node 7: ModelSamplingSD3 for high noise
+        workflow["7"] = {
+            "class_type": "ModelSamplingSD3",
+            "inputs": {"shift": shift, "model": ["1", 0]},
+        }
+
+        # Node 8: ModelSamplingSD3 for low noise (same base)
+        workflow["8"] = {
+            "class_type": "ModelSamplingSD3",
+            "inputs": {"shift": shift, "model": ["1", 0]},
+        }
+
+        # ─── LoRA Loading ───
+        current_high_model = ["7", 0]
+        current_low_model = ["8", 0]
+
+        if lora_configs and len(lora_configs) > 0:
+            high_node_id = 100
+            low_node_id = 150
+            for i, config in enumerate(lora_configs):
+                strength = config.get("strength", 1.0)
+                high_name = config.get("high", "")
+                if high_name:
+                    nid = str(high_node_id + i)
+                    workflow[nid] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": high_name,
+                            "strength_model": strength,
+                            "model": current_high_model,
+                        },
+                    }
+                    current_high_model = [nid, 0]
+                low_name = config.get("low", high_name)
+                if low_name:
+                    nid = str(low_node_id + i)
+                    workflow[nid] = {
+                        "class_type": "LoraLoaderModelOnly",
+                        "inputs": {
+                            "lora_name": low_name,
+                            "strength_model": strength,
+                            "model": current_low_model,
+                        },
+                    }
+                    current_low_model = [nid, 0]
+
+        # Node 10: KSamplerAdvanced — Pass 1 (High Noise)
+        workflow["10"] = {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "enable",
+                "noise_seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+                "start_at_step": 0,
+                "end_at_step": high_noise_steps,
+                "return_with_leftover_noise": "enable",
+                "model": current_high_model,
+                "positive": ["6", 0],
+                "negative": ["6", 1],
+                "latent_image": ["6", 2],
+            },
+        }
+
+        # Node 11: KSamplerAdvanced — Pass 2 (Low Noise)
+        workflow["11"] = {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "disable",
+                "noise_seed": 0,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": sampler_name,
+                "scheduler": scheduler,
+                "start_at_step": high_noise_steps,
+                "end_at_step": 10000,
+                "return_with_leftover_noise": "disable",
+                "model": current_low_model,
+                "positive": ["6", 0],
+                "negative": ["6", 1],
+                "latent_image": ["10", 0],
+            },
+        }
+
+        # Node 12: VAE Decode
+        workflow["12"] = {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": ["11", 0], "vae": ["3", 0]},
+        }
+
+        # Node 13: Save Video
+        workflow["13"] = {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {
+                "frame_rate": fps,
+                "loop_count": 0,
+                "filename_prefix": output_prefix,
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 17,
+                "save_metadata": True,
+                "trim_to_audio": False,
+                "pingpong": False,
+                "save_output": True,
+                "images": ["12", 0],
+            },
+        }
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+        logger.info(
+            f"☁️ Built Cloud Max T2V: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
+            f"shift={shift}, {sampler_name}/{scheduler}{lora_info}"
+        )
+        return workflow
+
     def build_workflow(
         self,
         image_name: str,

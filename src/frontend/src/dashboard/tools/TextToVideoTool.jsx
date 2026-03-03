@@ -26,6 +26,13 @@ const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 // T2V Models
 const T2V_MODELS = {
+  cloud_max: {
+    name: '☁️ Cloud Max bf16',
+    description: 'Cloud GPU • bf16 unquantized • 25 steps • Maximum quality',
+    maxFrames: 481,
+    defaultFrames: 81,
+    frameStep: 4,
+  },
   wan22: {
     name: 'Wan2.2 14B',
     description: 'High quality T2V with T2I pipeline',
@@ -249,7 +256,23 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     try {
       if (DEBUG) console.debug('🎬 T2V request:', { prompt, modelType, numFrames, resolution, fps })
 
-      const result = await postForm(`${BACKEND_BASE}/generate-text`, formData)
+      let t2vEndpoint = `${BACKEND_BASE}/generate-text`
+
+      // Cloud Max uses its own endpoint with mode=t2v
+      if (modelType === 'cloud_max') {
+        t2vEndpoint = `${BACKEND_BASE}/generate-cloud-max-async`
+        formData.append('mode', 't2v')
+        formData.append('steps', String(steps))
+        formData.append('cfg', String(cfg))
+        formData.append('seed', String(seed))
+        formData.append('shift', '8.0')
+        formData.append('high_noise_steps', '12')
+        formData.append('sampler_name', 'dpmpp_2m')
+        formData.append('scheduler', 'beta')
+        formData.append('negative_prompt', negativePrompt)
+      }
+
+      const result = await postForm(t2vEndpoint, formData)
 
       if (!result.ok) {
         throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
@@ -434,7 +457,23 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               <button
                 key={key}
                 className={`grok-toggle-btn ${modelType === key ? 'active' : ''}`}
-                onClick={() => setModelType(key)}
+                onClick={() => {
+                  setModelType(key)
+                  if (key === 'cloud_max') {
+                    setComputeTarget('cloud')
+                    setSteps(25)
+                    setCfg(3.0)
+                    setNumFrames(81)
+                  } else if (key === 'wan22') {
+                    setSteps(6)
+                    setCfg(1.0)
+                    setNumFrames(41)
+                  } else if (key === 'ltx2') {
+                    setSteps(20)
+                    setCfg(3.0)
+                    setNumFrames(25)
+                  }
+                }}
                 type="button"
                 title={config.description}
               >
@@ -452,7 +491,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
-                onClick={() => setComputeTarget('local')}
+                onClick={() => { if (modelType !== 'cloud_max') setComputeTarget('local') }}
+                disabled={modelType === 'cloud_max'}
                 style={{
                   padding: '4px 10px',
                   fontSize: '11px',
@@ -461,7 +501,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
                   background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
                   color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: 'pointer',
+                  cursor: modelType === 'cloud_max' ? 'not-allowed' : 'pointer',
+                  opacity: modelType === 'cloud_max' ? 0.4 : 1,
                   transition: 'all 0.15s ease',
                 }}
               >

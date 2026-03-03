@@ -6571,6 +6571,212 @@ async def generate_ultra_q8_async(
 
 
 # =============================================================================
+# Cloud Max Async Endpoint (RunPod bf16 — cloud-only)
+# =============================================================================
+
+
+@app.post("/generate-cloud-max-async")
+async def generate_cloud_max_async(
+    file: UploadFile = File(None),
+    prompt: str = Form("Motion, subject moving naturally, cinematic quality"),
+    negative_prompt: str = Form(
+        "low quality, blurry, distorted, artifacts, flickering, jitter",
+        description="Negative prompt",
+    ),
+    mode: str = Form("i2v", description="Generation mode: 'i2v' or 't2v'"),
+    num_frames: int = Form(81, description="Number of frames (4k+1 format)"),
+    resolution: str = Form("720p", description="Video resolution: 480p, 576p, 720p, 1080p"),
+    fps: int = Form(16, description="Frames per second"),
+    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
+    steps: int = Form(25, description="Sampling steps (20-30 recommended)"),
+    cfg: float = Form(3.0, description="CFG guidance scale (3.0-5.0 recommended)"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    high_noise_steps: int = Form(12, description="Steps for high noise pass"),
+    shift: float = Form(8.0, description="ModelSamplingSD3 shift"),
+    sampler_name: str = Form("dpmpp_2m", description="Sampler: dpmpp_2m, euler, uni_pc"),
+    scheduler: str = Form("beta", description="Scheduler: beta, karras, normal"),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
+    ),
+    user: User = Depends(get_current_user),
+):
+    """
+    Queue Cloud Max video generation on RunPod — bf16 full precision.
+
+    CLOUD-ONLY endpoint. Uses native ComfyUI UNETLoader with bf16 safetensors
+    on 48GB+ GPUs (A6000/A40/L40S). No quantization, no multi-GPU tricks.
+    Supports both I2V and T2V modes. Dual-pass sampling for high/low LoRA
+    compatibility.
+
+    Recommended GPU tier: A6000/A40 ($1.22/hr) or L40S ($1.91/hr).
+    """
+    if not _runpod or not _runpod.has_endpoint():
+        raise HTTPException(
+            status_code=503,
+            detail="Cloud Max requires a RunPod endpoint. Deploy one first.",
+        )
+
+    if not get_comfyui_client:
+        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+
+    comfyui = get_comfyui_client()
+
+    # Validate mode
+    if mode not in ("i2v", "t2v"):
+        raise HTTPException(status_code=400, detail="mode must be 'i2v' or 't2v'")
+
+    # I2V requires an image
+    if mode == "i2v" and not file:
+        raise HTTPException(status_code=400, detail="I2V mode requires an image file")
+
+    # Wan2.2 requires num_frames in format 4k+1
+    k = round((num_frames - 1) / 4)
+    k = max(1, k)
+    num_frames = 4 * k + 1
+
+    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
+    long_edge = resolution_map.get(resolution, 720)
+
+    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
+    duration_seconds = num_frames / fps if fps > 0 else 5
+    credits_required = calculate_credits(
+        "generate_wan22_comfyui",
+        width=width,
+        height=height,
+        duration_seconds=int(duration_seconds),
+    )
+    # Cloud Max costs 2x credits (premium quality)
+    credits_required = int(credits_required * 2)
+    logger.info(
+        f"☁️ Cloud Max {mode.upper()} costs {credits_required} credits "
+        f"({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    actual_seed = (
+        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
+    )
+    output_prefix = f"oelala_cloud_max_{mode}_{timestamp}"
+
+    # Handle image upload for I2V
+    image_name = None
+    input_filename = None
+    if mode == "i2v" and file:
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="File must be an image")
+
+        input_filename = f"comfyui_{timestamp}_{file.filename}"
+        input_path = UPLOAD_DIR / input_filename
+
+        try:
+            with open(input_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            logger.info(f"📤 Saved input image: {input_path}")
+        except Exception as e:
+            logger.error(f"Error saving file: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+
+        image_name = comfyui.upload_image(str(input_path))
+        if not image_name:
+            raise HTTPException(
+                status_code=500, detail="Failed to upload image to ComfyUI"
+            )
+
+    # Build workflow
+    if mode == "i2v":
+        workflow = comfyui.build_cloud_max_i2v_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=actual_seed,
+            output_prefix=output_prefix,
+            high_noise_steps=high_noise_steps,
+            shift=shift,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            lora_configs=parsed_lora_configs,
+            aspect_ratio=aspect_ratio,
+            long_edge=long_edge,
+        )
+    else:
+        workflow = comfyui.build_cloud_max_t2v_workflow(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            fps=fps,
+            steps=steps,
+            cfg=cfg,
+            seed=actual_seed,
+            output_prefix=output_prefix,
+            high_noise_steps=high_noise_steps,
+            shift=shift,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            lora_configs=parsed_lora_configs,
+            aspect_ratio=aspect_ratio,
+            long_edge=long_edge,
+        )
+
+    if not workflow:
+        raise HTTPException(
+            status_code=500, detail="Failed to build Cloud Max workflow"
+        )
+
+    # Always route to RunPod (cloud-only endpoint)
+    cloud_job_info = {
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": steps,
+        "seed": actual_seed,
+        "output_prefix": output_prefix,
+        "input_image": input_filename,
+        "created_at": timestamp,
+        "lora_count": len(parsed_lora_configs),
+        "job_type": f"cloud_max_{mode}",
+        "cfg": cfg,
+        "shift": shift,
+        "sampler": sampler_name,
+        "scheduler": scheduler,
+        "model_mode": "cloud_max",
+        "compute_target": "cloud",
+        "user_id": user.id,
+    }
+
+    result = await _submit_to_runpod(
+        workflow=workflow,
+        user_id=user.id,
+        prompt_id=str(uuid.uuid4()),
+        job_info=cloud_job_info,
+    )
+    await deduct_credits(
+        user, credits_required, result["prompt_id"],
+        f"Cloud Max {mode.upper()} (RunPod bf16)"
+    )
+
+    logger.info(f"☁️ Cloud Max {mode.upper()} job submitted to RunPod")
+    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
+    logger.info(f"   🎛️ {steps} steps, cfg={cfg}, {sampler_name}/{scheduler}")
+    logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs")
+
+    return result
+
+
+# =============================================================================
 # LTX-2 Image-to-Video Async Endpoint
 # =============================================================================
 
