@@ -21,7 +21,7 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 // Model mode options for I2V
 const MODEL_MODES = [
   { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
-  { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality + Lightning LoRA + NAG + MagCache' },
+  { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality • Single-GPU BlockSwap • Lightning LoRA + NAG + TorchCompile' },
   { value: 'distorch2_q8', label: '🧪 DisTorch2 Q8 Experimental', desc: 'Q8 quality + DisTorch2 Multi-GPU + Selectable LoRAs' },
   { value: 'ltx2', label: '⚡ LTX-2 19B Distilled', desc: 'Fast single-pass, lower VRAM' },
 ]
@@ -1231,12 +1231,12 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           ) : modelMode === 'blockswap_q8' ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f59e0b' }}>
-              <span style={{ fontWeight: 600 }}>🧪 BlockSwap Q8 Experimental</span> • <span style={{ color: '#fbbf24' }}>Q8_0 Dual-Pass</span>
+              <span style={{ fontWeight: 600 }}>🧪 BlockSwap Q8 Experimental</span> • <span style={{ color: '#fbbf24' }}>Q8_0 Single-GPU</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Lightning LoRA + NAG + MagCache + EnhanceAVideo • Florence2 captioning • BlockSwap VRAM optimization
+                Lightning LoRA + NAG + TorchCompile + EnhanceAVideo • Florence2 captioning • BlockSwap VRAM swap
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                All resolutions up to 30s
+                Single GPU • All resolutions up to 30s
               </div>
             </div>
           ) : modelMode === 'distorch2_q8' ? (
