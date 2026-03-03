@@ -248,7 +248,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         imageFilename = item.filename || imageUrl.split('/').pop()
       }
 
-      fetch(imageUrl)
+      apiFetch(imageUrl)
         .then(r => {
           if (!r.ok) throw new Error(`Failed to fetch image: ${r.status}`)
           return r.blob()
@@ -270,6 +270,13 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (selected.steps)     setSteps(Number(selected.steps) || selected.steps)
     if (selected.cfg)       setCfg(Number(selected.cfg) || selected.cfg)
     if (selected.seed)      setSeed(String(selected.seed))
+    if (selected.loras && Array.isArray(selected.loras)) {
+      setLoraConfigs(selected.loras.map(l => ({
+        high: l.high || '',
+        low: l.low || '',
+        strength: l.strength ?? 1.0,
+      })))
+    }
     setImportModal(null)
   }
   const [imageDescription, setImageDescription] = useState('')  // Store vision analysis result
@@ -615,7 +622,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       // Fetch the image and convert to File object
       // Use getMediaUrl to handle both signed URLs and relative paths
       const imageUrl = getMediaUrl(item.url, item.signed_url)
-      const response = await fetch(imageUrl)
+      const response = await apiFetch(imageUrl)
       const blob = await response.blob()
       const filename = item.filename || item.url.split('/').pop()
       const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
@@ -642,7 +649,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           const metaJson = await metaRes.json()
           const workflowData = parseComfyWorkflow(metaJson.metadata || {})
           // Only show modal if there's something useful to import
-          if (workflowData.positive || workflowData.steps) {
+          if (workflowData.positive || workflowData.steps || workflowData.loras?.length) {
             setImportModal({ item, workflow: workflowData })
           }
         }
@@ -747,12 +754,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const selectFromLibrary = useCallback(async (item) => {
     setError('')
     try {
-      // Use apiFetch for authenticated user media, bare fetch for signed/external URLs
       const imageUrl = getMediaUrl(item.url, item.signed_url)
-      const isUserMedia = item.url && item.url.startsWith('/user/media/')
-      const response = isUserMedia
-        ? await apiFetch(item.url)
-        : await fetch(imageUrl)
+      const response = await apiFetch(imageUrl)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
       const filename = item.name || item.url.split('/').pop()
@@ -968,7 +971,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         <MediaImportModal
           item={importModal.item}
           parsedData={importModal.workflow}
-          availableFields={['image', 'positive', 'negative', 'steps', 'cfg', 'seed']}
+          availableFields={['image', 'positive', 'negative', 'steps', 'cfg', 'seed', 'loras']}
           onApply={handleApplyImport}
           onClose={() => setImportModal(null)}
         />

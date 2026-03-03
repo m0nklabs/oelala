@@ -48,14 +48,15 @@ export default function MediaImportModal({ item, parsedData, availableFields, on
     positive:  { icon: <FileText  size={14} />, label: 'Positive prompt', group: 'prompts' },
     negative:  { icon: <FileText  size={14} />, label: 'Negative prompt', group: 'prompts' },
     steps:     { icon: <Settings2 size={14} />, label: 'Steps',           group: 'advanced' },
-    cfg:       { icon: <Settings2 size={14} />, label: 'CFG scale',       group: 'advanced' },
+    cfg:       { icon: <Settings2 size={14} />, label: 'Prompt Strength / CFG', group: 'advanced' },
     sampler:   { icon: <Settings2 size={14} />, label: 'Sampler',         group: 'advanced' },
     scheduler: { icon: <Settings2 size={14} />, label: 'Scheduler',       group: 'advanced' },
     seed:      { icon: <Settings2 size={14} />, label: 'Seed',            group: 'advanced' },
+    loras:     { icon: <Wand2     size={14} />, label: 'LoRA Stack',      group: 'loras' },
   }
 
-  const groups = ['source', 'prompts', 'advanced']
-  const groupLabel = { source: 'Source', prompts: 'Prompts', advanced: 'Advanced settings' }
+  const groups = ['source', 'prompts', 'advanced', 'loras']
+  const groupLabel = { source: 'Source', prompts: 'Prompts', advanced: 'Advanced settings', loras: 'LoRA Stack' }
 
   return (
     <div className="media-import-overlay" onClick={onClose}>
@@ -88,8 +89,32 @@ export default function MediaImportModal({ item, parsedData, availableFields, on
                 <div className="media-import-group-label">{groupLabel[group]}</div>
                 {fields.map(field => {
                   const meta = FIELD_META[field] || {}
-                  const value = field === 'image' ? '(use this image as input)' : parsedData?.[field]
+                  const isVideo = item?.type === 'video'
+                  const value = field === 'image'
+                    ? isVideo ? '(use start image from video)' : '(use this image as input)'
+                    : parsedData?.[field]
                   if (value === undefined) return null
+                  // Special rendering for LoRA array
+                  if (field === 'loras' && Array.isArray(value)) {
+                    return (
+                      <label key={field} className={`media-import-row ${checked[field] ? 'checked' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={!!checked[field]}
+                          onChange={() => toggle(field)}
+                        />
+                        <span className="media-import-field-icon">{meta.icon}</span>
+                        <span className="media-import-field-label">{meta.label}</span>
+                        <span className="media-import-field-value" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {value.map((lora, li) => (
+                            <span key={li} style={{ fontSize: '0.75rem' }}>
+                              {lora.high || lora.low} @ {lora.strength}
+                            </span>
+                          ))}
+                        </span>
+                      </label>
+                    )
+                  }
                   return (
                     <label key={field} className={`media-import-row ${checked[field] ? 'checked' : ''}`}>
                       <input

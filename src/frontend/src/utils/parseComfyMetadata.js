@@ -141,6 +141,13 @@ export function parseComfyWorkflow(workflow) {
     delete result.model // was an array ref, not a filename
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // 5. LoRA configs — extract from Power Lora Loader (rgthree) or
+  //    LoraLoaderModelOnly chains
+  // ─────────────────────────────────────────────────────────────────
+  const loras = _extractLoras(nodes)
+  if (loras.length > 0) result.loras = loras
+
   return result
 }
 
@@ -263,4 +270,84 @@ function _resolveInputText(nodes, value, depth) {
   if (typeof value === 'string' && value.length > 0) return value
   if (Array.isArray(value)) return _resolveTextRef(nodes, value[0], depth + 1)
   return null
+}
+
+/**
+ * Extract LoRA configurations from the workflow.
+ *
+ * Supports:
+ *  - Power Lora Loader (rgthree): paired high/low noise nodes with lora_1..lora_6 slots
+ *  - LoraLoaderModelOnly chains: sequential nodes starting at id 170 (high) / 180 (low)
+ *
+ * Returns: Array of { high: string, low: string, strength: number }
+ */
+function _extractLoras(nodes) {
+  const loras = []
+
+  // Strategy A: Power Lora Loader (rgthree) — used by BlockSwap/DisTorch2 Q8 workflows
+  const powerLoaders = []
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.class_type === 'Power Lora Loader (rgthree)') {
+      powerLoaders.push({ id, inputs: node.inputs || {} })
+    }
+  }
+
+  if (powerLoaders.length >= 2) {
+    // Pair them: first = high noise, second = low noise (by node id order)
+    powerLoaders.sort((a, b) => Number(a.id) - Number(b.id))
+    const highInputs = powerLoaders[0].inputs
+    const lowInputs = powerLoaders[1].inputs
+
+    for (let i = 1; i <= 6; i++) {
+      const highSlot = highInputs[`lora_${i}`]
+      const lowSlot = lowInputs[`lora_${i}`]
+      if (!highSlot?.on && !lowSlot?.on) continue
+      const highName = (highSlot?.on && highSlot?.lora && highSlot.lora !== 'None') ? highSlot.lora : ''
+      const lowName = (lowSlot?.on && lowSlot?.lora && lowSlot.lora !== 'None') ? lowSlot.lora : ''
+      if (!highName && !lowName) continue
+      loras.push({
+        high: highName,
+        low: lowName,
+        strength: highSlot?.strength ?? lowSlot?.strength ?? 1.0,
+      })
+    }
+    return loras
+  }
+
+  if (powerLoaders.length === 1) {
+    // Single Power Lora Loader — use same for both high and low
+    const inputs = powerLoaders[0].inputs
+    for (let i = 1; i <= 6; i++) {
+      const slot = inputs[`lora_${i}`]
+      if (!slot?.on || !slot?.lora || slot.lora === 'None') continue
+      loras.push({ high: slot.lora, low: slot.lora, strength: slot.strength ?? 1.0 })
+    }
+    return loras
+  }
+
+  // Strategy B: LoraLoaderModelOnly chains (used by T2V Q6 / I2V DisTorch2 workflows)
+  const loraModelOnlyNodes = []
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.class_type === 'LoraLoaderModelOnly') {
+      loraModelOnlyNodes.push({ id: Number(id), inputs: node.inputs || {} })
+    }
+  }
+
+  if (loraModelOnlyNodes.length > 0) {
+    // Group by range: 170-179 = high noise, 180-189 = low noise
+    const highNodes = loraModelOnlyNodes.filter(n => n.id >= 170 && n.id < 180).sort((a, b) => a.id - b.id)
+    const lowNodes = loraModelOnlyNodes.filter(n => n.id >= 180 && n.id < 190).sort((a, b) => a.id - b.id)
+    const maxLen = Math.max(highNodes.length, lowNodes.length)
+
+    for (let i = 0; i < maxLen; i++) {
+      const highName = highNodes[i]?.inputs?.lora_name || ''
+      const lowName = lowNodes[i]?.inputs?.lora_name || ''
+      const strength = highNodes[i]?.inputs?.strength_model ?? lowNodes[i]?.inputs?.strength_model ?? 1.0
+      if (highName || lowName) {
+        loras.push({ high: highName, low: lowName || highName, strength })
+      }
+    }
+  }
+
+  return loras
 }
