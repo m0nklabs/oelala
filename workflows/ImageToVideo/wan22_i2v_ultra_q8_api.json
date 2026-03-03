@@ -254,7 +254,7 @@
       "device": "cuda:0",
       "virtual_vram_gb": 0.0,
       "donor_device": "cpu",
-      "expert_mode_allocations": "cpu,*",
+      "expert_mode_allocations": "cpu,10gb",
       "eject_models": false
     }
   },
@@ -294,7 +294,7 @@
       "compute_device": "cuda:0",
       "virtual_vram_gb": 0.0,
       "donor_device": "cpu",
-      "expert_mode_allocations": "cuda:0,*",
+      "expert_mode_allocations": "cuda:0,1gb",
       "eject_models": true
     }
   },
