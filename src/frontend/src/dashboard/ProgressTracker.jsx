@@ -160,8 +160,10 @@ export default function ProgressTracker({ promptId, onComplete }) {
   }
 
   const isRunning = jobStatus.status === 'running'
-  const isQueued = jobStatus.status === 'queued'
+  const isQueued = jobStatus.status === 'queued' || jobStatus.status === 'pending'
   const isCompleted = jobStatus.status === 'completed'
+  const isFailed = jobStatus.status === 'failed'
+  const isCloud = jobStatus.compute_target === 'cloud'
 
   return (
     <div
@@ -183,14 +185,24 @@ export default function ProgressTracker({ promptId, onComplete }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {isRunning && <Loader2 size={16} className="spin" color="#22c55e" />}
+          {isRunning && <Loader2 size={16} className="spin" color={isCloud ? '#6366f1' : '#22c55e'} />}
           {isQueued && <Clock size={16} color="#fbbf24" />}
           {isCompleted && <TrendingUp size={16} color="#3b82f6" />}
           <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-            {isRunning && 'Generating...'}
-            {isQueued && 'In Queue'}
+            {isRunning && (isCloud ? 'Cloud generating...' : 'Generating...')}
+            {isQueued && (isCloud ? 'Cloud queue' : 'In Queue')}
             {isCompleted && 'Completed'}
           </span>
+          {isCloud && (
+            <span style={{
+              fontSize: '0.65rem',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(99, 102, 241, 0.15)',
+              color: '#818cf8',
+              fontWeight: 500,
+            }}>☁️ Cloud Max</span>
+          )}
         </div>
 
         {/* Queue position indicator */}
@@ -237,10 +249,10 @@ export default function ProgressTracker({ promptId, onComplete }) {
               top: 0,
               height: '100%',
               width: `${progress}%`,
-              backgroundColor: isRunning ? '#22c55e' : '#fbbf24',
+              backgroundColor: isCloud ? '#6366f1' : (isRunning ? '#22c55e' : '#fbbf24'),
               borderRadius: '4px',
               transition: 'width 0.3s ease-out',
-              boxShadow: `0 0 8px ${isRunning ? 'rgba(34, 197, 94, 0.5)' : 'rgba(251, 191, 36, 0.5)'}`,
+              boxShadow: `0 0 8px ${isCloud ? 'rgba(99, 102, 241, 0.5)' : (isRunning ? 'rgba(34, 197, 94, 0.5)' : 'rgba(251, 191, 36, 0.5)')}`,
             }}
           />
         </div>
@@ -277,19 +289,20 @@ export default function ProgressTracker({ promptId, onComplete }) {
         )}
       </div>
 
-      {/* Current processing node */}
-      {currentNode && isRunning && (
+      {/* Current processing node or cloud message */}
+      {isRunning && (isCloud ? jobStatus.message : currentNode) && (
         <div
           style={{
             marginTop: '8px',
             padding: '6px 8px',
-            backgroundColor: 'var(--bg-input)',
+            backgroundColor: isCloud ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-input)',
             borderRadius: '4px',
             fontSize: '0.7rem',
-            color: 'var(--text-secondary)',
+            color: isCloud ? '#818cf8' : 'var(--text-secondary)',
+            borderLeft: isCloud ? '2px solid #6366f1' : 'none',
           }}
         >
-          {currentNode}
+          {isCloud ? `☁️ ${jobStatus.message}` : currentNode}
         </div>
       )}
 
