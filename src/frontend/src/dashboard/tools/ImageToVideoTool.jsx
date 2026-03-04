@@ -3000,8 +3000,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                               }}
                             >
                               <option value="">-- None --</option>
-                              {availableLoras.filter(l => l.includes('high') || l.includes('High')).map(l => (
-                                <option key={l} value={l}>{l.replace('.safetensors', '')}</option>
+                              {(availableLoras.high_noise || []).map(l => (
+                                <option key={l.path || l} value={l.path || l}>{l.name || l}</option>
                               ))}
                             </select>
                           </div>
@@ -3023,8 +3023,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                               }}
                             >
                               <option value="">-- None --</option>
-                              {availableLoras.filter(l => l.includes('low') || l.includes('Low')).map(l => (
-                                <option key={l} value={l}>{l.replace('.safetensors', '')}</option>
+                              {(availableLoras.low_noise || []).map(l => (
+                                <option key={l.path || l} value={l.path || l}>{l.name || l}</option>
                               ))}
                             </select>
                           </div>

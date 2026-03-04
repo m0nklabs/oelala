@@ -8127,19 +8127,14 @@ async def caption_image(
     model: Optional[str] = Form(
         None, description="Guardian vision model ID (default: VISION_MODEL env)"
     ),
-    mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured"),
+    mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured, prompt_i2v, prompt_t2i, prompt_nsfw"),
     nsfw_intensity: Optional[int] = Form(None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"),
-    include_motion: Optional[bool] = Form(False, description="Include camera motion/animation descriptions in the output"),
-    motion_model: Optional[str] = Form(None, description="T2T model for motion prompt generation (default: GLM-4.7-Flash-Claude-Opus-Reasoning)"),
     detail_level: Optional[int] = Form(3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"),
 ):
     """
     Generate a caption/description for an uploaded image.
     Uses Guardian vision LLM for high-quality captioning.
-
-    When include_motion is enabled, a two-step pipeline runs:
-    1. Vision LLM analyzes the image (detail level controls verbosity)
-    2. Text-to-text LLM generates creative motion prompt based on the analysis
+    Detail level controls output verbosity (1=brief, 5=exhaustive).
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -8211,87 +8206,119 @@ async def caption_image(
     with open(input_path, "rb") as f:
         image_b64 = _b64.b64encode(f.read()).decode("utf-8")
 
-    # ── Step 1: Vision LLM — analyze the image (clean, no motion instructions) ──
     description = await analyze_image_with_vision(
         image_b64, custom_prompt=custom_prompt, model_override=model
     )
 
-    # ── Step 2: T2T LLM — generate motion prompt from the image analysis ──
-    motion_prompt = None
-    if include_motion and description:
-        t2t_model = motion_model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
-        logger.info(f"🎬 Step 2: Generating motion prompt with T2T model: {t2t_model}...")
+    return {"caption": description, "model": model or VISION_MODEL, "mode": mode}
 
-        motion_system = (
-            "You are a cinematographer and motion designer for AI video generation. "
-            "Given an image description, generate creative and specific camera motion and animation cues. "
-            "Focus on: camera movements (dolly, pan, tilt, crane, tracking, zoom), "
-            "subject animation (hair flowing, fabric rippling, walking, gesturing), "
-            "environmental motion (clouds drifting, light shifting, particles floating), "
-            "and cinematic timing (slow motion, speed ramp, freeze frame). "
-            "Output ONLY the motion prompt text — comma-separated, concise, cinematic style. "
-            "Be creative and specific to the scene described. No explanations, no labels."
-        )
 
-        motion_user = (
-            f"Based on this image analysis, generate a creative motion/camera prompt for AI video generation:\n\n"
-            f"{description}"
-        )
+class MotionPromptRequest(BaseModel):
+    """Request body for motion prompt generation."""
+    prompt: str
+    model: Optional[str] = None  # T2T model override
 
-        try:
-            from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
-            await wait_for_comfyui_idle()
-            await _free_comfy_vram()
 
-            t2t_body = {
-                "model": t2t_model,
-                "messages": [
-                    {"role": "system", "content": motion_system},
-                    {"role": "user", "content": motion_user},
-                ],
-                "max_tokens": 512,
-                "temperature": 1.0,
-            }
+@app.post("/generate-motion-prompt")
+async def generate_motion_prompt(
+    req: MotionPromptRequest,
+    user: User = Depends(get_current_user),
+):
+    """
+    Generate a creative motion/camera prompt from a text description.
+    Uses a T2T reasoning LLM to generate cinematic motion cues.
+    Call this AFTER /caption-image to get a separate motion prompt.
+    """
+    if not req.prompt or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="prompt is required")
 
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
-                        resp = await client.post(f"{GUARDIAN_BASE}/v1/chat/completions", json=t2t_body)
-                        if resp.status_code == 503 and attempt < max_retries - 1:
-                            logger.info(f"⏳ Guardian 503 (loading T2T model), retry {attempt + 1}/{max_retries}...")
-                            import asyncio
-                            await asyncio.sleep(15)
-                            continue
-                        resp.raise_for_status()
-                        result = resp.json()
-                        msg = result["choices"][0]["message"]
-                        motion_prompt = (msg.get("content") or msg.get("reasoning_content", "")).strip()
-                        # Strip thinking tags if present
-                        if "<think>" in motion_prompt:
-                            import re
-                            motion_prompt = re.sub(r'<think>.*?</think>\s*', '', motion_prompt, flags=re.DOTALL).strip()
-                        logger.info(f"🎬 Motion prompt generated: {motion_prompt[:100]}...")
-                        break
-                except httpx.ConnectError:
-                    logger.warning("⚠️ Guardian not available for motion prompt generation")
-                    break
-                except Exception as e:
-                    if "503" in str(e) and attempt < max_retries - 1:
+    t2t_model = req.model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
+    logger.info(f"🎬 Generating motion prompt with T2T model: {t2t_model}...")
+
+    motion_system = (
+        "You are a cinematographer and motion designer for AI video generation. "
+        "Given an image description, generate creative and specific camera motion and animation cues. "
+        "Focus on: camera movements (dolly, pan, tilt, crane, tracking, zoom), "
+        "subject animation (hair flowing, fabric rippling, walking, gesturing), "
+        "environmental motion (clouds drifting, light shifting, particles floating), "
+        "and cinematic timing (slow motion, speed ramp, freeze frame). "
+        "Output ONLY the motion prompt text — comma-separated, concise, cinematic style. "
+        "Be creative and specific to the scene described. No explanations, no labels."
+    )
+
+    motion_user = (
+        f"Based on this image analysis, generate a creative motion/camera prompt for AI video generation:\n\n"
+        f"{req.prompt.strip()}"
+    )
+
+    try:
+        import httpx
+        from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+        await wait_for_comfyui_idle()
+        await _free_comfy_vram()
+
+        t2t_body = {
+            "model": t2t_model,
+            "messages": [
+                {"role": "system", "content": motion_system},
+                {"role": "user", "content": motion_user},
+            ],
+            "max_tokens": 512,
+            "temperature": 1.0,
+        }
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
+                    resp = await client.post(f"{GUARDIAN_BASE}/v1/chat/completions", json=t2t_body)
+                    if resp.status_code == 503 and attempt < max_retries - 1:
+                        logger.info(f"⏳ Guardian 503 (loading T2T model), retry {attempt + 1}/{max_retries}...")
                         import asyncio
                         await asyncio.sleep(15)
                         continue
-                    logger.error(f"❌ Motion prompt generation failed: {e}")
-                    break
-        except Exception as e:
-            logger.error(f"❌ Motion prompt step failed: {e}")
-
-    result = {"caption": description, "model": model or VISION_MODEL, "mode": mode}
-    if motion_prompt:
-        result["motion_prompt"] = motion_prompt
-    if include_motion:
-        result["motion_model"] = motion_model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
-    return result
+                    resp.raise_for_status()
+                    result = resp.json()
+                    msg = result["choices"][0]["message"]
+                    # Prefer content over reasoning_content; strip thinking artifacts
+                    import re
+                    motion_prompt = (msg.get("content") or "").strip()
+                    reasoning = (msg.get("reasoning_content") or "").strip()
+                    # If content is empty but reasoning exists, use reasoning
+                    if not motion_prompt and reasoning:
+                        motion_prompt = reasoning
+                    # Strip <think>...</think> blocks
+                    motion_prompt = re.sub(r'<think>.*?</think>\s*', '', motion_prompt, flags=re.DOTALL).strip()
+                    # Strip common thinking patterns: lines starting with reasoning verbs/markers
+                    # Keep only the last paragraph-block (the actual prompt output)
+                    lines = motion_prompt.split('\n')
+                    # Find last non-empty line block — the actual motion prompt
+                    result_lines = []
+                    for line in reversed(lines):
+                        stripped = line.strip()
+                        if not stripped and result_lines:
+                            break  # Hit empty line after collecting output = done
+                        if stripped:
+                            result_lines.insert(0, stripped)
+                    if result_lines:
+                        motion_prompt = ' '.join(result_lines)
+                    logger.info(f"🎬 Motion prompt generated: {motion_prompt[:100]}...")
+                    return {"motion_prompt": motion_prompt, "model": t2t_model}
+            except httpx.ConnectError:
+                logger.warning("⚠️ Guardian not available for motion prompt generation")
+                raise HTTPException(status_code=503, detail="LLM service unavailable")
+            except Exception as e:
+                if "503" in str(e) and attempt < max_retries - 1:
+                    import asyncio
+                    await asyncio.sleep(15)
+                    continue
+                logger.error(f"❌ Motion prompt generation failed: {e}")
+                raise HTTPException(status_code=500, detail=f"Motion prompt generation failed: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Motion prompt step failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Motion prompt generation failed: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

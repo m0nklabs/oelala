@@ -861,9 +861,13 @@ async def get_published_media_file(media_id: str):
         }
         content_type = content_types.get(ext, "application/octet-stream")
 
-        # Try oelala-storage first
+        # Try oelala-storage first (check existence eagerly — iter is lazy)
         try:
             storage = get_storage_client()
+            bucket = storage.user_bucket(user_id)
+            key = storage.user_key(media_type_dir, filename)
+            if not storage.exists(bucket, key):
+                raise FileNotFoundError(f"Not in storage: {filename}")
             stream = storage.iter_user_media(user_id, media_type_dir, filename)
             debug_log(
                 f"Streaming from oelala-storage: {media_type_dir}/{filename} for user {user_id}"
