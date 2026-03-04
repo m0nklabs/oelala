@@ -8,6 +8,7 @@ import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
+import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 
 const STYLE_PRESETS = [
   { id: 'cinematic', label: '🎬 Cinematic', keywords: 'cinematic lighting, film grain, dramatic shadows, professional photography' },
@@ -50,7 +51,7 @@ const ENHANCEMENT_MODES = [
 
 const PROMPTGEN_DEFAULTS = {
   input: '', style: '', enhanceMode: 'expand', includeNegative: true,
-  includeMotion: false, nsfwMode: false, nsfwIntensity: 3, enhanceModel: DEFAULT_PROMPT_LLM,
+  includeMotion: false, cameraMotion: '', nsfwMode: false, nsfwIntensity: 3, enhanceModel: DEFAULT_PROMPT_LLM,
 }
 
 export default function PromptGeneratorTool({ onSendToTool }) {
@@ -62,6 +63,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [enhanceMode, setEnhanceMode] = useState(initial.enhanceMode)
   const [includeNegative, setIncludeNegative] = useState(initial.includeNegative)
   const [includeMotion, setIncludeMotion] = useState(initial.includeMotion)
+  const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
   const [nsfwMode, setNsfwMode] = useState(initial.nsfwMode)
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)
 
@@ -72,9 +74,9 @@ export default function PromptGeneratorTool({ onSendToTool }) {
 
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
-    input, style, enhanceMode, includeNegative, includeMotion,
+    input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
     nsfwMode, nsfwIntensity, enhanceModel,
-  }), [input, style, enhanceMode, includeNegative, includeMotion,
+  }), [input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
     nsfwMode, nsfwIntensity, enhanceModel])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
@@ -82,6 +84,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     const d = resetDefaults()
     setInput(d.input); setStyle(d.style); setEnhanceMode(d.enhanceMode)
     setIncludeNegative(d.includeNegative); setIncludeMotion(d.includeMotion)
+    setCameraMotion(d.cameraMotion || '')
     setNsfwMode(d.nsfwMode); setNsfwIntensity(d.nsfwIntensity); setEnhanceModel(d.enhanceModel)
   }, [resetDefaults])
 
@@ -116,6 +119,11 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     })
 
     if (result) {
+      // Prepend camera motion prefix to generated prompt if selected
+      const motionPrefix = getCameraMotionPrefix(cameraMotion)
+      if (motionPrefix && result.prompt) {
+        result.prompt = motionPrefix + result.prompt
+      }
       setResult(result)
       if (DEBUG) console.log('✨ Prompt result:', result)
     } else if (llm.error) {
@@ -133,7 +141,9 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     const stylePreset = allStyles.find(s => s.id === style)
     const styleKeywords = stylePreset ? `, ${stylePreset.keywords}` : ''
 
-    const enhancedPrompt = `${basePrompt}${styleKeywords}, masterpiece, best quality, highly detailed`
+    // Prepend camera motion prefix if selected
+    const motionPrefix = getCameraMotionPrefix(cameraMotion)
+    const enhancedPrompt = `${motionPrefix}${basePrompt}${styleKeywords}, masterpiece, best quality, highly detailed`
 
     const negativePrompt = includeNegative
       ? 'ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text, cropped, worst quality'
@@ -252,6 +262,20 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             Include motion prompts (for video)
           </label>
         </div>
+      </div>
+
+      {/* Camera Motion Selector — available for both SFW and NSFW */}
+      <div className="tool-section">
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          🎬 Camera Motion
+        </h3>
+        <CameraMotionSelector
+          value={cameraMotion}
+          onChange={setCameraMotion}
+        />
+        <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
+          Selected motion is prepended to the generated prompt — ready for T2V / I2V.
+        </p>
       </div>
 
       <div className="tool-section">
