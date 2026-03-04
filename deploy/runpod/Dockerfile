@@ -13,14 +13,14 @@
 # Push:    docker push ghcr.io/m0nklabs/oelala-comfyui-worker:latest
 # ============================================================
 
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+FROM runpod/pytorch:1.0.3-cu1300-torch291-ubuntu2404
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git git-lfs ffmpeg libgl1-mesa-glx libglib2.0-0 \
+    git git-lfs ffmpeg libgl1 libglib2.0-0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ---- ComfyUI ----

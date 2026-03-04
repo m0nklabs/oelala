@@ -318,42 +318,117 @@ def _cleanup_old_models(volume_models: Path, comfyui_models: Path):
 
 _comfyui_process = None
 
-def start_comfyui():
-    """Start ComfyUI server in background."""
-    global _comfyui_process
-    logger.info("🚀 Starting ComfyUI server...")
 
-    _comfyui_process = subprocess.Popen(
-        [sys.executable, "main.py", "--listen", COMFYUI_HOST, "--port", str(COMFYUI_PORT),
-         "--disable-auto-launch", "--disable-metadata"],
-        cwd="/comfyui",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
+def wait_for_cuda(max_wait: int = 60) -> bool:
+    """
+    Wait for CUDA to become available before starting ComfyUI.
 
-    # Stream ComfyUI logs in background thread
-    def log_reader():
-        for line in iter(_comfyui_process.stdout.readline, b''):
-            logger.info(f"[ComfyUI] {line.decode().strip()}")
-    threading.Thread(target=log_reader, daemon=True).start()
-
-    # Wait for ComfyUI to be ready
-    max_wait = 120  # seconds
+    On RunPod serverless cold starts, the GPU may not be immediately
+    available when the container starts. This check prevents ComfyUI
+    from crashing with 'CUDA-capable device(s) is/are busy or unavailable'.
+    """
+    logger.info("🔍 Checking CUDA availability...")
     start = time.time()
-    while (time.time() - start) < max_wait:
-        try:
-            r = requests.get(f"{COMFYUI_URL}/system_stats", timeout=2)
-            if r.status_code == 200:
-                stats = r.json()
-                gpu = stats.get("devices", [{}])[0]
-                logger.info(f"✅ ComfyUI ready! GPU: {gpu.get('name', 'unknown')} "
-                          f"VRAM: {gpu.get('vram_total', 0) / 1024**3:.1f}GB")
-                return True
-        except Exception:
-            pass
-        time.sleep(2)
+    attempt = 0
 
-    logger.error("❌ ComfyUI failed to start within 120s")
+    while (time.time() - start) < max_wait:
+        attempt += 1
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "import torch; "
+                 "assert torch.cuda.is_available(), 'CUDA not available'; "
+                 "d = torch.cuda.device_count(); "
+                 "name = torch.cuda.get_device_name(0); "
+                 "mem = torch.cuda.get_device_properties(0).total_mem / 1024**3; "
+                 "print(f'OK|{d}|{name}|{mem:.1f}')"],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, "CUDA_LAUNCH_BLOCKING": "1"},
+            )
+            if result.returncode == 0 and result.stdout.strip().startswith("OK|"):
+                parts = result.stdout.strip().split("|")
+                logger.info(f"✅ CUDA ready (attempt {attempt}): "
+                          f"{parts[2]}, {parts[3]}GB VRAM, {int(parts[1])} device(s)")
+                return True
+            else:
+                stderr = result.stderr.strip()[-200:] if result.stderr else "no output"
+                logger.warning(f"⚠️ CUDA check attempt {attempt} failed: {stderr}")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"⚠️ CUDA check attempt {attempt} timed out")
+        except Exception as e:
+            logger.warning(f"⚠️ CUDA check attempt {attempt} error: {e}")
+
+        time.sleep(5)
+
+    logger.error(f"❌ CUDA not available after {max_wait}s ({attempt} attempts)")
+    return False
+
+
+def start_comfyui(max_retries: int = 2):
+    """
+    Start ComfyUI server in background with retry logic.
+
+    Retries if ComfyUI crashes during startup (e.g. transient CUDA errors).
+    """
+    global _comfyui_process
+
+    for attempt in range(1, max_retries + 1):
+        if attempt > 1:
+            logger.info(f"🔄 Retry {attempt}/{max_retries}: restarting ComfyUI...")
+            # Kill leftover process if any
+            if _comfyui_process and _comfyui_process.poll() is None:
+                _comfyui_process.terminate()
+                try:
+                    _comfyui_process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    _comfyui_process.kill()
+            time.sleep(5)
+
+        logger.info(f"🚀 Starting ComfyUI server (attempt {attempt}/{max_retries})...")
+
+        env = {**os.environ, "CUDA_LAUNCH_BLOCKING": "1"}
+        _comfyui_process = subprocess.Popen(
+            [sys.executable, "main.py", "--listen", COMFYUI_HOST, "--port", str(COMFYUI_PORT),
+             "--disable-auto-launch", "--disable-metadata"],
+            cwd="/comfyui",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+
+        # Stream ComfyUI logs in background thread
+        def log_reader(proc=_comfyui_process):
+            for line in iter(proc.stdout.readline, b''):
+                logger.info(f"[ComfyUI] {line.decode().strip()}")
+        threading.Thread(target=log_reader, daemon=True).start()
+
+        # Wait for ComfyUI to be ready
+        max_wait = 120  # seconds
+        start = time.time()
+        while (time.time() - start) < max_wait:
+            # Check if process crashed
+            if _comfyui_process.poll() is not None:
+                logger.error(f"❌ ComfyUI process exited with code {_comfyui_process.returncode}")
+                break
+
+            try:
+                r = requests.get(f"{COMFYUI_URL}/system_stats", timeout=2)
+                if r.status_code == 200:
+                    stats = r.json()
+                    gpu = stats.get("devices", [{}])[0]
+                    logger.info(f"✅ ComfyUI ready! GPU: {gpu.get('name', 'unknown')} "
+                              f"VRAM: {gpu.get('vram_total', 0) / 1024**3:.1f}GB")
+                    return True
+            except Exception:
+                pass
+            time.sleep(2)
+
+        # If we get here, this attempt failed
+        if _comfyui_process.poll() is None:
+            logger.error(f"❌ ComfyUI failed to start within {max_wait}s (attempt {attempt})")
+        # Continue to next retry
+
+    logger.error(f"❌ ComfyUI failed to start after {max_retries} attempts")
     return False
 
 
@@ -681,8 +756,13 @@ if __name__ == "__main__":
         logger.error("❌ Failed to load models, exiting")
         sys.exit(1)
 
-    # Start ComfyUI
-    if not start_comfyui():
+    # Wait for CUDA to be available (RunPod cold start may delay GPU readiness)
+    if not wait_for_cuda(max_wait=60):
+        logger.error("❌ CUDA not available, exiting")
+        sys.exit(1)
+
+    # Start ComfyUI (with retry on CUDA errors)
+    if not start_comfyui(max_retries=2):
         logger.error("❌ Failed to start ComfyUI, exiting")
         sys.exit(1)
 
