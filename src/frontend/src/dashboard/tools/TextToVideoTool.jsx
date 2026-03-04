@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
@@ -11,6 +11,8 @@ import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Resolution presets with pixel dimensions per aspect ratio
 const RESOLUTION_PRESETS = [
@@ -50,35 +52,42 @@ const T2V_MODELS = {
   },
 }
 
+const T2V_DEFAULTS = {
+  prompt: '', negativePrompt: 'blurry, low quality, distorted, ugly',
+  modelType: 'wan22', numFrames: 41, aspectRatio: '1:1', resolution: '480p',
+  fps: 16, cameraMotion: '', enhanceModel: DEFAULT_PROMPT_LLM,
+  steps: 6, cfg: 1.0, seed: -1, t2iSteps: 20, t2iCfg: 6.0,
+  computeTarget: 'local', postUpscale: false, postUpscaleScale: 2,
+  postInterpolate: false, postInterpolateFps: 60,
+}
+
 export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('text_to_video', T2V_DEFAULTS)
 
-  const [prompt, setPrompt] = useState(() => {
-    const saved = localStorage.getItem('t2v_prompt')
-    return saved && saved.trim() ? saved : getDefaultPrompt(false)
-  })
-  const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, ugly')
-  const [modelType, setModelType] = useState('wan22')
-  const [numFrames, setNumFrames] = useState(41)
-  const [aspectRatio, setAspectRatio] = useState('1:1')
-  const [resolution, setResolution] = useState('480p')
-  const [fps, setFps] = useState(16)
-  const [cameraMotion, setCameraMotion] = useState('')
+  const [prompt, setPrompt] = useState(initial.prompt || getDefaultPrompt(false))
+  const [negativePrompt, setNegativePrompt] = useState(initial.negativePrompt)
+  const [modelType, setModelType] = useState(initial.modelType)
+  const [numFrames, setNumFrames] = useState(initial.numFrames)
+  const [aspectRatio, setAspectRatio] = useState(initial.aspectRatio)
+  const [resolution, setResolution] = useState(initial.resolution)
+  const [fps, setFps] = useState(initial.fps)
+  const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion)
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [isRefining, setIsRefining] = useState(false)
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
-  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
+  const [enhanceModel, setEnhanceModel] = useState(initial.enhanceModel)
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [steps, setSteps] = useState(6)
-  const [cfg, setCfg] = useState(1.0)
-  const [seed, setSeed] = useState(-1)
-  const [t2iSteps, setT2iSteps] = useState(20)
-  const [t2iCfg, setT2iCfg] = useState(6.0)
+  const [steps, setSteps] = useState(initial.steps)
+  const [cfg, setCfg] = useState(initial.cfg)
+  const [seed, setSeed] = useState(initial.seed)
+  const [t2iSteps, setT2iSteps] = useState(initial.t2iSteps)
+  const [t2iCfg, setT2iCfg] = useState(initial.t2iCfg)
 
-  const [computeTarget, setComputeTarget] = useState('local')
+  const [computeTarget, setComputeTarget] = useState(initial.computeTarget)
 
   const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState('')
@@ -105,10 +114,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
   // Post-processing options (chained jobs after generation)
   const [showPostProcessing, setShowPostProcessing] = useState(false)
-  const [postUpscale, setPostUpscale] = useState(false)
-  const [postUpscaleScale, setPostUpscaleScale] = useState(2)
-  const [postInterpolate, setPostInterpolate] = useState(false)
-  const [postInterpolateFps, setPostInterpolateFps] = useState(60)
+  const [postUpscale, setPostUpscale] = useState(initial.postUpscale)
+  const [postUpscaleScale, setPostUpscaleScale] = useState(initial.postUpscaleScale)
+  const [postInterpolate, setPostInterpolate] = useState(initial.postInterpolate)
+  const [postInterpolateFps, setPostInterpolateFps] = useState(initial.postInterpolateFps)
 
   // Fetch available T2V modes from backend
   useEffect(() => {
@@ -148,11 +157,30 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     }
   }, [modelType, availableModels])
 
-  // Save prompt to localStorage
   const handlePromptChange = (value) => {
     setPrompt(value)
-    localStorage.setItem('t2v_prompt', value)
   }
+
+  // ── Auto-save settings ──────────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({
+    prompt, negativePrompt, modelType, numFrames, aspectRatio, resolution,
+    fps, cameraMotion, enhanceModel, steps, cfg, seed, t2iSteps, t2iCfg,
+    computeTarget, postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
+  }), [prompt, negativePrompt, modelType, numFrames, aspectRatio, resolution,
+    fps, cameraMotion, enhanceModel, steps, cfg, seed, t2iSteps, t2iCfg,
+    computeTarget, postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setPrompt(d.prompt || getDefaultPrompt(false)); setNegativePrompt(d.negativePrompt)
+    setModelType(d.modelType); setNumFrames(d.numFrames); setAspectRatio(d.aspectRatio)
+    setResolution(d.resolution); setFps(d.fps); setCameraMotion(d.cameraMotion)
+    setEnhanceModel(d.enhanceModel); setSteps(d.steps); setCfg(d.cfg); setSeed(d.seed)
+    setT2iSteps(d.t2iSteps); setT2iCfg(d.t2iCfg); setComputeTarget(d.computeTarget)
+    setPostUpscale(d.postUpscale); setPostUpscaleScale(d.postUpscaleScale)
+    setPostInterpolate(d.postInterpolate); setPostInterpolateFps(d.postInterpolateFps)
+  }, [resetDefaults])
 
   // LLM prompt enhancement queue
   const llm = useLLMEnhance()
@@ -331,6 +359,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Video size={16} />
             Video Prompt
+            <ResetDefaultsButton onReset={handleResetDefaults} />
           </div>
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             <select

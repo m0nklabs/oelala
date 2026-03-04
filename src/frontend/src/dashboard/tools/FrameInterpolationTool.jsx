@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Upload, Zap, Loader2, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Frame interpolation models
 const INTERPOLATION_MODELS = [
@@ -26,17 +28,29 @@ const SLOW_MOTION_PRESETS = [
   { value: '8x', label: '8x Slower', multiplier: 8, desc: 'Epic slow motion' },
 ]
 
+const INTERP_DEFAULTS = { model: 'rife', mode: 'fps', fpsPreset: '30fps → 60fps (2x)', slowMoPreset: '2x' }
+
 export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('frame_interpolation', INTERP_DEFAULTS)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
 
-  const [model, setModel] = useState('rife')
-  const [mode, setMode] = useState('fps') // 'fps' or 'slowmo'
-  const [fpsPreset, setFpsPreset] = useState('30fps → 60fps (2x)')
-  const [slowMoPreset, setSlowMoPreset] = useState('2x')
+  const [model, setModel] = useState(initial.model)
+  const [mode, setMode] = useState(initial.mode)
+  const [fpsPreset, setFpsPreset] = useState(initial.fpsPreset)
+  const [slowMoPreset, setSlowMoPreset] = useState(initial.slowMoPreset)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ model, mode, fpsPreset, slowMoPreset }), [model, mode, fpsPreset, slowMoPreset])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setModel(d.model); setMode(d.mode); setFpsPreset(d.fpsPreset); setSlowMoPreset(d.slowMoPreset)
+  }, [resetDefaults])
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -153,7 +167,10 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
       <div style={{ marginBottom: '8px' }}>
-        <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '4px' }}>Frame Interpolation</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '4px' }}>Frame Interpolation</h2>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           Increase FPS & create smooth slow motion • RIFE/FILM integration
         </p>

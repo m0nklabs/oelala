@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, Video, Loader2, Settings, ChevronDown, Wand2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Style presets for V2V
 const STYLE_PRESETS = [
@@ -29,30 +31,49 @@ const STYLE_PROMPTS = {
   '3d-render': '3d render, modern cgi, photorealistic, octane render, unreal engine',
 }
 
+const V2V_DEFAULTS = {
+  style: 'none', prompt: '', negativePrompt: 'blurry, low quality, distorted, watermark',
+  denoise: 0.5, fps: 8, maxFrames: 32, steps: 20, cfg: 7.5, seed: -1,
+}
+
 export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('video_to_video', V2V_DEFAULTS)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
-  const [style, setStyle] = useState('none')
-  const [prompt, setPrompt] = useState('')
-  const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, watermark')
-  const [denoise, setDenoise] = useState(0.5)
-  const [fps, setFps] = useState(8)
-  const [maxFrames, setMaxFrames] = useState(32)
+  const [style, setStyle] = useState(initial.style)
+  const [prompt, setPrompt] = useState(initial.prompt)
+  const [negativePrompt, setNegativePrompt] = useState(initial.negativePrompt)
+  const [denoise, setDenoise] = useState(initial.denoise)
+  const [fps, setFps] = useState(initial.fps)
+  const [maxFrames, setMaxFrames] = useState(initial.maxFrames)
 
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [steps, setSteps] = useState(20)
-  const [cfg, setCfg] = useState(7.5)
-  const [seed, setSeed] = useState(-1)
+  const [steps, setSteps] = useState(initial.steps)
+  const [cfg, setCfg] = useState(initial.cfg)
+  const [seed, setSeed] = useState(initial.seed)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({
+    style, prompt, negativePrompt, denoise, fps, maxFrames, steps, cfg, seed,
+  }), [style, prompt, negativePrompt, denoise, fps, maxFrames, steps, cfg, seed])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setStyle(d.style); setPrompt(d.prompt); setNegativePrompt(d.negativePrompt)
+    setDenoise(d.denoise); setFps(d.fps); setMaxFrames(d.maxFrames)
+    setSteps(d.steps); setCfg(d.cfg); setSeed(d.seed)
+  }, [resetDefaults])
 
   const videoRef = useRef(null)
 
@@ -211,6 +232,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
           <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Video size={16} />
             Source Video
+            <ResetDefaultsButton onReset={handleResetDefaults} />
           </div>
         </div>
 

@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Paintbrush, Eraser, Undo2, Redo2, Loader2, Upload, Wand2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const MODELS = [
   { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', desc: 'Fast, artistic' },
@@ -14,22 +16,30 @@ const MODELS = [
   { value: 'ultraRealisticByStable_v20FP16.safetensors', label: 'Ultra Realistic', desc: 'Hyperrealistic' },
 ]
 
+const INPAINT_DEFAULTS = {
+  tool: 'brush', brushSize: 30, brushOpacity: 1.0,
+  prompt: '', negativePrompt: 'ugly, blurry, watermark, text, artifacts',
+  model: MODELS[0].value, steps: 20, cfg: 7.0, denoise: 0.85, feathering: 16,
+  showAdvanced: false, zoom: 1,
+}
+
 export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('inpaint', INPAINT_DEFAULTS)
 
   // Import modal state
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
   // Image state
-  const [sourceImage, setSourceImage] = useState(null) // { url, width, height, file }
-  const [tool, setTool] = useState('brush') // 'brush' | 'eraser'
-  const [brushSize, setBrushSize] = useState(30)
-  const [brushOpacity, setBrushOpacity] = useState(1.0)
+  const [sourceImage, setSourceImage] = useState(null)
+  const [tool, setTool] = useState(initial.tool)
+  const [brushSize, setBrushSize] = useState(initial.brushSize)
+  const [brushOpacity, setBrushOpacity] = useState(initial.brushOpacity)
 
   // Canvas refs
   const canvasRef = useRef(null)
-  const maskCanvasRef = useRef(null) // hidden mask canvas (black/white)
+  const maskCanvasRef = useRef(null)
   const containerRef = useRef(null)
 
   // History for undo/redo
@@ -39,19 +49,33 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
   const lastPos = useRef(null)
 
   // Generation params
-  const [prompt, setPrompt] = useState('')
-  const [negativePrompt, setNegativePrompt] = useState('ugly, blurry, watermark, text, artifacts')
-  const [model, setModel] = useState(MODELS[0].value)
-  const [steps, setSteps] = useState(20)
-  const [cfg, setCfg] = useState(7.0)
-  const [denoise, setDenoise] = useState(0.85)
-  const [feathering, setFeathering] = useState(16)
+  const [prompt, setPrompt] = useState(initial.prompt)
+  const [negativePrompt, setNegativePrompt] = useState(initial.negativePrompt)
+  const [model, setModel] = useState(initial.model)
+  const [steps, setSteps] = useState(initial.steps)
+  const [cfg, setCfg] = useState(initial.cfg)
+  const [denoise, setDenoise] = useState(initial.denoise)
+  const [feathering, setFeathering] = useState(initial.feathering)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(initial.showAdvanced)
 
   // Canvas zoom/pan
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(initial.zoom)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({
+    tool, brushSize, brushOpacity, prompt, negativePrompt, model, steps, cfg, denoise, feathering, showAdvanced, zoom
+  }), [tool, brushSize, brushOpacity, prompt, negativePrompt, model, steps, cfg, denoise, feathering, showAdvanced, zoom])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setTool(d.tool); setBrushSize(d.brushSize); setBrushOpacity(d.brushOpacity)
+    setPrompt(d.prompt); setNegativePrompt(d.negativePrompt); setModel(d.model)
+    setSteps(d.steps); setCfg(d.cfg); setDenoise(d.denoise); setFeathering(d.feathering)
+    setShowAdvanced(d.showAdvanced); setZoom(d.zoom)
+  }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
   useEffect(() => {
@@ -390,6 +414,9 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '4px' }}>
+        <ResetDefaultsButton onReset={handleResetDefaults} />
+      </div>
       <style>{`
         .inpaint-tool .toolbar {
           display: flex; align-items: center; gap: 8px; padding: 8px 12px;

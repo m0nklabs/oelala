@@ -8024,6 +8024,7 @@ def _build_nsfw_prompt(intensity: int) -> str:
 
 @app.post("/caption-image")
 async def caption_image(
+    user: User = Depends(get_current_user),
     file: UploadFile = File(...),
     model: Optional[str] = Form(
         None, description="Guardian vision model ID (default: VISION_MODEL env)"
@@ -8507,7 +8508,7 @@ async def _process_llm_job(request_data: dict) -> dict | None:
 
 
 @app.post("/generate-prompt")
-async def generate_prompt(request: Request):
+async def generate_prompt(request: Request, user: User = Depends(get_current_user)):
     """
     Generate enhanced prompts from basic input.
     Submits the request to the LLM queue and returns a job_id immediately.
@@ -8572,7 +8573,7 @@ async def generate_prompt(request: Request):
 
 
 @app.get("/llm-job/{job_id}")
-async def get_llm_job(job_id: str):
+async def get_llm_job(job_id: str, user: User = Depends(get_current_user)):
     """
     Poll LLM job status and result.
     Frontend calls this every 1-2s after submitting to /generate-prompt.
@@ -8916,7 +8917,7 @@ class AnalyzeAndGenerateRequest(BaseModel):
 
 
 @app.post("/api/analyze-image")
-async def analyze_image(request: AnalyzeImageRequest):
+async def analyze_image(request: AnalyzeImageRequest, user: User = Depends(get_current_user)):
     """
     Analyze an image using the vision model (Moondream).
     Returns a detailed text description of the image.
@@ -8938,7 +8939,7 @@ async def analyze_image(request: AnalyzeImageRequest):
 
 
 @app.post("/api/analyze-and-generate")
-async def analyze_and_generate(request: AnalyzeAndGenerateRequest):
+async def analyze_and_generate(request: AnalyzeAndGenerateRequest, user: User = Depends(get_current_user)):
     """
     Full pipeline: Analyze image with vision model, then generate creative video prompts.
 
@@ -9027,7 +9028,7 @@ class YouTubeDownloadRequest(BaseModel):
 
 
 @app.post("/youtube/info")
-async def youtube_info(request: YouTubeInfoRequest):
+async def youtube_info(request: YouTubeInfoRequest, user: User = Depends(get_current_user)):
     """
     Fetch metadata from a YouTube URL without downloading.
     Returns: title, channel, duration, thumbnail, view_count, etc.
@@ -9081,7 +9082,7 @@ async def youtube_info(request: YouTubeInfoRequest):
 
 
 @app.post("/youtube/download")
-async def youtube_download(request: YouTubeDownloadRequest):
+async def youtube_download(request: YouTubeDownloadRequest, user: User = Depends(get_current_user)):
     """
     Download video/audio from YouTube URL.
     Returns: path to downloaded file.
@@ -9195,6 +9196,7 @@ async def youtube_download(request: YouTubeDownloadRequest):
 
 @app.post("/caption-video")
 async def caption_video(
+    user: User = Depends(get_current_user),
     file: UploadFile = File(None),
     video_path: str = Form(None),
     model: str = Form("smolvlm"),
@@ -9604,7 +9606,7 @@ class VoiceCloneRequest(BaseModel):
 
 
 @app.post("/voice-clone")
-async def voice_clone(request: VoiceCloneRequest):
+async def voice_clone(request: VoiceCloneRequest, user: User = Depends(get_current_user)):
     """
     Clone a voice using F5-TTS.
 
@@ -9696,7 +9698,7 @@ class LipSyncRequest(BaseModel):
 
 
 @app.post("/lip-sync")
-async def generate_lip_sync(request: LipSyncRequest):
+async def generate_lip_sync(request: LipSyncRequest, user: User = Depends(get_current_user)):
     """Generate lip-synced video using LatentSyncNode via ComfyUI."""
     import random
 
@@ -10291,12 +10293,7 @@ async def upscale_image(
 
     # Check credits
     credits_required = UPSCALE_CREDITS["image_esrgan"]
-    balance = await get_credit_balance(user)
-    if balance < credits_required:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient credits. Need {credits_required}, have {balance}.",
-        )
+    await check_credits(user, credits_required)
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -10455,12 +10452,7 @@ async def upscale_video(
         credits_required = UPSCALE_CREDITS["video_lanczos"]
 
     # Check credits
-    balance = await get_credit_balance(user)
-    if balance < credits_required:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient credits. Need {credits_required}, have {balance}.",
-        )
+    balance = await check_credits(user, credits_required)
 
     # Validate model
     valid_models = [
@@ -10711,6 +10703,7 @@ async def upscale_video(
 
 @app.post("/interpolate-video")
 async def interpolate_video(
+    user: User = Depends(get_current_user),
     file: UploadFile = File(...),
     model: str = Form("rife"),
     mode: str = Form("fps"),
@@ -11089,6 +11082,7 @@ async def list_videos(user: User = Depends(get_current_user)):
 
 @app.post("/train-lora")
 async def train_lora_model(
+    user: User = Depends(get_current_user),
     files: List[UploadFile] = File(...),
     model_name: str = Form("", description="Name for the trained model"),
     num_epochs: int = Form(10, description="Number of training epochs"),
@@ -11177,6 +11171,7 @@ async def train_lora_model(
 
 @app.post("/train-lora-placeholder")
 async def train_lora_placeholder(
+    user: User = Depends(get_current_user),
     files: List[UploadFile] = File(...),
     model_name: str = Form("", description="Name for the trained model"),
 ):
@@ -11280,12 +11275,7 @@ async def inpaint_image(
     )
 
     # Credit check
-    credits = await get_credit_balance(user)
-    if credits < INPAINT_CREDITS:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient credits. Need {INPAINT_CREDITS}, have {credits}",
-        )
+    await check_credits(user, INPAINT_CREDITS)
 
     client = get_comfyui_client()
     if not client or not client.is_available():
@@ -11470,6 +11460,7 @@ async def inpaint_image(
 
 @app.post("/reframe")
 async def reframe_image(
+    user: User = Depends(get_current_user),
     image: UploadFile = File(...),
     target_width: int = Form(1280),
     target_height: int = Form(720),
@@ -11702,7 +11693,7 @@ async def reframe_image(
 
 
 @app.post("/detect-faces")
-async def detect_faces_endpoint(image: UploadFile = File(...)):
+async def detect_faces_endpoint(image: UploadFile = File(...), user: User = Depends(get_current_user)):
     """
     Detect faces in an image using InsightFace (buffalo_l).
     Returns list of detected faces with bounding boxes and confidence scores.
@@ -11729,6 +11720,7 @@ async def detect_faces_endpoint(image: UploadFile = File(...)):
 
 @app.post("/face-swap")
 async def face_swap(
+    user: User = Depends(get_current_user),
     target: UploadFile = File(...),
     source: UploadFile = File(...),
     face_indices: str = Form("0"),  # comma-separated e.g. "0,1" or "-1" for all
@@ -11796,7 +11788,7 @@ async def face_swap(
 
 
 @app.get("/api/face-profiles")
-async def list_face_profiles():
+async def list_face_profiles(user: User = Depends(get_current_user)):
     """List all saved face profiles."""
     if not face_service:
         raise HTTPException(status_code=503, detail="face_service unavailable")
@@ -11805,7 +11797,7 @@ async def list_face_profiles():
 
 
 @app.get("/api/face-profiles/{profile_id}")
-async def get_face_profile(profile_id: str):
+async def get_face_profile(profile_id: str, user: User = Depends(get_current_user)):
     """Get a single face profile by ID."""
     if not face_service:
         raise HTTPException(status_code=503, detail="face_service unavailable")
@@ -11817,6 +11809,7 @@ async def get_face_profile(profile_id: str):
 
 @app.post("/api/face-profiles")
 async def create_face_profile(
+    user: User = Depends(get_current_user),
     name: str = Form(...),
     description: str = Form(""),
     images: list[UploadFile] = File(...),
@@ -11863,7 +11856,7 @@ async def create_face_profile(
 
 
 @app.delete("/api/face-profiles/{profile_id}")
-async def delete_face_profile(profile_id: str):
+async def delete_face_profile(profile_id: str, user: User = Depends(get_current_user)):
     """Delete a face profile and all its reference images."""
     if not face_service:
         raise HTTPException(status_code=503, detail="face_service unavailable")
@@ -11875,6 +11868,7 @@ async def delete_face_profile(profile_id: str):
 
 @app.post("/face-swap/profile")
 async def face_swap_with_profile(
+    user: User = Depends(get_current_user),
     target: UploadFile = File(...),
     profile_id: str = Form(...),
     face_indices: str = Form("0"),
@@ -11935,6 +11929,7 @@ async def face_swap_with_profile(
 
 @app.post("/face-swap-video")
 async def face_swap_video(
+    user: User = Depends(get_current_user),
     video: UploadFile = File(..., description="Input video file"),
     source: UploadFile = File(..., description="Source image with reference face"),
     face_indices: str = Form(
@@ -12002,6 +11997,7 @@ async def face_swap_video(
 
 @app.post("/face-swap-video/profile")
 async def face_swap_video_with_profile(
+    user: User = Depends(get_current_user),
     video: UploadFile = File(..., description="Input video file"),
     profile_id: str = Form(..., description="Saved face profile ID"),
     face_indices: str = Form(
@@ -12069,6 +12065,7 @@ async def face_swap_video_with_profile(
 
 @app.post("/api/face-train")
 async def start_face_training(
+    user: User = Depends(get_current_user),
     name: str = Form(...),
     description: str = Form(""),
     steps: int = Form(1000),
@@ -12116,7 +12113,7 @@ async def start_face_training(
 
 
 @app.get("/api/face-train")
-async def list_face_training_jobs():
+async def list_face_training_jobs(user: User = Depends(get_current_user)):
     """List all face LoRA training jobs."""
     if not face_train_service:
         raise HTTPException(status_code=503, detail="face_train_service unavailable")
@@ -12145,7 +12142,7 @@ async def get_face_training_job(job_id: str):
 
 
 @app.delete("/api/face-train/{job_id}")
-async def cancel_face_training_job(job_id: str):
+async def cancel_face_training_job(job_id: str, user: User = Depends(get_current_user)):
     """Cancel a pending or running training job."""
     if not face_train_service:
         raise HTTPException(status_code=503, detail="face_train_service unavailable")
@@ -12158,7 +12155,7 @@ async def cancel_face_training_job(job_id: str):
 
 
 @app.post("/api/face-train/{job_id}/retry")
-async def retry_face_training_job(job_id: str):
+async def retry_face_training_job(job_id: str, user: User = Depends(get_current_user)):
     """Retry a failed or cancelled training job."""
     if not face_train_service:
         raise HTTPException(status_code=503, detail="face_train_service unavailable")

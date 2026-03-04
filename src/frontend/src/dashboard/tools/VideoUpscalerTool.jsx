@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Upload, ZoomIn, Loader2, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Video upscaling models
 const UPSCALE_MODELS = [
@@ -10,14 +12,26 @@ const UPSCALE_MODELS = [
   { value: 'basic-lanczos', label: 'Basic Lanczos', desc: 'Fast traditional upscaling', scale: [2, 4] },
 ]
 
+const VU_DEFAULTS = { model: 'realesrgan-video' }
+
 export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('video_upscaler', VU_DEFAULTS)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
 
-  const [model, setModel] = useState('realesrgan-video')
+  const [model, setModel] = useState(initial.model)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ model }), [model])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setModel(d.model)
+  }, [resetDefaults])
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -119,7 +133,10 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
       <div style={{ marginBottom: '8px' }}>
-        <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '4px' }}>Video Upscaler</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '4px' }}>Video Upscaler</h2>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           AI-enhanced video upscaling • 480p → 720p → 1080p → 4K
         </p>

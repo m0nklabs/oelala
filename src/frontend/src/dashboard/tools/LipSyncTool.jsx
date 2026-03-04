@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   Video, Upload, Play, Pause, Download, Loader2, X,
   FileAudio, FileVideo, Volume2, Trash2, Sliders
@@ -6,12 +6,17 @@ import {
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const SUPPORTED_VIDEO_FORMATS = ['video/mp4', 'video/webm', 'video/quicktime']
 const SUPPORTED_AUDIO_FORMATS = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/flac', 'audio/ogg', 'audio/webm']
 
+const LS_DEFAULTS = { lipsExpression: 1.5, inferenceSteps: 20, seed: -1 }
+
 export default function LipSyncTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('lip_sync', LS_DEFAULTS)
 
   // Video state
   const [videoFile, setVideoFile] = useState(null)
@@ -24,9 +29,18 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
   const [uploadedAudioPath, setUploadedAudioPath] = useState(null)
 
   // Settings
-  const [lipsExpression, setLipsExpression] = useState(1.5)
-  const [inferenceSteps, setInferenceSteps] = useState(20)
-  const [seed, setSeed] = useState(-1)
+  const [lipsExpression, setLipsExpression] = useState(initial.lipsExpression)
+  const [inferenceSteps, setInferenceSteps] = useState(initial.inferenceSteps)
+  const [seed, setSeed] = useState(initial.seed)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ lipsExpression, inferenceSteps, seed }), [lipsExpression, inferenceSteps, seed])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setLipsExpression(d.lipsExpression); setInferenceSteps(d.inferenceSteps); setSeed(d.seed)
+  }, [resetDefaults])
 
   // Playback refs
   const videoRef = useRef(null)
@@ -173,10 +187,13 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
     <div className="tool-container">
       {/* Video Input */}
       <div className="tool-section">
-        <h3>
-          <FileVideo size={18} />
-          Input Video (with face)
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ margin: 0 }}>
+            <FileVideo size={18} />
+            Input Video (with face)
+          </h3>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
 
         {!videoFile ? (
           <div

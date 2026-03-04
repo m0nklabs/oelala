@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   Video, Upload, Play, Pause, Download, Loader2, X,
   MessageSquare, Volume2, Mic, Settings2, ChevronDown
@@ -6,6 +6,8 @@ import {
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const SUPPORTED_VIDEO_FORMATS = ['video/mp4', 'video/webm', 'video/quicktime']
 
@@ -26,8 +28,11 @@ const VOICE_PRESETS = [
   { id: 'shimmer', label: 'Shimmer (Soft Female)' },
 ]
 
+const S2V_DEFAULTS = { text: '', ttsModel: 'f5v1', voicePreset: 'nova', lipsExpression: 1.5, inferenceSteps: 20, showAdvanced: false }
+
 export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('speech_to_video', S2V_DEFAULTS)
 
   // Video state
   const [videoFile, setVideoFile] = useState(null)
@@ -35,23 +40,33 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   const [uploadedVideoPath, setUploadedVideoPath] = useState(null)
 
   // TTS state
-  const [text, setText] = useState('')
-  const [ttsModel, setTtsModel] = useState('f5v1')
-  const [voicePreset, setVoicePreset] = useState('nova')
+  const [text, setText] = useState(initial.text)
+  const [ttsModel, setTtsModel] = useState(initial.ttsModel)
+  const [voicePreset, setVoicePreset] = useState(initial.voicePreset)
   const [voiceSampleFile, setVoiceSampleFile] = useState(null)
   const [voiceSampleUrl, setVoiceSampleUrl] = useState(null)
 
   // Lip sync settings
-  const [lipsExpression, setLipsExpression] = useState(1.5)
-  const [inferenceSteps, setInferenceSteps] = useState(20)
+  const [lipsExpression, setLipsExpression] = useState(initial.lipsExpression)
+  const [inferenceSteps, setInferenceSteps] = useState(initial.inferenceSteps)
 
   // UI state
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(initial.showAdvanced)
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [currentStep, setCurrentStep] = useState(null)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ text, ttsModel, voicePreset, lipsExpression, inferenceSteps, showAdvanced }), [text, ttsModel, voicePreset, lipsExpression, inferenceSteps, showAdvanced])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setText(d.text); setTtsModel(d.ttsModel); setVoicePreset(d.voicePreset)
+    setLipsExpression(d.lipsExpression); setInferenceSteps(d.inferenceSteps); setShowAdvanced(d.showAdvanced)
+  }, [resetDefaults])
 
   // Refs
   const videoRef = useRef(null)
@@ -231,6 +246,7 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
             <MessageSquare size={16} />
             Speech to Video
           </div>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
         </div>
 
         <div

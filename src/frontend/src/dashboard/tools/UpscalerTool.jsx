@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Upload, ZoomIn, Loader2, Image as ImageIcon, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const UPSCALE_MODELS = [
   { value: 'RealESRGAN_x4plus.pth', label: 'RealESRGAN 4x (General)', scale: 4 },
@@ -14,15 +16,27 @@ const UPSCALE_MODELS = [
 
 const SCALE_OPTIONS = [2, 4]
 
+const UPSCALER_DEFAULTS = { model: 'RealESRGAN_x4plus.pth', scale: 4, faceEnhance: false }
+
 export default function UpscalerTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('upscaler', UPSCALER_DEFAULTS)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [imageInfo, setImageInfo] = useState(null)
-  const [model, setModel] = useState('RealESRGAN_x4plus.pth')
-  const [scale, setScale] = useState(4)
-  const [faceEnhance, setFaceEnhance] = useState(false)
+  const [model, setModel] = useState(initial.model)
+  const [scale, setScale] = useState(initial.scale)
+  const [faceEnhance, setFaceEnhance] = useState(initial.faceEnhance)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ model, scale, faceEnhance }), [model, scale, faceEnhance])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setModel(d.model); setScale(d.scale); setFaceEnhance(d.faceEnhance)
+  }, [resetDefaults])
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -129,10 +143,13 @@ export default function UpscalerTool({ onOutput, onJobSubmitted }) {
   return (
     <div className="tool-container">
       <div className="tool-section">
-        <h3>
-          <ImageIcon size={18} />
-          Source Image
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ margin: 0 }}>
+            <ImageIcon size={18} />
+            Source Image
+          </h3>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
 
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}

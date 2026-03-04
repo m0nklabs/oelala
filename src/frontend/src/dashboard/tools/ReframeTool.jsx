@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Frame, Upload, Loader2, Download, Copy, Move, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, getJson, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const ASPECT_RATIOS = [
   { id: '1:1', label: '1:1 (Square)', width: 1024, height: 1024 },
@@ -34,28 +36,50 @@ const MODELS = [
   { id: 'flux', label: 'Flux (Fast)', file: 'flux1-dev-bnb-nf4.safetensors' },
 ]
 
+const REFRAME_DEFAULTS = {
+  aspectRatioId: ASPECT_RATIOS[0].id, position: 'center', modelId: MODELS[0].id,
+  prompt: '', steps: 25, cfg: 7, denoise: 0.85, feathering: 32, showAdvanced: false,
+}
+
 export default function ReframeTool({ onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('reframe', REFRAME_DEFAULTS)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
-  const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0])
-  const [position, setPosition] = useState('center')
-  const [model, setModel] = useState(MODELS[0])
-  const [prompt, setPrompt] = useState('')
-  const [steps, setSteps] = useState(25)
-  const [cfg, setCfg] = useState(7)
-  const [denoise, setDenoise] = useState(0.85)
-  const [feathering, setFeathering] = useState(32)
+  const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS.find(a => a.id === initial.aspectRatioId) || ASPECT_RATIOS[0])
+  const [position, setPosition] = useState(initial.position)
+  const [model, setModel] = useState(MODELS.find(m => m.id === initial.modelId) || MODELS[0])
+  const [prompt, setPrompt] = useState(initial.prompt)
+  const [steps, setSteps] = useState(initial.steps)
+  const [cfg, setCfg] = useState(initial.cfg)
+  const [denoise, setDenoise] = useState(initial.denoise)
+  const [feathering, setFeathering] = useState(initial.feathering)
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(initial.showAdvanced)
   const [lastQueued, setLastQueued] = useState(null)
   const fileInputRef = useRef(null)
+
+  // Auto-save settings (store IDs for object states)
+  const settingsSnapshot = useMemo(() => ({
+    aspectRatioId: aspectRatio.id, position, modelId: model.id,
+    prompt, steps, cfg, denoise, feathering, showAdvanced,
+  }), [aspectRatio, position, model, prompt, steps, cfg, denoise, feathering, showAdvanced])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setAspectRatio(ASPECT_RATIOS.find(a => a.id === d.aspectRatioId) || ASPECT_RATIOS[0])
+    setPosition(d.position)
+    setModel(MODELS.find(m => m.id === d.modelId) || MODELS[0])
+    setPrompt(d.prompt); setSteps(d.steps); setCfg(d.cfg); setDenoise(d.denoise)
+    setFeathering(d.feathering); setShowAdvanced(d.showAdvanced)
+  }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
   useEffect(() => {
@@ -265,6 +289,9 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
 
   return (
     <div className="space-y-4">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '4px' }}>
+        <ResetDefaultsButton onReset={handleResetDefaults} />
+      </div>
       {importModal && (
         <MediaImportModal
           item={importModal.item}

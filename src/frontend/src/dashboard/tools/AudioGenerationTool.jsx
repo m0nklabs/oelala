@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { Volume2, Music, Mic, Loader2, Play, Pause, Download, Settings, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const TTS_VOICES = [
   // Female voices
@@ -32,25 +34,43 @@ const MUSIC_STYLES = [
   { value: 'hiphop', label: 'Hip-Hop' },
 ]
 
+const AUDIO_DEFAULTS = {
+  mode: 'tts', text: '', voice: 'nova', musicStyle: 'cinematic',
+  duration: 10, speed: 1.0, pitch: 1.0,
+}
+
 export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('audio_generation', AUDIO_DEFAULTS)
 
-  const [mode, setMode] = useState('tts')
-  const [text, setText] = useState('')
-  const [voice, setVoice] = useState('nova')
-  const [musicStyle, setMusicStyle] = useState('cinematic')
-  const [duration, setDuration] = useState(10)
+  const [mode, setMode] = useState(initial.mode)
+  const [text, setText] = useState(initial.text)
+  const [voice, setVoice] = useState(initial.voice)
+  const [musicStyle, setMusicStyle] = useState(initial.musicStyle)
+  const [duration, setDuration] = useState(initial.duration)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Advanced TTS
-  const [speed, setSpeed] = useState(1.0)
-  const [pitch, setPitch] = useState(1.0)
+  const [speed, setSpeed] = useState(initial.speed)
+  const [pitch, setPitch] = useState(initial.pitch)
 
   const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
   const [result, setResult] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({
+    mode, text, voice, musicStyle, duration, speed, pitch,
+  }), [mode, text, voice, musicStyle, duration, speed, pitch])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setMode(d.mode); setText(d.text); setVoice(d.voice); setMusicStyle(d.musicStyle)
+    setDuration(d.duration); setSpeed(d.speed); setPitch(d.pitch)
+  }, [resetDefaults])
 
   const audioRef = useRef(null)
 
@@ -151,9 +171,10 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
     <div className="tool-container">
       {/* Mode Selection */}
       <div className="tool-section">
-        <h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Volume2 size={18} />
           Generation Mode
+          <ResetDefaultsButton onReset={handleResetDefaults} />
         </h3>
         <div className="mode-grid">
           {AUDIO_MODES.map((m) => (

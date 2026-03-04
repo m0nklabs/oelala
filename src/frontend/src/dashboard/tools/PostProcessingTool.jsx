@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, ZoomIn, Zap, Film, Loader2, Trash2, Plus, GripVertical, Play, Settings } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MyMediaTool from './MyMediaTool'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Processing modes
 const PROCESSING_MODES = {
@@ -40,23 +42,35 @@ const FPS_PRESETS = [
   { value: 120, label: '120 fps (slow-mo)', multiplier: 8 },
 ]
 
+const PP_DEFAULTS = { mode: 'upscale', upscaleModel: 'realesrgan-x4plus', upscaleScale: 2, targetFps: 60 }
+
 export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('post_processing', PP_DEFAULTS)
 
   // Mode selection
-  const [mode, setMode] = useState('upscale')
+  const [mode, setMode] = useState(initial.mode)
 
   // File management
-  const [files, setFiles] = useState([]) // [{file, preview, videoInfo}]
+  const [files, setFiles] = useState([])
   const [showMediaPicker, setShowMediaPicker] = useState(false)
   const fileInputRef = useRef(null)
 
   // Upscale settings
-  const [upscaleModel, setUpscaleModel] = useState('realesrgan-x4plus')
-  const [upscaleScale, setUpscaleScale] = useState(2)
+  const [upscaleModel, setUpscaleModel] = useState(initial.upscaleModel)
+  const [upscaleScale, setUpscaleScale] = useState(initial.upscaleScale)
 
   // Interpolation settings
-  const [targetFps, setTargetFps] = useState(60)
+  const [targetFps, setTargetFps] = useState(initial.targetFps)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ mode, upscaleModel, upscaleScale, targetFps }), [mode, upscaleModel, upscaleScale, targetFps])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setMode(d.mode); setUpscaleModel(d.upscaleModel); setUpscaleScale(d.upscaleScale); setTargetFps(d.targetFps)
+  }, [resetDefaults])
 
   // Processing state
   const [submitting, setSubmitting] = useState(false)
@@ -218,7 +232,10 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
 
   return (
     <div className="post-processing-tool" style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
-      <h2 style={{ marginBottom: '8px' }}>⚙️ Post-Processing</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ marginBottom: '8px' }}>⚙️ Post-Processing</h2>
+        <ResetDefaultsButton onReset={handleResetDefaults} />
+      </div>
       <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
         Process existing videos: upscale resolution, smooth motion, or join multiple clips
       </p>

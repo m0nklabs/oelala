@@ -1,10 +1,13 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send, Flame } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, NSFW_LLM_MODELS, DEFAULT_PROMPT_LLM, DEFAULT_NSFW_LLM } from '../../constants/llmModels'
 import { useNSFW } from '../../contexts/NSFWContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const STYLE_PRESETS = [
   { id: 'cinematic', label: '🎬 Cinematic', keywords: 'cinematic lighting, film grain, dramatic shadows, professional photography' },
@@ -45,20 +48,42 @@ const ENHANCEMENT_MODES = [
 
 // PROMPT_LLM_MODELS imported from shared constants/llmModels.js
 
+const PROMPTGEN_DEFAULTS = {
+  input: '', style: '', enhanceMode: 'expand', includeNegative: true,
+  includeMotion: false, nsfwMode: false, nsfwIntensity: 3, enhanceModel: DEFAULT_PROMPT_LLM,
+}
+
 export default function PromptGeneratorTool({ onSendToTool }) {
   const { nsfwEnabled } = useNSFW()
-  const [input, setInput] = useState('')
-  const [style, setStyle] = useState('')
-  const [enhanceMode, setEnhanceMode] = useState('expand')
-  const [includeNegative, setIncludeNegative] = useState(true)
-  const [includeMotion, setIncludeMotion] = useState(false)
-  const [nsfwMode, setNsfwMode] = useState(false)
-  const [nsfwIntensity, setNsfwIntensity] = useState(3)
+  const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('prompt_generator', PROMPTGEN_DEFAULTS)
+  const [input, setInput] = useState(initial.input)
+  const [style, setStyle] = useState(initial.style)
+  const [enhanceMode, setEnhanceMode] = useState(initial.enhanceMode)
+  const [includeNegative, setIncludeNegative] = useState(initial.includeNegative)
+  const [includeMotion, setIncludeMotion] = useState(initial.includeMotion)
+  const [nsfwMode, setNsfwMode] = useState(initial.nsfwMode)
+  const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)
 
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
+  const [enhanceModel, setEnhanceModel] = useState(initial.enhanceModel)
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({
+    input, style, enhanceMode, includeNegative, includeMotion,
+    nsfwMode, nsfwIntensity, enhanceModel,
+  }), [input, style, enhanceMode, includeNegative, includeMotion,
+    nsfwMode, nsfwIntensity, enhanceModel])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setInput(d.input); setStyle(d.style); setEnhanceMode(d.enhanceMode)
+    setIncludeNegative(d.includeNegative); setIncludeMotion(d.includeMotion)
+    setNsfwMode(d.nsfwMode); setNsfwIntensity(d.nsfwIntensity); setEnhanceModel(d.enhanceModel)
+  }, [resetDefaults])
 
   // Auto-switch model list when toggling NSFW
   const activeModels = nsfwMode ? NSFW_LLM_MODELS : PROMPT_LLM_MODELS
@@ -74,6 +99,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const llm = useLLMEnhance()
 
   const handleGenerate = async () => {
+    if (!user) { requestLogin('Log in om prompts te genereren'); return }
     if (!input.trim()) return
 
     setLoading(true)
@@ -174,9 +200,10 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       )}
 
       <div className="tool-section">
-        <h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Sparkles size={18} />
           Input Idea
+          <ResetDefaultsButton onReset={handleResetDefaults} />
         </h3>
         <textarea
           value={input}

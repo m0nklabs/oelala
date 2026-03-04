@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   User, Users, Upload, Loader2, Download, AlertCircle,
   Smile, RefreshCw, Trash2, Plus, Check, Image as ImageIcon,
@@ -9,6 +9,8 @@ import { apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FaceSwapTool
@@ -83,8 +85,13 @@ export default function FaceSwapTool({ onJobSubmitted, pendingImport, onImportCo
 // SwapPanel
 // ─────────────────────────────────────────────────────────────────────────────
 
+const FACESWAP_DEFAULTS = {
+  sourceMode: 'upload', swapAllFaces: false, faceIndex: 0,
+}
+
 function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImportConsumed }) {
-  const [sourceMode, setSourceMode] = useState('upload') // 'upload' | 'profile'
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('face_swap', FACESWAP_DEFAULTS)
+  const [sourceMode, setSourceMode] = useState(initial.sourceMode) // 'upload' | 'profile'
   const [profiles, setProfiles] = useState([])
   const [selectedProfileId, setSelectedProfileId] = useState(null)
 
@@ -95,9 +102,18 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
-  const [swapAllFaces, setSwapAllFaces] = useState(false)
+  const [swapAllFaces, setSwapAllFaces] = useState(initial.swapAllFaces)
   const [detectedFaces, setDetectedFaces] = useState(null)
-  const [faceIndex, setFaceIndex] = useState(0)
+  const [faceIndex, setFaceIndex] = useState(initial.faceIndex)
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({ sourceMode, swapAllFaces, faceIndex }), [sourceMode, swapAllFaces, faceIndex])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setSourceMode(d.sourceMode); setSwapAllFaces(d.swapAllFaces); setFaceIndex(d.faceIndex)
+  }, [resetDefaults])
 
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState(null) // { objectUrl }
@@ -313,9 +329,12 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 
       {/* Source mode toggle */}
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wide">
-          Source face
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide">
+            Source face
+          </label>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
         <div className="flex gap-2 p-1 bg-gray-800 rounded-lg">
           <button
             onClick={() => setSourceMode('upload')}

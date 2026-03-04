@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
@@ -9,6 +9,8 @@ import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Models grouped by category
 const MODEL_GROUPS = {
@@ -65,38 +67,60 @@ const getModelType = (modelValue) => {
   return 'sdxl'
 }
 
+const T2I_DEFAULTS = {
+  prompt: '', negativePrompt: 'ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text',
+  aspectRatio: '1:1', model: 'CyberRealistic_Pony_v14.1_FP16.safetensors', batchCount: 1,
+  enhanceModel: DEFAULT_PROMPT_LLM, cameraPosition: '',
+  selectedLoras: [{ name: 'None', strength: 1.0 }, { name: 'None', strength: 1.0 }, { name: 'None', strength: 1.0 }],
+  steps: 30, cfg: 7.5, guidance: 3.5, seed: -1, sampler: 'dpmpp_2m', scheduler: 'karras',
+}
+
 export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { nsfwEnabled } = useNSFW()
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('text_to_image', T2I_DEFAULTS)
 
-  const [prompt, setPrompt] = useState('')
-  const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text')
-  const [aspectRatio, setAspectRatio] = useState('1:1')
-  const [model, setModel] = useState('CyberRealistic_Pony_v14.1_FP16.safetensors')
-  const [batchCount, setBatchCount] = useState(1)
+  const [prompt, setPrompt] = useState(initial.prompt)
+  const [negativePrompt, setNegativePrompt] = useState(initial.negativePrompt)
+  const [aspectRatio, setAspectRatio] = useState(initial.aspectRatio)
+  const [model, setModel] = useState(initial.model)
+  const [batchCount, setBatchCount] = useState(initial.batchCount)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
-  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
+  const [enhanceModel, setEnhanceModel] = useState(initial.enhanceModel)
   const [error, setError] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
-  const [cameraPosition, setCameraPosition] = useState('')
+  const [cameraPosition, setCameraPosition] = useState(initial.cameraPosition)
 
   // LoRA settings
   const [availableLoras, setAvailableLoras] = useState([])
-  const [selectedLoras, setSelectedLoras] = useState([
-    { name: 'None', strength: 1.0 },
-    { name: 'None', strength: 1.0 },
-    { name: 'None', strength: 1.0 },
-  ])
+  const [selectedLoras, setSelectedLoras] = useState(initial.selectedLoras)
 
   // Advanced settings
-  const [steps, setSteps] = useState(30)
-  const [cfg, setCfg] = useState(7.5)
-  const [guidance, setGuidance] = useState(3.5)  // For Flux
-  const [seed, setSeed] = useState(-1)
-  const [sampler, setSampler] = useState('dpmpp_2m')
-  const [scheduler, setScheduler] = useState('karras')
+  const [steps, setSteps] = useState(initial.steps)
+  const [cfg, setCfg] = useState(initial.cfg)
+  const [guidance, setGuidance] = useState(initial.guidance)  // For Flux
+  const [seed, setSeed] = useState(initial.seed)
+  const [sampler, setSampler] = useState(initial.sampler)
+  const [scheduler, setScheduler] = useState(initial.scheduler)
+
+  // ── Auto-save settings ──────────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({
+    prompt, negativePrompt, aspectRatio, model, batchCount, enhanceModel,
+    cameraPosition, selectedLoras, steps, cfg, guidance, seed, sampler, scheduler,
+  }), [prompt, negativePrompt, aspectRatio, model, batchCount, enhanceModel,
+    cameraPosition, selectedLoras, steps, cfg, guidance, seed, sampler, scheduler])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setPrompt(d.prompt); setNegativePrompt(d.negativePrompt); setAspectRatio(d.aspectRatio)
+    setModel(d.model); setBatchCount(d.batchCount); setEnhanceModel(d.enhanceModel)
+    setCameraPosition(d.cameraPosition); setSelectedLoras(d.selectedLoras)
+    setSteps(d.steps); setCfg(d.cfg); setGuidance(d.guidance); setSeed(d.seed)
+    setSampler(d.sampler); setScheduler(d.scheduler)
+  }, [resetDefaults])
 
   // Pending import modal state
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
@@ -323,7 +347,10 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
       {/* Model Selection - Grouped with hover info */}
       <div className="grok-card">
         <div className="grok-card-header">
-          <div className="grok-card-title">Model</div>
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            Model
+            <ResetDefaultsButton onReset={handleResetDefaults} />
+          </div>
           <span className="nav-badge" style={{ fontSize: '0.7rem' }}>
             {getModelType(model).toUpperCase()}
           </span>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   Mic, Upload, Play, Pause, Download, Loader2, X,
   FileAudio, Volume2, Trash2, Check
@@ -6,6 +6,8 @@ import {
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const SUPPORTED_AUDIO_FORMATS = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/flac', 'audio/ogg', 'audio/webm']
 
@@ -20,8 +22,11 @@ const F5_MODELS = [
   { value: 'E2', label: 'E2-TTS', desc: 'Alternative English model' },
 ]
 
+const VC_DEFAULTS = { text: '', model: 'F5v1', speed: 1.0 }
+
 export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('voice_cloning', VC_DEFAULTS)
 
   // Voice sample state
   const [voiceSample, setVoiceSample] = useState(null)
@@ -29,11 +34,20 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
   const [uploadedPath, setUploadedPath] = useState(null)
 
   // Text input
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initial.text)
 
   // Model settings
-  const [model, setModel] = useState('F5v1')
-  const [speed, setSpeed] = useState(1.0)
+  const [model, setModel] = useState(initial.model)
+  const [speed, setSpeed] = useState(initial.speed)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ text, model, speed }), [text, model, speed])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setText(d.text); setModel(d.model); setSpeed(d.speed)
+  }, [resetDefaults])
 
   // Recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -247,10 +261,13 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
     <div className="tool-container">
       {/* Voice Sample Section */}
       <div className="tool-section">
-        <h3>
-          <FileAudio size={18} />
-          Voice Sample (5-30 seconds recommended)
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ margin: 0 }}>
+            <FileAudio size={18} />
+            Voice Sample (5-30 seconds recommended)
+          </h3>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
 
         {!voiceSample ? (
           <div className="voice-input-options">

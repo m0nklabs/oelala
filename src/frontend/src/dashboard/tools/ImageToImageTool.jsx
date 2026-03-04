@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const CHECKPOINTS = [
   { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony' },
@@ -24,8 +26,16 @@ const PRESETS = [
   { value: 'custom', label: 'Custom', icon: '🔧', desc: 'Full manual control', color: '#f59e0b' },
 ]
 
+const I2I_DEFAULTS = {
+  prompt: '', negativePrompt: 'ugly, deformed, blurry, low quality, bad anatomy, watermark',
+  denoise: 0.6, checkpoint: 'CyberRealistic_Pony_v14.1_FP16.safetensors', preset: 'balanced',
+  faceId: false, faceDetailer: true, faceRestore: true, faceIdWeight: 0.85,
+  steps: 25, cfg: 7.0, seed: -1, sampler: 'dpmpp_2m', scheduler: 'karras',
+}
+
 export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('image_to_image', I2I_DEFAULTS)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -33,27 +43,46 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const fileRef = useRef(null)  // Authoritative file reference (bypasses React state batching)
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
-  const [prompt, setPrompt] = useState('')
-  const [negativePrompt, setNegativePrompt] = useState('ugly, deformed, blurry, low quality, bad anatomy, watermark')
-  const [denoise, setDenoise] = useState(0.6)
-  const [checkpoint, setCheckpoint] = useState('CyberRealistic_Pony_v14.1_FP16.safetensors')
+  const [prompt, setPrompt] = useState(initial.prompt)
+  const [negativePrompt, setNegativePrompt] = useState(initial.negativePrompt)
+  const [denoise, setDenoise] = useState(initial.denoise)
+  const [checkpoint, setCheckpoint] = useState(initial.checkpoint)
 
   // Preset
-  const [preset, setPreset] = useState('balanced')
+  const [preset, setPreset] = useState(initial.preset)
 
   // Face processing
-  const [faceId, setFaceId] = useState(false)
-  const [faceDetailer, setFaceDetailer] = useState(true)
-  const [faceRestore, setFaceRestore] = useState(true)
-  const [faceIdWeight, setFaceIdWeight] = useState(0.85)
+  const [faceId, setFaceId] = useState(initial.faceId)
+  const [faceDetailer, setFaceDetailer] = useState(initial.faceDetailer)
+  const [faceRestore, setFaceRestore] = useState(initial.faceRestore)
+  const [faceIdWeight, setFaceIdWeight] = useState(initial.faceIdWeight)
 
   // Advanced
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [steps, setSteps] = useState(25)
-  const [cfg, setCfg] = useState(7.0)
-  const [seed, setSeed] = useState(-1)
-  const [sampler, setSampler] = useState('dpmpp_2m')
-  const [scheduler, setScheduler] = useState('karras')
+  const [steps, setSteps] = useState(initial.steps)
+  const [cfg, setCfg] = useState(initial.cfg)
+  const [seed, setSeed] = useState(initial.seed)
+  const [sampler, setSampler] = useState(initial.sampler)
+  const [scheduler, setScheduler] = useState(initial.scheduler)
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({
+    prompt, negativePrompt, denoise, checkpoint, preset,
+    faceId, faceDetailer, faceRestore, faceIdWeight,
+    steps, cfg, seed, sampler, scheduler,
+  }), [prompt, negativePrompt, denoise, checkpoint, preset,
+    faceId, faceDetailer, faceRestore, faceIdWeight,
+    steps, cfg, seed, sampler, scheduler])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setPrompt(d.prompt); setNegativePrompt(d.negativePrompt); setDenoise(d.denoise)
+    setCheckpoint(d.checkpoint); setPreset(d.preset)
+    setFaceId(d.faceId); setFaceDetailer(d.faceDetailer); setFaceRestore(d.faceRestore)
+    setFaceIdWeight(d.faceIdWeight)
+    setSteps(d.steps); setCfg(d.cfg); setSeed(d.seed); setSampler(d.sampler); setScheduler(d.scheduler)
+  }, [resetDefaults])
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -269,9 +298,10 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   return (
     <div className="tool-container">
       <div className="tool-section">
-        <h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <ImageIcon size={18} />
           Source Image
+          <ResetDefaultsButton onReset={handleResetDefaults} />
         </h3>
 
         <div

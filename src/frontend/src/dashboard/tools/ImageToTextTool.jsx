@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
@@ -7,6 +7,9 @@ import CreationsPickerModal from '../../components/CreationsPickerModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { VISION_MODELS, DEFAULT_VISION_MODEL } from '../../constants/llmModels'
+import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
@@ -31,11 +34,17 @@ const isPromptMode = (m) => m.startsWith('prompt_')
 // VISION_MODELS imported from shared constants/llmModels.js
 const MODELS = VISION_MODELS
 
+const I2T_DEFAULTS = {
+  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3,
+}
+
 export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
+  const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('image_to_text', I2T_DEFAULTS)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [model, setModel] = useState(DEFAULT_VISION_MODEL)
-  const [mode, setMode] = useState('detailed')
+  const [model, setModel] = useState(initial.model)
+  const [mode, setMode] = useState(initial.mode)
   const [caption, setCaption] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -44,7 +53,16 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [refineInstruction, setRefineInstruction] = useState('')
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
-  const [nsfwIntensity, setNsfwIntensity] = useState(3)  // 1-5 NSFW intensity scale
+  const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity }), [model, mode, nsfwIntensity])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setModel(d.model); setMode(d.mode); setNsfwIntensity(d.nsfwIntensity)
+  }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
   useEffect(() => {
@@ -136,6 +154,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   }, [])
 
   const handleCaption = async () => {
+    if (!user) { requestLogin('Log in om afbeeldingen te analyseren'); return }
     if (!file) return
 
     setLoading(true)
@@ -227,9 +246,10 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       )}
 
       <div className="tool-section">
-        <h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <ImageIcon size={18} />
           Upload Image
+          <ResetDefaultsButton onReset={handleResetDefaults} />
         </h3>
 
         <div

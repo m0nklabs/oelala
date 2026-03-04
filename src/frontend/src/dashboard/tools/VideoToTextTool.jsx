@@ -1,8 +1,11 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, Video, FileText, Loader2, Copy, Check, Settings, ChevronDown, Link, Youtube, Download } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, postJson } from '../../api'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const CAPTION_MODES = [
   { value: 'brief', label: 'Brief', desc: 'Short 1-2 sentence description' },
@@ -22,7 +25,13 @@ const SOURCE_TABS = [
   { value: 'youtube', label: 'YouTube', icon: Youtube },
 ]
 
+const V2T_DEFAULTS = {
+  model: 'smolvlm', mode: 'detailed', frameInterval: 1, maxFrames: 8,
+}
+
 export default function VideoToTextTool() {
+  const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('video_to_text', V2T_DEFAULTS)
   const [sourceTab, setSourceTab] = useState('upload')
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -35,10 +44,10 @@ export default function VideoToTextTool() {
   const [youtubeLoading, setYoutubeLoading] = useState(false)
   const [downloadedVideoPath, setDownloadedVideoPath] = useState(null)
 
-  const [model, setModel] = useState('smolvlm')
-  const [mode, setMode] = useState('detailed')
-  const [frameInterval, setFrameInterval] = useState(1) // seconds between sampled frames
-  const [maxFrames, setMaxFrames] = useState(8)
+  const [model, setModel] = useState(initial.model)
+  const [mode, setMode] = useState(initial.mode)
+  const [frameInterval, setFrameInterval] = useState(initial.frameInterval) // seconds between sampled frames
+  const [maxFrames, setMaxFrames] = useState(initial.maxFrames)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [loading, setLoading] = useState(false)
@@ -46,6 +55,15 @@ export default function VideoToTextTool() {
   const [status, setStatus] = useState('')
   const [result, setResult] = useState(null)
   const [copied, setCopied] = useState(false)
+
+  // ── Auto-save settings ──────────────────────────────────────────
+  const settingsSnapshot = useMemo(() => ({ model, mode, frameInterval, maxFrames }), [model, mode, frameInterval, maxFrames])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setModel(d.model); setMode(d.mode); setFrameInterval(d.frameInterval); setMaxFrames(d.maxFrames)
+  }, [resetDefaults])
 
   const videoRef = useRef(null)
 
@@ -198,6 +216,7 @@ export default function VideoToTextTool() {
   }
 
   const handleAnalyze = async () => {
+    if (!user) { requestLogin('Log in om video te analyseren'); return }
     if (!file && !downloadedVideoPath) return
 
     setLoading(true)
@@ -250,9 +269,10 @@ export default function VideoToTextTool() {
     <div className="tool-container">
 
       <div className="tool-section">
-        <h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Video size={18} />
           Source Video
+          <ResetDefaultsButton onReset={handleResetDefaults} />
         </h3>
 
         {/* Source Tabs */}

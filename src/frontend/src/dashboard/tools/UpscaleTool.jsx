@@ -1,8 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, ZoomIn, X, Loader2, Image as ImageIcon, Video, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // ─── Image upscale models ───────────────────────────────────────────────────
 const IMAGE_MODELS = [
@@ -25,8 +27,11 @@ const SCALE_OPTIONS = [2, 4]
  * Unified Upscale Tool — works for both images and videos.
  * Auto-detects media type from uploaded file.
  */
+const UPSCALE_DEFAULTS = { imageModel: IMAGE_MODELS[0].value, videoPreset: 'balanced', scale: 2, faceEnhance: false }
+
 export default function UpscaleTool({ onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('upscale', UPSCALE_DEFAULTS)
   const fileInputRef = useRef(null)
 
   // File state
@@ -36,10 +41,19 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
   const [mediaInfo, setMediaInfo] = useState(null) // { width, height, duration? }
 
   // Settings
-  const [imageModel, setImageModel] = useState(IMAGE_MODELS[0].value)
-  const [videoPreset, setVideoPreset] = useState('balanced')
-  const [scale, setScale] = useState(2)
-  const [faceEnhance, setFaceEnhance] = useState(false)
+  const [imageModel, setImageModel] = useState(initial.imageModel)
+  const [videoPreset, setVideoPreset] = useState(initial.videoPreset)
+  const [scale, setScale] = useState(initial.scale)
+  const [faceEnhance, setFaceEnhance] = useState(initial.faceEnhance)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ imageModel, videoPreset, scale, faceEnhance }), [imageModel, videoPreset, scale, faceEnhance])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setImageModel(d.imageModel); setVideoPreset(d.videoPreset); setScale(d.scale); setFaceEnhance(d.faceEnhance)
+  }, [resetDefaults])
 
   // Processing
   const [submitting, setSubmitting] = useState(false)
@@ -183,6 +197,7 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
             <ZoomIn size={16} />
             Upscale
           </div>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
           {mediaType && (
             <span className="info-badge" style={{ fontSize: '0.75rem' }}>
               {mediaType === 'image' ? '🖼️ Image' : '🎬 Video'}

@@ -1,21 +1,35 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { Type, Image as ImageIcon, Film, ArrowRight, Sparkles } from 'lucide-react'
 import { BACKEND_BASE } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToolSettings } from '../../hooks/useToolSettings'
+import ResetDefaultsButton from '../../components/ResetDefaultsButton'
+
+const T2I2V_DEFAULTS = { t2iPrompt: '', aspectRatio: '16:9', i2vPrompt: '', numFrames: 16 }
 
 export default function TextToImageToVideoTool({ onOutput }) {
   const { user, requestLogin } = useAuth()
+  const { initial, save: saveSettings, resetDefaults } = useToolSettings('t2i2v', T2I2V_DEFAULTS)
 
   // Step 1: Text to Image
-  const [t2iPrompt, setT2iPrompt] = useState('')
-  const [aspectRatio, setAspectRatio] = useState('16:9')
+  const [t2iPrompt, setT2iPrompt] = useState(initial.t2iPrompt)
+  const [aspectRatio, setAspectRatio] = useState(initial.aspectRatio)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
-  const [generatedImage, setGeneratedImage] = useState(null) // URL or Blob
+  const [generatedImage, setGeneratedImage] = useState(null)
 
   // Step 2: Image to Video
-  const [i2vPrompt, setI2vPrompt] = useState('')
-  const [numFrames, setNumFrames] = useState(16)
+  const [i2vPrompt, setI2vPrompt] = useState(initial.i2vPrompt)
+  const [numFrames, setNumFrames] = useState(initial.numFrames)
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
+
+  // Auto-save settings
+  const settingsSnapshot = useMemo(() => ({ t2iPrompt, aspectRatio, i2vPrompt, numFrames }), [t2iPrompt, aspectRatio, i2vPrompt, numFrames])
+  useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
+
+  const handleResetDefaults = useCallback(() => {
+    const d = resetDefaults()
+    setT2iPrompt(d.t2iPrompt); setAspectRatio(d.aspectRatio); setI2vPrompt(d.i2vPrompt); setNumFrames(d.numFrames)
+  }, [resetDefaults])
 
   const handleGenerateImage = async () => {
     // Check if user is logged in
@@ -50,6 +64,7 @@ export default function TextToImageToVideoTool({ onOutput }) {
       <div className="grok-card">
         <div className="grok-card-header">
           <div className="grok-card-title">Step 1: Text to Image</div>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
           <ImageIcon size={16} className="text-muted" />
         </div>
 

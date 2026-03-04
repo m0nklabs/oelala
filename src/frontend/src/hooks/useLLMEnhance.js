@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { BACKEND_BASE, DEBUG } from '../config'
+import { DEBUG } from '../config'
+import { apiFetch } from '../api'
 
 /**
  * useLLMEnhance — Hook for async LLM prompt enhancement via queue.
@@ -52,7 +53,7 @@ export default function useLLMEnhance() {
         }
 
         try {
-          const res = await fetch(`${BACKEND_BASE}/llm-job/${jobId}`, { signal })
+          const res = await apiFetch(`/llm-job/${jobId}`, { signal })
           if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: 'Unknown error' }))
             throw new Error(err.detail || `HTTP ${res.status}`)
@@ -126,9 +127,8 @@ export default function useLLMEnhance() {
 
     try {
       // Submit to queue
-      const res = await fetch(`${BACKEND_BASE}/generate-prompt`, {
+      const res = await apiFetch('/generate-prompt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input: params.input,
           style: params.style ?? null,
