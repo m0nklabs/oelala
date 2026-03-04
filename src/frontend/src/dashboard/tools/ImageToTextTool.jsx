@@ -176,7 +176,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         formData.append('include_motion', 'true')
       }
 
-      const res = await fetch(`${BACKEND_BASE}/caption-image`, {
+      const res = await apiFetch(`${BACKEND_BASE}/caption-image`, {
         method: 'POST',
         body: formData,
       })
