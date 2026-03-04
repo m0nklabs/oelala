@@ -8178,14 +8178,18 @@ async def caption_image(
 
     custom_prompt = caption_prompts.get(mode, caption_prompts["detailed"])
 
-    # Append motion instructions when include_motion is enabled
+    # When include_motion is enabled, force JSON output with separate fields
     if include_motion:
-        custom_prompt += (
-            " IMPORTANT: After your main prompt, add a SEPARATE LINE starting with 'MOTION:' "
-            "that contains ONLY camera motion and animation cues. "
-            "Examples: 'MOTION: slow zoom in, camera pans left, tracking shot, "
+        custom_prompt = (
+            "You MUST respond with ONLY valid JSON (no markdown, no code fences).\n"
+            "Analyze this image and return a JSON object with exactly two fields:\n"
+            '1. "prompt": ' + custom_prompt + "\n"
+            '2. "motion_prompt": Creative camera motion and animation cues for AI video generation. '
+            "Include specific movements like: slow zoom in, camera pans left, tracking shot, "
             "crane shot rising, handheld shake, dolly forward, subject walks toward camera, "
-            "hair blowing in wind, fabric rippling'. Include at least 2-3 specific motion descriptions."
+            "hair blowing in wind, fabric rippling. Include at least 3-4 specific motion/animation descriptions.\n\n"
+            'Example output: {"prompt": "woman in red dress standing in garden, golden hour, bokeh", '
+            '"motion_prompt": "slow dolly forward, hair gently blowing in wind, camera tilts up revealing sky, soft focus pull"}'
         )
 
     import base64 as _b64
@@ -8197,21 +8201,28 @@ async def caption_image(
         image_b64, custom_prompt=custom_prompt, model_override=model
     )
 
-    # Extract motion prompt if include_motion was enabled
+    # Parse JSON response when include_motion was enabled
+    import re
     motion_prompt = None
     if include_motion and description:
-        # Try to split on MOTION: marker
-        import re
-        motion_match = re.split(r'\n\s*MOTION:\s*', description, maxsplit=1)
-        if len(motion_match) == 2:
-            description = motion_match[0].strip()
-            motion_prompt = motion_match[1].strip()
-        else:
-            # Fallback: check for "motion:" anywhere
-            motion_match = re.split(r'(?i)\bmotion:\s*', description, maxsplit=1)
+        try:
+            # Strip markdown code fences if LLM wraps in ```json ... ```
+            cleaned = description.strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+                cleaned = re.sub(r'\s*```$', '', cleaned)
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                description = parsed.get("prompt", description)
+                motion_prompt = parsed.get("motion_prompt")
+                logger.info(f"🎬 Parsed motion prompt from JSON: {motion_prompt[:80] if motion_prompt else 'None'}...")
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(f"⚠️ Failed to parse motion JSON, falling back to raw text: {e}")
+            # Fallback: try MOTION: marker split
+            motion_match = re.split(r'(?i)\bmotion(?:_prompt)?:\s*', description, maxsplit=1)
             if len(motion_match) == 2:
-                description = motion_match[0].strip().rstrip(',')
-                motion_prompt = motion_match[1].strip()
+                description = motion_match[0].strip().rstrip(',').strip('"').strip()
+                motion_prompt = motion_match[1].strip().rstrip('"').strip()
 
     result = {"caption": description, "model": model or VISION_MODEL, "mode": mode}
     if motion_prompt:
