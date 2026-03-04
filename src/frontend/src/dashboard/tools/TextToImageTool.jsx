@@ -8,6 +8,7 @@ import CameraPositionSelector, { getCameraPositionPrefix } from '../../component
 import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
+import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 
 // Models grouped by category
 const MODEL_GROUPS = {
@@ -75,7 +76,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
   const [batchCount, setBatchCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isEnhancing, setIsEnhancing] = useState(false)
-  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
+  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
   const [error, setError] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [lastQueued, setLastQueued] = useState(null)
@@ -375,11 +376,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 cursor: 'pointer', maxWidth: '120px' }}
               title="LLM model for prompt enhancement"
             >
-              <option value="GLM-4.7-Flash-Claude-Opus-Reasoning">GLM+Claude ✨</option>
-              <option value="GLM-4.7-Flash">GLM Flash</option>
-              <option value="GLM-4.7-Flash-Uncensored-Balanced">GLM Uncensored</option>
-              <option value="Qwen3-30B-A3B-Thinking-2507">Qwen3 30B</option>
-              <option value="gemma-3-27b-it">Gemma 27B</option>
+              {PROMPT_LLM_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
             </select>
             <button
               className="icon-btn"

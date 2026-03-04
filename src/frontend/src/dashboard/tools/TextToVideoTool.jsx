@@ -10,6 +10,7 @@ import { estimateT2VTime } from '../../utils/timeEstimates'
 import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
+import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 
 // Resolution presets with pixel dimensions per aspect ratio
 const RESOLUTION_PRESETS = [
@@ -67,7 +68,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [isRefining, setIsRefining] = useState(false)
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
-  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
+  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -341,11 +342,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                 cursor: 'pointer', maxWidth: '120px' }}
               title="LLM model for prompt enhancement"
             >
-              <option value="GLM-4.7-Flash-Claude-Opus-Reasoning">GLM+Claude ✨</option>
-              <option value="GLM-4.7-Flash">GLM Flash</option>
-              <option value="GLM-4.7-Flash-Uncensored-Balanced">GLM Uncensored</option>
-              <option value="Qwen3-30B-A3B-Thinking-2507">Qwen3 30B</option>
-              <option value="gemma-3-27b-it">Gemma 27B</option>
+              {PROMPT_LLM_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
             </select>
             <button
               className="icon-btn"

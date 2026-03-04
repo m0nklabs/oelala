@@ -6,6 +6,7 @@ import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
+import { VISION_MODELS, DEFAULT_VISION_MODEL } from '../../constants/llmModels'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
@@ -27,18 +28,13 @@ const NSFW_LEVELS = [
 
 const isPromptMode = (m) => m.startsWith('prompt_')
 
-const MODELS = [
-  { id: 'Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking', label: 'Qwen3-VL 32B Heretic', description: 'Best quality · uncensored · slow' },
-  { id: 'Gemma3-27B-it-vl-GLM-4.7-Uncensored-Heretic', label: 'Gemma3 27B VL Heretic', description: 'Vision + reasoning · uncensored' },
-  { id: 'Qwen3-VL-30B-A3B-Thinking', label: 'Qwen3-VL 30B MoE', description: 'MoE · thinking mode · fast' },
-  { id: 'Step3-VL-10B', label: 'Step3-VL 10B', description: 'Fast · good quality' },
-  { id: 'moondream', label: 'Moondream', description: 'Ultra-light · fastest' },
-]
+// VISION_MODELS imported from shared constants/llmModels.js
+const MODELS = VISION_MODELS
 
 export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [model, setModel] = useState('Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking')
+  const [model, setModel] = useState(DEFAULT_VISION_MODEL)
   const [mode, setMode] = useState('detailed')
   const [caption, setCaption] = useState('')
   const [loading, setLoading] = useState(false)

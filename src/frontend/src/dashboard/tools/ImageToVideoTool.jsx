@@ -14,6 +14,7 @@ import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
 import { useToolProfile } from '../../hooks/useToolProfile'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
+import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
@@ -116,7 +117,7 @@ const I2V_DEFAULT_SETTINGS = {
   postUpscaleScale: 2,
   postInterpolate: false,
   postInterpolateFps: 60,
-  enhanceModel: 'GLM-4.7-Flash-Claude-Opus-Reasoning',
+  enhanceModel: DEFAULT_PROMPT_LLM,
   sourceImageName: null,
 }
 
@@ -223,7 +224,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [isRefining, setIsRefining] = useState(false)
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
-  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
+  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
 
   // Pending import modal state
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
@@ -1565,11 +1566,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 cursor: 'pointer', maxWidth: '120px' }}
               title="LLM model for prompt enhancement"
             >
-              <option value="GLM-4.7-Flash-Claude-Opus-Reasoning">GLM+Claude ✨</option>
-              <option value="GLM-4.7-Flash">GLM Flash</option>
-              <option value="GLM-4.7-Flash-Uncensored-Balanced">GLM Uncensored</option>
-              <option value="Qwen3-30B-A3B-Thinking-2507">Qwen3 30B</option>
-              <option value="gemma-3-27b-it">Gemma 27B</option>
+              {PROMPT_LLM_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
             </select>
             <button
               className="icon-btn"

@@ -3,6 +3,7 @@ import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
+import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 
 const STYLE_PRESETS = [
   { id: 'cinematic', label: '🎬 Cinematic', keywords: 'cinematic lighting, film grain, dramatic shadows, professional photography' },
@@ -23,13 +24,7 @@ const ENHANCEMENT_MODES = [
   { id: 'variations', label: 'Variations', description: 'Generate 3 alternatives' },
 ]
 
-const PROMPT_LLM_MODELS = [
-  { id: 'GLM-4.7-Flash-Claude-Opus-Reasoning', label: 'GLM-4.7 + Claude Opus ✨', description: 'Default · Claude Opus reasoning distillation · best quality' },
-  { id: 'GLM-4.7-Flash', label: 'GLM-4.7 Flash', description: 'Fast · compact · good for simple prompts' },
-  { id: 'GLM-4.7-Flash-Uncensored-Balanced', label: 'GLM-4.7 Uncensored', description: 'No content filters · balanced output' },
-  { id: 'Qwen3-30B-A3B-Thinking-2507', label: 'Qwen3 30B Thinking', description: 'High quality · reasoning mode · slower' },
-  { id: 'gemma-3-27b-it', label: 'Gemma 3 27B', description: 'Google · strong creative writing' },
-]
+// PROMPT_LLM_MODELS imported from shared constants/llmModels.js
 
 export default function PromptGeneratorTool({ onSendToTool }) {
   const [input, setInput] = useState('')
@@ -41,7 +36,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [enhanceModel, setEnhanceModel] = useState('GLM-4.7-Flash-Claude-Opus-Reasoning')
+  const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
 
   // LLM prompt enhancement queue
   const llm = useLLMEnhance()
