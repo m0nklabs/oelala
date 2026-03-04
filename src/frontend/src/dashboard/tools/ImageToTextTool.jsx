@@ -37,7 +37,7 @@ const MODELS = VISION_MODELS
 
 const I2T_DEFAULTS = {
   model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3,
-  includeMotion: false, cameraMotion: '', motionModel: DEFAULT_PROMPT_LLM, detailLevel: 3,
+  cameraMotion: '', motionModel: DEFAULT_PROMPT_LLM, detailLevel: 3,
 }
 
 export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
@@ -57,19 +57,19 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
-  const [includeMotion, setIncludeMotion] = useState(initial.includeMotion || false)
   const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
   const [motionModel, setMotionModel] = useState(initial.motionModel || DEFAULT_PROMPT_LLM)
   const [detailLevel, setDetailLevel] = useState(initial.detailLevel ?? 3)
+  const [motionLoading, setMotionLoading] = useState(false)
 
   // ── Auto-save settings ──────────────────────────────────────────
-  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, includeMotion, cameraMotion, motionModel, detailLevel }), [model, mode, nsfwIntensity, includeMotion, cameraMotion, motionModel, detailLevel])
+  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, cameraMotion, motionModel, detailLevel }), [model, mode, nsfwIntensity, cameraMotion, motionModel, detailLevel])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
     setModel(d.model); setMode(d.mode); setNsfwIntensity(d.nsfwIntensity)
-    setIncludeMotion(d.includeMotion || false); setCameraMotion(d.cameraMotion || '')
+    setCameraMotion(d.cameraMotion || '')
     setMotionModel(d.motionModel || DEFAULT_PROMPT_LLM); setDetailLevel(d.detailLevel ?? 3)
   }, [resetDefaults])
 
@@ -178,10 +178,6 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         formData.append('nsfw_intensity', nsfwIntensity.toString())
       }
       formData.append('detail_level', detailLevel.toString())
-      if (includeMotion) {
-        formData.append('include_motion', 'true')
-        formData.append('motion_model', motionModel)
-      }
 
       const res = await apiFetch(`${BACKEND_BASE}/caption-image`, {
         method: 'POST',
@@ -202,7 +198,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         if (motionPrefix) captionText = motionPrefix + captionText
       }
       setCaption(captionText)
-      setMotionPrompt(data.motion_prompt || '')
+      setMotionPrompt('')  // Reset — user generates motion separately
 
       if (DEBUG) console.log('🖼️ Caption result:', data)
     } catch (err) {
@@ -210,6 +206,32 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Generate motion prompt from caption using T2T LLM
+  const handleGenerateMotion = async () => {
+    if (!caption.trim() || motionLoading) return
+    setMotionLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`${BACKEND_BASE}/generate-motion-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: caption.trim(), model: motionModel }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Motion prompt generation failed')
+      }
+      const data = await res.json()
+      setMotionPrompt(data.motion_prompt || '')
+      if (DEBUG) console.log('🎬 Motion prompt:', data)
+    } catch (err) {
+      console.error('Motion prompt error:', err)
+      setError(err.message)
+    } finally {
+      setMotionLoading(false)
     }
   }
 
@@ -360,67 +382,19 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         </div>
 
         <div className="form-group">
-          <label>Caption Mode</label>
-          <div className="button-group">
-            {CAPTION_MODES.filter(m => m.group === 'caption').map((m) => (
-              <button
-                key={m.id}
-                className={`btn-option ${mode === m.id ? 'active' : ''}`}
-                onClick={() => setMode(m.id)}
-                title={m.description}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          <label style={{ marginTop: '12px' }}>Prompt Generator</label>
+          <label>Prompt Generator <span style={{ fontSize: '0.7rem', color: 'var(--text-muted, #666)', fontWeight: 'normal' }}>(optional — click again to deselect)</span></label>
           <div className="button-group">
             {CAPTION_MODES.filter(m => m.group === 'prompt').map((m) => (
               <button
                 key={m.id}
                 className={`btn-option ${mode === m.id ? 'active' : ''} ${m.id === 'prompt_nsfw' ? 'btn-option--nsfw' : ''}`}
-                onClick={() => setMode(m.id)}
+                onClick={() => setMode(mode === m.id ? 'detailed' : m.id)}
                 title={m.description}
               >
                 {m.label}
               </button>
             ))}
           </div>
-
-          {/* Include Motion checkbox — shown for all prompt modes */}
-          {isPromptMode(mode) && (
-            <div style={{ marginTop: '12px' }}>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={includeMotion}
-                  onChange={(e) => setIncludeMotion(e.target.checked)}
-                />
-                Include motion prompts (for video)
-              </label>
-
-              {/* T2T Model selector — shown when include_motion is enabled */}
-              {includeMotion && (
-                <div style={{ marginTop: '8px', marginLeft: '24px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #aaa)' }}>Motion Model (T2T)</label>
-                  <select
-                    value={motionModel}
-                    onChange={(e) => setMotionModel(e.target.value)}
-                    style={{ marginTop: '4px' }}
-                  >
-                    {PROMPT_LLM_MODELS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label} - {m.description}
-                      </option>
-                    ))}
-                  </select>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.65rem', color: 'var(--text-muted, #666)' }}>
-                    This text LLM generates creative motion cues from the image analysis.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Camera Motion Selector — shown for all prompt modes (I2V, T2I, NSFW) */}
           {isPromptMode(mode) && (
@@ -601,8 +575,8 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
             )}
           </div>
 
-          {/* Motion Prompt — separate block when include_motion generated one */}
-          {motionPrompt && (
+          {/* Motion Prompt — Generate from caption using T2T LLM */}
+          {isPromptMode(mode) && (
             <div style={{
               marginTop: '12px',
               padding: '12px 16px',
@@ -610,19 +584,63 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               border: '1px solid rgba(139, 92, 246, 0.25)',
               borderRadius: '10px',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-primary, #eee)' }}>🎬 Motion Prompt</h4>
                 <button
-                  className="btn-secondary"
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                  onClick={() => navigator.clipboard.writeText(motionPrompt)}
+                  className="btn-primary"
+                  style={{ padding: '5px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  onClick={handleGenerateMotion}
+                  disabled={motionLoading || !caption.trim()}
                 >
-                  <Copy size={14} /> Copy
+                  {motionLoading ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />}
+                  {motionLoading ? 'Generating...' : 'Generate Motion'}
                 </button>
               </div>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary, #aaa)', lineHeight: 1.5 }}>
-                {motionPrompt}
-              </p>
+
+              <div style={{ marginBottom: motionPrompt ? '8px' : '0' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted, #888)' }}>Motion Model (T2T)</label>
+                <select
+                  value={motionModel}
+                  onChange={(e) => setMotionModel(e.target.value)}
+                  style={{ marginTop: '2px', fontSize: '0.8rem' }}
+                >
+                  {PROMPT_LLM_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {motionPrompt && (
+                <>
+                  <textarea
+                    value={motionPrompt}
+                    onChange={(e) => setMotionPrompt(e.target.value)}
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      background: 'var(--bg-secondary, #1a1a1a)',
+                      color: 'var(--text-color, #fff)',
+                      fontFamily: 'inherit',
+                      fontSize: '0.85rem',
+                      resize: 'vertical',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                      onClick={() => navigator.clipboard.writeText(motionPrompt)}
+                    >
+                      <Copy size={14} /> Copy
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
