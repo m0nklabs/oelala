@@ -18,14 +18,13 @@ export const DEFAULT_PROMPT_LLM = 'GLM-4.7-Flash-Claude-Opus-Reasoning'
 
 // ── NSFW / Uncensored text LLMs (no content filters) ───────────────────────
 export const NSFW_LLM_MODELS = [
-  { id: 'GLM-4.7-Flash-Uncensored-Aggressive', label: 'GLM Aggressive 🔥', labelLong: 'GLM-4.7 Uncensored Aggressive', description: 'Maximum uncensored · no filters · best for explicit' },
-  { id: 'GLM-4.7-Flash-Uncensored-Balanced', label: 'GLM Uncensored', labelLong: 'GLM-4.7 Uncensored Balanced', description: 'Uncensored · balanced output' },
+  { id: 'GLM-4.7-Flash-Uncensored-Balanced', label: 'GLM Uncensored 🔥', labelLong: 'GLM-4.7 Uncensored', description: 'Best NSFW · no content filters · uncensored' },
   { id: 'DeepSeek-R1-Distill-Qwen-32B-Uncensored', label: 'DeepSeek 32B', labelLong: 'DeepSeek R1 32B Uncensored', description: 'Large · reasoning · uncensored · slow' },
   { id: 'gpt-oss-20b-uncensored', label: 'GPT-OSS 20B', labelLong: 'GPT-OSS 20B Uncensored', description: 'Uncensored · good creative writing' },
   { id: 'GLM-4.7-Flash-Claude-Opus-Reasoning', label: 'GLM+Claude ✨', labelLong: 'GLM-4.7 + Claude Opus', description: 'Best quality · mostly uncensored' },
 ]
 
-export const DEFAULT_NSFW_LLM = 'GLM-4.7-Flash-Uncensored-Aggressive'
+export const DEFAULT_NSFW_LLM = 'GLM-4.7-Flash-Uncensored-Balanced'
 
 // ── Vision LLMs (image/video captioning) ────────────────────────────────────
 export const VISION_MODELS = [
