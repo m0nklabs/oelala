@@ -391,10 +391,12 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
     """
     Poll ComfyUI /history until the job is done.
     Returns the history entry for this prompt_id.
-    Sends RunPod progress_update every ~15s if job is provided.
+    Sends RunPod progress_update when new logs appear or every 10s.
     """
+    global _log_buffer
     start = time.time()
     last_progress = 0
+    last_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
     while (time.time() - start) < timeout:
         try:
             resp = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=10)
@@ -413,11 +415,15 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
         except requests.exceptions.RequestException:
             pass
 
-        # Send progress update every ~15s
+        # Send progress when new ComfyUI logs appear (within 3s) or every 10s heartbeat
         elapsed = time.time() - start
-        if job and elapsed - last_progress >= 15:
+        current_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
+        has_new_logs = current_log_len > last_log_len
+        if job and (has_new_logs or elapsed - last_progress >= 10):
             _progress(job, f"Generating... {elapsed:.0f}s elapsed")
             last_progress = elapsed
+            # Re-read after _progress adds its own log line
+            last_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
 
         time.sleep(3)
 
@@ -483,13 +489,21 @@ def encode_outputs(files: list) -> list:
 
 # ---- RunPod Handler ----
 
+_log_buffer = None  # Set by handler(), read by _progress() for real-time log streaming
+
+
 def _progress(job, message: str):
-    """Send a progress update to RunPod (visible when polling job status)."""
+    """Send a progress update to RunPod with accumulated logs (visible when polling job status)."""
+    global _log_buffer
     try:
-        runpod.serverless.progress_update(job, message)
+        if _log_buffer:
+            payload = {"message": message, "logs": _log_buffer.getvalue()}
+        else:
+            payload = message
+        runpod.serverless.progress_update(job, payload)
         logger.info(f"📡 Progress: {message}")
-    except Exception:
-        pass  # non-fatal
+    except Exception as e:
+        logger.warning(f"⚠️ progress_update failed: {e}")
 
 
 def handler(event: dict) -> dict:
@@ -502,8 +516,10 @@ def handler(event: dict) -> dict:
     Progress updates are sent via RunPod API during execution.
     All logs are captured and returned in the 'logs' field.
     """
-    # Capture logs during this job
+    # Capture logs during this job (also used by _progress for real-time log streaming)
+    global _log_buffer
     log_buffer = io.StringIO()
+    _log_buffer = log_buffer
     log_handler = logging.StreamHandler(log_buffer)
     log_handler.setLevel(logging.DEBUG)
     log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
