@@ -1998,6 +1998,178 @@ def record_generation_complete(
     )
 
 
+# Directory for cloud-generated output
+CLOUD_MAX_OUTPUT_DIR = Path("/home/flip/oelala/media/generated/cloud-max")
+CLOUD_MAX_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Cache for completed cloud jobs (prevent re-processing on repeated polls)
+_cloud_completed_cache: dict[str, dict] = {}
+
+
+async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
+    """
+    Handle status polling for a cloud (RunPod) job.
+
+    When the job completes, this function:
+    1. Decodes the base64 video output from RunPod
+    2. Saves it locally to media/generated/cloud-max/
+    3. Uploads to oelala-storage via MediaService
+    4. Returns the same response format as local jobs
+    """
+    # Return cached result if already processed
+    if prompt_id in _cloud_completed_cache:
+        return _cloud_completed_cache[prompt_id]
+
+    runpod_job_id = job_info.get("runpod_job_id")
+    if not runpod_job_id:
+        return {"prompt_id": prompt_id, "status": "failed", "error": "Missing runpod_job_id", **job_info}
+
+    try:
+        rp_job = await _runpod.get_job_status(runpod_job_id)
+    except Exception as e:
+        logger.error(f"☁️ Failed to poll RunPod job {runpod_job_id}: {e}")
+        return {"prompt_id": prompt_id, "status": "running", "error": str(e), **job_info}
+
+    status_val = rp_job.status.value if hasattr(rp_job.status, "value") else str(rp_job.status)
+
+    # Map RunPod statuses to our status values
+    if status_val in ("IN_QUEUE",):
+        active_jobs[prompt_id]["_cloud_status"] = status_val
+        return {"prompt_id": prompt_id, "status": "pending", "compute_target": "cloud", **job_info}
+    elif status_val in ("IN_PROGRESS",):
+        active_jobs[prompt_id]["_cloud_status"] = status_val
+        # Include progress info from RunPod if available
+        progress = {}
+        if rp_job.output and isinstance(rp_job.output, dict):
+            progress["message"] = rp_job.output.get("message", "Generating...")
+        return {"prompt_id": prompt_id, "status": "running", "compute_target": "cloud", **progress, **job_info}
+    elif status_val in ("FAILED", "CANCELLED", "TIMED_OUT"):
+        error_msg = rp_job.error or f"RunPod job {status_val}"
+        logger.error(f"☁️ Cloud job failed: {runpod_job_id} — {error_msg}")
+        record_generation_complete(prompt_id, success=False, error=error_msg)
+        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        _cloud_completed_cache[prompt_id] = result
+        # Clean up active_jobs after a delay (keep for a bit so UI can read the failure)
+        active_jobs[prompt_id]["_cloud_completed"] = True
+        return result
+    elif status_val != "COMPLETED":
+        # Unknown status — treat as running
+        return {"prompt_id": prompt_id, "status": "running", "compute_target": "cloud", **job_info}
+
+    # ── COMPLETED — process output ──────────────────────────────────────
+    logger.info(f"☁️ Cloud job COMPLETED: {runpod_job_id}")
+
+    output = rp_job.output
+    if not output or not isinstance(output, dict):
+        error_msg = "RunPod returned empty output"
+        record_generation_complete(prompt_id, success=False, error=error_msg)
+        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        _cloud_completed_cache[prompt_id] = result
+        active_jobs[prompt_id]["_cloud_completed"] = True
+        return result
+
+    # Check for handler-level errors
+    if "error" in output:
+        error_msg = output["error"]
+        logger.error(f"☁️ Cloud handler error: {error_msg}")
+        record_generation_complete(prompt_id, success=False, error=error_msg)
+        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        _cloud_completed_cache[prompt_id] = result
+        active_jobs[prompt_id]["_cloud_completed"] = True
+        return result
+
+    files = output.get("files", [])
+    if not files:
+        error_msg = "No output files in RunPod response"
+        record_generation_complete(prompt_id, success=False, error=error_msg)
+        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        _cloud_completed_cache[prompt_id] = result
+        active_jobs[prompt_id]["_cloud_completed"] = True
+        return result
+
+    # Decode and save all output files (usually 1 video)
+    import base64
+    from datetime import datetime as _dt
+
+    output_video = None
+    output_image = None
+    saved_path = None
+
+    for i, f in enumerate(files):
+        b64_data = f.get("data")
+        if not b64_data:
+            continue
+
+        # Generate filename
+        timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+        orig_name = f.get("filename", f"output_{i:03d}.mp4")
+        ext = Path(orig_name).suffix or ".mp4"
+        save_name = f"cloud_max_{timestamp}_{i:03d}{ext}"
+        save_path = CLOUD_MAX_OUTPUT_DIR / save_name
+
+        try:
+            file_bytes = base64.b64decode(b64_data)
+            save_path.write_bytes(file_bytes)
+            logger.info(f"☁️ Saved cloud output: {save_path} ({len(file_bytes)} bytes)")
+
+            mime = f.get("type", "video/mp4")
+            if "video" in mime:
+                output_video = f"/media/generated/cloud-max/{save_name}"
+                saved_path = save_path
+            elif "image" in mime:
+                output_image = f"/media/generated/cloud-max/{save_name}"
+                saved_path = save_path
+        except Exception as e:
+            logger.error(f"☁️ Failed to save cloud output file {i}: {e}")
+
+    if not saved_path:
+        error_msg = "Failed to save any output files"
+        record_generation_complete(prompt_id, success=False, error=error_msg)
+        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        _cloud_completed_cache[prompt_id] = result
+        active_jobs[prompt_id]["_cloud_completed"] = True
+        return result
+
+    # Upload to oelala-storage via MediaService
+    storage_path = None
+    signed_url = None
+    try:
+        comfyui = get_comfyui_client()
+        if comfyui:
+            output_type = "video" if output_video else "image"
+            storage_path = await comfyui.on_job_complete_async(
+                prompt_id, str(saved_path), output_type
+            )
+            if storage_path:
+                logger.info(f"☁️ Auto-uploaded cloud output: {storage_path}")
+                signed_url = get_signed_media_url(storage_path, expires_in=86400)
+    except Exception as e:
+        logger.warning(f"☁️ Storage upload failed (file still saved locally): {e}")
+
+    # Record stats
+    execution_time = output.get("execution_time_s")
+    record_generation_complete(prompt_id, success=True)
+
+    # Mark as completed in active_jobs
+    active_jobs[prompt_id]["_cloud_completed"] = True
+
+    result = {
+        "prompt_id": prompt_id,
+        "status": "completed",
+        "output_video": output_video,
+        "output_image": output_image,
+        "url": signed_url or output_video or output_image,
+        "signed_url": signed_url,
+        "storage_path": storage_path,
+        "compute_target": "cloud",
+        "execution_time_s": execution_time,
+        **{k: v for k, v in job_info.items() if not k.startswith("_")},
+    }
+    _cloud_completed_cache[prompt_id] = result
+    logger.info(f"☁️ Cloud job complete: {prompt_id} → {output_video or output_image}")
+    return result
+
+
 @app.get("/api/generation-stats")
 async def get_generation_stats(
     limit: int = 100,
@@ -2224,12 +2396,42 @@ async def get_comfyui_queue():
                         }
                     )
 
+        # Include cloud (RunPod) jobs from active_jobs tracking
+        cloud_running = []
+        cloud_pending = []
+        for pid, info in list(active_jobs.items()):
+            if info.get("compute_target") != "cloud":
+                continue
+            # Skip if already completed/processed
+            if info.get("_cloud_completed"):
+                continue
+            cloud_status = info.get("_cloud_status", "IN_QUEUE")
+            cloud_job = {
+                "prompt_id": pid,
+                "status": "running" if cloud_status in ("IN_PROGRESS", "IN_QUEUE") else "pending",
+                "compute_target": "cloud",
+                "runpod_job_id": info.get("runpod_job_id"),
+                "prompt": info.get("prompt", ""),
+                "resolution": info.get("resolution", ""),
+                "aspect_ratio": info.get("aspect_ratio", ""),
+                "num_frames": info.get("num_frames"),
+                "model_name": info.get("model_name", "Cloud Max"),
+                "queue_position": 0,
+            }
+            if cloud_status in ("IN_PROGRESS",):
+                cloud_running.append(cloud_job)
+            else:
+                cloud_pending.append(cloud_job)
+
+        all_running = running + cloud_running
+        all_pending = pending + cloud_pending
+
         return {
-            "running": running,
-            "pending": pending,
+            "running": all_running,
+            "pending": all_pending,
             "training": training,
-            "total_running": len(running),
-            "total_pending": len(pending),
+            "total_running": len(all_running),
+            "total_pending": len(all_pending),
             "total_training": len(training),
         }
     except requests.exceptions.RequestException as e:
@@ -2244,12 +2446,18 @@ async def get_job_status(prompt_id: str):
     """
     Get status of a specific job by prompt_id.
     Returns status (queued/running/completed/failed) and output if available.
+    Handles both local ComfyUI jobs and cloud (RunPod) jobs transparently.
     """
     import requests
 
     # Check in our active jobs store
     job_info = active_jobs.get(prompt_id, {})
 
+    # ── Cloud (RunPod) job handling ──────────────────────────────────────
+    if job_info.get("compute_target") == "cloud" and _runpod:
+        return await _handle_cloud_job_status(prompt_id, job_info)
+
+    # ── Local ComfyUI job handling ──────────────────────────────────────
     # Check ComfyUI history for completion status
     try:
         history_resp = requests.get(
@@ -2415,6 +2623,28 @@ async def get_comfyui_output(filename: str, request: Request):
         headers["Access-Control-Allow-Credentials"] = "true"
 
     return FileResponse(output_path, headers=headers)
+
+
+@app.get("/media/generated/cloud-max/{filename}")
+async def get_cloud_max_media(filename: str, request: Request):
+    """Serve files from media/generated/cloud-max/ directory (Cloud Max output)."""
+    media_path = CLOUD_MAX_OUTPUT_DIR / filename
+    if not media_path.exists():
+        raise HTTPException(status_code=404, detail="Cloud Max output file not found")
+
+    stat = media_path.stat()
+    etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
+    headers = {
+        "Cache-Control": "public, max-age=3600, must-revalidate",
+        "ETag": etag,
+        "Vary": "Origin",
+    }
+    origin = request.headers.get("origin")
+    if origin and origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    return FileResponse(media_path, headers=headers)
 
 
 @app.get("/media/generated/{filename}")
@@ -6669,6 +6899,7 @@ async def generate_cloud_max_async(
     # Handle image upload for I2V
     image_name = None
     input_filename = None
+    input_images_b64 = {}
     if mode == "i2v" and file:
         if not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image")
@@ -6684,11 +6915,18 @@ async def generate_cloud_max_async(
             logger.error(f"Error saving file: {e}")
             raise HTTPException(status_code=500, detail="Failed to save uploaded file")
 
+        # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
+        import base64 as _b64
+        input_images_b64[input_filename] = _b64.b64encode(input_path.read_bytes()).decode()
+
         image_name = comfyui.upload_image(str(input_path))
         if not image_name:
             raise HTTPException(
                 status_code=500, detail="Failed to upload image to ComfyUI"
             )
+        # Use the ComfyUI-assigned name as key so RunPod handler saves it with matching filename
+        if image_name != input_filename:
+            input_images_b64[image_name] = input_images_b64.pop(input_filename)
 
     # Build workflow
     if mode == "i2v":
@@ -6762,6 +7000,7 @@ async def generate_cloud_max_async(
         user_id=user.id,
         prompt_id=str(uuid.uuid4()),
         job_info=cloud_job_info,
+        images=input_images_b64 if input_images_b64 else None,
     )
     await deduct_credits(
         user, credits_required, result["prompt_id"],
