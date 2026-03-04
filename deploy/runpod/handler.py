@@ -58,26 +58,50 @@ INPUT_DIR = "/comfyui/input"
 MODEL_VOLUME = os.getenv("RUNPOD_VOLUME_PATH", "/runpod-volume")
 
 # ---- Cloud Max model definitions ----
-# Source: Comfy-Org/Wan_2.1_ComfyUI_repackaged on HuggingFace
-HF_REPO = "Comfy-Org/Wan_2.1_ComfyUI_repackaged"
+# Source: Comfy-Org/Wan_2.2_ComfyUI_Repackaged on HuggingFace
+# Wan 2.2 uses dedicated high/low noise models for better temporal coherence.
+# fp8_scaled precision: near-bf16 quality, fits on 48GB GPUs (28.6GB total vs 57GB bf16).
+HF_REPO_22 = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
+HF_REPO_21 = "Comfy-Org/Wan_2.1_ComfyUI_repackaged"  # CLIP Vision not in 2.2 repo
 CLOUD_MAX_MODELS = [
     {
-        "hf_path": "split_files/diffusion_models/wan2.1_i2v_720p_14B_bf16.safetensors",
+        "hf_repo": HF_REPO_22,
+        "hf_path": "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
         "local_dir": "unet",
-        "filename": "wan2.1_i2v_720p_14B_bf16.safetensors",
-        "size_gb": 32.8,
-        "description": "I2V 720p bf16 diffusion model",
+        "filename": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        "size_gb": 14.3,
+        "description": "Wan 2.2 I2V high noise 14B fp8_scaled",
         "required": True,
     },
     {
-        "hf_path": "split_files/diffusion_models/wan2.1_t2v_14B_bf16.safetensors",
+        "hf_repo": HF_REPO_22,
+        "hf_path": "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         "local_dir": "unet",
-        "filename": "wan2.1_t2v_14B_bf16.safetensors",
-        "size_gb": 28.6,
-        "description": "T2V bf16 diffusion model",
-        "required": False,  # Skip at startup — too large for container disk without volume
+        "filename": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        "size_gb": 14.3,
+        "description": "Wan 2.2 I2V low noise 14B fp8_scaled",
+        "required": True,
     },
     {
+        "hf_repo": HF_REPO_22,
+        "hf_path": "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "local_dir": "unet",
+        "filename": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "size_gb": 14.3,
+        "description": "Wan 2.2 T2V high noise 14B fp8_scaled",
+        "required": False,  # Skip at startup — download on first T2V request
+    },
+    {
+        "hf_repo": HF_REPO_22,
+        "hf_path": "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+        "local_dir": "unet",
+        "filename": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+        "size_gb": 14.3,
+        "description": "Wan 2.2 T2V low noise 14B fp8_scaled",
+        "required": False,  # Skip at startup — download on first T2V request
+    },
+    {
+        "hf_repo": HF_REPO_22,
         "hf_path": "split_files/text_encoders/umt5_xxl_fp16.safetensors",
         "local_dir": "clip",
         "filename": "umt5_xxl_fp16.safetensors",
@@ -86,14 +110,16 @@ CLOUD_MAX_MODELS = [
         "required": True,
     },
     {
+        "hf_repo": HF_REPO_21,
         "hf_path": "split_files/vae/wan_2.1_vae.safetensors",
         "local_dir": "vae",
         "filename": "wan_2.1_vae.safetensors",
-        "size_gb": 0.25,
-        "description": "Wan 2.1 VAE",
+        "size_gb": 0.40,
+        "description": "Wan 2.1 VAE — required for 14B models (wan2.2_vae is 5B only)",
         "required": True,
     },
     {
+        "hf_repo": HF_REPO_21,
         "hf_path": "split_files/clip_vision/clip_vision_h.safetensors",
         "local_dir": "clip_vision",
         "filename": "clip_vision_h.safetensors",
@@ -201,7 +227,7 @@ def download_models():
         try:
             dl_start = time.time()
             downloaded_path = hf_hub_download(
-                repo_id=HF_REPO,
+                repo_id=model.get("hf_repo", HF_REPO_22),
                 filename=model["hf_path"],
                 local_dir="/tmp/hf_cache",
                 local_dir_use_symlinks=False,
@@ -237,18 +263,21 @@ def ensure_models():
     volume_path = Path(MODEL_VOLUME)
     volume_models = volume_path / "models"
 
+    # Clean up old Wan 2.1 models to free space on volume
+    _cleanup_old_models(volume_models, comfyui_models)
+
     # Strategy 1: Network Volume already has models
     if volume_path.exists() and volume_models.exists():
         logger.info("📁 Network Volume detected, setting up symlinks...")
         if setup_model_links():
-            # Verify at least the diffusion model is available
-            i2v = comfyui_models / "unet" / "wan2.1_i2v_720p_14B_bf16.safetensors"
-            if not i2v.exists():
-                i2v = comfyui_models / "diffusion_models" / "wan2.1_i2v_720p_14B_bf16.safetensors"
-            if i2v.exists():
+            # Verify at least the high noise diffusion model is available
+            i2v_hi = comfyui_models / "unet" / "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+            if not i2v_hi.exists():
+                i2v_hi = comfyui_models / "diffusion_models" / "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+            if i2v_hi.exists():
                 logger.info("✅ Models loaded from Network Volume")
                 return True
-            logger.warning("⚠️ Network Volume found but missing Cloud Max models, will download")
+            logger.warning("⚠️ Network Volume found but missing Wan 2.2 models, will download")
 
     # Strategy 2: Download from HuggingFace (to volume if available, else container)
     logger.info("📥 Downloading models from HuggingFace...")
@@ -260,6 +289,28 @@ def ensure_models():
         setup_model_links()
 
     return True
+
+
+def _cleanup_old_models(volume_models: Path, comfyui_models: Path):
+    """Remove deprecated Wan 2.1 models to free disk space."""
+    deprecated = [
+        ("unet", "wan2.1_i2v_720p_14B_bf16.safetensors"),
+        ("vae", "wan_2.1_vae.safetensors"),
+    ]
+    for subdir, filename in deprecated:
+        for base in [volume_models, comfyui_models]:
+            path = base / subdir / filename
+            if path.exists():
+                try:
+                    if path.is_symlink():
+                        path.unlink()
+                        logger.info(f"🗑️ Removed symlink: {path}")
+                    else:
+                        size_gb = path.stat().st_size / (1024**3)
+                        path.unlink()
+                        logger.info(f"🗑️ Removed old model: {path} ({size_gb:.1f}GB freed)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not remove {path}: {e}")
 
 
 # ---- ComfyUI Process Management ----

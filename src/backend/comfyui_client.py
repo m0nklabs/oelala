@@ -2696,50 +2696,44 @@ class ComfyUIClient:
         height: int = 720,
         num_frames: int = 81,
         fps: int = 16,
-        steps: int = 25,
+        steps: int = 15,
         cfg: float = 3.0,
         seed: int = -1,
         output_prefix: str = "oelala_cloud_max",
-        high_noise_steps: int = 12,
+        high_noise_steps: int = 8,
         shift: float = 8.0,
         sampler_name: str = "dpmpp_2m",
         scheduler: str = "beta",
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 720,
-        diffusion_model: str = "wan2.1_i2v_720p_14B_bf16.safetensors",
+        diffusion_model_high: str = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        diffusion_model_low: str = "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         text_encoder: str = "umt5_xxl_fp16.safetensors",
         vae_model: str = "wan_2.1_vae.safetensors",
         clip_vision: str = "clip_vision_h.safetensors",
+        # Legacy compat: if caller passes single diffusion_model, use it for both
+        diffusion_model: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Build Cloud Max I2V workflow — bf16 full precision for cloud GPUs (48GB+).
+        Build Cloud Max I2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
+
+        Uses dedicated high/low noise models from Wan 2.2 for better temporal
+        coherence and motion quality compared to Wan 2.1's single-model approach.
+        fp8_scaled precision is near-lossless vs bf16, fits on 48GB GPUs.
 
         Designed for RunPod serverless with A6000/A40/L40S GPUs. Uses native
-        ComfyUI nodes (UNETLoader, not GGUF). Dual-pass sampling to support
-        high/low noise LoRA pairs. No SageAttention, no DisTorch2, no BlockSwap
-        — pure single-GPU bf16 with maximum quality settings.
+        ComfyUI UNETLoader nodes. Dual-pass sampling with dedicated models
+        for high and low noise phases.
 
-        Key differences from local modes:
-        - bf16 safetensors (no quantization loss)
-        - Native UNETLoader (no GGUF dependency)
-        - Full precision text encoder (fp16, not fp8)
-        - More sampling steps (25 default vs 6-8 local)
-        - dpmpp_2m + beta scheduler (higher quality)
-        - Higher CFG (3.0 default for stronger prompt adherence)
+        Key features:
+        - Wan 2.2 dedicated high/low noise models (better than 2.1 unified)
+        - fp8_scaled precision (~14.3GB each, 28.6GB total, fits 48GB GPU)
+        - Wan 2.2 VAE (improved decoder, 1.41GB)
+        - Full precision text encoder (fp16 UMT5-XXL)
+        - 15 steps with dpmpp_2m/beta (optimal quality/speed)
+        - LoRA support with high/low noise split
         - No multi-GPU nodes (single powerful GPU)
-        - Dual-pass retained for high/low LoRA compatibility
-
-        Args:
-            diffusion_model: bf16 safetensors model filename on Network Volume.
-            text_encoder: Full precision text encoder filename.
-            vae_model: VAE decoder filename.
-            clip_vision: CLIP vision encoder for I2V conditioning.
-            high_noise_steps: Step at which to switch from high to low noise pass.
-            sampler_name: Sampler algorithm (dpmpp_2m recommended for quality).
-            scheduler: Noise scheduler (beta or karras recommended).
-            lora_configs: LoRA configs [{high, low, strength}, ...] — supports
-                          high/low noise split LoRAs.
         """
         # Wan2.2/2.1 requires num_frames in format 4k+1
         k = round((num_frames - 1) / 4)
@@ -2797,12 +2791,20 @@ class ComfyUIClient:
             },
         }
 
-        # Node 3: UNET Loader — bf16 model (native ComfyUI, NOT GGUF)
-        # weight_dtype="default" loads in native precision (bf16 for this model)
+        # Node 3: UNET Loader — HIGH NOISE model (Wan 2.2 fp8_scaled)
         workflow["3"] = {
             "class_type": "UNETLoader",
             "inputs": {
-                "unet_name": diffusion_model,
+                "unet_name": diffusion_model_high,
+                "weight_dtype": "default",
+            },
+        }
+
+        # Node 14: UNET Loader — LOW NOISE model (Wan 2.2 fp8_scaled)
+        workflow["14"] = {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": diffusion_model_low,
                 "weight_dtype": "default",
             },
         }
@@ -2872,10 +2874,10 @@ class ComfyUIClient:
             "inputs": {"shift": shift, "model": ["3", 0]},
         }
 
-        # Node 11: ModelSamplingSD3 for low noise model (same base model)
+        # Node 11: ModelSamplingSD3 for low noise model (SEPARATE model)
         workflow["11"] = {
             "class_type": "ModelSamplingSD3",
-            "inputs": {"shift": shift, "model": ["3", 0]},
+            "inputs": {"shift": shift, "model": ["14", 0]},
         }
 
         # ─── LoRA Loading (supports high/low split) ───
@@ -3002,27 +3004,30 @@ class ComfyUIClient:
         height: int = 720,
         num_frames: int = 81,
         fps: int = 16,
-        steps: int = 25,
+        steps: int = 15,
         cfg: float = 3.0,
         seed: int = -1,
         output_prefix: str = "oelala_cloud_max_t2v",
-        high_noise_steps: int = 12,
+        high_noise_steps: int = 8,
         shift: float = 8.0,
         sampler_name: str = "dpmpp_2m",
         scheduler: str = "beta",
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 720,
-        diffusion_model: str = "wan2.1_t2v_14B_bf16.safetensors",
+        diffusion_model_high: str = "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        diffusion_model_low: str = "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
         text_encoder: str = "umt5_xxl_fp16.safetensors",
         vae_model: str = "wan_2.1_vae.safetensors",
+        # Legacy compat: if caller passes single diffusion_model, use it for both
+        diffusion_model: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Build Cloud Max T2V workflow — bf16 full precision for cloud GPUs (48GB+).
+        Build Cloud Max T2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
 
         Same architecture as Cloud Max I2V but without image conditioning.
-        Uses WanImageToVideo without start_image to create empty video latent.
-        T2V-specific bf16 model (28.6GB, slightly smaller than I2V 32.8GB).
+        Uses dedicated high/low noise T2V models from Wan 2.2 for better
+        temporal coherence. fp8_scaled precision (~14.3GB each, fits 48GB GPU).
         """
         # Wan2.2/2.1 requires num_frames in format 4k+1
         k = round((num_frames - 1) / 4)
@@ -3031,6 +3036,11 @@ class ComfyUIClient:
 
         if seed < 0:
             seed = random.randint(0, 2**31 - 1)
+
+        # Legacy compat: single diffusion_model param → use for both
+        if diffusion_model is not None:
+            diffusion_model_high = diffusion_model
+            diffusion_model_low = diffusion_model
 
         # ─── Calculate dimensions from aspect ratio ───
         aspect_ratios = {
@@ -3057,12 +3067,21 @@ class ComfyUIClient:
 
         workflow = {}
 
-        # Node 1: UNET Loader — bf16 T2V model
+        # Node 1: UNET Loader — HIGH NOISE model (Wan 2.2 fp8_scaled)
         workflow["1"] = {
             "class_type": "UNETLoader",
             "inputs": {
-                "unet_name": diffusion_model,
-                "weight_dtype": "bf16",
+                "unet_name": diffusion_model_high,
+                "weight_dtype": "default",
+            },
+        }
+
+        # Node 9: UNET Loader — LOW NOISE model (Wan 2.2 fp8_scaled)
+        workflow["9"] = {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": diffusion_model_low,
+                "weight_dtype": "default",
             },
         }
 
@@ -3113,10 +3132,10 @@ class ComfyUIClient:
             "inputs": {"shift": shift, "model": ["1", 0]},
         }
 
-        # Node 8: ModelSamplingSD3 for low noise (same base)
+        # Node 8: ModelSamplingSD3 for low noise (SEPARATE model)
         workflow["8"] = {
             "class_type": "ModelSamplingSD3",
-            "inputs": {"shift": shift, "model": ["1", 0]},
+            "inputs": {"shift": shift, "model": ["9", 0]},
         }
 
         # ─── LoRA Loading ───
