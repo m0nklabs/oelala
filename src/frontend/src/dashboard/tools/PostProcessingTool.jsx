@@ -231,60 +231,48 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
   }, 0)
 
   return (
-    <div className="post-processing-tool" style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h2 style={{ marginBottom: '8px' }}>⚙️ Post-Processing</h2>
-        <ResetDefaultsButton onReset={handleResetDefaults} />
-      </div>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-        Process existing videos: upscale resolution, smooth motion, or join multiple clips
-      </p>
-
-      {/* Mode Selection */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+    <div className="tool-container">
+      {/* Mode Selection Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Processing Mode</div>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
+      <div className="grok-mode-selector">
         {Object.values(PROCESSING_MODES).map(m => {
           const Icon = m.icon
           return (
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              style={{
-                flex: 1,
-                padding: '16px',
-                backgroundColor: mode === m.id ? 'var(--accent-color)' : 'var(--bg-secondary)',
-                border: mode === m.id ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.2s',
-              }}
+              className={`grok-mode-card ${mode === m.id ? 'active' : ''}`}
             >
-              <Icon size={24} style={{ marginBottom: '8px', color: mode === m.id ? '#fff' : 'var(--text-muted)' }} />
-              <div style={{ fontWeight: 600, color: mode === m.id ? '#fff' : 'var(--text-primary)' }}>
+              <Icon size={24} className="mode-icon" />
+              <div className="mode-label">
                 {m.label.replace(/^. /, '')}
               </div>
-              <div style={{ fontSize: '0.75rem', color: mode === m.id ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', marginTop: '4px' }}>
+              <div className="mode-desc">
                 {m.desc}
               </div>
             </button>
           )
         })}
       </div>
+      </div>
 
-      {/* File Drop Zone */}
+      {/* File Upload Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">
+            {mode === 'concat' ? 'Video Files' : 'Source Video'}
+          </div>
+        </div>
       <div
+        className="upload-box"
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
-        style={{
-          border: '2px dashed var(--border-color)',
-          borderRadius: '12px',
-          padding: '24px',
-          textAlign: 'center',
-          backgroundColor: 'var(--bg-secondary)',
-          marginBottom: '16px',
-          cursor: 'pointer',
-        }}
         onClick={() => fileInputRef.current?.click()}
+        style={{ cursor: 'pointer', marginBottom: '16px' }}
       >
         <input
           ref={fileInputRef}
@@ -294,11 +282,11 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
           onChange={handleFileChange}
           style={{ display: 'none' }}
         />
-        <Upload size={32} style={{ color: 'var(--text-muted)', marginBottom: '8px' }} />
+        <Upload size={32} style={{ color: 'var(--text-muted)' }} />
         <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
           {mode === 'concat' ? 'Drop videos here or click to upload' : 'Drop a video here or click to upload'}
         </div>
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
           Or select from your media library
         </div>
       </div>
@@ -306,16 +294,8 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
       {/* Select from Media Library */}
       <button
         onClick={() => setShowMediaPicker(true)}
-        style={{
-          width: '100%',
-          padding: '12px',
-          backgroundColor: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          color: 'var(--text-primary)',
-          marginBottom: '24px',
-        }}
+        className="btn-secondary"
+        style={{ width: '100%', marginBottom: '16px' }}
       >
         📁 Select from My Media
       </button>
@@ -381,75 +361,43 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
 
       {/* File List */}
       {files.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ marginBottom: '12px' }}>
+        <div style={{ marginBottom: '16px' }}>
+          <label className="grok-section-label">
             {mode === 'concat' ? `Videos to Join (${files.length})` : 'Selected Video'}
             {mode === 'concat' && totalDuration > 0 && (
               <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '8px' }}>
                 Total: {totalDuration.toFixed(1)}s
               </span>
             )}
-          </h4>
+          </label>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {files.map((entry, idx) => (
-              <div
-                key={entry.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px',
-                  backgroundColor: 'var(--bg-secondary)',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
+              <div key={entry.id} className="file-item-row">
                 {mode === 'concat' && (
                   <GripVertical size={16} style={{ color: 'var(--text-muted)', cursor: 'grab' }} />
                 )}
 
-                <div style={{
-                  width: '80px',
-                  height: '45px',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                }}>
-                  <video
-                    src={entry.preview}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    muted
-                  />
+                <div className="file-thumb">
+                  <video src={entry.preview} muted />
                 </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div className="file-info">
+                  <div className="file-name">
                     {entry.file?.name || entry.filename || 'Video'}
                   </div>
                   {entry.videoInfo && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <div className="file-meta">
                       {entry.videoInfo.width}×{entry.videoInfo.height} • {entry.videoInfo.duration}s
                     </div>
                   )}
                 </div>
 
                 {mode === 'concat' && (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                    #{idx + 1}
-                  </div>
+                  <div className="file-meta">#{idx + 1}</div>
                 )}
 
-                <button
-                  onClick={() => removeFile(entry.id)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--error-color)',
-                    cursor: 'pointer',
-                    padding: '8px',
-                  }}
-                >
+                <button onClick={() => removeFile(entry.id)} className="file-remove">
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -459,115 +407,69 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
           {mode === 'concat' && (
             <button
               onClick={() => fileInputRef.current?.click()}
-              style={{
-                marginTop: '8px',
-                padding: '8px 16px',
-                backgroundColor: 'var(--bg-tertiary)',
-                border: '1px dashed var(--border-color)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
+              className="btn-secondary"
+              style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
             >
               <Plus size={16} /> Add more videos
             </button>
           )}
         </div>
       )}
+      </div>
 
-      {/* Mode-specific Settings */}
-      <div style={{
-        backgroundColor: 'var(--bg-secondary)',
-        padding: '16px',
-        borderRadius: '12px',
-        marginBottom: '24px',
-      }}>
-        <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings size={16} /> Settings
-        </h4>
+      {/* Settings Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Settings size={16} /> Settings
+          </div>
+        </div>
 
         {mode === 'upscale' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
-                Upscale Model
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+          <>
+            <div className="form-group">
+              <label className="grok-section-label">Upscale Model</label>
+              <div className="grok-toggle-group">
                 {UPSCALE_MODELS.map(m => (
                   <button
                     key={m.value}
                     onClick={() => setUpscaleModel(m.value)}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      backgroundColor: upscaleModel === m.value ? 'var(--accent-color)' : 'var(--bg-tertiary)',
-                      border: upscaleModel === m.value ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      color: upscaleModel === m.value ? '#fff' : 'var(--text-primary)',
-                    }}
+                    className={`grok-toggle-btn ${upscaleModel === m.value ? 'active' : ''}`}
                   >
-                    <div style={{ fontWeight: 500 }}>{m.label}</div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '4px' }}>{m.desc}</div>
+                    {m.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
-                Scale Factor
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="form-group">
+              <label className="grok-section-label">Scale Factor</label>
+              <div className="grok-toggle-group">
                 {[2, 4].map(s => (
                   <button
                     key={s}
                     onClick={() => setUpscaleScale(s)}
-                    style={{
-                      padding: '10px 24px',
-                      backgroundColor: upscaleScale === s ? 'var(--accent-color)' : 'var(--bg-tertiary)',
-                      border: upscaleScale === s ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      color: upscaleScale === s ? '#fff' : 'var(--text-primary)',
-                      fontWeight: 600,
-                    }}
+                    className={`grok-toggle-btn ${upscaleScale === s ? 'active' : ''}`}
                   >
                     {s}x
                   </button>
                 ))}
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {mode === 'interpolate' && (
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
-              Target Frame Rate
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="form-group">
+            <label className="grok-section-label">Target Frame Rate</label>
+            <div className="grok-toggle-group">
               {FPS_PRESETS.map(p => (
                 <button
                   key={p.value}
                   onClick={() => setTargetFps(p.value)}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    backgroundColor: targetFps === p.value ? 'var(--accent-color)' : 'var(--bg-tertiary)',
-                    border: targetFps === p.value ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    color: targetFps === p.value ? '#fff' : 'var(--text-primary)',
-                  }}
+                  className={`grok-toggle-btn ${targetFps === p.value ? 'active' : ''}`}
                 >
-                  <div style={{ fontWeight: 600 }}>{p.label}</div>
-                  <div style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '4px' }}>
-                    {p.multiplier}x frames
-                  </div>
+                  {p.label}
                 </button>
               ))}
             </div>
@@ -588,53 +490,18 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
         )}
       </div>
 
-      {/* Error display */}
-      {error && (
-        <div style={{
-          padding: '12px 16px',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid var(--error-color)',
-          borderRadius: '8px',
-          color: 'var(--error-color)',
-          marginBottom: '16px',
-        }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="status-banner error">{error}</div>}
 
-      {/* Success message */}
       {lastQueued && (
-        <div style={{
-          padding: '12px 16px',
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
-          border: '1px solid var(--success-color)',
-          borderRadius: '8px',
-          color: 'var(--success-color)',
-          marginBottom: '16px',
-        }}>
+        <div className="status-banner success">
           ✅ Job queued! Check the Jobs panel for progress.
         </div>
       )}
 
-      {/* Submit Button */}
       <button
         onClick={handleSubmit}
         disabled={submitting || files.length === 0}
-        style={{
-          width: '100%',
-          padding: '16px',
-          backgroundColor: submitting || files.length === 0 ? 'var(--bg-tertiary)' : 'var(--accent-color)',
-          border: 'none',
-          borderRadius: '12px',
-          color: submitting || files.length === 0 ? 'var(--text-muted)' : '#fff',
-          fontWeight: 600,
-          fontSize: '1rem',
-          cursor: submitting || files.length === 0 ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-        }}
+        className="primary-btn"
       >
         {submitting ? (
           <>
@@ -643,9 +510,9 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
         ) : (
           <>
             <Play size={20} />
-            {mode === 'upscale' && `Upscale ${upscaleScale}x`}
-            {mode === 'interpolate' && `Interpolate to ${targetFps}fps`}
-            {mode === 'concat' && `Join ${files.length} Videos`}
+            {mode === 'upscale' && ` Upscale ${upscaleScale}x`}
+            {mode === 'interpolate' && ` Interpolate to ${targetFps}fps`}
+            {mode === 'concat' && ` Join ${files.length} Videos`}
           </>
         )}
       </button>

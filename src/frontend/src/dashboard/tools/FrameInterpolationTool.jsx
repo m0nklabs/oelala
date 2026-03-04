@@ -165,161 +165,111 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-      <div style={{ marginBottom: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '4px' }}>Frame Interpolation</h2>
+    <div className="tool-container">
+      {/* Upload Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Zap size={16} />
+            Frame Interpolation
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
         </div>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-          Increase FPS & create smooth slow motion • RIFE/FILM integration
-        </p>
-      </div>
 
-      {/* Upload Section */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-        style={{
-          border: '2px dashed var(--border-color)',
-          borderRadius: '8px',
-          padding: '24px',
-          textAlign: 'center',
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-        }}
-        onClick={() => document.getElementById('interpolate-file')?.click()}
-      >
-        <Upload size={32} style={{ margin: '0 auto 12px', color: 'var(--text-muted)' }} />
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-          {file ? file.name : 'Drop video or click to upload'}
-        </p>
-        {videoInfo && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {videoInfo.width}×{videoInfo.height} • {videoInfo.duration}s • ~{videoInfo.fps}fps
-          </p>
-        )}
-        <input
-          id="interpolate-file"
-          type="file"
-          accept="video/*"
-          onChange={handleFileChange}
-          style={{ display: 'none' }}
-        />
-      </div>
-
-      {/* Preview */}
-      {preview && (
-        <div style={{ borderRadius: '8px', overflow: 'hidden', maxWidth: '100%' }}>
-          <video
-            src={preview}
-            controls
-            style={{ width: '100%', maxHeight: '400px', display: 'block' }}
+        <div
+          className="upload-box"
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          onClick={() => document.getElementById('interpolate-file')?.click()}
+          style={{ cursor: 'pointer' }}
+        >
+          {preview ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <video
+                src={preview}
+                controls
+                muted
+                style={{ maxHeight: '180px', borderRadius: '8px', maxWidth: '100%' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{file?.name}</span>
+              {videoInfo && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '12px' }}>
+                  <span>📐 {videoInfo.width}×{videoInfo.height}</span>
+                  <span>⏱️ {videoInfo.duration}s</span>
+                  <span>~{videoInfo.fps}fps</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <Upload size={32} className="text-muted" />
+              <div className="text-muted">Drop video here, or click to upload</div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MP4, WebM, MOV</span>
+            </>
+          )}
+          <input
+            id="interpolate-file"
+            type="file"
+            accept="video/*"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
           />
         </div>
-      )}
+      </div>
 
-      {/* Settings */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* Model Selection */}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            Interpolation Model
-          </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {INTERPOLATION_MODELS.map(m => (
-              <button
-                key={m.value}
-                onClick={() => setModel(m.value)}
-                type="button"
-                style={{
-                  flex: 1,
-                  padding: '10px',
-                  borderRadius: '6px',
-                  border: model === m.value ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                  background: model === m.value ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                  color: model === m.value ? 'var(--accent-color)' : 'var(--text-secondary)',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>
-                  {m.label} {m.recommended && '⭐'}
-                </div>
-                <div style={{ fontSize: '0.7rem', marginTop: '2px', opacity: 0.8 }}>{m.desc}</div>
-              </button>
-            ))}
-          </div>
+      {/* Model Selection Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Interpolation Model</div>
+        </div>
+        <div className="grok-toggle-group" style={{ flexDirection: 'column' }}>
+          {INTERPOLATION_MODELS.map(m => (
+            <button
+              key={m.value}
+              onClick={() => setModel(m.value)}
+              className={`grok-toggle-btn ${model === m.value ? 'active' : ''}`}
+              style={{ textAlign: 'left', padding: '10px 12px' }}
+            >
+              <div style={{ fontWeight: 500 }}>
+                {m.label} {m.recommended && '⭐'}
+              </div>
+              <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>{m.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mode & Preset Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Mode</div>
+        </div>
+        <div className="grok-toggle-group" style={{ marginBottom: '16px' }}>
+          <button
+            onClick={() => setMode('fps')}
+            className={`grok-toggle-btn ${mode === 'fps' ? 'active' : ''}`}
+          >
+            FPS Conversion
+          </button>
+          <button
+            onClick={() => setMode('slowmo')}
+            className={`grok-toggle-btn ${mode === 'slowmo' ? 'active' : ''}`}
+          >
+            Slow Motion
+          </button>
         </div>
 
-        {/* Mode Selection */}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            Mode
-          </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setMode('fps')}
-              type="button"
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: '6px',
-                border: mode === 'fps' ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                background: mode === 'fps' ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                color: mode === 'fps' ? 'var(--accent-color)' : 'var(--text-secondary)',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>FPS Conversion</div>
-              <div style={{ fontSize: '0.7rem', marginTop: '2px', opacity: 0.8 }}>Increase frame rate</div>
-            </button>
-            <button
-              onClick={() => setMode('slowmo')}
-              type="button"
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: '6px',
-                border: mode === 'slowmo' ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                background: mode === 'slowmo' ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                color: mode === 'slowmo' ? 'var(--accent-color)' : 'var(--text-secondary)',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>Slow Motion</div>
-              <div style={{ fontSize: '0.7rem', marginTop: '2px', opacity: 0.8 }}>Smooth slow-mo</div>
-            </button>
-          </div>
-        </div>
-
-        {/* FPS Presets (shown when mode === 'fps') */}
+        {/* FPS Presets */}
         {mode === 'fps' && (
-          <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-              Target FPS
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <div className="form-group">
+            <label className="grok-section-label">Target FPS</label>
+            <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px' }}>
               {FPS_PRESETS.map(preset => (
                 <button
                   key={preset.label}
                   onClick={() => setFpsPreset(preset.label)}
-                  type="button"
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    border: fpsPreset === preset.label ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                    background: fpsPreset === preset.label ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                    color: fpsPreset === preset.label ? 'var(--accent-color)' : 'var(--text-secondary)',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
+                  className={`grok-toggle-btn ${fpsPreset === preset.label ? 'active' : ''}`}
+                  style={{ fontSize: '0.8rem', padding: '6px 10px' }}
                 >
                   {preset.label}
                 </button>
@@ -328,33 +278,20 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
           </div>
         )}
 
-        {/* Slow Motion Presets (shown when mode === 'slowmo') */}
+        {/* Slow Motion Presets */}
         {mode === 'slowmo' && (
-          <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-              Slow Motion Speed
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="form-group">
+            <label className="grok-section-label">Slow Motion Speed</label>
+            <div className="grok-toggle-group" style={{ flexDirection: 'column' }}>
               {SLOW_MOTION_PRESETS.map(preset => (
                 <button
                   key={preset.value}
                   onClick={() => setSlowMoPreset(preset.value)}
-                  type="button"
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: '6px',
-                    border: slowMoPreset === preset.value ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                    background: slowMoPreset === preset.value ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
-                    color: slowMoPreset === preset.value ? 'var(--accent-color)' : 'var(--text-secondary)',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                  title={preset.desc}
+                  className={`grok-toggle-btn ${slowMoPreset === preset.value ? 'active' : ''}`}
+                  style={{ textAlign: 'left', padding: '10px 12px' }}
                 >
-                  <div style={{ fontWeight: 600 }}>{preset.label}</div>
-                  <div style={{ fontSize: '0.7rem', marginTop: '2px', opacity: 0.8 }}>{preset.desc}</div>
+                  <div style={{ fontWeight: 500 }}>{preset.label}</div>
+                  <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>{preset.desc}</div>
                 </button>
               ))}
             </div>
@@ -362,66 +299,44 @@ export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
         )}
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px' }}>
-          <p style={{ fontSize: '0.85rem', color: '#ef4444' }}>{error}</p>
-        </div>
-      )}
-
-      {/* Queued Confirmation */}
-      {lastQueued && (
-        <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '6px' }}>
-          <p style={{ fontSize: '0.85rem', color: '#22c55e' }}>
-            ✓ Interpolation queued! ({lastQueued.model}, {lastQueued.preset})
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Job ID: {lastQueued.promptId}
-          </p>
-        </div>
-      )}
+      {error && <div className="status-banner error">{error}</div>}
 
       {/* Generate Button */}
       <button
+        className="primary-btn"
         onClick={handleInterpolate}
         disabled={!file || submitting}
-        style={{
-          padding: '14px',
-          borderRadius: '8px',
-          border: 'none',
-          background: !file || submitting ? 'var(--bg-tertiary)' : 'var(--accent-color)',
-          color: !file || submitting ? 'var(--text-muted)' : 'white',
-          fontSize: '1rem',
-          fontWeight: 600,
-          cursor: !file || submitting ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          transition: 'all 0.2s',
-        }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '48px', fontSize: '1rem' }}
       >
         {submitting ? (
           <>
-            <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+            <Loader2 size={18} className="animate-spin" />
             Interpolating...
           </>
         ) : (
           <>
-            <Zap size={20} />
+            <Zap size={18} />
             Interpolate Frames
           </>
         )}
       </button>
 
+      {lastQueued && (
+        <div className="status-banner success">
+          ✅ Interpolation queued! ({lastQueued.model}, {lastQueued.preset}) — Check queue panel for progress
+        </div>
+      )}
+
       {/* Result */}
       {result && (
-        <div>
-          <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>
-            Result ({mode === 'fps'
-              ? FPS_PRESETS.find(p => p.label === fpsPreset)?.label
-              : SLOW_MOTION_PRESETS.find(p => p.value === slowMoPreset)?.label})
-          </h3>
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">
+              Result ({mode === 'fps'
+                ? FPS_PRESETS.find(p => p.label === fpsPreset)?.label
+                : SLOW_MOTION_PRESETS.find(p => p.value === slowMoPreset)?.label})
+            </div>
+          </div>
           <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
             <video src={result} controls style={{ width: '100%', display: 'block' }} />
           </div>

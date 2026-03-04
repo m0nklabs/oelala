@@ -260,12 +260,12 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
   return (
     <div className="tool-container">
       {/* Voice Sample Section */}
-      <div className="tool-section">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ margin: 0 }}>
-            <FileAudio size={18} />
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileAudio size={16} />
             Voice Sample (5-30 seconds recommended)
-          </h3>
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
         </div>
 
@@ -342,21 +342,25 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
       </div>
 
       {/* Text Input */}
-      <div className="tool-section">
-        <h3>Text to Speak</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Text to Speak</div>
+        </div>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter the text you want the cloned voice to speak..."
           rows={4}
-          className="prompt-textarea"
+          className="form-textarea"
         />
         <div className="char-count">{text.length} characters</div>
       </div>
 
       {/* Model Selection */}
-      <div className="tool-section">
-        <h3>Model</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Model</div>
+        </div>
         <div className="model-grid">
           {F5_MODELS.map((m) => (
             <button
@@ -372,8 +376,10 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
       </div>
 
       {/* Speed Control */}
-      <div className="tool-section">
-        <h3>Speed</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Speed <span className="nav-badge">{speed.toFixed(1)}x</span></div>
+        </div>
         <div className="slider-row">
           <input
             type="range"
@@ -400,7 +406,7 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
       )}
 
       {/* Generate Button */}
-      <div className="tool-section">
+      <div className="grok-card">
         <button
           className="generate-btn"
           onClick={handleGenerate}
@@ -430,7 +436,7 @@ export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
 
       {/* Result */}
       {result && (
-        <div className="tool-section result-section">
+        <div className="grok-card">
           <h3>
             <Volume2 size={18} />
             Cloned Voice Result

@@ -353,16 +353,7 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
         </div>
       )}
 
-      {/* Error */}
-      {error && (
-        <div style={{
-          padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px',
-          color: '#ef4444', fontSize: '0.85rem',
-        }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="status-banner error">{error}</div>}
 
       {/* Submit */}
       <button
@@ -385,13 +376,8 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
         )}
       </button>
 
-      {/* Queued */}
       {lastQueued && (
-        <div style={{
-          padding: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)',
-          border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px',
-          color: '#22c55e', fontSize: '0.85rem',
-        }}>
+        <div className="status-banner success">
           ✅ Upscale queued! ({lastQueued.credits} credits) — Check queue panel for progress
         </div>
       )}

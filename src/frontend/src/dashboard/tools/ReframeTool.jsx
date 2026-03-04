@@ -288,10 +288,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
   const previewLayout = calculatePreview()
 
   return (
-    <div className="space-y-4">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '4px' }}>
-        <ResetDefaultsButton onReset={handleResetDefaults} />
-      </div>
+    <div className="tool-container">
       {importModal && (
         <MediaImportModal
           item={importModal.item}
@@ -302,91 +299,89 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
         />
       )}
 
-      {/* Image Upload */}
-      <div
-        onClick={() => fileInputRef.current?.click()}
-        onDrop={handleFileDrop}
-        onDragOver={handleDragOver}
-        className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500 transition-colors"
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileDrop}
-          className="hidden"
+      {/* Image Upload Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Frame size={16} />
+            Reframe
+          </div>
+          <ResetDefaultsButton onReset={handleResetDefaults} />
+        </div>
+
+        <div
+          className="upload-box"
+          onClick={() => fileInputRef.current?.click()}
+          onDrop={handleFileDrop}
+          onDragOver={handleDragOver}
+          style={{ cursor: 'pointer' }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileDrop}
+            style={{ display: 'none' }}
+          />
+          {preview ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <img src={preview} alt="Preview" style={{ maxHeight: '128px', borderRadius: '8px' }} />
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Original: {originalSize.width}×{originalSize.height}
+              </span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Click to change</span>
+            </div>
+          ) : (
+            <>
+              <Upload size={32} className="text-muted" />
+              <div className="text-muted">Drop image here or click to upload</div>
+            </>
+          )}
+        </div>
+
+        <button
+          onClick={() => setShowCreationsPicker(true)}
+          className="btn-creations-picker"
+        >
+          📁 From My Creations
+        </button>
+
+        <CreationsPickerModal
+          show={showCreationsPicker}
+          onClose={() => setShowCreationsPicker(false)}
+          onSelect={handleCreationsSelect}
+          filter="image"
+          title="Select Image for Reframe"
         />
-        {preview ? (
-          <div className="flex flex-col items-center gap-2">
-            <img src={preview} alt="Preview" className="max-h-32 rounded" />
-            <span className="text-sm text-gray-400">
-              Original: {originalSize.width}×{originalSize.height}
-            </span>
-            <span className="text-xs text-gray-500">Click to change</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-gray-400">
-            <Upload className="w-8 h-8" />
-            <span>Drop image here or click to upload</span>
-          </div>
-        )}
       </div>
 
-      <button
-        onClick={() => setShowCreationsPicker(true)}
-        className="w-full py-2.5 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer text-gray-300 hover:border-purple-500 transition-colors text-sm"
-      >
-        📁 From My Creations
-      </button>
-
-      <CreationsPickerModal
-        show={showCreationsPicker}
-        onClose={() => setShowCreationsPicker(false)}
-        onSelect={handleCreationsSelect}
-        filter="image"
-        title="Select Image for Reframe"
-      />
-
-      {/* Target Aspect Ratio */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Target Aspect Ratio
-        </label>
-        <div className="grid grid-cols-4 gap-2">
+      {/* Aspect Ratio & Position Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Target Aspect Ratio</div>
+          <span className="nav-badge">{aspectRatio.width}×{aspectRatio.height}</span>
+        </div>
+        <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px' }}>
           {ASPECT_RATIOS.map(ar => (
             <button
               key={ar.id}
               onClick={() => setAspectRatio(ar)}
-              className={`px-3 py-2 text-sm rounded transition-colors ${
-                aspectRatio.id === ar.id
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+              className={`grok-toggle-btn ${aspectRatio.id === ar.id ? 'active' : ''}`}
+              style={{ fontSize: '0.8rem', padding: '6px 10px' }}
             >
               {ar.label}
             </button>
           ))}
         </div>
-        <span className="text-xs text-gray-500 mt-1 block">
-          Output: {aspectRatio.width}×{aspectRatio.height}
-        </span>
-      </div>
 
-      {/* Position Control */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Image Position
-        </label>
-        <div className="grid grid-cols-3 gap-2 w-40 mx-auto">
+        <label className="grok-section-label" style={{ marginTop: '16px' }}>Image Position</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '160px', margin: '0 auto' }}>
           {['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'].map(pos => (
             <button
               key={pos}
               onClick={() => setPosition(pos)}
-              className={`p-2 text-lg rounded transition-colors ${
-                position === pos
-                  ? 'bg-purple-600'
-                  : 'bg-gray-700 hover:bg-gray-600'
-              }`}
+              className={`grok-toggle-btn ${position === pos ? 'active' : ''}`}
+              style={{ padding: '8px', fontSize: '1.1rem' }}
               title={pos}
             >
               {POSITIONS.find(p => p.id === pos)?.icon || '○'}
@@ -397,25 +392,27 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
 
       {/* Preview Layout */}
       {previewLayout && (
-        <div className="bg-gray-800 rounded-lg p-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Layout Preview
-          </label>
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">Layout Preview</div>
+          </div>
           <div
-            className="relative mx-auto border border-gray-600 bg-gray-900"
             style={{
+              position: 'relative', margin: '0 auto',
+              border: '1px solid var(--border-color)', background: '#0a0a0a',
               width: Math.min(300, previewLayout.targetW / 3),
               height: Math.min(300, previewLayout.targetH / 3),
-              aspectRatio: `${previewLayout.targetW} / ${previewLayout.targetH}`
+              aspectRatio: `${previewLayout.targetW} / ${previewLayout.targetH}`,
+              borderRadius: '4px', overflow: 'hidden',
             }}
           >
-            {/* Outpaint area (striped) */}
-            <div className="absolute inset-0 bg-stripes opacity-30" />
-
-            {/* Original image position */}
+            <div style={{ position: 'absolute', inset: 0, opacity: 0.3, background: 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.05) 5px, rgba(255,255,255,0.05) 10px)' }} />
             <div
-              className="absolute bg-purple-600/50 border-2 border-purple-400 flex items-center justify-center text-xs"
               style={{
+                position: 'absolute',
+                background: 'rgba(168, 85, 247, 0.4)', border: '2px solid rgba(168, 85, 247, 0.7)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem',
+                color: 'var(--text-secondary)',
                 width: `${(previewLayout.scaledW / previewLayout.targetW) * 100}%`,
                 height: `${(previewLayout.scaledH / previewLayout.targetH) * 100}%`,
                 left: `${(previewLayout.offsetX / previewLayout.targetW) * 100}%`,
@@ -425,41 +422,34 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
               Original
             </div>
           </div>
-          <p className="text-xs text-gray-500 text-center mt-2">
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '8px' }}>
             Purple = original image, striped = AI-generated fill
           </p>
         </div>
       )}
 
-      {/* Prompt */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Fill Prompt (optional)
-        </label>
+      {/* Prompt & Model Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Generation Settings</div>
+        </div>
+
+        <label className="grok-section-label">Fill Prompt (optional)</label>
         <textarea
+          className="form-textarea"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe what should appear in the extended areas..."
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 resize-none"
           rows={2}
         />
-      </div>
 
-      {/* Model Selector */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Model
-        </label>
-        <div className="flex gap-2">
+        <label className="grok-section-label" style={{ marginTop: '12px' }}>Model</label>
+        <div className="grok-toggle-group">
           {MODELS.map(m => (
             <button
               key={m.id}
               onClick={() => setModel(m)}
-              className={`flex-1 px-3 py-2 text-sm rounded transition-colors ${
-                model.id === m.id
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+              className={`grok-toggle-btn ${model.id === m.id ? 'active' : ''}`}
             >
               {m.label}
             </button>
@@ -467,134 +457,107 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
         </div>
       </div>
 
-      {/* Advanced Settings */}
-      <div className="border border-gray-700 rounded-lg overflow-hidden">
+      {/* Advanced Settings Card */}
+      <div className="grok-card" style={{ padding: 0, overflow: 'hidden' }}>
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full px-4 py-2 bg-gray-800 flex items-center justify-between text-gray-300 hover:bg-gray-750"
+          style={{
+            width: '100%', padding: '14px 20px', background: 'transparent', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            color: 'var(--text-secondary)', cursor: 'pointer',
+          }}
         >
-          <span className="text-sm font-medium">Advanced Settings</span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Advanced Settings</span>
+          <ChevronDown size={16} style={{ transition: 'transform 0.2s', transform: showAdvanced ? 'rotate(180deg)' : 'none' }} />
         </button>
 
         {showAdvanced && (
-          <div className="p-4 space-y-4 bg-gray-850">
-            {/* Steps */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Steps: {steps}
-              </label>
-              <input
-                type="range"
-                min={10}
-                max={50}
-                value={steps}
-                onChange={(e) => setSteps(Number(e.target.value))}
-                className="w-full accent-purple-500"
-              />
+          <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="grok-section-label">Steps</label>
+                <span className="nav-badge">{steps}</span>
+              </div>
+              <input type="range" className="form-range" min={10} max={50} value={steps} onChange={(e) => setSteps(Number(e.target.value))} />
             </div>
 
-            {/* CFG */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                CFG Scale: {cfg}
-              </label>
-              <input
-                type="range"
-                min={1}
-                max={15}
-                step={0.5}
-                value={cfg}
-                onChange={(e) => setCfg(Number(e.target.value))}
-                className="w-full accent-purple-500"
-              />
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="grok-section-label">CFG Scale</label>
+                <span className="nav-badge">{cfg}</span>
+              </div>
+              <input type="range" className="form-range" min={1} max={15} step={0.5} value={cfg} onChange={(e) => setCfg(Number(e.target.value))} />
             </div>
 
-            {/* Denoise */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Denoise: {denoise.toFixed(2)}
-              </label>
-              <input
-                type="range"
-                min={0.5}
-                max={1}
-                step={0.05}
-                value={denoise}
-                onChange={(e) => setDenoise(Number(e.target.value))}
-                className="w-full accent-purple-500"
-              />
-              <span className="text-xs text-gray-500">Higher = more creative fill</span>
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="grok-section-label">Denoise</label>
+                <span className="nav-badge">{denoise.toFixed(2)}</span>
+              </div>
+              <input type="range" className="form-range" min={0.5} max={1} step={0.05} value={denoise} onChange={(e) => setDenoise(Number(e.target.value))} />
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Higher = more creative fill</span>
             </div>
 
-            {/* Feathering */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Edge Feathering: {feathering}px
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={64}
-                step={8}
-                value={feathering}
-                onChange={(e) => setFeathering(Number(e.target.value))}
-                className="w-full accent-purple-500"
-              />
-              <span className="text-xs text-gray-500">Blend between original and fill</span>
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="grok-section-label">Edge Feathering</label>
+                <span className="nav-badge">{feathering}px</span>
+              </div>
+              <input type="range" className="form-range" min={0} max={64} step={8} value={feathering} onChange={(e) => setFeathering(Number(e.target.value))} />
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Blend between original and fill</span>
             </div>
           </div>
         )}
       </div>
 
+      {error && <div className="status-banner error">{error}</div>}
+
       {/* Generate Button */}
       <button
+        className="primary-btn"
         onClick={handleGenerate}
         disabled={isLoading || !file}
-        className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '48px', fontSize: '1rem' }}
       >
         {isLoading ? (
           <>
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 size={18} className="animate-spin" />
             Queueing...
           </>
         ) : (
           <>
-            <Frame className="w-5 h-5" />
+            <Frame size={18} />
             Reframe Image
           </>
         )}
       </button>
 
-      {/* Queued confirmation */}
       {lastQueued && (
-        <div className="p-3 bg-green-900/50 border border-green-700 rounded-lg text-green-200 text-sm">
-          ✅ Reframe job queued! ({lastQueued.aspectRatio}) - Check queue panel for progress
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
-          {error}
+        <div className="status-banner success">
+          ✅ Reframe job queued! ({lastQueued.aspectRatio}) — Check queue panel for progress
         </div>
       )}
 
       {/* Result */}
       {result && (
-        <div className="space-y-3">
-          <div className="rounded-lg overflow-hidden border border-gray-700">
-            <img src={result.url} alt="Reframed" className="w-full" />
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">Result</div>
           </div>
-          <div className="flex gap-2">
+          <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
+            <img src={result.url} alt="Reframed" style={{ width: '100%', display: 'block' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             <button
+              className="primary-btn"
               onClick={handleDownload}
-              className="flex-1 py-2 bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-2"
+              style={{ flex: 1, height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
             >
-              <Download className="w-4 h-4" />
+              <Download size={16} />
               Download
             </button>
             <button
+              className="primary-btn"
               onClick={() => {
                 setFile(null)
                 setPreview(null)
@@ -608,21 +571,14 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
                   img.src = result.url
                 })
               }}
-              className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center justify-center gap-2"
+              style={{ flex: 1, height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
             >
-              <Move className="w-4 h-4" />
+              <Move size={16} />
               Use as Input
             </button>
           </div>
         </div>
       )}
-
-      {/* Info */}
-      <div className="text-xs text-gray-500 space-y-1">
-        <p>💡 <strong>Reframe</strong> extends your image to a new aspect ratio using AI outpainting.</p>
-        <p>📐 The original image will be placed according to the position you select.</p>
-        <p>🎨 Use the prompt to guide what should appear in the extended areas.</p>
-      </div>
     </div>
   )
 }

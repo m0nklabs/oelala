@@ -131,143 +131,111 @@ export default function VideoUpscalerTool({ onOutput, onJobSubmitted }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-      <div style={{ marginBottom: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 600, marginBottom: '4px' }}>Video Upscaler</h2>
+    <div className="tool-container">
+      {/* Upload Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ZoomIn size={16} />
+            Video Upscaler
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
         </div>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-          AI-enhanced video upscaling • 480p → 720p → 1080p → 4K
-        </p>
-      </div>
 
-      {/* Upload Section */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-        style={{
-          border: '2px dashed var(--border-color)',
-          borderRadius: '8px',
-          padding: '24px',
-          textAlign: 'center',
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-        }}
-        onClick={() => document.getElementById('video-upscale-file')?.click()}
-      >
-        <Upload size={32} style={{ margin: '0 auto 12px', color: 'var(--text-muted)' }} />
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-          {file ? file.name : 'Drop video or click to upload'}
-        </p>
-        {videoInfo && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {videoInfo.width}×{videoInfo.height} • {videoInfo.duration}s
-          </p>
-        )}
-        <input
-          id="video-upscale-file"
-          type="file"
-          accept="video/*"
-          onChange={handleFileChange}
-          style={{ display: 'none' }}
-        />
-      </div>
-
-      {/* Preview */}
-      {preview && (
-        <div style={{ borderRadius: '8px', overflow: 'hidden', maxWidth: '100%' }}>
-          <video
-            src={preview}
-            controls
-            style={{ width: '100%', maxHeight: '400px', display: 'block' }}
+        <div
+          className="upload-box"
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          onClick={() => document.getElementById('video-upscale-file')?.click()}
+          style={{ cursor: 'pointer' }}
+        >
+          {preview ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <video
+                src={preview}
+                controls
+                muted
+                style={{ maxHeight: '180px', borderRadius: '8px', maxWidth: '100%' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{file?.name}</span>
+              {videoInfo && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '12px' }}>
+                  <span>📐 {videoInfo.width}×{videoInfo.height}</span>
+                  <span>⏱️ {videoInfo.duration}s</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <Upload size={32} className="text-muted" />
+              <div className="text-muted">Drop video here, or click to upload</div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MP4, WebM, MOV</span>
+            </>
+          )}
+          <input
+            id="video-upscale-file"
+            type="file"
+            accept="video/*"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
           />
         </div>
-      )}
+      </div>
 
-      {/* Settings */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* Model Selection */}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            Upscale Model
-          </label>
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              border: '1px solid var(--border-color)',
-              background: 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
-              fontSize: '0.9rem',
-            }}
-          >
+      {/* Settings Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Settings</div>
+        </div>
+
+        <div className="form-group">
+          <label className="grok-section-label">Upscale Model</label>
+          <div className="grok-toggle-group" style={{ flexDirection: 'column' }}>
             {UPSCALE_MODELS.map(m => (
-              <option key={m.value} value={m.value}>
-                {m.label} - {m.desc}
-              </option>
+              <button
+                key={m.value}
+                onClick={() => setModel(m.value)}
+                className={`grok-toggle-btn ${model === m.value ? 'active' : ''}`}
+                style={{ textAlign: 'left', padding: '10px 12px' }}
+              >
+                <div style={{ fontWeight: 500 }}>{m.label}</div>
+                <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>{m.desc}</div>
+              </button>
             ))}
-          </select>
-          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Note: Currently uses fixed 4x upscaling with RealESRGAN. Custom resolution and quality settings coming soon.
-          </p>
+          </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+            Currently uses fixed 4x upscaling. Custom resolution settings coming soon.
+          </div>
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px' }}>
-          <p style={{ fontSize: '0.85rem', color: '#ef4444' }}>{error}</p>
-        </div>
-      )}
-
-      {/* Queued Confirmation */}
-      {lastQueued && (
-        <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '6px' }}>
-          <p style={{ fontSize: '0.85rem', color: '#22c55e' }}>
-            ✓ Video upscale queued! ({lastQueued.model})
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Job ID: {lastQueued.promptId}
-          </p>
-        </div>
-      )}
+      {error && <div className="status-banner error">{error}</div>}
 
       {/* Generate Button */}
       <button
+        className="primary-btn"
         onClick={handleUpscale}
         disabled={!file || submitting}
-        style={{
-          padding: '14px',
-          borderRadius: '8px',
-          border: 'none',
-          background: !file || submitting ? 'var(--bg-tertiary)' : 'var(--accent-color)',
-          color: !file || submitting ? 'var(--text-muted)' : 'white',
-          fontSize: '1rem',
-          fontWeight: 600,
-          cursor: !file || submitting ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          transition: 'all 0.2s',
-        }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '48px', fontSize: '1rem' }}
       >
         {submitting ? (
           <>
-            <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+            <Loader2 size={18} className="animate-spin" />
             Upscaling...
           </>
         ) : (
           <>
-            <ZoomIn size={20} />
+            <ZoomIn size={18} />
             Upscale Video
           </>
         )}
       </button>
+
+      {lastQueued && (
+        <div className="status-banner success">
+          ✅ Video upscale queued! ({lastQueued.model}) — Check queue panel for progress
+        </div>
+      )}
     </div>
   )
 }

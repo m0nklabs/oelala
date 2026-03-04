@@ -186,12 +186,12 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
   return (
     <div className="tool-container">
       {/* Video Input */}
-      <div className="tool-section">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ margin: 0 }}>
-            <FileVideo size={18} />
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileVideo size={16} />
             Input Video (with face)
-          </h3>
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
         </div>
 
@@ -232,11 +232,13 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
       </div>
 
       {/* Audio Input */}
-      <div className="tool-section">
-        <h3>
-          <FileAudio size={18} />
-          Audio Track (speech/dialogue)
-        </h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileAudio size={16} />
+            Audio Track (speech/dialogue)
+          </div>
+        </div>
 
         {!audioFile ? (
           <div
@@ -270,11 +272,13 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
       </div>
 
       {/* Settings */}
-      <div className="tool-section">
-        <h3>
-          <Sliders size={18} />
-          Settings
-        </h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Sliders size={16} />
+            Settings
+          </div>
+        </div>
 
         <div className="setting-row">
           <label>Lips Expression</label>
@@ -328,7 +332,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
       )}
 
       {/* Generate Button */}
-      <div className="tool-section">
+      <div className="grok-card">
         <button
           className="generate-btn"
           onClick={handleGenerate}
@@ -358,7 +362,7 @@ export default function LipSyncTool({ onOutput, onJobSubmitted }) {
 
       {/* Result */}
       {result && (
-        <div className="tool-section result-section">
+        <div className="grok-card">
           <h3>
             <Video size={18} />
             Lip Synced Result

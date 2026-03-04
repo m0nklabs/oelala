@@ -169,12 +169,12 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     <div className="tool-container">
       {/* NSFW Toggle — only visible when NSFW is enabled globally */}
       {nsfwEnabled && (
-        <div className="tool-section">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Flame size={18} color={nsfwMode ? '#ef4444' : undefined} />
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Flame size={16} color={nsfwMode ? '#ef4444' : undefined} />
               NSFW Mode
-            </h3>
+            </div>
             <button
               onClick={() => handleNsfwToggle(!nsfwMode)}
               style={{
@@ -209,12 +209,14 @@ export default function PromptGeneratorTool({ onSendToTool }) {
         </div>
       )}
 
-      <div className="tool-section">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Sparkles size={18} />
-          Input Idea
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Sparkles size={16} />
+            Input Idea
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
-        </h3>
+        </div>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -222,12 +224,14 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             ? 'Describe your NSFW scene idea... (e.g., "woman in lingerie, bedroom")'
             : 'Describe your image or video idea... (e.g., \'a cat wearing sunglasses\')'}
           rows={3}
-          className="prompt-input"
+          className="form-textarea"
         />
       </div>
 
-      <div className="tool-section">
-        <h3>Style Preset</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Style Preset</div>
+        </div>
         <div className="style-grid">
           {activeStyles.map((s) => (
             <button
@@ -242,8 +246,10 @@ export default function PromptGeneratorTool({ onSendToTool }) {
         </div>
       </div>
 
-      <div className="tool-section">
-        <h3>Options</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Options</div>
+        </div>
         <div className="options-row">
           <label className="checkbox-label">
             <input
@@ -265,10 +271,10 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       </div>
 
       {/* Camera Motion Selector — available for both SFW and NSFW */}
-      <div className="tool-section">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          🎬 Camera Motion
-        </h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Camera Motion</div>
+        </div>
         <CameraMotionSelector
           value={cameraMotion}
           onChange={setCameraMotion}
@@ -278,15 +284,14 @@ export default function PromptGeneratorTool({ onSendToTool }) {
         </p>
       </div>
 
-      <div className="tool-section">
-        <h3>AI Model</h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">AI Model</div>
+        </div>
         <select
           value={enhanceModel}
           onChange={(e) => setEnhanceModel(e.target.value)}
-          style={{ width: '100%', padding: '10px 12px', borderRadius: '8px',
-            border: `1px solid ${nsfwMode ? 'rgba(239,68,68,0.3)' : 'var(--border-color, #444)'}`,
-            background: 'var(--bg-secondary, #1a1a1a)', color: 'var(--text-color, #fff)',
-            fontSize: '14px', cursor: 'pointer' }}
+          className="form-select"
         >
           {activeModels.map((m) => (
             <option key={m.id} value={m.id}>{m.label}</option>

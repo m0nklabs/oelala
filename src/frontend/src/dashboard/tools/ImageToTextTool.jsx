@@ -289,12 +289,15 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         />
       )}
 
-      <div className="tool-section">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <ImageIcon size={18} />
-          Upload Image
+      {/* Upload Image Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ImageIcon size={16} />
+            Upload Image
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
-        </h3>
+        </div>
 
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
@@ -335,15 +338,18 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         />
       </div>
 
-      <div className="tool-section">
-        <h3>
-          <Wand2 size={18} />
-          Caption Settings
-        </h3>
+      {/* Caption Settings Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Wand2 size={16} />
+            Caption Settings
+          </div>
+        </div>
 
         <div className="form-group">
-          <label>Vision Model (I2T)</label>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
+          <label className="grok-section-label">Vision Model (I2T)</label>
+          <select className="form-select" value={model} onChange={(e) => setModel(e.target.value)}>
             {MODELS.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label} - {m.description}
@@ -382,7 +388,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         </div>
 
         <div className="form-group">
-          <label>Prompt Generator <span style={{ fontSize: '0.7rem', color: 'var(--text-muted, #666)', fontWeight: 'normal' }}>(optional — click again to deselect)</span></label>
+          <label className="grok-section-label">Prompt Generator <span style={{ fontSize: '0.7rem', color: 'var(--text-muted, #666)', fontWeight: 'normal' }}>(optional — click again to deselect)</span></label>
           <div className="button-group">
             {CAPTION_MODES.filter(m => m.group === 'prompt').map((m) => (
               <button

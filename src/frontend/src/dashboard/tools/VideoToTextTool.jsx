@@ -268,12 +268,15 @@ export default function VideoToTextTool() {
   return (
     <div className="tool-container">
 
-      <div className="tool-section">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Video size={18} />
-          Source Video
+      {/* Source Video Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Video size={16} />
+            Source Video
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
-        </h3>
+        </div>
 
         {/* Source Tabs */}
         <div className="source-tabs">
@@ -423,12 +426,14 @@ export default function VideoToTextTool() {
         )}
       </div>
 
-      {/* Model Selection */}
-      <div className="tool-section">
-        <h3>
-          <FileText size={18} />
-          Analysis Model
-        </h3>
+      {/* Analysis Model Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileText size={16} />
+            Analysis Model
+          </div>
+        </div>
         <div className="model-grid">
           {MODELS.map((m) => (
             <button
@@ -443,9 +448,11 @@ export default function VideoToTextTool() {
         </div>
       </div>
 
-      {/* Caption Mode */}
-      <div className="tool-section">
-        <h3>Output Style</h3>
+      {/* Output Style Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Output Style</div>
+        </div>
         <div className="mode-grid">
           {CAPTION_MODES.map((m) => (
             <button
@@ -460,38 +467,37 @@ export default function VideoToTextTool() {
         </div>
       </div>
 
-      {/* Advanced Settings */}
-      <div className="tool-section collapsible">
-        <h3
+      {/* Advanced Settings Card */}
+      <div className="grok-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          style={{ cursor: 'pointer' }}
+          style={{
+            width: '100%', padding: '14px 20px', background: 'transparent', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            color: 'var(--text-secondary)', cursor: 'pointer',
+          }}
         >
-          <Settings size={16} />
-          Advanced
-          <ChevronDown
-            size={16}
-            style={{
-              marginLeft: 'auto',
-              transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s'
-            }}
-          />
-        </h3>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={16} />
+            Advanced
+          </span>
+          <ChevronDown size={16} style={{ transition: 'transform 0.2s', transform: showAdvanced ? 'rotate(180deg)' : 'none' }} />
+        </button>
 
         {showAdvanced && (
-          <div className="advanced-content">
-            <div className="form-row">
-              <label>Frame Interval</label>
-              <select value={frameInterval} onChange={(e) => setFrameInterval(parseFloat(e.target.value))}>
+          <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label className="grok-section-label">Frame Interval</label>
+              <select className="form-select" value={frameInterval} onChange={(e) => setFrameInterval(parseFloat(e.target.value))}>
                 <option value={0.5}>Every 0.5s</option>
                 <option value={1}>Every 1s</option>
                 <option value={2}>Every 2s</option>
                 <option value={5}>Every 5s</option>
               </select>
             </div>
-            <div className="form-row">
-              <label>Max Frames</label>
-              <select value={maxFrames} onChange={(e) => setMaxFrames(parseInt(e.target.value))}>
+            <div>
+              <label className="grok-section-label">Max Frames</label>
+              <select className="form-select" value={maxFrames} onChange={(e) => setMaxFrames(parseInt(e.target.value))}>
                 <option value={4}>4 frames</option>
                 <option value={8}>8 frames</option>
                 <option value={16}>16 frames</option>

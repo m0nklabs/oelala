@@ -170,12 +170,14 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
   return (
     <div className="tool-container">
       {/* Mode Selection */}
-      <div className="tool-section">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Volume2 size={18} />
-          Generation Mode
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Volume2 size={16} />
+            Generation Mode
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
-        </h3>
+        </div>
         <div className="mode-grid">
           {AUDIO_MODES.map((m) => (
             <button
@@ -192,10 +194,12 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
       </div>
 
       {/* Input */}
-      <div className="tool-section">
-        <h3>
-          {mode === 'tts' ? 'Text to Speak' : mode === 'music' ? 'Music Prompt' : 'Sound Description'}
-        </h3>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">
+            {mode === 'tts' ? 'Text to Speak' : mode === 'music' ? 'Music Prompt' : 'Sound Description'}
+          </div>
+        </div>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -207,14 +211,16 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
               : 'Describe the sound effect (e.g., "thunder rumbling in the distance")'
           }
           rows={4}
-          className="prompt-textarea"
+          className="form-textarea"
         />
       </div>
 
       {/* TTS Voice Selection */}
       {mode === 'tts' && (
-        <div className="tool-section">
-          <h3>Voice</h3>
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">Voice</div>
+          </div>
           {/* Female voices */}
           <div className="voice-group">
             <span className="voice-group-label">Female</span>
@@ -252,8 +258,10 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
 
       {/* Music Style */}
       {mode === 'music' && (
-        <div className="tool-section">
-          <h3>Style</h3>
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">Style</div>
+          </div>
           <div className="style-grid">
             {MUSIC_STYLES.map((s) => (
               <button
@@ -270,8 +278,10 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
 
       {/* Duration (for music/sfx) */}
       {(mode === 'music' || mode === 'sfx') && (
-        <div className="tool-section">
-          <h3>Duration</h3>
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">Duration</div>
+          </div>
           <div className="slider-row">
             <input
               type="range"
@@ -287,48 +297,41 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
 
       {/* Advanced Settings */}
       {mode === 'tts' && (
-        <div className="tool-section collapsible">
-          <h3
+        <div className="grok-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            style={{ cursor: 'pointer' }}
+            style={{
+              width: '100%', padding: '14px 20px', background: 'transparent', border: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              color: 'var(--text-secondary)', cursor: 'pointer',
+            }}
           >
-            <Settings size={16} />
-            Advanced
-            <ChevronDown
-              size={16}
-              style={{
-                marginLeft: 'auto',
-                transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s'
-              }}
-            />
-          </h3>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings size={16} />
+              Advanced
+            </span>
+            <ChevronDown size={16} style={{ transition: 'transform 0.2s', transform: showAdvanced ? 'rotate(180deg)' : 'none' }} />
+          </button>
 
           {showAdvanced && (
-            <div className="advanced-content">
-              <div className="slider-row">
-                <label>Speed</label>
+            <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label className="grok-section-label">Speed <span className="nav-badge">{speed.toFixed(1)}x</span></label>
                 <input
-                  type="range"
-                  min={0.5}
-                  max={2}
-                  step={0.1}
+                  type="range" className="form-range"
+                  min={0.5} max={2} step={0.1}
                   value={speed}
                   onChange={(e) => setSpeed(parseFloat(e.target.value))}
                 />
-                <span className="slider-value">{speed.toFixed(1)}x</span>
               </div>
-              <div className="slider-row">
-                <label>Pitch</label>
+              <div>
+                <label className="grok-section-label">Pitch <span className="nav-badge">{pitch.toFixed(1)}x</span></label>
                 <input
-                  type="range"
-                  min={0.5}
-                  max={2}
-                  step={0.1}
+                  type="range" className="form-range"
+                  min={0.5} max={2} step={0.1}
                   value={pitch}
                   onChange={(e) => setPitch(parseFloat(e.target.value))}
                 />
-                <span className="slider-value">{pitch.toFixed(1)}x</span>
               </div>
             </div>
           )}
@@ -389,18 +392,6 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
       )}
 
       <style>{`
-        .tool-section {
-          margin-bottom: 20px;
-        }
-        .tool-section h3 {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          font-weight: 500;
-          margin-bottom: 12px;
-          color: var(--text-color, #fff);
-        }
         .mode-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);

@@ -21,40 +21,31 @@ export default function FaceSwapTool({ onJobSubmitted, pendingImport, onImportCo
   const [tab, setTab] = useState('swap') // 'swap' | 'profiles' | 'train'
 
   return (
-    <div className="space-y-4">
+    <div className="tool-container">
       {/* Tab pills */}
-      <div className="flex gap-1 p-1 bg-gray-800 rounded-lg">
+      <div className="grok-toggle-group">
         <button
           onClick={() => setTab('swap')}
-          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
-            tab === 'swap'
-              ? 'bg-purple-600 text-white'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
+          className={`grok-toggle-btn ${tab === 'swap' ? 'active' : ''}`}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw size={14} />
           Swap
         </button>
         <button
           onClick={() => setTab('profiles')}
-          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
-            tab === 'profiles'
-              ? 'bg-purple-600 text-white'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
+          className={`grok-toggle-btn ${tab === 'profiles' ? 'active' : ''}`}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
-          <Users className="w-3.5 h-3.5" />
+          <Users size={14} />
           Profiles
         </button>
         <button
           onClick={() => setTab('train')}
-          className={`flex-1 py-2 text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
-            tab === 'train'
-              ? 'bg-purple-600 text-white'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
+          className={`grok-toggle-btn ${tab === 'train' ? 'active' : ''}`}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
-          <Cpu className="w-3.5 h-3.5" />
+          <Cpu size={14} />
           Train LoRA
         </button>
       </div>
@@ -70,9 +61,9 @@ export default function FaceSwapTool({ onJobSubmitted, pendingImport, onImportCo
       )}
 
       {/* Ethical use notice */}
-      <div className="flex items-start gap-2 p-3 bg-yellow-900/30 border border-yellow-700/50 rounded-lg">
-        <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-yellow-200">
+      <div className="status-banner warning">
+        <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+        <div>
           <strong>Ethical Use:</strong> Only use face swap with consent of all parties involved.
           Creating non-consensual deepfakes is illegal in many jurisdictions.
         </div>
@@ -316,7 +307,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
   const indicesLabel = swapAllFaces ? 'all faces' : `face #${faceIndex}`
 
   return (
-    <div className="space-y-4">
+    <div className="tool-container" style={{ gap: '12px' }}>
       {importModal && (
         <MediaImportModal
           item={importModal.item}
@@ -328,23 +319,21 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       )}
 
       {/* Source mode toggle */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide">
-            Source face
-          </label>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Source Face</div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
         </div>
-        <div className="flex gap-2 p-1 bg-gray-800 rounded-lg">
+        <div className="grok-toggle-group">
           <button
             onClick={() => setSourceMode('upload')}
-            className={`flex-1 py-1.5 text-sm rounded transition-colors ${sourceMode === 'upload' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            className={`grok-toggle-btn ${sourceMode === 'upload' ? 'active' : ''}`}
           >
             Upload photo
           </button>
           <button
             onClick={() => setSourceMode('profile')}
-            className={`flex-1 py-1.5 text-sm rounded transition-colors ${sourceMode === 'profile' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            className={`grok-toggle-btn ${sourceMode === 'profile' ? 'active' : ''}`}
           >
             Saved profile {profiles.length > 0 && `(${profiles.length})`}
           </button>
@@ -352,7 +341,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       </div>
 
       {/* Upload grid */}
-      <div className="grid grid-cols-2 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         {/* Target */}
         <DropZone
           label="Target (face to replace)"
@@ -382,7 +371,6 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
             inputOnChange={handleSourceDrop}
             placeholder="Source face photo"
             Icon={Smile}
-            borderColor="border-blue-600"
           />
         ) : (
           <ProfilePicker
@@ -395,7 +383,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 
       <button
         onClick={() => setShowCreationsPicker(true)}
-        className="w-full py-2.5 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer text-gray-300 hover:border-purple-500 transition-colors text-sm"
+        className="btn-creations-picker"
       >
         📁 Target from My Creations
       </button>
@@ -411,9 +399,9 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       {sourceMode === 'upload' && (targetFile || sourceFile) && (
         <button
           onClick={swapInputsAction}
-          className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg flex items-center justify-center gap-2 text-sm"
+          className="btn-secondary"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw size={14} />
           Swap Target ↔ Source
         </button>
       )}
@@ -423,38 +411,38 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
         <button
           onClick={detectFaces}
           disabled={isLoading}
-          className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+          className="btn-secondary"
+          style={{ opacity: isLoading ? 0.5 : 1 }}
         >
-          <User className="w-4 h-4" />
+          <User size={14} />
           Detect Faces in Target
         </button>
       )}
 
       {/* Face selector (appears after detection) */}
       {detectedFaces && (
-        <div className="bg-gray-800 rounded-lg p-3 space-y-2">
-          <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+        <div className="grok-card">
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={swapAllFaces}
               onChange={e => setSwapAllFaces(e.target.checked)}
-              className="rounded"
+              style={{ borderRadius: '4px' }}
             />
             Swap all {detectedFaces.length} detected face{detectedFaces.length !== 1 ? 's' : ''}
           </label>
           {!swapAllFaces && detectedFaces.length > 1 && (
-            <div className="flex gap-2 flex-wrap mt-1">
+            <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
               {detectedFaces.map((face, idx) => (
                 <button
                   key={idx}
                   onClick={() => setFaceIndex(idx)}
-                  className={`px-3 py-1 text-sm rounded ${
-                    faceIndex === idx ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  className={`grok-toggle-btn ${faceIndex === idx ? 'active' : ''}`}
+                  style={{ fontSize: '0.8rem', padding: '6px 12px' }}
                 >
                   Face {idx + 1}
                   {face?.confidence && (
-                    <span className="ml-1 opacity-60 text-xs">{Math.round(face.confidence * 100)}%</span>
+                    <span style={{ marginLeft: '4px', opacity: 0.6, fontSize: '0.7rem' }}>{Math.round(face.confidence * 100)}%</span>
                   )}
                 </button>
               ))}
@@ -463,8 +451,14 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
         </div>
       )}
 
+      {/* Error */}
+      {error && (
+        <div className="status-banner error">{error}</div>
+      )}
+
       {/* Generate button */}
       <button
+        className="primary-btn"
         onClick={handleSwap}
         disabled={
           isLoading ||
@@ -472,26 +466,22 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
           (sourceMode === 'upload' && !sourceFile) ||
           (sourceMode === 'profile' && !selectedProfileId)
         }
-        className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '48px', fontSize: '1rem' }}
       >
         {isLoading ? (
-          <><Loader2 className="w-5 h-5 animate-spin" /> {isVideoTarget ? 'Processing video...' : 'Swapping...'}</>
+          <><Loader2 size={18} className="animate-spin" /> {isVideoTarget ? 'Processing video...' : 'Swapping...'}</>
         ) : (
-          <><User className="w-5 h-5" /> {isVideoTarget ? 'Swap Face in Video' : `Swap Face${detectedFaces ? ` (${indicesLabel})` : ''}`}</>
+          <><User size={18} /> {isVideoTarget ? 'Swap Face in Video' : `Swap Face${detectedFaces ? ` (${indicesLabel})` : ''}`}</>
         )}
       </button>
 
-      {/* Error */}
-      {error && (
-        <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
-          {error}
-        </div>
-      )}
-
       {/* Result */}
       {result && (
-        <div className="space-y-3">
-          <div className="rounded-lg overflow-hidden border border-gray-700 bg-black">
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title">Result</div>
+          </div>
+          <div style={{ borderRadius: '8px', overflow: 'hidden', background: '#000' }}>
             {result.isVideo ? (
               <video
                 src={result.objectUrl}
@@ -500,28 +490,22 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
                 loop
                 muted
                 playsInline
-                className="w-full max-h-[480px]"
+                style={{ width: '100%', maxHeight: '480px', display: 'block' }}
               />
             ) : (
-              <img src={result.objectUrl} alt="Face swap result" className="w-full" />
+              <img src={result.objectUrl} alt="Face swap result" style={{ width: '100%', display: 'block' }} />
             )}
           </div>
           <button
+            className="primary-btn"
             onClick={handleDownload}
-            className="w-full py-2 bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-2"
+            style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '40px' }}
           >
-            <Download className="w-4 h-4" />
+            <Download size={16} />
             Download {result.isVideo ? 'Video' : 'Image'}
           </button>
         </div>
       )}
-
-      <div className="text-xs text-gray-500 space-y-1">
-        <p>📸 Best results: clear frontal face photo, good lighting, no obstructions.</p>
-        <p>⚡ Images run directly — result in seconds. Videos process frame-by-frame (may take a minute).</p>
-        <p>🎬 Supports MP4, MOV, WebM — audio is preserved in the output.</p>
-        <p>💾 Reuse faces often? Save them as a <strong>Face Profile</strong> in the Profiles tab.</p>
-      </div>
     </div>
   )
 }
@@ -533,31 +517,26 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 function ProfilePicker({ profiles, selectedId, onSelect }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-300 mb-2">Source (saved profile)</label>
-      <div className="border-2 border-dashed border-gray-600 rounded-lg p-2 space-y-1.5 overflow-y-auto"
-        style={{ minHeight: '12rem', maxHeight: '16rem' }}
-      >
+      <label className="grok-section-label">Source (saved profile)</label>
+      <div className="upload-box" style={{ minHeight: '12rem', maxHeight: '16rem', overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {profiles.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500 py-4">
-            <Users className="w-6 h-6" />
-            <span className="text-xs text-center">No profiles yet.<br/>Create one in the Profiles tab.</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '8px', color: 'var(--text-muted)', padding: '16px 0' }}>
+            <Users size={24} />
+            <span style={{ fontSize: '0.75rem', textAlign: 'center' }}>No profiles yet.<br/>Create one in the Profiles tab.</span>
           </div>
         ) : profiles.map(p => (
           <button
             key={p.id}
             onClick={() => onSelect(p.id)}
-            className={`w-full flex items-center gap-2 px-2.5 py-2 rounded text-sm text-left transition-colors ${
-              selectedId === p.id
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
+            className={`grok-toggle-btn ${selectedId === p.id ? 'active' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', textAlign: 'left', width: '100%' }}
           >
-            <User className="w-3.5 h-3.5 flex-shrink-0" />
-            <div className="truncate flex-1">
-              <div className="font-medium truncate text-xs">{p.name}</div>
-              <div className="text-xs opacity-60">{p.image_count} photo{p.image_count !== 1 ? 's' : ''}</div>
+            <User size={14} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ fontWeight: 500, fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+              <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>{p.image_count} photo{p.image_count !== 1 ? 's' : ''}</div>
             </div>
-            {selectedId === p.id && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+            {selectedId === p.id && <Check size={14} style={{ flexShrink: 0 }} />}
           </button>
         ))}
       </div>
@@ -662,73 +641,86 @@ function ProfilesPanel({ user, requestLogin }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="tool-container" style={{ gap: '12px' }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-200">Face Profiles</h3>
-          <p className="text-xs text-gray-400">Save faces for quick reuse across all generation tools</p>
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Face Profiles</div>
+          <button
+            onClick={() => setShowCreateForm(v => !v)}
+            className="primary-btn"
+            style={{ height: '32px', fontSize: '0.8rem', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={14} />
+            New Profile
+          </button>
         </div>
-        <button
-          onClick={() => setShowCreateForm(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Profile
-        </button>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Save faces for quick reuse across all generation tools</p>
       </div>
 
       {/* Create form */}
       {showCreateForm && (
-        <div className="border border-purple-700/50 bg-gray-800/50 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-purple-300">Create New Profile</h4>
+        <div className="grok-card" style={{ borderColor: 'rgba(168, 85, 247, 0.3)' }}>
+          <div className="grok-card-header">
+            <div className="grok-card-title" style={{ color: '#c084fc' }}>Create New Profile</div>
+          </div>
 
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Name *</label>
+          <div className="form-group">
+            <label className="grok-section-label">Name *</label>
             <input
               type="text"
+              className="form-input"
               value={newName}
               onChange={e => setNewName(e.target.value)}
               placeholder="e.g. John Doe"
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
             />
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Description (optional)</label>
+          <div className="form-group">
+            <label className="grok-section-label">Description (optional)</label>
             <input
               type="text"
+              className="form-input"
               value={newDesc}
               onChange={e => setNewDesc(e.target.value)}
               placeholder="e.g. Actor, friend, client…"
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
             />
           </div>
 
           {/* Photo upload */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Reference Photos *</label>
-            <p className="text-xs text-gray-500 mb-2">
+          <div className="form-group">
+            <label className="grok-section-label">Reference Photos *</label>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
               Multiple angles &amp; lighting conditions = better identity accuracy. Embeddings are averaged.
             </p>
-            <div className="flex flex-wrap gap-2 mb-2">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
               {newPreviews.map((url, idx) => (
-                <div key={idx} className="relative">
-                  <img src={url} alt="" className="w-16 h-16 object-cover rounded border border-gray-600" />
+                <div key={idx} style={{ position: 'relative' }}>
+                  <img src={url} alt="" style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
                   <button
                     onClick={() => removeImage(idx)}
-                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-white hover:bg-red-700"
+                    style={{
+                      position: 'absolute', top: '-4px', right: '-4px', width: '20px', height: '20px',
+                      background: '#dc2626', borderRadius: '50%', border: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', cursor: 'pointer',
+                    }}
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 size={12} />
                   </button>
                 </div>
               ))}
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-16 h-16 border-2 border-dashed border-gray-600 rounded flex items-center justify-center hover:border-purple-500 transition-colors"
+                style={{
+                  width: '64px', height: '64px', border: '2px dashed var(--border-color)',
+                  borderRadius: '6px', background: 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'var(--text-muted)',
+                }}
                 title="Add photos"
               >
-                <Plus className="w-5 h-5 text-gray-400" />
+                <Plus size={20} />
               </button>
             </div>
             <input
@@ -737,29 +729,31 @@ function ProfilesPanel({ user, requestLogin }) {
               accept="image/*"
               multiple
               onChange={handleImagePick}
-              className="hidden"
+              style={{ display: 'none' }}
             />
-            <p className="text-xs text-gray-500">{newImages.length} photo{newImages.length !== 1 ? 's' : ''} selected</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{newImages.length} photo{newImages.length !== 1 ? 's' : ''} selected</p>
           </div>
 
           {error && (
-            <div className="p-2 bg-red-900/50 border border-red-700 rounded text-red-200 text-xs">{error}</div>
+            <div className="status-banner error">{error}</div>
           )}
 
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
+              className="primary-btn"
               onClick={handleCreate}
               disabled={creating || !newName.trim() || newImages.length === 0}
-              className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded font-medium text-sm flex items-center justify-center gap-2"
+              style={{ flex: 1, height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
             >
               {creating
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+                ? <><Loader2 size={16} className="animate-spin" /> Creating...</>
                 : 'Create Profile'
               }
             </button>
             <button
               onClick={resetForm}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              className="btn-secondary"
+              style={{ width: 'auto', padding: '0 16px' }}
             >
               Cancel
             </button>
@@ -769,20 +763,20 @@ function ProfilesPanel({ user, requestLogin }) {
 
       {/* Profiles list */}
       {loading ? (
-        <div className="flex items-center justify-center p-8 text-gray-400 gap-2">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">Loading profiles…</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px', color: 'var(--text-muted)', gap: '8px' }}>
+          <Loader2 size={20} className="animate-spin" />
+          <span style={{ fontSize: '0.85rem' }}>Loading profiles…</span>
         </div>
       ) : profiles.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-8 text-gray-500 gap-3">
-          <Users className="w-10 h-10 opacity-30" />
-          <div className="text-center">
-            <p className="text-sm font-medium">No face profiles yet</p>
-            <p className="text-xs mt-1 text-gray-500">Create a profile to quickly reuse faces across all tools</p>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px', color: 'var(--text-muted)', gap: '12px' }}>
+          <Users size={40} style={{ opacity: 0.3 }} />
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: '0.85rem', fontWeight: 500 }}>No face profiles yet</p>
+            <p style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--text-muted)' }}>Create a profile to quickly reuse faces across all tools</p>
           </div>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {profiles.map(profile => (
             <ProfileCard
               key={profile.id}
@@ -790,14 +784,6 @@ function ProfilesPanel({ user, requestLogin }) {
               onDelete={() => handleDelete(profile.id, profile.name)}
             />
           ))}
-        </div>
-      )}
-
-      {!loading && profiles.length > 0 && (
-        <div className="text-xs text-gray-500 space-y-1">
-          <p>🧠 Averaged embeddings across all photos = better identity stability.</p>
-          <p>📸 5–15 photos from varied angles &amp; expressions gives the best results.</p>
-          <p>🎬 Profiles work in Face Swap and (soon) Lynx video identity injection.</p>
         </div>
       )}
     </div>
@@ -810,31 +796,34 @@ function ProfilesPanel({ user, requestLogin }) {
 
 function ProfileCard({ profile, onDelete }) {
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
-      <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
-        <User className="w-5 h-5 text-gray-400" />
+    <div className="grok-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{
+        width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-secondary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <User size={20} style={{ color: 'var(--text-muted)' }} />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm text-gray-200 truncate">{profile.name}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.name}</div>
         {profile.description && (
-          <div className="text-xs text-gray-400 truncate">{profile.description}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.description}</div>
         )}
-        <div className="flex items-center gap-3 mt-1">
-          <span className="text-xs text-gray-500 flex items-center gap-1">
-            <ImageIcon className="w-3 h-3" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <ImageIcon size={12} />
             {profile.image_count} photo{profile.image_count !== 1 ? 's' : ''}
           </span>
-          <span className="text-xs text-purple-400">
+          <span className="nav-badge" style={{ fontSize: '0.7rem' }}>
             {profile.embedding_count} embedding{profile.embedding_count !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
       <button
         onClick={onDelete}
-        className="p-2 text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
+        style={{ padding: '8px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
         title="Delete profile"
       >
-        <Trash2 className="w-4 h-4" />
+        <Trash2 size={16} />
       </button>
     </div>
   )
@@ -950,46 +939,49 @@ function TrainLoraPanel({ user, requestLogin }) {
     : null
 
   return (
-    <div className="space-y-5">
+    <div className="tool-container" style={{ gap: '12px' }}>
       {/* Train new LoRA form */}
-      <div className="border border-purple-700/50 bg-gray-800/50 rounded-lg p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-purple-400" />
-          <h3 className="text-sm font-semibold text-gray-200">Train New Face LoRA</h3>
+      <div className="grok-card" style={{ borderColor: 'rgba(168, 85, 247, 0.3)' }}>
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Cpu size={16} style={{ color: '#c084fc' }} />
+            Train New Face LoRA
+          </div>
         </div>
-        <p className="text-xs text-gray-400">
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Trains a Dreambooth-style SDXL LoRA from your reference photos.
           Use the trigger word in any SDXL prompt to generate images with this person's face.
         </p>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Person Name *</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="form-group">
+            <label className="grok-section-label">Person Name *</label>
             <input
               type="text"
+              className="form-input"
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. John Doe"
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
             />
             {triggerPreview && (
-              <p className="text-xs text-purple-400 mt-1">Trigger: <code>{triggerPreview}</code></p>
+              <p style={{ fontSize: '0.7rem', color: '#c084fc', marginTop: '4px' }}>Trigger: <code>{triggerPreview}</code></p>
             )}
           </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">
-              Training Steps: <strong className="text-gray-200">{steps}</strong>
-            </label>
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label className="grok-section-label">Training Steps</label>
+              <span className="nav-badge">{steps}</span>
+            </div>
             <input
               type="range"
+              className="form-range"
               min={500}
               max={2000}
               step={100}
               value={steps}
               onChange={e => setSteps(Number(e.target.value))}
-              className="w-full accent-purple-500"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-0.5">
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
               <span>500 (fast)</span>
               <span>2000 (detailed)</span>
             </div>
@@ -997,95 +989,103 @@ function TrainLoraPanel({ user, requestLogin }) {
         </div>
 
         {/* Photo upload */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Reference Photos * ({images.length} selected)</label>
-          <div className="flex flex-wrap gap-2 mb-2">
+        <div className="form-group">
+          <label className="grok-section-label">Reference Photos * ({images.length} selected)</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
             {previews.map((url, idx) => (
-              <div key={idx} className="relative">
-                <img src={url} alt="" className="w-14 h-14 object-cover rounded border border-gray-600" />
+              <div key={idx} style={{ position: 'relative' }}>
+                <img src={url} alt="" style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
                 <button
                   onClick={() => removeImage(idx)}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700"
+                  style={{
+                    position: 'absolute', top: '-4px', right: '-4px', width: '16px', height: '16px',
+                    background: '#dc2626', borderRadius: '50%', border: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', cursor: 'pointer',
+                  }}
                 >
-                  <Trash2 className="w-2.5 h-2.5 text-white" />
+                  <Trash2 size={10} />
                 </button>
               </div>
             ))}
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-14 h-14 border-2 border-dashed border-gray-600 rounded flex items-center justify-center hover:border-purple-500 transition-colors"
+              style={{
+                width: '56px', height: '56px', border: '2px dashed var(--border-color)',
+                borderRadius: '6px', background: 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: 'var(--text-muted)',
+              }}
             >
-              <Plus className="w-4 h-4 text-gray-400" />
+              <Plus size={16} />
             </button>
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImagePick} className="hidden" />
-          <p className="text-xs text-gray-500">Tip: 10–20 varied photos (angles, lighting, expressions) give the best results.</p>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImagePick} style={{ display: 'none' }} />
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tip: 10–20 varied photos (angles, lighting, expressions) give the best results.</p>
         </div>
 
         {error && (
-          <div className="p-2 bg-red-900/50 border border-red-700 rounded text-red-200 text-xs">{error}</div>
+          <div className="status-banner error">{error}</div>
         )}
 
         <button
+          className="primary-btn"
           onClick={handleSubmit}
           disabled={submitting || !name.trim() || images.length < 2}
-          className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded font-medium text-sm flex items-center justify-center gap-2"
+          style={{ height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
           {submitting
-            ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting...</>
-            : <><Zap className="w-4 h-4" /> Start Training (~{Math.ceil(steps / 60)} min)</>}
+            ? <><Loader2 size={16} className="animate-spin" /> Starting...</>
+            : <><Zap size={16} /> Start Training (~{Math.ceil(steps / 60)} min)</>}
         </button>
       </div>
 
       {/* Training jobs */}
       {jobs.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Training Jobs</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <label className="grok-section-label">Training Jobs</label>
           {jobs.map(job => {
             const progress = job.steps_total > 0 ? Math.round((job.steps_done / job.steps_total) * 100) : 0
             const StatusIcon = STATUS_ICONS[job.status] || Clock
             return (
-              <div key={job.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+              <div key={job.id} className="grok-card" style={{ padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <StatusIcon
-                        className={`w-3.5 h-3.5 flex-shrink-0 ${STATUS_COLORS[job.status]} ${
-                          job.status === 'running' ? 'animate-spin' : ''
-                        }`}
+                        size={14}
+                        className={`${STATUS_COLORS[job.status]} ${job.status === 'running' ? 'animate-spin' : ''}`}
+                        style={{ flexShrink: 0 }}
                       />
-                      <span className="text-sm font-medium text-gray-200 truncate">{job.name}</span>
-                      <span className={`text-xs ${STATUS_COLORS[job.status]}`}>{job.status}</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</span>
+                      <span className={`nav-badge ${STATUS_COLORS[job.status]}`} style={{ fontSize: '0.7rem' }}>{job.status}</span>
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      trigger: <code className="text-purple-300">{job.trigger}</code>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      trigger: <code style={{ color: '#c084fc' }}>{job.trigger}</code>
                       {' · '}{job.images_count} photos · {job.steps_total} steps
                     </div>
                     {job.status === 'running' && (
-                      <div className="mt-2">
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
                           <span>Step {job.steps_done} / {job.steps_total}</span>
                           <span>{progress}%</span>
                         </div>
-                        <div className="w-full bg-gray-700 rounded-full h-1.5">
-                          <div
-                            className="bg-purple-500 h-1.5 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                          />
+                        <div style={{ width: '100%', background: 'var(--bg-secondary)', borderRadius: '4px', height: '6px' }}>
+                          <div style={{ width: `${progress}%`, background: '#a855f7', height: '6px', borderRadius: '4px', transition: 'width 0.5s' }} />
                         </div>
                       </div>
                     )}
                     {job.error && (
-                      <div className="text-xs text-red-400 mt-1">{job.error}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#fca5a5', marginTop: '4px' }}>{job.error}</div>
                     )}
                   </div>
                   {(job.status === 'pending' || job.status === 'running') && (
                     <button
                       onClick={() => handleCancel(job.id)}
-                      className="text-gray-500 hover:text-red-400 flex-shrink-0"
+                      style={{ padding: '4px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}
                       title="Cancel"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
@@ -1097,27 +1097,25 @@ function TrainLoraPanel({ user, requestLogin }) {
 
       {/* Ready LoRAs */}
       {loras.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Trained LoRAs — Ready to Use</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <label className="grok-section-label">Trained LoRAs — Ready to Use</label>
           {loras.map(lora => (
-            <div key={lora.filename} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg border border-green-800/40">
-              <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-200 truncate">{lora.filename}</div>
-                <div className="text-xs text-gray-500">{lora.size_mb} MB</div>
+            <div key={lora.filename} className="grok-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderColor: 'rgba(34, 197, 94, 0.3)' }}>
+              <Check size={16} style={{ color: '#22c55e', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lora.filename}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{lora.size_mb} MB</div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <code className="text-xs text-purple-300 bg-gray-700 px-2 py-1 rounded font-mono">
-                  {lora.trigger}
-                </code>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <code className="nav-badge" style={{ fontSize: '0.7rem', fontFamily: 'monospace' }}>{lora.trigger}</code>
                 <button
                   onClick={() => copyTrigger(lora.trigger)}
-                  className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors"
+                  style={{ padding: '6px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
                   title="Copy trigger word"
                 >
                   {copiedTrigger === lora.trigger
-                    ? <CheckCheck className="w-3.5 h-3.5 text-green-400" />
-                    : <Copy className="w-3.5 h-3.5" />}
+                    ? <CheckCheck size={14} style={{ color: '#22c55e' }} />
+                    : <Copy size={14} />}
                 </button>
               </div>
             </div>
@@ -1126,20 +1124,14 @@ function TrainLoraPanel({ user, requestLogin }) {
       )}
 
       {jobs.length === 0 && loras.length === 0 && (
-        <div className="flex flex-col items-center justify-center p-8 text-gray-500 gap-3">
-          <Cpu className="w-10 h-10 opacity-30" />
-          <div className="text-center">
-            <p className="text-sm font-medium">No trained LoRAs yet</p>
-            <p className="text-xs mt-1">Fill in the form above to train your first face LoRA</p>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px', color: 'var(--text-muted)', gap: '12px' }}>
+          <Cpu size={40} style={{ opacity: 0.3 }} />
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: '0.85rem', fontWeight: 500 }}>No trained LoRAs yet</p>
+            <p style={{ fontSize: '0.75rem', marginTop: '4px' }}>Fill in the form above to train your first face LoRA</p>
           </div>
         </div>
       )}
-
-      <div className="text-xs text-gray-500 space-y-1">
-        <p>🧠 Base model: JuggernautXL — works with all SDXL generation modes.</p>
-        <p>⏱️ ~{Math.ceil(1000 / 60)} min for 1000 steps · ~{Math.ceil(2000 / 60)} min for 2000 steps (on RTX 5060 Ti).</p>
-        <p>📽️ For video: use the <strong>Lynx / Face Profiles</strong> system instead — face LoRAs don't transfer to Wan2.2.</p>
-      </div>
     </div>
   )
 }
@@ -1150,42 +1142,46 @@ function TrainLoraPanel({ user, requestLogin }) {
 
 function DropZone({
   label, preview, isVideo, badge, onDrop, onDragOver, onClick,
-  accept, inputRef, inputOnChange, placeholder, Icon, borderColor = 'border-gray-600',
+  accept, inputRef, inputOnChange, placeholder, Icon,
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
+      <label className="grok-section-label">{label}</label>
       <div
+        className="upload-box"
         onClick={onClick}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        className={`border-2 border-dashed ${borderColor} rounded-lg p-4 text-center cursor-pointer hover:border-purple-500 transition-colors flex items-center justify-center`}
-        style={{ minHeight: '10rem', aspectRatio: '1 / 1' }}
+        style={{ minHeight: '10rem', aspectRatio: '1 / 1', cursor: 'pointer', padding: '16px' }}
       >
         <input
           ref={inputRef}
           type="file"
           accept={accept}
           onChange={inputOnChange}
-          className="hidden"
+          style={{ display: 'none' }}
         />
         {preview ? (
-          <div className="relative w-full h-full flex items-center justify-center">
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {isVideo ? (
-              <video src={preview} className="max-w-full max-h-full object-cover rounded" muted />
+              <video src={preview} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'cover', borderRadius: '6px' }} muted />
             ) : (
-              <img src={preview} alt="Preview" className="max-w-full max-h-full object-cover rounded" />
+              <img src={preview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'cover', borderRadius: '6px' }} />
             )}
             {badge && (
-              <div className="absolute bottom-1 right-1 bg-black/70 px-2 py-1 rounded text-xs text-white">
+              <div style={{
+                position: 'absolute', bottom: '4px', right: '4px',
+                background: 'rgba(0,0,0,0.7)', padding: '2px 8px',
+                borderRadius: '4px', fontSize: '0.7rem', color: '#fff',
+              }}>
                 {badge}
               </div>
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 text-gray-400">
-            <Icon className="w-6 h-6" />
-            <span className="text-xs">{placeholder}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
+            <Icon size={24} />
+            <span style={{ fontSize: '0.75rem' }}>{placeholder}</span>
           </div>
         )}
       </div>

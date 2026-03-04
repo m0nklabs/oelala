@@ -297,12 +297,15 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
   return (
     <div className="tool-container">
-      <div className="tool-section">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <ImageIcon size={18} />
-          Source Image
+      {/* Source Image Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ImageIcon size={16} />
+            Source Image
+          </div>
           <ResetDefaultsButton onReset={handleResetDefaults} />
-        </h3>
+        </div>
 
         <div
           className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
@@ -358,15 +361,19 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         />
       </div>
 
-      <div className="tool-section">
-        <h3>
-          <Wand2 size={18} />
-          Transformation
-        </h3>
+      {/* Transformation Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Wand2 size={16} />
+            Transformation
+          </div>
+        </div>
 
         <div className="form-group">
-          <label>Prompt (describe desired changes)</label>
+          <label className="grok-section-label">Prompt (describe desired changes)</label>
           <textarea
+            className="form-textarea"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={3}
@@ -375,24 +382,24 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
 
         <div className="form-group">
-          <label>
-            <Sliders size={14} />
-            Denoise Strength
-            <span className="label-value">{denoise.toFixed(2)}</span>
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Denoise Strength</label>
+            <span className="nav-badge">{denoise.toFixed(2)}</span>
+          </div>
           <input
             type="range"
+            className="form-range"
             min="0.1"
             max="1.0"
             step="0.05"
             value={denoise}
             onChange={(e) => setDenoise(parseFloat(e.target.value))}
           />
-          <div className="range-labels">
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             <span>Subtle (0.1)</span>
             <span>Complete (1.0)</span>
           </div>
-          <div className="denoise-hint">
+          <div style={{ marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             {denoise < 0.3 && '💡 Minor adjustments, preserves most of original'}
             {denoise >= 0.3 && denoise < 0.6 && '💡 Moderate changes, good balance'}
             {denoise >= 0.6 && denoise < 0.8 && '💡 Significant transformation'}
@@ -401,8 +408,8 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
 
         <div className="form-group">
-          <label>Model</label>
-          <select value={checkpoint} onChange={(e) => setCheckpoint(e.target.value)}>
+          <label className="grok-section-label">Model</label>
+          <select className="form-select" value={checkpoint} onChange={(e) => setCheckpoint(e.target.value)}>
             {CHECKPOINTS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
@@ -410,12 +417,14 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
       </div>
 
-      {/* Quality Preset */}
-      <div className="tool-section">
-        <h3>
-          <Zap size={18} />
-          Quality Preset
-        </h3>
+      {/* Quality Preset Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Zap size={16} />
+            Quality Preset
+          </div>
+        </div>
         <div className="preset-grid">
           {PRESETS.map((p) => (
             <button
@@ -432,12 +441,14 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
       </div>
 
-      {/* Face Processing */}
-      <div className="tool-section">
-        <h3>
-          <UserIcon size={18} />
-          Face Processing
-        </h3>
+      {/* Face Processing Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <UserIcon size={16} />
+            Face Processing
+          </div>
+        </div>
 
         <div className="face-toggles">
           <label className="toggle-row" title="IP-Adapter FaceID: Extracts face identity from source image and preserves it during generation">
@@ -502,32 +513,40 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
       </div>
 
-      {/* Advanced Settings */}
-      <div className="tool-section collapsible">
+      {/* Advanced Settings Card */}
+      <div className="grok-card" style={{ padding: 0, overflow: 'hidden' }}>
         <button
-          className="section-toggle"
           onClick={() => setShowAdvanced(!showAdvanced)}
+          style={{
+            width: '100%', padding: '14px 20px', background: 'transparent', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            color: 'var(--text-secondary)', cursor: 'pointer',
+          }}
         >
-          <Settings size={16} />
-          Advanced Settings
-          <ChevronDown size={16} className={showAdvanced ? 'rotated' : ''} />
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={16} />
+            Advanced Settings
+          </span>
+          <ChevronDown size={16} style={{ transition: 'transform 0.2s', transform: showAdvanced ? 'rotate(180deg)' : 'none' }} />
         </button>
 
         {showAdvanced && (
-          <div className="advanced-content">
+          <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label>Negative Prompt</label>
+              <label className="grok-section-label">Negative Prompt</label>
               <textarea
+                className="form-textarea"
                 value={negativePrompt}
                 onChange={(e) => setNegativePrompt(e.target.value)}
                 rows={2}
               />
             </div>
 
-            <div className="form-row">
-              <div className="form-group half">
-                <label>Steps</label>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <label className="grok-section-label">Steps</label>
                 <input
+                  className="form-input"
                   type="number"
                   value={steps}
                   onChange={(e) => setSteps(parseInt(e.target.value) || 25)}
@@ -535,9 +554,10 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
                   max="50"
                 />
               </div>
-              <div className="form-group half">
-                <label>CFG Scale</label>
+              <div style={{ flex: 1 }}>
+                <label className="grok-section-label">CFG Scale</label>
                 <input
+                  className="form-input"
                   type="number"
                   value={cfg}
                   onChange={(e) => setCfg(parseFloat(e.target.value) || 7.0)}
@@ -548,10 +568,10 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
               </div>
             </div>
 
-            <div className="form-row">
-              <div className="form-group half">
-                <label>Sampler</label>
-                <select value={sampler} onChange={(e) => setSampler(e.target.value)}>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <label className="grok-section-label">Sampler</label>
+                <select className="form-select" value={sampler} onChange={(e) => setSampler(e.target.value)}>
                   <option value="euler">Euler</option>
                   <option value="euler_ancestral">Euler Ancestral</option>
                   <option value="dpmpp_2m">DPM++ 2M</option>
@@ -559,9 +579,9 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
                   <option value="dpmpp_3m_sde">DPM++ 3M SDE</option>
                 </select>
               </div>
-              <div className="form-group half">
-                <label>Scheduler</label>
-                <select value={scheduler} onChange={(e) => setScheduler(e.target.value)}>
+              <div style={{ flex: 1 }}>
+                <label className="grok-section-label">Scheduler</label>
+                <select className="form-select" value={scheduler} onChange={(e) => setScheduler(e.target.value)}>
                   <option value="normal">Normal</option>
                   <option value="karras">Karras</option>
                   <option value="exponential">Exponential</option>
@@ -570,9 +590,10 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
               </div>
             </div>
 
-            <div className="form-group">
-              <label>Seed (-1 = random)</label>
+            <div>
+              <label className="grok-section-label">Seed (-1 = random)</label>
               <input
+                className="form-input"
                 type="number"
                 value={seed}
                 onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
