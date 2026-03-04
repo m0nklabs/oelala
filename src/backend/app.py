@@ -8130,10 +8130,16 @@ async def caption_image(
     mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured"),
     nsfw_intensity: Optional[int] = Form(None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"),
     include_motion: Optional[bool] = Form(False, description="Include camera motion/animation descriptions in the output"),
+    motion_model: Optional[str] = Form(None, description="T2T model for motion prompt generation (default: GLM-4.7-Flash-Claude-Opus-Reasoning)"),
+    detail_level: Optional[int] = Form(3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"),
 ):
     """
     Generate a caption/description for an uploaded image.
     Uses Guardian vision LLM for high-quality captioning.
+
+    When include_motion is enabled, a two-step pipeline runs:
+    1. Vision LLM analyzes the image (detail level controls verbosity)
+    2. Text-to-text LLM generates creative motion prompt based on the analysis
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -8150,8 +8156,25 @@ async def caption_image(
         logger.error(f"Error saving file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
 
+    # Clamp detail_level
+    detail_level = max(1, min(5, detail_level or 3))
+
+    # Detail-level modifiers for the vision prompt
+    detail_prefixes = {
+        1: "Be very brief (1-2 sentences max). ",
+        2: "Keep it concise (2-3 sentences). ",
+        3: "",  # default — use the prompt as-is
+        4: "Be thorough and detailed. Include subtle details about expression, texture, fabric, background elements, lighting direction, and compositional style. ",
+        5: (
+            "Be EXHAUSTIVELY detailed. Describe EVERYTHING: exact pose and body language, every clothing item and accessory, "
+            "hair style/color/texture, facial expression and micro-expressions, skin details, background elements and their positions, "
+            "lighting setup (direction, color temperature, shadows), color palette, camera angle, depth of field, mood, atmosphere, "
+            "art style, and any text or symbols visible. Leave nothing out. "
+        ),
+    }
+
     # Route through Guardian vision LLM
-    logger.info(f"🔮 Captioning with Guardian vision model: {model}...")
+    logger.info(f"🔮 Captioning with Guardian vision model: {model}, detail_level={detail_level}...")
     caption_prompts = {
         "brief": "In one sentence, describe the main subject of this image.",
         "detailed": "Describe this image in rich detail: the main subject, their appearance, clothing, pose, expression, the background, lighting, colors, and overall mood.",
@@ -8178,55 +8201,96 @@ async def caption_image(
 
     custom_prompt = caption_prompts.get(mode, caption_prompts["detailed"])
 
-    # When include_motion is enabled, force JSON output with separate fields
-    if include_motion:
-        custom_prompt = (
-            "You MUST respond with ONLY valid JSON (no markdown, no code fences).\n"
-            "Analyze this image and return a JSON object with exactly two fields:\n"
-            '1. "prompt": ' + custom_prompt + "\n"
-            '2. "motion_prompt": Creative camera motion and animation cues for AI video generation. '
-            "Include specific movements like: slow zoom in, camera pans left, tracking shot, "
-            "crane shot rising, handheld shake, dolly forward, subject walks toward camera, "
-            "hair blowing in wind, fabric rippling. Include at least 3-4 specific motion/animation descriptions.\n\n"
-            'Example output: {"prompt": "woman in red dress standing in garden, golden hour, bokeh", '
-            '"motion_prompt": "slow dolly forward, hair gently blowing in wind, camera tilts up revealing sky, soft focus pull"}'
-        )
+    # Apply detail level modifier (prepend to prompt)
+    detail_prefix = detail_prefixes.get(detail_level, "")
+    if detail_prefix:
+        custom_prompt = detail_prefix + custom_prompt
 
     import base64 as _b64
 
     with open(input_path, "rb") as f:
         image_b64 = _b64.b64encode(f.read()).decode("utf-8")
 
+    # ── Step 1: Vision LLM — analyze the image (clean, no motion instructions) ──
     description = await analyze_image_with_vision(
         image_b64, custom_prompt=custom_prompt, model_override=model
     )
 
-    # Parse JSON response when include_motion was enabled
-    import re
+    # ── Step 2: T2T LLM — generate motion prompt from the image analysis ──
     motion_prompt = None
     if include_motion and description:
+        t2t_model = motion_model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
+        logger.info(f"🎬 Step 2: Generating motion prompt with T2T model: {t2t_model}...")
+
+        motion_system = (
+            "You are a cinematographer and motion designer for AI video generation. "
+            "Given an image description, generate creative and specific camera motion and animation cues. "
+            "Focus on: camera movements (dolly, pan, tilt, crane, tracking, zoom), "
+            "subject animation (hair flowing, fabric rippling, walking, gesturing), "
+            "environmental motion (clouds drifting, light shifting, particles floating), "
+            "and cinematic timing (slow motion, speed ramp, freeze frame). "
+            "Output ONLY the motion prompt text — comma-separated, concise, cinematic style. "
+            "Be creative and specific to the scene described. No explanations, no labels."
+        )
+
+        motion_user = (
+            f"Based on this image analysis, generate a creative motion/camera prompt for AI video generation:\n\n"
+            f"{description}"
+        )
+
         try:
-            # Strip markdown code fences if LLM wraps in ```json ... ```
-            cleaned = description.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
-                cleaned = re.sub(r'\s*```$', '', cleaned)
-            parsed = json.loads(cleaned)
-            if isinstance(parsed, dict):
-                description = parsed.get("prompt", description)
-                motion_prompt = parsed.get("motion_prompt")
-                logger.info(f"🎬 Parsed motion prompt from JSON: {motion_prompt[:80] if motion_prompt else 'None'}...")
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"⚠️ Failed to parse motion JSON, falling back to raw text: {e}")
-            # Fallback: try MOTION: marker split
-            motion_match = re.split(r'(?i)\bmotion(?:_prompt)?:\s*', description, maxsplit=1)
-            if len(motion_match) == 2:
-                description = motion_match[0].strip().rstrip(',').strip('"').strip()
-                motion_prompt = motion_match[1].strip().rstrip('"').strip()
+            from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+            await wait_for_comfyui_idle()
+            await _free_comfy_vram()
+
+            t2t_body = {
+                "model": t2t_model,
+                "messages": [
+                    {"role": "system", "content": motion_system},
+                    {"role": "user", "content": motion_user},
+                ],
+                "max_tokens": 512,
+                "temperature": 1.0,
+            }
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
+                        resp = await client.post(f"{GUARDIAN_BASE}/v1/chat/completions", json=t2t_body)
+                        if resp.status_code == 503 and attempt < max_retries - 1:
+                            logger.info(f"⏳ Guardian 503 (loading T2T model), retry {attempt + 1}/{max_retries}...")
+                            import asyncio
+                            await asyncio.sleep(15)
+                            continue
+                        resp.raise_for_status()
+                        result = resp.json()
+                        msg = result["choices"][0]["message"]
+                        motion_prompt = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+                        # Strip thinking tags if present
+                        if "<think>" in motion_prompt:
+                            import re
+                            motion_prompt = re.sub(r'<think>.*?</think>\s*', '', motion_prompt, flags=re.DOTALL).strip()
+                        logger.info(f"🎬 Motion prompt generated: {motion_prompt[:100]}...")
+                        break
+                except httpx.ConnectError:
+                    logger.warning("⚠️ Guardian not available for motion prompt generation")
+                    break
+                except Exception as e:
+                    if "503" in str(e) and attempt < max_retries - 1:
+                        import asyncio
+                        await asyncio.sleep(15)
+                        continue
+                    logger.error(f"❌ Motion prompt generation failed: {e}")
+                    break
+        except Exception as e:
+            logger.error(f"❌ Motion prompt step failed: {e}")
 
     result = {"caption": description, "model": model or VISION_MODEL, "mode": mode}
     if motion_prompt:
         result["motion_prompt"] = motion_prompt
+    if include_motion:
+        result["motion_model"] = motion_model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
     return result
 
 

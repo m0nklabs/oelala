@@ -6,7 +6,7 @@ import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
-import { VISION_MODELS, DEFAULT_VISION_MODEL } from '../../constants/llmModels'
+import { VISION_MODELS, DEFAULT_VISION_MODEL, PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
@@ -36,7 +36,8 @@ const isPromptMode = (m) => m.startsWith('prompt_')
 const MODELS = VISION_MODELS
 
 const I2T_DEFAULTS = {
-  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3, includeMotion: false, cameraMotion: '',
+  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3,
+  includeMotion: false, cameraMotion: '', motionModel: DEFAULT_PROMPT_LLM, detailLevel: 3,
 }
 
 export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
@@ -58,15 +59,18 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
   const [includeMotion, setIncludeMotion] = useState(initial.includeMotion || false)
   const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
+  const [motionModel, setMotionModel] = useState(initial.motionModel || DEFAULT_PROMPT_LLM)
+  const [detailLevel, setDetailLevel] = useState(initial.detailLevel ?? 3)
 
   // ── Auto-save settings ──────────────────────────────────────────
-  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, includeMotion, cameraMotion }), [model, mode, nsfwIntensity, includeMotion, cameraMotion])
+  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, includeMotion, cameraMotion, motionModel, detailLevel }), [model, mode, nsfwIntensity, includeMotion, cameraMotion, motionModel, detailLevel])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
     setModel(d.model); setMode(d.mode); setNsfwIntensity(d.nsfwIntensity)
     setIncludeMotion(d.includeMotion || false); setCameraMotion(d.cameraMotion || '')
+    setMotionModel(d.motionModel || DEFAULT_PROMPT_LLM); setDetailLevel(d.detailLevel ?? 3)
   }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
@@ -173,8 +177,10 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       if (mode === 'prompt_nsfw') {
         formData.append('nsfw_intensity', nsfwIntensity.toString())
       }
+      formData.append('detail_level', detailLevel.toString())
       if (includeMotion) {
         formData.append('include_motion', 'true')
+        formData.append('motion_model', motionModel)
       }
 
       const res = await apiFetch(`${BACKEND_BASE}/caption-image`, {
@@ -314,7 +320,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         </h3>
 
         <div className="form-group">
-          <label>Model</label>
+          <label>Vision Model (I2T)</label>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             {MODELS.map((m) => (
               <option key={m.id} value={m.id}>
@@ -322,6 +328,35 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Detail Level Slider */}
+        <div className="form-group">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <label style={{ margin: 0 }}>Detail Level</label>
+            <span style={{
+              fontSize: '0.75rem',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: detailLevel >= 4 ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.06)',
+              color: detailLevel >= 4 ? '#a78bfa' : 'var(--text-muted, #888)',
+            }}>
+              {['', 'Brief', 'Concise', 'Default', 'Thorough', 'Exhaustive'][detailLevel]}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={5}
+            step={1}
+            value={detailLevel}
+            onChange={(e) => setDetailLevel(Number(e.target.value))}
+            style={{ width: '100%', marginTop: '4px' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-muted, #666)', marginTop: '2px' }}>
+            <span>Brief</span>
+            <span>Exhaustive</span>
+          </div>
         </div>
 
         <div className="form-group">
@@ -363,6 +398,27 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
                 />
                 Include motion prompts (for video)
               </label>
+
+              {/* T2T Model selector — shown when include_motion is enabled */}
+              {includeMotion && (
+                <div style={{ marginTop: '8px', marginLeft: '24px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #aaa)' }}>Motion Model (T2T)</label>
+                  <select
+                    value={motionModel}
+                    onChange={(e) => setMotionModel(e.target.value)}
+                    style={{ marginTop: '4px' }}
+                  >
+                    {PROMPT_LLM_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label} - {m.description}
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.65rem', color: 'var(--text-muted, #666)' }}>
+                    This text LLM generates creative motion cues from the image analysis.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
