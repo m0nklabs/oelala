@@ -451,6 +451,17 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         formData.append('scheduler', 'beta')
       }
 
+      // Wan22 cloud routing — send extra cloud params via /generate-text
+      if (modelType === 'wan22' && computeTarget === 'cloud') {
+        formData.append('steps', String(steps))
+        formData.append('cfg', String(cfg))
+        formData.append('seed', String(seed))
+        formData.append('shift', '8.0')
+        formData.append('high_noise_steps', '12')
+        formData.append('sampler_name', 'dpmpp_2m')
+        formData.append('scheduler', 'beta')
+      }
+
       const result = await postForm(t2vEndpoint, formData)
 
       if (!result.ok) {
@@ -685,7 +696,6 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   setDuration(5)
                   setSteps(6)
                   setCfg(1.0)
-                  if (computeTarget === 'cloud') setComputeTarget('local')
                 } else if (newMode === 'ltx2') {
                   setResolution('576p')
                   setAspectRatio('9:16')
@@ -732,8 +742,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             </div>
           ) : modelType === 'wan22' ? (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>Wan2.2 14B Q6</span> | <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>T2I first pass + I2V animation | All resolutions up to 30s</div>
+              <span style={{ fontWeight: 600 }}>Wan2.2 14B Q6</span> | <span style={{ color: '#93c5fd' }}>{computeTarget === 'cloud' ? 'Cloud GPU (fp8)' : 'DisTorch2 Multi-GPU'}</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>{computeTarget === 'cloud' ? 'Cloud fp8 precision | RunPod GPU | All resolutions up to 30s' : 'T2I first pass + I2V animation | All resolutions up to 30s'}</div>
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>

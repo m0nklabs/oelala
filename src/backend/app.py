@@ -7679,11 +7679,22 @@ async def generate_text_video(
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
     post_processing: str = Form("", description="JSON array of post-processing steps"),
+    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
+    negative_prompt: str = Form("blurry, low quality, distorted, ugly, artifacts, overexposed, underexposed, flickering, jitter", description="Negative prompt"),
+    steps: int = Form(-1, description="Sampling steps (-1 for model default)"),
+    cfg: float = Form(-1.0, description="CFG guidance scale (-1 for model default)"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    lora_configs: str = Form("", description="JSON array of LoRA configs"),
+    shift: float = Form(8.0, description="Shift value for cloud sampler"),
+    high_noise_steps: int = Form(12, description="High noise steps for cloud dual-pass"),
+    sampler_name: str = Form("dpmpp_2m", description="Sampler name for cloud"),
+    scheduler: str = Form("beta", description="Scheduler for cloud"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate video from text prompt via ComfyUI T2V workflow.
     Supports multiple models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
+    Supports cloud routing via compute_target='cloud' (RunPod).
     Requires authentication and credits.
     """
     if not get_comfyui_client:
@@ -7729,6 +7740,10 @@ async def generate_text_video(
     logger.info(
         f"💰 T2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
     )
+    # Cloud T2V uses 2x credit multiplier (same as cloud_max)
+    if compute_target == "cloud":
+        credits_required = int(credits_required * 2)
+        logger.info(f"☁️ Cloud T2V: {credits_required} credits (2x cloud multiplier)")
     await check_credits(user, credits_required)
     job_id = str(uuid.uuid4())
 
@@ -7736,50 +7751,23 @@ async def generate_text_video(
     import random
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    seed = random.randint(0, 2**32 - 1)
 
-    # Build workflow based on model type
-    if model_type == "ltx2":
-        # LTX-2 doesn't need frame adjustment
-        workflow = build_ltx2_t2v_workflow(
-            prompt=prompt,
-            width=width,
-            height=height,
-            num_frames=num_frames,
-            steps=mode_config["default_steps"],
-            cfg=mode_config["default_cfg"],
-            seed=seed,
-            filename_prefix=f"oelala_ltx2_t2v_{timestamp}",
-        )
-        if not workflow:
-            raise HTTPException(
-                status_code=500, detail="Failed to build LTX-2 workflow"
-            )
-    else:
-        # Wan2.2: Native T2V with DisTorch2 dual-pass Q6_K
-        # Frame adjustment to 4k+1 handled inside build_t2v_q6_workflow
-        long_edge = 480 if resolution == "480p" else 720
+    # Resolve seed: -1 means random
+    actual_seed = seed if seed >= 0 else random.randint(0, 2**32 - 1)
 
-        workflow = comfyui.build_t2v_q6_workflow(
-            prompt=prompt,
-            width=width,
-            height=height,
-            num_frames=num_frames,
-            fps=fps,
-            steps=mode_config["default_steps"],
-            cfg=mode_config["default_cfg"],
-            seed=seed,
-            output_prefix=f"oelala_t2v_{timestamp}",
-            aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-        )
+    # Resolve steps/cfg: -1 means use model defaults
+    actual_steps = steps if steps > 0 else mode_config["default_steps"]
+    actual_cfg = cfg if cfg >= 0 else mode_config["default_cfg"]
 
-    # Queue workflow
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(status_code=500, detail="Failed to queue workflow")
+    # Parse LoRA configs
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
 
-    # Parse post-processing steps if provided
+    # Parse post-processing steps
     post_processing_steps = []
     if post_processing:
         try:
@@ -7788,6 +7776,116 @@ async def generate_text_video(
                 post_processing_steps = []
         except json.JSONDecodeError:
             post_processing_steps = []
+
+    # Map resolution to long_edge
+    long_edge = 480 if resolution == "480p" else 720
+
+    # ── Cloud routing ────────────────────────────────────────────────
+    if compute_target == "cloud" and model_type == "wan22":
+        if not _runpod or not _runpod.has_endpoint():
+            raise HTTPException(
+                status_code=503,
+                detail="RunPod cloud GPU not available. Deploy an endpoint first.",
+            )
+
+        output_prefix = f"oelala_t2v_cloud_{timestamp}"
+
+        # Build cloud-quality workflow (fp8 native UNETLoader, no DisTorch2)
+        workflow = comfyui.build_cloud_max_t2v_workflow(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            fps=fps,
+            steps=actual_steps,
+            cfg=actual_cfg,
+            seed=actual_seed,
+            output_prefix=output_prefix,
+            high_noise_steps=high_noise_steps,
+            shift=shift,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            lora_configs=parsed_lora_configs,
+            aspect_ratio=aspect_ratio,
+            long_edge=long_edge,
+        )
+        if not workflow:
+            raise HTTPException(
+                status_code=500, detail="Failed to build cloud T2V workflow"
+            )
+
+        cloud_job_info = {
+            "prompt": prompt[:100],
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "num_frames": num_frames,
+            "fps": fps,
+            "steps": actual_steps,
+            "seed": actual_seed,
+            "output_prefix": output_prefix,
+            "created_at": timestamp,
+            "lora_count": len(parsed_lora_configs),
+            "post_processing": post_processing_steps,
+            "job_type": "wan22_t2v",
+            "cfg": actual_cfg,
+            "shift": shift,
+            "sampler": sampler_name,
+            "scheduler": scheduler,
+            "model_mode": "wan2.2",
+            "compute_target": "cloud",
+            "user_id": user.id,
+        }
+        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=str(uuid.uuid4()),
+            job_info=cloud_job_info,
+            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
+        )
+        await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 T2V (cloud)")
+        logger.info(f"☁️ T2V cloud job submitted: {result.get('runpod_job_id')}")
+        return result
+
+    # ── Local routing ────────────────────────────────────────────────
+    # Build workflow based on model type
+    if model_type == "ltx2":
+        # LTX-2 doesn't need frame adjustment
+        workflow = build_ltx2_t2v_workflow(
+            prompt=prompt,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            steps=actual_steps,
+            cfg=actual_cfg,
+            seed=actual_seed,
+            filename_prefix=f"oelala_ltx2_t2v_{timestamp}",
+        )
+        if not workflow:
+            raise HTTPException(
+                status_code=500, detail="Failed to build LTX-2 workflow"
+            )
+    else:
+        # Wan2.2: Native T2V with DisTorch2 dual-pass Q6_K
+        workflow = comfyui.build_t2v_q6_workflow(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            fps=fps,
+            steps=actual_steps,
+            cfg=actual_cfg,
+            seed=actual_seed,
+            output_prefix=f"oelala_t2v_{timestamp}",
+            aspect_ratio=aspect_ratio,
+            long_edge=long_edge,
+            lora_configs=parsed_lora_configs if parsed_lora_configs else None,
+        )
+
+    # Queue workflow
+    prompt_id = comfyui.queue_prompt(workflow)
+    if not prompt_id:
+        raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
     # Register pending post-processing if any steps specified
     if post_processing_steps:
@@ -7855,7 +7953,7 @@ async def generate_text_video(
             "height": height,
             "num_frames": num_frames,
             "fps": fps,
-            "seed": seed,
+            "seed": actual_seed,
             "type": "text-to-video",
             "model_type": model_type,
             "model_name": mode_config["name"],
