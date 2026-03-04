@@ -40,6 +40,7 @@ import base64
 import subprocess
 import threading
 import logging
+import io
 import glob
 from pathlib import Path
 
@@ -479,13 +480,24 @@ def handler(event: dict) -> dict:
 
     Receives a workflow, queues it in ComfyUI, waits for completion,
     and returns the output files (base64 encoded).
+
+    All logs during execution are captured and returned in the 'logs' field.
     """
+    # Capture logs during this job
+    log_buffer = io.StringIO()
+    log_handler = logging.StreamHandler(log_buffer)
+    log_handler.setLevel(logging.DEBUG)
+    log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+    logger.addHandler(log_handler)
+
     start_time = time.time()
     input_data = event.get("input", {})
 
     workflow = input_data.get("workflow")
     if not workflow:
-        return {"error": "No workflow provided in input.workflow"}
+        logger.addHandler(log_handler)  # ensure cleanup
+        logger.removeHandler(log_handler)
+        return {"error": "No workflow provided in input.workflow", "logs": log_buffer.getvalue()}
 
     # Save input images if provided
     images = input_data.get("images", {})
@@ -503,7 +515,8 @@ def handler(event: dict) -> dict:
         # Collect outputs
         files = collect_outputs(history)
         if not files:
-            return {"error": "No output files generated", "prompt_id": prompt_id}
+            logger.removeHandler(log_handler)
+            return {"error": "No output files generated", "prompt_id": prompt_id, "logs": log_buffer.getvalue()}
 
         # Encode outputs as base64
         encoded_files = encode_outputs(files)
@@ -511,19 +524,24 @@ def handler(event: dict) -> dict:
         elapsed = time.time() - start_time
         logger.info(f"✅ Job complete in {elapsed:.1f}s — {len(encoded_files)} files")
 
+        logger.removeHandler(log_handler)
         return {
             "files": encoded_files,
             "prompt_id": prompt_id,
             "execution_time_s": round(elapsed, 1),
+            "logs": log_buffer.getvalue(),
         }
 
     except TimeoutError as e:
-        return {"error": str(e)}
+        logger.removeHandler(log_handler)
+        return {"error": str(e), "logs": log_buffer.getvalue()}
     except RuntimeError as e:
-        return {"error": str(e)}
+        logger.removeHandler(log_handler)
+        return {"error": str(e), "logs": log_buffer.getvalue()}
     except Exception as e:
         logger.exception(f"❌ Handler error: {e}")
-        return {"error": f"Unexpected error: {str(e)}"}
+        logger.removeHandler(log_handler)
+        return {"error": f"Unexpected error: {str(e)}", "logs": log_buffer.getvalue()}
 
 
 # ---- Startup ----
