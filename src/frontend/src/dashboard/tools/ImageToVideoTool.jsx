@@ -518,6 +518,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (modelMode === 'ultra_q8') {
       return preset.max_duration_ultra_q8 || 30
     }
+    if (modelMode === 'cloud_max') {
+      return preset.max_duration_cloud_max || 30
+    }
     return preset.max_duration_wan22 || 30
   }, [resolution, modelMode])
 
@@ -2312,8 +2315,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         </div>
 
-        {/* Model Version - only for non-Wan2.2 modes */}
-        {modelMode !== 'wan2.2' && (
+        {/* Model Version - only for non-Wan2.2, non-Cloud modes */}
+        {modelMode !== 'wan2.2' && modelMode !== 'cloud_max' && (
           <div className="form-group">
             <label className="grok-section-label">Model Version</label>
             <div className="grok-toggle-group">
@@ -2807,6 +2810,284 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Advanced Settings for Cloud Max — bf16 on RunPod */}
+        {modelMode === 'cloud_max' && (
+          <div style={{
+            backgroundColor: 'var(--bg-tertiary)',
+            padding: '16px',
+            borderRadius: '8px',
+            marginTop: '8px'
+          }}>
+            <div
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: 'var(--text-primary)'
+              }}>
+                ☁️ Cloud Max Settings
+              </div>
+              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
+            </div>
+
+            {showAdvanced && (
+              <div style={{ marginTop: '12px' }}>
+                {/* Steps */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Sampling Steps</label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
+                  </div>
+                  <input
+                    type="range" min="10" max="40" step="1"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    <span>10 (fast)</span><span>25 (rec)</span><span>40 (quality)</span>
+                  </div>
+                </div>
+
+                {/* CFG */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">CFG Scale</label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
+                  </div>
+                  <input
+                    type="range" min="1.0" max="10.0" step="0.5"
+                    value={cfg}
+                    onChange={(e) => setCfg(parseFloat(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    <span>1.0</span><span>3.0 (rec)</span><span>10.0</span>
+                  </div>
+                </div>
+
+                {/* High Noise Steps */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">High Noise Steps</label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsHighNoiseSteps} of {steps}</span>
+                  </div>
+                  <input
+                    type="range" min="1" max={Math.max(steps - 1, 2)} step="1"
+                    value={bsHighNoiseSteps}
+                    onChange={(e) => setBsHighNoiseSteps(parseInt(e.target.value, 10))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    Steps using high-noise LoRA before switching to low-noise LoRA
+                  </div>
+                </div>
+
+                {/* Shift */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Model Shift</label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsShift.toFixed(1)}</span>
+                  </div>
+                  <input
+                    type="range" min="1.0" max="20.0" step="0.5"
+                    value={bsShift}
+                    onChange={(e) => setBsShift(parseFloat(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    <span>1.0</span><span>8.0 (rec)</span><span>20.0</span>
+                  </div>
+                </div>
+
+                {/* Seed */}
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label className="grok-section-label">Seed</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number" value={seed}
+                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
+                      placeholder="-1 for random"
+                      style={{
+                        flex: 1, padding: '8px 12px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.9rem'
+                      }}
+                    />
+                    <button className="btn ghost sm" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap' }}>Random</button>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    -1 = random seed each generation
+                  </div>
+                </div>
+
+                {/* Cloud Max LoRA Settings */}
+                <div style={{
+                  paddingTop: '16px',
+                  borderTop: '1px solid var(--border-color)'
+                }}>
+                  <div
+                    onClick={() => setShowLoraPanel(!showLoraPanel)}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      marginBottom: showLoraPanel ? '12px' : 0
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>🎨 LoRA Stack</span>
+                      {loraConfigs.length > 0 && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '2px 6px',
+                          backgroundColor: 'rgba(var(--accent-rgb), 0.2)',
+                          borderRadius: '10px',
+                          color: 'var(--accent-color)'
+                        }}>
+                          {loraConfigs.length} active
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
+                  </div>
+
+                  {showLoraPanel && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {loraConfigs.map((config, idx) => (
+                        <div key={idx} style={{
+                          padding: '10px',
+                          backgroundColor: 'var(--bg-secondary)',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>LoRA #{idx + 1}</span>
+                            <button
+                              onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem' }}
+                            >×</button>
+                          </div>
+
+                          {/* High Noise LoRA */}
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>High Noise LoRA</label>
+                            <select
+                              value={config.high || ''}
+                              onChange={(e) => {
+                                const newConfigs = [...loraConfigs]
+                                newConfigs[idx] = { ...newConfigs[idx], high: e.target.value }
+                                setLoraConfigs(newConfigs)
+                              }}
+                              style={{
+                                width: '100%', padding: '6px 8px',
+                                backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                                borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem'
+                              }}
+                            >
+                              <option value="">-- None --</option>
+                              {availableLoras.filter(l => l.includes('high') || l.includes('High')).map(l => (
+                                <option key={l} value={l}>{l.replace('.safetensors', '')}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Low Noise LoRA */}
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Low Noise LoRA</label>
+                            <select
+                              value={config.low || ''}
+                              onChange={(e) => {
+                                const newConfigs = [...loraConfigs]
+                                newConfigs[idx] = { ...newConfigs[idx], low: e.target.value }
+                                setLoraConfigs(newConfigs)
+                              }}
+                              style={{
+                                width: '100%', padding: '6px 8px',
+                                backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                                borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem'
+                              }}
+                            >
+                              <option value="">-- None --</option>
+                              {availableLoras.filter(l => l.includes('low') || l.includes('Low')).map(l => (
+                                <option key={l} value={l}>{l.replace('.safetensors', '')}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Strength */}
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              <span>Strength</span>
+                              <span>{(config.strength || 1.0).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range" min="0" max="2" step="0.05"
+                              value={config.strength || 1.0}
+                              onChange={(e) => {
+                                const newConfigs = [...loraConfigs]
+                                newConfigs[idx] = { ...newConfigs[idx], strength: parseFloat(e.target.value) }
+                                setLoraConfigs(newConfigs)
+                              }}
+                              style={{ width: '100%', cursor: 'pointer' }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Add LoRA button */}
+                      <button
+                        onClick={() => setLoraConfigs([...loraConfigs, { high: '', low: '', strength: 1.0 }])}
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: 'transparent',
+                          border: '1px dashed var(--border-color)',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        + Add LoRA
+                      </button>
+
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        💡 Dual-pass LoRAs: high noise LoRA → first {bsHighNoiseSteps} steps, low noise LoRA → remaining {steps - bsHighNoiseSteps} steps
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cloud Max cost estimate */}
+                <div style={{
+                  marginTop: '16px',
+                  padding: '10px 12px',
+                  backgroundColor: 'rgba(244, 114, 182, 0.08)',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(244, 114, 182, 0.2)',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)'
+                }}>
+                  💰 Cloud Max uses 2× credits • GPU: A6000/A40 ($1.22/hr) • No local GPU needed
                 </div>
               </div>
             )}
