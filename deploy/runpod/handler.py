@@ -67,6 +67,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan2.1_i2v_720p_14B_bf16.safetensors",
         "size_gb": 32.8,
         "description": "I2V 720p bf16 diffusion model",
+        "required": True,
     },
     {
         "hf_path": "split_files/diffusion_models/wan2.1_t2v_14B_bf16.safetensors",
@@ -74,6 +75,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan2.1_t2v_14B_bf16.safetensors",
         "size_gb": 28.6,
         "description": "T2V bf16 diffusion model",
+        "required": False,  # Skip at startup — too large for container disk without volume
     },
     {
         "hf_path": "split_files/text_encoders/umt5_xxl_fp16.safetensors",
@@ -81,6 +83,7 @@ CLOUD_MAX_MODELS = [
         "filename": "umt5_xxl_fp16.safetensors",
         "size_gb": 11.4,
         "description": "UMT5-XXL fp16 text encoder",
+        "required": True,
     },
     {
         "hf_path": "split_files/vae/wan_2.1_vae.safetensors",
@@ -88,6 +91,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan_2.1_vae.safetensors",
         "size_gb": 0.25,
         "description": "Wan 2.1 VAE",
+        "required": True,
     },
     {
         "hf_path": "split_files/clip_vision/clip_vision_h.safetensors",
@@ -95,6 +99,7 @@ CLOUD_MAX_MODELS = [
         "filename": "clip_vision_h.safetensors",
         "size_gb": 1.26,
         "description": "CLIP Vision H (I2V conditioning)",
+        "required": True,
     },
 ]
 
@@ -165,6 +170,11 @@ def download_models():
 
     # Check which models are missing (check both volume and comfyui dirs)
     for model in CLOUD_MAX_MODELS:
+        # Skip optional models at startup (e.g. T2V when no volume)
+        if not model.get("required", True):
+            logger.info(f"⏭️ {model['filename']} ({model['size_gb']}GB) — optional, skipping")
+            continue
+
         dest_vol = volume_models / model["local_dir"] / model["filename"]
         dest_local = comfyui_models / model["local_dir"] / model["filename"]
         if dest_vol.exists() or dest_local.exists():
@@ -203,13 +213,12 @@ def download_models():
             speed = model["size_gb"] / elapsed * 1024 if elapsed > 0 else 0
             logger.info(f"✅ {model['filename']} downloaded in {elapsed:.0f}s "
                        f"({speed:.0f} MB/s)")
+
+            # Clean HF cache after each download to free disk space
+            shutil.rmtree("/tmp/hf_cache", ignore_errors=True)
         except Exception as e:
             logger.error(f"❌ Failed to download {model['filename']}: {e}")
             return False
-
-    # Clean up HF cache
-    import shutil
-    shutil.rmtree("/tmp/hf_cache", ignore_errors=True)
 
     total_elapsed = time.time() - start
     logger.info(f"✅ All models downloaded in {total_elapsed:.0f}s "
