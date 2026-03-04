@@ -36,7 +36,7 @@ const isPromptMode = (m) => m.startsWith('prompt_')
 const MODELS = VISION_MODELS
 
 const I2T_DEFAULTS = {
-  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3, cameraMotion: '',
+  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3, includeMotion: false, cameraMotion: '',
 }
 
 export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
@@ -55,16 +55,17 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
+  const [includeMotion, setIncludeMotion] = useState(initial.includeMotion || false)
   const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
 
   // ── Auto-save settings ──────────────────────────────────────────
-  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, cameraMotion }), [model, mode, nsfwIntensity, cameraMotion])
+  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, includeMotion, cameraMotion }), [model, mode, nsfwIntensity, includeMotion, cameraMotion])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
     setModel(d.model); setMode(d.mode); setNsfwIntensity(d.nsfwIntensity)
-    setCameraMotion(d.cameraMotion || '')
+    setIncludeMotion(d.includeMotion || false); setCameraMotion(d.cameraMotion || '')
   }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
@@ -170,6 +171,9 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       formData.append('mode', mode)
       if (mode === 'prompt_nsfw') {
         formData.append('nsfw_intensity', nsfwIntensity.toString())
+      }
+      if (includeMotion) {
+        formData.append('include_motion', 'true')
       }
 
       const res = await fetch(`${BACKEND_BASE}/caption-image`, {
@@ -345,6 +349,20 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               </button>
             ))}
           </div>
+
+          {/* Include Motion checkbox — shown for all prompt modes */}
+          {isPromptMode(mode) && (
+            <div style={{ marginTop: '12px' }}>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={includeMotion}
+                  onChange={(e) => setIncludeMotion(e.target.checked)}
+                />
+                Include motion prompts (for video)
+              </label>
+            </div>
+          )}
 
           {/* Camera Motion Selector — shown for all prompt modes (I2V, T2I, NSFW) */}
           {isPromptMode(mode) && (

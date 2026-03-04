@@ -8129,6 +8129,7 @@ async def caption_image(
     ),
     mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured"),
     nsfw_intensity: Optional[int] = Form(None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"),
+    include_motion: Optional[bool] = Form(False, description="Include camera motion/animation descriptions in the output"),
 ):
     """
     Generate a caption/description for an uploaded image.
@@ -8176,6 +8177,14 @@ async def caption_image(
     }
 
     custom_prompt = caption_prompts.get(mode, caption_prompts["detailed"])
+
+    # Append motion instructions when include_motion is enabled
+    if include_motion and mode != "prompt_i2v":  # prompt_i2v already includes motion
+        custom_prompt += (
+            " Also describe camera motion, movement, and animation cues suitable for "
+            "AI video generation (e.g. slow zoom in, camera pans left, subject walks forward, "
+            "hair blowing in wind). Include these naturally within the prompt."
+        )
 
     import base64 as _b64
 
