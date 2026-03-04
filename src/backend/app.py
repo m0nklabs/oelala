@@ -58,6 +58,7 @@ from fastapi import (
     WebSocketDisconnect,
     Depends,
     Request,
+    Query,
 )
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -2002,8 +2003,48 @@ def record_generation_complete(
 CLOUD_MAX_OUTPUT_DIR = Path("/home/flip/oelala/media/generated/cloud-max")
 CLOUD_MAX_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# LoRA source directory (SSD)
+LORA_DIR = Path("/mnt/ssd/loras")
+
 # Cache for completed cloud jobs (prevent re-processing on repeated polls)
 _cloud_completed_cache: dict[str, dict] = {}
+
+
+def _lora_download_token(filename: str) -> str:
+    """Generate HMAC-SHA256 token for LoRA download URL validation."""
+    import hmac
+    import hashlib
+    key = os.getenv("RUNPOD_API_KEY", "fallback-lora-key").encode()
+    return hmac.new(key, filename.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _build_lora_download_list(lora_configs: list) -> list:
+    """
+    Build signed download URLs for LoRAs needed by a cloud job.
+    Only includes LoRAs that exist locally on the SSD.
+    Returns list of {filename, url} dicts.
+    """
+    base_url = os.getenv("BACKEND_PUBLIC_URL", "https://api.oelala.xyz")
+    downloads = []
+    seen = set()
+    for config in lora_configs:
+        for key in ("high", "low"):
+            name = config.get(key, "")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            lora_path = LORA_DIR / name
+            if not lora_path.exists():
+                logger.warning(f"⚠️ LoRA not found locally for cloud upload: {name}")
+                continue
+            token = _lora_download_token(name)
+            downloads.append({
+                "filename": name,
+                "url": f"{base_url}/loras/download/{name}?token={token}",
+            })
+    if downloads:
+        logger.info(f"☁️ Built {len(downloads)} LoRA download URL(s) for cloud job")
+    return downloads
 
 
 async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
@@ -2645,6 +2686,36 @@ async def get_cloud_max_media(filename: str, request: Request):
         headers["Access-Control-Allow-Credentials"] = "true"
 
     return FileResponse(media_path, headers=headers)
+
+
+@app.get("/loras/download/{filename:path}")
+async def download_lora_for_cloud(filename: str, token: str = Query(...)):
+    """
+    Serve LoRA files for RunPod cloud workers.
+    Protected with HMAC-signed token (derived from RUNPOD_API_KEY).
+    Files are streamed from /mnt/ssd/loras/.
+    """
+    import hmac as _hmac_mod
+    expected = _lora_download_token(filename)
+    if not _hmac_mod.compare_digest(token, expected):
+        logger.warning(f"⚠️ Invalid LoRA download token for: {filename}")
+        raise HTTPException(status_code=403, detail="Invalid download token")
+
+    lora_path = LORA_DIR / filename
+    if not lora_path.exists():
+        raise HTTPException(status_code=404, detail="LoRA not found")
+
+    size_mb = lora_path.stat().st_size / (1024 * 1024)
+    logger.info(f"☁️ Serving LoRA for cloud worker: {filename} ({size_mb:.0f}MB)")
+    return FileResponse(
+        lora_path,
+        media_type="application/octet-stream",
+        filename=filename,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, no-cache",
+        },
+    )
 
 
 @app.get("/media/generated/{filename}")
@@ -5702,6 +5773,7 @@ async def _submit_to_runpod(
     prompt_id: str,
     job_info: dict,
     images: dict = None,
+    lora_downloads: list = None,
 ) -> dict:
     """Submit a ComfyUI workflow to RunPod cloud GPU instead of local."""
     if not _runpod or not _runpod.has_endpoint():
@@ -5713,6 +5785,9 @@ async def _submit_to_runpod(
     extra = {}
     if images:
         extra["images"] = images
+    if lora_downloads:
+        extra["lora_downloads"] = lora_downloads
+        logger.info(f"☁️ Including {len(lora_downloads)} LoRA download(s) in RunPod job")
 
     job = await _runpod.submit_workflow(workflow, extra_input=extra or None)
     logger.info(f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})")
@@ -6972,6 +7047,9 @@ async def generate_cloud_max_async(
             status_code=500, detail="Failed to build Cloud Max workflow"
         )
 
+    # Build LoRA download URLs for cloud worker (on-demand upload)
+    cloud_lora_downloads = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+
     # Always route to RunPod (cloud-only endpoint)
     cloud_job_info = {
         "prompt": prompt[:100],
@@ -7001,6 +7079,7 @@ async def generate_cloud_max_async(
         prompt_id=str(uuid.uuid4()),
         job_info=cloud_job_info,
         images=input_images_b64 if input_images_b64 else None,
+        lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
     )
     await deduct_credits(
         user, credits_required, result["prompt_id"],

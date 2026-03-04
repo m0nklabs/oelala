@@ -370,6 +370,79 @@ def save_input_images(images: dict):
     return saved
 
 
+def download_loras(lora_downloads: list, job=None):
+    """
+    Download LoRA files from backend on demand for cloud jobs.
+    Downloads to Network Volume (persistent cache) if available,
+    otherwise to container's ComfyUI loras dir (ephemeral).
+
+    Skips LoRAs that already exist (cached from previous jobs).
+    """
+    volume_loras = Path(MODEL_VOLUME) / "models" / "loras"
+    comfyui_loras = Path("/comfyui/models/loras")
+
+    # Prefer volume (persistent across jobs) over container disk
+    target_dir = volume_loras if Path(MODEL_VOLUME).exists() else comfyui_loras
+    target_dir.mkdir(parents=True, exist_ok=True)
+    comfyui_loras.mkdir(parents=True, exist_ok=True)
+
+    downloaded = 0
+    for lora in lora_downloads:
+        filename = lora["filename"]
+        url = lora["url"]
+        target = target_dir / filename
+
+        # Check if already present (volume cache or comfyui dir)
+        comfyui_target = comfyui_loras / filename
+        if target.exists() or comfyui_target.exists():
+            logger.info(f"✅ LoRA cached: {filename}")
+            continue
+
+        logger.info(f"⬇️ Downloading LoRA: {filename}...")
+        if job:
+            _progress(job, f"Downloading LoRA: {filename}...")
+
+        try:
+            resp = requests.get(url, stream=True, timeout=600)
+            resp.raise_for_status()
+
+            total = int(resp.headers.get("content-length", 0))
+            tmp = target.with_suffix(".download")
+            received = 0
+            last_pct = -1
+            with open(tmp, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):  # 8MB chunks
+                    f.write(chunk)
+                    received += len(chunk)
+                    if total > 0:
+                        pct = int(received / total * 100)
+                        # Report progress every 25%
+                        if pct >= last_pct + 25:
+                            last_pct = pct
+                            if job:
+                                _progress(job, f"Downloading LoRA {filename}: {pct}%")
+            tmp.rename(target)
+            size_mb = target.stat().st_size / (1024 * 1024)
+            logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
+
+            # If saved to volume, also symlink into comfyui dir so ComfyUI finds it
+            if target_dir == volume_loras and not comfyui_target.exists():
+                comfyui_target.symlink_to(target)
+                logger.info(f"🔗 Symlinked LoRA: {filename}")
+
+            downloaded += 1
+        except Exception as e:
+            logger.error(f"❌ Failed to download LoRA {filename}: {e}")
+            tmp = target.with_suffix(".download")
+            if tmp.exists():
+                tmp.unlink()
+            raise RuntimeError(f"Failed to download LoRA {filename}: {e}")
+
+    if downloaded > 0:
+        logger.info(f"✅ Downloaded {downloaded} LoRA(s) on demand")
+    return downloaded
+
+
 def queue_workflow(workflow: dict) -> str:
     """Queue a workflow in ComfyUI and return the prompt_id."""
     resp = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow})
@@ -540,6 +613,12 @@ def handler(event: dict) -> dict:
     if images:
         _progress(event, f"Saving {len(images)} input image(s)...")
         save_input_images(images)
+
+    # Download LoRAs on demand if provided
+    lora_downloads = input_data.get("lora_downloads", [])
+    if lora_downloads:
+        _progress(event, f"Downloading {len(lora_downloads)} LoRA(s)...")
+        download_loras(lora_downloads, job=event)
 
     try:
         # Queue the workflow
