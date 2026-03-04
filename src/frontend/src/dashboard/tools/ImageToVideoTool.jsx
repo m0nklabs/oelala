@@ -2645,11 +2645,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                                               📁 {category === 'root' ? 'Root' : category}
                                             </div>
                                             {matches.map((lora) => (
-                                              <div key={lora.name}
+                                              <div key={lora.path}
                                                 onMouseDown={(e) => {
                                                   e.preventDefault()
                                                   const newConfigs = [...loraConfigs]
-                                                  newConfigs[idx] = { ...config, high: lora.name }
+                                                  newConfigs[idx] = { ...config, high: lora.path }
                                                   setLoraConfigs(newConfigs)
                                                   setLoraSearchHigh({ ...loraSearchHigh, [idx]: '' })
                                                   setLoraDropdownOpen(null)
@@ -2734,11 +2734,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                                               📁 {category === 'root' ? 'Root' : category}
                                             </div>
                                             {matches.map((lora) => (
-                                              <div key={lora.name}
+                                              <div key={lora.path}
                                                 onMouseDown={(e) => {
                                                   e.preventDefault()
                                                   const newConfigs = [...loraConfigs]
-                                                  newConfigs[idx] = { ...config, low: lora.name }
+                                                  newConfigs[idx] = { ...config, low: lora.path }
                                                   setLoraConfigs(newConfigs)
                                                   setLoraSearchLow({ ...loraSearchLow, [idx]: '' })
                                                   setLoraDropdownOpen(null)

@@ -2018,10 +2018,42 @@ def _lora_download_token(filename: str) -> str:
     return hmac.new(key, filename.encode(), hashlib.sha256).hexdigest()[:32]
 
 
+def _resolve_lora_path(name: str) -> tuple[Path, str] | tuple[None, None]:
+    """
+    Resolve a LoRA name to its actual file path.
+    Handles names with or without .safetensors extension,
+    and LoRAs in subdirectories.
+
+    Returns (full_path, filename) or (None, None) if not found.
+    """
+    # Try exact path first (may include extension and/or subdirectory)
+    exact = LORA_DIR / name
+    if exact.is_file():
+        return exact, name
+
+    # Try adding .safetensors extension
+    with_ext = LORA_DIR / f"{name}.safetensors"
+    if with_ext.is_file():
+        return with_ext, f"{name}.safetensors"
+
+    # Search subdirectories for exact filename match
+    for match in LORA_DIR.rglob(f"{name}"):
+        if match.is_file():
+            return match, str(match.relative_to(LORA_DIR))
+
+    # Search subdirectories with extension added
+    for match in LORA_DIR.rglob(f"{name}.safetensors"):
+        if match.is_file():
+            return match, str(match.relative_to(LORA_DIR))
+
+    return None, None
+
+
 def _build_lora_download_list(lora_configs: list) -> list:
     """
     Build signed download URLs for LoRAs needed by a cloud job.
     Only includes LoRAs that exist locally on the SSD.
+    Handles names with or without .safetensors extension.
     Returns list of {filename, url} dicts.
     """
     base_url = os.getenv("BACKEND_PUBLIC_URL", "https://api.oelala.xyz")
@@ -2033,14 +2065,16 @@ def _build_lora_download_list(lora_configs: list) -> list:
             if not name or name in seen:
                 continue
             seen.add(name)
-            lora_path = LORA_DIR / name
-            if not lora_path.exists():
+            lora_path, resolved_name = _resolve_lora_path(name)
+            if not lora_path:
                 logger.warning(f"⚠️ LoRA not found locally for cloud upload: {name}")
                 continue
-            token = _lora_download_token(name)
+            # Update config in-place so workflow builder gets the correct filename
+            config[key] = resolved_name
+            token = _lora_download_token(resolved_name)
             downloads.append({
-                "filename": name,
-                "url": f"{base_url}/loras/download/{name}?token={token}",
+                "filename": resolved_name,
+                "url": f"{base_url}/loras/download/{resolved_name}?token={token}",
             })
     if downloads:
         logger.info(f"☁️ Built {len(downloads)} LoRA download URL(s) for cloud job")
@@ -2694,6 +2728,7 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
     Serve LoRA files for RunPod cloud workers.
     Protected with HMAC-signed token (derived from RUNPOD_API_KEY).
     Files are streamed from /mnt/ssd/loras/.
+    Handles filenames with or without .safetensors extension.
     """
     import hmac as _hmac_mod
     expected = _lora_download_token(filename)
@@ -2701,18 +2736,18 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
         logger.warning(f"⚠️ Invalid LoRA download token for: {filename}")
         raise HTTPException(status_code=403, detail="Invalid download token")
 
-    lora_path = LORA_DIR / filename
-    if not lora_path.exists():
+    lora_path, resolved_name = _resolve_lora_path(filename)
+    if not lora_path:
         raise HTTPException(status_code=404, detail="LoRA not found")
 
     size_mb = lora_path.stat().st_size / (1024 * 1024)
-    logger.info(f"☁️ Serving LoRA for cloud worker: {filename} ({size_mb:.0f}MB)")
+    logger.info(f"☁️ Serving LoRA for cloud worker: {resolved_name} ({size_mb:.0f}MB)")
     return FileResponse(
         lora_path,
         media_type="application/octet-stream",
-        filename=filename,
+        filename=resolved_name,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="{resolved_name}"',
             "Cache-Control": "private, no-cache",
         },
     )
