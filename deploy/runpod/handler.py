@@ -387,12 +387,14 @@ def queue_workflow(workflow: dict) -> str:
     return prompt_id
 
 
-def wait_for_completion(prompt_id: str, timeout: int = 1800) -> dict:
+def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
     """
     Poll ComfyUI /history until the job is done.
     Returns the history entry for this prompt_id.
+    Sends RunPod progress_update every ~15s if job is provided.
     """
     start = time.time()
+    last_progress = 0
     while (time.time() - start) < timeout:
         try:
             resp = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=10)
@@ -410,6 +412,13 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800) -> dict:
                         raise RuntimeError(f"ComfyUI job failed: {error_msg}")
         except requests.exceptions.RequestException:
             pass
+
+        # Send progress update every ~15s
+        elapsed = time.time() - start
+        if job and elapsed - last_progress >= 15:
+            _progress(job, f"Generating... {elapsed:.0f}s elapsed")
+            last_progress = elapsed
+
         time.sleep(3)
 
     raise TimeoutError(f"Job {prompt_id} timed out after {timeout}s")
@@ -474,6 +483,15 @@ def encode_outputs(files: list) -> list:
 
 # ---- RunPod Handler ----
 
+def _progress(job, message: str):
+    """Send a progress update to RunPod (visible when polling job status)."""
+    try:
+        runpod.serverless.progress_update(job, message)
+        logger.info(f"📡 Progress: {message}")
+    except Exception:
+        pass  # non-fatal
+
+
 def handler(event: dict) -> dict:
     """
     Main RunPod handler function.
@@ -481,7 +499,8 @@ def handler(event: dict) -> dict:
     Receives a workflow, queues it in ComfyUI, waits for completion,
     and returns the output files (base64 encoded).
 
-    All logs during execution are captured and returned in the 'logs' field.
+    Progress updates are sent via RunPod API during execution.
+    All logs are captured and returned in the 'logs' field.
     """
     # Capture logs during this job
     log_buffer = io.StringIO()
@@ -493,36 +512,44 @@ def handler(event: dict) -> dict:
     start_time = time.time()
     input_data = event.get("input", {})
 
+    _progress(event, "Job received, validating workflow...")
+
     workflow = input_data.get("workflow")
     if not workflow:
-        logger.addHandler(log_handler)  # ensure cleanup
         logger.removeHandler(log_handler)
         return {"error": "No workflow provided in input.workflow", "logs": log_buffer.getvalue()}
 
     # Save input images if provided
     images = input_data.get("images", {})
     if images:
+        _progress(event, f"Saving {len(images)} input image(s)...")
         save_input_images(images)
 
     try:
         # Queue the workflow
+        _progress(event, "Queuing workflow in ComfyUI...")
         prompt_id = queue_workflow(workflow)
+        _progress(event, f"Workflow queued (prompt_id: {prompt_id}), generating...")
 
         # Wait for completion
         timeout = input_data.get("timeout", 1800)  # 30 min default
-        history = wait_for_completion(prompt_id, timeout=timeout)
+        history = wait_for_completion(prompt_id, timeout=timeout, job=event)
 
         # Collect outputs
+        _progress(event, "Generation complete, collecting outputs...")
         files = collect_outputs(history)
         if not files:
             logger.removeHandler(log_handler)
             return {"error": "No output files generated", "prompt_id": prompt_id, "logs": log_buffer.getvalue()}
 
         # Encode outputs as base64
+        total_size = sum(f["size"] for f in files)
+        _progress(event, f"Encoding {len(files)} file(s) ({total_size / 1024 / 1024:.1f} MB)...")
         encoded_files = encode_outputs(files)
 
         elapsed = time.time() - start_time
         logger.info(f"✅ Job complete in {elapsed:.1f}s — {len(encoded_files)} files")
+        _progress(event, f"Done! {len(encoded_files)} file(s) in {elapsed:.0f}s")
 
         logger.removeHandler(log_handler)
         return {
@@ -533,13 +560,16 @@ def handler(event: dict) -> dict:
         }
 
     except TimeoutError as e:
+        _progress(event, f"❌ Timeout: {e}")
         logger.removeHandler(log_handler)
         return {"error": str(e), "logs": log_buffer.getvalue()}
     except RuntimeError as e:
+        _progress(event, f"❌ Error: {e}")
         logger.removeHandler(log_handler)
         return {"error": str(e), "logs": log_buffer.getvalue()}
     except Exception as e:
         logger.exception(f"❌ Handler error: {e}")
+        _progress(event, f"❌ Unexpected error: {e}")
         logger.removeHandler(log_handler)
         return {"error": f"Unexpected error: {str(e)}", "logs": log_buffer.getvalue()}
 
