@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react'
-import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send } from 'lucide-react'
+import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send, Flame } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
-import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
+import { PROMPT_LLM_MODELS, NSFW_LLM_MODELS, DEFAULT_PROMPT_LLM, DEFAULT_NSFW_LLM } from '../../constants/llmModels'
+import { useNSFW } from '../../contexts/NSFWContext'
 
 const STYLE_PRESETS = [
   { id: 'cinematic', label: '🎬 Cinematic', keywords: 'cinematic lighting, film grain, dramatic shadows, professional photography' },
@@ -18,6 +19,24 @@ const STYLE_PRESETS = [
   { id: 'scifi', label: '🚀 Sci-Fi', keywords: 'science fiction, futuristic, space, advanced technology' },
 ]
 
+const NSFW_STYLE_PRESETS = [
+  { id: 'sensual', label: '💋 Sensual', keywords: 'sensual, intimate, soft lighting, romantic atmosphere' },
+  { id: 'glamour', label: '✨ Glamour', keywords: 'glamour photography, studio lighting, alluring, provocative pose' },
+  { id: 'boudoir', label: '🛏️ Boudoir', keywords: 'boudoir photography, intimate setting, soft fabrics, warm lighting' },
+  { id: 'artistic_nude', label: '🎨 Art Nude', keywords: 'artistic nude, fine art, dramatic lighting, sculptural body' },
+  { id: 'fetish', label: '⛓️ Fetish', keywords: 'fetish, leather, latex, dominant, submissive, dark aesthetic' },
+  { id: 'hentai', label: '🎌 Hentai', keywords: 'hentai, anime style, ecchi, explicit, Japanese illustration' },
+]
+
+const NSFW_INTENSITY_LABELS = [
+  '', // 0 unused
+  '💋 Suggestive',
+  '🔥 Softcore',
+  '🔞 Nude',
+  '💥 Hardcore',
+  '⚡ Extreme',
+]
+
 const ENHANCEMENT_MODES = [
   { id: 'expand', label: 'Expand', description: 'Add more details and context' },
   { id: 'refine', label: 'Refine', description: 'Improve grammar and structure' },
@@ -27,16 +46,29 @@ const ENHANCEMENT_MODES = [
 // PROMPT_LLM_MODELS imported from shared constants/llmModels.js
 
 export default function PromptGeneratorTool({ onSendToTool }) {
+  const { nsfwEnabled } = useNSFW()
   const [input, setInput] = useState('')
   const [style, setStyle] = useState('')
   const [enhanceMode, setEnhanceMode] = useState('expand')
   const [includeNegative, setIncludeNegative] = useState(true)
   const [includeMotion, setIncludeMotion] = useState(false)
+  const [nsfwMode, setNsfwMode] = useState(false)
+  const [nsfwIntensity, setNsfwIntensity] = useState(3)
 
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
+
+  // Auto-switch model list when toggling NSFW
+  const activeModels = nsfwMode ? NSFW_LLM_MODELS : PROMPT_LLM_MODELS
+  const activeStyles = nsfwMode ? NSFW_STYLE_PRESETS : STYLE_PRESETS
+
+  const handleNsfwToggle = (enabled) => {
+    setNsfwMode(enabled)
+    setStyle('') // reset style when switching
+    setEnhanceModel(enabled ? DEFAULT_NSFW_LLM : DEFAULT_PROMPT_LLM)
+  }
 
   // LLM prompt enhancement queue
   const llm = useLLMEnhance()
@@ -54,6 +86,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       include_negative: includeNegative,
       include_motion: includeMotion,
       model: enhanceModel,
+      ...(nsfwMode && { nsfw_intensity: nsfwIntensity }),
     })
 
     if (result) {
@@ -70,7 +103,8 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     if (!input.trim()) return
 
     const basePrompt = input.trim()
-    const stylePreset = STYLE_PRESETS.find(s => s.id === style)
+    const allStyles = [...STYLE_PRESETS, ...NSFW_STYLE_PRESETS]
+    const stylePreset = allStyles.find(s => s.id === style)
     const styleKeywords = stylePreset ? `, ${stylePreset.keywords}` : ''
 
     const enhancedPrompt = `${basePrompt}${styleKeywords}, masterpiece, best quality, highly detailed`
@@ -97,6 +131,48 @@ export default function PromptGeneratorTool({ onSendToTool }) {
 
   return (
     <div className="tool-container">
+      {/* NSFW Toggle — only visible when NSFW is enabled globally */}
+      {nsfwEnabled && (
+        <div className="tool-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Flame size={18} color={nsfwMode ? '#ef4444' : undefined} />
+              NSFW Mode
+            </h3>
+            <button
+              onClick={() => handleNsfwToggle(!nsfwMode)}
+              style={{
+                padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 600, transition: 'all 0.2s',
+                background: nsfwMode ? '#ef4444' : 'var(--bg-secondary, #1a1a1a)',
+                color: nsfwMode ? '#fff' : 'var(--text-muted, #888)',
+                border: `1px solid ${nsfwMode ? '#ef4444' : 'var(--border-color, #444)'}`,
+              }}
+            >
+              {nsfwMode ? '🔥 ON' : 'OFF'}
+            </button>
+          </div>
+          {nsfwMode && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted, #888)' }}>Intensity</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: nsfwIntensity >= 4 ? '#ef4444' : nsfwIntensity >= 2 ? '#f59e0b' : 'var(--text-color)' }}>
+                  {NSFW_INTENSITY_LABELS[nsfwIntensity]}
+                </span>
+              </div>
+              <input
+                type="range" min={1} max={5} value={nsfwIntensity}
+                onChange={(e) => setNsfwIntensity(parseInt(e.target.value))}
+                style={{ width: '100%', accentColor: '#ef4444' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted, #666)', marginTop: '2px' }}>
+                <span>Suggestive</span><span>Extreme</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="tool-section">
         <h3>
           <Sparkles size={18} />
@@ -105,7 +181,9 @@ export default function PromptGeneratorTool({ onSendToTool }) {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Describe your image or video idea... (e.g., 'a cat wearing sunglasses')"
+          placeholder={nsfwMode
+            ? 'Describe your NSFW scene idea... (e.g., "woman in lingerie, bedroom")'
+            : 'Describe your image or video idea... (e.g., \'a cat wearing sunglasses\')'}
           rows={3}
           className="prompt-input"
         />
@@ -114,11 +192,12 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       <div className="tool-section">
         <h3>Style Preset</h3>
         <div className="style-grid">
-          {STYLE_PRESETS.map((s) => (
+          {activeStyles.map((s) => (
             <button
               key={s.id}
               className={`style-btn ${style === s.id ? 'active' : ''}`}
               onClick={() => setStyle(style === s.id ? '' : s.id)}
+              style={nsfwMode && style === s.id ? { background: '#ef4444', borderColor: '#ef4444' } : {}}
             >
               {s.label}
             </button>
@@ -154,16 +233,16 @@ export default function PromptGeneratorTool({ onSendToTool }) {
           value={enhanceModel}
           onChange={(e) => setEnhanceModel(e.target.value)}
           style={{ width: '100%', padding: '10px 12px', borderRadius: '8px',
-            border: '1px solid var(--border-color, #444)',
+            border: `1px solid ${nsfwMode ? 'rgba(239,68,68,0.3)' : 'var(--border-color, #444)'}`,
             background: 'var(--bg-secondary, #1a1a1a)', color: 'var(--text-color, #fff)',
             fontSize: '14px', cursor: 'pointer' }}
         >
-          {PROMPT_LLM_MODELS.map((m) => (
+          {activeModels.map((m) => (
             <option key={m.id} value={m.id}>{m.label}</option>
           ))}
         </select>
         <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-muted, #888)' }}>
-          {PROMPT_LLM_MODELS.find((m) => m.id === enhanceModel)?.description}
+          {activeModels.find((m) => m.id === enhanceModel)?.description}
         </p>
       </div>
 

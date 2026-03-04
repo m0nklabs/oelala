@@ -138,6 +138,7 @@ export default function useLLMEnhance() {
           use_llm: params.use_llm ?? true,
           model: params.model ?? null,
           refine_instruction: params.refine_instruction ?? null,
+          nsfw_intensity: params.nsfw_intensity ?? null,
         }),
         signal: controller.signal,
       })
