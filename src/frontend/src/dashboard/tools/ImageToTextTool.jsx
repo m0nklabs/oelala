@@ -10,6 +10,7 @@ import { VISION_MODELS, DEFAULT_VISION_MODEL } from '../../constants/llmModels'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
+import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
@@ -35,7 +36,7 @@ const isPromptMode = (m) => m.startsWith('prompt_')
 const MODELS = VISION_MODELS
 
 const I2T_DEFAULTS = {
-  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3,
+  model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3, cameraMotion: '',
 }
 
 export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
@@ -54,14 +55,16 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
+  const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
 
   // ── Auto-save settings ──────────────────────────────────────────
-  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity }), [model, mode, nsfwIntensity])
+  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, cameraMotion }), [model, mode, nsfwIntensity, cameraMotion])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
     setModel(d.model); setMode(d.mode); setNsfwIntensity(d.nsfwIntensity)
+    setCameraMotion(d.cameraMotion || '')
   }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
@@ -180,7 +183,14 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       }
 
       const data = await res.json()
-      setCaption(data.caption || '')
+      let captionText = data.caption || ''
+
+      // Prepend camera motion prefix when in prompt mode and motion is selected
+      if (isPromptMode(mode) && cameraMotion) {
+        const motionPrefix = getCameraMotionPrefix(cameraMotion)
+        if (motionPrefix) captionText = motionPrefix + captionText
+      }
+      setCaption(captionText)
 
       if (DEBUG) console.log('🖼️ Caption result:', data)
     } catch (err) {
@@ -335,6 +345,19 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               </button>
             ))}
           </div>
+
+          {/* Camera Motion Selector — shown for all prompt modes (I2V, T2I, NSFW) */}
+          {isPromptMode(mode) && (
+            <div style={{ marginTop: '12px' }}>
+              <CameraMotionSelector
+                value={cameraMotion}
+                onChange={setCameraMotion}
+              />
+              <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
+                Selected motion is prepended to the generated prompt — ready for T2V / I2V.
+              </p>
+            </div>
+          )}
 
           {/* NSFW Intensity Slider */}
           {mode === 'prompt_nsfw' && (
