@@ -47,6 +47,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [model, setModel] = useState(initial.model)
   const [mode, setMode] = useState(initial.mode)
   const [caption, setCaption] = useState('')
+  const [motionPrompt, setMotionPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isRefining, setIsRefining] = useState(false)
@@ -195,6 +196,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         if (motionPrefix) captionText = motionPrefix + captionText
       }
       setCaption(captionText)
+      setMotionPrompt(data.motion_prompt || '')
 
       if (DEBUG) console.log('🖼️ Caption result:', data)
     } catch (err) {
@@ -542,6 +544,31 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               </p>
             )}
           </div>
+
+          {/* Motion Prompt — separate block when include_motion generated one */}
+          {motionPrompt && (
+            <div style={{
+              marginTop: '12px',
+              padding: '12px 16px',
+              background: 'rgba(139, 92, 246, 0.08)',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+              borderRadius: '10px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-primary, #eee)' }}>🎬 Motion Prompt</h4>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                  onClick={() => navigator.clipboard.writeText(motionPrompt)}
+                >
+                  <Copy size={14} /> Copy
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary, #aaa)', lineHeight: 1.5 }}>
+                {motionPrompt}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

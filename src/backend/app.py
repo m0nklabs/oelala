@@ -8179,11 +8179,13 @@ async def caption_image(
     custom_prompt = caption_prompts.get(mode, caption_prompts["detailed"])
 
     # Append motion instructions when include_motion is enabled
-    if include_motion and mode != "prompt_i2v":  # prompt_i2v already includes motion
+    if include_motion:
         custom_prompt += (
-            " Also describe camera motion, movement, and animation cues suitable for "
-            "AI video generation (e.g. slow zoom in, camera pans left, subject walks forward, "
-            "hair blowing in wind). Include these naturally within the prompt."
+            " IMPORTANT: After your main prompt, add a SEPARATE LINE starting with 'MOTION:' "
+            "that contains ONLY camera motion and animation cues. "
+            "Examples: 'MOTION: slow zoom in, camera pans left, tracking shot, "
+            "crane shot rising, handheld shake, dolly forward, subject walks toward camera, "
+            "hair blowing in wind, fabric rippling'. Include at least 2-3 specific motion descriptions."
         )
 
     import base64 as _b64
@@ -8194,7 +8196,27 @@ async def caption_image(
     description = await analyze_image_with_vision(
         image_b64, custom_prompt=custom_prompt, model_override=model
     )
-    return {"caption": description, "model": model or VISION_MODEL, "mode": mode}
+
+    # Extract motion prompt if include_motion was enabled
+    motion_prompt = None
+    if include_motion and description:
+        # Try to split on MOTION: marker
+        import re
+        motion_match = re.split(r'\n\s*MOTION:\s*', description, maxsplit=1)
+        if len(motion_match) == 2:
+            description = motion_match[0].strip()
+            motion_prompt = motion_match[1].strip()
+        else:
+            # Fallback: check for "motion:" anywhere
+            motion_match = re.split(r'(?i)\bmotion:\s*', description, maxsplit=1)
+            if len(motion_match) == 2:
+                description = motion_match[0].strip().rstrip(',')
+                motion_prompt = motion_match[1].strip()
+
+    result = {"caption": description, "model": model or VISION_MODEL, "mode": mode}
+    if motion_prompt:
+        result["motion_prompt"] = motion_prompt
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -8784,7 +8806,7 @@ async def analyze_image_with_vision(
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(
-                timeout=120.0, headers=_guardian_headers()
+                timeout=240.0, headers=_guardian_headers()
             ) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
