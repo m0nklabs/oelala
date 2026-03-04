@@ -1918,6 +1918,62 @@ active_jobs = {}
 # Maps prompt_id -> [{type: "upscale", scale: 2}, {type: "interpolate", target_fps: 60}]
 pending_post_processing = {}
 
+# Persistence file for cloud jobs (survives backend restarts)
+CLOUD_JOBS_FILE = Path("/home/flip/oelala/data/cloud_jobs.json")
+
+
+def _persist_cloud_jobs() -> None:
+    """Save active cloud jobs to disk so they survive backend restarts."""
+    try:
+        cloud_jobs = {
+            pid: info for pid, info in active_jobs.items()
+            if info.get("compute_target") == "cloud"
+            and not info.get("_cloud_completed")
+        }
+        if not cloud_jobs:
+            # Remove file if no active cloud jobs
+            if CLOUD_JOBS_FILE.exists():
+                CLOUD_JOBS_FILE.unlink()
+            return
+        # Filter out non-serializable keys
+        serializable = {}
+        for pid, info in cloud_jobs.items():
+            serializable[pid] = {
+                k: v for k, v in info.items()
+                if not k.startswith("_") or k in ("_cloud_status",)
+            }
+        CLOUD_JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CLOUD_JOBS_FILE, "w") as f:
+            json.dump(serializable, f, indent=2)
+        logger.debug(f"☁️ Persisted {len(serializable)} cloud job(s) to disk")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to persist cloud jobs: {e}")
+
+
+def _restore_cloud_jobs() -> int:
+    """Restore cloud jobs from disk on startup. Returns count restored."""
+    if not CLOUD_JOBS_FILE.exists():
+        return 0
+    try:
+        with open(CLOUD_JOBS_FILE, "r") as f:
+            saved_jobs = json.load(f)
+        count = 0
+        for pid, info in saved_jobs.items():
+            if pid not in active_jobs:
+                active_jobs[pid] = info
+                count += 1
+                logger.info(f"☁️ Restored cloud job: {pid} (RunPod: {info.get('runpod_job_id', '?')})")
+        if count > 0:
+            logger.info(f"☁️ Restored {count} cloud job(s) from previous session")
+        return count
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to restore cloud jobs: {e}")
+        return 0
+
+
+# Restore cloud jobs on module load
+_restore_cloud_jobs()
+
 # Generation stats file for analysis
 GENERATION_STATS_FILE = Path("/home/flip/oelala/data/generation_stats.json")
 
@@ -2126,6 +2182,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         _cloud_completed_cache[prompt_id] = result
         # Clean up active_jobs after a delay (keep for a bit so UI can read the failure)
         active_jobs[prompt_id]["_cloud_completed"] = True
+        _persist_cloud_jobs()
         return result
     elif status_val != "COMPLETED":
         # Unknown status — treat as running
@@ -2141,6 +2198,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
+        _persist_cloud_jobs()
         return result
 
     # Check for handler-level errors
@@ -2151,6 +2209,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
+        _persist_cloud_jobs()
         return result
 
     files = output.get("files", [])
@@ -2160,6 +2219,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
+        _persist_cloud_jobs()
         return result
 
     # Decode and save all output files (usually 1 video)
@@ -2203,6 +2263,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
+        _persist_cloud_jobs()
         return result
 
     # Upload to oelala-storage via MediaService
@@ -2227,6 +2288,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     # Mark as completed in active_jobs
     active_jobs[prompt_id]["_cloud_completed"] = True
+    _persist_cloud_jobs()
 
     result = {
         "prompt_id": prompt_id,
@@ -5833,6 +5895,7 @@ async def _submit_to_runpod(
     job_info["runpod_endpoint_id"] = job.endpoint_id
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    _persist_cloud_jobs()
 
     return {
         "success": True,
