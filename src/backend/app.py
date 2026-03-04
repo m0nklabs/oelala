@@ -6024,11 +6024,13 @@ async def generate_wan22_async(
             "model_mode": "wan2.2",
             "user_id": user.id,
         }
+        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 I2V (cloud)")
         return result
@@ -6292,11 +6294,13 @@ async def generate_blockswap_q8_async(
             "enable_interpolation": enable_interpolation,
             "user_id": user.id,
         }
+        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "BlockSwap Q8 I2V (cloud)")
         return result
@@ -6537,11 +6541,13 @@ async def generate_distorch2_q8_async(
             "enable_interpolation": enable_interpolation,
             "user_id": user.id,
         }
+        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "DisTorch2 Q8 I2V (cloud)")
         return result
@@ -6783,11 +6789,13 @@ async def generate_ultra_q8_async(
             "enable_interpolation": enable_interpolation,
             "user_id": user.id,
         }
+        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "Ultra Q8 I2V (cloud)")
         return result
