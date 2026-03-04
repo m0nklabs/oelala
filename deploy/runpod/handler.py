@@ -321,7 +321,14 @@ def save_input_images(images: dict):
 def queue_workflow(workflow: dict) -> str:
     """Queue a workflow in ComfyUI and return the prompt_id."""
     resp = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow})
-    resp.raise_for_status()
+    if resp.status_code != 200:
+        # Log full error details from ComfyUI
+        try:
+            error_body = resp.json()
+        except Exception:
+            error_body = resp.text[:2000]
+        logger.error(f"❌ ComfyUI /prompt returned {resp.status_code}: {json.dumps(error_body, indent=2)[:2000]}")
+        raise RuntimeError(f"ComfyUI rejected workflow ({resp.status_code}): {json.dumps(error_body)[:1000]}")
     data = resp.json()
     prompt_id = data.get("prompt_id")
     logger.info(f"📋 Queued workflow: {prompt_id}")

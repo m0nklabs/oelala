@@ -2788,19 +2788,22 @@ class ComfyUIClient:
             "inputs": {
                 "width": width,
                 "height": height,
-                "interpolation": "lanczos",
-                "keep_proportion": False,
+                "upscale_method": "lanczos",
+                "keep_proportion": "stretch",
                 "divisible_by": 8,
+                "crop_position": "center",
+                "pad_color": "0, 0, 0",
                 "image": ["1", 0],
             },
         }
 
         # Node 3: UNET Loader — bf16 model (native ComfyUI, NOT GGUF)
+        # weight_dtype="default" loads in native precision (bf16 for this model)
         workflow["3"] = {
             "class_type": "UNETLoader",
             "inputs": {
                 "unet_name": diffusion_model,
-                "weight_dtype": "bf16",
+                "weight_dtype": "default",
             },
         }
 
@@ -2823,6 +2826,16 @@ class ComfyUIClient:
         workflow["6"] = {
             "class_type": "CLIPVisionLoader",
             "inputs": {"clip_name": clip_vision},
+        }
+
+        # Node 12: CLIP Vision Encode (CLIP_VISION + IMAGE → CLIP_VISION_OUTPUT)
+        workflow["12"] = {
+            "class_type": "CLIPVisionEncode",
+            "inputs": {
+                "clip_vision": ["6", 0],
+                "image": ["2", 0],
+                "crop": "center",
+            },
         }
 
         # Node 7: Positive prompt encoding
@@ -2848,7 +2861,7 @@ class ComfyUIClient:
                 "positive": ["7", 0],
                 "negative": ["8", 0],
                 "vae": ["5", 0],
-                "clip_vision": ["6", 0],
+                "clip_vision_output": ["12", 0],
                 "start_image": ["2", 0],
             },
         }
