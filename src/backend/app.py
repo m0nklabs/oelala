@@ -625,6 +625,25 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+async def _save_upload(file: UploadFile, dest: Path) -> bytes:
+    """Save an UploadFile to disk, returning the raw bytes.
+
+    Seeks to 0 first (guards against consumed streams) and rejects
+    empty uploads with a 400 so RunPod / ComfyUI never receives 0-byte files.
+    """
+    await file.seek(0)
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is empty (0 bytes). Re-select or re-upload the file.",
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(content)
+    logger.info(f"📤 Saved upload: {dest} ({len(content)} bytes)")
+    return content
+
 # Mount static files after CORS
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
@@ -5171,13 +5190,7 @@ async def generate_video(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"i2v_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     # Upload to ComfyUI
     comfyui_image_name = comfyui.upload_image(str(input_path))
@@ -5632,15 +5645,7 @@ async def generate_wan22_comfyui(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    # Save uploaded file
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     # Generate output filename
     if not output_filename:
@@ -5993,15 +5998,7 @@ async def generate_wan22_async(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    # Save uploaded file
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     # Upload to ComfyUI
     image_name = comfyui.upload_image(str(input_path))
@@ -6031,9 +6028,7 @@ async def generate_wan22_async(
         audio_filename = f"post_audio_{timestamp}_{post_audio_file.filename}"
         post_audio_path = str(UPLOAD_DIR / audio_filename)
         try:
-            with open(post_audio_path, "wb") as buffer:
-                shutil.copyfileobj(post_audio_file.file, buffer)
-            logger.info(f"📤 Saved post-processing audio: {post_audio_path}")
+            await _save_upload(post_audio_file, Path(post_audio_path))
         except Exception as e:
             logger.warning(f"Failed to save post audio file: {e}")
             post_audio_path = None
@@ -6309,14 +6304,7 @@ async def generate_blockswap_q8_async(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     image_name = comfyui.upload_image(str(input_path))
     if not image_name:
@@ -6560,14 +6548,7 @@ async def generate_distorch2_q8_async(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     image_name = comfyui.upload_image(str(input_path))
     if not image_name:
@@ -6808,14 +6789,7 @@ async def generate_ultra_q8_async(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"comfyui_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     image_name = comfyui.upload_image(str(input_path))
     if not image_name:
@@ -7087,18 +7061,11 @@ async def generate_cloud_max_async(
 
         input_filename = f"comfyui_{timestamp}_{file.filename}"
         input_path = UPLOAD_DIR / input_filename
-
-        try:
-            with open(input_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            logger.info(f"📤 Saved input image: {input_path}")
-        except Exception as e:
-            logger.error(f"Error saving file: {e}")
-            raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+        content = await _save_upload(file, input_path)
 
         # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
         import base64 as _b64
-        input_images_b64[input_filename] = _b64.b64encode(input_path.read_bytes()).decode()
+        input_images_b64[input_filename] = _b64.b64encode(content).decode()
 
         image_name = comfyui.upload_image(str(input_path))
         if not image_name:
@@ -7276,15 +7243,7 @@ async def generate_ltx2_i2v_async(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"ltx2_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    # Save uploaded file
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"📤 Saved input image: {input_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     # Upload to ComfyUI
     image_name = comfyui.upload_image(str(input_path))
@@ -7306,9 +7265,7 @@ async def generate_ltx2_i2v_async(
         audio_filename = f"post_audio_{timestamp}_{post_audio_file.filename}"
         post_audio_path = str(UPLOAD_DIR / audio_filename)
         try:
-            with open(post_audio_path, "wb") as buffer:
-                shutil.copyfileobj(post_audio_file.file, buffer)
-            logger.info(f"📤 Saved post-processing audio: {post_audio_path}")
+            await _save_upload(post_audio_file, Path(post_audio_path))
         except Exception as e:
             logger.warning(f"Failed to save post audio file: {e}")
             post_audio_path = None
@@ -8016,13 +7973,7 @@ async def generate_pose_video(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"pose_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     # Upload to ComfyUI
     comfyui_image_name = comfyui.upload_image(str(input_path))
@@ -8143,13 +8094,7 @@ async def caption_image(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"caption_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-
-    try:
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    await _save_upload(file, input_path)
 
     # Clamp detail_level
     detail_level = max(1, min(5, detail_level or 3))
@@ -11349,16 +11294,8 @@ async def train_lora_model(
     for i, file in enumerate(files):
         input_filename = f"train_{i:03d}_{file.filename}"
         input_path = training_dir / input_filename
-
-        try:
-            with open(input_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            image_paths.append(str(input_path))
-        except Exception as e:
-            logger.error(f"Error saving file {file.filename}: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to save {file.filename}"
-            )
+        await _save_upload(file, input_path)
+        image_paths.append(str(input_path))
 
     # Generate output name
     if not model_name:
@@ -11440,15 +11377,8 @@ async def train_lora_placeholder(
     for i, file in enumerate(files):
         input_filename = f"train_{i:03d}_{file.filename}"
         input_path = training_dir / input_filename
-        try:
-            with open(input_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            image_paths.append(str(input_path))
-        except Exception as e:
-            logger.error(f"Error saving file {file.filename}: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to save {file.filename}"
-            )
+        await _save_upload(file, input_path)
+        image_paths.append(str(input_path))
 
     output_dir = OUTPUT_DIR / model_name
     os.makedirs(output_dir, exist_ok=True)
