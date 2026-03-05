@@ -10489,9 +10489,8 @@ async def generate_i2i(
 UPSCALE_MODELS = [
     "RealESRGAN_x4plus.pth",
     "RealESRGAN_x4plus_anime_6B.pth",
-    "RealESRGAN_x2plus.pth",
     "4x-UltraSharp.pth",
-    "4x_NMKD-Siax_200k.pth",
+    "4x_foolhardy_Remacri.pth",
 ]
 
 # Credit costs for upscale operations
@@ -10753,6 +10752,9 @@ async def upscale_video(
         if model == "seedvr2":
             # SeedVR2 AI video upscaler workflow
             # Requires: SeedVR2LoadDiTModel, SeedVR2LoadVAEModel, SeedVR2VideoUpscaler
+            # DiT on cuda:1 (5060 Ti 16GB), VAE on cuda:0 (3060 12GB)
+            # BlockSwap 28 blocks + swap_io to cuda:0 for VRAM savings
+            # Tiled VAE required to avoid OOM on 12GB card
             workflow = {
                 "1": {
                     "inputs": {
@@ -10770,16 +10772,23 @@ async def upscale_video(
                 "2": {
                     "inputs": {
                         "model": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
-                        "device": "cuda:1",  # RTX 5060 Ti has more VRAM
+                        "device": "cuda:1",
+                        "blocks_to_swap": 28,
+                        "swap_io_components": True,
                         "offload_device": "cuda:0",
-                        "attention_mode": "sdpa",
                     },
                     "class_type": "SeedVR2LoadDiTModel",
                 },
                 "3": {
                     "inputs": {
-                        "model": "seedvr2_ema_vae_fp32.safetensors",
+                        "model": "ema_vae_fp16.safetensors",
                         "device": "cuda:0",
+                        "encode_tiled": True,
+                        "encode_tile_size": 512,
+                        "encode_tile_overlap": 64,
+                        "decode_tiled": True,
+                        "decode_tile_size": 512,
+                        "decode_tile_overlap": 64,
                     },
                     "class_type": "SeedVR2LoadVAEModel",
                 },
@@ -10789,8 +10798,8 @@ async def upscale_video(
                         "dit": ["2", 0],
                         "vae": ["3", 0],
                         "seed": 42,
-                        "resolution": int(1080 * scale / 2),  # Target resolution
-                        "max_resolution": 0,
+                        "resolution": min(int(1080 * scale / 2), 720),
+                        "max_resolution": 1280,
                         "batch_size": 5,
                         "uniform_batch_size": False,
                         "color_correction": "lab",
