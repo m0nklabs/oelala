@@ -115,7 +115,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 
   // Load profiles so user can pick one as source
   useEffect(() => {
-    fetch(`${BACKEND_BASE}/api/face-profiles`)
+    apiFetch('/api/face-profiles')
       .then(r => r.json())
       .then(d => setProfiles(d.profiles || []))
       .catch(() => {})
@@ -169,7 +169,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       } else {
         mediaUrl = getMediaUrl(item.url, item.signed_url)
       }
-      const response = await fetch(mediaUrl)
+      const response = await apiFetch(mediaUrl)
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const filename = item.filename || mediaUrl.split('/').pop()
@@ -217,7 +217,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
     try {
       const fd = new FormData()
       fd.append('image', targetFile)
-      const res = await fetch(`${BACKEND_BASE}/detect-faces`, { method: 'POST', body: fd })
+      const res = await apiFetch('/detect-faces', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Detection failed')
       setDetectedFaces(data.faces || [])
@@ -270,7 +270,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 
       if (DEBUG) console.log('👤 FaceSwap →', endpoint, 'indices:', idx, 'video:', isVideoTarget)
 
-      const res = await fetch(endpoint, { method: 'POST', body: fd })
+      const res = await apiFetch(endpoint, { method: 'POST', body: fd })
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
@@ -566,7 +566,7 @@ function ProfilesPanel({ user, requestLogin }) {
   const loadProfiles = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/face-profiles`)
+      const res = await apiFetch('/api/face-profiles')
       const data = await res.json()
       setProfiles(data.profiles || [])
     } catch {
@@ -615,7 +615,7 @@ function ProfilesPanel({ user, requestLogin }) {
       fd.append('description', newDesc.trim())
       newImages.forEach(img => fd.append('images', img))
 
-      const res = await fetch(`${BACKEND_BASE}/api/face-profiles`, { method: 'POST', body: fd })
+      const res = await apiFetch('/api/face-profiles', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Create failed')
 
@@ -632,7 +632,7 @@ function ProfilesPanel({ user, requestLogin }) {
   const handleDelete = async (profileId, profileName) => {
     if (!window.confirm(`Delete face profile "${profileName}"?`)) return
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/face-profiles/${profileId}`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/face-profiles/${profileId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
       setProfiles(prev => prev.filter(p => p.id !== profileId))
     } catch (err) {
@@ -865,8 +865,8 @@ function TrainLoraPanel({ user, requestLogin }) {
   const loadStatus = useCallback(async () => {
     try {
       const [jobsRes, lorasRes] = await Promise.all([
-        fetch(`${BACKEND_BASE}/api/face-train`),
-        fetch(`${BACKEND_BASE}/api/face-train/loras`),
+        apiFetch('/api/face-train'),
+        apiFetch('/api/face-train/loras'),
       ])
       const [jobsData, lorasData] = await Promise.all([jobsRes.json(), lorasRes.json()])
       setJobs((jobsData.jobs || []).slice().reverse()) // newest first
@@ -908,7 +908,7 @@ function TrainLoraPanel({ user, requestLogin }) {
       fd.append('steps', String(steps))
       images.forEach(img => fd.append('images', img))
 
-      const res = await fetch(`${BACKEND_BASE}/api/face-train`, { method: 'POST', body: fd })
+      const res = await apiFetch('/api/face-train', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Start failed')
 
@@ -924,7 +924,7 @@ function TrainLoraPanel({ user, requestLogin }) {
   }
 
   const handleCancel = async (jobId) => {
-    await fetch(`${BACKEND_BASE}/api/face-train/${jobId}`, { method: 'DELETE' })
+    await apiFetch(`/api/face-train/${jobId}`, { method: 'DELETE' })
     loadStatus()
   }
 
