@@ -24,7 +24,7 @@ Usage:
 
 import httpx
 from pathlib import Path
-from typing import Optional, List, Dict, Any, BinaryIO, Union
+from typing import Optional, List, Dict, Any, BinaryIO, Tuple, Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -139,6 +139,46 @@ class StorageClient:
         resp = self.client.get(url)
         resp.raise_for_status()
         return resp.content
+
+    def get_with_metadata(self, bucket: str, key: str) -> Tuple[bytes, str, int]:
+        """
+        Download an object and return content with metadata for proxying.
+
+        Args:
+            bucket: Bucket name
+            key: Object key
+
+        Returns:
+            Tuple of (content_bytes, content_type, content_length)
+        """
+        url = f"/{bucket}/{key}"
+        resp = self.client.get(url)
+        resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "application/octet-stream")
+        return resp.content, content_type, len(resp.content)
+
+    def stream(self, bucket: str, key: str):
+        """
+        Stream an object from storage. Returns a context manager yielding chunks.
+
+        Usage:
+            with storage.stream("generated", "video.mp4") as (chunks, content_type, size):
+                for chunk in chunks:
+                    yield chunk
+        """
+        import contextlib
+
+        url = f"/{bucket}/{key}"
+
+        @contextlib.contextmanager
+        def _stream_ctx():
+            with self.client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                ct = resp.headers.get("content-type", "application/octet-stream")
+                cl = int(resp.headers.get("content-length", 0))
+                yield resp.iter_bytes(), ct, cl
+
+        return _stream_ctx()
 
     def get_to_file(self, bucket: str, key: str, path: Path) -> Path:
         """
