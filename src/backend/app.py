@@ -2156,6 +2156,30 @@ def _build_lora_download_list(lora_configs: list) -> list:
     return downloads
 
 
+CLOUD_LOGS_DIR = Path("/home/flip/oelala/logs/cloud")
+CLOUD_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Optional[Path]:
+    """Save raw ComfyUI logs from a cloud job to logs/cloud/."""
+    try:
+        output = rp_job.output
+        logs_text = None
+        if isinstance(output, dict):
+            logs_text = output.get("logs")
+        if not logs_text:
+            return None
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        status_val = rp_job.status.value if hasattr(rp_job.status, "value") else str(rp_job.status)
+        log_file = CLOUD_LOGS_DIR / f"{ts}_{status_val}_{runpod_job_id}.log"
+        log_file.write_text(logs_text)
+        logger.info(f"☁️ Saved cloud logs: {log_file.name} ({len(logs_text)} chars)")
+        return log_file
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to save cloud logs: {e}")
+        return None
+
+
 async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     """
     Handle status polling for a cloud (RunPod) job.
@@ -2165,6 +2189,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     2. Saves it locally to media/generated/cloud-max/
     3. Uploads to oelala-storage via MediaService
     4. Returns the same response format as local jobs
+    5. Saves raw ComfyUI logs to logs/cloud/
     """
     # Return cached result if already processed
     if prompt_id in _cloud_completed_cache:
@@ -2196,11 +2221,14 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     elif status_val in ("FAILED", "CANCELLED", "TIMED_OUT"):
         error_msg = rp_job.error or f"RunPod job {status_val}"
         logger.error(f"☁️ Cloud job failed: {runpod_job_id} — {error_msg}")
+        _save_cloud_logs(runpod_job_id, prompt_id, rp_job)
         record_generation_complete(prompt_id, success=False, error=error_msg)
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         # Clean up active_jobs after a delay (keep for a bit so UI can read the failure)
         active_jobs[prompt_id]["_cloud_completed"] = True
+        active_jobs[prompt_id]["_cloud_status"] = status_val
+        active_jobs[prompt_id]["_cloud_error"] = error_msg
         _persist_cloud_jobs()
         return result
     elif status_val != "COMPLETED":
@@ -2209,6 +2237,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     # ── COMPLETED — process output ──────────────────────────────────────
     logger.info(f"☁️ Cloud job COMPLETED: {runpod_job_id}")
+    _save_cloud_logs(runpod_job_id, prompt_id, rp_job)
 
     output = rp_job.output
     if not output or not isinstance(output, dict):
@@ -2554,17 +2583,13 @@ async def get_comfyui_queue():
 
         # Include cloud (RunPod) jobs from active_jobs tracking
         cloud_running = []
-        cloud_pending = []
+        cloud_failed = []
         for pid, info in list(active_jobs.items()):
             if info.get("compute_target") != "cloud":
-                continue
-            # Skip if already completed/processed
-            if info.get("_cloud_completed"):
                 continue
             cloud_status = info.get("_cloud_status", "IN_QUEUE")
             cloud_job = {
                 "prompt_id": pid,
-                "status": "running" if cloud_status in ("IN_PROGRESS", "IN_QUEUE") else "pending",
                 "compute_target": "cloud",
                 "runpod_job_id": info.get("runpod_job_id"),
                 "prompt": info.get("prompt", ""),
@@ -2574,20 +2599,29 @@ async def get_comfyui_queue():
                 "model_name": info.get("model_name", "Cloud Max"),
                 "queue_position": 0,
             }
-            if cloud_status in ("IN_PROGRESS",):
-                cloud_running.append(cloud_job)
+            # Completed-successfully jobs are hidden from queue
+            if info.get("_cloud_completed") and cloud_status not in ("FAILED", "CANCELLED", "TIMED_OUT"):
+                continue
+            # Failed/cancelled/timed-out → show as failed so user can dismiss
+            if cloud_status in ("FAILED", "CANCELLED", "TIMED_OUT") or info.get("_cloud_completed"):
+                cloud_job["status"] = "failed"
+                cloud_job["error"] = info.get("_cloud_error", f"RunPod job {cloud_status}")
+                cloud_failed.append(cloud_job)
             else:
-                cloud_pending.append(cloud_job)
+                # Active jobs → always "running" so frontend polls /comfyui/job/{id}
+                cloud_job["status"] = "running"
+                cloud_running.append(cloud_job)
 
         all_running = running + cloud_running
-        all_pending = pending + cloud_pending
 
         return {
             "running": all_running,
-            "pending": all_pending,
+            "pending": pending,
+            "failed": cloud_failed,
             "training": training,
             "total_running": len(all_running),
-            "total_pending": len(all_pending),
+            "total_pending": len(pending),
+            "total_failed": len(cloud_failed),
             "total_training": len(training),
         }
     except requests.exceptions.RequestException as e:
@@ -2937,22 +2971,27 @@ async def get_comfyui_metadata(filename: str):
 
 @app.delete("/comfyui/queue/{prompt_id}")
 async def cancel_job(prompt_id: str):
-    """Cancel a queued or running job"""
+    """Cancel or dismiss a queued, running, or failed job."""
     import requests
 
     try:
-        # ComfyUI interrupt endpoint
+        # Cloud job — just remove from tracking (dismiss)
+        if prompt_id in active_jobs and active_jobs[prompt_id].get("compute_target") == "cloud":
+            del active_jobs[prompt_id]
+            _persist_cloud_jobs()
+            logger.info(f"☁️ Dismissed cloud job: {prompt_id}")
+            return {"success": True, "prompt_id": prompt_id}
+
+        # Local ComfyUI job — interrupt + remove from queue
         resp = requests.post(
             "http://localhost:8188/interrupt", json={"prompt_id": prompt_id}, timeout=5
         )
         resp.raise_for_status()
 
-        # Also try to delete from queue
         requests.post(
             "http://localhost:8188/queue", json={"delete": [prompt_id]}, timeout=5
         )
 
-        # Remove from our tracking
         if prompt_id in active_jobs:
             del active_jobs[prompt_id]
 

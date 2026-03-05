@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Clock, Play, Loader2, X, CheckCircle, RefreshCw, Brain } from 'lucide-react'
+import { Clock, Play, Loader2, X, CheckCircle, RefreshCw, Brain, AlertTriangle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import ProgressTracker from './ProgressTracker'
 
@@ -8,7 +8,7 @@ import ProgressTracker from './ProgressTracker'
  * Shows running count and pending count, click for popup with details
  */
 export default function QueueIndicator({ onJobComplete, refreshToken }) {
-  const [queue, setQueue] = useState({ running: [], pending: [], training: [], total_running: 0, total_pending: 0, total_training: 0 })
+  const [queue, setQueue] = useState({ running: [], pending: [], failed: [], training: [], total_running: 0, total_pending: 0, total_failed: 0, total_training: 0 })
   const [completedJobs, setCompletedJobs] = useState([])
   const [showPopup, setShowPopup] = useState(false)
   const [notifiedIds, setNotifiedIds] = useState(new Set())
@@ -97,8 +97,9 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   }
 
   const isRunning = queue.total_running > 0
+  const hasFailed = (queue.total_failed || 0) > 0
   const isTraining = (queue.total_training || 0) > 0
-  const totalJobs = queue.total_running + queue.total_pending + (queue.total_training || 0)
+  const totalJobs = queue.total_running + queue.total_pending + (queue.total_failed || 0) + (queue.total_training || 0)
 
   return (
     <div style={{ position: 'relative' }} ref={popupRef}>
@@ -110,8 +111,8 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
           alignItems: 'center',
           gap: '6px',
           padding: '6px 10px',
-          backgroundColor: isRunning ? 'rgba(34, 197, 94, 0.15)' : isTraining ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-          border: `1px solid ${isRunning ? '#22c55e' : isTraining ? '#a855f7' : 'var(--border-color)'}`,
+          backgroundColor: isRunning ? 'rgba(34, 197, 94, 0.15)' : hasFailed ? 'rgba(239, 68, 68, 0.15)' : isTraining ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+          border: `1px solid ${isRunning ? '#22c55e' : hasFailed ? '#ef4444' : isTraining ? '#a855f7' : 'var(--border-color)'}`,
           borderRadius: '6px',
           cursor: 'pointer',
           color: 'var(--text-primary)',
@@ -136,6 +137,9 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
         )}
         {isTraining && (
           <span style={{ color: '#a855f7', fontSize: '0.7rem' }}>🧠{queue.total_training}</span>
+        )}
+        {hasFailed && (
+          <span style={{ color: '#ef4444', fontSize: '0.7rem' }}>⚠️{queue.total_failed}</span>
         )}
       </button>
 
@@ -224,6 +228,18 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
               </div>
             )}
 
+            {/* Failed (dismissable) */}
+            {(queue.failed || []).length > 0 && (
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '0.7rem', color: '#ef4444', marginBottom: '4px', textTransform: 'uppercase' }}>
+                  Failed
+                </div>
+                {queue.failed.map((job) => (
+                  <JobRow key={job.prompt_id} job={job} status="failed" onCancel={cancelJob} />
+                ))}
+              </div>
+            )}
+
             {/* Recent completed */}
             {completedJobs.length > 0 && (
               <div>
@@ -252,8 +268,8 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
 function JobRow({ job, status, onCancel, onJobComplete }) {
   const [showDetails, setShowDetails] = useState(status === 'running')
   const isCloud = job.compute_target === 'cloud'
-  const colors = { running: '#22c55e', pending: '#fbbf24', completed: '#3b82f6' }
-  const Icon = { running: Loader2, pending: Clock, completed: CheckCircle }[status]
+  const colors = { running: '#22c55e', pending: '#fbbf24', completed: '#3b82f6', failed: '#ef4444' }
+  const Icon = { running: Loader2, pending: Clock, completed: CheckCircle, failed: AlertTriangle }[status]
 
   return (
     <div style={{ marginBottom: '4px' }}>
@@ -289,7 +305,8 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
             {isCloud && <span style={{ color: '#6366f1', marginRight: '4px' }}>Cloud</span>}
-            {job.resolution} {job.aspect_ratio} {job.num_frames && `• ${job.num_frames}f`}
+            {status === 'failed' && job.error && <span style={{ color: '#ef4444' }}>{job.error.slice(0, 60)}</span>}
+            {status !== 'failed' && <>{job.resolution} {job.aspect_ratio} {job.num_frames && `• ${job.num_frames}f`}</>}
           </div>
         </div>
         {status !== 'completed' && onCancel && (

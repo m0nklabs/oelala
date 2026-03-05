@@ -563,12 +563,12 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
         except requests.exceptions.RequestException:
             pass
 
-        # Send progress when new ComfyUI logs appear (within 3s) or every 10s heartbeat
+        # Send progress when new ComfyUI logs appear (within 3s) or every 60s heartbeat
         elapsed = time.time() - start
         current_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
         has_new_logs = current_log_len > last_log_len
-        if job and (has_new_logs or elapsed - last_progress >= 10):
-            _progress(job, f"Generating... {elapsed:.0f}s elapsed")
+        if job and (has_new_logs or elapsed - last_progress >= 60):
+            _progress(job, f"Generating... {elapsed:.0f}s elapsed", log_locally=has_new_logs)
             last_progress = elapsed
             # Re-read after _progress adds its own log line
             last_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
@@ -640,7 +640,7 @@ def encode_outputs(files: list) -> list:
 _log_buffer = None  # Set by handler(), read by _progress() for real-time log streaming
 
 
-def _progress(job, message: str):
+def _progress(job, message: str, log_locally: bool = True):
     """Send a progress update to RunPod with accumulated logs (visible when polling job status)."""
     global _log_buffer
     try:
@@ -649,7 +649,8 @@ def _progress(job, message: str):
         else:
             payload = message
         runpod.serverless.progress_update(job, payload)
-        logger.info(f"📡 Progress: {message}")
+        if log_locally:
+            logger.info(f"📡 Progress: {message}")
     except Exception as e:
         logger.warning(f"⚠️ progress_update failed: {e}")
 

@@ -417,6 +417,7 @@ When implementing any feature or component:
 1. **Always Include Debug Logging**: Add comprehensive debug output throughout all code.
 2. **Global Debug Control**: Implement a DEBUG flag that controls debug output.
 3. **Clear Formatting**: Use emoji prefixes for easy scanning (🐛, 🔍, ⚠️, ❌, ✅).
+4. **Timestamps Required**: ALL log files MUST include timestamps on every line. Use `%(asctime)s` in Python logging formatters or ISO 8601 format. Never write logs without timestamps — logfiles without timestamps are useless for debugging.
 
 ## Git Workflow & Commit Standards
 
