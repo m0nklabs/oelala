@@ -23,12 +23,13 @@ See [docs/FACE_SYSTEM.md](FACE_SYSTEM.md) for full architecture.
 ### Still TODO — Face System
 | Priority | Task | Notes |
 |----------|------|-------|
-| HIGH | Test image swap end-to-end via UI | Needs real photos |
-| HIGH | Test video swap end-to-end via UI | Needs a test video |
-| HIGH | Test face profile create + swap via UI | Multi-photo profile |
-| HIGH | Test LoRA training (200 steps, 2 photos) | `torchao` may need install |
-| MED | `pip install torchao==0.10.0` in gpu venv | Required for ai-toolkit |
-| MED | GFPGAN face enhancement (image quality post-swap) | Separate model needed |
+| ✅ DONE | Test image swap end-to-end (API) | 5 faces detected, swap produces 768x1344 PNG |
+| ✅ DONE | Test video swap end-to-end (API) | 480x480 41-frame video swapped correctly |
+| ✅ DONE | Test face profile create + swap (API) | Profile CRUD + profile-based swap working |
+| ✅ DONE | Fix auth bug (JWKS exception + duplicate decode) | auth.py fixed, backend restarted |
+| ✅ DONE | Fix FaceSwapTool.jsx fetch→apiFetch | 10 raw fetch() calls migrated |
+| MED | Test LoRA training (200 steps, 2 photos) | OOM when ComfyUI loaded; needs free VRAM |
+| MED | GFPGAN face enhancement (image quality post-swap) | Model present, not wired up |
 | MED | Use trained face LoRA in ComfyUI T2I/T2V workflow | Integration missing |
 | LOW | Face swap in generated video (auto after I2V job) | UX feature |
 
@@ -53,9 +54,9 @@ The main functionality is complete! All MEGA issues for core features are done:
 ### 🔴 High Priority
 | Issue | Title | Labels | Notes |
 |-------|-------|--------|-------|
-| #51 | Video upscaling (480p → 4K) | frontend, backend | ✅ All 3 presets working (lanczos/ESRGAN/SeedVR2) |
+| #51 | Video upscaling (480p → 4K) | frontend, backend | ✅ Closed — All 3 presets working (lanczos/ESRGAN/SeedVR2) |
 
-> **Note**: All other GitHub issues (#29-70) have been closed. No open issues remain in m0nklabs/oelala.
+> **Note**: All GitHub issues (#29-70, #51) have been closed. No open issues remain in m0nklabs/oelala.
 
 ---
 
@@ -74,6 +75,13 @@ The main functionality is complete! All MEGA issues for core features are done:
 ---
 
 ## ✅ Recently Completed
+
+### 2026-03-06
+- [x] Face system E2E testing: image swap, video swap, profiles CRUD — all working
+- [x] fix(auth): JWKS exception handling + duplicate JWT decode removal
+- [x] fix(frontend): FaceSwapTool.jsx 10x fetch()→apiFetch() for auth
+- [x] Upscale E2E testing: all 3 video presets + 4 image models verified
+- [x] SeedVR2 OOM fix (resolution cap + memory management)
 
 ### 2026-03-05
 - [x] oelala-storage: Webhook notification system (#10) — async dispatcher, HMAC signing, retry
