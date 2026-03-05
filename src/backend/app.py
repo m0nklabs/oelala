@@ -621,10 +621,8 @@ UPLOAD_DIR = Path("/home/flip/oelala/uploads")
 OUTPUT_DIR = Path("/home/flip/oelala/generated")
 FRONTEND_DIR = Path("/home/flip/oelala/src/frontend")
 COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
-AVATARS_DIR = Path("/home/flip/oelala/media/avatars")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
-AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def _save_upload(file: UploadFile, dest: Path) -> bytes:
@@ -2101,10 +2099,6 @@ def record_generation_complete(
         f"📊 Generation stats recorded: {prompt_id} - {duration_seconds:.1f}s {'✅' if success else '❌'}"
     )
 
-
-# Directory for cloud-generated output
-CLOUD_MAX_OUTPUT_DIR = Path("/home/flip/oelala/media/generated/cloud-max")
-CLOUD_MAX_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # LoRA source directory (SSD)
 LORA_DIR = Path("/mnt/ssd/loras")
@@ -3652,55 +3646,57 @@ async def list_unified_media(
                     # Admin: list all users' media
                     # List buckets that start with "users/"
                     try:
-                        # Get all user directories from storage
-                        users_path = Path("/home/flip/oelala/media/users")
-                        if users_path.exists():
-                            for user_dir in users_path.iterdir():
-                                if user_dir.is_dir():
-                                    uid = user_dir.name
-                                    try:
-                                        objects = storage.list_user_media(
-                                            uid, media_type
-                                        )
-                                        for obj in objects:
-                                            key = obj.get("key", "")
-                                            filename = obj.get(
-                                                "filename",
-                                                key.split("/")[-1]
-                                                if "/" in key
-                                                else key,
-                                            )
-                                            obj_type = obj.get("media_type", "")
+                        # Discover user IDs from storage
+                        all_user_objects = storage.list("users")
+                        user_ids: set[str] = set()
+                        for obj in all_user_objects:
+                            key = obj.get("key", "")
+                            if "/" in key:
+                                user_ids.add(key.split("/")[0])
+                        for uid in user_ids:
+                            try:
+                                objects = storage.list_user_media(
+                                    uid, media_type
+                                )
+                                for obj in objects:
+                                    key = obj.get("key", "")
+                                    filename = obj.get(
+                                        "filename",
+                                        key.split("/")[-1]
+                                        if "/" in key
+                                        else key,
+                                    )
+                                    obj_type = obj.get("media_type", "")
 
-                                            if obj_type == "videos" or obj.get(
-                                                "content_type", ""
-                                            ).startswith("video/"):
-                                                item_type = "video"
-                                            elif obj_type == "audio" or obj.get(
-                                                "content_type", ""
-                                            ).startswith("audio/"):
-                                                item_type = "audio"
-                                            else:
-                                                item_type = "image"
+                                    if obj_type == "videos" or obj.get(
+                                        "content_type", ""
+                                    ).startswith("video/"):
+                                        item_type = "video"
+                                    elif obj_type == "audio" or obj.get(
+                                        "content_type", ""
+                                    ).startswith("audio/"):
+                                        item_type = "audio"
+                                    else:
+                                        item_type = "image"
 
-                                            all_media.append(
-                                                {
-                                                    "name": filename,
-                                                    "filename": filename,
-                                                    "type": item_type,
-                                                    "url": f"/admin/user-media/{uid}/{obj_type}/{filename}",
-                                                    "size": obj.get("size", 0),
-                                                    "modified": obj.get(
-                                                        "modified_at", ""
-                                                    ),
-                                                    "mtime": _parse_mtime(obj.get("modified_at")),
-                                                    "source": "user",
-                                                    "visibility": "private",
-                                                    "owner_id": uid,
-                                                }
-                                            )
-                                    except Exception:
-                                        pass  # Skip users with no media
+                                    all_media.append(
+                                        {
+                                            "name": filename,
+                                            "filename": filename,
+                                            "type": item_type,
+                                            "url": f"/admin/user-media/{uid}/{obj_type}/{filename}",
+                                            "size": obj.get("size", 0),
+                                            "modified": obj.get(
+                                                "modified_at", ""
+                                            ),
+                                            "mtime": _parse_mtime(obj.get("modified_at")),
+                                            "source": "user",
+                                            "visibility": "private",
+                                            "owner_id": uid,
+                                        }
+                                    )
+                            except Exception:
+                                pass  # Skip users with no media
                     except Exception as e:
                         logger.debug(f"Error listing all users: {e}")
             except Exception as e:

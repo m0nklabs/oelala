@@ -652,7 +652,7 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
 # Admin Generated Media Access (Transition Phase)
 # =============================================================================
 
-# Media directories for admin access
+# Fallback directories (used when storage service is unavailable)
 MEDIA_GENERATED_DIR = Path("/home/flip/oelala/media/generated")
 COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
 

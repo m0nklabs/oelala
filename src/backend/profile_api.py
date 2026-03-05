@@ -20,8 +20,7 @@ from pydantic import BaseModel, Field, validator
 from PIL import Image
 from auth import get_current_user, get_optional_user, User
 
-AVATARS_DIR = Path("/home/flip/oelala/media/avatars")
-AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+# Note: avatars stored in oelala-storage 'avatars' bucket
 AVATAR_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 AVATAR_SIZE = 256  # square px
 

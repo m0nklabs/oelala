@@ -18,8 +18,7 @@ from auth import get_current_user, get_optional_user, User
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
-THUMBNAIL_DIR = Path("/home/flip/oelala/media/generated")
-THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+# Note: thumbnails served from oelala-storage, no local dir needed
 
 
 def debug_log(msg: str):
