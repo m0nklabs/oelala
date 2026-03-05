@@ -9,7 +9,7 @@ const BACKEND_BASE = isProduction
 
 // Storage service URL (oelala-storage Go service)
 const STORAGE_BASE = isProduction
-  ? 'https://storage.oelala.xyz'  // TODO: Add to tunnel when needed
+  ? 'https://storage.oelala.xyz'
   : 'http://192.168.1.2:7990'
 
 // Global debug flag for UI logging
