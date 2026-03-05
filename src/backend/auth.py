@@ -76,7 +76,7 @@ def decode_jwt_with_jwks(token: str) -> Optional[dict]:
         return jwt.decode(
             token, signing_key.key, algorithms=["RS256"], audience="authenticated"
         )
-    except jwt.InvalidTokenError as e:
+    except (jwt.InvalidTokenError, jwt.exceptions.PyJWKClientError, Exception) as e:
         debug_log(f"JWT JWKS decode failed: {e}")
         return None
 
@@ -143,7 +143,6 @@ async def get_current_user(
 
     token = credentials.credentials
     logger.info("🔐 AUTH: Got token, attempting decode...")
-    payload = decode_supabase_jwt(token)
     payload = decode_supabase_jwt(token)
 
     if not payload:
