@@ -2320,6 +2320,17 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     try:
         comfyui = get_comfyui_client()
         if comfyui:
+            # Register job metadata so on_job_complete_async can upload to user storage
+            cloud_user_id = job_info.get("user_id")
+            cloud_prompt = job_info.get("prompt", "")
+            if cloud_user_id:
+                comfyui.register_job_metadata(
+                    prompt_id,
+                    user_id=cloud_user_id,
+                    prompt=cloud_prompt,
+                    settings={k: v for k, v in job_info.items() if k not in ("user_id", "prompt")},
+                )
+
             output_type = "video" if output_video else "image"
             storage_path = await comfyui.on_job_complete_async(
                 prompt_id, str(saved_path), output_type
