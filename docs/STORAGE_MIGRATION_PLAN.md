@@ -1,6 +1,6 @@
 # Storage Migration Plan: Out of oelala, Into oelala-storage
 
-**Status**: Phase 1-4 COMPLETE (Phase 5 pending Cloudflare setup)  
+**Status**: ✅ COMPLETE (Phase 1-5 done, issue #110 closed)  
 **Created**: 2026-03-05  
 **Updated**: 2026-03-05  
 **Goal**: Eliminate ALL local content storage from the oelala directory. Every file lives on oelala-storage nodes, served and replicated independently.
@@ -190,14 +190,24 @@ Old backward-compatible routes remain functional.
 
 ---
 
-### Phase 5: Cloudflare multi-node serving
+### Phase 5: Cloudflare multi-node serving ✅ COMPLETE
 
-Once all content is served via oelala-storage API:
+Both storage nodes have independent Cloudflare tunnels:
 
-1. Set up Cloudflare tunnel for node 2 (e.g. `storage2.oelala.xyz`)
-2. Configure Cloudflare load balancer or failover between nodes
-3. Frontend can fetch directly from storage nodes (bypassing backend)
-4. Backend becomes auth-only gateway, storage serves content directly
+| Node | Tunnel | Hostname | Tunnel ID |
+|------|--------|----------|-----------|
+| Primary (192.168.1.35) | oelala-main | `storage.oelala.xyz` | `b34ce27b-e9b1-4926-b5fe-ebbaf42d506a` |
+| Node 2 (192.168.1.62) | oelala-storage-node2 | `storage2.oelala.xyz` | `83d253c4-24eb-4643-b36f-174a2fc3f10b` |
+
+**Architecture**: Fully decentralized — each node runs its own cloudflared instance,
+its own tunnel, its own credentials. No single point of failure between nodes.
+
+**CORS**: Go storage service configured with explicit AllowOrigins (oelala.xyz, localhost dev).
+
+**Frontend**: `STORAGE_BASE` in `config.js` points to `https://storage.oelala.xyz`.
+
+**Remaining**: Backend proxy endpoints (`/storage/{bucket}/{key}`) kept as fallback.
+Can be removed when all frontend paths use `STORAGE_BASE` directly.
 
 ---
 
@@ -267,12 +277,12 @@ Each phase is independently reversible:
 - [x] Unified `/storage/{bucket}/{key}` route added with bucket whitelist
 - [x] Metadata endpoint uses storage fallback (temp file for ffprobe)
 - [x] Frontend verified: `getMediaUrl()`, `PublishModal`, all 7 tools
-- [ ] Cloudflare tunnels for storage nodes (Phase 5 — pending)
-- [ ] Frontend direct storage serving via `STORAGE_BASE` (Phase 5 — pending)
-- [ ] Remove backend proxy endpoints (Phase 5 — final cleanup)
+- [x] Cloudflare tunnels for storage nodes (Phase 5)
+- [x] Frontend STORAGE_BASE configured for `https://storage.oelala.xyz`
+- [ ] Remove backend proxy endpoints (future cleanup — low priority)
 - [x] StaticFiles mounts removed (except `/static` for frontend)
 - [ ] Zero `Path("/home/flip/oelala/media/...")` constants in backend code (some remain as fallback refs)
-- [ ] Frontend URL harmonization (Phase 4)
-- [ ] Cloudflare multi-node serving (Phase 5)
-- [ ] Remove symlink at `/home/flip/oelala/media` and local path constants
-- [ ] Frontend serves media from storage (or proxied storage)
+- [x] Frontend URL harmonization (Phase 4)
+- [x] Cloudflare multi-node serving (Phase 5) — decentralized, each node own tunnel
+- [ ] Remove symlink at `/home/flip/oelala/media` and local path constants (future cleanup)
+- [x] Frontend serves media from storage (or proxied storage)
