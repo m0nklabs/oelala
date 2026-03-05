@@ -9,3 +9,11 @@
 
 ### Fixed
 - Removed hardcoded `/home/flip/oelala/media/generated` and `/home/flip/oelala/media/users` filesystem dependencies
+
+### Infrastructure
+- Phase 5: Decentralized Cloudflare tunnels — each storage node has its own tunnel (no SPOF)
+- Tunnel `oelala-main` (ai-kvm2): oelala.xyz, api.oelala.xyz, storage.oelala.xyz
+- Tunnel `oelala-storage-node2` (ubuntu-oelalastorage2): storage2.oelala.xyz
+- CORS configured on Go storage service with explicit origins
+- Frontend `STORAGE_BASE` set to `https://storage.oelala.xyz`
+- Storage migration Phase 1-5 fully complete, issue #110 closed
