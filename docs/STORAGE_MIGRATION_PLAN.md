@@ -1,6 +1,6 @@
 # Storage Migration Plan: Out of oelala, Into oelala-storage
 
-**Status**: Phase 1-3 COMPLETE  
+**Status**: Phase 1-4 COMPLETE (Phase 5 pending Cloudflare setup)  
 **Created**: 2026-03-05  
 **Updated**: 2026-03-05  
 **Goal**: Eliminate ALL local content storage from the oelala directory. Every file lives on oelala-storage nodes, served and replicated independently.
@@ -145,7 +145,7 @@ async def serve_media(bucket: str, path: str):
     return Response(content=data, media_type=content_type)
 ```
 
-#### 3b. Replace FileResponse endpoints
+#### 3b. Replace FileResponse endpoints ✅ COMPLETE
 
 **Endpoints to convert**:
 | Endpoint | Current Source | Target Bucket/Key |
@@ -154,7 +154,7 @@ async def serve_media(bucket: str, path: str):
 | `GET /media/generated/{fn}` | `media/generated/{fn}` | `generated/{fn}` |
 | `GET /media/generated/cloud-max/{fn}` | `media/generated/cloud-max/{fn}` | `generated/cloud-max/{fn}` |
 
-#### 3c. Gallery API filesystem scans → Storage list
+#### 3c. Gallery API filesystem scans → Storage list ✅ COMPLETE
 
 **Current** (`gallery_api.py` ~L889-890):
 ```python
@@ -172,20 +172,21 @@ objects = storage.list("generated")
 
 ---
 
-### Phase 4: Frontend URL harmonization
+### Phase 4: Frontend URL harmonization ✅ COMPLETE
 
-All frontend media URLs currently reference specific backend paths:
-- `/comfyui/output/{fn}` 
-- `/media/generated/{fn}`
-- `/media/generated/cloud-max/{fn}`
-- `/user/media/{type}/{fn}`
+All frontend media URLs reference specific backend paths that proxy to storage:
+- `/comfyui/output/{fn}` → `comfyui-local` bucket
+- `/media/generated/{fn}` → `generated` bucket
+- `/media/generated/cloud-max/{fn}` → `generated/cloud-max/` in bucket
+- `/user/media/{type}/{fn}` → `users/{uid}/{type}/{fn}` in bucket
 
-**Target**: Single unified pattern:
-```
-/storage/{bucket}/{key}
-```
+**Unified route added**: `GET /storage/{bucket}/{key}` serves content from whitelisted
+buckets (`generated`, `comfyui-local`, `avatars`) with path traversal protection.
+Old backward-compatible routes remain functional.
 
-Or keep backward-compatible routes that internally proxy to storage.
+**Frontend**: `getMediaUrl()` in `config.js` handles signed URLs and relative paths.
+`STORAGE_BASE` ready for Phase 5 (Cloudflare direct serving).
+`PublishModal.jsx` uses `apiFetch` and existing routes — no changes needed.
 
 ---
 
@@ -204,23 +205,33 @@ Once all content is served via oelala-storage API:
 
 ### Backend (src/backend/)
 
-| File | Changes | Priority |
-|------|---------|----------|
-| `app.py` | Remove local path constants, replace writes/reads with StorageClient | P0 |
-| `gallery_api.py` | Replace Path.glob() scans with StorageClient.list() | P0 |
-| `admin_api.py` | Replace local file scanning with StorageClient.list() | P1 |
-| `profile_api.py` | Replace avatar disk I/O with StorageClient | P1 |
-| `comfyui_client.py` | Output download → StorageClient.put() | P0 |
-| `media_service.py` | Already uses StorageClient — verify completeness | P2 |
-| `storage_client.py` | May need `get_with_content_type()` method for proxying | P1 |
+| File | Changes | Status |
+|------|---------|--------|
+| `app.py` | Remove local path constants, replace writes/reads with StorageClient | ✅ Done |
+| `gallery_api.py` | Replace Path.glob() scans with StorageClient.list() | ✅ Done |
+| `admin_api.py` | Replace local file scanning with StorageClient.list() | ✅ Done |
+| `profile_api.py` | Replace avatar disk I/O with StorageClient | ✅ Done |
+| `comfyui_client.py` | Output download → StorageClient.put() | ✅ Done |
+| `media_service.py` | Already uses StorageClient | ✅ Verified |
+| `storage_client.py` | Added `get_with_metadata()`, `stream()` methods | ✅ Done |
 
 ### Frontend (src/frontend/)
 
-| File | Changes | Priority |
-|------|---------|----------|
-| `api.ts` | Update media URL construction | P1 |
-| Tool components (7 files) | Update image/video URL references | P1 |
-| `PublishModal.jsx` | Update URL construction | P2 |
+| File | Changes | Status |
+|------|---------|--------|
+| `config.js` | `getMediaUrl()` handles signed URLs + relative paths | ✅ No change needed |
+| Tool components (7 files) | Use `apiFetch` for all media fetching | ✅ Already migrated |
+| `PublishModal.jsx` | Uses `apiFetch` + existing proxy routes | ✅ No change needed |
+
+### Remaining Local Path Constants (Intentionally Kept)
+
+| Constant | File | Reason |
+|----------|------|--------|
+| `UPLOAD_DIR` | `app.py` | Staging dir for ComfyUI uploads |
+| `OUTPUT_DIR` | `app.py` | Local generated output dir |
+| `COMFYUI_OUTPUT_DIR` | `app.py` | ComfyUI writes here directly |
+| `MEDIA_GENERATED_DIR` | `admin_api.py` | Fallback when storage unavailable |
+| `COMFYUI_OUTPUT_DIR` | `admin_api.py` | Fallback when storage unavailable |
 
 ### Workflows
 
@@ -252,6 +263,13 @@ Each phase is independently reversible:
 - [x] All primary serving endpoints proxy through storage API
 - [x] All write operations go through StorageClient
 - [x] Gallery, admin, and user endpoints work via storage proxy
+- [x] Dead path constants removed (AVATARS_DIR, CLOUD_MAX_OUTPUT_DIR, THUMBNAIL_DIR)
+- [x] Unified `/storage/{bucket}/{key}` route added with bucket whitelist
+- [x] Metadata endpoint uses storage fallback (temp file for ffprobe)
+- [x] Frontend verified: `getMediaUrl()`, `PublishModal`, all 7 tools
+- [ ] Cloudflare tunnels for storage nodes (Phase 5 — pending)
+- [ ] Frontend direct storage serving via `STORAGE_BASE` (Phase 5 — pending)
+- [ ] Remove backend proxy endpoints (Phase 5 — final cleanup)
 - [x] StaticFiles mounts removed (except `/static` for frontend)
 - [ ] Zero `Path("/home/flip/oelala/media/...")` constants in backend code (some remain as fallback refs)
 - [ ] Frontend URL harmonization (Phase 4)

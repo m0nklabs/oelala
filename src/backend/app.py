@@ -2877,27 +2877,61 @@ async def get_generated_media(filename: str, request: Request, user: User = Depe
     )
 
 
+# =============================================================================
+# Unified storage proxy route (Phase 4)
+# =============================================================================
+
+ALLOWED_STORAGE_BUCKETS = {"generated", "comfyui-local", "avatars"}
+
+
+@app.get("/storage/{bucket}/{key:path}")
+async def unified_storage_proxy(bucket: str, key: str, request: Request):
+    """
+    Unified storage proxy endpoint.
+    Serves content from oelala-storage buckets via a single route pattern.
+    Only whitelisted public buckets are accessible without auth.
+    """
+    if bucket not in ALLOWED_STORAGE_BUCKETS:
+        raise HTTPException(status_code=404, detail="Bucket not found")
+
+    # Reject path traversal
+    if ".." in key:
+        raise HTTPException(status_code=400, detail="Invalid key")
+
+    return _storage_proxy_response(
+        bucket, key, request,
+        cache_control="public, max-age=3600, must-revalidate",
+    )
+
+
 @app.get("/comfyui-metadata/{filename}")
 async def get_comfyui_metadata(filename: str):
     """
     Extract and return the ComfyUI workflow/metadata from an output file.
     Works with videos (mp4, webm, mov) and images (png).
-    Searches in both ComfyUI/output/ and media/generated/ directories.
+    Checks local ComfyUI output first, then fetches from storage.
     """
     import subprocess
+    import tempfile
 
-    # Search in multiple directories
-    search_dirs = [
-        Path("/home/flip/oelala/ComfyUI/output"),
-        Path("/home/flip/oelala/media/generated"),
-    ]
-
+    # Check local ComfyUI output directory first
     output_path = None
-    for search_dir in search_dirs:
-        candidate = search_dir / filename
-        if candidate.exists():
-            output_path = candidate
-            break
+    candidate = COMFYUI_OUTPUT_DIR / filename
+    if candidate.exists():
+        output_path = candidate
+
+    # Fall back to storage (download to temp file for ffprobe)
+    tmp_file = None
+    if not output_path:
+        try:
+            storage = get_storage_client()
+            data, _, _ = storage.get_with_metadata("generated", filename)
+            tmp_file = tempfile.NamedTemporaryFile(suffix=Path(filename).suffix, delete=False)
+            tmp_file.write(data)
+            tmp_file.close()
+            output_path = Path(tmp_file.name)
+        except Exception:
+            pass
 
     if not output_path:
         raise HTTPException(status_code=404, detail="Output file not found")
@@ -2957,6 +2991,13 @@ async def get_comfyui_metadata(filename: str):
     except Exception as e:
         logger.error(f"Failed to extract metadata from {filename}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temp file if we downloaded from storage
+        if tmp_file:
+            try:
+                Path(tmp_file.name).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @app.delete("/comfyui/queue/{prompt_id}")
