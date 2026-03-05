@@ -60,10 +60,11 @@ from fastapi import (
     Request,
     Query,
 )
-from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
+from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
+import httpx
 import shutil
 from pathlib import Path
 import logging
@@ -647,21 +648,60 @@ async def _save_upload(file: UploadFile, dest: Path) -> bytes:
 # Mount static files after CORS
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
-# Mount ComfyUI output directory
-if COMFYUI_OUTPUT_DIR.exists():
-    app.mount(
-        "/comfyui-output",
-        StaticFiles(directory=str(COMFYUI_OUTPUT_DIR)),
-        name="comfyui_output",
-    )
+# NOTE: /comfyui-output and /avatars StaticFiles mounts removed.
+# These are now served via oelala-storage proxy endpoints:
+#   /comfyui/output/{filename}  → storage bucket "comfyui-local"
+#   /avatars/{filename}         → storage bucket "avatars" (endpoint below)
 
-# Mount avatars directory (public, no auth required)
-app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
+
+@app.get("/avatars/{filename}")
+async def get_avatar(filename: str, request: Request):
+    """Serve avatar images via oelala-storage proxy."""
+    return _storage_proxy_response(
+        "avatars", filename, request,
+        cache_control="public, max-age=86400, must-revalidate",
+    )
 
 
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
+
+def _storage_proxy_response(
+    bucket: str,
+    key: str,
+    request: Request,
+    cache_control: str = "public, max-age=3600, must-revalidate",
+) -> Response:
+    """
+    Fetch a file from oelala-storage and return it as a FastAPI Response.
+
+    Adds CORS headers compatible with Cloudflare caching and proper
+    Content-Type from the storage service.
+    """
+    storage = get_storage_client()
+    try:
+        content, content_type, content_length = storage.get_with_metadata(bucket, key)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=502, detail="Storage service error")
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Storage service unavailable")
+
+    headers = {
+        "Cache-Control": cache_control,
+        "Content-Length": str(content_length),
+        "Vary": "Origin",
+    }
+
+    origin = request.headers.get("origin")
+    if origin and origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    return Response(content=content, media_type=content_type, headers=headers)
 
 
 # =============================================================================
@@ -1616,10 +1656,8 @@ class DeleteMediaRequest(BaseModel):
 
 @app.delete("/delete-comfyui-media")
 async def delete_comfyui_media(request: DeleteMediaRequest):
-    """Delete media files from ComfyUI output directory or generated media"""
-    comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
-    generated_dir = Path("/home/flip/oelala/media/generated")
-
+    """Delete media files via oelala-storage with local fallback."""
+    storage = get_storage_client()
     deleted = []
     errors = []
 
@@ -1627,47 +1665,37 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
 
     for filename in request.filenames:
         found = False
-        logger.debug(f"   Trying to delete: {filename}")
 
-        # Try ComfyUI output first
-        file_path = comfyui_output / filename
-        if str(file_path.resolve()).startswith(str(comfyui_output.resolve())):
-            if file_path.exists():
+        # Try storage buckets first
+        for bucket in ("comfyui-local", "generated"):
+            try:
+                if storage.delete(bucket, filename):
+                    deleted.append(filename)
+                    found = True
+                    logger.info(f"   ✅ Deleted from storage/{bucket}: {filename}")
+                    break
+            except Exception:
+                continue
+
+        # Fallback: try local ComfyUI output dir (ComfyUI may write here directly)
+        if not found:
+            comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
+            file_path = comfyui_output / filename
+            if str(file_path.resolve()).startswith(str(comfyui_output.resolve())) and file_path.exists():
                 try:
                     file_path.unlink()
                     deleted.append(filename)
                     found = True
-                    logger.info(f"   ✅ Deleted from ComfyUI: {filename}")
+                    logger.info(f"   ✅ Deleted from local ComfyUI: {filename}")
                 except Exception as e:
                     errors.append({"filename": filename, "error": str(e)})
                     found = True
 
-        # If not found in ComfyUI output, try generated dir
         if not found:
-            file_path = generated_dir / filename
-            if str(file_path.resolve()).startswith(str(generated_dir.resolve())):
-                if file_path.exists():
-                    try:
-                        file_path.unlink()
-                        deleted.append(filename)
-                        found = True
-                        logger.info(f"   ✅ Deleted from generated: {filename}")
-                    except Exception as e:
-                        errors.append({"filename": filename, "error": str(e)})
-                        found = True
-
-        if not found:
-            errors.append(
-                {
-                    "filename": filename,
-                    "error": "File not found in ComfyUI or generated",
-                }
-            )
+            errors.append({"filename": filename, "error": "File not found"})
             logger.warning(f"   ⚠️ Not found: {filename}")
 
     logger.info(f"🗑️ Delete complete: {len(deleted)} deleted, {len(errors)} errors")
-    return {"deleted": deleted, "errors": errors, "count": len(deleted)}
-
     return {"deleted": deleted, "errors": errors, "count": len(deleted)}
 
 
@@ -2288,20 +2316,22 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         orig_name = f.get("filename", f"output_{i:03d}.mp4")
         ext = Path(orig_name).suffix or ".mp4"
         save_name = f"cloud_max_{timestamp}_{i:03d}{ext}"
-        save_path = CLOUD_MAX_OUTPUT_DIR / save_name
 
         try:
             file_bytes = base64.b64decode(b64_data)
-            save_path.write_bytes(file_bytes)
-            logger.info(f"☁️ Saved cloud output: {save_path} ({len(file_bytes)} bytes)")
+
+            # Save to oelala-storage instead of local disk
+            storage = get_storage_client()
+            storage.put("generated", f"cloud-max/{save_name}", file_bytes)
+            logger.info(f"☁️ Saved cloud output to storage: generated/cloud-max/{save_name} ({len(file_bytes)} bytes)")
 
             mime = f.get("type", "video/mp4")
             if "video" in mime:
                 output_video = f"/media/generated/cloud-max/{save_name}"
-                saved_path = save_path
+                saved_path = f"generated/cloud-max/{save_name}"
             elif "image" in mime:
                 output_image = f"/media/generated/cloud-max/{save_name}"
-                saved_path = save_path
+                saved_path = f"generated/cloud-max/{save_name}"
         except Exception as e:
             logger.error(f"☁️ Failed to save cloud output file {i}: {e}")
 
@@ -2800,52 +2830,14 @@ async def get_job_status(prompt_id: str):
 
 @app.get("/comfyui/output/{filename}")
 async def get_comfyui_output(filename: str, request: Request):
-    """Serve ComfyUI output files (videos/images)"""
-    output_path = Path("/home/flip/oelala/ComfyUI/output") / filename
-    if not output_path.exists():
-        raise HTTPException(status_code=404, detail="Output file not found")
-
-    # Use ETag based on file mtime+size so browsers revalidate after file changes
-    stat = output_path.stat()
-    etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
-
-    # Add CORS headers directly — CORSMiddleware depends on request Origin,
-    # but Cloudflare may cache a non-CORS response and serve it to browsers.
-    # By always setting Vary: Origin + explicit CORS headers, we ensure CF
-    # caches separate versions and browsers always get valid CORS responses.
-    headers = {
-        "Cache-Control": "public, max-age=3600, must-revalidate",
-        "ETag": etag,
-        "Vary": "Origin",
-    }
-    origin = request.headers.get("origin")
-    if origin and origin in ALLOWED_ORIGINS:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-
-    return FileResponse(output_path, headers=headers)
+    """Serve ComfyUI output files via oelala-storage proxy."""
+    return _storage_proxy_response("comfyui-local", filename, request)
 
 
 @app.get("/media/generated/cloud-max/{filename}")
 async def get_cloud_max_media(filename: str, request: Request):
-    """Serve files from media/generated/cloud-max/ directory (Cloud Max output)."""
-    media_path = CLOUD_MAX_OUTPUT_DIR / filename
-    if not media_path.exists():
-        raise HTTPException(status_code=404, detail="Cloud Max output file not found")
-
-    stat = media_path.stat()
-    etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
-    headers = {
-        "Cache-Control": "public, max-age=3600, must-revalidate",
-        "ETag": etag,
-        "Vary": "Origin",
-    }
-    origin = request.headers.get("origin")
-    if origin and origin in ALLOWED_ORIGINS:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-
-    return FileResponse(media_path, headers=headers)
+    """Serve Cloud Max output files via oelala-storage proxy."""
+    return _storage_proxy_response("generated", f"cloud-max/{filename}", request)
 
 
 @app.get("/loras/download/{filename:path}")
@@ -2880,21 +2872,14 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
 
 
 @app.get("/media/generated/{filename}")
-async def get_generated_media(filename: str, user: User = Depends(get_current_user)):
-    """Serve files from media/generated/ directory (admin only)"""
-    # Admin-only: shared server directory, non-admin users access via oelala-storage signed URLs
+async def get_generated_media(filename: str, request: Request, user: User = Depends(get_current_user)):
+    """Serve files from generated bucket via oelala-storage (admin only)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    media_path = Path("/home/flip/oelala/media/generated") / filename
-    if not media_path.exists():
-        raise HTTPException(status_code=404, detail="Media file not found")
-    return FileResponse(
-        media_path,
-        headers={
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "CDN-Cache-Control": "public, max-age=31536000",
-        },
+    return _storage_proxy_response(
+        "generated", filename, request,
+        cache_control="public, max-age=31536000, immutable",
     )
 
 
@@ -4189,18 +4174,24 @@ async def batch_download_zip(
                 # Generated media: /media/generated/<filename>
                 elif url.startswith("/media/generated/"):
                     fn = url.split("/media/generated/", 1)[1]
-                    file_path = Path("/home/flip/oelala/media/generated") / fn
-                    if file_path.exists() and file_path.is_file():
-                        zf.write(str(file_path), filename)
+                    storage = get_storage_client()
+                    try:
+                        data = storage.get("generated", fn)
+                        zf.writestr(filename, data)
                         added += 1
+                    except Exception:
+                        logger.warning(f"⚠️ Not found in storage: generated/{fn}")
 
                 # ComfyUI output: /comfyui/output/<filename>
                 elif url.startswith("/comfyui/output/"):
                     fn = url.split("/comfyui/output/", 1)[1]
-                    file_path = Path("/home/flip/oelala/ComfyUI/output") / fn
-                    if file_path.exists() and file_path.is_file():
-                        zf.write(str(file_path), filename)
+                    storage = get_storage_client()
+                    try:
+                        data = storage.get("comfyui-local", fn)
+                        zf.writestr(filename, data)
                         added += 1
+                    except Exception:
+                        logger.warning(f"⚠️ Not found in storage: comfyui-local/{fn}")
 
                 # Public gallery item: /api/gallery/<id>/file
                 elif "/api/gallery/" in url and url.endswith("/file"):
@@ -4468,23 +4459,24 @@ async def restart_backend():
 
 
 @app.get("/files/{filename}")
-async def get_file(filename: str):
-    """Serve generated video files"""
+async def get_file(filename: str, request: Request):
+    """Serve generated files via oelala-storage proxy, with local fallback."""
+    # Try storage first (new path)
+    try:
+        return _storage_proxy_response("generated", filename, request)
+    except HTTPException:
+        pass
+
+    # Fallback to local OUTPUT_DIR for legacy files
     file_path = OUTPUT_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    # Determine media type based on extension so the browser can play it inline
     ext = file_path.suffix.lower()
-    media_type = "application/octet-stream"
-    if ext == ".mp4":
-        media_type = "video/mp4"
-    elif ext == ".gif":
-        media_type = "image/gif"
-    elif ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
-        media_type = "image/jpeg"
-    elif ext == ".json":
-        media_type = "application/json"
-    logger.info(f"Serving file {file_path} with media_type={media_type}")
+    media_type = {
+        ".mp4": "video/mp4", ".gif": "image/gif", ".json": "application/json",
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }.get(ext, "application/octet-stream")
     return FileResponse(file_path, media_type=media_type, filename=filename)
 
 
@@ -11247,13 +11239,16 @@ async def generate_v2v(
 
 
 @app.get("/videos/{filename}")
-async def get_video(filename: str):
-    """Download generated video file"""
+async def get_video(filename: str, request: Request):
+    """Download generated video file via oelala-storage proxy."""
+    try:
+        return _storage_proxy_response("generated", filename, request)
+    except HTTPException:
+        pass
+    # Fallback to local OUTPUT_DIR
     file_path = OUTPUT_DIR / filename
-
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
-
     return FileResponse(path=file_path, media_type="video/mp4", filename=filename)
 
 
@@ -11270,43 +11265,50 @@ async def get_image(filename: str):
 
 @app.get("/list-videos")
 async def list_videos(user: User = Depends(get_current_user)):
-    """List all generated videos from both output directories (admin only)"""
-    # Admin-only: these are shared server directories
+    """List all generated videos from oelala-storage (admin only)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     videos = []
 
-    # Scan OUTPUT_DIR (generated/)
-    for file_path in OUTPUT_DIR.glob("*.mp4"):
-        stat = file_path.stat()
-        videos.append(
-            {
+    try:
+        storage = get_storage_client()
+        # List generated bucket from storage
+        for obj in storage.list("generated"):
+            key = obj.get("key", "")
+            if key.endswith(".mp4"):
+                videos.append({
+                    "filename": key.split("/")[-1],
+                    "size": obj.get("size", 0),
+                    "created": obj.get("modified", ""),
+                    "mtime": 0,
+                    "url": f"/media/generated/{key}",
+                })
+        # Also list ComfyUI local output bucket
+        for obj in storage.list("comfyui-local"):
+            key = obj.get("key", "")
+            if key.endswith(".mp4"):
+                videos.append({
+                    "filename": key.split("/")[-1],
+                    "size": obj.get("size", 0),
+                    "created": obj.get("modified", ""),
+                    "mtime": 0,
+                    "url": f"/comfyui/output/{key.split('/')[-1]}",
+                })
+    except Exception as e:
+        logger.warning(f"⚠️ Storage list failed, falling back to local scan: {e}")
+        # Fallback to local scan
+        for file_path in OUTPUT_DIR.glob("*.mp4"):
+            stat = file_path.stat()
+            videos.append({
                 "filename": file_path.name,
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
                 "mtime": stat.st_mtime,
                 "url": f"/videos/{file_path.name}",
-            }
-        )
+            })
 
-    # Also scan COMFYUI_OUTPUT_DIR
-    if COMFYUI_OUTPUT_DIR.exists():
-        for file_path in COMFYUI_OUTPUT_DIR.glob("*.mp4"):
-            stat = file_path.stat()
-            videos.append(
-                {
-                    "filename": file_path.name,
-                    "size": stat.st_size,
-                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    "mtime": stat.st_mtime,
-                    "url": f"/comfyui-outputs/{file_path.name}",
-                }
-            )
-
-    # Sort by mtime (newest first)
-    videos.sort(key=lambda v: v.get("mtime", 0), reverse=True)
-
+    videos.sort(key=lambda v: v.get("created", ""), reverse=True)
     return {"videos": videos, "count": len(videos)}
 
 
