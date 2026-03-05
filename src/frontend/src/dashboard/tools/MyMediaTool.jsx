@@ -237,6 +237,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     { id: 'inpaint',        label: '🎨 Inpaint' },
     { id: 'reframe',        label: '📐 Reframe' },
     { id: 'face-swap',      label: '👤 Face Swap' },
+    { id: 'upscale',         label: '🔍 Upscale' },
   ]
 
   // Close the dropdown when the lightbox switches items

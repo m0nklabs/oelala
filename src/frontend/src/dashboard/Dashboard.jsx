@@ -208,8 +208,6 @@ export default function Dashboard() {
         return 'Reframe'
       case TOOL_IDS.FACE_SWAP:
         return 'Face Swap'
-      case TOOL_IDS.UPSCALER:
-        return 'Upscaler'
       case TOOL_IDS.UPSCALE:
         return 'Upscale'
       case TOOL_IDS.IMAGE_TO_TEXT:
