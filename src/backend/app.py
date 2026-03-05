@@ -3562,6 +3562,21 @@ async def runpod_submit_workflow(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _parse_mtime(val) -> float:
+    """Convert modified_at (ISO string or datetime) to unix timestamp for sorting."""
+    if val is None:
+        return 0.0
+    if hasattr(val, "timestamp"):
+        return val.timestamp()
+    if isinstance(val, str) and val:
+        try:
+            from dateutil.parser import isoparse
+            return isoparse(val).timestamp()
+        except Exception:
+            pass
+    return 0.0
+
+
 @app.get("/api/media/unified")
 async def list_unified_media(
     type: str = "all",
@@ -3640,9 +3655,7 @@ async def list_unified_media(
                             "url": f"/user/media/{obj_type}/{filename}",
                             "size": obj.get("size", 0),
                             "modified": obj.get("modified_at", ""),
-                            "mtime": obj.get("modified_at").timestamp()
-                            if hasattr(obj.get("modified_at"), "timestamp")
-                            else 0,
+                            "mtime": _parse_mtime(obj.get("modified_at")),
                             "source": "user",
                             "visibility": "private",  # User storage = private by default
                         }
@@ -3695,14 +3708,7 @@ async def list_unified_media(
                                                     "modified": obj.get(
                                                         "modified_at", ""
                                                     ),
-                                                    "mtime": obj.get(
-                                                        "modified_at"
-                                                    ).timestamp()
-                                                    if hasattr(
-                                                        obj.get("modified_at"),
-                                                        "timestamp",
-                                                    )
-                                                    else 0,
+                                                    "mtime": _parse_mtime(obj.get("modified_at")),
                                                     "source": "user",
                                                     "visibility": "private",
                                                     "owner_id": uid,
@@ -3749,7 +3755,7 @@ async def list_unified_media(
                             "url": f"/media/generated/{key}",
                             "size": obj.get("size", 0),
                             "modified": obj.get("modified_at", ""),
-                            "mtime": 0,  # Storage API returns string, not timestamp
+                            "mtime": _parse_mtime(obj.get("modified_at")),
                             "source": "generated",
                             "visibility": "dev",  # Generated = dev visibility
                         }
@@ -3850,7 +3856,7 @@ async def list_unified_media(
                                 "visibility": "public",
                                 "is_nsfw": item.get("is_nsfw", False),
                                 "owner_id": item.get("user_id"),
-                                "mtime": 0,  # Will sort by created_at
+                                "mtime": _parse_mtime(item.get("created_at") or item.get("updated_at")),
                             }
                         )
             except Exception as e:
@@ -3957,9 +3963,7 @@ async def list_user_media(type: str = "all", user: User = Depends(get_current_us
                     "modified": obj.get("modified_at", datetime.now()).isoformat()
                     if isinstance(obj.get("modified_at"), datetime)
                     else obj.get("modified_at", ""),
-                    "mtime": obj.get("modified_at", datetime.now()).timestamp()
-                    if isinstance(obj.get("modified_at"), datetime)
-                    else 0,
+                    "mtime": _parse_mtime(obj.get("modified_at")),
                     "hash": obj.get("hash", ""),
                 }
             )
