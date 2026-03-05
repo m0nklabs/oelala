@@ -3543,15 +3543,30 @@ class ComfyUIClient:
 
         file_data = None
         try:
-            # Read file content
-            try:
-                with open(output_path, "rb") as f:
-                    file_data = f.read()
-            except (IOError, OSError) as e:
-                logger.error(f"❌ Failed to read file {output_path}: {e}")
-                # Clear metadata on file read failure to prevent memory leak
-                self.clear_job_metadata(prompt_id)
-                return None
+            # Read file content — try local first, fall back to storage
+            file_path = Path(output_path)
+            if file_path.exists():
+                try:
+                    with open(output_path, "rb") as f:
+                        file_data = f.read()
+                except (IOError, OSError) as e:
+                    logger.error(f"❌ Failed to read file {output_path}: {e}")
+                    self.clear_job_metadata(prompt_id)
+                    return None
+            else:
+                # Try fetching from storage (path may be "generated/cloud-max/file.mp4")
+                try:
+                    sc = get_storage_client()
+                    parts = output_path.replace("\\", "/").split("/", 1)
+                    if len(parts) == 2:
+                        file_data = sc.get(parts[0], parts[1])
+                    if not file_data:
+                        raise FileNotFoundError(output_path)
+                    logger.info(f"📦 Read {len(file_data)} bytes from storage: {output_path}")
+                except Exception as e:
+                    logger.error(f"❌ File not found locally or in storage: {output_path} ({e})")
+                    self.clear_job_metadata(prompt_id)
+                    return None
 
             # Generate storage filename with high-precision timestamp (ms) to avoid collisions
             timestamp = int(datetime.now().timestamp() * 1000)
@@ -3652,14 +3667,26 @@ class ComfyUIClient:
             return None
 
         try:
-            # Read file content
+            # Read file content — try local first, fall back to storage
             file_path = Path(output_path)
-            if not file_path.exists():
-                logger.error(f"❌ Output file not found: {output_path}")
-                self.clear_job_metadata(prompt_id)
-                return None
-
-            file_data = file_path.read_bytes()
+            if file_path.exists():
+                file_data = file_path.read_bytes()
+            else:
+                # Try fetching from storage (path may be "generated/cloud-max/file.mp4")
+                try:
+                    sc = get_storage_client()
+                    parts = output_path.replace("\\", "/").split("/", 1)
+                    if len(parts) == 2:
+                        file_data = sc.get(parts[0], parts[1])
+                    else:
+                        file_data = None
+                    if not file_data:
+                        raise FileNotFoundError(output_path)
+                    logger.info(f"📦 Read {len(file_data)} bytes from storage: {output_path}")
+                except Exception as e:
+                    logger.error(f"❌ File not found locally or in storage: {output_path} ({e})")
+                    self.clear_job_metadata(prompt_id)
+                    return None
 
             # Map output_type to generation_type
             gen_type_map = {
@@ -3841,6 +3868,14 @@ class ComfyUIClient:
                                 f.write(resp.content)
                             logger.info(f"📥 Video downloaded: {output_path}")
 
+                            # Upload to generated bucket in oelala-storage
+                            try:
+                                storage_client = get_storage_client()
+                                storage_client.put("generated", filename, resp.content)
+                                logger.info(f"📤 Video uploaded to storage: generated/{filename}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Storage upload failed (non-fatal): {e}")
+
                             # Auto-upload to user storage if prompt_id is provided
                             if prompt_id:
                                 storage_path = self.on_job_complete(
@@ -3899,6 +3934,14 @@ class ComfyUIClient:
                             with open(output_path, "wb") as f:
                                 f.write(resp.content)
                             logger.info(f"📥 Image downloaded: {output_path}")
+
+                            # Upload to generated bucket in oelala-storage
+                            try:
+                                storage_client = get_storage_client()
+                                storage_client.put("generated", filename, resp.content)
+                                logger.info(f"📤 Image uploaded to storage: generated/{filename}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Storage upload failed (non-fatal): {e}")
 
                             # Auto-upload to user storage if prompt_id is provided
                             if prompt_id:
