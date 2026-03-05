@@ -1,7 +1,8 @@
 # Storage Migration Plan: Out of oelala, Into oelala-storage
 
-**Status**: Planning  
+**Status**: Phase 1-3 COMPLETE  
 **Created**: 2026-03-05  
+**Updated**: 2026-03-05  
 **Goal**: Eliminate ALL local content storage from the oelala directory. Every file lives on oelala-storage nodes, served and replicated independently.
 
 ## Current Architecture
@@ -13,7 +14,7 @@ oelala-backend (Python/FastAPI)
   └─ Some paths already use StorageClient (user media)
 
 oelala-storage (Go)
-  ├─ Primary: 192.168.1.35:7990 (data: /home/flip/oelala/media/)  ← SAME DIR!
+  ├─ Primary: 192.168.1.35:7990 (data: /home/flip/oelala-storage-data/)  ← MOVED ✅
   ├─ Node 2:  192.168.1.62:7990 (data: ~/oelala-storage-node-data/)
   └─ Auto-sync between nodes every 5 minutes
 ```
@@ -51,11 +52,13 @@ Frontend → Cloudflare → Any node (failover between nodes)
 5. Verify health + file access via API
 6. Keep `/home/flip/oelala/media/` as read-only fallback during transition
 
-**Risk**: Low — only moves the storage service's data dir. Backend still writes to old path until Phase 2.
+**Risk**: Low — only moves the storage service's data dir.
+
+**Status**: ✅ COMPLETE — Data moved to `/home/flip/oelala-storage-data/`, symlink at old path for backward compat.
 
 ---
 
-### Phase 2: Migrate backend writes to StorageClient (MEDIUM RISK)
+### Phase 2: Migrate backend writes to StorageClient (MEDIUM RISK) ✅ COMPLETE
 
 Replace ALL local filesystem writes with `StorageClient.put()` calls.
 
@@ -121,7 +124,7 @@ storage.put("avatars", f"{user.id}.jpg", buf.getvalue())
 
 ---
 
-### Phase 3: Migrate backend reads to StorageClient (MEDIUM RISK)
+### Phase 3: Migrate backend reads to StorageClient (MEDIUM RISK) ✅ COMPLETE
 
 Replace ALL local filesystem reads and `FileResponse` with storage proxy endpoints.
 
@@ -243,9 +246,15 @@ Each phase is independently reversible:
 
 ## Success Criteria
 
-- [ ] Zero files in `/home/flip/oelala/media/` (except ComfyUI/output which is internal)
-- [ ] Zero `Path("/home/flip/oelala/media/...")` in backend code
-- [ ] All content accessible via `http://localhost:7990/{bucket}/{key}`
-- [ ] Content replicated to node 2 within 5 minutes of creation
-- [ ] Gallery, admin, and user endpoints work via storage proxy
+- [x] Data directory moved out of oelala repo to `/home/flip/oelala-storage-data/`
+- [x] All content accessible via `http://localhost:7990/{bucket}/{key}`
+- [x] Content replicated to node 2 within 5 minutes of creation
+- [x] All primary serving endpoints proxy through storage API
+- [x] All write operations go through StorageClient
+- [x] Gallery, admin, and user endpoints work via storage proxy
+- [x] StaticFiles mounts removed (except `/static` for frontend)
+- [ ] Zero `Path("/home/flip/oelala/media/...")` constants in backend code (some remain as fallback refs)
+- [ ] Frontend URL harmonization (Phase 4)
+- [ ] Cloudflare multi-node serving (Phase 5)
+- [ ] Remove symlink at `/home/flip/oelala/media` and local path constants
 - [ ] Frontend serves media from storage (or proxied storage)
