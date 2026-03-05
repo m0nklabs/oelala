@@ -1,6 +1,6 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-03-04
+> Active development tasks. Updated: 2026-03-05
 
 ---
 
@@ -53,7 +53,7 @@ The main functionality is complete! All MEGA issues for core features are done:
 ### 🔴 High Priority
 | Issue | Title | Labels | Notes |
 |-------|-------|--------|-------|
-| #51 | Video upscaling (480p → 4K) | frontend, backend | **BLOCKED**: No ESRGAN models installed |
+| #51 | Video upscaling (480p → 4K) | frontend, backend | ✅ All 3 presets working (lanczos/ESRGAN/SeedVR2) |
 
 > **Note**: All other GitHub issues (#29-70) have been closed. No open issues remain in m0nklabs/oelala.
 
@@ -66,14 +66,22 @@ The main functionality is complete! All MEGA issues for core features are done:
 | #12 | Prometheus metrics | done | ✅ Closed |
 | #13 | Admin CLI | done | ✅ Closed (stats command added) |
 | #24 | MEGA: Distributed Storage Network | high | 🔄 Open |
-| #19 | MEGA: Operations & Observability | medium | 🔄 Open |
-| #10 | Webhook notifications | medium | 🔄 Open |
-| #20 | MEGA: Platform & Deployment | low | 🔄 Open |
+| #19 | MEGA: Operations & Observability | done | ✅ Closed (all sub-issues resolved) |
+| #10 | Webhook notifications | done | ✅ Closed (implemented 2026-03-05) |
+| #20 | MEGA: Platform & Deployment | done | ✅ Closed |
 | #7 | Windows installer | low | 🔄 Open |
 
 ---
 
 ## ✅ Recently Completed
+
+### 2026-03-05
+- [x] oelala-storage: Webhook notification system (#10) — async dispatcher, HMAC signing, retry
+- [x] oelala-storage: Fiber v2.52.10 → v2.52.12 security fix (DoS + predictable UUID CVEs)
+- [x] oelala-storage: Issues #19, #20 closed (already resolved)
+- [x] oelala: PR #109 (opencv bump) resolved, PR #107 (video upscaling dead code) closed + cleaned
+- [x] oelala: rollup CVE fixed (4.53.3 → 4.59.0)
+- [x] oelala: Dead upscaler files removed (-671 lines), upscale wired to send-to menu
 
 ### 2026-03-04
 - [x] UI refactor: inline styles → CSS classes across 14 tool components
@@ -118,6 +126,5 @@ The main functionality is complete! All MEGA issues for core features are done:
 Based on project priorities:
 
 1. **Face system testing** - All code is built, needs end-to-end validation
-2. **#51 Video upscaling** - Needs ESRGAN models installed
-3. **UI polish** - Continue CSS class migration for remaining inline styles
-4. **oelala-storage #24** - Distributed storage network (MEGA)
+2. **UI polish** - Continue CSS class migration for remaining inline styles
+3. **oelala-storage #24** - Distributed storage network (MEGA)

@@ -51,7 +51,7 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 | T2I | SDXL (full) | 1024x1024 | ~8GB |
 | T2I | Flux FP8 | 1024x1024 | ~12GB |
 | I2I | SDXL | 1536x1536 | ~10GB |
-| Upscale | 4x | 2048x2048 max | ~8GB |
+| Upscale | 4x (ESRGAN) / AI (SeedVR2) | 720p-2048p | ~10-16GB |
 
 **Note**: Image gen fits on single GPU. Use `cuda:0` (16GB) for headroom.
 
@@ -305,8 +305,36 @@ Available categories:
 ## 🚫 NOT Available
 
 - `realvisxlV50_v50Bakedvae.safetensors` - **Removed**
-- ESRGAN upscale models - **Not installed** (empty folder)
 - ControlNet models - **Not installed**
+
+---
+
+## 🔍 Upscale Models
+
+### ESRGAN (Image/Video per-frame)
+| Model | Size | Purpose |
+|-------|------|------|
+| `RealESRGAN_x4plus.pth` | 64MB | General purpose 4x upscale |
+| `RealESRGAN_x4plus_anime_6B.pth` | 18MB | Anime/illustration optimized |
+| `4x-UltraSharp.pth` | 64MB | High detail sharpening |
+| `4x_foolhardy_Remacri.pth` | 64MB | Alternative 4x (good detail) |
+
+Path: `ComfyUI/models/upscale_models/`
+
+### SeedVR2 (AI Video Upscaler)
+| Model | Size | Purpose |
+|-------|------|------|
+| `seedvr2_ema_3b_fp8_e4m3fn.safetensors` | 3.2GB | DiT 3B model (fp8 quantized) |
+| `ema_vae_fp16.safetensors` | 479MB | VAE model (fp16) |
+
+Path: `ComfyUI/models/SEEDVR2/`
+
+**Tested Settings (2026-03-05):**
+- DiT on cuda:1 (5060 Ti), VAE on cuda:0 (3060)
+- BlockSwap: 28 blocks + swap_io to cuda:0
+- Tiled VAE: 512x512 tiles, 64px overlap
+- Max output: 720p (1280 max_resolution safety cap)
+- Input 480x480 41 frames → 720x720 in ~100s
 
 ---
 
@@ -320,7 +348,8 @@ Available categories:
 ├── vae/               # VAE models
 ├── clip/              # CLIP/T5 text encoders
 ├── mmaudio/           # MMAudio models
-├── upscale_models/    # Empty (not installed)
+├── upscale_models/    # RealESRGAN_x4plus, anime_6B, UltraSharp, Remacri
+├── SEEDVR2/           # SeedVR2 DiT 3B fp8 + VAE fp16
 └── controlnet/        # Empty (not installed)
 
 /home/flip/oelala/ComfyUI/custom_nodes/  # All custom nodes
