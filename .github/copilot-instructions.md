@@ -21,6 +21,7 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **NEVER rebase Copilot branches manually**: Unless explicitly requested. Let the automated workflows or Copilot handle rebases.
 - **Use ALL available resources**: The agent MUST actively use every resource the user has made available (SSH access, API endpoints, CLI tools, tunnels, services, MCP tools, etc.). Never leave a capability unused when it could solve the task faster or better. If unsure whether a resource exists, check first — don't assume it's unavailable.
 - **Maintain resource inventory**: The agent MUST keep an up-to-date inventory of all available resources (machines, SSH access, tunnels, API keys, services, tools) in the relevant instruction files. When a new resource is provisioned or discovered, document it immediately.
+- **Context refresh**: Periodically re-read this instruction file (`.github/copilot-instructions.md`) and the active agent file (`.github/agents/MARK1.md`) during long sessions. Context drifts — re-reading prevents mistakes. Do this at minimum: (1) at session start, (2) before starting a new major task, (3) whenever unsure about conventions or rules. Also check `/memories/` for persistent context from previous sessions.
 
 ## Communication Rules
 
