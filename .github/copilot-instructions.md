@@ -19,6 +19,8 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **NEVER do manual workarounds when automating**: If we are building automation for something, NEVER fall back to doing it manually "just this once". Fix the automation instead.
 - **NEVER approve PRs manually**: Do not run `gh pr review --approve` or any approval command unless the user explicitly requests it.
 - **NEVER rebase Copilot branches manually**: Unless explicitly requested. Let the automated workflows or Copilot handle rebases.
+- **Use ALL available resources**: The agent MUST actively use every resource the user has made available (SSH access, API endpoints, CLI tools, tunnels, services, MCP tools, etc.). Never leave a capability unused when it could solve the task faster or better. If unsure whether a resource exists, check first — don't assume it's unavailable.
+- **Maintain resource inventory**: The agent MUST keep an up-to-date inventory of all available resources (machines, SSH access, tunnels, API keys, services, tools) in the relevant instruction files. When a new resource is provisioned or discovered, document it immediately.
 
 ## Communication Rules
 
@@ -261,7 +263,31 @@ systemctl is-enabled oelala-backend oelala-frontend comfyui oelala-storage
 - **Dev mode exception**: Only for oelala-storage during active development: `cd /home/flip/oelala-storage && ./bin/oelala-storage serve`
 ## Cloudflare & CORS Configuration (CRITICAL)
 
-- **Cloudflare Tunnels**: `api.oelala.xyz` → `localhost:7998`, `oelala.xyz` → `localhost:5174`
+### Tunnel Inventory
+
+| Tunnel | ID | Machine | Config |
+|--------|----|---------|--------|
+| `oelala-main` | `b34ce27b-e9b1-4926-b5fe-ebbaf42d506a` | 192.168.1.35 (ai-kvm2) | `/etc/cloudflared/config.yml` |
+| `oelala-storage-node2` | `83d253c4-24eb-4643-b36f-174a2fc3f10b` | 192.168.1.62 (ubuntu-oelalastorage2) | `/etc/cloudflared/config.yml` |
+
+### DNS → Tunnel Routing
+
+| Hostname | Tunnel | Target Service |
+|----------|--------|----------------|
+| `oelala.xyz` | oelala-main | `http://localhost:5174` (frontend) |
+| `api.oelala.xyz` | oelala-main | `http://localhost:7998` (backend) |
+| `storage.oelala.xyz` | oelala-main | `http://localhost:7990` (storage node 1) |
+| `pgdb.oelala.xyz` | oelala-main | `tcp://localhost:5432` (PostgreSQL) |
+| `storage2.oelala.xyz` | oelala-storage-node2 | `http://localhost:7990` (storage node 2) |
+
+### Tunnel Management
+
+- **Cert location (ai-kvm2)**: `/home/flip/.cloudflared/cert.pem`
+- **Create DNS record**: `TUNNEL_ORIGIN_CERT=/home/flip/.cloudflared/cert.pem cloudflared tunnel route dns <tunnel-id> <hostname>`
+- **Each node runs its own tunnel** — independent, decentralized. No node depends on another for Cloudflare connectivity.
+- **Node 2 is fully autonomous** — has its own cloudflared install, tunnel, credentials, and systemd service.
+
+### CORS Configuration
 - **CORS Origins**: Explicit list in `src/backend/app.py` — NEVER use `allow_origins=["*"]` with `allow_credentials=True` (violates CORS spec, browsers reject it)
 - **Allowed Origins**:
   ```python
