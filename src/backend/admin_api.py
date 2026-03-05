@@ -11,11 +11,12 @@ from typing import Optional, List
 from datetime import datetime
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, validator
 import httpx
 
 from auth import get_current_user, User
+from storage_client import get_client as get_storage_client
 
 logger = logging.getLogger(__name__)
 
@@ -711,74 +712,89 @@ async def list_generated_media(
     limit: int = Query(100, ge=1, le=500),
 ):
     """
-    List all media files from generated directories (admin only).
-
-    This is a transition endpoint while migrating to user-scoped storage.
-    Returns videos/images from media/generated/ and ComfyUI/output/.
+    List all media files from oelala-storage buckets (admin only).
+    Reads from 'generated' and 'comfyui-local' buckets.
     """
     media = []
+    video_exts = {".mp4", ".webm"}
+    image_exts = {".png", ".jpg", ".jpeg", ".webp"}
+    all_exts = video_exts | image_exts
 
-    # Scan media/generated
-    if MEDIA_GENERATED_DIR.exists():
-        for ext in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
-            for file_path in MEDIA_GENERATED_DIR.glob(ext):
-                stat = file_path.stat()
-                is_video = file_path.suffix.lower() in [".mp4", ".webm"]
-                item_type = "video" if is_video else "image"
+    try:
+        storage = get_storage_client()
 
-                if type != "all" and item_type != type:
-                    continue
+        # List generated bucket
+        for obj in storage.list("generated"):
+            key = obj.get("key", "")
+            ext = Path(key).suffix.lower()
+            if ext not in all_exts:
+                continue
+            item_type = "video" if ext in video_exts else "image"
+            if type != "all" and item_type != type:
+                continue
+            media.append({
+                "name": Path(key).name,
+                "type": item_type,
+                "url": f"/media/generated/{key}",
+                "source": "generated",
+                "size": obj.get("size", 0),
+                "modified": obj.get("modified_at", ""),
+                "mtime": 0,
+                "has_metadata": False,
+            })
 
-                # Check if file has embedded metadata (workflow)
-                has_metadata = check_file_has_metadata(file_path)
+        # List comfyui-local bucket
+        for obj in storage.list("comfyui-local"):
+            key = obj.get("key", "")
+            ext = Path(key).suffix.lower()
+            if ext not in all_exts:
+                continue
+            item_type = "video" if ext in video_exts else "image"
+            if type != "all" and item_type != type:
+                continue
+            media.append({
+                "name": Path(key).name,
+                "type": item_type,
+                "url": f"/comfyui/output/{Path(key).name}",
+                "source": "comfyui-local",
+                "size": obj.get("size", 0),
+                "modified": obj.get("modified_at", ""),
+                "mtime": 0,
+                "has_metadata": False,
+            })
+    except Exception as e:
+        logger.warning(f"⚠️ Storage list failed, falling back to local scan: {e}")
+        # Fallback to local scan
+        for src_dir, url_prefix, source in [
+            (MEDIA_GENERATED_DIR, "/media/generated", "media/generated"),
+            (COMFYUI_OUTPUT_DIR, "/comfyui/output", "ComfyUI/output"),
+        ]:
+            if src_dir.exists():
+                for ext_pat in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
+                    for fp in src_dir.glob(ext_pat):
+                        is_video = fp.suffix.lower() in video_exts
+                        item_type = "video" if is_video else "image"
+                        if type != "all" and item_type != type:
+                            continue
+                        stat = fp.stat()
+                        media.append({
+                            "name": fp.name,
+                            "type": item_type,
+                            "url": f"{url_prefix}/{fp.name}",
+                            "source": source,
+                            "size": stat.st_size,
+                            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            "mtime": stat.st_mtime,
+                            "has_metadata": False,
+                        })
 
-                media.append(
-                    {
-                        "name": file_path.name,
-                        "type": item_type,
-                        "url": f"/media/generated/{file_path.name}",
-                        "source": "media/generated",
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        "mtime": stat.st_mtime,
-                        "has_metadata": has_metadata,
-                    }
-                )
-
-    # Scan ComfyUI output
-    if COMFYUI_OUTPUT_DIR.exists():
-        for ext in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
-            for file_path in COMFYUI_OUTPUT_DIR.glob(ext):
-                stat = file_path.stat()
-                is_video = file_path.suffix.lower() in [".mp4", ".webm"]
-                item_type = "video" if is_video else "image"
-
-                if type != "all" and item_type != type:
-                    continue
-
-                # Check if file has embedded metadata (workflow)
-                has_metadata = check_file_has_metadata(file_path)
-
-                media.append(
-                    {
-                        "name": file_path.name,
-                        "type": item_type,
-                        "url": f"/comfyui/output/{file_path.name}",
-                        "source": "ComfyUI/output",
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        "mtime": stat.st_mtime,
-                        "has_metadata": has_metadata,
-                    }
-                )
-
-    # Sort by mtime (newest first)
-    media.sort(key=lambda m: m.get("mtime", 0), reverse=True)
+    # Sort by modified (newest first)
+    media.sort(key=lambda m: m.get("modified", ""), reverse=True)
 
     return {
         "media": media[:limit],
         "total": len(media),
-        "sources": ["media/generated", "ComfyUI/output"],
+        "sources": ["generated", "comfyui-local"],
     }
 
 
@@ -787,25 +803,20 @@ async def get_generated_file(
     filename: str,
     admin: User = Depends(get_admin_user),
 ):
-    """Serve a file from media/generated/ (admin only)."""
-    file_path = MEDIA_GENERATED_DIR / filename
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Determine content type
-    suffix = file_path.suffix.lower()
-    content_types = {
-        ".mp4": "video/mp4",
-        ".webm": "video/webm",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-    }
-    content_type = content_types.get(suffix, "application/octet-stream")
-
-    return FileResponse(path=file_path, media_type=content_type, filename=filename)
+    """Serve a file from generated storage bucket (admin only)."""
+    try:
+        storage = get_storage_client()
+        data, content_type, _ = storage.get_with_metadata("generated", filename)
+        return Response(content=data, media_type=content_type, headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "public, max-age=3600",
+        })
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=502, detail="Storage error")
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
 @router.get("/generated-media/comfyui/{filename}")
@@ -813,25 +824,20 @@ async def get_comfyui_file(
     filename: str,
     admin: User = Depends(get_admin_user),
 ):
-    """Serve a file from ComfyUI/output/ (admin only)."""
-    file_path = COMFYUI_OUTPUT_DIR / filename
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Determine content type
-    suffix = file_path.suffix.lower()
-    content_types = {
-        ".mp4": "video/mp4",
-        ".webm": "video/webm",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-    }
-    content_type = content_types.get(suffix, "application/octet-stream")
-
-    return FileResponse(path=file_path, media_type=content_type, filename=filename)
+    """Serve a file from comfyui-local storage bucket (admin only)."""
+    try:
+        storage = get_storage_client()
+        data, content_type, _ = storage.get_with_metadata("comfyui-local", filename)
+        return Response(content=data, media_type=content_type, headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "public, max-age=3600",
+        })
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=502, detail="Storage error")
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
 # =============================================================================
