@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
 
@@ -882,26 +882,28 @@ async def get_published_media_file(media_id: str):
                 },
             )
         except Exception as storage_err:
-            debug_log(f"oelala-storage failed: {storage_err}, trying local directories")
+            debug_log(f"oelala-storage user media failed: {storage_err}, trying storage buckets")
 
-        # Fallback to local directories for dev/testing
-        local_dirs = [
-            Path("/home/flip/oelala/media/generated"),
-            Path("/home/flip/oelala/ComfyUI/output"),
-        ]
-
-        for local_dir in local_dirs:
-            local_path = local_dir / filename
-            if local_path.exists():
-                debug_log(f"Serving from local: {local_path}")
-                return FileResponse(
-                    path=local_path,
-                    media_type=content_type,
-                    filename=filename,
-                    headers={
-                        "Cache-Control": "public, max-age=86400",
-                    },
-                )
+        # Fallback: try generated and comfyui-local storage buckets
+        try:
+            storage = get_storage_client()
+            for bucket in ["generated", "comfyui-local"]:
+                try:
+                    data = storage.get(bucket, filename)
+                    if data:
+                        debug_log(f"Serving from storage bucket: {bucket}/{filename}")
+                        return Response(
+                            content=data,
+                            media_type=content_type,
+                            headers={
+                                "Content-Disposition": f'inline; filename="{filename}"',
+                                "Cache-Control": "public, max-age=86400",
+                            },
+                        )
+                except Exception:
+                    continue
+        except Exception as e:
+            debug_log(f"Storage bucket fallback also failed: {e}")
 
         # Nothing found
         raise HTTPException(status_code=404, detail=f"Media file not found: {filename}")
