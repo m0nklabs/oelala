@@ -513,10 +513,15 @@ async def upload_avatar(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not process image: {exc}")
 
-    # Save to disk
-    dest = AVATARS_DIR / f"{user.id}.jpg"
-    img.save(str(dest), "JPEG", quality=85, optimize=True)
-    debug_log(f"👤 Saved avatar for user {user.id} → {dest}")
+    # Save to oelala-storage instead of local disk
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=85, optimize=True)
+    avatar_bytes = buf.getvalue()
+
+    from storage_client import get_client as get_storage_client
+    storage = get_storage_client()
+    storage.put("avatars", f"{user.id}.jpg", avatar_bytes, content_type="image/jpeg")
+    debug_log(f"👤 Saved avatar for user {user.id} → storage:avatars/{user.id}.jpg")
 
     # Build public URL (served via /avatars/ static mount)
     avatar_url = f"/avatars/{user.id}.jpg"
