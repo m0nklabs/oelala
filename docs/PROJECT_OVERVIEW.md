@@ -156,6 +156,8 @@ This ordering is intentional: putting the 3060 first keeps the 5060 Ti freer for
 | Document | Description |
 |----------|-------------|
 | [ROADMAP.md](ROADMAP.md) | Product and infrastructure direction |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture and runtime flow |
+| [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Canonical infrastructure inventory |
 | [STORAGE_MIGRATION_PLAN.md](STORAGE_MIGRATION_PLAN.md) | Final state of the storage migration |
 | [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) | Tunnel, CORS, and cache behavior |
 | [FACE_SYSTEM.md](FACE_SYSTEM.md) | I2I/face processing architecture |

@@ -1,387 +1,261 @@
-# Oelala Architecture Documentation
+# Oelala Architecture
 
-## System Overview
+> Last Updated: 2026-03-06
 
-Oelala is een AI video generation platform met een modern dashboard UI. Het platform integreert met ComfyUI voor video generatie via Wan2.2 workflows.
+## Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User Browser                            │
-│                    http://localhost:7998                        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Frontend (React + Vite)                      │
-│                    Port: 5174 (dev) / 7998 (prod via backend)   │
-│                    Dashboard UI with sidebar navigation         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Backend (FastAPI/Uvicorn)                    │
-│                    Port: 7998                                   │
-│                    Serves static frontend + API                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    ComfyUI (Workflow Engine)                    │
-│                    Port: 8188                                   │
-│                    DisTorch2 dual-pass workflows                │
-└─────────────────────────────────────────────────────────────────┘
-```
+Oelala is a hybrid AI media platform, not just a single video-generation app. The current codebase combines product UI, orchestration, storage, billing, community, admin, and AI-assist flows behind one surface.
 
----
+At runtime it is composed of:
 
-## Service Configuration
+1. **Frontend product surface**: React/Vite dashboard organized by tool families
+2. **Backend control plane**: FastAPI APIs for auth, credits, generation, media, gallery, moderation, and admin
+3. **Execution engines**: local ComfyUI plus RunPod Cloud Max for burst workloads
+4. **Storage layer**: `oelala-storage` for object storage, retention, signed access, and node rollout
+5. **Platform dependencies**: Supabase, Stripe, Cloudflare, and selected LLM/media services
 
-### Frontend Service
-**File**: \`~/.config/systemd/user/oelala-frontend.service\`
+## Capability Map
 
-```ini
-[Unit]
-Description=Oelala Frontend Dev Server (Vite)
-After=network.target
+### Creative Tool Families
 
-[Service]
-Type=simple
-WorkingDirectory=/home/flip/oelala/src/frontend
-ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5174
-Restart=always
-RestartSec=5
+| Family | Current Capabilities |
+|--------|----------------------|
+| Video | Image-to-Video, Text-to-Video, Text-to-Image-to-Video, Video-to-Video, Speech-to-Video |
+| Image | Text-to-Image, Image-to-Image, Inpaint, Reframe, Face Swap, Upscale |
+| Prompt / Analysis | Prompt Generator, Image-to-Text, Video-to-Text, image analysis, analyze-and-generate |
+| Audio | Audio generation, Voice Cloning, Lip Sync |
+| Advanced | Pipeline tool, Post-Processing, LoRA Browser, LoRA Training |
+| Community | Gallery publishing, likes, moderation/reporting |
+| Account | Profile, API keys, credits, storage quota |
+| Admin | Admin panel, analytics, moderation, storage nodes, system tooling |
 
-[Install]
-WantedBy=default.target
-```
+## Runtime Topology
 
-**Commands:**
-```bash
-systemctl --user start oelala-frontend
-systemctl --user stop oelala-frontend
-systemctl --user status oelala-frontend
-journalctl --user -u oelala-frontend -f
+```text
+User Browser
+    │
+    ▼
+Frontend (React/Vite, :5174)
+    │
+    ▼
+Backend API (FastAPI, :7998)
+    ├─ Auth / profiles / credits / API keys
+    ├─ Gallery / moderation / admin APIs
+    ├─ Media library / workflow metadata / storage proxy
+    ├─ Local ComfyUI orchestration (:8188)
+    ├─ RunPod Cloud Max orchestration
+    ├─ LLM-assisted prompt / caption / analysis flows
+    └─ WebSocket / queue / progress plumbing
+          │
+          ├─ Local execution → ComfyUI
+          ├─ Cloud execution → RunPod worker
+          ├─ Media persistence → oelala-storage
+          ├─ Auth/data → Supabase
+          └─ Payments/credits → Stripe
+
+oelala-storage
+    ├─ primary/coordinator (:7990)
+    ├─ local node-01 (:7993)
+    └─ remote node-02
 ```
 
-### Backend Service
-**File**: \`~/.config/systemd/user/oelala-backend.service\`
+## Frontend Layer
 
-```ini
-[Unit]
-Description=Oelala Backend API (FastAPI/Uvicorn)
-After=network.target
+The frontend is a dashboard application organized around tool groups, account surfaces, and admin operations.
 
-[Service]
-Type=simple
-WorkingDirectory=/home/flip/oelala/src/backend
-Environment="PATH=/home/flip/venvs/gpu/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/flip/venvs/gpu/bin/uvicorn app:app --host 0.0.0.0 --port 7998 --workers 2
-Restart=always
-RestartSec=5
+### Main Responsibilities
 
-[Install]
-WantedBy=default.target
+- tool configuration and submission
+- authenticated media browsing across images, video, audio, and prompts
+- queue/progress display
+- gallery/community surfaces
+- profile, API key, and credit flows
+- admin visibility into moderation, analytics, storage nodes, and system state
+
+### Important Frontend Conventions
+
+- use `apiFetch()` for backend API calls
+- avoid raw `fetch()` for normal backend communication
+- media can be served via backend-relative routes, signed URLs, or storage-facing URLs
+- creations picking is implemented as inline panels, not blocking modal overlays
+
+## Backend Layer
+
+The backend is the product control plane. Policy, orchestration, and user-facing integration logic live here.
+
+### Major Subsystems
+
+| Area | Main Modules / Routes |
+|------|------------------------|
+| Auth / profile | `auth.py`, `profile_api.py`, `/user/profile`, `/api/profile/*` |
+| Credits / billing | `credits.py`, `credits_api.py`, `/api/credits/*`, `/api/stripe/*` |
+| Gallery / community | `gallery_api.py`, `/api/gallery/*` |
+| Moderation | `moderation_api.py`, `/api/report/*`, `/api/admin/moderation/*` |
+| API keys | `api_keys_management.py`, `/api/keys/*`, `/api/v1/*` |
+| Admin | `admin_api.py`, `/api/admin/*`, `/api/admin/metrics` |
+| Storage integration | `storage_client.py`, `storage_nodes_api.py`, `/storage/*`, `/api/storage-nodes/*` |
+| LoRA surfaces | `lora_api.py`, `lora_scanner.py`, `/api/loras/*`, `/train-lora` |
+| Face systems | `face_service.py`, `face_train_service.py`, `/face-swap*`, `/api/face-train*`, `/api/face-profiles*` |
+| Generation core | `comfyui_client.py`, `runpod_client.py`, `workflow_loader.py`, `job_queue.py` |
+| LLM/media intelligence | `guardian_client.py`, `llm_queue.py`, captioning, prompt generation, analysis endpoints |
+
+### Important Backend Responsibilities
+
+- Supabase-backed authentication and user state
+- credit charging and entitlement checks
+- tool endpoint validation and workflow assembly
+- ComfyUI prompt submission, polling, queue inspection, and cancellation
+- RunPod Cloud Max submission, queue-state persistence, timeout handling, and recovery behavior
+- storage uploads, proxying, workflow metadata lookup, and unified media APIs
+- admin and reporting endpoints for users, storage, moderation, and platform operations
+
+### Design Rules
+
+- business and entitlement logic belong in the backend, not storage
+- storage access is backend-driven and application-authorized
+- generation state should report honest queue/running/failed outcomes
+- legacy compatibility endpoints may still exist, but product behavior should be described through the modular APIs above
+
+## Execution Layer
+
+Generation is split across local and cloud execution paths.
+
+### Local Execution: ComfyUI
+
+Current local characteristics:
+
+- Wan 2.2 workflows for video generation
+- Flux, SDXL, SD1.5, and related image-generation paths
+- dedicated endpoints for I2I, T2I, T2V, V2V, upscale, interpolation, reframe, inpaint, and face workflows
+- DisTorch2 multi-GPU distribution for large models
+- local outputs land in `ComfyUI/output/` or temporary processing paths before storage upload
+
+### Cloud Execution: RunPod Cloud Max
+
+Current cloud characteristics:
+
+- asynchronous cloud generation for Wan 2.2 workloads
+- persisted cloud job state and queue age tracking
+- worker-side LoRA download support
+- timeout handling when workers never provision
+- output persistence back into the same media/storage surface exposed to users
+
+### LLM-Assisted Media Flows
+
+Oelala also has non-generation AI flows layered into the backend:
+
+- prompt generation
+- motion prompt generation
+- image and video captioning
+- image analysis and analyze-and-generate flows
+- Guardian/Ollama status visibility for local language-model integrations
+
+## GPU Layout
+
+| GPU | VRAM | CUDA | Role |
+|-----|------|------|------|
+| RTX 3060 | 12GB | cuda:0 | donor / weight-heavy device |
+| RTX 5060 Ti | 16GB | cuda:1 | primary compute device |
+
+Preferred DisTorch2 allocation:
+
+```text
+cuda:0,10gb;cuda:1,15gb;cpu,*
 ```
 
----
+## Storage Layer
 
-## Port Inventory
+Persistent media storage is delegated to `oelala-storage`.
 
-| Service         | Port | Protocol | Description                    |
-|-----------------|------|----------|--------------------------------|
-| Frontend (Vite) | 5174 | HTTP     | React dev server               |
-| Backend (API)   | 7998 | HTTP     | FastAPI REST endpoints         |
-| ComfyUI         | 8188 | HTTP/WS  | Workflow engine + WebSocket    |
+### Storage Principles
 
----
+- storage buckets are the source of truth
+- backend-local paths are temporary processing locations only
+- retention is defined by backend metadata and executed by storage
+- signed/public access is a storage concern, but policy still belongs to the backend
+- node rollout and visibility are part of the product-admin surface
 
-## Backend Architecture
+### Current Nodes
 
-### Main Components
+| Node | Role | Hostname |
+|------|------|----------|
+| primary | coordinator / main entrypoint | `storage-main.oelala.xyz`, `storage.oelala.xyz` |
+| node-01 | additional local node | `storage-node-01.oelala.xyz` |
+| node-02 | remote node | `storage2.oelala.xyz` |
 
-**File**: \`src/backend/app.py\`
-- FastAPI application with REST endpoints
-- Static file serving for generated videos
-- CORS middleware for frontend access
+## Platform Dependencies
 
-**File**: \`src/backend/comfyui_client.py\`
-- ComfyUI API client
-- Workflow templating (DisTorch2 workflow)
-- WebSocket progress monitoring
+| Dependency | Role |
+|------------|------|
+| Supabase | auth, profile data, app state |
+| Stripe | credits and payments |
+| Cloudflare | tunnels, DNS, proxy/cache behavior |
+| RunPod | burst cloud GPU execution |
+| oelala-storage | media storage, retention, signed access, node rollout |
+| Guardian / local LLM stack | prompt and analysis support paths |
 
-### Key Endpoints
+## Delivery and Edge
 
-| Endpoint                     | Method | Description                        |
-|------------------------------|--------|------------------------------------|
-| `/health`                    | GET    | Health check (ComfyUI + legacy)    |
-| `/loras`                     | GET    | List available LoRA models         |
-| `/unet-models`               | GET    | List GGUF unet models with pairs   |
-| `/extract-metadata`          | POST   | Extract prompt from PNG metadata   |
-| `/wan22/image-to-video`      | POST   | Generate video via ComfyUI         |
-| `/list-comfyui-media`        | GET    | List output media with metadata    |
-| `/api/presets`               | GET    | List available workflow presets    |
-| `/comfyui-output/{filename}` | GET    | Serve generated videos/images      |
+Cloudflare is used for public routing and tunnel-based connectivity.
 
-### LoRA Endpoint Response
+### Public Hostnames
 
-```json
-{
-  "loras": [...],
-  "high_noise": [...],
-  "low_noise": [...],
-  "general": [...],
-  "by_category": { "subfolder": [...] }
-}
-```
+| Hostname | Target |
+|----------|--------|
+| `oelala.xyz` | frontend |
+| `api.oelala.xyz` | backend |
+| `storage.oelala.xyz` | storage primary |
+| `storage2.oelala.xyz` | remote storage node |
 
-### Unet Models Endpoint Response
+### Important Edge Rules
 
-```json
-{
-  "models": [...],
-  "high_noise": [...],
-  "low_noise": [...],
-  "pairs": [{ "name": "...", "high": {...}, "low": {...} }]
-}
-```
+- `Vary: Origin` matters for CORS correctness behind Cloudflare
+- explicit origins are required when credentials are involved
+- per-node tunnels are preferred over centralizing node ingress through one host
 
-### Metadata Extraction
+## Runtime Services
 
-The `/extract-metadata` endpoint extracts prompts from uploaded images:
-- **oelala_params**: Our custom format with `original_t2i_prompt` preservation
-- **ComfyUI workflow**: CLIPTextEncode nodes, WanVideo positive_prompt
-- **A1111 format**: Parameters text block parsing
+| Service | Port | systemd unit |
+|---------|------|--------------|
+| frontend | 5174 | `oelala-frontend.service` |
+| backend | 7998 | `oelala-backend.service` |
+| ComfyUI | 8188 | `comfyui.service` |
+| storage primary | 7990 | `oelala-storage.service` |
+| storage node-01 | 7993 | `oelala-node-01.service` |
 
-The `/list-comfyui-media` endpoint returns comprehensive metadata when `include_metadata=true`:
-- **Prompt extraction**: Positive/negative prompts from workflow JSON
-- **Generation params**: Steps, CFG, seed
-- **Sampler info**: Sampler name, scheduler
-- **Resolution**: Width × height from EmptyLatentImage
-- **LoRAs**: Array of `{name, strength}` from LoraLoader nodes
-- **Model**: Checkpoint/GGUF model name
-- **Heuristic detection**: Negative prompts identified by keywords (worst, bad, ugly, etc.)
+## Representative Flows
 
----
+### Local Generation
 
-## ComfyUI Workflow: DisTorch2 I2V
+1. User configures a tool in the frontend.
+2. Backend validates auth, credits, and tool-specific settings.
+3. Backend assembles a workflow and submits it to ComfyUI.
+4. Progress is polled or streamed back to the frontend.
+5. Output is uploaded to storage and indexed in the user media surface.
+6. Temporary local files are cleaned up.
 
-De primaire workflow voor image-to-video generatie gebruikt **DisTorch2 dual-pass sampling**.
+### Cloud Generation
 
-### Workflow Nodes
+1. User submits a cloud-capable generation.
+2. Backend creates a cloud job record and sends work to RunPod.
+3. Backend tracks queue age and status transitions instead of faking running state.
+4. Completed output is persisted into the same media/storage system as local jobs.
+5. Stuck jobs age out into failure when workers never provision.
 
-| Node | Type                              | Purpose                           |
-|------|-----------------------------------|-----------------------------------|
-| 1    | UnetLoaderGGUFAdvancedDisTorch2   | Load high noise Q6_K model        |
-| 2    | UnetLoaderGGUFAdvancedDisTorch2   | Load low noise Q6_K model         |
-| 3    | VAELoaderDisTorch2MultiGPU        | Load VAE decoder                  |
-| 4    | CLIPLoaderDisTorch2MultiGPU       | Load T5 text encoder (CONVERTED)  |
-| 5-6  | ModelSamplingSD3                  | Configure shift=5 for both models |
-| 7-8  | SageAttention                     | Apply SageAttn optimization       |
-| 9-10 | CLIPTextEncode                    | Encode positive/negative prompts  |
-| 11   | LoadImage                         | Load input image                  |
-| 12   | WanImageToVideo                   | I2V conditioning                  |
-| 13   | KSamplerAdvanced                  | High noise pass (steps 0-3)       |
-| 14   | KSamplerAdvanced                  | Low noise pass (steps 3+)         |
-| 15   | VAEDecode                         | Decode latents to frames          |
-| 16   | VHS_VideoCombine                  | Combine frames to video           |
-| 17   | LoraLoaderModelOnly               | Optional LoRA for high noise      |
-| 18   | LoraLoaderModelOnly               | Optional LoRA for low noise       |
-| 19   | AspectRatioResolution_Warper      | Calculate width/height            |
+### Community / Account Flow
 
-### Memory Allocation
+1. User authenticates via Supabase-backed flows.
+2. Credits and permissions are checked before generation or publishing actions.
+3. Generated media can move into user libraries, gallery surfaces, moderation flows, and API-backed access paths.
+4. Admin tools observe usage, storage nodes, moderation items, and system state through dedicated APIs.
 
-```
-expert_mode_allocations: "cuda:1,0.25gb;cuda:0,8gb;cpu,*"
-```
+## Canonical Supporting Docs
 
-- **GPU 0**: 0.25 GB (control overhead)
-- **GPU 1**: 8 GB (primary compute)
-- **CPU**: Remaining weights (offload)
-
-### Model Files
-
-```
-ComfyUI/models/
-├── diffusion_models/
-│   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf
-│   └── wan2.2_i2v_low_noise_14B_Q6_K.gguf
-├── clip/
-│   └── umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors
-├── vae/
-│   └── wan_2.2_vae.safetensors
-└── loras/
-    ├── wan 2.2/           # Wan2.2 specific LoRAs
-    └── ...                # 53+ total LoRA files
-```
-
----
-
-## Frontend Architecture
-
-### Tech Stack
-- **React 18** with hooks
-- **Vite** dev server with HMR
-- **CSS Variables** for theming
-- **Lucide React** icons
-
-### Dashboard Navigation (Sidebar)
-
-The dashboard uses a collapsible sidebar with grouped tools:
-
-```
-┌─────────────────────────────────┐
-│ 🎬 Oelala                      │
-├─────────────────────────────────┤
-│ ▶ Video Tools                   │
-│   • Text to Video               │
-│   • Image to Video      ✓       │
-│   • Video to Video      soon    │
-├─────────────────────────────────┤
-│ ▶ Image Tools                   │
-│   • Text to Image               │
-│   • Image to Image      soon    │
-│   • Reframe             soon    │
-│   • Face Swap           soon    │
-│   • Upscaler            soon    │
-├─────────────────────────────────┤
-│ ▶ My Media                      │
-│   • All                         │
-│   • Images                      │
-│   • Videos                      │
-│   • Favorites                   │
-│   • Prompts             NEW     │
-├─────────────────────────────────┤
-│ ▶ Training                      │
-│   • Train LoRA          soon    │
-└─────────────────────────────────┘
-```
-
-### Key Components
-
-**File**: `src/frontend/src/dashboard/Dashboard.jsx`
-- Main dashboard container with sidebar + content layout
-- Tool routing based on active tool ID
-- Full-width mode for My Media tools
-
-**File**: `src/frontend/src/dashboard/nav.js`
-- Navigation structure definition
-- Tool IDs and labels
-- Status badges (new, soon, etc.)
-
-**File**: `src/frontend/src/dashboard/tools/ImageToVideoTool.jsx`
-- Main I2V generation interface
-- Image upload (drag & drop, URL, creations)
-- Parameter controls (resolution, duration, fps, aspect ratio)
-- Prompt persistence via localStorage
-- Metadata extraction from uploaded images (auto-fill prompts)
-- Preset selector for workflow selection
-
-**File**: `src/frontend/src/dashboard/tools/MyMediaTool.jsx`
-- Media gallery with grid view (images, videos, all, prompts)
-- Favorites system (localStorage)
-- Sort/filter controls (date, name, size, favorites)
-- Start image hiding (source images for videos)
-- Multi-select with keyboard shortcuts
-- **Prompt bubble (💬)** on thumbnails with prompt metadata
-- **Prompt popup modal** showing:
-  - Positive/negative prompts with copy button
-  - Generation settings (steps, CFG, seed, sampler, scheduler)
-  - LoRA models used with strength percentages
-  - Model/checkpoint name
-  - Resolution and video duration
-- Dedicated **Prompts list view** for browsing generation history
-
-**File**: `src/frontend/src/components/PresetSelector.jsx`
-- Workflow preset selection dropdown
-- API-driven preset list from `/api/presets`
-
-### Model Selection UI
-
-**Unet Models:**
-- Collapsible panel in Model Selection
-- Model Pair dropdown (recommended) - auto-selects matching high/low
-- Advanced: separate high/low noise selectors
-
-**LoRA Models:**
-- Collapsible panel in Sampling Settings
-- Category-grouped dropdowns (by subfolder)
-- Separate high/low noise selectors
-- Strength slider (0 - 2.0, default 1.5)
-
-### Prompt System
-
-**Positive Prompt:**
-- Persisted to `localStorage.getItem('oelala_last_prompt')`
-- Auto-filled from uploaded image metadata
-
-**Negative Prompt:**
-- Collapsible section with default text
-- Preserved in generated video metadata
-
----
-
-## Development Commands
-
-### Starting All Services
-
-```bash
-# Start all services
-systemctl --user start oelala-frontend oelala-backend
-
-# Check status
-systemctl --user status oelala-frontend oelala-backend
-
-# View logs
-journalctl --user -u oelala-frontend -f
-journalctl --user -u oelala-backend -f
-```
-
-### Building Frontend for Production
-
-```bash
-cd /home/flip/oelala/src/frontend
-npm run build
-```
-
-### Testing Endpoints
-
-```bash
-curl http://localhost:7998/health
-curl http://localhost:7998/loras | jq .
-```
-
----
-
-## Environment
-
-### Python
-\`/home/flip/venvs/gpu/\` (canonical GPU venv)
-
-### Node.js
-\`/usr/bin/node\` (v22.x)
-
----
-
-## File Structure
-
-```
-/home/flip/oelala/
-├── src/
-│   ├── backend/
-│   │   ├── app.py
-│   │   ├── comfyui_client.py
-│   │   └── generated/
-│   └── frontend/
-│       └── src/dashboard/tools/
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── PROJECT_OVERVIEW.md
-├── ComfyUI/
-│   ├── models/
-│   └── user/default/workflows/
-└── README.md
-```
-
----
-
-*Last Updated: January 3, 2026 - Added Prompts section, extended metadata extraction, preset support*
+- `PROJECT_OVERVIEW.md`
+- `ROADMAP.md`
+- `INFRASTRUCTURE.md`
+- `STORAGE_MIGRATION_PLAN.md`
+- `CLOUDFLARE_SETUP.md`
+- `FACE_SYSTEM.md`
+- `COMFYUI_INVENTORY.md`
+- `DISTORCH2_MULTI_GPU_SETTINGS.md`
