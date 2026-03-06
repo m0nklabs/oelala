@@ -2227,6 +2227,36 @@ def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Optional[Pat
         return None
 
 
+def _mark_cloud_job_timed_out(prompt_id: str, job_info: dict, queue_age: float) -> Optional[dict]:
+    """Mark a cloud job as failed when it sits in queue beyond the allowed timeout."""
+    if queue_age < CLOUD_QUEUE_TIMEOUT_SECONDS:
+        return None
+
+    runpod_job_id = job_info.get("runpod_job_id", "?")
+    error_msg = (
+        f"RunPod job stuck in queue for {int(queue_age)}s; no cloud worker was provisioned"
+    )
+    logger.error(f"☁️ Cloud job timed out in queue: {runpod_job_id} — {error_msg}")
+
+    result = {
+        "prompt_id": prompt_id,
+        "status": "failed",
+        "error": error_msg,
+        "compute_target": "cloud",
+        **job_info,
+    }
+    _cloud_completed_cache[prompt_id] = result
+
+    if prompt_id in active_jobs:
+        active_jobs[prompt_id]["_cloud_completed"] = True
+        active_jobs[prompt_id]["_cloud_status"] = "TIMED_OUT"
+        active_jobs[prompt_id]["_cloud_error"] = error_msg
+
+    _persist_cloud_jobs()
+    record_generation_complete(prompt_id, success=False, error=error_msg)
+    return result
+
+
 async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     """
     Handle status polling for a cloud (RunPod) job.
@@ -2257,25 +2287,9 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     # Map RunPod statuses to our status values
     if status_val in ("IN_QUEUE",):
         queue_age = max(0.0, time.time() - float(job_info.get("_start_time") or time.time()))
-        if queue_age >= CLOUD_QUEUE_TIMEOUT_SECONDS:
-            error_msg = (
-                f"RunPod job stuck in queue for {int(queue_age)}s; no cloud worker was provisioned"
-            )
-            logger.error(f"☁️ Cloud job timed out in queue: {runpod_job_id} — {error_msg}")
-            result = {
-                "prompt_id": prompt_id,
-                "status": "failed",
-                "error": error_msg,
-                "compute_target": "cloud",
-                **job_info,
-            }
-            _cloud_completed_cache[prompt_id] = result
-            active_jobs[prompt_id]["_cloud_completed"] = True
-            active_jobs[prompt_id]["_cloud_status"] = "TIMED_OUT"
-            active_jobs[prompt_id]["_cloud_error"] = error_msg
-            _persist_cloud_jobs()
-            record_generation_complete(prompt_id, success=False, error=error_msg)
-            return result
+        timed_out_result = _mark_cloud_job_timed_out(prompt_id, job_info, queue_age)
+        if timed_out_result:
+            return timed_out_result
         active_jobs[prompt_id]["_cloud_status"] = status_val
         return {
             "prompt_id": prompt_id,
@@ -2694,11 +2708,16 @@ async def get_comfyui_queue():
                 cloud_job["error"] = info.get("_cloud_error", f"RunPod job {cloud_status}")
                 cloud_failed.append(cloud_job)
             elif cloud_status == "IN_QUEUE":
-                cloud_job["status"] = "pending"
-                cloud_job["queue_age_seconds"] = int(
-                    max(0.0, time.time() - float(info.get("_start_time") or time.time()))
-                )
-                pending.append(cloud_job)
+                queue_age = max(0.0, time.time() - float(info.get("_start_time") or time.time()))
+                timed_out_result = _mark_cloud_job_timed_out(pid, info, queue_age)
+                if timed_out_result:
+                    cloud_job["status"] = "failed"
+                    cloud_job["error"] = timed_out_result["error"]
+                    cloud_failed.append(cloud_job)
+                else:
+                    cloud_job["status"] = "pending"
+                    cloud_job["queue_age_seconds"] = int(queue_age)
+                    pending.append(cloud_job)
             else:
                 # Only real in-progress cloud jobs belong in the running list.
                 cloud_job["status"] = "running"
