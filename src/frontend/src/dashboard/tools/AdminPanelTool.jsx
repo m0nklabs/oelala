@@ -270,8 +270,8 @@ export default function AdminPanel() {
         </p>
       </div>
 
-      {/* Main Tabs: Users vs System */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+      {/* Main Tabs */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>
         <button
           onClick={() => setActiveMainTab('users')}
           style={{

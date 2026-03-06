@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiFetch } from '../../api'
-import { HardDrive, Server, Activity, Users, FileDigit, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { HardDrive, Server, RefreshCw, AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 
 export default function AdminStorageNodesTab() {
   const { isAdmin } = useAuth()
@@ -9,6 +9,7 @@ export default function AdminStorageNodesTab() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
+  const [expandedNodes, setExpandedNodes] = useState({})
 
   const fetchNodes = async () => {
     try {
@@ -57,13 +58,13 @@ export default function AdminStorageNodesTab() {
     const now = new Date()
     const seconds = Math.floor((now - date) / 1000)
     
-    if (seconds < 60) return `${seconds}s ago`
+    if (seconds < 60) return `${seconds}s`
     const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
+    if (minutes < 60) return `${minutes}m`
     const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
+    if (hours < 24) return `${hours}h`
     const days = Math.floor(hours / 24)
-    return `${days}d ago`
+    return `${days}d`
   }
 
   const isOnline = (lastHeartbeat) => {
@@ -75,28 +76,28 @@ export default function AdminStorageNodesTab() {
     return seconds < 120
   }
 
+  const toggleNode = (nodeId) => {
+    setExpandedNodes(prev => ({
+      ...prev,
+      [nodeId]: !prev[nodeId]
+    }))
+  }
+
   if (!isAdmin) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <AlertCircle size={48} style={{ color: '#ef4444', marginBottom: '1rem' }} />
         <h3>Access Denied</h3>
-        <p>You need administrator privileges to view this page.</p>
       </div>
     )
   }
 
   return (
-    <div style={{ background: 'var(--surface-color)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
-      <div style={{ 
-        padding: '1.5rem', 
-        borderBottom: '1px solid var(--border-color)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-color)' }}>
-          <HardDrive size={24} style={{ color: 'var(--accent-color)' }} />
-          Storage Node Cluster
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', margin: 0 }}>
+          <HardDrive size={20} style={{ color: 'var(--accent-color)' }} />
+          Storage Network
         </h2>
         <button
           onClick={fetchNodes}
@@ -104,106 +105,137 @@ export default function AdminStorageNodesTab() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.5rem 1rem',
-            background: 'var(--bg-color)',
+            gap: '0.4rem',
+            padding: '0.4rem 0.8rem',
+            background: 'var(--surface-color-light)',
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
-            color: 'var(--text-color)',
+            color: 'var(--text-secondary)',
+            fontSize: '0.85rem',
             cursor: refreshing ? 'not-allowed' : 'pointer',
             opacity: refreshing ? 0.7 : 1,
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
           }}
         >
-          <RefreshCw size={16} className={refreshing ? 'spin' : ''} />
+          <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
           {refreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
       {error && (
-        <div style={{ padding: '1rem', margin: '1rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <AlertCircle size={20} />
+        <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <AlertCircle size={16} />
           {error}
         </div>
       )}
 
       {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading storage nodes...
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          Loading network status...
         </div>
       ) : nodes.length === 0 ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <Server size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-          <p>No storage nodes registered.</p>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--surface-color)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <Server size={32} style={{ opacity: 0.2, margin: '0 auto 1rem auto' }} />
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>No storage nodes registered.</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-color)', borderBottom: '2px solid var(--border-color)' }}>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Node ID</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Storage Usage</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Host info</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Version</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Last Heartbeat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {nodes.map((node) => {
-                const online = isOnline(node.last_heartbeat)
-                const percentUsed = node.total_space_bytes ? (node.used_space_bytes / node.total_space_bytes) * 100 : 0
-                
-                return (
-                  <tr key={node.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '1rem', fontFamily: 'monospace', color: 'var(--text-color)' }}>
-                      {node.node_id}
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '999px',
-                        fontSize: '0.85rem',
-                        fontWeight: 500,
-                        background: online ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                        color: online ? '#10b981' : '#ef4444'
-                      }}>
-                        {online ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                        {online ? 'Online' : 'Offline'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {nodes.map((node) => {
+            const online = isOnline(node.last_heartbeat)
+            const percentUsed = node.total_space_bytes ? (node.used_space_bytes / node.total_space_bytes) * 100 : 0
+            const isExpanded = expandedNodes[node.node_id]
+            
+            return (
+              <div 
+                key={node.node_id} 
+                style={{ 
+                  background: 'var(--surface-color)', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: '12px',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Node Header */}
+                <div 
+                  onClick={() => toggleNode(node.node_id)}
+                  style={{ 
+                    padding: '1rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: isExpanded ? 'var(--surface-color-light)' : 'transparent',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ 
+                      width: '10px', 
+                      height: '10px', 
+                      borderRadius: '50%', 
+                      background: online ? '#10b981' : '#ef4444',
+                      boxShadow: online ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none'
+                    }} />
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
+                        {node.hostname || node.node_id.substring(0, 8)}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                        Last seen: {formatTimeAgo(node.last_heartbeat)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: percentUsed > 90 ? '#ef4444' : 'var(--text-primary)' }}>
+                        {formatBytes(node.used_space_bytes)}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        / {formatBytes(node.total_space_bytes)}
+                      </div>
+                    </div>
+                    {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </div>
+                </div>
+
+                {/* Progress Bar (Always visible) */}
+                <div style={{ width: '100%', height: '4px', background: 'var(--bg-color)', position: 'relative' }}>
+                  <div style={{ 
+                    position: 'absolute',
+                    top: 0, left: 0, bottom: 0,
+                    width: `${Math.min(percentUsed, 100)}%`, 
+                    background: percentUsed > 90 ? '#ef4444' : percentUsed > 75 ? '#f59e0b' : '#10b981',
+                    transition: 'width 0.5s ease-out'
+                  }} />
+                </div>
+
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div style={{ padding: '1rem', borderTop: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Node ID:</span>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{node.node_id}</span>
+                      
+                      <span style={{ color: 'var(--text-muted)' }}>IP Addr:</span>
+                      <span style={{ color: 'var(--text-primary)' }}>{node.ip_address}</span>
+                      
+                      <span style={{ color: 'var(--text-muted)' }}>OS:</span>
+                      <span style={{ color: 'var(--text-primary)' }}>{node.os_type} ({node.architecture})</span>
+                      
+                      <span style={{ color: 'var(--text-muted)' }}>Version:</span>
+                      <span style={{ color: 'var(--text-primary)' }}>{node.version || 'v0.1.0'}</span>
+                      
+                      <span style={{ color: 'var(--text-muted)' }}>Percent:</span>
+                      <span style={{ color: percentUsed > 90 ? '#ef4444' : 'var(--text-primary)', fontWeight: 600 }}>
+                        {percentUsed.toFixed(1)}% used
                       </span>
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--text-color)' }}>
-                        {formatBytes(node.used_space_bytes)} / {formatBytes(node.total_space_bytes)}
-                      </div>
-                      <div style={{ width: '100%', height: '6px', background: 'var(--bg-color)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ 
-                          height: '100%', 
-                          width: `${Math.min(percentUsed, 100)}%`, 
-                          background: percentUsed > 90 ? '#ef4444' : percentUsed > 75 ? '#f59e0b' : '#10b981',
-                          borderRadius: '3px'
-                        }} />
-                      </div>
-                    </td>
-                    <td style={{ padding: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      <div>IP: {node.ip_address}</div>
-                      <div>Hostname: {node.hostname}</div>
-                      <div>OS: {node.os_type} ({node.architecture})</div>
-                    </td>
-                    <td style={{ padding: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      {node.version || 'unknown'}
-                    </td>
-                    <td style={{ padding: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      {formatTimeAgo(node.last_heartbeat)}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
