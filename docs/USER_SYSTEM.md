@@ -142,7 +142,7 @@ On-demand login popup shown when guest tries to:
 
 ### Phase 4: Self-Hosting (Production)
 - [ ] Self-host Supabase via Docker
-- [ ] Custom domain (auth.oelala.ai)
+- [ ] Custom domain (auth.oelala.xyz)
 - [ ] Backup & security hardening
 
 ---
