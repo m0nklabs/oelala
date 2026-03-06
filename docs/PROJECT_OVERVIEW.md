@@ -1,72 +1,86 @@
 # Oelala Project Overview
 
-> **Last Updated**: January 2026
-> **Version**: 0.4.x (Alpha)
+> **Last Updated**: 2026-03-06
+> **Version**: 0.11.x (Alpha)
 
 ---
 
 ## Vision
 
-**Oelala** is an AI-powered media creation platform that enables creators to produce professional-quality image and video content using state-of-the-art generative AI models. The platform provides a unified, credits-based interface with age-gated mature content support.
+**Oelala** is a hybrid local-plus-cloud AI media platform for image, video, audio, and prompt workflows. It combines local multi-GPU ComfyUI execution, optional RunPod cloud bursting, user-scoped storage, credits, gallery publishing, and admin tooling behind a single product surface.
 
 ---
 
 ## Current Status
 
-### ✅ Core Features (Implemented)
+### ✅ Core Platform
 
 | Category | Features |
 |----------|----------|
-| **Image Generation** | Text-to-Image (Flux, SDXL), Image Upscaling (RealESRGAN) |
-| **Video Generation** | Image-to-Video, Text-to-Video (Wan2.2 14B), Video-to-Video |
-| **Video Processing** | Upscaling, Frame Interpolation (RIFE), Reframing |
-| **Audio Pipeline** | Text-to-Speech (ChatterBox), Voice Cloning (F5-TTS), Lip Sync |
-| **User System** | Supabase Auth (Google/GitHub), Credits, Stripe payments |
-| **Gallery** | Publish, Like, View counts, SFW/NSFW filtering |
-| **Infrastructure** | Multi-GPU (DisTorch2), WebSocket progress, systemd services |
+| **Image** | Text-to-Image, Image-to-Image, Inpainting, Reframe, prompt generation, image captioning |
+| **Video** | Image-to-Video, Text-to-Video, Video-to-Video, upscaling, frame interpolation |
+| **Audio** | Text-to-Speech, voice cloning, lip sync, audio generation modes |
+| **Face Workflows** | IP-Adapter FaceID, FaceDetailer, GFPGAN, face swap, face LoRA training queue integration |
+| **User System** | Supabase auth, credits, Stripe, profile system, gallery publishing, likes, NSFW gating |
+| **Storage** | Full migration to oelala-storage completed, storage proxy routes, signed/public URL support, admin node visibility |
+| **Cloud Compute** | RunPod Cloud Max integration for Wan 2.2 T2V/I2V workloads with queue polling and persistence |
+| **Operations** | systemd services, Cloudflare tunnels, WebSocket progress, admin storage cluster dashboard |
 
-### 🔄 In Progress
+### 🔄 Active Work
 
-- Auto-upload generated content to user storage
-- Storage quota tracking and display
-- Admin dashboard for user management
+- Cloud worker reliability and queue recovery around RunPod provisioning
+- Storage cluster rollout beyond the primary node and remote node 2
+- Retention/quota surfacing and additional media management polish
+- Cleanup of remaining legacy local-path assumptions and fallback code
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    OELALA PLATFORM                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐ │
-│  │   React     │───▶│   FastAPI   │───▶│    ComfyUI      │ │
-│  │  Frontend   │    │   Backend   │    │  (port 8188)    │ │
-│  │ (port 5174) │    │ (port 7998) │    │                 │ │
-│  └─────────────┘    └─────────────┘    └─────────────────┘ │
-│         │                  │                    │          │
-│         ▼                  ▼                    ▼          │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐ │
-│  │  Supabase   │    │  oelala-    │    │   GPU Models    │ │
-│  │  Auth/DB    │    │  storage    │    │  (GGUF/LoRA)    │ │
-│  └─────────────┘    │ (port 7990) │    └─────────────────┘ │
-│                     └─────────────┘                        │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                            OELALA PLATFORM                        │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ┌─────────────┐    ┌─────────────┐    ┌────────────────────────┐  │
+│  │   React     │───▶│   FastAPI   │───▶│  ComfyUI + Workflows   │  │
+│  │  Frontend   │    │   Backend   │    │        :8188           │  │
+│  │    :5174    │    │    :7998    │    └────────────────────────┘  │
+│  └─────────────┘    └─────────────┘                 │              │
+│         │                  │                        │              │
+│         │                  ├───────────────┐        │              │
+│         ▼                  ▼               ▼        ▼              │
+│  ┌─────────────┐    ┌──────────────┐  ┌────────┐  ┌─────────────┐  │
+│  │  Supabase   │    │ oelala-      │  │RunPod  │  │ Cloudflare  │  │
+│  │ Auth / DB   │    │ storage      │  │Cloud   │  │ tunnels/DNS │  │
+│  └─────────────┘    │ coordinator  │  │ Max    │  └─────────────┘  │
+│                     │ :7990        │  └────────┘                    │
+│                     └──────┬───────┘                                │
+│                            │                                        │
+│                    ┌───────▼────────┐                               │
+│                    │ storage-node-01 │                               │
+│                    │      :7993      │                               │
+│                    └───────┬────────┘                               │
+│                            │                                        │
+│                    ┌───────▼────────┐                               │
+│                    │  storage-node-02│                              │
+│                    │  remote tunnel  │                              │
+│                    └─────────────────┘                              │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| Frontend | React 18, Vite 7, CSS |
-| Backend | FastAPI, Python 3.10 |
-| AI Engine | ComfyUI with DisTorch2 |
-| Database | Supabase (PostgreSQL) |
-| Auth | Supabase Auth (OAuth) |
-| Payments | Stripe Checkout |
-| Storage | oelala-storage (Go/Fiber) |
-| GPU | NVIDIA RTX (CUDA 12.x) |
+| Frontend | React, Vite, tool-based dashboard UI |
+| Backend | FastAPI, Python, Supabase integration |
+| AI Engine | ComfyUI, DisTorch2, Wan 2.2, Flux, SDXL |
+| Cloud GPU | RunPod serverless endpoint + custom worker image |
+| Storage | oelala-storage (Go/Fiber), signed URLs, dedup, GC |
+| Auth | Supabase Auth (Google/GitHub OAuth + JWT) |
+| Payments | Stripe credits |
+| Edge/Delivery | Cloudflare tunnels, cache and CORS controls |
 
 ---
 
@@ -75,14 +89,14 @@
 ```
 /home/flip/oelala/
 ├── src/
-│   ├── backend/          # FastAPI application
-│   └── frontend/         # React/Vite application
-├── ComfyUI/              # AI generation engine
-│   ├── models/           # GGUF, LoRA, VAE, CLIP
-│   └── output/           # Generated media
-├── workflows/            # ComfyUI workflow templates
-├── docs/                 # Documentation
-└── tests/                # Test suites
+│   ├── backend/          # FastAPI application, auth, queue, storage proxy
+│   └── frontend/         # React/Vite dashboard and tools
+├── ComfyUI/              # Local generation engine and models
+├── workflows/            # API-format ComfyUI workflows
+├── docs/                 # Product, infra, GPU, and migration docs
+├── tests/                # Unit/integration/GPU tests
+├── deploy/               # RunPod and service deployment assets
+└── changelog/            # Changelog fragments
 ```
 
 ---
@@ -91,69 +105,71 @@
 
 | GPU | VRAM | CUDA Device | Role |
 |-----|------|-------------|------|
-| RTX 5060 Ti | 16GB | cuda:0 | Primary generation |
-| RTX 3060 | 12GB | cuda:1 | Secondary/overflow |
-| **Total** | **28GB** | | DisTorch2 distribution |
+| RTX 3060 | 12GB | cuda:0 | Donor GPU for model weights |
+| RTX 5060 Ti | 16GB | cuda:1 | Primary compute GPU |
+| **Total** | **28GB** | | Local multi-GPU generation budget |
 
 ### Multi-GPU Setup (DisTorch2)
 ```
-cuda:1,12gb;cuda:0,16gb
+cuda:0,10gb;cuda:1,15gb;cpu,*
 ```
+
+This ordering is intentional: putting the 3060 first keeps the 5060 Ti freer for activations.
 
 ---
 
 ## Services
 
-| Service | Port | Type | Command |
-|---------|------|------|---------|
-| Frontend (dev) | 5174 | Vite | npm run dev |
-| Backend API | 7998 | systemd | oelala-api.service |
-| ComfyUI | 8188 | systemd | comfyui.service |
-| Storage | 7990 | systemd | oelala-storage.service |
+| Service | Port | Runtime | Notes |
+|---------|------|---------|-------|
+| Frontend | 5174 | systemd | `oelala-frontend.service` |
+| Backend API | 7998 | systemd | `oelala-backend.service` |
+| ComfyUI | 8188 | systemd | `comfyui.service` |
+| Storage coordinator | 7990 | systemd | `oelala-storage.service` |
+| Storage node 01 | 7993 | systemd | `oelala-node-01.service` |
 
 ---
 
-## Development
+## Storage Model
 
-### Quick Start
-```bash
-# Start dev servers
-cd /home/flip/oelala/src/frontend && npm run dev
-# Backend runs via systemd: sudo systemctl restart oelala-api
-
-# Run tests
-pytest tests/ -v
-
-# Lint
-ruff check src/
-```
-
-### Environment
-- **Python venv**: /home/flip/venvs/gpu
-- **Node**: 18+
-- **CUDA**: 12.1+
+- Local permanent media directories are no longer the source of truth.
+- Generated/uploaded content is pushed into **oelala-storage** buckets and served via storage routes or Cloudflare-facing storage hostnames.
+- Temporary backend processing now uses `/tmp/oelala_uploads` and `/tmp/oelala_generated`, then unlinks files after successful upload.
+- Storage nodes currently exposed in docs and config:
+	- `storage-main.oelala.xyz` → coordinator / primary node
+	- `storage-node-01.oelala.xyz` → additional local node
+	- `storage2.oelala.xyz` → remote node 2
 
 ---
 
-## Documentation
+## Development Notes
+
+- Use `apiFetch()` for frontend backend calls; raw `fetch()` is considered legacy debt.
+- Use the canonical GPU environment at `/home/flip/venvs/gpu`.
+- Run services via systemd for production-like behavior; do not start backend or ComfyUI manually outside approved workflows.
+- Root `README.md` is intentionally sparse and should stay that way.
+
+---
+
+## Key Documentation
 
 | Document | Description |
 |----------|-------------|
-| [README.md](../README.md) | Main project readme |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture |
-| [ROADMAP.md](ROADMAP.md) | Product roadmap |
-| [TODO_LIST.md](TODO_LIST.md) | Development tasks |
-| [CREDITS_SETUP.md](CREDITS_SETUP.md) | Credit system setup |
-| [COMFYUI_INVENTORY.md](COMFYUI_INVENTORY.md) | Model inventory |
-| [MULTI_GPU_SETUP.md](MULTI_GPU_SETUP.md) | GPU configuration |
+| [ROADMAP.md](ROADMAP.md) | Product and infrastructure direction |
+| [STORAGE_MIGRATION_PLAN.md](STORAGE_MIGRATION_PLAN.md) | Final state of the storage migration |
+| [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) | Tunnel, CORS, and cache behavior |
+| [FACE_SYSTEM.md](FACE_SYSTEM.md) | I2I/face processing architecture |
+| [COMFYUI_INVENTORY.md](COMFYUI_INVENTORY.md) | Installed models and node inventory |
+| [DISTORCH2_MULTI_GPU_SETTINGS.md](DISTORCH2_MULTI_GPU_SETTINGS.md) | Multi-GPU tuning guide |
+| [TODO_LIST.md](TODO_LIST.md) | Active implementation backlog |
 
 ---
 
 ## Links
 
 - **Repository**: [github.com/m0nklabs/oelala](https://github.com/m0nklabs/oelala)
-- **Issues**: [GitHub Issues](https://github.com/m0nklabs/oelala/issues)
+- **Storage Service**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)
 
 ---
 
-*Maintained by m0nk111*
+*Maintained as an actively developed alpha platform.*

@@ -1,263 +1,158 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-07-09
-> **Version**: 0.11.0 (Alpha)
+> **Last Updated**: 2026-03-06
+> **Version**: 0.11.x (Alpha)
 
 ## Vision
 
-Oelala is an AI-powered video generation platform that enables creators to produce professional-quality video content using state-of-the-art generative AI models. The platform combines text-to-video, image-to-video, voice synthesis, lip-sync, and avatar generation into a unified, user-friendly interface.
+Oelala is an AI media platform for creators who want one place for prompt generation, image creation, video generation, audio workflows, gallery publishing, and hybrid local/cloud execution.
 
 ---
 
-## Current Status: Alpha (v0.3.x)
+## Current Snapshot
 
-### ✅ Completed Features
+### ✅ Recently Landed
 
-#### Core Generation Pipeline
-- [x] Text-to-Image (T2I) via ComfyUI/Flux/SDXL
-- [x] Image-to-Video (I2V) via Wan2.2 14B DisTorch2
-- [x] Text-to-Video (T2V) via Wan2.2
-- [x] Video-to-Video style transfer
-- [x] Image upscaling (RealESRGAN, 4x-UltraSharp)
-- [x] Video upscaling
-- [x] Video reframing/aspect ratio conversion
-- [x] Frame interpolation (RIFE)
+- Storage migration phase 1-5 completed and documented
+- User/source/generated media now centered on oelala-storage rather than permanent local paths
+- RunPod Cloud Max support added for Wan 2.2 text-to-video and image-to-video
+- Cloud job persistence and queue semantics improved for backend restarts and stale queue handling
+- I2I face pipeline expanded with FaceID, FaceDetailer, and GFPGAN
+- Prompt and image-to-text workflows expanded with camera motion and two-step motion prompting
+- Admin dashboard now has storage node/cluster visibility
+- Frontend API calls standardized on `apiFetch()` for auth/CORS correctness
 
-#### Audio Pipeline (Phase 3) ✅ COMPLETE
-- [x] YouTube import (yt-dlp integration)
-- [x] Text-to-Speech (ChatterBox TTS)
-- [x] Voice Cloning (F5-TTS with multi-language support)
-- [x] Lip Sync (LatentSyncNode)
-- [x] Speech to Video (combined TTS + Lip Sync)
+### 🔄 Active Focus
 
-#### User System (Phase 4) ✅ COMPLETE
-- [x] Supabase Auth integration (Google, GitHub OAuth)
-- [x] User-scoped storage buckets
-- [x] Credit system with Stripe payments
-- [x] Welcome bonus (100 credits on signup)
-- [x] Credit costs per generation type
-- [x] NSFW toggle (login required)
-- [x] Guest access (view-only, no NSFW)
-- [x] Login modal for auth-required actions
-- [x] Admin-only features (LogViewer, dev content)
-
-#### Gallery & Publishing (Phase 5) ✅ COMPLETE
-- [x] Publish to Gallery system
-- [x] SFW/NSFW content tagging
-- [x] Public gallery page with filters
-- [x] Like system
-- [x] View count tracking
-- [x] Media detail modal with prompts
-- [x] Unpublish option
-
-#### Infrastructure
-- [x] React/Vite frontend with tool-based UI
-- [x] FastAPI backend with ComfyUI integration
-- [x] WebSocket progress streaming
-- [x] Multi-GPU support (DisTorch2)
-- [x] Workflow metadata embedding in outputs
-- [x] oelala-storage Go service (HTTP :7990)
-- [x] Systemd services for all components
+| Area | Current Focus | Why It Matters |
+|------|---------------|----------------|
+| Cloud reliability | RunPod worker provisioning, queue timeout behavior, clearer cloud failure states | Cloud generation must fail honestly instead of looking alive forever |
+| Storage cluster | Coordinator + node rollout, public URLs, node heartbeats | Multi-node storage is the base for resilience and future scale |
+| Media UX | Move/organize media, quota/retention visibility, polished gallery sorting | Users need sane lifecycle management, not just generation buttons |
+| Legacy cleanup | Remove remaining fallback/local-path assumptions | Prevent split-brain between backend disk and storage service |
 
 ---
 
-## Short-Term Roadmap (Q1 2026)
+## Completed Product Areas
 
-### Phase 6: Auto-Upload & Storage Polish 🔄 In Progress
+### Generation Stack
+- [x] Text-to-Image
+- [x] Image-to-Image
+- [x] Inpainting and reframing
+- [x] Image-to-Video
+- [x] Text-to-Video
+- [x] Video-to-Video
+- [x] Image and video upscaling
+- [x] Frame interpolation
+- [x] Prompt generation and image captioning
 
-**Goal**: Generated content auto-saves to user storage
+### Face / Character Tooling
+- [x] Face swap
+- [x] I2I FaceID identity transfer
+- [x] FaceDetailer refinement
+- [x] GFPGAN face restoration
+- [x] Face LoRA training queue integration
 
-| Task | Status | Priority | Issue |
-|------|--------|----------|-------|
-| Auto-upload after generation | ⏳ Todo | Critical | #7, #15 |
-| Storage quota tracking | ⏳ Todo | High | #33 |
-| Quota display in user menu | ⏳ Todo | High | #33 |
-| Retention policies (30d free) | ⏳ Todo | Medium | #71 |
-| Warning when approaching limit | ⏳ Todo | Medium | #33 |
-| Consistent auth in all frontend API calls | ✅ Done | High | - |
+### User / Monetization
+- [x] Supabase auth (Google + GitHub)
+- [x] Credits and Stripe checkout
+- [x] User media history and gallery publishing
+- [x] Profiles and social links
+- [x] NSFW gating and guest restrictions
 
-### Phase 7: Advanced Generation
+### Platform / Ops
+- [x] Multi-GPU local execution with DisTorch2
+- [x] WebSocket progress and queue polling
+- [x] Storage migration to oelala-storage
+- [x] Cloudflare tunnel/CORS hardening
+- [x] systemd-based deployment for core services
 
-**Goal**: More control over generation process
+---
+
+## Near-Term Roadmap
+
+### 1. Cloud Execution Hardening
 
 | Task | Status | Priority |
 |------|--------|----------|
-| ControlNet integration (pose, depth, canny) | ⏳ Todo | High |
-| LoRA model browser and loading | ✅ Done | High |
-| Custom LoRA training interface | ⏳ Todo | Medium |
-| Inpainting/outpainting tools | ⏳ Todo | Medium |
-| Face swap (InSwapper) | ✅ Done | Medium |
-| I2I face processing (IP-Adapter FaceID, FaceDetailer, GFPGAN) | ✅ Done | High |
-| I2I preset system (Portrait, Character, Stylized) | ✅ Done | Medium |
+| Ensure at least one viable RunPod worker profile for Cloud Max | 🔄 In progress | Critical |
+| Improve worker warm-up, queue visibility, and timeout reporting | 🔄 In progress | Critical |
+| Finish EU-centric storage access for cloud workers | 🔄 In progress | High |
+| Reduce cold-start friction for LoRA/model downloads | 🔄 In progress | High |
 
-### Phase 8: Content Filtering & Moderation
+### 2. Storage as the Real Source of Truth
 
 | Task | Status | Priority |
 |------|--------|----------|
-| Global NSFW toggle in header | ✅ Done | High |
-| Keyword-based NSFW detection | ✅ Done | High |
-| LoRA filtering by NSFW flag | ✅ Done | High |
-| Guest access (SFW only, no toggle) | ✅ Done | High |
-| Login required for NSFW toggle | ✅ Done | High |
-| Manual NSFW tagging system | ⏳ Todo | Medium |
-| NSFW flags in metadata DB | ⏳ Todo | Medium |
-| Auto-tag NSFW on generation | ⏳ Todo | Medium |
-| Model/checkpoint NSFW filtering | ⏳ Todo | Low |
-| Generated content NSFW scanning | ⏳ Todo | Low |
+| Roll out coordinator + additional local node configs | 🔄 In progress | Critical |
+| Remove more legacy direct-disk fallback code | 🔄 In progress | High |
+| Expose quota, retention, and expiration to users | ⏳ Planned | High |
+| Decide when backend proxy routes can be retired in favor of direct storage hostnames | ⏳ Planned | Medium |
 
-### Phase 9: Avatar System
-
-**Goal**: Consistent character generation
+### 3. Media Management Polish
 
 | Task | Status | Priority |
 |------|--------|----------|
-| Character/avatar profile system | ⏳ Todo | High |
-| Face consistency across generations | ⏳ Todo | High |
-| Expression control | ⏳ Todo | Medium |
-| Full-body pose library | ⏳ Todo | Medium |
-| Avatar-to-video pipeline | ⏳ Todo | High |
+| Folder/move/rename workflows in My Media | 🔄 In progress | High |
+| Better storage/admin observability | 🔄 In progress | High |
+| More consistent workflow metadata and import/export UX | ⏳ Planned | Medium |
 
----
+### 4. Safety and Governance
 
-## Mid-Term Roadmap (Q2-Q3 2026)
-
-### ✅ User System & Multi-tenancy (Phase 4 — COMPLETED)
-
-**Goal**: Production-ready user management — **DONE**
-
-#### Authentication Providers
-| Provider | Status | Notes |
-|----------|--------|-------|
-| Email/Password | ✅ Done | Supabase Auth |
-| Google OAuth | ✅ Done | Production |
-| GitHub OAuth | ✅ Done | Production |
-| Discord OAuth | ⏳ Todo | Community integration |
-| Facebook OAuth | ⏳ Todo | Mass market |
-| Steam OAuth | ❌ Dropped | Not supported (no macOS/mobile) |
-| Apple Sign-In | ❌ Dropped | Not supported (no macOS/mobile) |
-
-#### User Features
-- [x] User registration & profiles
-- [ ] Project/workspace management
-- [x] Generation history (My Media)
-- [x] Gallery favorites (Like system)
-- [x] Usage quotas & tracking (credit system)
-- [x] API key management
-- [ ] Team/organization support
-
-### Phase 10: Local-First Distributed Storage (oelala-storage)
-
-**Goal**: Self-hosted, cross-platform storage nodes — **Partially done (Go service at :7990)**
-
-#### Storage Node Architecture
-| Feature | Status | Priority |
-|---------|--------|----------|
-| Cross-platform node daemon (Win/Linux) | ✅ Done | Critical |
-| SQLite metadata database | ✅ Done | Critical |
-| REST API (S3-compatible) | ✅ Done | High |
-| Content-addressed storage (SHA-256) | ✅ Done | High |
-| gRPC sync engine | 🔄 In Progress | High |
-| Multi-node distributed storage | ⏳ Todo | High |
-| File chunking & resumable transfers | ⏳ Todo | Medium |
-| Conflict resolution (LWW/manual) | ⏳ Todo | Medium |
-| Node discovery (mDNS/manual) | ⏳ Todo | Medium |
-| Admin UI | ✅ Done | Medium |
-| Deduplication | ✅ Done | Low |
-| Garbage collection | ✅ Done | Low |
-
-#### Node Types
-| Type | Description | Typical Hardware |
-|------|-------------|------------------|
-| **Primary** | Main node, always online | Home server, VPS |
-| **Replica** | Mirror/failover, read-heavy | Secondary server |
-| **Edge** | Local cache, partial sync | Desktop, laptop |
-| **Archive** | Cold storage, infrequent access | NAS, external drive |
-
-### Phase 9: Cloud Integration (Post-Local)
-
-**Goal**: Add cloud backends once local distribution is stable
-
-| Feature | Status | Priority |
-|---------|--------|----------|
-| S3-compatible backend (MinIO, AWS, etc.) | ⏳ Todo | High |
-| CDN integration (CloudFlare/Bunny) | ⏳ Todo | High |
-| Multi-region redundancy | ⏳ Todo | Medium |
-| Automatic backup/archival | ⏳ Todo | Medium |
-| Content deduplication | ⏳ Todo | Low |
-| IPFS/decentralized option | ⏳ Todo | Low |
-
-### Phase 11: Security & Compliance
-
-**Goal**: Enterprise-ready security
-
-| Feature | Status | Priority |
-|---------|--------|----------|
-| Content moderation (NSFW filtering) | ✅ Done | Critical |
-| DMCA takedown system | ⏳ Todo | Critical |
-| Watermarking (optional/invisible) | ⏳ Todo | High |
-| Audit logging | ✅ Done | High |
-| GDPR compliance tools | ⏳ Todo | High |
-| Content provenance (C2PA) | ⏳ Todo | Medium |
-| Rate limiting & abuse prevention | ✅ Done | High |
-| CORS security (explicit origins, Vary: Origin) | ✅ Done | High |
-
----
-
-## Long-Term Roadmap (Q4 2026+)
-
-### Phase 12: Commercial Platform
-
-**Goal**: Monetization and scaling
-
-#### Pricing Tiers
-| Tier | Target | Features |
+| Task | Status | Priority |
 |------|--------|----------|
-| Free | Hobbyists | Limited generations, watermark, queue |
-| Creator ($19/mo) | Content creators | More generations, no watermark, priority |
-| Pro ($49/mo) | Professionals | Unlimited, API access, custom models |
-| Enterprise | Studios | Self-hosted, SLA, dedicated support |
-
-#### Monetization Features
-- [x] Stripe payments integration
-- [x] Credit-based usage system
-- [x] Welcome bonus (100 credits on signup)
-- [ ] Subscription billing tiers
-- [ ] Marketplace for custom LoRAs/models
-- [ ] API metering & billing
-- [ ] White-label/reseller program
-
-### Phase 13: Advanced AI Features
-
-| Feature | Description |
-|---------|-------------|
-| Real-time generation | Stream generation progress |
-| Multi-shot video editing | Storyboard-based generation |
-| Audio-reactive video | Music visualization |
-| 3D avatar generation | Full 3D character creation |
-| Virtual try-on | Fashion/product visualization |
-| AI video editing | Smart cuts, transitions |
-
-### Phase 14: Platform Ecosystem
-
-| Feature | Description |
-|---------|-------------|
-| Plugin/extension system | Third-party integrations |
-| Public API | Developer access |
-| Desktop app | Electron-based client |
-| Browser extension | Quick generation from any page |
-| Zapier/n8n integration | Workflow automation |
+| Improve auditability of admin and storage actions | ⏳ Planned | High |
+| Add stronger moderation workflows beyond keyword gates | ⏳ Planned | High |
+| Tighten public/private media access strategy | 🔄 In progress | High |
 
 ---
 
-## Technical Debt & Improvements
+## Mid-Term Roadmap
 
-### Code Quality
-- [x] Test suite (pytest — 15 test files)
-- [x] CI/CD pipeline (GitHub Actions — 23 workflows)
-- [ ] Code coverage > 80%
-- [ ] API documentation (OpenAPI/Swagger)
-- [x] Type hints in backend (partial)
-- [x] Consistent auth in all frontend API calls (apiFetch)
+### Distributed Storage Network
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| Coordinator node | 🔄 In progress | Main storage entrypoint and node registry |
+| Local node 01 | 🔄 In progress | Secondary local node on distinct ports |
+| Remote node 02 | 🔄 In progress | Autonomous tunnel, independent host |
+| Replication and observability | ⏳ Planned | Node health, lag, placement, metrics |
+
+### Advanced Creation Workflows
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| ControlNet-style guidance | ⏳ Planned | Better controllability |
+| Stronger avatar consistency | ⏳ Planned | Character continuity across runs |
+| More direct tool chaining | 🔄 In progress | "Use in tool", prompt/image/video reuse |
+| Better preset system | 🔄 In progress | Factory presets + safe defaults |
+
+### Commercial Readiness
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| Credit-based monetization | ✅ Done | Already in production path |
+| Subscription tiers | ⏳ Planned | Beyond one-off credit packs |
+| API product surface | ⏳ Planned | External integrations |
+| Team/org workflows | ⏳ Planned | Shared workspaces and governance |
+
+---
+
+## Longer-Term Direction
+
+- Production-grade hybrid routing between local GPUs and cloud GPUs
+- Richer provenance, audit, and retention tooling
+- More composable media pipelines instead of isolated tool tabs
+- Marketplace or packaged model/preset distribution once platform stability justifies it
+
+---
+
+## Technical Debt to Keep Burning Down
+
+- Remove stale docs and code that still describe local media folders as canonical storage
+- Keep frontend/backend/storage hostnames aligned across config and docs
+- Keep cloud queue behavior honest: pending is pending, not fake running
+- Keep auth behavior consistent across REST, media URLs, and WebSocket-style flows
 
 ### Performance
 - [ ] Response caching (Redis)
