@@ -123,6 +123,7 @@ ComfyUI/user/default/*
 ComfyUI/custom_nodes/
 
 # Media storage (managed by oelala-storage)
+media
 media/
 
 # Supabase CLI temp files
