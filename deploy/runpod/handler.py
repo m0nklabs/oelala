@@ -253,6 +253,118 @@ def download_models():
     return True
 
 
+def _model_destinations(model: dict) -> tuple[Path, Path]:
+    """Return volume and local destinations for a model file."""
+    volume_models = Path(MODEL_VOLUME) / "models"
+    comfyui_models = Path("/comfyui/models")
+    return (
+        volume_models / model["local_dir"] / model["filename"],
+        comfyui_models / model["local_dir"] / model["filename"],
+    )
+
+
+def _is_model_present(model: dict) -> bool:
+    """Check whether a model already exists in either persistent or local storage."""
+    dest_vol, dest_local = _model_destinations(model)
+    return dest_vol.exists() or dest_local.exists()
+
+
+def download_requested_models(filenames: list[str]) -> int:
+    """Download a specific subset of models on demand."""
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        raise RuntimeError("huggingface_hub not installed, cannot download models")
+
+    requested = {name for name in filenames if name}
+    models = [model for model in CLOUD_MAX_MODELS if model["filename"] in requested]
+    if not models:
+        return 0
+
+    volume_models = Path(MODEL_VOLUME) / "models"
+    comfyui_models = Path("/comfyui/models")
+    target_base = volume_models if Path(MODEL_VOLUME).exists() else comfyui_models
+    downloaded = 0
+
+    for model in models:
+        if _is_model_present(model):
+            logger.info(f"✅ {model['filename']} already present")
+            continue
+
+        dest_dir = target_base / model["local_dir"]
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / model["filename"]
+        logger.info(f"⬇️ On-demand model download: {model['filename']}")
+
+        downloaded_path = hf_hub_download(
+            repo_id=model.get("hf_repo", HF_REPO_22),
+            filename=model["hf_path"],
+            local_dir="/tmp/hf_cache",
+            local_dir_use_symlinks=False,
+        )
+
+        import shutil
+
+        shutil.move(downloaded_path, str(dest))
+        shutil.rmtree("/tmp/hf_cache", ignore_errors=True)
+
+        # If downloaded to volume, make sure ComfyUI sees it immediately.
+        if target_base == volume_models:
+            comfyui_target = comfyui_models / model["local_dir"] / model["filename"]
+            comfyui_target.parent.mkdir(parents=True, exist_ok=True)
+            if not comfyui_target.exists():
+                comfyui_target.symlink_to(dest)
+                logger.info(f"🔗 Symlinked on-demand model: {model['filename']}")
+
+        downloaded += 1
+
+    return downloaded
+
+
+def restart_comfyui():
+    """Restart ComfyUI so newly downloaded models appear in node input lists."""
+    global _comfyui_process
+
+    if _comfyui_process and _comfyui_process.poll() is None:
+        logger.info("🔄 Restarting ComfyUI to reload model lists...")
+        _comfyui_process.terminate()
+        try:
+            _comfyui_process.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            _comfyui_process.kill()
+            _comfyui_process.wait(timeout=10)
+
+    if not start_comfyui():
+        raise RuntimeError("ComfyUI failed to restart after downloading models")
+
+
+def ensure_workflow_models(workflow: dict, job=None) -> int:
+    """Ensure workflow-referenced optional models exist before queueing."""
+    referenced = set()
+    for node in workflow.values():
+        inputs = node.get("inputs", {})
+        for key in ("unet_name", "clip_name", "vae_name"):
+            value = inputs.get(key)
+            if isinstance(value, str):
+                referenced.add(value)
+
+    requested = [
+        model["filename"]
+        for model in CLOUD_MAX_MODELS
+        if model["filename"] in referenced and not _is_model_present(model)
+    ]
+    if not requested:
+        return 0
+
+    if job:
+        _progress(job, f"Downloading {len(requested)} required model(s) for workflow...")
+
+    downloaded = download_requested_models(requested)
+    if downloaded > 0:
+        restart_comfyui()
+    return downloaded
+
+
 def ensure_models():
     """
     Ensure all required models are available. Tries strategies in order:
@@ -695,6 +807,11 @@ def handler(event: dict) -> dict:
     if lora_downloads:
         _progress(event, f"Downloading {len(lora_downloads)} LoRA(s)...")
         download_loras(lora_downloads, job=event)
+
+    # Download optional workflow models on demand (e.g. Cloud Max T2V fp8 models)
+    downloaded_models = ensure_workflow_models(workflow, job=event)
+    if downloaded_models > 0:
+        _progress(event, f"Reloaded ComfyUI after downloading {downloaded_models} model(s)")
 
     try:
         # Queue the workflow
