@@ -54,9 +54,18 @@ export default function AdminStorageNodesTab() {
 
   const formatTimeAgo = (dateString) => {
     if (!dateString) return 'Never'
-    const date = new Date(dateString + 'Z') // assuming UTC
+    
+    // Make sure we parse the date correctly whether it has a timezone or not
+    const safeDateStr = (dateString.endsWith('Z') || dateString.includes('+')) 
+      ? dateString 
+      : dateString + 'Z'
+      
+    const date = new Date(safeDateStr)
     const now = new Date()
     const seconds = Math.floor((now - date) / 1000)
+    
+    // If future date or invalid
+    if (isNaN(seconds) || seconds < 0) return 'Just now'
     
     if (seconds < 60) return `${seconds}s`
     const minutes = Math.floor(seconds / 60)
@@ -231,8 +240,14 @@ export default function AdminStorageNodesTab() {
                         </>
                       )}
                       
-                      <span style={{ color: 'var(--text-muted)' }}>OS:</span>
-                      <span style={{ color: 'var(--text-primary)' }}>{node.os_type} ({node.architecture})</span>
+                      {(node.os_type || node.os || node.architecture || node.arch) && (
+                        <>
+                          <span style={{ color: 'var(--text-muted)' }}>OS:</span>
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            {node.os_type || node.os || 'Unknown'} {node.architecture || node.arch ? `(${node.architecture || node.arch})` : ''}
+                          </span>
+                        </>
+                      )}
                       
                       <span style={{ color: 'var(--text-muted)' }}>Version:</span>
                       <span style={{ color: 'var(--text-primary)' }}>{node.version || 'v0.1.0'}</span>

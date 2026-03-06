@@ -3619,6 +3619,15 @@ class ComfyUIClient:
                 f"✅ Auto-uploaded to storage: {storage_path} ({len(file_data)} bytes)"
             )
 
+            # Cleanup local file to keep media dirs empty
+            try:
+                local_path = Path(output_path)
+                if local_path.exists() and str(local_path.parent) != str(Path("/home/flip/oelala-storage")):
+                    local_path.unlink()
+                    logger.info(f"🗑️ Cleaned up auto-uploaded local file: {local_path}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup local file {output_path}: {e}")
+
             # Clear job metadata after successful upload
             self.clear_job_metadata(prompt_id)
 
@@ -3726,6 +3735,14 @@ class ComfyUIClient:
             logger.info(
                 f"✅ Async uploaded to storage: {record.storage_path} ({len(file_data)} bytes)"
             )
+
+            # Cleanup local file to keep media dirs empty
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info(f"🗑️ Cleaned up async local file: {file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup async local file {file_path}: {e}")
 
             # Clear job metadata after successful upload
             self.clear_job_metadata(prompt_id)

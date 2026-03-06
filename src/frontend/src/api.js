@@ -118,6 +118,17 @@ export async function postForm(url, formData, headers = {}) {
     }
   }
 
+  // Normalize detail error string to prevent UI [object Object] breaking
+  if (!res.ok && data && typeof data.detail === 'object') {
+    const orig = data.detail;
+    if (orig.error === 'insufficient_credits') {
+      data.detail_obj = orig;
+      data.detail = "Not enough credits. (Need " + orig.required + ", have " + orig.available + ")";
+    } else {
+      data.detail = JSON.stringify(orig);
+    }
+  }
+
   return { ok: res.ok, status: res.status, data }
 }
 
@@ -149,6 +160,29 @@ export async function postJson(url, body = {}) {
   const text = await res.text()
   try {
     const data = text ? JSON.parse(text) : null
+    
+    if (res.status === 402 && data?.detail) {
+      if (typeof data.detail === 'object' && data.detail.error === 'insufficient_credits') {
+        window.dispatchEvent(new CustomEvent('insufficient-credits', {
+          detail: {
+            required: data.detail.required,
+            available: data.detail.available,
+            packages: Array.isArray(data.detail.packages) ? data.detail.packages : []
+          }
+        }))
+      }
+    }
+
+    if (!res.ok && data && typeof data.detail === 'object') {
+      const orig = data.detail;
+      if (orig.error === 'insufficient_credits') {
+        data.detail_obj = orig;
+        data.detail = "Not enough credits. (Need " + orig.required + ", have " + orig.available + ")";
+      } else {
+        data.detail = JSON.stringify(orig);
+      }
+    }
+
     return { ok: res.ok, status: res.status, data }
   } catch (e) {
     return { ok: res.ok, status: res.status, data: text }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video, Wand2, ChevronDown } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video, Wand2, ChevronDown, Folder, FolderInput } from 'lucide-react'
 import { BACKEND_BASE, getMediaUrl } from '../../config'
 import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
 import { listUserMedia, listUnifiedMedia, deleteUserMedia, apiFetch } from '../../api'
@@ -219,6 +219,12 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     const saved = localStorage.getItem('oelala_media_type_filter')
     return saved && ['all', 'video', 'image', 'audio', 'prompts'].includes(saved) ? saved : filterProp
   }) // 'all', 'video', 'image', 'audio', 'prompts' — internal state from dropdown
+  
+  const [currentFolder, setCurrentFolder] = useState('/')
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [moveDestFolder, setMoveDestFolder] = useState('')
+  const [moving, setMoving] = useState(false)
+  
   const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
   const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
 
@@ -343,10 +349,35 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     })
   }
 
+  // Calculate available folders
+  const folders = useMemo(() => {
+    const f = new Set(['/'])
+    mediaList.forEach(item => {
+      if (!item.filename) return
+      const parts = item.filename.split('/')
+      if (parts.length > 1) {
+        f.add('/' + parts[0])
+      }
+    })
+    return Array.from(f).sort()
+  }, [mediaList])
+
   // Filtered and sorted media list
   const sortedMediaList = useMemo(() => {
-    // First filter by favorites
     let filtered = [...mediaList]
+
+    // First filter by current folder
+    filtered = filtered.filter(item => {
+      if (!item.filename) return false
+      const parts = item.filename.split('/')
+      if (currentFolder === '/') {
+        return parts.length === 1
+      } else {
+        return parts.length > 1 && '/' + parts[0] === currentFolder
+      }
+    })
+
+    // Then filter by favorites
     if (filterBy === 'favorites') {
       filtered = filtered.filter(item => favorites.has(item.filename))
     } else if (filterBy === 'non-favorites') {
@@ -594,6 +625,70 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
 
   const clearSelection = () => {
     setSelectedItems(new Set())
+  }
+
+  const handleMove = async (targetFolder) => {
+    if (selectedItems.size === 0) return
+
+    setMoving(true)
+    setError('')
+
+    const itemsToMove = Array.from(selectedItems)
+      .map(idx => sortedMediaList[idx])
+      .filter(Boolean)
+
+    let successCount = 0
+    let failCount = 0
+
+    // the folder should be stripped of leading slash if we build new filename
+    const destPrefix = targetFolder === '/' ? '' : targetFolder.substring(1) + '/'
+
+    for (const item of itemsToMove) {
+      if (!item.filename || !item.media_type) continue
+
+      // source file name as it belongs in the bucket
+      const srcFilename = item.filename
+      
+      // Calculate new filename (basename only to avoid nesting deeper than 1)
+      const baseName = srcFilename.split('/').pop()
+      const destFilename = destPrefix + baseName
+
+      // Skip if same
+      if (srcFilename === destFilename) {
+        successCount++
+        continue
+      }
+
+      try {
+        const resp = await apiFetch(`/api/media/move`, {
+          method: 'POST',
+          body: JSON.stringify({
+            media_type: item.media_type,
+            src_filename: srcFilename,
+            dest_filename: destFilename
+          })
+        })
+        if (resp.ok) {
+          successCount++
+        } else {
+          failCount++
+        }
+      } catch (err) {
+        console.error('Error moving file', err)
+        failCount++
+      }
+    }
+
+    setMoving(false)
+    setShowMoveModal(false)
+    setMoveDestFolder('')
+    
+    if (failCount > 0) {
+      setError(`Moved ${successCount} items, failed to move ${failCount} items.`)
+    }
+    
+    setSelectedItems(new Set())
+    await fetchMedia()
   }
 
   const handleDelete = async () => {
@@ -1409,6 +1504,24 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
             <option value="prompts">📝 Prompts</option>
           </select>
 
+          {/* Folder Dropdown */}
+          {folders.length > 1 && (
+            <select
+              className="sort-select"
+              value={currentFolder}
+              onChange={(e) => {
+                setCurrentFolder(e.target.value)
+                setSelectedItems(new Set())
+              }}
+              style={{ fontWeight: 500, minWidth: '120px' }}
+            >
+              <option value="/">📂 Root (/)</option>
+              {folders.filter(f => f !== '/').map(f => (
+                <option key={f} value={f}>📂 {f.substring(1)}</option>
+              ))}
+            </select>
+          )}
+
           {/* Search input */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
             <Search size={14} style={{ color: 'var(--text-muted)', position: 'absolute', left: '8px' }} />
@@ -1555,6 +1668,14 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
               >
                 <Download size={16} />
                 Download
+              </button>
+              <button
+                className="header-btn"
+                onClick={() => setShowMoveModal(true)}
+                title="Move selected items to a folder"
+              >
+                <Folder size={16} />
+                Move
               </button>
               <button
                 className="delete-btn"
@@ -2668,6 +2789,141 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move Folder Modal */}
+      {showMoveModal && (
+        <div className="prompt-popup-overlay" onClick={() => setShowMoveModal(false)}>
+          <div className="prompt-popup" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="prompt-popup-header">
+              <h3 className="prompt-popup-title">
+                <Folder size={18} />
+                Move {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''}
+              </h3>
+              <button 
+                className="prompt-popup-close"
+                onClick={() => setShowMoveModal(false)}
+                disabled={moving}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ padding: '16px 0' }}>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '16px', fontSize: '0.9rem' }}>
+                Moved items can be organized in subdirectories one level deep. Use '/' for the root directory.
+              </p>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  Target Folder
+                </label>
+                <input
+                  type="text"
+                  value={moveDestFolder}
+                  onChange={(e) => setMoveDestFolder(e.target.value)}
+                  placeholder="e.g. references, funny, /"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'rgba(0,0,0,0.3)',
+                    color: 'white',
+                    fontSize: '1rem',
+                  }}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && moveDestFolder.trim() !== '') {
+                      handleMove(moveDestFolder.trim() || '/')
+                    }
+                  }}
+                />
+                
+                {/* Suggestions */}
+                {folders.filter(f => f !== '/').length > 0 && (
+                  <div style={{ marginTop: '12px' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Existing folders</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <button
+                        onClick={() => setMoveDestFolder('/')}
+                        style={{
+                          padding: '4px 10px',
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: '#fff',
+                          fontSize: '0.8rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        / (root)
+                      </button>
+                      {folders.filter(f => f !== '/').map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setMoveDestFolder(f.substring(1))}
+                          style={{
+                            padding: '4px 10px',
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {f.substring(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button
+                  onClick={() => setShowMoveModal(false)}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                  disabled={moving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (moveDestFolder.trim() !== '') {
+                      handleMove(moveDestFolder.trim() || '/')
+                    } else {
+                      handleMove('/') // default empty space to root move just in case
+                    }
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'var(--accent-color, #a855f7)',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  disabled={moving}
+                >
+                  {moving ? 'Moving...' : 'Move Items'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

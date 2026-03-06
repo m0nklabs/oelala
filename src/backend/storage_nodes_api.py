@@ -97,7 +97,27 @@ async def list_storage_nodes(client: Client = Depends(get_supabase)):
     """List all registered storage nodes, for the admin dashboard"""
     try:
         response = client.table("storage_nodes").select("*").order("name").execute()
-        return response.data
+        nodes = response.data
+        
+        # Inject Backblaze B2 as a virtual node
+        b2_bucket = os.environ.get("B2_BUCKET_NAME", "Backblaze B2")
+        nodes.append({
+            "id": "virtual-b2-node",
+            "node_id": "backblaze-b2",
+            "name": f"Backblaze B2 Cloud ({b2_bucket})",
+            "type": "cloud",
+            "total_bytes": 10000000000000, # Mock 10 TB capacity
+            "used_bytes": 0, # Could be dynamic later
+            "status": "online",
+            "version": "boto3/latest",
+            "last_heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "ip_address": "cloud",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "public_url": f"https://f000.backblazeb2.com/file/{b2_bucket}"
+        })
+        
+        return nodes
     except Exception as e:
         logger.error(f"Failed to fetch storage nodes: {e}")
         raise HTTPException(status_code=500, detail="Database failure")

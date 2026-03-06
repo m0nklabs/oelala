@@ -131,17 +131,23 @@ optional_security = OptionalHTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> User:
     """
     Extract and validate user from JWT token.
     Raises HTTPException 401 if no valid token.
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif "token" in request.query_params:
+        token = request.query_params.get("token")
+        
+    if not token:
         logger.info("🔐 AUTH: No credentials provided")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    token = credentials.credentials
     logger.info("🔐 AUTH: Got token, attempting decode...")
     payload = decode_supabase_jwt(token)
 
@@ -158,16 +164,22 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
 ) -> Optional[User]:
     """
     Extract user from JWT if present, otherwise return None.
     Useful for endpoints that work both authenticated and anonymous.
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif "token" in request.query_params:
+        token = request.query_params.get("token")
+        
+    if not token:
         return None
 
-    token = credentials.credentials
     payload = decode_supabase_jwt(token)
 
     if not payload:

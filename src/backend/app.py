@@ -619,8 +619,8 @@ from tool_profiles_api import router as tool_profiles_router
 app.include_router(tool_profiles_router)  # Tool settings at /api/settings/*
 
 # Create directories
-UPLOAD_DIR = Path("/home/flip/oelala/uploads")
-OUTPUT_DIR = Path("/home/flip/oelala/generated")
+UPLOAD_DIR = Path("/tmp/oelala_uploads")
+OUTPUT_DIR = Path("/tmp/oelala_generated")
 FRONTEND_DIR = Path("/home/flip/oelala/src/frontend")
 COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -861,6 +861,15 @@ async def upload_generated_media(
         )
 
         logger.info(f"🗄️ Media uploaded to storage: {record.storage_path}")
+
+        # Clean up local file after successful upload to keep media dirs empty
+        try:
+            if file_path.exists():
+                file_path.unlink()
+                logger.info(f"🗑️ Cleaned up local file: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up local file {file_path}: {e}")
+
         return record
 
     except Exception as e:
@@ -1987,7 +1996,7 @@ def _persist_cloud_jobs() -> None:
         for pid, info in cloud_jobs.items():
             serializable[pid] = {
                 k: v for k, v in info.items()
-                if not k.startswith("_") or k in ("_cloud_status",)
+                if not k.startswith("_") or k in ("_cloud_status", "_start_time")
             }
         CLOUD_JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(CLOUD_JOBS_FILE, "w") as f:
@@ -2007,6 +2016,17 @@ def _restore_cloud_jobs() -> int:
         count = 0
         for pid, info in saved_jobs.items():
             if pid not in active_jobs:
+                if not info.get("_start_time"):
+                    created_at = info.get("created_at")
+                    if created_at:
+                        try:
+                            info["_start_time"] = datetime.strptime(
+                                created_at, "%Y%m%d_%H%M%S"
+                            ).timestamp()
+                        except Exception:
+                            info["_start_time"] = time.time()
+                    else:
+                        info["_start_time"] = time.time()
                 active_jobs[pid] = info
                 count += 1
                 logger.info(f"☁️ Restored cloud job: {pid} (RunPod: {info.get('runpod_job_id', '?')})")
@@ -2107,6 +2127,9 @@ LORA_DIR = Path("/mnt/ssd/loras")
 
 # Cache for completed cloud jobs (prevent re-processing on repeated polls)
 _cloud_completed_cache: dict[str, dict] = {}
+
+# Guard against cloud jobs that stay queued forever when RunPod never provisions a worker.
+CLOUD_QUEUE_TIMEOUT_SECONDS = int(os.getenv("RUNPOD_QUEUE_TIMEOUT_SECONDS", "300"))
 
 
 def _lora_download_token(filename: str) -> str:
@@ -2233,8 +2256,34 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     # Map RunPod statuses to our status values
     if status_val in ("IN_QUEUE",):
+        queue_age = max(0.0, time.time() - float(job_info.get("_start_time") or time.time()))
+        if queue_age >= CLOUD_QUEUE_TIMEOUT_SECONDS:
+            error_msg = (
+                f"RunPod job stuck in queue for {int(queue_age)}s; no cloud worker was provisioned"
+            )
+            logger.error(f"☁️ Cloud job timed out in queue: {runpod_job_id} — {error_msg}")
+            result = {
+                "prompt_id": prompt_id,
+                "status": "failed",
+                "error": error_msg,
+                "compute_target": "cloud",
+                **job_info,
+            }
+            _cloud_completed_cache[prompt_id] = result
+            active_jobs[prompt_id]["_cloud_completed"] = True
+            active_jobs[prompt_id]["_cloud_status"] = "TIMED_OUT"
+            active_jobs[prompt_id]["_cloud_error"] = error_msg
+            _persist_cloud_jobs()
+            record_generation_complete(prompt_id, success=False, error=error_msg)
+            return result
         active_jobs[prompt_id]["_cloud_status"] = status_val
-        return {"prompt_id": prompt_id, "status": "pending", "compute_target": "cloud", **job_info}
+        return {
+            "prompt_id": prompt_id,
+            "status": "pending",
+            "compute_target": "cloud",
+            "queue_age_seconds": int(queue_age),
+            **job_info,
+        }
     elif status_val in ("IN_PROGRESS",):
         active_jobs[prompt_id]["_cloud_status"] = status_val
         # Include progress info from RunPod if available
@@ -2644,8 +2693,14 @@ async def get_comfyui_queue():
                 cloud_job["status"] = "failed"
                 cloud_job["error"] = info.get("_cloud_error", f"RunPod job {cloud_status}")
                 cloud_failed.append(cloud_job)
+            elif cloud_status == "IN_QUEUE":
+                cloud_job["status"] = "pending"
+                cloud_job["queue_age_seconds"] = int(
+                    max(0.0, time.time() - float(info.get("_start_time") or time.time()))
+                )
+                pending.append(cloud_job)
             else:
-                # Active jobs → always "running" so frontend polls /comfyui/job/{id}
+                # Only real in-progress cloud jobs belong in the running list.
                 cloud_job["status"] = "running"
                 cloud_running.append(cloud_job)
 
@@ -3790,47 +3845,39 @@ async def list_unified_media(
         # ComfyUI local output (admin only)
         if is_admin and source in ("all", "comfyui-local"):
             try:
-                # List directly from filesystem since symlink listing is broken in oelala-storage
-                comfyui_path = Path("/home/flip/oelala/ComfyUI/output")
-                if comfyui_path.exists():
-                    for file in comfyui_path.iterdir():
-                        if file.is_file() and not file.name.startswith("."):
-                            filename = file.name
-                            ext = (
-                                filename.lower().split(".")[-1]
-                                if "." in filename
-                                else ""
-                            )
+                objects = storage.list("comfyui-local")
+                for obj in objects:
+                    key = obj.get("key", "")
+                    if not key or key == ".":
+                        continue
+                    filename = key
+                    ext = filename.lower().split(".")[-1] if "." in filename else ""
 
-                            if ext in ("mp4", "webm", "mov", "avi"):
-                                item_type = "video"
-                            elif ext in ("mp3", "wav", "flac", "ogg"):
-                                item_type = "audio"
-                            elif ext in ("png", "jpg", "jpeg", "webp", "gif"):
-                                item_type = "image"
-                            else:
-                                continue
+                    if ext in ("mp4", "webm", "mov", "avi"):
+                        item_type = "video"
+                    elif ext in ("mp3", "wav", "flac", "ogg"):
+                        item_type = "audio"
+                    elif ext in ("png", "jpg", "jpeg", "webp", "gif"):
+                        item_type = "image"
+                    else:
+                        continue
 
-                            # Filter by type if specified
-                            if type != "all" and item_type != type:
-                                continue
+                    if type != "all" and item_type != type:
+                        continue
 
-                            stat = file.stat()
-                            all_media.append(
-                                {
-                                    "name": filename,
-                                    "filename": filename,
-                                    "type": item_type,
-                                    "url": f"/comfyui/output/{filename}",
-                                    "size": stat.st_size,
-                                    "modified": datetime.fromtimestamp(
-                                        stat.st_mtime
-                                    ).isoformat(),
-                                    "mtime": stat.st_mtime,
-                                    "source": "comfyui-local",
-                                    "visibility": "dev",  # ComfyUI local = dev visibility
-                                }
-                            )
+                    all_media.append(
+                        {
+                            "name": filename,
+                            "filename": filename,
+                            "type": item_type,
+                            "url": f"/comfyui/output/{filename}",
+                            "size": obj.get("size", 0),
+                            "modified": obj.get("modified_at", ""),
+                            "mtime": _parse_mtime(obj.get("modified_at")),
+                            "source": "comfyui-local",
+                            "visibility": "dev",
+                        }
+                    )
             except Exception as e:
                 logger.debug(f"ComfyUI media error: {e}")
 
@@ -4146,6 +4193,29 @@ async def get_user_media_workflow(
         logger.error(f"Failed to extract workflow: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class MediaMoveRequest(BaseModel):
+    media_type: str
+    src_filename: str
+    dest_filename: str
+
+@app.post("/api/media/move")
+async def move_media(req: MediaMoveRequest, user: User = Depends(get_current_user)):
+    """Move/rename a user's media file."""
+    try:
+        storage = get_storage_client()
+        success = storage.move_user_media(
+            user.id,
+            req.media_type,
+            req.src_filename,
+            req.dest_filename
+        )
+        if not success:
+            raise HTTPException(status_code=404, detail="Source file not found or move failed")
+        return {"success": True, "message": "Moved successfully"}
+    except Exception as e:
+        logger.error(f"Error moving media: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/media/batch-download-zip")
 async def batch_download_zip(

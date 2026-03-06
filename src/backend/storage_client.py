@@ -26,6 +26,7 @@ import httpx
 from pathlib import Path
 from typing import Optional, List, Dict, Any, BinaryIO, Tuple, Union
 import logging
+from b2_client import b2_client
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,13 @@ class StorageClient:
         elif hasattr(data, "read"):
             data = data.read()
 
+        # [MARK1] Dual-write to Backblaze B2 (if configured)
+        if b2_client.is_configured():
+            try:
+                b2_client.put(bucket, key, data, content_type or "application/octet-stream")
+            except Exception as e:
+                logger.error(f"B2 dual-write failed: {e}")
+
         resp = self.client.put(url, content=data, headers=headers)
         resp.raise_for_status()
         return resp.json()
@@ -135,6 +143,12 @@ class StorageClient:
         Returns:
             File content as bytes
         """
+        # [MARK1] Try Backblaze B2 first if configured
+        if b2_client.is_configured():
+            b2_data = b2_client.get(bucket, key)
+            if b2_data is not None:
+                return b2_data
+
         url = f"/{bucket}/{key}"
         resp = self.client.get(url)
         resp.raise_for_status()
@@ -151,6 +165,12 @@ class StorageClient:
         Returns:
             Tuple of (content_bytes, content_type, content_length)
         """
+        # [MARK1] Try Backblaze B2 first
+        if b2_client.is_configured():
+            b2_meta = b2_client.get_with_metadata(bucket, key)
+            if b2_meta is not None:
+                return b2_meta
+
         url = f"/{bucket}/{key}"
         resp = self.client.get(url)
         resp.raise_for_status()
@@ -197,6 +217,36 @@ class StorageClient:
         path.write_bytes(data)
         return path
 
+    def move(self, src_bucket: str, src_key: str, dest_bucket: str, dest_key: str) -> bool:
+        """
+        Move/rename an object from source to destination.
+        
+        Args:
+            src_bucket: Source bucket name
+            src_key: Source object key
+            dest_bucket: Destination bucket name
+            dest_key: Destination object key
+            
+        Returns:
+            True if moved successfully
+        """
+        url = f"{self.api_url}/{src_bucket}/{src_key}?action=move"
+        payload = {
+            "dest_bucket": dest_bucket,
+            "dest_key": dest_key
+        }
+        
+        headers = self._get_auth_headers(is_write=True)
+        resp = self.client.post(url, json=payload, headers=headers)
+        
+        if resp.status_code == 200:
+            return True
+        elif resp.status_code == 404:
+            return False
+            
+        resp.raise_for_status()
+        return False
+
     def delete(self, bucket: str, key: str) -> bool:
         """
         Delete an object from storage.
@@ -208,6 +258,10 @@ class StorageClient:
         Returns:
             True if deleted successfully
         """
+        # [MARK1] Delete from B2 too
+        if b2_client.is_configured():
+            b2_client.delete(bucket, key)
+
         url = f"/{bucket}/{key}"
         resp = self.client.delete(url)
         return resp.status_code == 204
@@ -355,6 +409,22 @@ class StorageClient:
 
         return _iter()
 
+    def move_user_media(
+        self,
+        user_id: str,
+        media_type: str,
+        src_filename: str,
+        dest_filename: str,
+    ) -> bool:
+        """
+        Move/rename user's media file (e.g. into a subfolder).
+        Subfolders are supported by including a '/' in the dest_filename.
+        """
+        bucket = self.user_bucket(user_id)
+        src_key = self.user_key(media_type, src_filename)
+        dest_key = self.user_key(media_type, dest_filename)
+        return self.move(bucket, src_key, bucket, dest_key)
+
     def delete_user_media(
         self,
         user_id: str,
@@ -427,13 +497,13 @@ class StorageClient:
         Get URL for user's media file.
 
         Args:
-            external: If True, return production URL (storage.oelala.xyz)
+            external: If True, return production URL (storage-main.oelala.xyz)
         """
         bucket = self.user_bucket(user_id)
         key = self.user_key(media_type, filename)
 
         if external:
-            return f"https://storage.oelala.xyz/{bucket}/{key}"
+            return f"https://storage-main.oelala.xyz/{bucket}/{key}"
         else:
             return f"{self.base_url}/{bucket}/{key}"
 
@@ -468,6 +538,10 @@ def get(bucket: str, key: str) -> bytes:
     """Download an object using the default client."""
     return get_client().get(bucket, key)
 
+
+def move(src_bucket: str, src_key: str, dest_bucket: str, dest_key: str) -> bool:
+    """Move an object using the default client."""
+    return get_client().move(src_bucket, src_key, dest_bucket, dest_key)
 
 def delete(bucket: str, key: str) -> bool:
     """Delete an object using the default client."""

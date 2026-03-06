@@ -9,7 +9,7 @@ const BACKEND_BASE = isProduction
 
 // Storage service URL (oelala-storage Go service)
 const STORAGE_BASE = isProduction
-  ? 'https://storage.oelala.xyz'
+  ? 'https://storage-main.oelala.xyz'
   : 'http://192.168.1.2:7990'
 
 // Global debug flag for UI logging
@@ -38,8 +38,25 @@ const getMediaUrl = (url, signedUrl = null) => {
   if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
     return finalUrl
   }
+  
   // Otherwise prepend backend base
-  return `${BACKEND_BASE}${finalUrl}`
+  let fullUrl = `${BACKEND_BASE}${finalUrl}`
+  
+  // Try to append token from localStorage for protected media endpoints accessed via img/video src
+  try {
+    const sbKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+    if (sbKey) {
+      const data = JSON.parse(localStorage.getItem(sbKey))
+      const token = data?.access_token
+      if (token) {
+        fullUrl += (fullUrl.includes('?') ? '&' : '?') + `token=${token}`
+      }
+    }
+  } catch (e) {
+    // Ignore localStorage access errors
+  }
+  
+  return fullUrl
 }
 
 export { BACKEND_BASE, STORAGE_BASE, EXTERNAL_SERVICES, getMediaUrl }

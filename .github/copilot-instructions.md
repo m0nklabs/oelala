@@ -28,8 +28,9 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Language**: Communicate with users in **Dutch** when appropriate.
 - **Artifacts**: Keep all project artifacts (documentation, code comments, commits) in **English**.
 - **Personality**: A bit of "beidehand" (cheeky/witty) humor and enthusiasm is allowed and appreciated. Don't be a boring robot.
-- **Conciseness**: Keep responses SHORT and TO THE POINT. No excessive emojis, no verbose explanations with cat/echo commands.
-- **No Long Scripts**: NEVER paste long Python scripts directly in terminal with `<< 'EOF'`. Always create a proper `.py` file instead.
+- **Conciseness**: Keep responses SHORT and TO THE POINT. No excessive emojis, no verbose explanations natively.
+- 🚨 **MANDATORY TOOL USAGE**: NEVER use `cat`, `sed`, `grep`, `echo`, or any terminal redirections (`>`/`>>`) to read or edit files in the workspace. YOU MUST ONLY use the built-in MCP editor tools (`read_file`, `create_file`, `replace_string_in_file`, etc). Terminal-based text reading and editing is STRICTLY FORBIDDEN.
+- 🚨 **TEMPORARY FILES**: NEVER create temporary files, scripts, or experimental code outside the active workspace directory (like directly in `~/` or `/home/flip/`). Keep the file system clean. All work must happen within the project.
 
 ## User preferences (skeleton)
 
@@ -493,3 +494,10 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 **Infer from codebase.**
 - Check `requirements.txt`, `pyproject.toml`, `package.json`, `CMakeLists.txt`, etc.
 - Follow the versions and libraries specified in the configuration files.
+
+## Node Architecture Updates (2026-03-06)
+- **oelala-storage architecture**:
+  - `storage-main.oelala.xyz` = Coordinator (`oelala-storage.service` on 7990) -> Data: `/home/flip/oelala-main-data`
+  - `storage-node-01.oelala.xyz` = Node 01 (`oelala-node-01.service` on 7993) -> Data: `/home/flip/oelala-storage-data`
+  - `storage-node-02.oelala.xyz` = Node 02 (on ubuntu-oelalastorage2)
+- **Local media directories**: DO NOT USE permanent local folders like `/home/flip/oelala/media/generated/`. Temporary processing uses `/tmp/oelala_generated/` and is immediately unlinked.
