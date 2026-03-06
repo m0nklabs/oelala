@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
-import { postForm } from '../../api'
+import { postForm, apiFetch } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import CameraPositionSelector, { getCameraPositionPrefix } from '../../components/CameraPositionSelector'
@@ -195,7 +195,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
   useEffect(() => {
     const fetchLoras = async () => {
       try {
-        const res = await fetch(`${BACKEND_BASE}/loras`)
+        const res = await apiFetch('/loras')
         if (res.ok) {
           const data = await res.json()
           setAvailableLoras(data.loras || [])

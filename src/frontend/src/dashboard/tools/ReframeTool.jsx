@@ -562,7 +562,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
                 setFile(null)
                 setPreview(null)
                 setResult(null)
-                const blob = fetch(result.url).then(r => r.blob()).then(b => {
+                const blob = apiFetch(result.url).then(r => r.blob()).then(b => {
                   const f = new File([b], 'reframed.png', { type: 'image/png' })
                   setFile(f)
                   setPreview(result.url)

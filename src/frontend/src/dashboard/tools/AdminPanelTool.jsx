@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
+import { apiFetch } from '../../api'
 import {
   Users, Search, Coins, Shield, Crown,
   ChevronDown, ChevronUp,
@@ -37,11 +38,7 @@ export default function AdminPanel() {
 
     const fetchStats = async () => {
       try {
-        const response = await fetch(`${BACKEND_BASE}/api/admin/stats`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
+        const response = await apiFetch('/api/admin/stats')
 
         if (response.ok) {
           const data = await response.json()
@@ -71,13 +68,8 @@ export default function AdminPanel() {
           params.append('tier', filterTier)
         }
 
-        const response = await fetch(
-          `${BACKEND_BASE}/api/admin/users?${params}`,
-          {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          }
+        const response = await apiFetch(
+          `/api/admin/users?${params}`
         )
 
         if (response.ok) {
@@ -98,13 +90,8 @@ export default function AdminPanel() {
   // Fetch user transactions when expanded
   const fetchTransactions = async (userId) => {
     try {
-      const response = await fetch(
-        `${BACKEND_BASE}/api/admin/transactions/${userId}?limit=10`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
+      const response = await apiFetch(
+        `/api/admin/transactions/${userId}?limit=10`
       )
 
       if (response.ok) {
@@ -157,12 +144,8 @@ export default function AdminPanel() {
     setCreditError('')
 
     try {
-      const response = await fetch(`${BACKEND_BASE}/api/admin/credits/adjust`, {
+      const response = await apiFetch('/api/admin/credits/adjust', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           user_id: creditAdjustUser.user_id,
           amount: amount,
@@ -182,9 +165,8 @@ export default function AdminPanel() {
       const params = new URLSearchParams({ page: page.toString(), per_page: '20' })
       if (filterTier) params.append('tier', filterTier)
 
-      const refreshResponse = await fetch(
-        `${BACKEND_BASE}/api/admin/users?${params}`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      const refreshResponse = await apiFetch(
+        `/api/admin/users?${params}`
       )
 
       if (refreshResponse.ok) {
@@ -204,12 +186,8 @@ export default function AdminPanel() {
 
   const updateTier = async (userId, newTier) => {
     try {
-      const response = await fetch(`${BACKEND_BASE}/api/admin/tier/update`, {
+      const response = await apiFetch('/api/admin/tier/update', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           user_id: userId,
           tier: newTier,
@@ -235,12 +213,8 @@ export default function AdminPanel() {
 
   const toggleStatus = async (userId, field, currentValue) => {
     try {
-      const response = await fetch(`${BACKEND_BASE}/api/admin/status/toggle`, {
+      const response = await apiFetch('/api/admin/status/toggle', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           user_id: userId,
           [field]: !currentValue,

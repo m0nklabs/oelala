@@ -100,7 +100,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       }
 
       try {
-        const response = await fetch(fetchUrl)
+        const response = await apiFetch(fetchUrl)
         const blob = await response.blob()
         const filename = imageFilename
         const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })

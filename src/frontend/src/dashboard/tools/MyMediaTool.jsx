@@ -732,7 +732,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   const handleDownloadMetadata = async (item, e) => {
     e?.stopPropagation()
     try {
-      const res = await fetch(`${BACKEND_BASE}/comfyui-metadata/${item.filename}`)
+      const res = await apiFetch(`/comfyui-metadata/${item.filename}`)
       if (!res.ok) throw new Error('No metadata available')
       const data = await res.json()
 
@@ -2184,7 +2184,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                           try {
                             let workflowData = {}
                             try {
-                              const res = await fetch(`${BACKEND_BASE}/comfyui-metadata/${item.filename}`)
+                              const res = await apiFetch(`/comfyui-metadata/${item.filename}`)
                               if (res.ok) {
                                 const json = await res.json()
                                 workflowData = parseComfyWorkflow(json.metadata || {})
@@ -2468,7 +2468,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                             try {
                               let workflowData = {}
                               try {
-                                const res = await fetch(`${BACKEND_BASE}/comfyui-metadata/${selectedItem.filename}`)
+                                const res = await apiFetch(`/comfyui-metadata/${selectedItem.filename}`)
                                 if (res.ok) {
                                   const json = await res.json()
                                   workflowData = parseComfyWorkflow(json.metadata || {})

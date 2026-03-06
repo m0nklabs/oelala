@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
+import { apiFetch } from '../../api'
 import {
   Cpu, HardDrive, Server, Activity,
   RefreshCw, Thermometer, MemoryStick,
@@ -44,15 +45,9 @@ export default function AdminSystemTab() {
     try {
       // Fetch GPU, health, and queue in parallel
       const [gpuRes, healthRes, queueRes] = await Promise.all([
-        fetch(`${BACKEND_BASE}/api/admin/system/gpu`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }),
-        fetch(`${BACKEND_BASE}/api/admin/system/health`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }),
-        fetch(`${BACKEND_BASE}/api/admin/system/queue`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }),
+        apiFetch('/api/admin/system/gpu'),
+        apiFetch('/api/admin/system/health'),
+        apiFetch('/api/admin/system/queue'),
       ])
 
       if (gpuRes.ok) setGpuData(await gpuRes.json())
@@ -73,9 +68,8 @@ export default function AdminSystemTab() {
     if (!isAdmin || !session) return
 
     try {
-      const res = await fetch(
-        `${BACKEND_BASE}/api/admin/system/logs?service=${selectedService}&lines=100`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      const res = await apiFetch(
+        `/api/admin/system/logs?service=${selectedService}&lines=100`
       )
       if (res.ok) setLogsData(await res.json())
     } catch (err) {
@@ -89,9 +83,7 @@ export default function AdminSystemTab() {
     setAiSettingsLoading(true)
 
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings`, {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      })
+      const res = await apiFetch('/api/admin/ai-settings')
       if (res.ok) {
         const data = await res.json()
         setAiSettings(data)
@@ -111,12 +103,8 @@ export default function AdminSystemTab() {
     setAiSettingsSaving(true)
 
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings`, {
+      const res = await apiFetch('/api/admin/ai-settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({
           prompt_system: editedPromptSystem,
           ollama_model: editedOllamaModel,
@@ -144,9 +132,8 @@ export default function AdminSystemTab() {
     if (!session) return
 
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/admin/ai-settings/reset`, {
+      const res = await apiFetch('/api/admin/ai-settings/reset', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` }
       })
       if (res.ok) {
         const data = await res.json()

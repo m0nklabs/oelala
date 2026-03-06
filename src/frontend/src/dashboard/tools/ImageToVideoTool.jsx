@@ -469,9 +469,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
       if (DEBUG) console.log('🔮 Analyzing image and generating prompts...')
 
-      const res = await fetch(`${BACKEND_BASE}/api/analyze-and-generate`, {
+      const res = await apiFetch('/api/analyze-and-generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_base64: imageBase64,
           nsfw: useNsfw,
@@ -541,7 +540,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   useEffect(() => {
     const fetchLoras = async () => {
       try {
-        const res = await fetch(`${BACKEND_BASE}/loras`)
+        const res = await apiFetch('/loras')
         if (res.ok) {
           const data = await res.json()
           setAvailableLoras(data)
@@ -585,7 +584,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   useEffect(() => {
     const fetchUnets = async () => {
       try {
-        const res = await fetch(`${BACKEND_BASE}/unet-models`)
+        const res = await apiFetch('/unet-models')
         if (res.ok) {
           const data = await res.json()
           setAvailableUnets(data)
@@ -660,7 +659,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
       // Fetch metadata and show import modal so user can optionally reuse prompts
       try {
-        const metaRes = await fetch(`${BACKEND_BASE}/comfyui-metadata/${filename}`)
+        const metaRes = await apiFetch(`/comfyui-metadata/${filename}`)
         if (metaRes.ok) {
           const metaJson = await metaRes.json()
           const workflowData = parseComfyWorkflow(metaJson.metadata || {})
@@ -702,7 +701,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     try {
       const formData = new FormData()
       formData.append('file', picked)
-      const res = await fetch(`${BACKEND_BASE}/extract-metadata`, { method: 'POST', body: formData })
+      const res = await apiFetch('/extract-metadata', { method: 'POST', body: formData })
       if (res.ok) {
         const meta = await res.json()
         if (DEBUG) console.debug('🐛 extracted metadata:', meta)
@@ -1599,9 +1598,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               onClick={async () => {
                 if (!previewUrl) return
                 try {
-                  const res = await fetch(`${BACKEND_BASE}/extract-metadata-url`, {
+                  const res = await apiFetch('/extract-metadata-url', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image_url: previewUrl })
                   })
                   const data = await res.json()

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
+import { apiFetch } from '../../api'
 import {
   Flag, Shield, Eye, EyeOff, Check, X, AlertTriangle,
   ChevronDown, ChevronUp, Clock, User, FileText, RefreshCw
@@ -82,9 +83,7 @@ export default function AdminModerationTab() {
   // Fetch moderation stats
   const fetchStats = useCallback(async () => {
     try {
-      const resp = await fetch(`${BACKEND_BASE}/api/admin/moderation/stats`, {
-        headers: authHeaders(),
-      })
+      const resp = await apiFetch('/api/admin/moderation/stats')
       if (resp.ok) {
         setStats(await resp.json())
       }
@@ -98,9 +97,8 @@ export default function AdminModerationTab() {
     setLoading(true)
     setError('')
     try {
-      const resp = await fetch(
-        `${BACKEND_BASE}/api/admin/moderation/queue?status=${filterStatus}&page=${page}&per_page=20`,
-        { headers: authHeaders() }
+      const resp = await apiFetch(
+        `/api/admin/moderation/queue?status=${filterStatus}&page=${page}&per_page=20`
       )
       if (!resp.ok) throw new Error('Failed to load queue')
       const data = await resp.json()
@@ -122,9 +120,8 @@ export default function AdminModerationTab() {
   const handleAction = async (mediaId, action, reason = null, reportId = null) => {
     setActionLoading(mediaId)
     try {
-      const resp = await fetch(`${BACKEND_BASE}/api/admin/moderation/${mediaId}/action`, {
+      const resp = await apiFetch(`/api/admin/moderation/${mediaId}/action`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ action, reason, report_id: reportId }),
       })
       if (!resp.ok) throw new Error('Action failed')
@@ -142,9 +139,8 @@ export default function AdminModerationTab() {
     if (selectedItems.size === 0) return
     setBulkActionLoading(true)
     try {
-      const resp = await fetch(`${BACKEND_BASE}/api/admin/moderation/bulk-action`, {
+      const resp = await apiFetch('/api/admin/moderation/bulk-action', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           media_ids: Array.from(selectedItems),
           action,
@@ -165,9 +161,7 @@ export default function AdminModerationTab() {
   const fetchAuditLog = async () => {
     setAuditLoading(true)
     try {
-      const resp = await fetch(`${BACKEND_BASE}/api/admin/moderation/log/actions?per_page=50`, {
-        headers: authHeaders(),
-      })
+      const resp = await apiFetch('/api/admin/moderation/log/actions?per_page=50')
       if (resp.ok) {
         const data = await resp.json()
         setAuditLog(data.items || [])

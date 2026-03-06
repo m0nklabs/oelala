@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
+import { apiFetch } from '../../api'
 import {
   Key, Plus, Copy, Trash2, Eye, EyeOff,
   Check, AlertCircle, Clock, Activity, Shield
@@ -39,11 +40,7 @@ export default function APIKeysTool() {
     setError(null)
 
     try {
-      const response = await fetch(`${BACKEND_BASE}/api/keys`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
+      const response = await apiFetch('/api/keys')
 
       if (!response.ok) {
         throw new Error('Failed to fetch API keys')
@@ -82,12 +79,8 @@ export default function APIKeysTool() {
         body.expires_days = parseInt(newKeyExpires, 10)
       }
 
-      const response = await fetch(`${BACKEND_BASE}/api/keys`, {
+      const response = await apiFetch('/api/keys', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(body),
       })
 
@@ -128,11 +121,8 @@ export default function APIKeysTool() {
     setDeleteLoading(true)
 
     try {
-      const response = await fetch(`${BACKEND_BASE}/api/keys/${deleteKeyId}`, {
+      const response = await apiFetch(`/api/keys/${deleteKeyId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
       })
 
       if (!response.ok) {
@@ -151,12 +141,8 @@ export default function APIKeysTool() {
   // Toggle key active status
   const handleToggleKey = async (keyId, currentStatus) => {
     try {
-      const response = await fetch(`${BACKEND_BASE}/api/keys/${keyId}`, {
+      const response = await apiFetch(`/api/keys/${keyId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ is_active: !currentStatus }),
       })
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { BarChart3, Users, Coins, TrendingUp, Clock, Activity, RefreshCw, Zap, HardDrive } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
+import { apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -44,11 +45,9 @@ export default function AdminAnalyticsTab() {
     setLoading(true)
     setError(null)
     try {
-      const headers = { Authorization: `Bearer ${session?.access_token}` }
-
       const [statsResp, genResp] = await Promise.all([
-        fetch(`${BACKEND_BASE}/api/admin/stats`, { headers }),
-        fetch(`${BACKEND_BASE}/api/generation-stats?limit=10000`),
+        apiFetch('/api/admin/stats'),
+        apiFetch('/api/generation-stats?limit=10000'),
       ])
 
       if (statsResp.ok) {

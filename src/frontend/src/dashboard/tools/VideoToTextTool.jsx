@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, Video, FileText, Loader2, Copy, Check, Settings, ChevronDown, Link, Youtube, Download } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, postJson } from '../../api'
+import { postForm, postJson, apiFetch } from '../../api'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
@@ -114,7 +114,7 @@ export default function VideoToTextTool() {
   const handleCreationsSelect = useCallback(async (item) => {
     try {
       const mediaUrl = getMediaUrl(item.url, item.signed_url)
-      const response = await fetch(mediaUrl)
+      const response = await apiFetch(mediaUrl)
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
       const blob = await response.blob()
       const filename = item.filename || mediaUrl.split('/').pop()

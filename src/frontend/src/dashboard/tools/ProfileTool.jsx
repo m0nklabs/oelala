@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { User, Save, RefreshCw, CheckCircle, AlertCircle, Twitter, Instagram, Youtube, Github, Globe, Link2, Camera, Bell } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
+import { apiFetch } from '../../api'
 
 /**
  * Profile editing tool - allows users to view and edit their profile.
@@ -52,9 +53,8 @@ export default function ProfileTool() {
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await fetch(`${BACKEND_BASE}/api/profile/me/avatar`, {
+      const res = await apiFetch('/api/profile/me/avatar', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       })
       if (!res.ok) {
@@ -77,9 +77,7 @@ export default function ProfileTool() {
   async function fetchProfile() {
     try {
       setLoading(true)
-      const res = await fetch(`${BACKEND_BASE}/api/profile/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch('/api/profile/me')
 
       if (res.ok) {
         const data = await res.json()
@@ -102,9 +100,7 @@ export default function ProfileTool() {
 
   async function fetchStats() {
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/profile/me/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch('/api/profile/me/stats')
       if (res.ok) {
         const data = await res.json()
         setStats(data)
@@ -116,9 +112,7 @@ export default function ProfileTool() {
 
   async function fetchNotifPrefs() {
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/profile/me/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch('/api/profile/me/notifications')
       if (res.ok) {
         const data = await res.json()
         setNotifPrefs(data)
@@ -133,12 +127,8 @@ export default function ProfileTool() {
     setNotifPrefs((p) => ({ ...p, [key]: newValue }))
     setNotifSaving(true)
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/profile/me/notifications`, {
+      const res = await apiFetch('/api/profile/me/notifications', {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ [key]: newValue }),
       })
       if (!res.ok) {
@@ -162,12 +152,8 @@ export default function ProfileTool() {
       setError(null)
       setSuccess(null)
 
-      const res = await fetch(`${BACKEND_BASE}/api/profile/me`, {
+      const res = await apiFetch('/api/profile/me', {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(profile),
       })
 
