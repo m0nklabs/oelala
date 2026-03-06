@@ -1,6 +1,6 @@
 # Oelala TODO List
 
-> Active development tasks. Updated: 2026-03-05
+> Active development tasks. Updated: 2026-07-09
 
 ---
 
@@ -75,6 +75,11 @@ The main functionality is complete! All MEGA issues for core features are done:
 ---
 
 ## ✅ Recently Completed
+
+### 2026-07-09
+- [x] feat(frontend): migrated ALL remaining raw fetch() → apiFetch() across 14 tool files (50+ calls total)
+- [x] Security: kept 3 fetch() calls intentionally raw (blob URLs + external user URLs — prevent JWT leakage)
+- [x] Updated ROADMAP.md: marked 20+ completed features, fixed phase numbering, updated version history
 
 ### 2026-03-06
 - [x] Face system E2E testing: image swap, video swap, profiles CRUD — all working

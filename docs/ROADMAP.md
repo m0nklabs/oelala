@@ -1,7 +1,7 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-03-02
-> **Version**: 0.10.0 (Alpha)
+> **Last Updated**: 2026-07-09
+> **Version**: 0.11.0 (Alpha)
 
 ## Vision
 
@@ -74,6 +74,7 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Quota display in user menu | ⏳ Todo | High | #33 |
 | Retention policies (30d free) | ⏳ Todo | Medium | #71 |
 | Warning when approaching limit | ⏳ Todo | Medium | #33 |
+| Consistent auth in all frontend API calls | ✅ Done | High | - |
 
 ### Phase 7: Advanced Generation
 
@@ -90,23 +91,21 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | I2I preset system (Portrait, Character, Stylized) | ✅ Done | Medium |
 
 ### Phase 8: Content Filtering & Moderation
+
+| Task | Status | Priority |
+|------|--------|----------|
 | Global NSFW toggle in header | ✅ Done | High |
 | Keyword-based NSFW detection | ✅ Done | High |
 | LoRA filtering by NSFW flag | ✅ Done | High |
+| Guest access (SFW only, no toggle) | ✅ Done | High |
+| Login required for NSFW toggle | ✅ Done | High |
 | Manual NSFW tagging system | ⏳ Todo | Medium |
 | NSFW flags in metadata DB | ⏳ Todo | Medium |
 | Auto-tag NSFW on generation | ⏳ Todo | Medium |
 | Model/checkpoint NSFW filtering | ⏳ Todo | Low |
 | Generated content NSFW scanning | ⏳ Todo | Low |
 
-**NSFW Access Control** (requires User System):
-- Default (not logged in): SFW only, no toggle visible
-- Logged in as adult: NSFW toggle available
-- Age verification at registration (DOB/checkbox)
-- Content generated with NSFW components → auto-tagged NSFW
-- NSFW flag stored in media metadata
-
-### Phase 6: Avatar System
+### Phase 9: Avatar System
 
 **Goal**: Consistent character generation
 
@@ -122,46 +121,49 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 
 ## Mid-Term Roadmap (Q2-Q3 2026)
 
-### Phase 7: User System & Multi-tenancy
+### ✅ User System & Multi-tenancy (Phase 4 — COMPLETED)
 
-**Goal**: Production-ready user management
+**Goal**: Production-ready user management — **DONE**
 
 #### Authentication Providers
 | Provider | Status | Notes |
 |----------|--------|-------|
-| Email/Password | ⏳ Todo | Basic auth |
-| Google OAuth | ⏳ Todo | Priority |
-| GitHub OAuth | ⏳ Todo | Developer-friendly |
+| Email/Password | ✅ Done | Supabase Auth |
+| Google OAuth | ✅ Done | Production |
+| GitHub OAuth | ✅ Done | Production |
 | Discord OAuth | ⏳ Todo | Community integration |
 | Facebook OAuth | ⏳ Todo | Mass market |
-| Steam OAuth | ⏳ Todo | Gaming audience |
-| Apple Sign-In | ⏳ Todo | iOS requirement |
+| Steam OAuth | ❌ Dropped | Not supported (no macOS/mobile) |
+| Apple Sign-In | ❌ Dropped | Not supported (no macOS/mobile) |
 
 #### User Features
-- [ ] User registration & profiles
+- [x] User registration & profiles
 - [ ] Project/workspace management
-- [ ] Generation history & favorites
-- [ ] Usage quotas & tracking
-- [ ] API key management
+- [x] Generation history (My Media)
+- [x] Gallery favorites (Like system)
+- [x] Usage quotas & tracking (credit system)
+- [x] API key management
 - [ ] Team/organization support
 
-### Phase 8: Local-First Distributed Storage
+### Phase 10: Local-First Distributed Storage (oelala-storage)
 
-**Goal**: Self-hosted, cross-platform storage nodes before cloud integration
+**Goal**: Self-hosted, cross-platform storage nodes — **Partially done (Go service at :7990)**
 
 #### Storage Node Architecture
 | Feature | Status | Priority |
 |---------|--------|----------|
-| Cross-platform node daemon (Win/Linux/Mac) | ⏳ Todo | Critical |
-| SQLite metadata database | ⏳ Todo | Critical |
-| REST API for node communication | ⏳ Todo | High |
-| Content-addressed storage (SHA-256) | ⏳ Todo | High |
-| P2P sync engine | ⏳ Todo | High |
+| Cross-platform node daemon (Win/Linux) | ✅ Done | Critical |
+| SQLite metadata database | ✅ Done | Critical |
+| REST API (S3-compatible) | ✅ Done | High |
+| Content-addressed storage (SHA-256) | ✅ Done | High |
+| gRPC sync engine | 🔄 In Progress | High |
+| Multi-node distributed storage | ⏳ Todo | High |
 | File chunking & resumable transfers | ⏳ Todo | Medium |
 | Conflict resolution (LWW/manual) | ⏳ Todo | Medium |
 | Node discovery (mDNS/manual) | ⏳ Todo | Medium |
-| At-rest encryption (optional) | ⏳ Todo | Low |
-| LZ4/ZSTD compression (optional) | ⏳ Todo | Low |
+| Admin UI | ✅ Done | Medium |
+| Deduplication | ✅ Done | Low |
+| Garbage collection | ✅ Done | Low |
 
 #### Node Types
 | Type | Description | Typical Hardware |
@@ -184,25 +186,26 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Content deduplication | ⏳ Todo | Low |
 | IPFS/decentralized option | ⏳ Todo | Low |
 
-### Phase 10: Security & Compliance
+### Phase 11: Security & Compliance
 
 **Goal**: Enterprise-ready security
 
 | Feature | Status | Priority |
 |---------|--------|----------|
-| Content moderation (NSFW filtering) | ⏳ Todo | Critical |
+| Content moderation (NSFW filtering) | ✅ Done | Critical |
 | DMCA takedown system | ⏳ Todo | Critical |
 | Watermarking (optional/invisible) | ⏳ Todo | High |
-| Audit logging | ⏳ Todo | High |
+| Audit logging | ✅ Done | High |
 | GDPR compliance tools | ⏳ Todo | High |
 | Content provenance (C2PA) | ⏳ Todo | Medium |
-| Rate limiting & abuse prevention | ⏳ Todo | High |
+| Rate limiting & abuse prevention | ✅ Done | High |
+| CORS security (explicit origins, Vary: Origin) | ✅ Done | High |
 
 ---
 
 ## Long-Term Roadmap (Q4 2026+)
 
-### Phase 10: Commercial Platform
+### Phase 12: Commercial Platform
 
 **Goal**: Monetization and scaling
 
@@ -215,13 +218,15 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Enterprise | Studios | Self-hosted, SLA, dedicated support |
 
 #### Monetization Features
-- [ ] Subscription billing (Stripe)
-- [ ] Credit-based usage system
+- [x] Stripe payments integration
+- [x] Credit-based usage system
+- [x] Welcome bonus (100 credits on signup)
+- [ ] Subscription billing tiers
 - [ ] Marketplace for custom LoRAs/models
 - [ ] API metering & billing
 - [ ] White-label/reseller program
 
-### Phase 11: Advanced AI Features
+### Phase 13: Advanced AI Features
 
 | Feature | Description |
 |---------|-------------|
@@ -232,7 +237,7 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | Virtual try-on | Fashion/product visualization |
 | AI video editing | Smart cuts, transitions |
 
-### Phase 12: Platform Ecosystem
+### Phase 14: Platform Ecosystem
 
 | Feature | Description |
 |---------|-------------|
@@ -247,11 +252,12 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 ## Technical Debt & Improvements
 
 ### Code Quality
-- [ ] Comprehensive test suite (pytest, vitest)
-- [ ] CI/CD pipeline (GitHub Actions)
+- [x] Test suite (pytest — 15 test files)
+- [x] CI/CD pipeline (GitHub Actions — 23 workflows)
 - [ ] Code coverage > 80%
 - [ ] API documentation (OpenAPI/Swagger)
-- [ ] Type hints throughout backend
+- [x] Type hints in backend (partial)
+- [x] Consistent auth in all frontend API calls (apiFetch)
 
 ### Performance
 - [ ] Response caching (Redis)
@@ -278,6 +284,7 @@ Oelala is an AI-powered video generation platform that enables creators to produ
 | 0.1.5 | Dec 2025 | Web interface, ComfyUI integration |
 | 0.2.0 | Jan 2026 | Audio pipeline, voice cloning, lip sync |
 | 0.10.0 | Mar 2026 | I2I face processing, CORS fix, CreationsPickerModal inline |
+| 0.11.0 | Jul 2026 | Auth hardening, fetch→apiFetch migration (14 files), face system E2E tests |
 
 ---
 
