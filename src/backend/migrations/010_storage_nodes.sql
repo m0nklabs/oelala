@@ -41,4 +41,6 @@ ALTER TABLE public.storage_nodes ENABLE ROW LEVEL SECURITY;
 -- but mostly backend will bypass RLS.
 CREATE POLICY "Admins can view storage nodes" ON public.storage_nodes
     FOR SELECT TO authenticated
-    USING (auth.uid() IN (SELECT user_id FROM admin_users));
+    USING (
+        (SELECT is_admin FROM public.user_credits WHERE user_id = auth.uid()) = true
+    );
