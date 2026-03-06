@@ -592,12 +592,14 @@ async def request_metrics_middleware(request: Request, call_next):
 
 # API v1 router (programmatic access)
 from api_v1 import router as api_v1_router
+from storage_nodes_api import router as storage_nodes_router
 
 # API keys management router
 from api_keys_management import router as api_keys_router
 
 # Include API routers
 app.include_router(api_v1_router)  # REST API v1 at /api/v1/*
+app.include_router(storage_nodes_router)
 app.include_router(api_keys_router)  # API key management at /api/keys/*
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook

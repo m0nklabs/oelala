@@ -1,0 +1,30 @@
+name: "Run DB Migration"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup PSQL certificates
+        run: |
+          mkdir -p ~/.postgresql
+          echo "${{ secrets.PG_CA_CERT }}" > ~/.postgresql/root.crt
+          echo "${{ secrets.PG_CLIENT_CERT }}" > ~/.postgresql/postgresql.crt
+          echo "${{ secrets.PG_CLIENT_KEY }}" > ~/.postgresql/postgresql.key
+          chmod 600 ~/.postgresql/postgresql.key
+          chmod 600 ~/.postgresql/postgresql.crt
+          chmod 600 ~/.postgresql/root.crt
+
+      - name: Execute Migration
+        run: |
+          psql "sslmode=verify-ca sslrootcert=$HOME/.postgresql/root.crt sslcert=$HOME/.postgresql/postgresql.crt sslkey=$HOME/.postgresql/postgresql.key host=${{ secrets.PG_HOST }} port=5432 user=${{ secrets.PG_USER }} dbname=${{ secrets.PG_DATABASE }}" -f src/backend/migrations/010_storage_nodes.sql
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf ~/.postgresql
