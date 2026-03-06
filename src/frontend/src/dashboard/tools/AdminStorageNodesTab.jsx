@@ -141,8 +141,8 @@ export default function AdminStorageNodesTab() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {nodes.map((node) => {
-            const online = isOnline(node.last_heartbeat)
-            const percentUsed = node.total_space_bytes ? (node.used_space_bytes / node.total_space_bytes) * 100 : 0
+            const online = isOnline(node.last_heartbeat_at)
+            const percentUsed = node.total_bytes ? (node.used_bytes / node.total_bytes) * 100 : 0
             const isExpanded = expandedNodes[node.node_id]
             
             return (
@@ -181,7 +181,7 @@ export default function AdminStorageNodesTab() {
                         {node.hostname || node.node_id.substring(0, 8)}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                        Last seen: {formatTimeAgo(node.last_heartbeat)}
+                        Last seen: {formatTimeAgo(node.last_heartbeat_at)}
                       </div>
                     </div>
                   </div>
@@ -189,10 +189,10 @@ export default function AdminStorageNodesTab() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '0.8rem', fontWeight: 600, color: percentUsed > 90 ? '#ef4444' : 'var(--text-primary)' }}>
-                        {formatBytes(node.used_space_bytes)}
+                        {formatBytes(node.used_bytes)}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        / {formatBytes(node.total_space_bytes)}
+                        / {formatBytes(node.total_bytes)}
                       </div>
                     </div>
                     {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
@@ -219,6 +219,17 @@ export default function AdminStorageNodesTab() {
                       
                       <span style={{ color: 'var(--text-muted)' }}>IP Addr:</span>
                       <span style={{ color: 'var(--text-primary)' }}>{node.ip_address}</span>
+                      
+                      {node.public_url && (
+                        <>
+                          <span style={{ color: 'var(--text-muted)' }}>Public URL:</span>
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            <a href={node.public_url} target="_blank" rel="noreferrer" style={{ color: 'var(--primary-color)' }}>
+                              {node.public_url.replace('https://', '')}
+                            </a>
+                          </span>
+                        </>
+                      )}
                       
                       <span style={{ color: 'var(--text-muted)' }}>OS:</span>
                       <span style={{ color: 'var(--text-primary)' }}>{node.os_type} ({node.architecture})</span>

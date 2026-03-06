@@ -17,6 +17,7 @@ class HeartbeatPayload(BaseModel):
     node_id: str
     name: str
     type: str
+    public_url: Optional[str] = None
     total_bytes: int
     used_bytes: int
     status: str
@@ -69,6 +70,7 @@ async def receive_heartbeat(
             "node_id": payload.node_id,
             "name": payload.name,
             "type": payload.type,
+            "public_url": payload.public_url,
             "total_bytes": payload.total_bytes,
             "used_bytes": payload.used_bytes,
             "status": payload.status,
