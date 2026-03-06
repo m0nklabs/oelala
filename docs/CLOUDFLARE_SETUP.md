@@ -1,6 +1,6 @@
 # Cloudflare Integration Guide
 
-This document describes how to set up Cloudflare Tunnel and CDN caching for oelala-storage.
+This document describes the current Cloudflare Tunnel and CDN caching setup for Oelala and oelala-storage.
 
 ## ⚠️ CORS & Caching Gotcha (CRITICAL)
 
@@ -44,11 +44,20 @@ Cloudflare caches responses **including CORS headers**. If a non-browser request
                     └───────────────────────┘
 ```
 
+## Current Hostname Inventory
+
+| Hostname | Tunnel | Target |
+|----------|--------|--------|
+| `oelala.xyz` | `oelala-main` | frontend `localhost:5174` |
+| `api.oelala.xyz` | `oelala-main` | backend `localhost:7998` |
+| `storage.oelala.xyz` | `oelala-main` | storage `localhost:7990` |
+| `storage2.oelala.xyz` | `oelala-storage-node2` | remote storage node |
+
 ## Prerequisites
 
-- Cloudflare account (free tier works)
+- Cloudflare account
 - Domain managed by Cloudflare DNS
-- `cloudflared` CLI installed
+- `cloudflared` installed on each participating machine
 
 ## Step 1: Install cloudflared
 
@@ -73,34 +82,36 @@ This opens a browser to authenticate with your Cloudflare account.
 
 ```bash
 # Create tunnel
-cloudflared tunnel create oelala-storage
+cloudflared tunnel create oelala-main
 
 # Note the tunnel ID (e.g., a1b2c3d4-e5f6-7890-abcd-ef1234567890)
 ```
 
 ## Step 4: Configure Tunnel
 
-Create `/etc/cloudflared/config.yml`:
+Example `/etc/cloudflared/config.yml` for the main machine:
 
 ```yaml
 tunnel: a1b2c3d4-e5f6-7890-abcd-ef1234567890  # Your tunnel ID
 credentials-file: /root/.cloudflared/a1b2c3d4-e5f6-7890-abcd-ef1234567890.json
 
 ingress:
-  # Media storage API
-  - hostname: storage.oelala.ai
-    service: http://localhost:7990
-    originRequest:
-      noTLSVerify: true
+  - hostname: oelala.xyz
+    service: http://localhost:5174
 
-  # Catch-all (required)
+  - hostname: api.oelala.xyz
+    service: http://localhost:7998
+
+  - hostname: storage.oelala.xyz
+    service: http://localhost:7990
+
   - service: http_status:404
 ```
 
 ## Step 5: Route DNS
 
 ```bash
-cloudflared tunnel route dns oelala-storage storage.oelala.ai
+TUNNEL_ORIGIN_CERT=/home/flip/.cloudflared/cert.pem cloudflared tunnel route dns <tunnel-id> storage.oelala.xyz
 ```
 
 This creates a CNAME record pointing to your tunnel.
@@ -157,10 +168,10 @@ Cache-Control: public, max-age=3600
 
 ```bash
 # Test tunnel is working
-curl -I https://storage.oelala.ai/health
+curl -I https://storage.oelala.xyz/health
 
 # Test signed URL through CDN
-curl -I "https://storage.oelala.ai/users/test/file.mp4?expires=1234567890&sig=abc123"
+curl -I "https://storage.oelala.xyz/users/test/file.mp4?expires=1234567890&sig=abc123"
 ```
 
 Check `CF-Cache-Status` header:
@@ -181,7 +192,7 @@ Check `CF-Cache-Status` header:
 ### Tunnel not connecting
 ```bash
 journalctl -u cloudflared -f
-cloudflared tunnel info oelala-storage
+cloudflared tunnel info oelala-main
 ```
 
 ### Cache not working
@@ -196,11 +207,16 @@ cloudflared tunnel info oelala-storage
 
 ## Production Checklist
 
-- [ ] Tunnel created and running as service
-- [ ] DNS routed through Cloudflare
+- [ ] Tunnel created and running as service on each node
+- [ ] DNS routed through the correct tunnel
 - [ ] Cache rules configured
 - [ ] SSL/TLS set to "Full (strict)"
 - [ ] Rate limiting configured (optional)
 - [ ] Bot management enabled (optional)
 - [ ] `signing_secret` is strong (32+ bytes)
 - [ ] `signing_secret` matches in oelala-storage.yaml and .env
+
+## Notes
+
+- Each storage node should have its own tunnel. Do not centralize node connectivity through another storage node.
+- The backend normally accesses storage with bearer auth and admin-secret headers; signed URLs are for controlled read access, not a replacement for service auth.
