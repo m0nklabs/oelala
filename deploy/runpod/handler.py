@@ -5,10 +5,10 @@ RunPod Serverless Handler for Oelala ComfyUI Worker
 Receives ComfyUI workflow JSON via RunPod API, executes it on the
 local ComfyUI instance, and returns the output (images/videos).
 
-Supports two model loading strategies:
-1. Network Volume — models pre-loaded, symlinked at startup (fast)
-2. Download-at-startup — models downloaded from HuggingFace on first boot
-   (slower cold start but no monthly Network Volume cost)
+Supports three asset-loading strategies:
+1. RunPod cached models / HF cache for public models when available
+2. Container-disk downloads from HuggingFace for missing public models
+3. Optional RunPod Network Volume for LoRAs and hard-to-replace private assets
 
 Input format:
 {
@@ -42,7 +42,10 @@ import threading
 import logging
 import io
 import glob
+import shutil
+from collections import deque
 from pathlib import Path
+from typing import Iterator
 
 import requests
 import runpod
@@ -57,6 +60,19 @@ COMFYUI_URL = f"http://{COMFYUI_HOST}:{COMFYUI_PORT}"
 OUTPUT_DIR = "/comfyui/output"
 INPUT_DIR = "/comfyui/input"
 MODEL_VOLUME = os.getenv("RUNPOD_VOLUME_PATH", "/runpod-volume")
+CACHED_MODEL_DIRS_ENV = "RUNPOD_CACHED_MODEL_DIRS"
+HF_STAGING_DIR = Path(os.getenv("RUNPOD_HF_STAGING_DIR", "/tmp/hf_cache"))
+DOWNLOAD_SAFETY_BUFFER_GB = float(os.getenv("RUNPOD_DOWNLOAD_SAFETY_BUFFER_GB", "2"))
+DEFAULT_CACHED_MODEL_DIRS = [
+    "/runpod-volume/huggingface-cache/hub",
+    "/runpod-model-cache",
+    "/runpod-models",
+    "/cache/runpod-models",
+    "/root/.cache/huggingface/hub",
+    "/root/.cache/huggingface",
+]
+
+_cached_roots_logged = False
 
 # ---- Cloud Max model definitions ----
 # Source: Comfy-Org/Wan_2.2_ComfyUI_Repackaged on HuggingFace
@@ -72,6 +88,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
         "size_gb": 14.3,
         "description": "Wan 2.2 I2V high noise 14B fp8_scaled",
+        "persist_on_volume": True,
         "required": True,
     },
     {
@@ -81,6 +98,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         "size_gb": 14.3,
         "description": "Wan 2.2 I2V low noise 14B fp8_scaled",
+        "persist_on_volume": True,
         "required": True,
     },
     {
@@ -90,6 +108,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
         "size_gb": 14.3,
         "description": "Wan 2.2 T2V high noise 14B fp8_scaled",
+        "persist_on_volume": True,
         "required": False,  # Skip at startup — download on first T2V request
     },
     {
@@ -99,6 +118,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
         "size_gb": 14.3,
         "description": "Wan 2.2 T2V low noise 14B fp8_scaled",
+        "persist_on_volume": True,
         "required": False,  # Skip at startup — download on first T2V request
     },
     {
@@ -108,6 +128,7 @@ CLOUD_MAX_MODELS = [
         "filename": "umt5_xxl_fp16.safetensors",
         "size_gb": 11.4,
         "description": "UMT5-XXL fp16 text encoder",
+        "persist_on_volume": True,
         "required": True,
     },
     {
@@ -129,14 +150,18 @@ CLOUD_MAX_MODELS = [
         "required": True,
     },
 ]
+PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_MAX_MODELS}
 
 
 # ---- Model Setup ----
 
 def setup_model_links():
     """
-    Create symlinks from network volume models to ComfyUI model dirs.
-    Fallback for deployments using RunPod Network Volume.
+    Create symlinks from network volume assets to ComfyUI model dirs.
+
+    Public/general Hugging Face model files are never linked from the RunPod
+    Network Volume. That volume is reserved for LoRAs and hard-to-recreate
+    private/custom assets only.
     """
     volume_models = Path(MODEL_VOLUME) / "models"
     comfyui_models = Path("/comfyui/models")
@@ -157,6 +182,9 @@ def setup_model_links():
         if src.exists():
             dst.mkdir(parents=True, exist_ok=True)
             for f in src.iterdir():
+                if f.is_file() and f.name in PUBLIC_MODEL_FILENAMES:
+                    logger.info(f"⏭️ Skipping public model on RunPod volume per policy: {d}/{f.name}")
+                    continue
                 target = dst / f.name
                 if not target.exists():
                     target.symlink_to(f)
@@ -172,25 +200,12 @@ def download_models():
     Download Cloud Max bf16 models from HuggingFace if not already present.
     Uses huggingface_hub for efficient downloading with resume support.
 
-    Downloads to Network Volume if mounted (persistent), otherwise to
-    container disk (lost on restart).
+    Public/general models always download to the worker container disk.
+    The RunPod Network Volume is reserved for LoRAs and private/custom assets.
     """
-    try:
-        from huggingface_hub import hf_hub_download
-    except ImportError:
-        logger.error("❌ huggingface_hub not installed, cannot download models")
-        return False
-
-    # Determine target: prefer Network Volume (persistent) over container disk
-    volume_models = Path(MODEL_VOLUME) / "models"
-    comfyui_models = Path("/comfyui/models")
-
-    if Path(MODEL_VOLUME).exists():
-        target_base = volume_models
-        logger.info(f"📁 Downloading to Network Volume: {target_base}")
-    else:
-        target_base = comfyui_models
-        logger.info(f"📁 Downloading to container disk: {target_base} (NOT persistent!)")
+    linked = link_cached_models(required_only=True)
+    if linked:
+        logger.info(f"✅ Startup satisfied {linked} required model(s) from cache")
 
     total_to_download = 0
     models_needed = []
@@ -202,9 +217,7 @@ def download_models():
             logger.info(f"⏭️ {model['filename']} ({model['size_gb']}GB) — optional, skipping")
             continue
 
-        dest_vol = volume_models / model["local_dir"] / model["filename"]
-        dest_local = comfyui_models / model["local_dir"] / model["filename"]
-        if dest_vol.exists() or dest_local.exists():
+        if _is_model_present(model):
             logger.info(f"✅ {model['filename']} ({model['size_gb']}GB) — already present")
         else:
             models_needed.append(model)
@@ -214,10 +227,22 @@ def download_models():
         logger.info("✅ All Cloud Max models already downloaded")
         return True
 
+    ok, capacity_error = _check_download_capacity(models_needed)
+    if not ok:
+        logger.error(f"❌ {capacity_error}")
+        return False
+
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        logger.error("❌ huggingface_hub not installed, cannot download models")
+        return False
+
     logger.info(f"📦 Downloading {len(models_needed)} models ({total_to_download:.1f}GB total)...")
     start = time.time()
 
     for i, model in enumerate(models_needed, 1):
+        target_base = _target_base_for_model(model)
         dest_dir = target_base / model["local_dir"]
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / model["filename"]
@@ -230,11 +255,9 @@ def download_models():
             downloaded_path = hf_hub_download(
                 repo_id=model.get("hf_repo", HF_REPO_22),
                 filename=model["hf_path"],
-                local_dir="/tmp/hf_cache",
+                local_dir=str(HF_STAGING_DIR),
                 local_dir_use_symlinks=False,
             )
-            # Move to ComfyUI model dir
-            import shutil
             shutil.move(downloaded_path, str(dest))
             elapsed = time.time() - dl_start
             speed = model["size_gb"] / elapsed * 1024 if elapsed > 0 else 0
@@ -242,7 +265,7 @@ def download_models():
                        f"({speed:.0f} MB/s)")
 
             # Clean HF cache after each download to free disk space
-            shutil.rmtree("/tmp/hf_cache", ignore_errors=True)
+            shutil.rmtree(HF_STAGING_DIR, ignore_errors=True)
         except Exception as e:
             logger.error(f"❌ Failed to download {model['filename']}: {e}")
             return False
@@ -263,62 +286,350 @@ def _model_destinations(model: dict) -> tuple[Path, Path]:
     )
 
 
+def _should_persist_model(model: dict) -> bool:
+    """Public/general models must never persist on the RunPod Network Volume."""
+    return False
+
+
+def _writable_volume_models_dir() -> Path | None:
+    """Return the writable volume-backed models dir, if available.
+
+    RunPod cached-model mounts also live under /runpod-volume, but they do not
+    guarantee a writable Network Volume for arbitrary files. Treat the path as a
+    writable model volume only when the root exists and is writable.
+    """
+    volume_path = Path(MODEL_VOLUME)
+    if not volume_path.exists():
+        return None
+
+    probe_path = volume_path / ".oelala-write-probe"
+    try:
+        probe_path.write_text("probe")
+        probe_path.unlink(missing_ok=True)
+    except OSError:
+        logger.info(f"📁 Volume root present but not writable at {volume_path}; treating it as cache-only mount")
+        return None
+
+    return volume_path / "models"
+
+
+def _target_base_for_model(model: dict) -> Path:
+    """Always store public/general models on the worker container disk."""
+    comfyui_models = Path("/comfyui/models")
+
+    logger.info(f"📁 Using ephemeral container storage for model: {model['filename']}")
+    return comfyui_models
+
+
+def _model_size_bytes(model: dict) -> int:
+    """Convert a configured model size from GiB to bytes."""
+    return int(model["size_gb"] * (1024 ** 3))
+
+
+def _existing_stats_path(path: Path) -> Path:
+    """Return an existing path suitable for filesystem stats."""
+    current = path
+    while not current.exists() and current != current.parent:
+        current = current.parent
+    return current
+
+
+def _storage_device_key(path: Path) -> int:
+    """Return the filesystem device id for the given path."""
+    return os.stat(_existing_stats_path(path)).st_dev
+
+
+def _check_download_capacity(models: list[dict]) -> tuple[bool, str | None]:
+    """Estimate whether current filesystems can hold the requested HF downloads.
+
+    Final model files accumulate on the target filesystem, while the Hugging Face
+    staging dir needs room for the largest in-flight download plus a small buffer.
+    If both paths live on the same filesystem, those requirements add up.
+    """
+    if not models:
+        return True, None
+
+    requirements: dict[int, dict[str, int | Path]] = {}
+    buffer_bytes = int(DOWNLOAD_SAFETY_BUFFER_GB * (1024 ** 3))
+
+    for model in models:
+        target_dir = _target_base_for_model(model) / model["local_dir"]
+        device = _storage_device_key(target_dir)
+        entry = requirements.setdefault(
+            device,
+            {"path": _existing_stats_path(target_dir), "required": 0},
+        )
+        entry["required"] += _model_size_bytes(model)
+
+    staging_device = _storage_device_key(HF_STAGING_DIR)
+    staging_entry = requirements.setdefault(
+        staging_device,
+        {"path": _existing_stats_path(HF_STAGING_DIR), "required": 0},
+    )
+    staging_entry["required"] += max(_model_size_bytes(model) for model in models) + buffer_bytes
+
+    failures: list[str] = []
+    for entry in requirements.values():
+        stats_path = entry["path"]
+        required_bytes = int(entry["required"])
+        free_bytes = shutil.disk_usage(stats_path).free
+        if free_bytes < required_bytes:
+            failures.append(
+                f"{stats_path}: need ~{required_bytes / (1024 ** 3):.1f}GB free, have {free_bytes / (1024 ** 3):.1f}GB"
+            )
+
+    if not failures:
+        return True, None
+
+    target_names = ", ".join(model["filename"] for model in models)
+    return (
+        False,
+        "Insufficient disk for Hugging Face model download preflight. "
+        f"Models: {target_names}. "
+        f"Constraints: {'; '.join(failures)}. "
+        "Increase containerDiskInGb or use RunPod cached models.",
+    )
+
+
+def _split_env_list(raw_value: str | None) -> list[str]:
+    """Parse a comma-separated env var into a de-duplicated list."""
+    if not raw_value:
+        return []
+
+    values: list[str] = []
+    for part in raw_value.split(","):
+        value = part.strip()
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def _candidate_cached_model_roots() -> list[Path]:
+    """Return ordered candidate roots for RunPod cached-model files."""
+    roots: list[Path] = []
+    explicit_roots = _split_env_list(os.getenv(CACHED_MODEL_DIRS_ENV))
+    env_roots = [
+        os.getenv("RUNPOD_CACHED_MODEL_DIR"),
+        os.getenv("HF_HOME"),
+        os.getenv("HUGGINGFACE_HUB_CACHE"),
+        os.getenv("HF_HUB_CACHE"),
+    ]
+
+    for raw_path in [*explicit_roots, *env_roots, *DEFAULT_CACHED_MODEL_DIRS]:
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        if path not in roots:
+            roots.append(path)
+
+    return roots
+
+
+def _log_cached_model_roots_once() -> None:
+    """Emit one-time diagnostics about cached-model search roots."""
+    global _cached_roots_logged
+    if _cached_roots_logged:
+        return
+
+    roots = _candidate_cached_model_roots()
+    if not roots:
+        logger.warning("⚠️ No cached-model roots configured or discovered")
+        _cached_roots_logged = True
+        return
+
+    for root in roots:
+        if root.exists():
+            logger.info(f"🗂️ Cached-model root available: {root}")
+        else:
+            logger.info(f"🗂️ Cached-model root missing: {root}")
+
+    _cached_roots_logged = True
+
+
+def _iter_cached_model_candidates(root: Path, model: dict) -> Iterator[Path]:
+    """Yield likely cached-model file paths for a single model."""
+    filename = model["filename"]
+    hf_path = Path(model["hf_path"])
+    repo_slug = model.get("hf_repo", HF_REPO_22).replace("/", "--")
+    snapshot_dirs = [
+        root / f"models--{repo_slug}" / "snapshots",
+        root / repo_slug / "snapshots",
+        root / "snapshots",
+    ]
+    direct_candidates = [
+        root / hf_path,
+        root / model["local_dir"] / filename,
+        root / "models" / model["local_dir"] / filename,
+        root / filename,
+    ]
+
+    seen: set[Path] = set()
+    for candidate in direct_candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            yield candidate
+
+    for snapshots_root in snapshot_dirs:
+        if not snapshots_root.exists():
+            continue
+        for snapshot_dir in snapshots_root.iterdir():
+            candidate = snapshot_dir / hf_path
+            if candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+    if root.exists() and root.is_dir():
+        for candidate in root.rglob(filename):
+            if candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+
+def _find_cached_model_source(model: dict) -> Path | None:
+    """Locate a model file inside a RunPod cached-model mount or HF cache."""
+    _log_cached_model_roots_once()
+    for root in _candidate_cached_model_roots():
+        if not root.exists():
+            continue
+        for candidate in _iter_cached_model_candidates(root, model):
+            if candidate.is_file():
+                logger.info(f"💾 Found cached model for {model['filename']}: {candidate}")
+                return candidate
+    logger.info(f"🫥 No cached model found for {model['filename']}")
+    return None
+
+
+def _link_model_into_comfyui(model: dict, source: Path) -> bool:
+    """Symlink a cached model file into the expected ComfyUI model directory."""
+    _, dest_local = _model_destinations(model)
+    dest_local.parent.mkdir(parents=True, exist_ok=True)
+
+    if _is_model_present(model):
+        return False
+    # Remove stale symlink or corrupt/empty placeholder before linking
+    if dest_local.exists() or dest_local.is_symlink():
+        dest_local.unlink()
+
+    dest_local.symlink_to(source)
+    logger.info(f"🔗 Linked cached model: {model['filename']} -> {source}")
+    return True
+
+
+def _missing_models(
+    *,
+    required_only: bool = False,
+    filenames: set[str] | None = None,
+) -> list[dict]:
+    """Return models that are still missing from both volume and local paths."""
+    missing = []
+    for model in CLOUD_MAX_MODELS:
+        if required_only and not model.get("required", True):
+            continue
+        if filenames and model["filename"] not in filenames:
+            continue
+        if not _is_model_present(model):
+            missing.append(model)
+    return missing
+
+
+def link_cached_models(
+    *,
+    required_only: bool = False,
+    filenames: set[str] | None = None,
+) -> int:
+    """Link models from cached storage before falling back to HF downloads."""
+    linked = 0
+    for model in _missing_models(required_only=required_only, filenames=filenames):
+        source = _find_cached_model_source(model)
+        if source and _link_model_into_comfyui(model, source):
+            linked += 1
+
+    if linked:
+        logger.info(f"✅ Linked {linked} cached model(s) into ComfyUI")
+    return linked
+
+
 def _is_model_present(model: dict) -> bool:
-    """Check whether a model already exists in either persistent or local storage."""
+    """Check whether a model already exists in either persistent or local storage.
+
+    A model is considered present only if the file exists AND has a reasonable size
+    (at least 50MB). This prevents treating corrupt/empty placeholder files as valid.
+    """
+    # Minimum file size: 50MB — catches empty placeholders and failed partial downloads
+    min_bytes = 50 * 1024 * 1024
+
+    def _valid(path: Path) -> bool:
+        try:
+            return path.exists() and path.stat().st_size >= min_bytes
+        except OSError:
+            return False
+
     dest_vol, dest_local = _model_destinations(model)
-    return dest_vol.exists() or dest_local.exists()
+    volume_present = _valid(dest_vol) and _should_persist_model(model)
+    return volume_present or _valid(dest_local)
 
 
 def download_requested_models(filenames: list[str]) -> int:
     """Download a specific subset of models on demand."""
+    requested = {name for name in filenames if name}
+    if not requested:
+        return 0
+
+    linked = link_cached_models(filenames=requested)
+    models = _missing_models(filenames=requested)
+    if not models:
+        return linked
+
+    ok, capacity_error = _check_download_capacity(models)
+    if not ok:
+        raise RuntimeError(capacity_error)
+
     try:
         from huggingface_hub import hf_hub_download
     except ImportError:
         raise RuntimeError("huggingface_hub not installed, cannot download models")
 
-    requested = {name for name in filenames if name}
-    models = [model for model in CLOUD_MAX_MODELS if model["filename"] in requested]
-    if not models:
-        return 0
-
-    volume_models = Path(MODEL_VOLUME) / "models"
     comfyui_models = Path("/comfyui/models")
-    target_base = volume_models if Path(MODEL_VOLUME).exists() else comfyui_models
-    downloaded = 0
+    prepared = linked
 
     for model in models:
         if _is_model_present(model):
             logger.info(f"✅ {model['filename']} already present")
             continue
 
+        target_base = _target_base_for_model(model)
         dest_dir = target_base / model["local_dir"]
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / model["filename"]
+
+        # Remove any stale/corrupt placeholder before downloading
+        if dest.exists() or dest.is_symlink():
+            logger.info(f"🗑️ Removing corrupt/stale placeholder: {dest.name}")
+            dest.unlink(missing_ok=True)
+
         logger.info(f"⬇️ On-demand model download: {model['filename']}")
 
         downloaded_path = hf_hub_download(
             repo_id=model.get("hf_repo", HF_REPO_22),
             filename=model["hf_path"],
-            local_dir="/tmp/hf_cache",
+            local_dir=str(HF_STAGING_DIR),
             local_dir_use_symlinks=False,
         )
 
-        import shutil
-
         shutil.move(downloaded_path, str(dest))
-        shutil.rmtree("/tmp/hf_cache", ignore_errors=True)
+        shutil.rmtree(HF_STAGING_DIR, ignore_errors=True)
 
         # If downloaded to volume, make sure ComfyUI sees it immediately.
-        if target_base == volume_models:
+        if target_base != comfyui_models:
             comfyui_target = comfyui_models / model["local_dir"] / model["filename"]
             comfyui_target.parent.mkdir(parents=True, exist_ok=True)
             if not comfyui_target.exists():
                 comfyui_target.symlink_to(dest)
                 logger.info(f"🔗 Symlinked on-demand model: {model['filename']}")
 
-        downloaded += 1
+        prepared += 1
 
-    return downloaded
+    return prepared
 
 
 def restart_comfyui():
@@ -368,38 +679,40 @@ def ensure_workflow_models(workflow: dict, job=None) -> int:
 def ensure_models():
     """
     Ensure all required models are available. Tries strategies in order:
-    1. Network Volume symlinks (instant, if volume has models)
-    2. Download from HuggingFace to Network Volume (persistent, slow first time)
-    3. Download from HuggingFace to container disk (non-persistent fallback)
+    1. RunPod cached-model / HF cache symlinks (fast, no worker download time)
+    2. Download from HuggingFace to container disk
+
+    The RunPod Network Volume is reserved for LoRAs and private/custom assets.
     """
     comfyui_models = Path("/comfyui/models")
     volume_path = Path(MODEL_VOLUME)
-    volume_models = volume_path / "models"
+    volume_models = _writable_volume_models_dir()
+
+    if not volume_path.exists():
+        logger.info(f"📁 Network Volume not mounted at {volume_path}; public models will use container disk")
+    elif volume_models is None:
+        logger.info(f"📁 {volume_path} is not writable Network Volume storage; public models will use container disk")
+    else:
+        logger.info(f"📁 Writable Network Volume detected at {volume_path}; reserved for LoRAs/private assets only")
 
     # Clean up old Wan 2.1 models to free space on volume
-    _cleanup_old_models(volume_models, comfyui_models)
+    _cleanup_old_models(volume_models or (volume_path / "models"), comfyui_models)
 
-    # Strategy 1: Network Volume already has models
-    if volume_path.exists() and volume_models.exists():
-        logger.info("📁 Network Volume detected, setting up symlinks...")
-        if setup_model_links():
-            # Verify at least the high noise diffusion model is available
-            i2v_hi = comfyui_models / "unet" / "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
-            if not i2v_hi.exists():
-                i2v_hi = comfyui_models / "diffusion_models" / "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
-            if i2v_hi.exists():
-                logger.info("✅ Models loaded from Network Volume")
-                return True
-            logger.warning("⚠️ Network Volume found but missing Wan 2.2 models, will download")
+    # Strategy 1: Link any files already available via RunPod cached-model storage.
+    cached_linked = link_cached_models(required_only=True)
+    if cached_linked:
+        logger.info("✅ Required models linked from cached-model storage")
 
-    # Strategy 2: Download from HuggingFace (to volume if available, else container)
-    logger.info("📥 Downloading models from HuggingFace...")
+    if not _missing_models(required_only=True):
+        logger.info("✅ All required models are available before any HF download")
+        return True
+
+    logger.warning("⚠️ Some required models are still missing, falling back to Hugging Face download")
+
+    # Strategy 2: Download from HuggingFace to container storage.
+    logger.info("📥 Downloading missing models from HuggingFace...")
     if not download_models():
         return False
-
-    # If downloaded to volume, set up symlinks to ComfyUI dirs
-    if volume_path.exists() and volume_models.exists():
-        setup_model_links()
 
     return True
 
@@ -429,6 +742,7 @@ def _cleanup_old_models(volume_models: Path, comfyui_models: Path):
 # ---- ComfyUI Process Management ----
 
 _comfyui_process = None
+_comfyui_recent_logs = deque(maxlen=80)
 
 
 def wait_for_cuda(max_wait: int = 60) -> bool:
@@ -452,7 +766,9 @@ def wait_for_cuda(max_wait: int = 60) -> bool:
                  "assert torch.cuda.is_available(), 'CUDA not available'; "
                  "d = torch.cuda.device_count(); "
                  "name = torch.cuda.get_device_name(0); "
-                 "mem = torch.cuda.get_device_properties(0).total_mem / 1024**3; "
+                 "props = torch.cuda.get_device_properties(0); "
+                 "mem_bytes = getattr(props, 'total_memory', getattr(props, 'total_mem', 0)); "
+                 "mem = mem_bytes / 1024**3; "
                  "print(f'OK|{d}|{name}|{mem:.1f}')"],
                 capture_output=True, text=True, timeout=30,
                 env={**os.environ, "CUDA_LAUNCH_BLOCKING": "1"},
@@ -508,10 +824,14 @@ def start_comfyui(max_retries: int = 2):
             env=env,
         )
 
+        _comfyui_recent_logs.clear()
+
         # Stream ComfyUI logs in background thread
         def log_reader(proc=_comfyui_process):
             for line in iter(proc.stdout.readline, b''):
-                logger.info(f"[ComfyUI] {line.decode().strip()}")
+                decoded = line.decode(errors="replace").rstrip()
+                _comfyui_recent_logs.append(decoded)
+                logger.info(f"[ComfyUI] {decoded}")
         threading.Thread(target=log_reader, daemon=True).start()
 
         # Wait for ComfyUI to be ready
@@ -521,6 +841,10 @@ def start_comfyui(max_retries: int = 2):
             # Check if process crashed
             if _comfyui_process.poll() is not None:
                 logger.error(f"❌ ComfyUI process exited with code {_comfyui_process.returncode}")
+                if _comfyui_recent_logs:
+                    logger.error("❌ Last ComfyUI log lines before exit:")
+                    for recent_line in _comfyui_recent_logs:
+                        logger.error(f"[ComfyUI][tail] {recent_line}")
                 break
 
             try:
@@ -538,6 +862,10 @@ def start_comfyui(max_retries: int = 2):
         # If we get here, this attempt failed
         if _comfyui_process.poll() is None:
             logger.error(f"❌ ComfyUI failed to start within {max_wait}s (attempt {attempt})")
+            if _comfyui_recent_logs:
+                logger.error("❌ Recent ComfyUI startup log lines before timeout:")
+                for recent_line in _comfyui_recent_logs:
+                    logger.error(f"[ComfyUI][tail] {recent_line}")
         # Continue to next retry
 
     logger.error(f"❌ ComfyUI failed to start after {max_retries} attempts")
@@ -560,16 +888,17 @@ def save_input_images(images: dict):
 def download_loras(lora_downloads: list, job=None):
     """
     Download LoRA files from backend on demand for cloud jobs.
-    Downloads to Network Volume (persistent cache) if available,
+    Downloads to Network Volume (persistent cache) if writable,
     otherwise to container's ComfyUI loras dir (ephemeral).
 
     Skips LoRAs that already exist (cached from previous jobs).
     """
-    volume_loras = Path(MODEL_VOLUME) / "models" / "loras"
+    volume_models = _writable_volume_models_dir()
+    volume_loras = volume_models / "loras" if volume_models is not None else None
     comfyui_loras = Path("/comfyui/models/loras")
 
     # Prefer volume (persistent across jobs) over container disk
-    target_dir = volume_loras if Path(MODEL_VOLUME).exists() else comfyui_loras
+    target_dir = volume_loras if volume_loras is not None else comfyui_loras
     target_dir.mkdir(parents=True, exist_ok=True)
     comfyui_loras.mkdir(parents=True, exist_ok=True)
 
@@ -613,7 +942,7 @@ def download_loras(lora_downloads: list, job=None):
             logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
 
             # If saved to volume, also symlink into comfyui dir so ComfyUI finds it
-            if target_dir == volume_loras and not comfyui_target.exists():
+            if volume_loras is not None and target_dir == volume_loras and not comfyui_target.exists():
                 comfyui_target.symlink_to(target)
                 logger.info(f"🔗 Symlinked LoRA: {filename}")
 
@@ -869,7 +1198,7 @@ if __name__ == "__main__":
     logger.info("🎬 Oelala ComfyUI Worker starting...")
     logger.info("=" * 60)
 
-    # Ensure models are available (Network Volume or download from HF)
+    # Ensure public models are available (cached-model hit or download from HF)
     if not ensure_models():
         logger.error("❌ Failed to load models, exiting")
         sys.exit(1)

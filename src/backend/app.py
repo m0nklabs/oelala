@@ -2080,10 +2080,33 @@ def record_generation_start(prompt_id: str, job_info: dict) -> None:
     if prompt_id in active_jobs:
         active_jobs[prompt_id]["_start_time"] = time.time()
         active_jobs[prompt_id]["_job_type"] = job_info.get("job_type", "unknown")
+        # Persist user_id so record_generation_complete can upload log to user bucket
+        if "user_id" in job_info:
+            active_jobs[prompt_id]["user_id"] = job_info["user_id"]
+
+
+def _upload_gen_log_to_user_storage(
+    user_id: str,
+    prompt_id: str,
+    status: str,
+    log_text: str,
+) -> None:
+    """Upload a generation log to the user's storage bucket (fire-and-forget)."""
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        short_id = prompt_id[:8] if prompt_id else "unknown"
+        log_key = f"logs/{ts}_{status}_{short_id}.log"
+        storage_key = f"users/{user_id}/{log_key}"
+
+        storage = get_storage_client()
+        storage.put("generated", storage_key, log_text.encode("utf-8"))
+        logger.info(f"📋 Gen log uploaded to user storage: generated/{storage_key}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to upload gen log for {prompt_id}: {e}")
 
 
 def record_generation_complete(
-    prompt_id: str, success: bool = True, error: str = None
+    prompt_id: str, success: bool = True, error: str = None, log_text: str = None
 ) -> None:
     """Record completion of a generation job and save stats"""
     import time
@@ -2120,6 +2143,29 @@ def record_generation_complete(
     logger.info(
         f"📊 Generation stats recorded: {prompt_id} - {duration_seconds:.1f}s {'✅' if success else '❌'}"
     )
+
+    # Upload log to user's storage bucket if we have user_id
+    user_id = job_info.get("user_id")
+    if user_id:
+        status_str = "completed" if success else "failed"
+        # Build log content: use provided log_text or generate a summary from stat
+        if not log_text:
+            log_lines = [
+                f"prompt_id: {prompt_id}",
+                f"status: {status_str}",
+                f"timestamp: {stat['timestamp']}",
+                f"duration_seconds: {stat['duration_seconds']}",
+                f"job_type: {stat['job_type']}",
+                f"resolution: {stat['resolution']}",
+                f"num_frames: {stat['num_frames']}",
+                f"model_mode: {stat['model_mode']}",
+                f"steps: {stat['steps']}",
+                f"compute_target: {job_info.get('compute_target', 'local')}",
+            ]
+            if error:
+                log_lines.append(f"error: {error}")
+            log_text = "\n".join(log_lines) + "\n"
+        _upload_gen_log_to_user_storage(user_id, prompt_id, status_str, log_text)
 
 
 # LoRA source directory (SSD)
@@ -2309,7 +2355,8 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         error_msg = rp_job.error or f"RunPod job {status_val}"
         logger.error(f"☁️ Cloud job failed: {runpod_job_id} — {error_msg}")
         _save_cloud_logs(runpod_job_id, prompt_id, rp_job)
-        record_generation_complete(prompt_id, success=False, error=error_msg)
+        _rp_log_text = (rp_job.output or {}).get("logs") if isinstance(rp_job.output, dict) else None
+        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         # Clean up active_jobs after a delay (keep for a bit so UI can read the failure)
@@ -2327,9 +2374,10 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     _save_cloud_logs(runpod_job_id, prompt_id, rp_job)
 
     output = rp_job.output
+    _rp_log_text = output.get("logs") if isinstance(output, dict) else None
     if not output or not isinstance(output, dict):
         error_msg = "RunPod returned empty output"
-        record_generation_complete(prompt_id, success=False, error=error_msg)
+        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
@@ -2340,7 +2388,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     if "error" in output:
         error_msg = output["error"]
         logger.error(f"☁️ Cloud handler error: {error_msg}")
-        record_generation_complete(prompt_id, success=False, error=error_msg)
+        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
@@ -2350,7 +2398,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     files = output.get("files", [])
     if not files:
         error_msg = "No output files in RunPod response"
-        record_generation_complete(prompt_id, success=False, error=error_msg)
+        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
         result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
@@ -2432,7 +2480,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     # Record stats
     execution_time = output.get("execution_time_s")
-    record_generation_complete(prompt_id, success=True)
+    record_generation_complete(prompt_id, success=True, log_text=_rp_log_text)
 
     # Mark as completed in active_jobs
     active_jobs[prompt_id]["_cloud_completed"] = True
@@ -6352,6 +6400,7 @@ async def generate_wan22_async(
 
     # Store job info for tracking
     job_info = {
+        "user_id": user.id,
         "prompt": prompt[:100],
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
@@ -6609,6 +6658,7 @@ async def generate_blockswap_q8_async(
         "prompt_id": prompt_id,
         "user_id": user.id,
         "prompt": prompt[:100],
+        "user_id": user.id,
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
         "num_frames": num_frames,
@@ -7547,6 +7597,7 @@ async def generate_ltx2_i2v_async(
 
     # Store job info for tracking
     job_info = {
+        "user_id": user.id,
         "prompt": prompt[:100],
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
@@ -8017,6 +8068,25 @@ async def generate_text_video(
     prompt_id = comfyui.queue_prompt(workflow)
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
+
+    # Register in active_jobs for stats tracking and gen log upload
+    _t2v_job_info = {
+        "user_id": user.id,
+        "prompt": prompt[:100],
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "num_frames": num_frames,
+        "fps": fps,
+        "steps": actual_steps,
+        "seed": actual_seed,
+        "cfg": actual_cfg,
+        "model_mode": model_type,
+        "job_type": f"{model_type}_t2v",
+        "created_at": timestamp,
+        "lora_count": len(parsed_lora_configs),
+    }
+    active_jobs[prompt_id] = _t2v_job_info
+    record_generation_start(prompt_id, _t2v_job_info)
 
     # Register pending post-processing if any steps specified
     if post_processing_steps:
