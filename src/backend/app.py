@@ -95,7 +95,9 @@ from credits_api import (
     stripe_router,
     check_credits,
     deduct_credits,
+    refund_credits,
 )
+from credits import get_credit_manager
 
 # Gallery system
 from gallery_api import router as gallery_router
@@ -2303,6 +2305,40 @@ def _mark_cloud_job_timed_out(prompt_id: str, job_info: dict, queue_age: float) 
     return result
 
 
+async def _refund_cloud_job_credits(prompt_id: str, job_info: dict, reason: str = "Cloud generation failed - credits refunded") -> bool:
+    """
+    Refund credits for a failed/timed-out cloud job.
+    Idempotent — uses the _credit_refunded flag to prevent double refunds.
+    """
+    # Guard against double refund
+    if active_jobs.get(prompt_id, {}).get("_credit_refunded"):
+        logger.debug(f"⚠️ Refund skipped for {prompt_id} — already refunded")
+        return False
+
+    user_id = job_info.get("user_id")
+    credits_required = job_info.get("credits_required", 0)
+
+    if not user_id or not credits_required:
+        logger.debug(f"⚠️ Refund skipped for {prompt_id}: user_id={user_id}, credits={credits_required}")
+        return False
+
+    try:
+        manager = get_credit_manager()
+        await manager.refund(
+            user_id=user_id,
+            amount=credits_required,
+            reference_id=prompt_id,
+            reason=reason,
+        )
+        logger.info(f"🔄 Refunded {credits_required} credits to user {user_id} for failed cloud job {prompt_id}")
+        if prompt_id in active_jobs:
+            active_jobs[prompt_id]["_credit_refunded"] = True
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to refund credits for {prompt_id}: {e}")
+        return False
+
+
 async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     """
     Handle status polling for a cloud (RunPod) job.
@@ -2335,6 +2371,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         queue_age = max(0.0, time.time() - float(job_info.get("_start_time") or time.time()))
         timed_out_result = _mark_cloud_job_timed_out(prompt_id, job_info, queue_age)
         if timed_out_result:
+            await _refund_cloud_job_credits(prompt_id, job_info, "RunPod queue timeout — no worker provisioned, credits refunded")
             return timed_out_result
         active_jobs[prompt_id]["_cloud_status"] = status_val
         return {
@@ -2364,6 +2401,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         active_jobs[prompt_id]["_cloud_status"] = status_val
         active_jobs[prompt_id]["_cloud_error"] = error_msg
         _persist_cloud_jobs()
+        await _refund_cloud_job_credits(prompt_id, job_info, f"RunPod job {status_val} — credits refunded")
         return result
     elif status_val != "COMPLETED":
         # Unknown status — treat as running
@@ -2755,16 +2793,16 @@ async def get_comfyui_queue():
                 cloud_job["status"] = "failed"
                 cloud_job["error"] = info.get("_cloud_error", f"RunPod job {cloud_status}")
                 cloud_failed.append(cloud_job)
-            elif cloud_status == "IN_QUEUE":
+            elif cloud_status in ("IN_QUEUE", "IN_PROGRESS"):
+                # Show as pending/running based on local cache. Do NOT timeout here —
+                # timeouts only fire when RunPod is actually polled via get_job_status,
+                # to avoid killing jobs that are IN_PROGRESS but not yet polled.
                 queue_age = max(0.0, time.time() - float(info.get("_start_time") or time.time()))
-                timed_out_result = _mark_cloud_job_timed_out(pid, info, queue_age)
-                if timed_out_result:
-                    cloud_job["status"] = "failed"
-                    cloud_job["error"] = timed_out_result["error"]
-                    cloud_failed.append(cloud_job)
+                cloud_job["status"] = "running" if cloud_status == "IN_PROGRESS" else "pending"
+                cloud_job["queue_age_seconds"] = int(queue_age)
+                if cloud_status == "IN_PROGRESS":
+                    cloud_running.append(cloud_job)
                 else:
-                    cloud_job["status"] = "pending"
-                    cloud_job["queue_age_seconds"] = int(queue_age)
                     pending.append(cloud_job)
             else:
                 # Only real in-progress cloud jobs belong in the running list.
@@ -6338,6 +6376,7 @@ async def generate_wan22_async(
             "cfg": cfg,
             "model_mode": "wan2.2",
             "user_id": user.id,
+            "credits_required": credits_required,
         }
         cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
@@ -6602,6 +6641,7 @@ async def generate_blockswap_q8_async(
             "enable_upscale": enable_upscale,
             "enable_interpolation": enable_interpolation,
             "user_id": user.id,
+            "credits_required": credits_required,
         }
         cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
@@ -6843,6 +6883,7 @@ async def generate_distorch2_q8_async(
             "enable_upscale": enable_upscale,
             "enable_interpolation": enable_interpolation,
             "user_id": user.id,
+            "credits_required": credits_required,
         }
         cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
@@ -7084,6 +7125,7 @@ async def generate_ultra_q8_async(
             "enable_upscale": enable_upscale,
             "enable_interpolation": enable_interpolation,
             "user_id": user.id,
+            "credits_required": credits_required,
         }
         cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
@@ -7368,6 +7410,7 @@ async def generate_cloud_max_async(
         "model_mode": "cloud_max",
         "compute_target": "cloud",
         "user_id": user.id,
+        "credits_required": credits_required,
     }
 
     result = await _submit_to_runpod(
@@ -7541,6 +7584,7 @@ async def generate_ltx2_i2v_async(
             "cfg": cfg,
             "model_mode": "ltx2",
             "user_id": user.id,
+            "credits_required": credits_required,
         }
         result = await _submit_to_runpod(
             workflow=workflow,
@@ -8015,6 +8059,7 @@ async def generate_text_video(
             "model_mode": "wan2.2",
             "compute_target": "cloud",
             "user_id": user.id,
+            "credits_required": credits_required,
         }
         cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         result = await _submit_to_runpod(
