@@ -980,7 +980,7 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
     """
     Poll ComfyUI /history until the job is done.
     Returns the history entry for this prompt_id.
-    Sends RunPod progress_update when new logs appear or every 10s.
+    Sends RunPod progress_update when new logs appear or every 30s.
     """
     global _log_buffer
     start = time.time()
@@ -1004,11 +1004,11 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
         except requests.exceptions.RequestException:
             pass
 
-        # Send progress when new ComfyUI logs appear (within 3s) or every 60s heartbeat
+        # Send progress when new ComfyUI logs appear (within 3s) or every 30s heartbeat
         elapsed = time.time() - start
         current_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
         has_new_logs = current_log_len > last_log_len
-        if job and (has_new_logs or elapsed - last_progress >= 60):
+        if job and (has_new_logs or elapsed - last_progress >= 30):
             _progress(job, f"Generating... {elapsed:.0f}s elapsed", log_locally=has_new_logs)
             last_progress = elapsed
             # Re-read after _progress adds its own log line

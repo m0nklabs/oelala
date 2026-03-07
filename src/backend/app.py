@@ -88,6 +88,9 @@ from storage_client import get_client as get_storage_client
 # MediaService for oelala-storage + Supabase integration (new async client)
 from media_service import MediaService, MediaRecord
 
+# Generation artifact storage (workflow, settings, logs per generation)
+from gen_artifacts import save_gen_start_artifacts, save_gen_logs, format_comfyui_history_log
+
 # Credits system
 from credits import calculate_credits
 from credits_api import (
@@ -2087,30 +2090,10 @@ def record_generation_start(prompt_id: str, job_info: dict) -> None:
             active_jobs[prompt_id]["user_id"] = job_info["user_id"]
 
 
-def _upload_gen_log_to_user_storage(
-    user_id: str,
-    prompt_id: str,
-    status: str,
-    log_text: str,
-) -> None:
-    """Upload a generation log to the user's storage bucket (fire-and-forget)."""
-    try:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        short_id = prompt_id[:8] if prompt_id else "unknown"
-        log_key = f"logs/{ts}_{status}_{short_id}.log"
-        storage_key = f"users/{user_id}/{log_key}"
-
-        storage = get_storage_client()
-        storage.put("generated", storage_key, log_text.encode("utf-8"))
-        logger.info(f"📋 Gen log uploaded to user storage: generated/{storage_key}")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to upload gen log for {prompt_id}: {e}")
-
-
 def record_generation_complete(
     prompt_id: str, success: bool = True, error: str = None, log_text: str = None
 ) -> None:
-    """Record completion of a generation job and save stats"""
+    """Record completion of a generation job and save stats + execution log to user bucket."""
     import time
 
     job_info = active_jobs.get(prompt_id, {})
@@ -2146,7 +2129,7 @@ def record_generation_complete(
         f"📊 Generation stats recorded: {prompt_id} - {duration_seconds:.1f}s {'✅' if success else '❌'}"
     )
 
-    # Upload log to user's storage bucket if we have user_id
+    # Save execution log to user's generation artifact bundle
     user_id = job_info.get("user_id")
     if user_id:
         status_str = "completed" if success else "failed"
@@ -2167,7 +2150,7 @@ def record_generation_complete(
             if error:
                 log_lines.append(f"error: {error}")
             log_text = "\n".join(log_lines) + "\n"
-        _upload_gen_log_to_user_storage(user_id, prompt_id, status_str, log_text)
+        save_gen_logs(user_id, prompt_id, log_text, status_str, duration_seconds)
 
 
 # LoRA source directory (SSD)
@@ -2499,7 +2482,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
             cloud_user_id = job_info.get("user_id")
             cloud_prompt = job_info.get("prompt", "")
             if cloud_user_id:
-                comfyui.register_job_metadata(
+                comfyui.register_job(
                     prompt_id,
                     user_id=cloud_user_id,
                     prompt=cloud_prompt,
@@ -2938,7 +2921,8 @@ async def get_job_status(prompt_id: str):
                             )  # 24h
 
                 # Record generation completion for stats tracking
-                record_generation_complete(prompt_id, success=True)
+                _local_log = format_comfyui_history_log(prompt_id, job_data)
+                record_generation_complete(prompt_id, success=True, log_text=_local_log)
 
                 return {
                     "prompt_id": prompt_id,
@@ -6136,6 +6120,8 @@ async def _submit_to_runpod(
     job_info: dict,
     images: dict = None,
     lora_downloads: list = None,
+    prompt_full: str = None,
+    input_image_path: str = None,
 ) -> dict:
     """Submit a ComfyUI workflow to RunPod cloud GPU instead of local."""
     if not _runpod or not _runpod.has_endpoint():
@@ -6161,6 +6147,23 @@ async def _submit_to_runpod(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     _persist_cloud_jobs()
+
+    # Save generation artifacts to user storage bucket
+    _img_path = None
+    if job_info.get("input_image"):
+        _candidate = UPLOAD_DIR / job_info["input_image"]
+        if _candidate.exists():
+            _img_path = str(_candidate)
+    elif input_image_path:
+        _img_path = input_image_path
+    save_gen_start_artifacts(
+        user_id=user_id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt_full or job_info.get("prompt", ""),
+        job_info=job_info,
+        input_image_path=_img_path,
+    )
 
     return {
         "success": True,
@@ -6385,6 +6388,7 @@ async def generate_wan22_async(
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
+            prompt_full=prompt,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 I2V (cloud)")
         return result
@@ -6463,6 +6467,11 @@ async def generate_wan22_async(
     }
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=prompt, job_info=job_info,
+        input_image_path=str(input_path),
+    )
 
     if is_extend_mode and actual_clip_count > 1:
         logger.info(
@@ -6650,6 +6659,7 @@ async def generate_blockswap_q8_async(
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
+            prompt_full=prompt,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "BlockSwap Q8 I2V (cloud)")
         return result
@@ -6720,6 +6730,11 @@ async def generate_blockswap_q8_async(
     }
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=prompt, job_info=job_info,
+        input_image_path=str(input_path),
+    )
 
     logger.info(f"🧪 Queued BlockSwap Q8 job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
@@ -6892,6 +6907,7 @@ async def generate_distorch2_q8_async(
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
+            prompt_full=prompt,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "DisTorch2 Q8 I2V (cloud)")
         return result
@@ -6958,6 +6974,11 @@ async def generate_distorch2_q8_async(
     }
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=prompt, job_info=job_info,
+        input_image_path=str(input_path),
+    )
 
     logger.info(f"🧪 Queued DisTorch2 Q8 job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
@@ -7134,6 +7155,7 @@ async def generate_ultra_q8_async(
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
+            prompt_full=prompt,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "Ultra Q8 I2V (cloud)")
         return result
@@ -7200,6 +7222,11 @@ async def generate_ultra_q8_async(
     }
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=prompt, job_info=job_info,
+        input_image_path=str(input_path),
+    )
 
     logger.info(f"⚡ Queued Ultra Q8 job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
@@ -7420,6 +7447,7 @@ async def generate_cloud_max_async(
         job_info=cloud_job_info,
         images=input_images_b64 if input_images_b64 else None,
         lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
+        prompt_full=prompt,
     )
     await deduct_credits(
         user, credits_required, result["prompt_id"],
@@ -7591,6 +7619,7 @@ async def generate_ltx2_i2v_async(
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            prompt_full=prompt,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "LTX-2 I2V (cloud)")
         return result
@@ -7661,6 +7690,11 @@ async def generate_ltx2_i2v_async(
     }
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=prompt, job_info=job_info,
+        input_image_path=str(input_path),
+    )
 
     logger.info(f"🚀 Queued LTX-2 I2V async job: {prompt_id}")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
@@ -7840,6 +7874,10 @@ async def post_process_media(
     }
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=f"Post-process: {mode}", job_info=job_info,
+    )
 
     # Deduct credits
     await deduct_credits(user, credits_required, prompt_id, f"Post-process: {mode}")
@@ -8068,6 +8106,7 @@ async def generate_text_video(
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
+            prompt_full=prompt,
         )
         await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 T2V (cloud)")
         logger.info(f"☁️ T2V cloud job submitted: {result.get('runpod_job_id')}")
@@ -8132,6 +8171,10 @@ async def generate_text_video(
     }
     active_jobs[prompt_id] = _t2v_job_info
     record_generation_start(prompt_id, _t2v_job_info)
+    save_gen_start_artifacts(
+        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
+        prompt=prompt, job_info=_t2v_job_info,
+    )
 
     # Register pending post-processing if any steps specified
     if post_processing_steps:

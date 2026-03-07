@@ -3698,23 +3698,26 @@ class ComfyUIClient:
                     return None
 
             # Map output_type to generation_type
+            # Settings are nested under metadata["settings"]
+            settings = metadata.get("settings", {})
+            job_type = settings.get("job_type", "") or settings.get("type", "")
             gen_type_map = {
-                "video": "t2v" if "t2v" in metadata.get("type", "") else "i2v",
+                "video": "t2v" if "t2v" in job_type else "i2v",
                 "image": "t2i",
                 "audio": "audio",
             }
             generation_type = gen_type_map.get(output_type, output_type)
 
-            # Extract metadata for Supabase
+            # Extract metadata for Supabase from nested settings
             extra_metadata = {
-                "model_name": metadata.get("model_name") or metadata.get("model_type"),
-                "resolution": metadata.get("resolution"),
-                "aspect_ratio": metadata.get("aspect_ratio"),
-                "num_frames": metadata.get("num_frames"),
-                "fps": metadata.get("fps"),
-                "seed": metadata.get("seed"),
-                "steps": metadata.get("steps"),
-                "cfg": metadata.get("cfg"),
+                "model_name": settings.get("model_name") or settings.get("model_type") or settings.get("model_mode"),
+                "resolution": settings.get("resolution"),
+                "aspect_ratio": settings.get("aspect_ratio"),
+                "num_frames": settings.get("num_frames"),
+                "fps": settings.get("fps"),
+                "seed": settings.get("seed"),
+                "steps": settings.get("steps"),
+                "cfg": settings.get("cfg"),
                 "size_bytes": len(file_data),
             }
             # Remove None values
@@ -3728,8 +3731,8 @@ class ComfyUIClient:
                 filename=file_path.name,
                 generation_type=generation_type,
                 prompt=metadata.get("prompt", ""),
+                model_name=extra_metadata.get("model_name"),
                 workflow_id=prompt_id,
-                extra_metadata=extra_metadata,
             )
 
             logger.info(
