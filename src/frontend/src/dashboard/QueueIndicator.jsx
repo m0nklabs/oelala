@@ -54,11 +54,14 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
 
   // Watch for jobs completing (running + pending cloud jobs)
   useEffect(() => {
+    let cancelled = false
     const watchJobs = async () => {
       // Poll running jobs for completion
       for (const job of queue.running) {
+        if (cancelled) return
         const status = await checkJobStatus(job.prompt_id)
-        if (status && status.status === 'completed') {
+        if (cancelled) return
+        if (status && (status.status === 'completed' || status.status === 'failed')) {
           setCompletedJobs(prev => {
             if (prev.some(j => j.prompt_id === status.prompt_id)) return prev
             return [...prev, status].slice(-10)
@@ -67,9 +70,11 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
       }
       // Poll pending cloud jobs so their status advances (IN_QUEUE → IN_PROGRESS → COMPLETED)
       for (const job of queue.pending) {
+        if (cancelled) return
         if (job.compute_target === 'cloud') {
           const status = await checkJobStatus(job.prompt_id)
-          if (status && status.status === 'completed') {
+          if (cancelled) return
+          if (status && (status.status === 'completed' || status.status === 'failed')) {
             setCompletedJobs(prev => {
               if (prev.some(j => j.prompt_id === status.prompt_id)) return prev
               return [...prev, status].slice(-10)
@@ -79,6 +84,7 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
       }
     }
     if (queue.running.length > 0 || queue.pending.some(j => j.compute_target === 'cloud')) watchJobs()
+    return () => { cancelled = true }
   }, [queue.running, queue.pending, checkJobStatus])
 
   // Close popup on click outside

@@ -2128,6 +2128,19 @@ async def _cloud_job_poller() -> None:
                 # Small delay between individual polls to avoid hammering RunPod
                 await asyncio.sleep(2)
 
+            # Cleanup: remove completed cloud jobs from active_jobs after 5 min
+            # (keeps them briefly so frontend can read the final status)
+            CLOUD_CLEANUP_DELAY = 300  # 5 minutes
+            stale_ids = [
+                pid for pid, info in active_jobs.items()
+                if info.get("compute_target") == "cloud"
+                and info.get("_cloud_completed")
+                and (time.time() - float(info.get("_start_time", time.time()))) > CLOUD_CLEANUP_DELAY
+            ]
+            for pid in stale_ids:
+                del active_jobs[pid]
+                logger.debug(f"☁️ Cleaned up completed cloud job {pid} from memory")
+
         except asyncio.CancelledError:
             logger.info("☁️ Cloud job poller stopping")
             break
@@ -2490,6 +2503,14 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         active_jobs[prompt_id]["_cloud_error"] = error_msg
         _persist_cloud_jobs()
         await _refund_cloud_job_credits(prompt_id, job_info, f"RunPod job {status_val} — credits refunded")
+        # WS notification for failure
+        if ws_manager:
+            cloud_user_id = job_info.get("user_id")
+            if cloud_user_id:
+                await ws_manager.broadcast_to_user(cloud_user_id, "job_failed", {
+                    "job_id": prompt_id, "prompt_id": prompt_id,
+                    "error": error_msg, "compute_target": "cloud",
+                })
         return result
     elif status_val != "COMPLETED":
         # Unknown status — treat as running
@@ -2580,6 +2601,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     # Upload to oelala-storage via MediaService
     storage_path = None
     signed_url = None
+    upload_ok = False
     try:
         comfyui = get_comfyui_client()
         if comfyui:
@@ -2601,11 +2623,21 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
             if storage_path:
                 logger.info(f"☁️ Auto-uploaded cloud output: {storage_path}")
                 signed_url = get_signed_media_url(storage_path, expires_in=86400)
+                upload_ok = True
     except Exception as e:
-        logger.warning(f"☁️ Storage upload failed (file still saved locally): {e}")
+        logger.warning(f"☁️ Storage upload failed — will retry next poll cycle: {e}")
 
-    # Record stats
+    # If storage upload failed, DON'T mark as completed so poller retries
+    if not upload_ok:
+        logger.warning(f"☁️ Storage upload incomplete for {prompt_id}, will retry")
+        return {"prompt_id": prompt_id, "status": "running", "compute_target": "cloud", **job_info}
+
+    # Record stats — fallback execution_time from _start_time if RunPod didn't provide it
     execution_time = output.get("execution_time_s")
+    if execution_time is None:
+        start_ts = job_info.get("_start_time")
+        if start_ts:
+            execution_time = round(time.time() - float(start_ts), 1)
     record_generation_complete(prompt_id, success=True, log_text=_rp_log_text)
 
     # Mark as completed in active_jobs
@@ -2626,6 +2658,24 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     }
     _cloud_completed_cache[prompt_id] = result
     logger.info(f"☁️ Cloud job complete: {prompt_id} → {output_video or output_image}")
+
+    # WebSocket notification — push to user immediately
+    if ws_manager:
+        cloud_user_id = job_info.get("user_id")
+        if cloud_user_id:
+            await ws_manager.broadcast_to_user(cloud_user_id, "job_complete", {
+                "job_id": prompt_id,
+                "prompt_id": prompt_id,
+                "output_video": output_video,
+                "output_image": output_image,
+                "url": signed_url or output_video or output_image,
+                "signed_url": signed_url,
+                "storage_path": storage_path,
+                "compute_target": "cloud",
+                "execution_time_s": execution_time,
+            })
+            logger.info(f"📡 WS notification sent to {cloud_user_id} for cloud job {prompt_id}")
+
     return result
 
 

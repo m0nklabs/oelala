@@ -197,7 +197,7 @@ const saveFavorites = (favorites) => {
   }
 }
 
-export default function MyMediaTool({ filter: filterProp = 'all', selectionMode = false, onSelectItem = null, onSendToTool = null }) {
+export default function MyMediaTool({ filter: filterProp = 'all', selectionMode = false, onSelectItem = null, onSendToTool = null, refreshToken = 0 }) {
   const [mediaList, setMediaList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -506,7 +506,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     if (mounted) fetchMedia()
     return () => { mounted = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, user?.id, isAdminUser, sourceFilter, visibilityFilter, filterUserId, includeAllUsers])
+  }, [filter, user?.id, isAdminUser, sourceFilter, visibilityFilter, filterUserId, includeAllUsers, refreshToken])
 
   // Keyboard navigation
   useEffect(() => {

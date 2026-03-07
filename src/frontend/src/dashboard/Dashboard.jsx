@@ -278,7 +278,7 @@ export default function Dashboard() {
         return wrapWithSuspense(<LoRABrowserTool />)
 
       case TOOL_IDS.MY_MEDIA_ALL:
-        return wrapWithSuspense(<MyMediaTool onSendToTool={handleSendToTool} />)
+        return wrapWithSuspense(<MyMediaTool onSendToTool={handleSendToTool} refreshToken={historyRefreshToken} />)
       case TOOL_IDS.GALLERY:
         return wrapWithSuspense(<Gallery onRemix={handleSendToTool} onViewProfile={(userId) => setViewingProfile(userId)} />)
 
@@ -600,6 +600,7 @@ export default function Dashboard() {
                     selectionMode={i2vCreationsMode}
                     onSelectItem={i2vOnSelectImage}
                     onSendToTool={handleSendToTool}
+                    refreshToken={historyRefreshToken}
                   />
                 </div>
               </section>
