@@ -946,6 +946,27 @@ TTS Modes
 │   Tested: 2026-03-01 ✅                                              │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
+│ ☁️ IMAGE-TO-VIDEO (I2V) - CLOUD MAX RUNPOD FP8_SCALED               │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ 256×256 Smoke Validation                                             │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Frames: 5 | FPS: 8 | Steps: 2 | CFG: 1.0                          │
+│   Endpoint: x2x496ymkidl3m | Template: tkpy0pi8gt                   │
+│   GPU Tiers: 48GB+ only (AMPERE_48, ADA_48_PRO, AMPERE_80,          │
+│              ADA_80_PRO, BLACKWELL_96, HOPPER_141, BLACKWELL_180)   │
+│   Models:                                                            │
+│     - wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors              │
+│     - wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors               │
+│   CLIP: umt5_xxl_fp16.safetensors                                    │
+│   VAE: wan_2.1_vae.safetensors                                       │
+│   CLIP Vision: clip_vision_h.safetensors                             │
+│   Worker Image: ghcr.io/m0nklabs/oelala-comfyui-worker:latest       │
+│   Cold Start Delay: ~447s | Execution: ~12s                          │
+│   Warm Start Delay: ~39s | Execution: ~12s                           │
+│   Result: ✅ COMPLETED on RunPod serverless (2026-03-07)            │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
 │ �🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B                                  │
 │ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
