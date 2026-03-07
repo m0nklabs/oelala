@@ -52,9 +52,10 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
     }
   }, [completedJobs, notifiedIds, onJobComplete])
 
-  // Watch for jobs completing
+  // Watch for jobs completing (running + pending cloud jobs)
   useEffect(() => {
     const watchJobs = async () => {
+      // Poll running jobs for completion
       for (const job of queue.running) {
         const status = await checkJobStatus(job.prompt_id)
         if (status && status.status === 'completed') {
@@ -64,9 +65,21 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
           })
         }
       }
+      // Poll pending cloud jobs so their status advances (IN_QUEUE → IN_PROGRESS → COMPLETED)
+      for (const job of queue.pending) {
+        if (job.compute_target === 'cloud') {
+          const status = await checkJobStatus(job.prompt_id)
+          if (status && status.status === 'completed') {
+            setCompletedJobs(prev => {
+              if (prev.some(j => j.prompt_id === status.prompt_id)) return prev
+              return [...prev, status].slice(-10)
+            })
+          }
+        }
+      }
     }
-    if (queue.running.length > 0) watchJobs()
-  }, [queue.running, checkJobStatus])
+    if (queue.running.length > 0 || queue.pending.some(j => j.compute_target === 'cloud')) watchJobs()
+  }, [queue.running, queue.pending, checkJobStatus])
 
   // Close popup on click outside
   useEffect(() => {
