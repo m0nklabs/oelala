@@ -30,6 +30,15 @@ logger = logging.getLogger(__name__)
 DEBUG = os.getenv("RUNPOD_DEBUG", "false").lower() in ("true", "1", "yes")
 
 
+def _parse_endpoint_ids(raw_value: str) -> List[str]:
+    """Parse a comma-separated RunPod endpoint list into unique IDs."""
+    endpoint_ids: List[str] = []
+    for endpoint_id in (part.strip() for part in raw_value.split(",")):
+        if endpoint_id and endpoint_id not in endpoint_ids:
+            endpoint_ids.append(endpoint_id)
+    return endpoint_ids
+
+
 def debug_log(msg: str):
     if DEBUG:
         logger.info(f"🐛 [RunPod] {msg}")
@@ -94,8 +103,16 @@ class RunPodClient:
         self._endpoints: Dict[str, RunPodEndpoint] = {}
         # Active jobs — job_id -> RunPodJob
         self._active_jobs: Dict[str, RunPodJob] = {}
+        configured_endpoints = _parse_endpoint_ids(os.getenv("RUNPOD_ENDPOINT_IDS", ""))
+        explicit_default = os.getenv("RUNPOD_ENDPOINT_ID", "").strip()
+        if explicit_default and explicit_default not in configured_endpoints:
+            configured_endpoints.insert(0, explicit_default)
+
+        self.endpoint_ids: List[str] = configured_endpoints
         # Default endpoint (set via env var, configure, or auto-detected)
-        self.default_endpoint_id: Optional[str] = os.getenv("RUNPOD_ENDPOINT_ID")
+        self.default_endpoint_id: Optional[str] = explicit_default or (
+            configured_endpoints[0] if configured_endpoints else None
+        )
 
     @property
     def http(self) -> httpx.AsyncClient:
@@ -116,7 +133,82 @@ class RunPodClient:
 
     def has_endpoint(self) -> bool:
         """Check if at least one endpoint is configured."""
-        return bool(self.default_endpoint_id or self._endpoints)
+        return bool(self.default_endpoint_id or self.endpoint_ids or self._endpoints)
+
+    def _candidate_endpoint_ids(
+        self,
+        endpoint_id: Optional[str] = None,
+    ) -> List[str]:
+        """Return endpoint candidates ordered by preference with duplicates removed."""
+        if endpoint_id:
+            return [endpoint_id]
+
+        candidates: List[str] = []
+        for candidate in [self.default_endpoint_id, *self.endpoint_ids, *self._endpoints.keys()]:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+        return candidates
+
+    @staticmethod
+    def _health_count(health: Dict[str, Any], key: str) -> int:
+        """Read a health counter from either the top-level or nested workers payload."""
+        workers = health.get("workers") if isinstance(health.get("workers"), dict) else {}
+        value = workers.get(key, health.get(key, 0))
+        return int(value or 0)
+
+    @staticmethod
+    def _is_endpoint_healthy(health: Dict[str, Any]) -> bool:
+        """Check whether an endpoint is suitable for new submissions."""
+        if not health or health.get("status") in {"error", "no_endpoint", "unavailable"}:
+            return False
+        if health.get("error"):
+            return False
+        if RunPodClient._health_count(health, "unhealthy") > 0:
+            return False
+        if RunPodClient._health_count(health, "throttled") > 0:
+            return False
+        return any(
+            RunPodClient._health_count(health, key) > 0
+            for key in ("ready", "idle", "running", "initializing")
+        )
+
+    async def select_submit_endpoint(
+        self,
+        endpoint_id: Optional[str] = None,
+    ) -> str:
+        """Select the best endpoint for a new submission, preferring healthy candidates."""
+        candidates = self._candidate_endpoint_ids(endpoint_id)
+        if not candidates:
+            raise RuntimeError("No RunPod endpoint configured. Deploy one first.")
+
+        if endpoint_id or len(candidates) == 1:
+            return candidates[0]
+
+        fallback_endpoint = candidates[0]
+        failed_health_checks: Dict[str, Dict[str, Any]] = {}
+
+        for candidate in candidates:
+            health = await self.get_endpoint_health(candidate)
+            if self._is_endpoint_healthy(health):
+                if candidate != self.default_endpoint_id:
+                    logger.warning(
+                        "☁️ Switching RunPod default endpoint from %s to healthy endpoint %s",
+                        self.default_endpoint_id,
+                        candidate,
+                    )
+                    self.default_endpoint_id = candidate
+                    if candidate not in self.endpoint_ids:
+                        self.endpoint_ids.append(candidate)
+                return candidate
+            failed_health_checks[candidate] = health
+
+        logger.warning(
+            "☁️ No healthy RunPod endpoint found among %s; falling back to %s (health=%s)",
+            candidates,
+            fallback_endpoint,
+            failed_health_checks,
+        )
+        return fallback_endpoint
 
     # ------------------------------------------------------------------
     # Account
@@ -176,6 +268,11 @@ class RunPodClient:
             self.default_endpoint_id = endpoints[0]["id"]
             debug_log(f"Auto-selected default endpoint: {self.default_endpoint_id}")
 
+        for ep in endpoints:
+            endpoint_id = ep["id"]
+            if endpoint_id not in self.endpoint_ids:
+                self.endpoint_ids.append(endpoint_id)
+
         return endpoints
 
     # ------------------------------------------------------------------
@@ -201,9 +298,7 @@ class RunPodClient:
         Returns:
             RunPodJob with the job ID
         """
-        ep_id = endpoint_id or self.default_endpoint_id
-        if not ep_id:
-            raise RuntimeError("No RunPod endpoint configured. Deploy one first.")
+        ep_id = await self.select_submit_endpoint(endpoint_id)
 
         payload: Dict[str, Any] = {
             "input": {
@@ -251,9 +346,7 @@ class RunPodClient:
         Returns:
             RunPodJob with output
         """
-        ep_id = endpoint_id or self.default_endpoint_id
-        if not ep_id:
-            raise RuntimeError("No RunPod endpoint configured.")
+        ep_id = await self.select_submit_endpoint(endpoint_id)
 
         payload: Dict[str, Any] = {
             "input": {

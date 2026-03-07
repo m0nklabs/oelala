@@ -2,8 +2,9 @@
 # Oelala ComfyUI Worker for RunPod Serverless
 # ============================================================
 # Lightweight ComfyUI container for Cloud Max Wan 2.2 video gen.
-# Models loaded from RunPod Network Volume (~46GB) at startup.
-# Fallback: downloads from HuggingFace if no volume mounted.
+# Public models come from RunPod cached-model storage or container-disk
+# Hugging Face downloads.
+# Optional RunPod Network Volume is reserved for LoRAs/private assets only.
 # Uses fp8_scaled precision (near-lossless, fits 48GB GPUs).
 #
 # Image size: ~8GB (no models baked in)
@@ -49,7 +50,7 @@ RUN git clone --depth 1 https://github.com/kijai/ComfyUI-KJNodes.git && \
 WORKDIR /comfyui
 RUN pip install --no-cache-dir runpod requests httpx huggingface_hub
 
-# Create model directories (will be populated from Network Volume at startup)
+# Create model directories (public models are resolved at runtime)
 RUN mkdir -p models/unet models/clip models/vae models/clip_vision models/loras
 
 COPY handler.py /comfyui/handler.py
