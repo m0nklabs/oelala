@@ -1067,6 +1067,14 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Generation time backfill failed: {e}")
 
+    # Start background cloud job poller
+    global _cloud_poller_task
+    if _runpod:
+        _cloud_poller_task = asyncio.create_task(_cloud_job_poller())
+        logger.info("☁️ Background cloud job poller started")
+    else:
+        logger.info("☁️ Cloud job poller skipped (RunPod not available)")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1082,6 +1090,15 @@ async def shutdown_event():
     # Stop webhook retry worker
     logger.info("🛑 Stopping webhook retry worker...")
     await webhook_service.stop_retry_worker()
+
+    # Stop cloud job poller
+    if _cloud_poller_task and not _cloud_poller_task.done():
+        logger.info("🛑 Stopping cloud job poller...")
+        _cloud_poller_task.cancel()
+        try:
+            await _cloud_poller_task
+        except asyncio.CancelledError:
+            pass
 
     logger.info("✅ Shutdown complete")
 
@@ -2046,6 +2063,79 @@ def _restore_cloud_jobs() -> int:
 # Restore cloud jobs on module load
 _restore_cloud_jobs()
 
+# ── Background cloud job poller ─────────────────────────────────────────
+# Polls active (non-completed) cloud jobs every CLOUD_POLL_INTERVAL seconds
+# so completions are processed even if the frontend isn't watching.
+CLOUD_POLL_INTERVAL = int(os.getenv("CLOUD_POLL_INTERVAL", "30"))
+# Max age before a cloud job is considered abandoned (2 hours)
+CLOUD_JOB_MAX_AGE = int(os.getenv("CLOUD_JOB_MAX_AGE", "7200"))
+
+_cloud_poller_task: Optional[asyncio.Task] = None
+
+
+async def _cloud_job_poller() -> None:
+    """Background task: periodically poll all active cloud jobs for completion."""
+    logger.info(f"☁️ Cloud job poller started (interval={CLOUD_POLL_INTERVAL}s)")
+    while True:
+        try:
+            await asyncio.sleep(CLOUD_POLL_INTERVAL)
+            if not _runpod:
+                continue
+
+            # Collect cloud jobs that need polling
+            cloud_jobs = {
+                pid: info for pid, info in active_jobs.items()
+                if info.get("compute_target") == "cloud"
+                and not info.get("_cloud_completed")
+            }
+            if not cloud_jobs:
+                continue
+
+            logger.debug(f"☁️ Background poll: {len(cloud_jobs)} active cloud job(s)")
+
+            for prompt_id, job_info in list(cloud_jobs.items()):
+                try:
+                    # Check if job is too old (RunPod may have purged it)
+                    job_age = time.time() - float(job_info.get("_start_time", time.time()))
+                    if job_age > CLOUD_JOB_MAX_AGE:
+                        logger.warning(
+                            f"☁️ Expiring stale cloud job {prompt_id} "
+                            f"(age={int(job_age)}s, runpod={job_info.get('runpod_job_id')})"
+                        )
+                        error_msg = f"Cloud job expired (age {int(job_age)}s exceeds {CLOUD_JOB_MAX_AGE}s limit)"
+                        active_jobs[prompt_id]["_cloud_completed"] = True
+                        active_jobs[prompt_id]["_cloud_status"] = "EXPIRED"
+                        active_jobs[prompt_id]["_cloud_error"] = error_msg
+                        _cloud_completed_cache[prompt_id] = {
+                            "prompt_id": prompt_id, "status": "failed",
+                            "error": error_msg, "compute_target": "cloud",
+                        }
+                        record_generation_complete(prompt_id, success=False, error=error_msg)
+                        await _refund_cloud_job_credits(prompt_id, job_info, error_msg)
+                        _persist_cloud_jobs()
+                        continue
+
+                    result = await _handle_cloud_job_status(prompt_id, job_info)
+                    status = result.get("status")
+                    if status in ("completed", "failed"):
+                        logger.info(
+                            f"☁️ Background poll resolved {prompt_id}: {status}"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"☁️ Background poll error for {prompt_id}: {e}"
+                    )
+                # Small delay between individual polls to avoid hammering RunPod
+                await asyncio.sleep(2)
+
+        except asyncio.CancelledError:
+            logger.info("☁️ Cloud job poller stopping")
+            break
+        except Exception as e:
+            logger.error(f"☁️ Cloud poller unexpected error: {e}")
+            await asyncio.sleep(10)
+
+
 # Generation stats file for analysis
 GENERATION_STATS_FILE = Path("/home/flip/oelala/data/generation_stats.json")
 
@@ -2344,8 +2434,23 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     try:
         rp_job = await _runpod.get_job_status(runpod_job_id)
     except Exception as e:
+        error_str = str(e)
+        # 404 = RunPod purged the job — it's gone forever
+        if "404" in error_str:
+            error_msg = f"RunPod job expired/purged (404): {runpod_job_id}"
+            logger.warning(f"☁️ {error_msg}")
+            result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+            _cloud_completed_cache[prompt_id] = result
+            if prompt_id in active_jobs:
+                active_jobs[prompt_id]["_cloud_completed"] = True
+                active_jobs[prompt_id]["_cloud_status"] = "EXPIRED"
+                active_jobs[prompt_id]["_cloud_error"] = error_msg
+            _persist_cloud_jobs()
+            record_generation_complete(prompt_id, success=False, error=error_msg)
+            await _refund_cloud_job_credits(prompt_id, job_info, error_msg)
+            return result
         logger.error(f"☁️ Failed to poll RunPod job {runpod_job_id}: {e}")
-        return {"prompt_id": prompt_id, "status": "running", "error": str(e), **job_info}
+        return {"prompt_id": prompt_id, "status": "running", "error": error_str, **job_info}
 
     status_val = rp_job.status.value if hasattr(rp_job.status, "value") else str(rp_job.status)
 

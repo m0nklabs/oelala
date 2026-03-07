@@ -398,7 +398,12 @@ class RunPodClient:
         resp.raise_for_status()
         data = resp.json()
 
-        status = RunPodJobStatus(data.get("status", "IN_QUEUE"))
+        raw_status = data.get("status") or "IN_QUEUE"
+        try:
+            status = RunPodJobStatus(raw_status)
+        except ValueError:
+            debug_log(f"Unknown RunPod status '{raw_status}' for {job_id}, treating as FAILED")
+            status = RunPodJobStatus.FAILED
         job = self._active_jobs.get(job_id, RunPodJob(id=job_id, endpoint_id=ep_id))
         job.status = status
         job.output = data.get("output")
