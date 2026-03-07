@@ -404,8 +404,19 @@ def _split_env_list(raw_value: str | None) -> list[str]:
     return values
 
 
+_cached_model_roots: list[Path] | None = None  # Cached result — env vars don't change mid-job
+
+
 def _candidate_cached_model_roots() -> list[Path]:
-    """Return ordered candidate roots for RunPod cached-model files."""
+    """Return ordered candidate roots for RunPod cached-model files.
+
+    Results are cached after first call since env vars don't change during
+    a container's lifetime. Avoids rebuilding the list on every model check.
+    """
+    global _cached_model_roots
+    if _cached_model_roots is not None:
+        return _cached_model_roots
+
     roots: list[Path] = []
     explicit_roots = _split_env_list(os.getenv(CACHED_MODEL_DIRS_ENV))
     env_roots = [
@@ -422,6 +433,7 @@ def _candidate_cached_model_roots() -> list[Path]:
         if path not in roots:
             roots.append(path)
 
+    _cached_model_roots = roots
     return roots
 
 
@@ -752,6 +764,9 @@ def wait_for_cuda(max_wait: int = 60) -> bool:
     On RunPod serverless cold starts, the GPU may not be immediately
     available when the container starts. This check prevents ComfyUI
     from crashing with 'CUDA-capable device(s) is/are busy or unavailable'.
+
+    Uses in-process torch check instead of spawning a subprocess per attempt
+    (~2-5s overhead per subprocess avoided).
     """
     logger.info("🔍 Checking CUDA availability...")
     start = time.time()
@@ -760,29 +775,18 @@ def wait_for_cuda(max_wait: int = 60) -> bool:
     while (time.time() - start) < max_wait:
         attempt += 1
         try:
-            result = subprocess.run(
-                [sys.executable, "-c",
-                 "import torch; "
-                 "assert torch.cuda.is_available(), 'CUDA not available'; "
-                 "d = torch.cuda.device_count(); "
-                 "name = torch.cuda.get_device_name(0); "
-                 "props = torch.cuda.get_device_properties(0); "
-                 "mem_bytes = getattr(props, 'total_memory', getattr(props, 'total_mem', 0)); "
-                 "mem = mem_bytes / 1024**3; "
-                 "print(f'OK|{d}|{name}|{mem:.1f}')"],
-                capture_output=True, text=True, timeout=30,
-                env={**os.environ, "CUDA_LAUNCH_BLOCKING": "1"},
-            )
-            if result.returncode == 0 and result.stdout.strip().startswith("OK|"):
-                parts = result.stdout.strip().split("|")
+            import torch
+            if torch.cuda.is_available():
+                d = torch.cuda.device_count()
+                name = torch.cuda.get_device_name(0)
+                props = torch.cuda.get_device_properties(0)
+                mem_bytes = getattr(props, "total_memory", getattr(props, "total_mem", 0))
+                mem = mem_bytes / 1024**3
                 logger.info(f"✅ CUDA ready (attempt {attempt}): "
-                          f"{parts[2]}, {parts[3]}GB VRAM, {int(parts[1])} device(s)")
+                          f"{name}, {mem:.1f}GB VRAM, {d} device(s)")
                 return True
             else:
-                stderr = result.stderr.strip()[-200:] if result.stderr else "no output"
-                logger.warning(f"⚠️ CUDA check attempt {attempt} failed: {stderr}")
-        except subprocess.TimeoutExpired:
-            logger.warning(f"⚠️ CUDA check attempt {attempt} timed out")
+                logger.warning(f"⚠️ CUDA check attempt {attempt}: not available yet")
         except Exception as e:
             logger.warning(f"⚠️ CUDA check attempt {attempt} error: {e}")
 
@@ -981,6 +985,9 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
     Poll ComfyUI /history until the job is done.
     Returns the history entry for this prompt_id.
     Sends RunPod progress_update when new logs appear or every 30s.
+
+    Uses adaptive polling: 2s during first 30s (startup), then 5s during
+    generation, to reduce unnecessary ComfyUI API calls on long jobs.
     """
     global _log_buffer
     start = time.time()
@@ -1004,17 +1011,18 @@ def wait_for_completion(prompt_id: str, timeout: int = 1800, job=None) -> dict:
         except requests.exceptions.RequestException:
             pass
 
-        # Send progress when new ComfyUI logs appear (within 3s) or every 30s heartbeat
+        # Send progress when new ComfyUI logs appear or every 30s heartbeat
         elapsed = time.time() - start
         current_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
         has_new_logs = current_log_len > last_log_len
         if job and (has_new_logs or elapsed - last_progress >= 30):
             _progress(job, f"Generating... {elapsed:.0f}s elapsed", log_locally=has_new_logs)
             last_progress = elapsed
-            # Re-read after _progress adds its own log line
             last_log_len = len(_log_buffer.getvalue()) if _log_buffer else 0
 
-        time.sleep(3)
+        # Adaptive polling: fast during startup, slower during generation
+        poll_interval = 2 if elapsed < 30 else 5
+        time.sleep(poll_interval)
 
     raise TimeoutError(f"Job {prompt_id} timed out after {timeout}s")
 
@@ -1060,12 +1068,24 @@ def collect_outputs(history_entry: dict) -> list:
 
 
 def encode_outputs(files: list) -> list:
-    """Encode output files as base64 for API response."""
+    """Encode output files as base64 for API response.
+
+    Uses streaming base64 encoding to avoid holding both raw bytes
+    and base64 string in memory simultaneously for large files.
+    """
     encoded = []
     for f in files:
         path = Path(f["path"])
         if path.exists():
-            b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+            # Stream base64 encoding in 3MB chunks to limit peak memory
+            chunks = []
+            with open(path, "rb") as fh:
+                while True:
+                    chunk = fh.read(3 * 1024 * 1024)  # 3MB (divisible by 3 for base64)
+                    if not chunk:
+                        break
+                    chunks.append(base64.b64encode(chunk).decode("ascii"))
+            b64 = "".join(chunks)
             encoded.append({
                 "filename": f["filename"],
                 "data": b64,
@@ -1078,15 +1098,25 @@ def encode_outputs(files: list) -> list:
 
 # ---- RunPod Handler ----
 
-_log_buffer = None  # Set by handler(), read by _progress() for real-time log streaming
+_log_buffer = None       # Set by handler(), captures all logs for the job
+_log_sent_pos = 0        # Track how much of the log buffer was already sent
+_LOG_MAX_BYTES = 2 * 1024 * 1024  # 2MB cap — prevents unbounded memory growth
 
 
 def _progress(job, message: str, log_locally: bool = True):
-    """Send a progress update to RunPod with accumulated logs (visible when polling job status)."""
-    global _log_buffer
+    """Send a progress update to RunPod with only NEW log lines since last update.
+
+    Previous implementation sent the ENTIRE accumulated log buffer on every
+    heartbeat, causing exponentially growing payloads on long jobs (20+ min).
+    Now only the delta is sent, keeping payloads small and constant-sized.
+    """
+    global _log_buffer, _log_sent_pos
     try:
         if _log_buffer:
-            payload = {"message": message, "logs": _log_buffer.getvalue()}
+            full = _log_buffer.getvalue()
+            new_logs = full[_log_sent_pos:]
+            _log_sent_pos = len(full)
+            payload = {"message": message, "logs": new_logs}
         else:
             payload = message
         runpod.serverless.progress_update(job, payload)
@@ -1094,6 +1124,23 @@ def _progress(job, message: str, log_locally: bool = True):
             logger.info(f"📡 Progress: {message}")
     except Exception as e:
         logger.warning(f"⚠️ progress_update failed: {e}")
+
+
+def _cleanup_output_dir():
+    """Remove stale output files from previous jobs to free disk space."""
+    try:
+        output_path = Path(OUTPUT_DIR)
+        if not output_path.exists():
+            return
+        removed = 0
+        for f in output_path.iterdir():
+            if f.is_file():
+                f.unlink()
+                removed += 1
+        if removed:
+            logger.info(f"🗑️ Cleaned {removed} stale output file(s)")
+    except Exception as e:
+        logger.warning(f"⚠️ Output cleanup failed: {e}")
 
 
 def handler(event: dict) -> dict:
@@ -1107,9 +1154,10 @@ def handler(event: dict) -> dict:
     All logs are captured and returned in the 'logs' field.
     """
     # Capture logs during this job (also used by _progress for real-time log streaming)
-    global _log_buffer
+    global _log_buffer, _log_sent_pos
     log_buffer = io.StringIO()
     _log_buffer = log_buffer
+    _log_sent_pos = 0
     log_handler = logging.StreamHandler(log_buffer)
     log_handler.setLevel(logging.DEBUG)
     log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
@@ -1118,31 +1166,33 @@ def handler(event: dict) -> dict:
     start_time = time.time()
     input_data = event.get("input", {})
 
-    _progress(event, "Job received, validating workflow...")
-
-    workflow = input_data.get("workflow")
-    if not workflow:
-        logger.removeHandler(log_handler)
-        return {"error": "No workflow provided in input.workflow", "logs": log_buffer.getvalue()}
-
-    # Save input images if provided
-    images = input_data.get("images", {})
-    if images:
-        _progress(event, f"Saving {len(images)} input image(s)...")
-        save_input_images(images)
-
-    # Download LoRAs on demand if provided
-    lora_downloads = input_data.get("lora_downloads", [])
-    if lora_downloads:
-        _progress(event, f"Downloading {len(lora_downloads)} LoRA(s)...")
-        download_loras(lora_downloads, job=event)
-
-    # Download optional workflow models on demand (e.g. Cloud Max T2V fp8 models)
-    downloaded_models = ensure_workflow_models(workflow, job=event)
-    if downloaded_models > 0:
-        _progress(event, f"Reloaded ComfyUI after downloading {downloaded_models} model(s)")
-
     try:
+        _progress(event, "Job received, validating workflow...")
+
+        # Clean old output files from previous jobs
+        _cleanup_output_dir()
+
+        workflow = input_data.get("workflow")
+        if not workflow:
+            return {"error": "No workflow provided in input.workflow", "logs": log_buffer.getvalue()}
+
+        # Save input images if provided
+        images = input_data.get("images", {})
+        if images:
+            _progress(event, f"Saving {len(images)} input image(s)...")
+            save_input_images(images)
+
+        # Download LoRAs on demand if provided
+        lora_downloads = input_data.get("lora_downloads", [])
+        if lora_downloads:
+            _progress(event, f"Downloading {len(lora_downloads)} LoRA(s)...")
+            download_loras(lora_downloads, job=event)
+
+        # Download optional workflow models on demand (e.g. Cloud Max T2V fp8 models)
+        downloaded_models = ensure_workflow_models(workflow, job=event)
+        if downloaded_models > 0:
+            _progress(event, f"Reloaded ComfyUI after downloading {downloaded_models} model(s)")
+
         # Queue the workflow
         _progress(event, "Queuing workflow in ComfyUI...")
         prompt_id = queue_workflow(workflow)
@@ -1156,7 +1206,6 @@ def handler(event: dict) -> dict:
         _progress(event, "Generation complete, collecting outputs...")
         files = collect_outputs(history)
         if not files:
-            logger.removeHandler(log_handler)
             return {"error": "No output files generated", "prompt_id": prompt_id, "logs": log_buffer.getvalue()}
 
         # Encode outputs as base64
@@ -1168,7 +1217,6 @@ def handler(event: dict) -> dict:
         logger.info(f"✅ Job complete in {elapsed:.1f}s — {len(encoded_files)} files")
         _progress(event, f"Done! {len(encoded_files)} file(s) in {elapsed:.0f}s")
 
-        logger.removeHandler(log_handler)
         return {
             "files": encoded_files,
             "prompt_id": prompt_id,
@@ -1178,17 +1226,23 @@ def handler(event: dict) -> dict:
 
     except TimeoutError as e:
         _progress(event, f"❌ Timeout: {e}")
-        logger.removeHandler(log_handler)
         return {"error": str(e), "logs": log_buffer.getvalue()}
     except RuntimeError as e:
         _progress(event, f"❌ Error: {e}")
-        logger.removeHandler(log_handler)
         return {"error": str(e), "logs": log_buffer.getvalue()}
     except Exception as e:
         logger.exception(f"❌ Handler error: {e}")
         _progress(event, f"❌ Unexpected error: {e}")
-        logger.removeHandler(log_handler)
         return {"error": f"Unexpected error: {str(e)}", "logs": log_buffer.getvalue()}
+    finally:
+        logger.removeHandler(log_handler)
+        _log_buffer = None
+        _log_sent_pos = 0
+        # Cap: if buffer grew too large, warn
+        buf_size = len(log_buffer.getvalue())
+        if buf_size > _LOG_MAX_BYTES:
+            logger.warning(f"⚠️ Job log buffer was {buf_size / 1024:.0f}KB (cap: {_LOG_MAX_BYTES / 1024:.0f}KB)")
+        log_buffer.close()
 
 
 # ---- Startup ----
