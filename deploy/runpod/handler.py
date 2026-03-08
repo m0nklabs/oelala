@@ -89,7 +89,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 I2V high noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "required": True,
+        "startup_required": False,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -99,7 +99,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 I2V low noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "required": True,
+        "startup_required": False,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -109,7 +109,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 T2V high noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "required": False,  # Skip at startup — download on first T2V request
+        "startup_required": False,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -119,7 +119,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 T2V low noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "required": False,  # Skip at startup — download on first T2V request
+        "startup_required": False,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -129,7 +129,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 11.4,
         "description": "UMT5-XXL fp16 text encoder",
         "persist_on_volume": True,
-        "required": True,
+        "startup_required": True,
     },
     {
         "hf_repo": HF_REPO_21,
@@ -138,7 +138,7 @@ CLOUD_MAX_MODELS = [
         "filename": "wan_2.1_vae.safetensors",
         "size_gb": 0.40,
         "description": "Wan 2.1 VAE — required for 14B models (wan2.2_vae is 5B only)",
-        "required": True,
+        "startup_required": True,
     },
     {
         "hf_repo": HF_REPO_21,
@@ -147,7 +147,7 @@ CLOUD_MAX_MODELS = [
         "filename": "clip_vision_h.safetensors",
         "size_gb": 1.26,
         "description": "CLIP Vision H (I2V conditioning)",
-        "required": True,
+        "startup_required": False,
     },
 ]
 PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_MAX_MODELS}
@@ -195,9 +195,14 @@ def setup_model_links():
     return linked > 0
 
 
+def _is_startup_required(model: dict) -> bool:
+    """Return whether a model should be prepared during worker startup."""
+    return bool(model.get("startup_required", model.get("required", True)))
+
+
 def download_models():
     """
-    Download Cloud Max bf16 models from HuggingFace if not already present.
+    Download startup-required Cloud Max models from HuggingFace if not already present.
     Uses huggingface_hub for efficient downloading with resume support.
 
     Public/general models always download to the worker container disk.
@@ -212,9 +217,11 @@ def download_models():
 
     # Check which models are missing (check both volume and comfyui dirs)
     for model in CLOUD_MAX_MODELS:
-        # Skip optional models at startup (e.g. T2V when no volume)
-        if not model.get("required", True):
-            logger.info(f"⏭️ {model['filename']} ({model['size_gb']}GB) — optional, skipping")
+        # Skip mode-specific models at startup; they are resolved per workflow.
+        if not _is_startup_required(model):
+            logger.info(
+                f"⏭️ {model['filename']} ({model['size_gb']}GB) — not startup-required, deferring to workflow"
+            )
             continue
 
         if _is_model_present(model):
@@ -535,7 +542,7 @@ def _missing_models(
     """Return models that are still missing from both volume and local paths."""
     missing = []
     for model in CLOUD_MAX_MODELS:
-        if required_only and not model.get("required", True):
+        if required_only and not _is_startup_required(model):
             continue
         if filenames and model["filename"] not in filenames:
             continue

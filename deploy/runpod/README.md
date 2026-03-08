@@ -214,6 +214,14 @@ RunPod currently supports only one cached model per endpoint. For Oelala that me
 5. The worker now links files from cached-model storage before falling back to live Hugging Face downloads.
 6. Keep `workersMin=0` and `idleTimeout=120`.
 
+### Startup vs workflow-specific preparation
+
+- Worker startup should preload only the shared Cloud Max core: `umt5_xxl_fp16.safetensors` and `wan_2.1_vae.safetensors`.
+- Mode-specific assets stay on-demand:
+    - T2V jobs pull/link only the `wan2.2_t2v_*` UNETs they reference.
+    - I2V jobs pull/link only the `wan2.2_i2v_*` UNETs plus `clip_vision_h.safetensors`.
+- This avoids wasting cold-start time on I2V-only assets when the job is T2V, while still using RunPod cached-model storage whenever those files are available.
+
 This gives the best cost/performance balance without forcing every Cloud Max job to pay for multi-GB Hugging Face downloads inside a running worker.
 
 ## Usage
