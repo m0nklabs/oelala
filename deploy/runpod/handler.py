@@ -200,6 +200,16 @@ def _is_startup_required(model: dict) -> bool:
     return bool(model.get("startup_required", model.get("required", True)))
 
 
+def _startup_models() -> list[dict]:
+    """Return models that should be prepared during worker startup."""
+    return [model for model in CLOUD_MAX_MODELS if _is_startup_required(model)]
+
+
+def _deferred_models() -> list[dict]:
+    """Return models that are intentionally deferred until workflow demand."""
+    return [model for model in CLOUD_MAX_MODELS if not _is_startup_required(model)]
+
+
 def download_models():
     """
     Download startup-required Cloud Max models from HuggingFace if not already present.
@@ -457,10 +467,13 @@ def _log_cached_model_roots_once() -> None:
         return
 
     for root in roots:
-        if root.exists():
-            logger.info(f"🗂️ Cached-model root available: {root}")
-        else:
-            logger.info(f"🗂️ Cached-model root missing: {root}")
+        try:
+            if root.exists():
+                logger.info(f"🗂️ Cached-model root available: {root}")
+            else:
+                logger.info(f"🗂️ Cached-model root missing: {root}")
+        except OSError as exc:
+            logger.info(f"🗂️ Cached-model root inaccessible: {root} ({exc})")
 
     _cached_roots_logged = True
 
@@ -504,18 +517,65 @@ def _iter_cached_model_candidates(root: Path, model: dict) -> Iterator[Path]:
                 yield candidate
 
 
-def _find_cached_model_source(model: dict) -> Path | None:
+def _find_cached_model_source(model: dict, *, emit_logs: bool = True) -> Path | None:
     """Locate a model file inside a RunPod cached-model mount or HF cache."""
     _log_cached_model_roots_once()
     for root in _candidate_cached_model_roots():
-        if not root.exists():
+        try:
+            root_exists = root.exists()
+        except OSError as exc:
+            if emit_logs:
+                logger.info(f"🫥 Skipping inaccessible cached-model root {root}: {exc}")
+            continue
+        if not root_exists:
             continue
         for candidate in _iter_cached_model_candidates(root, model):
             if candidate.is_file():
-                logger.info(f"💾 Found cached model for {model['filename']}: {candidate}")
+                if emit_logs:
+                    logger.info(f"💾 Found cached model for {model['filename']}: {candidate}")
                 return candidate
-    logger.info(f"🫥 No cached model found for {model['filename']}")
+    if emit_logs:
+        logger.info(f"🫥 No cached model found for {model['filename']}")
     return None
+
+
+def _model_state_for_log(model: dict) -> str:
+    """Return a concise readiness state for diagnostics logging."""
+    _, dest_local = _model_destinations(model)
+    if dest_local.is_symlink():
+        return "cached-linked"
+    if _is_model_present(model):
+        return "local"
+    if _find_cached_model_source(model, emit_logs=False):
+        return "cached-available"
+    return "download-needed"
+
+
+def _detect_workflow_family(referenced: set[str]) -> str:
+    """Infer the Cloud Max workflow family from referenced model names."""
+    has_i2v = any("i2v" in name for name in referenced) or "clip_vision_h.safetensors" in referenced
+    has_t2v = any("t2v" in name for name in referenced)
+    if has_i2v and has_t2v:
+        return "mixed"
+    if has_i2v:
+        return "i2v"
+    if has_t2v:
+        return "t2v"
+    return "shared-core"
+
+
+def _log_startup_model_plan() -> None:
+    """Emit a clear startup/deferred model plan for worker diagnostics."""
+    startup_states = ", ".join(
+        f"{model['filename']}={_model_state_for_log(model)}"
+        for model in _startup_models()
+    )
+    deferred_states = ", ".join(
+        f"{model['filename']}={_model_state_for_log(model)}"
+        for model in _deferred_models()
+    )
+    logger.info(f"🧭 Startup model plan: preload shared core only ({startup_states})")
+    logger.info(f"🧭 Deferred workflow models: {deferred_states}")
 
 
 def _link_model_into_comfyui(model: dict, source: Path) -> bool:
@@ -678,13 +738,36 @@ def ensure_workflow_models(workflow: dict, job=None) -> int:
             if isinstance(value, str):
                 referenced.add(value)
 
+    if referenced:
+        logger.info(
+            "🎯 Workflow model check: family=%s referenced=%s",
+            _detect_workflow_family(referenced),
+            ", ".join(sorted(referenced)),
+        )
+
     requested = [
         model["filename"]
         for model in CLOUD_MAX_MODELS
         if model["filename"] in referenced and not _is_model_present(model)
     ]
     if not requested:
+        if referenced:
+            logger.info("✅ Workflow model check: all referenced models already available")
         return 0
+
+    cache_ready = []
+    download_needed = []
+    for filename in requested:
+        model = next(item for item in CLOUD_MAX_MODELS if item["filename"] == filename)
+        if _find_cached_model_source(model, emit_logs=False):
+            cache_ready.append(filename)
+        else:
+            download_needed.append(filename)
+
+    if cache_ready:
+        logger.info("💾 Workflow cache hits pending link: %s", ", ".join(cache_ready))
+    if download_needed:
+        logger.warning("⬇️ Workflow models still require download: %s", ", ".join(download_needed))
 
     if job:
         _progress(job, f"Downloading {len(requested)} required model(s) for workflow...")
@@ -713,6 +796,8 @@ def ensure_models():
         logger.info(f"📁 {volume_path} is not writable Network Volume storage; public models will use container disk")
     else:
         logger.info(f"📁 Writable Network Volume detected at {volume_path}; reserved for LoRAs/private assets only")
+
+    _log_startup_model_plan()
 
     # Clean up old Wan 2.1 models to free space on volume
     _cleanup_old_models(volume_models or (volume_path / "models"), comfyui_models)

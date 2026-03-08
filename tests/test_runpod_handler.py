@@ -272,3 +272,30 @@ def test_ensure_workflow_models_downloads_only_referenced_t2v_models(monkeypatch
     assert "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" not in requested
     assert "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" not in requested
     assert "clip_vision_h.safetensors" not in requested
+
+
+def test_detect_workflow_family_distinguishes_t2v_i2v_and_mixed(monkeypatch):
+    """Workflow diagnostics should correctly classify referenced model families."""
+    module = _load_handler_module(monkeypatch)
+
+    assert module._detect_workflow_family({"wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}) == "t2v"
+    assert module._detect_workflow_family({"wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"}) == "i2v"
+    assert module._detect_workflow_family({"clip_vision_h.safetensors"}) == "i2v"
+    assert module._detect_workflow_family({
+        "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+    }) == "mixed"
+    assert module._detect_workflow_family({"umt5_xxl_fp16.safetensors"}) == "shared-core"
+
+
+def test_startup_models_include_only_shared_core(monkeypatch):
+    """Startup diagnostics should report only shared core assets as preload targets."""
+    module = _load_handler_module(monkeypatch)
+
+    startup_names = {model["filename"] for model in module._startup_models()}
+    deferred_names = {model["filename"] for model in module._deferred_models()}
+
+    assert startup_names == {"umt5_xxl_fp16.safetensors", "wan_2.1_vae.safetensors"}
+    assert "clip_vision_h.safetensors" in deferred_names
+    assert "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors" in deferred_names
+    assert "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" in deferred_names
