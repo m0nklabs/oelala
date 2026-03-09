@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
 
@@ -881,7 +881,9 @@ async def get_published_media_file(media_id: str):
                 },
             )
         except Exception as storage_err:
-            debug_log(f"oelala-storage user media failed: {storage_err}, trying storage buckets")
+            debug_log(
+                f"oelala-storage user media failed: {storage_err}, trying storage buckets"
+            )
 
         # Fallback: try generated and comfyui-local storage buckets
         try:

@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -13,6 +13,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/storage-nodes", tags=["Storage Nodes"])
 
+
 class HeartbeatPayload(BaseModel):
     node_id: str
     name: str
@@ -23,39 +24,44 @@ class HeartbeatPayload(BaseModel):
     status: str
     version: str
 
+
 def get_supabase() -> Client:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise HTTPException(status_code=500, detail="Missing Supabase config")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
 def verify_storage_api_key(authorization: str = Header(None)):
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
-    
+
     parts = authorization.split(" ")
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
-        
+        raise HTTPException(
+            status_code=401, detail="Invalid Authorization header format"
+        )
+
     token = parts[1]
     expected_token = os.environ.get("STORAGE_NODE_API_KEY", "dev-secret-key-12345")
-    
+
     if token != expected_token:
         raise HTTPException(status_code=403, detail="Invalid storage node API key")
-        
+
     return True
+
 
 @router.post("/heartbeat")
 async def receive_heartbeat(
-    payload: HeartbeatPayload, 
+    payload: HeartbeatPayload,
     request: Request,
-    _: bool = Depends(verify_storage_api_key)
+    _: bool = Depends(verify_storage_api_key),
 ):
     """
     Receive heartbeat from a distributed oelala-storage node.
     Register it if new, update stats & timestamp if existing.
     """
     client = get_supabase()
-    
+
     # Try to get client IP for debugging
     client_ip = None
     if request.client:
@@ -76,21 +82,21 @@ async def receive_heartbeat(
             "status": payload.status,
             "version": payload.version,
             "ip_address": client_ip,
-            "last_heartbeat_at": datetime.now(timezone.utc).isoformat()
+            "last_heartbeat_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         # We need to do an upsert on node_id.
         # Ensure node_id is unique constraint in DB for this to work natively.
-        response = client.table("storage_nodes").upsert(
-            data, 
-            on_conflict="node_id"
-        ).execute()
-        
+        response = (
+            client.table("storage_nodes").upsert(data, on_conflict="node_id").execute()
+        )
+
         return {"status": "success", "received": True}
-        
+
     except Exception as e:
         logger.error(f"Failed to process storage node heartbeat: {e}")
         raise HTTPException(status_code=500, detail="Database failure")
+
 
 @router.get("")
 async def list_storage_nodes(client: Client = Depends(get_supabase)):
@@ -98,25 +104,27 @@ async def list_storage_nodes(client: Client = Depends(get_supabase)):
     try:
         response = client.table("storage_nodes").select("*").order("name").execute()
         nodes = response.data
-        
+
         # Inject Backblaze B2 as a virtual node
         b2_bucket = os.environ.get("B2_BUCKET_NAME", "Backblaze B2")
-        nodes.append({
-            "id": "virtual-b2-node",
-            "node_id": "backblaze-b2",
-            "name": f"Backblaze B2 Cloud ({b2_bucket})",
-            "type": "cloud",
-            "total_bytes": 10000000000000, # Mock 10 TB capacity
-            "used_bytes": 0, # Could be dynamic later
-            "status": "online",
-            "version": "boto3/latest",
-            "last_heartbeat_at": datetime.now(timezone.utc).isoformat(),
-            "ip_address": "cloud",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "public_url": f"https://f000.backblazeb2.com/file/{b2_bucket}"
-        })
-        
+        nodes.append(
+            {
+                "id": "virtual-b2-node",
+                "node_id": "backblaze-b2",
+                "name": f"Backblaze B2 Cloud ({b2_bucket})",
+                "type": "cloud",
+                "total_bytes": 10000000000000,  # Mock 10 TB capacity
+                "used_bytes": 0,  # Could be dynamic later
+                "status": "online",
+                "version": "boto3/latest",
+                "last_heartbeat_at": datetime.now(timezone.utc).isoformat(),
+                "ip_address": "cloud",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "public_url": f"https://f000.backblazeb2.com/file/{b2_bucket}",
+            }
+        )
+
         return nodes
     except Exception as e:
         logger.error(f"Failed to fetch storage nodes: {e}")

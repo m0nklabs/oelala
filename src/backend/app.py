@@ -89,7 +89,11 @@ from storage_client import get_client as get_storage_client
 from media_service import MediaService, MediaRecord
 
 # Generation artifact storage (workflow, settings, logs per generation)
-from gen_artifacts import save_gen_start_artifacts, save_gen_logs, format_comfyui_history_log
+from gen_artifacts import (
+    save_gen_start_artifacts,
+    save_gen_logs,
+    format_comfyui_history_log,
+)
 
 # Credits system
 from credits import calculate_credits
@@ -98,7 +102,6 @@ from credits_api import (
     stripe_router,
     check_credits,
     deduct_credits,
-    refund_credits,
 )
 from credits import get_credit_manager
 
@@ -650,6 +653,7 @@ async def _save_upload(file: UploadFile, dest: Path) -> bytes:
     logger.info(f"📤 Saved upload: {dest} ({len(content)} bytes)")
     return content
 
+
 # Mount static files after CORS
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
@@ -663,7 +667,9 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 async def get_avatar(filename: str, request: Request):
     """Serve avatar images via oelala-storage proxy."""
     return _storage_proxy_response(
-        "avatars", filename, request,
+        "avatars",
+        filename,
+        request,
         cache_control="public, max-age=86400, must-revalidate",
     )
 
@@ -1050,7 +1056,9 @@ async def startup_event():
         asyncio.create_task(llm_queue_manager.start_worker(_process_llm_job))
         logger.info("✅ LLM queue worker started!")
     else:
-        logger.warning("⚠️ LLM queue not available — prompt enhancement will use sync fallback")
+        logger.warning(
+            "⚠️ LLM queue not available — prompt enhancement will use sync fallback"
+        )
 
     # Start webhook retry worker
     logger.info("🪝 Starting webhook retry worker...")
@@ -1712,7 +1720,10 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
         if not found:
             comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
             file_path = comfyui_output / filename
-            if str(file_path.resolve()).startswith(str(comfyui_output.resolve())) and file_path.exists():
+            if (
+                str(file_path.resolve()).startswith(str(comfyui_output.resolve()))
+                and file_path.exists()
+            ):
                 try:
                     file_path.unlink()
                     deleted.append(filename)
@@ -2004,7 +2015,8 @@ def _persist_cloud_jobs() -> None:
     """Save active cloud jobs to disk so they survive backend restarts."""
     try:
         cloud_jobs = {
-            pid: info for pid, info in active_jobs.items()
+            pid: info
+            for pid, info in active_jobs.items()
             if info.get("compute_target") == "cloud"
             and not info.get("_cloud_completed")
         }
@@ -2017,7 +2029,8 @@ def _persist_cloud_jobs() -> None:
         serializable = {}
         for pid, info in cloud_jobs.items():
             serializable[pid] = {
-                k: v for k, v in info.items()
+                k: v
+                for k, v in info.items()
                 if not k.startswith("_") or k in ("_cloud_status", "_start_time")
             }
         CLOUD_JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -2051,7 +2064,9 @@ def _restore_cloud_jobs() -> int:
                         info["_start_time"] = time.time()
                 active_jobs[pid] = info
                 count += 1
-                logger.info(f"☁️ Restored cloud job: {pid} (RunPod: {info.get('runpod_job_id', '?')})")
+                logger.info(
+                    f"☁️ Restored cloud job: {pid} (RunPod: {info.get('runpod_job_id', '?')})"
+                )
         if count > 0:
             logger.info(f"☁️ Restored {count} cloud job(s) from previous session")
         return count
@@ -2084,7 +2099,8 @@ async def _cloud_job_poller() -> None:
 
             # Collect cloud jobs that need polling
             cloud_jobs = {
-                pid: info for pid, info in active_jobs.items()
+                pid: info
+                for pid, info in active_jobs.items()
                 if info.get("compute_target") == "cloud"
                 and not info.get("_cloud_completed")
             }
@@ -2096,7 +2112,9 @@ async def _cloud_job_poller() -> None:
             for prompt_id, job_info in list(cloud_jobs.items()):
                 try:
                     # Check if job is too old (RunPod may have purged it)
-                    job_age = time.time() - float(job_info.get("_start_time", time.time()))
+                    job_age = time.time() - float(
+                        job_info.get("_start_time", time.time())
+                    )
                     if job_age > CLOUD_JOB_MAX_AGE:
                         logger.warning(
                             f"☁️ Expiring stale cloud job {prompt_id} "
@@ -2107,10 +2125,14 @@ async def _cloud_job_poller() -> None:
                         active_jobs[prompt_id]["_cloud_status"] = "EXPIRED"
                         active_jobs[prompt_id]["_cloud_error"] = error_msg
                         _cloud_completed_cache[prompt_id] = {
-                            "prompt_id": prompt_id, "status": "failed",
-                            "error": error_msg, "compute_target": "cloud",
+                            "prompt_id": prompt_id,
+                            "status": "failed",
+                            "error": error_msg,
+                            "compute_target": "cloud",
                         }
-                        record_generation_complete(prompt_id, success=False, error=error_msg)
+                        record_generation_complete(
+                            prompt_id, success=False, error=error_msg
+                        )
                         await _refund_cloud_job_credits(prompt_id, job_info, error_msg)
                         _persist_cloud_jobs()
                         continue
@@ -2118,13 +2140,9 @@ async def _cloud_job_poller() -> None:
                     result = await _handle_cloud_job_status(prompt_id, job_info)
                     status = result.get("status")
                     if status in ("completed", "failed"):
-                        logger.info(
-                            f"☁️ Background poll resolved {prompt_id}: {status}"
-                        )
+                        logger.info(f"☁️ Background poll resolved {prompt_id}: {status}")
                 except Exception as e:
-                    logger.warning(
-                        f"☁️ Background poll error for {prompt_id}: {e}"
-                    )
+                    logger.warning(f"☁️ Background poll error for {prompt_id}: {e}")
                 # Small delay between individual polls to avoid hammering RunPod
                 await asyncio.sleep(2)
 
@@ -2132,10 +2150,12 @@ async def _cloud_job_poller() -> None:
             # (keeps them briefly so frontend can read the final status)
             CLOUD_CLEANUP_DELAY = 300  # 5 minutes
             stale_ids = [
-                pid for pid, info in active_jobs.items()
+                pid
+                for pid, info in active_jobs.items()
                 if info.get("compute_target") == "cloud"
                 and info.get("_cloud_completed")
-                and (time.time() - float(info.get("_start_time", time.time()))) > CLOUD_CLEANUP_DELAY
+                and (time.time() - float(info.get("_start_time", time.time())))
+                > CLOUD_CLEANUP_DELAY
             ]
             for pid in stale_ids:
                 del active_jobs[pid]
@@ -2270,6 +2290,7 @@ def _lora_download_token(filename: str) -> str:
     """Generate HMAC-SHA256 token for LoRA download URL validation."""
     import hmac
     import hashlib
+
     key = os.getenv("RUNPOD_API_KEY", "fallback-lora-key").encode()
     return hmac.new(key, filename.encode(), hashlib.sha256).hexdigest()[:32]
 
@@ -2328,10 +2349,12 @@ def _build_lora_download_list(lora_configs: list) -> list:
             # Update config in-place so workflow builder gets the correct filename
             config[key] = resolved_name
             token = _lora_download_token(resolved_name)
-            downloads.append({
-                "filename": resolved_name,
-                "url": f"{base_url}/loras/download/{resolved_name}?token={token}",
-            })
+            downloads.append(
+                {
+                    "filename": resolved_name,
+                    "url": f"{base_url}/loras/download/{resolved_name}?token={token}",
+                }
+            )
     if downloads:
         logger.info(f"☁️ Built {len(downloads)} LoRA download URL(s) for cloud job")
     return downloads
@@ -2351,7 +2374,11 @@ def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Optional[Pat
         if not logs_text:
             return None
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        status_val = rp_job.status.value if hasattr(rp_job.status, "value") else str(rp_job.status)
+        status_val = (
+            rp_job.status.value
+            if hasattr(rp_job.status, "value")
+            else str(rp_job.status)
+        )
         log_file = CLOUD_LOGS_DIR / f"{ts}_{status_val}_{runpod_job_id}.log"
         log_file.write_text(logs_text)
         logger.info(f"☁️ Saved cloud logs: {log_file.name} ({len(logs_text)} chars)")
@@ -2361,15 +2388,15 @@ def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Optional[Pat
         return None
 
 
-def _mark_cloud_job_timed_out(prompt_id: str, job_info: dict, queue_age: float) -> Optional[dict]:
+def _mark_cloud_job_timed_out(
+    prompt_id: str, job_info: dict, queue_age: float
+) -> Optional[dict]:
     """Mark a cloud job as failed when it sits in queue beyond the allowed timeout."""
     if queue_age < CLOUD_QUEUE_TIMEOUT_SECONDS:
         return None
 
     runpod_job_id = job_info.get("runpod_job_id", "?")
-    error_msg = (
-        f"RunPod job stuck in queue for {int(queue_age)}s; no cloud worker was provisioned"
-    )
+    error_msg = f"RunPod job stuck in queue for {int(queue_age)}s; no cloud worker was provisioned"
     logger.error(f"☁️ Cloud job timed out in queue: {runpod_job_id} — {error_msg}")
 
     result = {
@@ -2391,7 +2418,11 @@ def _mark_cloud_job_timed_out(prompt_id: str, job_info: dict, queue_age: float) 
     return result
 
 
-async def _refund_cloud_job_credits(prompt_id: str, job_info: dict, reason: str = "Cloud generation failed - credits refunded") -> bool:
+async def _refund_cloud_job_credits(
+    prompt_id: str,
+    job_info: dict,
+    reason: str = "Cloud generation failed - credits refunded",
+) -> bool:
     """
     Refund credits for a failed/timed-out cloud job.
     Idempotent — uses the _credit_refunded flag to prevent double refunds.
@@ -2405,7 +2436,9 @@ async def _refund_cloud_job_credits(prompt_id: str, job_info: dict, reason: str 
     credits_required = job_info.get("credits_required", 0)
 
     if not user_id or not credits_required:
-        logger.debug(f"⚠️ Refund skipped for {prompt_id}: user_id={user_id}, credits={credits_required}")
+        logger.debug(
+            f"⚠️ Refund skipped for {prompt_id}: user_id={user_id}, credits={credits_required}"
+        )
         return False
 
     try:
@@ -2416,7 +2449,9 @@ async def _refund_cloud_job_credits(prompt_id: str, job_info: dict, reason: str 
             reference_id=prompt_id,
             reason=reason,
         )
-        logger.info(f"🔄 Refunded {credits_required} credits to user {user_id} for failed cloud job {prompt_id}")
+        logger.info(
+            f"🔄 Refunded {credits_required} credits to user {user_id} for failed cloud job {prompt_id}"
+        )
         if prompt_id in active_jobs:
             active_jobs[prompt_id]["_credit_refunded"] = True
         return True
@@ -2442,7 +2477,12 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     runpod_job_id = job_info.get("runpod_job_id")
     if not runpod_job_id:
-        return {"prompt_id": prompt_id, "status": "failed", "error": "Missing runpod_job_id", **job_info}
+        return {
+            "prompt_id": prompt_id,
+            "status": "failed",
+            "error": "Missing runpod_job_id",
+            **job_info,
+        }
 
     try:
         rp_job = await _runpod.get_job_status(runpod_job_id)
@@ -2452,7 +2492,13 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         if "404" in error_str:
             error_msg = f"RunPod job expired/purged (404): {runpod_job_id}"
             logger.warning(f"☁️ {error_msg}")
-            result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+            result = {
+                "prompt_id": prompt_id,
+                "status": "failed",
+                "error": error_msg,
+                "compute_target": "cloud",
+                **job_info,
+            }
             _cloud_completed_cache[prompt_id] = result
             if prompt_id in active_jobs:
                 active_jobs[prompt_id]["_cloud_completed"] = True
@@ -2463,16 +2509,29 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
             await _refund_cloud_job_credits(prompt_id, job_info, error_msg)
             return result
         logger.error(f"☁️ Failed to poll RunPod job {runpod_job_id}: {e}")
-        return {"prompt_id": prompt_id, "status": "running", "error": error_str, **job_info}
+        return {
+            "prompt_id": prompt_id,
+            "status": "running",
+            "error": error_str,
+            **job_info,
+        }
 
-    status_val = rp_job.status.value if hasattr(rp_job.status, "value") else str(rp_job.status)
+    status_val = (
+        rp_job.status.value if hasattr(rp_job.status, "value") else str(rp_job.status)
+    )
 
     # Map RunPod statuses to our status values
     if status_val in ("IN_QUEUE",):
-        queue_age = max(0.0, time.time() - float(job_info.get("_start_time") or time.time()))
+        queue_age = max(
+            0.0, time.time() - float(job_info.get("_start_time") or time.time())
+        )
         timed_out_result = _mark_cloud_job_timed_out(prompt_id, job_info, queue_age)
         if timed_out_result:
-            await _refund_cloud_job_credits(prompt_id, job_info, "RunPod queue timeout — no worker provisioned, credits refunded")
+            await _refund_cloud_job_credits(
+                prompt_id,
+                job_info,
+                "RunPod queue timeout — no worker provisioned, credits refunded",
+            )
             return timed_out_result
         active_jobs[prompt_id]["_cloud_status"] = status_val
         return {
@@ -2488,33 +2547,64 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         progress = {}
         if rp_job.output and isinstance(rp_job.output, dict):
             progress["message"] = rp_job.output.get("message", "Generating...")
-        return {"prompt_id": prompt_id, "status": "running", "compute_target": "cloud", **progress, **job_info}
+        return {
+            "prompt_id": prompt_id,
+            "status": "running",
+            "compute_target": "cloud",
+            **progress,
+            **job_info,
+        }
     elif status_val in ("FAILED", "CANCELLED", "TIMED_OUT"):
         error_msg = rp_job.error or f"RunPod job {status_val}"
         logger.error(f"☁️ Cloud job failed: {runpod_job_id} — {error_msg}")
         _save_cloud_logs(runpod_job_id, prompt_id, rp_job)
-        _rp_log_text = (rp_job.output or {}).get("logs") if isinstance(rp_job.output, dict) else None
-        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
-        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        _rp_log_text = (
+            (rp_job.output or {}).get("logs")
+            if isinstance(rp_job.output, dict)
+            else None
+        )
+        record_generation_complete(
+            prompt_id, success=False, error=error_msg, log_text=_rp_log_text
+        )
+        result = {
+            "prompt_id": prompt_id,
+            "status": "failed",
+            "error": error_msg,
+            "compute_target": "cloud",
+            **job_info,
+        }
         _cloud_completed_cache[prompt_id] = result
         # Clean up active_jobs after a delay (keep for a bit so UI can read the failure)
         active_jobs[prompt_id]["_cloud_completed"] = True
         active_jobs[prompt_id]["_cloud_status"] = status_val
         active_jobs[prompt_id]["_cloud_error"] = error_msg
         _persist_cloud_jobs()
-        await _refund_cloud_job_credits(prompt_id, job_info, f"RunPod job {status_val} — credits refunded")
+        await _refund_cloud_job_credits(
+            prompt_id, job_info, f"RunPod job {status_val} — credits refunded"
+        )
         # WS notification for failure
         if ws_manager:
             cloud_user_id = job_info.get("user_id")
             if cloud_user_id:
-                await ws_manager.broadcast_to_user(cloud_user_id, "job_failed", {
-                    "job_id": prompt_id, "prompt_id": prompt_id,
-                    "error": error_msg, "compute_target": "cloud",
-                })
+                await ws_manager.broadcast_to_user(
+                    cloud_user_id,
+                    "job_failed",
+                    {
+                        "job_id": prompt_id,
+                        "prompt_id": prompt_id,
+                        "error": error_msg,
+                        "compute_target": "cloud",
+                    },
+                )
         return result
     elif status_val != "COMPLETED":
         # Unknown status — treat as running
-        return {"prompt_id": prompt_id, "status": "running", "compute_target": "cloud", **job_info}
+        return {
+            "prompt_id": prompt_id,
+            "status": "running",
+            "compute_target": "cloud",
+            **job_info,
+        }
 
     # ── COMPLETED — process output ──────────────────────────────────────
     logger.info(f"☁️ Cloud job COMPLETED: {runpod_job_id}")
@@ -2524,8 +2614,16 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     _rp_log_text = output.get("logs") if isinstance(output, dict) else None
     if not output or not isinstance(output, dict):
         error_msg = "RunPod returned empty output"
-        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
-        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        record_generation_complete(
+            prompt_id, success=False, error=error_msg, log_text=_rp_log_text
+        )
+        result = {
+            "prompt_id": prompt_id,
+            "status": "failed",
+            "error": error_msg,
+            "compute_target": "cloud",
+            **job_info,
+        }
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
         _persist_cloud_jobs()
@@ -2535,8 +2633,16 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     if "error" in output:
         error_msg = output["error"]
         logger.error(f"☁️ Cloud handler error: {error_msg}")
-        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
-        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        record_generation_complete(
+            prompt_id, success=False, error=error_msg, log_text=_rp_log_text
+        )
+        result = {
+            "prompt_id": prompt_id,
+            "status": "failed",
+            "error": error_msg,
+            "compute_target": "cloud",
+            **job_info,
+        }
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
         _persist_cloud_jobs()
@@ -2545,8 +2651,16 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     files = output.get("files", [])
     if not files:
         error_msg = "No output files in RunPod response"
-        record_generation_complete(prompt_id, success=False, error=error_msg, log_text=_rp_log_text)
-        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        record_generation_complete(
+            prompt_id, success=False, error=error_msg, log_text=_rp_log_text
+        )
+        result = {
+            "prompt_id": prompt_id,
+            "status": "failed",
+            "error": error_msg,
+            "compute_target": "cloud",
+            **job_info,
+        }
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
         _persist_cloud_jobs()
@@ -2577,7 +2691,9 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
             # Save to oelala-storage instead of local disk
             storage = get_storage_client()
             storage.put("generated", f"cloud-max/{save_name}", file_bytes)
-            logger.info(f"☁️ Saved cloud output to storage: generated/cloud-max/{save_name} ({len(file_bytes)} bytes)")
+            logger.info(
+                f"☁️ Saved cloud output to storage: generated/cloud-max/{save_name} ({len(file_bytes)} bytes)"
+            )
 
             mime = f.get("type", "video/mp4")
             if "video" in mime:
@@ -2592,7 +2708,13 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     if not saved_path:
         error_msg = "Failed to save any output files"
         record_generation_complete(prompt_id, success=False, error=error_msg)
-        result = {"prompt_id": prompt_id, "status": "failed", "error": error_msg, "compute_target": "cloud", **job_info}
+        result = {
+            "prompt_id": prompt_id,
+            "status": "failed",
+            "error": error_msg,
+            "compute_target": "cloud",
+            **job_info,
+        }
         _cloud_completed_cache[prompt_id] = result
         active_jobs[prompt_id]["_cloud_completed"] = True
         _persist_cloud_jobs()
@@ -2613,7 +2735,11 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
                     prompt_id,
                     user_id=cloud_user_id,
                     prompt=cloud_prompt,
-                    settings={k: v for k, v in job_info.items() if k not in ("user_id", "prompt")},
+                    settings={
+                        k: v
+                        for k, v in job_info.items()
+                        if k not in ("user_id", "prompt")
+                    },
                 )
 
             output_type = "video" if output_video else "image"
@@ -2630,7 +2756,12 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     # If storage upload failed, DON'T mark as completed so poller retries
     if not upload_ok:
         logger.warning(f"☁️ Storage upload incomplete for {prompt_id}, will retry")
-        return {"prompt_id": prompt_id, "status": "running", "compute_target": "cloud", **job_info}
+        return {
+            "prompt_id": prompt_id,
+            "status": "running",
+            "compute_target": "cloud",
+            **job_info,
+        }
 
     # Record stats — fallback execution_time from _start_time if RunPod didn't provide it
     execution_time = output.get("execution_time_s")
@@ -2663,18 +2794,24 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     if ws_manager:
         cloud_user_id = job_info.get("user_id")
         if cloud_user_id:
-            await ws_manager.broadcast_to_user(cloud_user_id, "job_complete", {
-                "job_id": prompt_id,
-                "prompt_id": prompt_id,
-                "output_video": output_video,
-                "output_image": output_image,
-                "url": signed_url or output_video or output_image,
-                "signed_url": signed_url,
-                "storage_path": storage_path,
-                "compute_target": "cloud",
-                "execution_time_s": execution_time,
-            })
-            logger.info(f"📡 WS notification sent to {cloud_user_id} for cloud job {prompt_id}")
+            await ws_manager.broadcast_to_user(
+                cloud_user_id,
+                "job_complete",
+                {
+                    "job_id": prompt_id,
+                    "prompt_id": prompt_id,
+                    "output_video": output_video,
+                    "output_image": output_image,
+                    "url": signed_url or output_video or output_image,
+                    "signed_url": signed_url,
+                    "storage_path": storage_path,
+                    "compute_target": "cloud",
+                    "execution_time_s": execution_time,
+                },
+            )
+            logger.info(
+                f"📡 WS notification sent to {cloud_user_id} for cloud job {prompt_id}"
+            )
 
     return result
 
@@ -2924,19 +3061,31 @@ async def get_comfyui_queue():
                 "queue_position": 0,
             }
             # Completed-successfully jobs are hidden from queue
-            if info.get("_cloud_completed") and cloud_status not in ("FAILED", "CANCELLED", "TIMED_OUT"):
+            if info.get("_cloud_completed") and cloud_status not in (
+                "FAILED",
+                "CANCELLED",
+                "TIMED_OUT",
+            ):
                 continue
             # Failed/cancelled/timed-out → show as failed so user can dismiss
-            if cloud_status in ("FAILED", "CANCELLED", "TIMED_OUT") or info.get("_cloud_completed"):
+            if cloud_status in ("FAILED", "CANCELLED", "TIMED_OUT") or info.get(
+                "_cloud_completed"
+            ):
                 cloud_job["status"] = "failed"
-                cloud_job["error"] = info.get("_cloud_error", f"RunPod job {cloud_status}")
+                cloud_job["error"] = info.get(
+                    "_cloud_error", f"RunPod job {cloud_status}"
+                )
                 cloud_failed.append(cloud_job)
             elif cloud_status in ("IN_QUEUE", "IN_PROGRESS"):
                 # Show as pending/running based on local cache. Do NOT timeout here —
                 # timeouts only fire when RunPod is actually polled via get_job_status,
                 # to avoid killing jobs that are IN_PROGRESS but not yet polled.
-                queue_age = max(0.0, time.time() - float(info.get("_start_time") or time.time()))
-                cloud_job["status"] = "running" if cloud_status == "IN_PROGRESS" else "pending"
+                queue_age = max(
+                    0.0, time.time() - float(info.get("_start_time") or time.time())
+                )
+                cloud_job["status"] = (
+                    "running" if cloud_status == "IN_PROGRESS" else "pending"
+                )
                 cloud_job["queue_age_seconds"] = int(queue_age)
                 if cloud_status == "IN_PROGRESS":
                     cloud_running.append(cloud_job)
@@ -3144,6 +3293,7 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
     Handles filenames with or without .safetensors extension.
     """
     import hmac as _hmac_mod
+
     expected = _lora_download_token(filename)
     if not _hmac_mod.compare_digest(token, expected):
         logger.warning(f"⚠️ Invalid LoRA download token for: {filename}")
@@ -3167,13 +3317,17 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
 
 
 @app.get("/media/generated/{filename}")
-async def get_generated_media(filename: str, request: Request, user: User = Depends(get_current_user)):
+async def get_generated_media(
+    filename: str, request: Request, user: User = Depends(get_current_user)
+):
     """Serve files from generated bucket via oelala-storage (admin only)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     return _storage_proxy_response(
-        "generated", filename, request,
+        "generated",
+        filename,
+        request,
         cache_control="public, max-age=31536000, immutable",
     )
 
@@ -3200,7 +3354,9 @@ async def unified_storage_proxy(bucket: str, key: str, request: Request):
         raise HTTPException(status_code=400, detail="Invalid key")
 
     return _storage_proxy_response(
-        bucket, key, request,
+        bucket,
+        key,
+        request,
         cache_control="public, max-age=3600, must-revalidate",
     )
 
@@ -3227,7 +3383,9 @@ async def get_comfyui_metadata(filename: str):
         try:
             storage = get_storage_client()
             data, _, _ = storage.get_with_metadata("generated", filename)
-            tmp_file = tempfile.NamedTemporaryFile(suffix=Path(filename).suffix, delete=False)
+            tmp_file = tempfile.NamedTemporaryFile(
+                suffix=Path(filename).suffix, delete=False
+            )
             tmp_file.write(data)
             tmp_file.close()
             output_path = Path(tmp_file.name)
@@ -3308,7 +3466,10 @@ async def cancel_job(prompt_id: str):
 
     try:
         # Cloud job — just remove from tracking (dismiss)
-        if prompt_id in active_jobs and active_jobs[prompt_id].get("compute_target") == "cloud":
+        if (
+            prompt_id in active_jobs
+            and active_jobs[prompt_id].get("compute_target") == "cloud"
+        ):
             del active_jobs[prompt_id]
             _persist_cloud_jobs()
             logger.info(f"☁️ Dismissed cloud job: {prompt_id}")
@@ -3892,6 +4053,7 @@ def _parse_mtime(val) -> float:
     if isinstance(val, str) and val:
         try:
             from dateutil.parser import isoparse
+
             return isoparse(val).timestamp()
         except Exception:
             pass
@@ -3997,16 +4159,12 @@ async def list_unified_media(
                                 user_ids.add(key.split("/")[0])
                         for uid in user_ids:
                             try:
-                                objects = storage.list_user_media(
-                                    uid, media_type
-                                )
+                                objects = storage.list_user_media(uid, media_type)
                                 for obj in objects:
                                     key = obj.get("key", "")
                                     filename = obj.get(
                                         "filename",
-                                        key.split("/")[-1]
-                                        if "/" in key
-                                        else key,
+                                        key.split("/")[-1] if "/" in key else key,
                                     )
                                     obj_type = obj.get("media_type", "")
 
@@ -4028,10 +4186,10 @@ async def list_unified_media(
                                             "type": item_type,
                                             "url": f"/admin/user-media/{uid}/{obj_type}/{filename}",
                                             "size": obj.get("size", 0),
-                                            "modified": obj.get(
-                                                "modified_at", ""
+                                            "modified": obj.get("modified_at", ""),
+                                            "mtime": _parse_mtime(
+                                                obj.get("modified_at")
                                             ),
-                                            "mtime": _parse_mtime(obj.get("modified_at")),
                                             "source": "user",
                                             "visibility": "private",
                                             "owner_id": uid,
@@ -4171,7 +4329,9 @@ async def list_unified_media(
                                 "visibility": "public",
                                 "is_nsfw": item.get("is_nsfw", False),
                                 "owner_id": item.get("user_id"),
-                                "mtime": _parse_mtime(item.get("created_at") or item.get("updated_at")),
+                                "mtime": _parse_mtime(
+                                    item.get("created_at") or item.get("updated_at")
+                                ),
                             }
                         )
             except Exception as e:
@@ -4443,23 +4603,24 @@ class MediaMoveRequest(BaseModel):
     src_filename: str
     dest_filename: str
 
+
 @app.post("/api/media/move")
 async def move_media(req: MediaMoveRequest, user: User = Depends(get_current_user)):
     """Move/rename a user's media file."""
     try:
         storage = get_storage_client()
         success = storage.move_user_media(
-            user.id,
-            req.media_type,
-            req.src_filename,
-            req.dest_filename
+            user.id, req.media_type, req.src_filename, req.dest_filename
         )
         if not success:
-            raise HTTPException(status_code=404, detail="Source file not found or move failed")
+            raise HTTPException(
+                status_code=404, detail="Source file not found or move failed"
+            )
         return {"success": True, "message": "Moved successfully"}
     except Exception as e:
         logger.error(f"Error moving media: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/media/batch-download-zip")
 async def batch_download_zip(
@@ -4826,8 +4987,12 @@ async def get_file(filename: str, request: Request):
         raise HTTPException(status_code=404, detail="File not found")
     ext = file_path.suffix.lower()
     media_type = {
-        ".mp4": "video/mp4", ".gif": "image/gif", ".json": "application/json",
-        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".mp4": "video/mp4",
+        ".gif": "image/gif",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
         ".webp": "image/webp",
     }.get(ext, "application/octet-stream")
     return FileResponse(file_path, media_type=media_type, filename=filename)
@@ -6293,7 +6458,9 @@ async def _submit_to_runpod(
         logger.info(f"☁️ Including {len(lora_downloads)} LoRA download(s) in RunPod job")
 
     job = await _runpod.submit_workflow(workflow, extra_input=extra or None)
-    logger.info(f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})")
+    logger.info(
+        f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})"
+    )
 
     # Track RunPod job alongside local job tracking
     job_info["compute_target"] = "cloud"
@@ -6364,7 +6531,9 @@ async def generate_wan22_async(
     post_audio_file: UploadFile = File(
         None, description="Audio file for add_audio post-processing"
     ),
-    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
+    compute_target: str = Form(
+        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
+    ),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
@@ -6516,7 +6685,9 @@ async def generate_wan22_async(
             "prompt": prompt[:100],
             "resolution": resolution,
             "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames * actual_clip_count if is_extend_mode else num_frames,
+            "num_frames": num_frames * actual_clip_count
+            if is_extend_mode
+            else num_frames,
             "frames_per_clip": num_frames,
             "clip_count": actual_clip_count,
             "extend_mode": is_extend_mode,
@@ -6536,7 +6707,11 @@ async def generate_wan22_async(
             "user_id": user.id,
             "credits_required": credits_required,
         }
-        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        cloud_lora_dl = (
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
+        )
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
@@ -6545,7 +6720,9 @@ async def generate_wan22_async(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 I2V (cloud)")
+        await deduct_credits(
+            user, credits_required, result["prompt_id"], "Wan2.2 I2V (cloud)"
+        )
         return result
 
     # Queue the workflow (non-blocking)
@@ -6623,8 +6800,11 @@ async def generate_wan22_async(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=prompt, job_info=job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt,
+        job_info=job_info,
         input_image_path=str(input_path),
     )
 
@@ -6683,7 +6863,9 @@ async def generate_blockswap_q8_async(
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
     ),
-    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
+    compute_target: str = Form(
+        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
+    ),
     user: User = Depends(get_current_user),
 ):
     """
@@ -6807,7 +6989,11 @@ async def generate_blockswap_q8_async(
             "user_id": user.id,
             "credits_required": credits_required,
         }
-        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        cloud_lora_dl = (
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
+        )
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
@@ -6816,7 +7002,9 @@ async def generate_blockswap_q8_async(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        await deduct_credits(user, credits_required, result["prompt_id"], "BlockSwap Q8 I2V (cloud)")
+        await deduct_credits(
+            user, credits_required, result["prompt_id"], "BlockSwap Q8 I2V (cloud)"
+        )
         return result
 
     # Queue workflow
@@ -6886,8 +7074,11 @@ async def generate_blockswap_q8_async(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=prompt, job_info=job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt,
+        job_info=job_info,
         input_image_path=str(input_path),
     )
 
@@ -6930,7 +7121,9 @@ async def generate_distorch2_q8_async(
     steps: int = Form(8, description="Sampling steps (4-12)"),
     cfg: float = Form(1.0, description="CFG guidance scale"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    high_noise_steps: int = Form(4, description="Steps for high noise model (4+4 split tested)"),
+    high_noise_steps: int = Form(
+        4, description="Steps for high noise model (4+4 split tested)"
+    ),
     shift: float = Form(9.0, description="ModelSamplingSD3 shift"),
     nag_scale: float = Form(11.0, description="NAG guidance scale"),
     enable_upscale: bool = Form(False, description="Enable 4x upscale"),
@@ -6941,7 +7134,9 @@ async def generate_distorch2_q8_async(
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
     ),
-    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
+    compute_target: str = Form(
+        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
+    ),
     user: User = Depends(get_current_user),
 ):
     """
@@ -7055,7 +7250,11 @@ async def generate_distorch2_q8_async(
             "user_id": user.id,
             "credits_required": credits_required,
         }
-        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        cloud_lora_dl = (
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
+        )
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
@@ -7064,7 +7263,9 @@ async def generate_distorch2_q8_async(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        await deduct_credits(user, credits_required, result["prompt_id"], "DisTorch2 Q8 I2V (cloud)")
+        await deduct_credits(
+            user, credits_required, result["prompt_id"], "DisTorch2 Q8 I2V (cloud)"
+        )
         return result
 
     prompt_id = comfyui.queue_prompt(workflow)
@@ -7130,8 +7331,11 @@ async def generate_distorch2_q8_async(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=prompt, job_info=job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt,
+        job_info=job_info,
         input_image_path=str(input_path),
     )
 
@@ -7186,7 +7390,9 @@ async def generate_ultra_q8_async(
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
     ),
-    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
+    compute_target: str = Form(
+        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
+    ),
     user: User = Depends(get_current_user),
 ):
     """
@@ -7274,9 +7480,7 @@ async def generate_ultra_q8_async(
     )
 
     if not workflow:
-        raise HTTPException(
-            status_code=500, detail="Failed to build Ultra Q8 workflow"
-        )
+        raise HTTPException(status_code=500, detail="Failed to build Ultra Q8 workflow")
 
     # Route to cloud if requested
     if compute_target == "cloud":
@@ -7303,7 +7507,11 @@ async def generate_ultra_q8_async(
             "user_id": user.id,
             "credits_required": credits_required,
         }
-        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        cloud_lora_dl = (
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
+        )
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
@@ -7312,7 +7520,9 @@ async def generate_ultra_q8_async(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        await deduct_credits(user, credits_required, result["prompt_id"], "Ultra Q8 I2V (cloud)")
+        await deduct_credits(
+            user, credits_required, result["prompt_id"], "Ultra Q8 I2V (cloud)"
+        )
         return result
 
     prompt_id = comfyui.queue_prompt(workflow)
@@ -7378,8 +7588,11 @@ async def generate_ultra_q8_async(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=prompt, job_info=job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt,
+        job_info=job_info,
         input_image_path=str(input_path),
     )
 
@@ -7418,7 +7631,9 @@ async def generate_cloud_max_async(
     ),
     mode: str = Form("i2v", description="Generation mode: 'i2v' or 't2v'"),
     num_frames: int = Form(81, description="Number of frames (4k+1 format)"),
-    resolution: str = Form("720p", description="Video resolution: 480p, 576p, 720p, 1080p"),
+    resolution: str = Form(
+        "720p", description="Video resolution: 480p, 576p, 720p, 1080p"
+    ),
     fps: int = Form(16, description="Frames per second"),
     aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
     steps: int = Form(25, description="Sampling steps (20-30 recommended)"),
@@ -7426,7 +7641,9 @@ async def generate_cloud_max_async(
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     high_noise_steps: int = Form(12, description="Steps for high noise pass"),
     shift: float = Form(8.0, description="ModelSamplingSD3 shift"),
-    sampler_name: str = Form("dpmpp_2m", description="Sampler: dpmpp_2m, euler, uni_pc"),
+    sampler_name: str = Form(
+        "dpmpp_2m", description="Sampler: dpmpp_2m, euler, uni_pc"
+    ),
     scheduler: str = Form("beta", description="Scheduler: beta, karras, normal"),
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
@@ -7513,6 +7730,7 @@ async def generate_cloud_max_async(
 
         # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
         import base64 as _b64
+
         input_images_b64[input_filename] = _b64.b64encode(content).decode()
 
         image_name = comfyui.upload_image(str(input_path))
@@ -7569,7 +7787,9 @@ async def generate_cloud_max_async(
         )
 
     # Build LoRA download URLs for cloud worker (on-demand upload)
-    cloud_lora_downloads = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+    cloud_lora_downloads = (
+        _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+    )
 
     # Always route to RunPod (cloud-only endpoint)
     cloud_job_info = {
@@ -7605,8 +7825,10 @@ async def generate_cloud_max_async(
         prompt_full=prompt,
     )
     await deduct_credits(
-        user, credits_required, result["prompt_id"],
-        f"Cloud Max {mode.upper()} (RunPod bf16)"
+        user,
+        credits_required,
+        result["prompt_id"],
+        f"Cloud Max {mode.upper()} (RunPod bf16)",
     )
 
     logger.info(f"☁️ Cloud Max {mode.upper()} job submitted to RunPod")
@@ -7640,7 +7862,9 @@ async def generate_ltx2_i2v_async(
     post_audio_file: UploadFile = File(
         None, description="Audio file for add_audio post-processing"
     ),
-    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
+    compute_target: str = Form(
+        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
+    ),
     user: User = Depends(get_current_user),
 ):
     """
@@ -7776,7 +8000,9 @@ async def generate_ltx2_i2v_async(
             job_info=cloud_job_info,
             prompt_full=prompt,
         )
-        await deduct_credits(user, credits_required, result["prompt_id"], "LTX-2 I2V (cloud)")
+        await deduct_credits(
+            user, credits_required, result["prompt_id"], "LTX-2 I2V (cloud)"
+        )
         return result
 
     # Queue the workflow (non-blocking)
@@ -7846,8 +8072,11 @@ async def generate_ltx2_i2v_async(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=prompt, job_info=job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt,
+        job_info=job_info,
         input_image_path=str(input_path),
     )
 
@@ -8030,8 +8259,11 @@ async def post_process_media(
     active_jobs[prompt_id] = job_info
     record_generation_start(prompt_id, job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=f"Post-process: {mode}", job_info=job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=f"Post-process: {mode}",
+        job_info=job_info,
     )
 
     # Deduct credits
@@ -8098,14 +8330,21 @@ async def generate_text_video(
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
     post_processing: str = Form("", description="JSON array of post-processing steps"),
-    compute_target: str = Form("local", description="Compute target: 'local' or 'cloud' (RunPod)"),
-    negative_prompt: str = Form("blurry, low quality, distorted, ugly, artifacts, overexposed, underexposed, flickering, jitter", description="Negative prompt"),
+    compute_target: str = Form(
+        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
+    ),
+    negative_prompt: str = Form(
+        "blurry, low quality, distorted, ugly, artifacts, overexposed, underexposed, flickering, jitter",
+        description="Negative prompt",
+    ),
     steps: int = Form(-1, description="Sampling steps (-1 for model default)"),
     cfg: float = Form(-1.0, description="CFG guidance scale (-1 for model default)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     lora_configs: str = Form("", description="JSON array of LoRA configs"),
     shift: float = Form(8.0, description="Shift value for cloud sampler"),
-    high_noise_steps: int = Form(12, description="High noise steps for cloud dual-pass"),
+    high_noise_steps: int = Form(
+        12, description="High noise steps for cloud dual-pass"
+    ),
     sampler_name: str = Form("dpmpp_2m", description="Sampler name for cloud"),
     scheduler: str = Form("beta", description="Scheduler for cloud"),
     user: User = Depends(get_current_user),  # Require authenticated user
@@ -8254,7 +8493,11 @@ async def generate_text_video(
             "user_id": user.id,
             "credits_required": credits_required,
         }
-        cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        cloud_lora_dl = (
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
+        )
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
@@ -8263,7 +8506,9 @@ async def generate_text_video(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        await deduct_credits(user, credits_required, result["prompt_id"], "Wan2.2 T2V (cloud)")
+        await deduct_credits(
+            user, credits_required, result["prompt_id"], "Wan2.2 T2V (cloud)"
+        )
         logger.info(f"☁️ T2V cloud job submitted: {result.get('runpod_job_id')}")
         return result
 
@@ -8327,8 +8572,11 @@ async def generate_text_video(
     active_jobs[prompt_id] = _t2v_job_info
     record_generation_start(prompt_id, _t2v_job_info)
     save_gen_start_artifacts(
-        user_id=user.id, prompt_id=prompt_id, workflow=workflow,
-        prompt=prompt, job_info=_t2v_job_info,
+        user_id=user.id,
+        prompt_id=prompt_id,
+        workflow=workflow,
+        prompt=prompt,
+        job_info=_t2v_job_info,
     )
 
     # Register pending post-processing if any steps specified
@@ -8565,9 +8813,16 @@ async def caption_image(
     model: Optional[str] = Form(
         None, description="Guardian vision model ID (default: VISION_MODEL env)"
     ),
-    mode: str = Form("detailed", description="Mode: brief, detailed, tags, structured, prompt_i2v, prompt_t2i, prompt_nsfw"),
-    nsfw_intensity: Optional[int] = Form(None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"),
-    detail_level: Optional[int] = Form(3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"),
+    mode: str = Form(
+        "detailed",
+        description="Mode: brief, detailed, tags, structured, prompt_i2v, prompt_t2i, prompt_nsfw",
+    ),
+    nsfw_intensity: Optional[int] = Form(
+        None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"
+    ),
+    detail_level: Optional[int] = Form(
+        3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"
+    ),
 ):
     """
     Generate a caption/description for an uploaded image.
@@ -8601,7 +8856,9 @@ async def caption_image(
     }
 
     # Route through Guardian vision LLM
-    logger.info(f"🔮 Captioning with Guardian vision model: {model}, detail_level={detail_level}...")
+    logger.info(
+        f"🔮 Captioning with Guardian vision model: {model}, detail_level={detail_level}..."
+    )
     caption_prompts = {
         "brief": "In one sentence, describe the main subject of this image.",
         "detailed": "Describe this image in rich detail: the main subject, their appearance, clothing, pose, expression, the background, lighting, colors, and overall mood.",
@@ -8647,6 +8904,7 @@ async def caption_image(
 
 class MotionPromptRequest(BaseModel):
     """Request body for motion prompt generation."""
+
     prompt: str
     model: Optional[str] = None  # T2T model override
 
@@ -8685,7 +8943,11 @@ async def generate_motion_prompt(
 
     try:
         import httpx
-        from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+        from guardian_client import (
+            wait_for_comfyui_idle,
+            free_comfyui_vram as _free_comfy_vram,
+        )
+
         await wait_for_comfyui_idle()
         await _free_comfy_vram()
 
@@ -8702,11 +8964,18 @@ async def generate_motion_prompt(
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
-                    resp = await client.post(f"{GUARDIAN_BASE}/v1/chat/completions", json=t2t_body)
+                async with httpx.AsyncClient(
+                    timeout=120.0, headers=_guardian_headers()
+                ) as client:
+                    resp = await client.post(
+                        f"{GUARDIAN_BASE}/v1/chat/completions", json=t2t_body
+                    )
                     if resp.status_code == 503 and attempt < max_retries - 1:
-                        logger.info(f"⏳ Guardian 503 (loading T2T model), retry {attempt + 1}/{max_retries}...")
+                        logger.info(
+                            f"⏳ Guardian 503 (loading T2T model), retry {attempt + 1}/{max_retries}..."
+                        )
                         import asyncio
+
                         await asyncio.sleep(15)
                         continue
                     resp.raise_for_status()
@@ -8714,16 +8983,19 @@ async def generate_motion_prompt(
                     msg = result["choices"][0]["message"]
                     # Prefer content over reasoning_content; strip thinking artifacts
                     import re
+
                     motion_prompt = (msg.get("content") or "").strip()
                     reasoning = (msg.get("reasoning_content") or "").strip()
                     # If content is empty but reasoning exists, use reasoning
                     if not motion_prompt and reasoning:
                         motion_prompt = reasoning
                     # Strip <think>...</think> blocks
-                    motion_prompt = re.sub(r'<think>.*?</think>\s*', '', motion_prompt, flags=re.DOTALL).strip()
+                    motion_prompt = re.sub(
+                        r"<think>.*?</think>\s*", "", motion_prompt, flags=re.DOTALL
+                    ).strip()
                     # Strip common thinking patterns: lines starting with reasoning verbs/markers
                     # Keep only the last paragraph-block (the actual prompt output)
-                    lines = motion_prompt.split('\n')
+                    lines = motion_prompt.split("\n")
                     # Find last non-empty line block — the actual motion prompt
                     result_lines = []
                     for line in reversed(lines):
@@ -8733,7 +9005,7 @@ async def generate_motion_prompt(
                         if stripped:
                             result_lines.insert(0, stripped)
                     if result_lines:
-                        motion_prompt = ' '.join(result_lines)
+                        motion_prompt = " ".join(result_lines)
                     logger.info(f"🎬 Motion prompt generated: {motion_prompt[:100]}...")
                     return {"motion_prompt": motion_prompt, "model": t2t_model}
             except httpx.ConnectError:
@@ -8742,15 +9014,20 @@ async def generate_motion_prompt(
             except Exception as e:
                 if "503" in str(e) and attempt < max_retries - 1:
                     import asyncio
+
                     await asyncio.sleep(15)
                     continue
                 logger.error(f"❌ Motion prompt generation failed: {e}")
-                raise HTTPException(status_code=500, detail=f"Motion prompt generation failed: {e}")
+                raise HTTPException(
+                    status_code=500, detail=f"Motion prompt generation failed: {e}"
+                )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Motion prompt step failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Motion prompt generation failed: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Motion prompt generation failed: {e}"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -8942,7 +9219,7 @@ Input/idea: "{base_input}"
 {style_context}
 {motion_context}
 
-Intensity {nsfw_level}: {'suggestive/sensual' if nsfw_level == 1 else 'softcore erotic' if nsfw_level == 2 else 'full nudity' if nsfw_level == 3 else 'hardcore explicit' if nsfw_level == 4 else 'extreme/no limits'}
+Intensity {nsfw_level}: {"suggestive/sensual" if nsfw_level == 1 else "softcore erotic" if nsfw_level == 2 else "full nudity" if nsfw_level == 3 else "hardcore explicit" if nsfw_level == 4 else "extreme/no limits"}
 
 Generate as JSON."""
     elif mode == "refine":
@@ -9018,7 +9295,9 @@ Generate as JSON."""
 
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
+            async with httpx.AsyncClient(
+                timeout=120.0, headers=_guardian_headers()
+            ) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
                     json=llm_request_body,
@@ -9580,7 +9859,9 @@ class AnalyzeAndGenerateRequest(BaseModel):
 
 
 @app.post("/api/analyze-image")
-async def analyze_image(request: AnalyzeImageRequest, user: User = Depends(get_current_user)):
+async def analyze_image(
+    request: AnalyzeImageRequest, user: User = Depends(get_current_user)
+):
     """
     Analyze an image using the vision model (Moondream).
     Returns a detailed text description of the image.
@@ -9602,7 +9883,9 @@ async def analyze_image(request: AnalyzeImageRequest, user: User = Depends(get_c
 
 
 @app.post("/api/analyze-and-generate")
-async def analyze_and_generate(request: AnalyzeAndGenerateRequest, user: User = Depends(get_current_user)):
+async def analyze_and_generate(
+    request: AnalyzeAndGenerateRequest, user: User = Depends(get_current_user)
+):
     """
     Full pipeline: Analyze image with vision model, then generate creative video prompts.
 
@@ -9691,7 +9974,9 @@ class YouTubeDownloadRequest(BaseModel):
 
 
 @app.post("/youtube/info")
-async def youtube_info(request: YouTubeInfoRequest, user: User = Depends(get_current_user)):
+async def youtube_info(
+    request: YouTubeInfoRequest, user: User = Depends(get_current_user)
+):
     """
     Fetch metadata from a YouTube URL without downloading.
     Returns: title, channel, duration, thumbnail, view_count, etc.
@@ -9745,7 +10030,9 @@ async def youtube_info(request: YouTubeInfoRequest, user: User = Depends(get_cur
 
 
 @app.post("/youtube/download")
-async def youtube_download(request: YouTubeDownloadRequest, user: User = Depends(get_current_user)):
+async def youtube_download(
+    request: YouTubeDownloadRequest, user: User = Depends(get_current_user)
+):
     """
     Download video/audio from YouTube URL.
     Returns: path to downloaded file.
@@ -10269,7 +10556,9 @@ class VoiceCloneRequest(BaseModel):
 
 
 @app.post("/voice-clone")
-async def voice_clone(request: VoiceCloneRequest, user: User = Depends(get_current_user)):
+async def voice_clone(
+    request: VoiceCloneRequest, user: User = Depends(get_current_user)
+):
     """
     Clone a voice using F5-TTS.
 
@@ -10361,7 +10650,9 @@ class LipSyncRequest(BaseModel):
 
 
 @app.post("/lip-sync")
-async def generate_lip_sync(request: LipSyncRequest, user: User = Depends(get_current_user)):
+async def generate_lip_sync(
+    request: LipSyncRequest, user: User = Depends(get_current_user)
+):
     """Generate lip-synced video using LatentSyncNode via ComfyUI."""
     import random
 
@@ -10791,7 +11082,9 @@ async def generate_i2i(
 
     # Calculate credits — face processing adds extra cost
     base_credits = calculate_credits("sdxl", width=1024, height=1024, steps=steps)
-    face_credits = (3 if face_id else 0) + (2 if face_detailer else 0) + (1 if face_restore else 0)
+    face_credits = (
+        (3 if face_id else 0) + (2 if face_detailer else 0) + (1 if face_restore else 0)
+    )
     credits_required = base_credits + face_credits
     logger.info(
         f"💰 I2I costs {credits_required} credits "
@@ -10819,6 +11112,7 @@ async def generate_i2i(
 
         # Log file identity for debugging (detect duplicate uploads)
         import hashlib
+
         file_hash = hashlib.md5(content).hexdigest()[:12]
         logger.info(
             f"🔍 I2I source: {file.filename} → {upload_filename} "
@@ -10858,7 +11152,9 @@ async def generate_i2i(
 
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
-        logger.info(f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits){feature_str}")
+        logger.info(
+            f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits){feature_str}"
+        )
 
         return {
             "status": "queued",
@@ -11727,36 +12023,42 @@ async def list_videos(user: User = Depends(get_current_user)):
         for obj in storage.list("generated"):
             key = obj.get("key", "")
             if key.endswith(".mp4"):
-                videos.append({
-                    "filename": key.split("/")[-1],
-                    "size": obj.get("size", 0),
-                    "created": obj.get("modified", ""),
-                    "mtime": 0,
-                    "url": f"/media/generated/{key}",
-                })
+                videos.append(
+                    {
+                        "filename": key.split("/")[-1],
+                        "size": obj.get("size", 0),
+                        "created": obj.get("modified", ""),
+                        "mtime": 0,
+                        "url": f"/media/generated/{key}",
+                    }
+                )
         # Also list ComfyUI local output bucket
         for obj in storage.list("comfyui-local"):
             key = obj.get("key", "")
             if key.endswith(".mp4"):
-                videos.append({
-                    "filename": key.split("/")[-1],
-                    "size": obj.get("size", 0),
-                    "created": obj.get("modified", ""),
-                    "mtime": 0,
-                    "url": f"/comfyui/output/{key.split('/')[-1]}",
-                })
+                videos.append(
+                    {
+                        "filename": key.split("/")[-1],
+                        "size": obj.get("size", 0),
+                        "created": obj.get("modified", ""),
+                        "mtime": 0,
+                        "url": f"/comfyui/output/{key.split('/')[-1]}",
+                    }
+                )
     except Exception as e:
         logger.warning(f"⚠️ Storage list failed, falling back to local scan: {e}")
         # Fallback to local scan
         for file_path in OUTPUT_DIR.glob("*.mp4"):
             stat = file_path.stat()
-            videos.append({
-                "filename": file_path.name,
-                "size": stat.st_size,
-                "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                "mtime": stat.st_mtime,
-                "url": f"/videos/{file_path.name}",
-            })
+            videos.append(
+                {
+                    "filename": file_path.name,
+                    "size": stat.st_size,
+                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "mtime": stat.st_mtime,
+                    "url": f"/videos/{file_path.name}",
+                }
+            )
 
     videos.sort(key=lambda v: v.get("created", ""), reverse=True)
     return {"videos": videos, "count": len(videos)}
@@ -12360,7 +12662,9 @@ async def reframe_image(
 
 
 @app.post("/detect-faces")
-async def detect_faces_endpoint(image: UploadFile = File(...), user: User = Depends(get_current_user)):
+async def detect_faces_endpoint(
+    image: UploadFile = File(...), user: User = Depends(get_current_user)
+):
     """
     Detect faces in an image using InsightFace (buffalo_l).
     Returns list of detected faces with bounding boxes and confidence scores.

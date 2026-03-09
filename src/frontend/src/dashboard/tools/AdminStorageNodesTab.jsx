@@ -54,19 +54,19 @@ export default function AdminStorageNodesTab() {
 
   const formatTimeAgo = (dateString) => {
     if (!dateString) return 'Never'
-    
+
     // Make sure we parse the date correctly whether it has a timezone or not
-    const safeDateStr = (dateString.endsWith('Z') || dateString.includes('+')) 
-      ? dateString 
+    const safeDateStr = (dateString.endsWith('Z') || dateString.includes('+'))
+      ? dateString
       : dateString + 'Z'
-      
+
     const date = new Date(safeDateStr)
     const now = new Date()
     const seconds = Math.floor((now - date) / 1000)
-    
+
     // If future date or invalid
     if (isNaN(seconds) || seconds < 0) return 'Just now'
-    
+
     if (seconds < 60) return `${seconds}s`
     const minutes = Math.floor(seconds / 60)
     if (minutes < 60) return `${minutes}m`
@@ -153,21 +153,21 @@ export default function AdminStorageNodesTab() {
             const online = isOnline(node.last_heartbeat_at)
             const percentUsed = node.total_bytes ? (node.used_bytes / node.total_bytes) * 100 : 0
             const isExpanded = expandedNodes[node.node_id]
-            
+
             return (
-              <div 
-                key={node.node_id} 
-                style={{ 
-                  background: 'var(--surface-color)', 
-                  border: '1px solid var(--border-color)', 
+              <div
+                key={node.node_id}
+                style={{
+                  background: 'var(--surface-color)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '12px',
                   overflow: 'hidden'
                 }}
               >
                 {/* Node Header */}
-                <div 
+                <div
                   onClick={() => toggleNode(node.node_id)}
-                  style={{ 
+                  style={{
                     padding: '1rem',
                     cursor: 'pointer',
                     display: 'flex',
@@ -178,10 +178,10 @@ export default function AdminStorageNodesTab() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ 
-                      width: '10px', 
-                      height: '10px', 
-                      borderRadius: '50%', 
+                    <div style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
                       background: online ? '#10b981' : '#ef4444',
                       boxShadow: online ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none'
                     }} />
@@ -194,7 +194,7 @@ export default function AdminStorageNodesTab() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '0.8rem', fontWeight: 600, color: percentUsed > 90 ? '#ef4444' : 'var(--text-primary)' }}>
@@ -210,10 +210,10 @@ export default function AdminStorageNodesTab() {
 
                 {/* Progress Bar (Always visible) */}
                 <div style={{ width: '100%', height: '4px', background: 'var(--bg-color)', position: 'relative' }}>
-                  <div style={{ 
+                  <div style={{
                     position: 'absolute',
                     top: 0, left: 0, bottom: 0,
-                    width: `${Math.min(percentUsed, 100)}%`, 
+                    width: `${Math.min(percentUsed, 100)}%`,
                     background: percentUsed > 90 ? '#ef4444' : percentUsed > 75 ? '#f59e0b' : '#10b981',
                     transition: 'width 0.5s ease-out'
                   }} />
@@ -225,10 +225,10 @@ export default function AdminStorageNodesTab() {
                     <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Node ID:</span>
                       <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{node.node_id}</span>
-                      
+
                       <span style={{ color: 'var(--text-muted)' }}>IP Addr:</span>
                       <span style={{ color: 'var(--text-primary)' }}>{node.ip_address}</span>
-                      
+
                       {node.public_url && (
                         <>
                           <span style={{ color: 'var(--text-muted)' }}>Public URL:</span>
@@ -239,7 +239,7 @@ export default function AdminStorageNodesTab() {
                           </span>
                         </>
                       )}
-                      
+
                       {(node.os_type || node.os || node.architecture || node.arch) && (
                         <>
                           <span style={{ color: 'var(--text-muted)' }}>OS:</span>
@@ -248,10 +248,10 @@ export default function AdminStorageNodesTab() {
                           </span>
                         </>
                       )}
-                      
+
                       <span style={{ color: 'var(--text-muted)' }}>Version:</span>
                       <span style={{ color: 'var(--text-primary)' }}>{node.version || 'v0.1.0'}</span>
-                      
+
                       <span style={{ color: 'var(--text-muted)' }}>Percent:</span>
                       <span style={{ color: percentUsed > 90 ? '#ef4444' : 'var(--text-primary)', fontWeight: 600 }}>
                         {percentUsed.toFixed(1)}% used

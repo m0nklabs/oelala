@@ -160,7 +160,7 @@ export async function postJson(url, body = {}) {
   const text = await res.text()
   try {
     const data = text ? JSON.parse(text) : null
-    
+
     if (res.status === 402 && data?.detail) {
       if (typeof data.detail === 'object' && data.detail.error === 'insufficient_credits') {
         window.dispatchEvent(new CustomEvent('insufficient-credits', {
