@@ -364,7 +364,7 @@ This repository has a **self-hosted GPU runner** (`oelala-gpu`) with direct acce
 The server uses **DisTorch2** for multi-GPU model distribution across both GPUs:
 
 ### Hardware
-> **GPU ordering pinned** via `CUDA_DEVICE_ORDER=PCI_BUS_ID` (system-wide in `/etc/environment`).  
+> **GPU ordering pinned** via `CUDA_DEVICE_ORDER=PCI_BUS_ID` (system-wide in `/etc/environment`).
 > nvidia-smi index = PyTorch cuda index. Stable across reboots.
 
 | Index | GPU | VRAM | Role |

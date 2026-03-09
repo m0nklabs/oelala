@@ -51,6 +51,7 @@ def debug_log(msg: str):
 RUNPOD_API_BASE = "https://api.runpod.ai/v2"
 RUNPOD_GRAPHQL = "https://api.runpod.io/graphql"
 
+
 # Job status mapping from RunPod → internal
 class RunPodJobStatus(str, Enum):
     IN_QUEUE = "IN_QUEUE"
@@ -64,6 +65,7 @@ class RunPodJobStatus(str, Enum):
 @dataclass
 class RunPodEndpoint:
     """Represents a deployed RunPod serverless endpoint."""
+
     id: str
     name: str
     gpu_type: str = "UNKNOWN"
@@ -75,6 +77,7 @@ class RunPodEndpoint:
 @dataclass
 class RunPodJob:
     """Represents a submitted RunPod job."""
+
     id: str
     endpoint_id: str
     status: RunPodJobStatus = RunPodJobStatus.IN_QUEUE
@@ -88,6 +91,7 @@ class RunPodJob:
 # ---------------------------------------------------------------------------
 # RunPod Client
 # ---------------------------------------------------------------------------
+
 
 class RunPodClient:
     """
@@ -144,7 +148,11 @@ class RunPodClient:
             return [endpoint_id]
 
         candidates: List[str] = []
-        for candidate in [self.default_endpoint_id, *self.endpoint_ids, *self._endpoints.keys()]:
+        for candidate in [
+            self.default_endpoint_id,
+            *self.endpoint_ids,
+            *self._endpoints.keys(),
+        ]:
             if candidate and candidate not in candidates:
                 candidates.append(candidate)
         return candidates
@@ -152,14 +160,20 @@ class RunPodClient:
     @staticmethod
     def _health_count(health: Dict[str, Any], key: str) -> int:
         """Read a health counter from either the top-level or nested workers payload."""
-        workers = health.get("workers") if isinstance(health.get("workers"), dict) else {}
+        workers = (
+            health.get("workers") if isinstance(health.get("workers"), dict) else {}
+        )
         value = workers.get(key, health.get(key, 0))
         return int(value or 0)
 
     @staticmethod
     def _is_endpoint_healthy(health: Dict[str, Any]) -> bool:
         """Check whether an endpoint is suitable for new submissions."""
-        if not health or health.get("status") in {"error", "no_endpoint", "unavailable"}:
+        if not health or health.get("status") in {
+            "error",
+            "no_endpoint",
+            "unavailable",
+        }:
             return False
         if health.get("error"):
             return False
@@ -216,7 +230,7 @@ class RunPodClient:
 
     async def get_account_info(self) -> Dict[str, Any]:
         """Get RunPod account info (balance, spend, etc.)."""
-        query = '{ myself { id email clientBalance spendLimit currentSpendPerHr } }'
+        query = "{ myself { id email clientBalance spendLimit currentSpendPerHr } }"
         resp = await self.http.post(RUNPOD_GRAPHQL, json={"query": query})
         resp.raise_for_status()
         data = resp.json()
@@ -402,7 +416,9 @@ class RunPodClient:
         try:
             status = RunPodJobStatus(raw_status)
         except ValueError:
-            debug_log(f"Unknown RunPod status '{raw_status}' for {job_id}, treating as FAILED")
+            debug_log(
+                f"Unknown RunPod status '{raw_status}' for {job_id}, treating as FAILED"
+            )
             status = RunPodJobStatus.FAILED
         job = self._active_jobs.get(job_id, RunPodJob(id=job_id, endpoint_id=ep_id))
         job.status = status
@@ -439,7 +455,9 @@ class RunPodClient:
         start = time.time()
         while (time.time() - start) < timeout:
             job = await self.get_job_status(job_id, endpoint_id)
-            debug_log(f"Poll {job_id}: status={job.status} elapsed={time.time()-start:.0f}s")
+            debug_log(
+                f"Poll {job_id}: status={job.status} elapsed={time.time() - start:.0f}s"
+            )
 
             if job.status in (
                 RunPodJobStatus.COMPLETED,
@@ -452,7 +470,9 @@ class RunPodClient:
             await asyncio.sleep(interval)
 
         # Timeout
-        job = self._active_jobs.get(job_id, RunPodJob(id=job_id, endpoint_id=endpoint_id or ""))
+        job = self._active_jobs.get(
+            job_id, RunPodJob(id=job_id, endpoint_id=endpoint_id or "")
+        )
         job.status = RunPodJobStatus.TIMED_OUT
         job.error = f"Polling timed out after {timeout}s"
         return job
@@ -511,7 +531,8 @@ class RunPodClient:
     def get_active_jobs(self) -> List[RunPodJob]:
         """Get all tracked active jobs."""
         return [
-            j for j in self._active_jobs.values()
+            j
+            for j in self._active_jobs.values()
             if j.status in (RunPodJobStatus.IN_QUEUE, RunPodJobStatus.IN_PROGRESS)
         ]
 

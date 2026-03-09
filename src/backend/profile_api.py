@@ -12,7 +12,6 @@ import random
 import string
 import asyncio
 from contextlib import asynccontextmanager
-from pathlib import Path
 import httpx
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query, File, UploadFile
@@ -518,6 +517,7 @@ async def upload_avatar(
     avatar_bytes = buf.getvalue()
 
     from storage_client import get_client as get_storage_client
+
     storage = get_storage_client()
     storage.put("avatars", f"{user.id}.jpg", avatar_bytes, content_type="image/jpeg")
     debug_log(f"👤 Saved avatar for user {user.id} → storage:avatars/{user.id}.jpg")

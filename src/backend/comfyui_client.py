@@ -1676,7 +1676,10 @@ class ComfyUIClient:
             for config in lora_configs:
                 if config.get("high"):
                     high_loras.append(
-                        {"name": config["high"], "strength": config.get("strength", 1.0)}
+                        {
+                            "name": config["high"],
+                            "strength": config.get("strength", 1.0),
+                        }
                     )
                 if config.get("low"):
                     low_loras.append(
@@ -1684,7 +1687,10 @@ class ComfyUIClient:
                     )
                 elif config.get("high"):
                     low_loras.append(
-                        {"name": config["high"], "strength": config.get("strength", 1.0)}
+                        {
+                            "name": config["high"],
+                            "strength": config.get("strength", 1.0),
+                        }
                     )
 
             # High noise LoRAs
@@ -1702,7 +1708,9 @@ class ComfyUIClient:
                         },
                     }
                     current_high_model = [node_id, 0]
-                    logger.info(f"🎨 T2V High LoRA #{i + 1}: {lora['name']} @ {lora['strength']}")
+                    logger.info(
+                        f"🎨 T2V High LoRA #{i + 1}: {lora['name']} @ {lora['strength']}"
+                    )
                 workflow["13"]["inputs"]["model"] = current_high_model
             else:
                 workflow["13"]["inputs"]["model"] = ["7", 0]
@@ -1722,7 +1730,9 @@ class ComfyUIClient:
                         },
                     }
                     current_low_model = [node_id, 0]
-                    logger.info(f"🎨 T2V Low LoRA #{i + 1}: {lora['name']} @ {lora['strength']}")
+                    logger.info(
+                        f"🎨 T2V Low LoRA #{i + 1}: {lora['name']} @ {lora['strength']}"
+                    )
                 workflow["14"]["inputs"]["model"] = current_low_model
             else:
                 workflow["14"]["inputs"]["model"] = ["8", 0]
@@ -1752,7 +1762,9 @@ class ComfyUIClient:
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
-            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            lora_info = (
+                f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            )
         logger.info(
             f"🔧 Built T2V DisTorch2 workflow: {aspect_ratio}@{long_edge}, {num_frames}f, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}{lora_info}"
@@ -2102,7 +2114,9 @@ class ComfyUIClient:
             lora_configs: Additional LoRAs [{high, low, strength}, ...]
         """
         # Load template
-        workflow = load_workflow_from_file("ImageToVideo/wan22_i2v_blockswap_q8_api.json")
+        workflow = load_workflow_from_file(
+            "ImageToVideo/wan22_i2v_blockswap_q8_api.json"
+        )
         if not workflow:
             logger.error("❌ Failed to load BlockSwap Q8 workflow template")
             return None
@@ -2119,9 +2133,15 @@ class ComfyUIClient:
 
         # ─── Calculate dimensions from aspect ratio ───
         aspect_ratios = {
-            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
-            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
-            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
 
@@ -2163,8 +2183,12 @@ class ComfyUIClient:
             # Remove Florence2 nodes to save VRAM
             for nid in list(workflow.keys()):
                 ct = workflow[nid].get("class_type", "")
-                if ct in ("DownloadAndLoadFlorence2Model", "Florence2Run",
-                          "Text Find and Replace", "StringConcatenate"):
+                if ct in (
+                    "DownloadAndLoadFlorence2Model",
+                    "Florence2Run",
+                    "Text Find and Replace",
+                    "StringConcatenate",
+                ):
                     del workflow[nid]
             # Connect positive encode directly to prompt string
             workflow["462"]["inputs"].pop("text", None)  # Remove connection
@@ -2215,7 +2239,9 @@ class ComfyUIClient:
                         "lora": high_name,
                         "strength": config.get("strength", 1.0),
                     }
-                    logger.info(f"🎨 BS-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}")
+                    logger.info(
+                        f"🎨 BS-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}"
+                    )
 
                 # Low noise LoRA slot (falls back to high if not specified)
                 low_name = config.get("low", high_name)
@@ -2252,7 +2278,9 @@ class ComfyUIClient:
             workflow["419"]["inputs"]["filename_prefix"] = f"{output_prefix}_upscaled"
 
         if enable_interpolation:
-            workflow["433"]["inputs"]["filename_prefix"] = f"{output_prefix}_interpolated"
+            workflow["433"]["inputs"]["filename_prefix"] = (
+                f"{output_prefix}_interpolated"
+            )
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
@@ -2318,7 +2346,9 @@ class ComfyUIClient:
             distorch2_alloc: DisTorch2 expert_mode_allocations string
             (all other args same as build_blockswap_q8_workflow)
         """
-        workflow = load_workflow_from_file("ImageToVideo/wan22_i2v_distorch2_q8_api.json")
+        workflow = load_workflow_from_file(
+            "ImageToVideo/wan22_i2v_distorch2_q8_api.json"
+        )
         if not workflow:
             logger.error("❌ Failed to load DisTorch2 Q8 workflow template")
             return None
@@ -2335,9 +2365,15 @@ class ComfyUIClient:
 
         # ─── Calculate dimensions from aspect ratio ───
         aspect_ratios = {
-            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
-            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
-            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
 
@@ -2359,7 +2395,9 @@ class ComfyUIClient:
         # ─── DisTorch2 allocation on all loader nodes ───
         for loader_id in ["495", "496", "460", "461"]:
             if loader_id in workflow:
-                workflow[loader_id]["inputs"]["expert_mode_allocations"] = distorch2_alloc
+                workflow[loader_id]["inputs"]["expert_mode_allocations"] = (
+                    distorch2_alloc
+                )
 
         # ─── Input Image ───
         workflow["88"]["inputs"]["image"] = image_name
@@ -2380,8 +2418,12 @@ class ComfyUIClient:
             workflow["462"]["inputs"]["text"] = prompt
             for nid in list(workflow.keys()):
                 ct = workflow[nid].get("class_type", "")
-                if ct in ("DownloadAndLoadFlorence2Model", "Florence2Run",
-                          "Text Find and Replace", "StringConcatenate"):
+                if ct in (
+                    "DownloadAndLoadFlorence2Model",
+                    "Florence2Run",
+                    "Text Find and Replace",
+                    "StringConcatenate",
+                ):
                     del workflow[nid]
             workflow["462"]["inputs"].pop("text", None)
             workflow["462"]["inputs"]["text"] = prompt
@@ -2431,7 +2473,9 @@ class ComfyUIClient:
                         "lora": high_name,
                         "strength": config.get("strength", 1.0),
                     }
-                    logger.info(f"🎨 DT2-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}")
+                    logger.info(
+                        f"🎨 DT2-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}"
+                    )
 
                 # Low noise LoRA slot (falls back to high if not specified)
                 low_name = config.get("low", high_name)
@@ -2465,7 +2509,9 @@ class ComfyUIClient:
             workflow["419"]["inputs"]["filename_prefix"] = f"{output_prefix}_upscaled"
 
         if enable_interpolation:
-            workflow["433"]["inputs"]["filename_prefix"] = f"{output_prefix}_interpolated"
+            workflow["433"]["inputs"]["filename_prefix"] = (
+                f"{output_prefix}_interpolated"
+            )
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
@@ -2546,9 +2592,15 @@ class ComfyUIClient:
 
         # ─── Calculate dimensions from aspect ratio ───
         aspect_ratios = {
-            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
-            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
-            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
 
@@ -2586,8 +2638,12 @@ class ComfyUIClient:
             workflow["462"]["inputs"]["text"] = prompt
             for nid in list(workflow.keys()):
                 ct = workflow[nid].get("class_type", "")
-                if ct in ("DownloadAndLoadFlorence2Model", "Florence2Run",
-                          "Text Find and Replace", "StringConcatenate"):
+                if ct in (
+                    "DownloadAndLoadFlorence2Model",
+                    "Florence2Run",
+                    "Text Find and Replace",
+                    "StringConcatenate",
+                ):
                     del workflow[nid]
             workflow["462"]["inputs"].pop("text", None)
             workflow["462"]["inputs"]["text"] = prompt
@@ -2634,7 +2690,9 @@ class ComfyUIClient:
                         "lora": high_name,
                         "strength": config.get("strength", 1.0),
                     }
-                    logger.info(f"🎨 Ultra-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}")
+                    logger.info(
+                        f"🎨 Ultra-Q8 High LoRA #{i}: {high_name} @ {config.get('strength', 1.0)}"
+                    )
 
                 low_name = config.get("low", high_name)
                 if low_name:
@@ -2666,7 +2724,9 @@ class ComfyUIClient:
             workflow["419"]["inputs"]["filename_prefix"] = f"{output_prefix}_upscaled"
 
         if enable_interpolation:
-            workflow["433"]["inputs"]["filename_prefix"] = f"{output_prefix}_interpolated"
+            workflow["433"]["inputs"]["filename_prefix"] = (
+                f"{output_prefix}_interpolated"
+            )
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
@@ -2745,9 +2805,15 @@ class ComfyUIClient:
 
         # ─── Calculate dimensions from aspect ratio ───
         aspect_ratios = {
-            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
-            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
-            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
 
@@ -2905,7 +2971,9 @@ class ComfyUIClient:
                         },
                     }
                     current_high_model = [nid, 0]
-                    logger.info(f"🎨 Cloud Max High LoRA #{i+1}: {high_name} @ {strength}")
+                    logger.info(
+                        f"🎨 Cloud Max High LoRA #{i + 1}: {high_name} @ {strength}"
+                    )
 
                 # Low noise LoRA (falls back to high if not specified)
                 low_name = config.get("low", high_name)
@@ -2920,7 +2988,9 @@ class ComfyUIClient:
                         },
                     }
                     current_low_model = [nid, 0]
-                    logger.info(f"🎨 Cloud Max Low LoRA #{i+1}: {low_name} @ {strength}")
+                    logger.info(
+                        f"🎨 Cloud Max Low LoRA #{i + 1}: {low_name} @ {strength}"
+                    )
 
         # Node 20: KSamplerAdvanced — Pass 1 (High Noise)
         workflow["20"] = {
@@ -2988,7 +3058,9 @@ class ComfyUIClient:
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
-            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            lora_info = (
+                f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            )
         logger.info(
             f"☁️ Built Cloud Max I2V: {width}x{height}, {num_frames}f@{fps}fps, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
@@ -3044,9 +3116,15 @@ class ComfyUIClient:
 
         # ─── Calculate dimensions from aspect ratio ───
         aspect_ratios = {
-            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
-            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
-            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
 
@@ -3238,7 +3316,9 @@ class ComfyUIClient:
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
-            lora_info = f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            lora_info = (
+                f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            )
         logger.info(
             f"☁️ Built Cloud Max T2V: {width}x{height}, {num_frames}f@{fps}fps, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
@@ -3562,9 +3642,13 @@ class ComfyUIClient:
                         file_data = sc.get(parts[0], parts[1])
                     if not file_data:
                         raise FileNotFoundError(output_path)
-                    logger.info(f"📦 Read {len(file_data)} bytes from storage: {output_path}")
+                    logger.info(
+                        f"📦 Read {len(file_data)} bytes from storage: {output_path}"
+                    )
                 except Exception as e:
-                    logger.error(f"❌ File not found locally or in storage: {output_path} ({e})")
+                    logger.error(
+                        f"❌ File not found locally or in storage: {output_path} ({e})"
+                    )
                     self.clear_job_metadata(prompt_id)
                     return None
 
@@ -3622,7 +3706,9 @@ class ComfyUIClient:
             # Cleanup local file to keep media dirs empty
             try:
                 local_path = Path(output_path)
-                if local_path.exists() and str(local_path.parent) != str(Path("/home/flip/oelala-storage")):
+                if local_path.exists() and str(local_path.parent) != str(
+                    Path("/home/flip/oelala-storage")
+                ):
                     local_path.unlink()
                     logger.info(f"🗑️ Cleaned up auto-uploaded local file: {local_path}")
             except Exception as e:
@@ -3691,9 +3777,13 @@ class ComfyUIClient:
                         file_data = None
                     if not file_data:
                         raise FileNotFoundError(output_path)
-                    logger.info(f"📦 Read {len(file_data)} bytes from storage: {output_path}")
+                    logger.info(
+                        f"📦 Read {len(file_data)} bytes from storage: {output_path}"
+                    )
                 except Exception as e:
-                    logger.error(f"❌ File not found locally or in storage: {output_path} ({e})")
+                    logger.error(
+                        f"❌ File not found locally or in storage: {output_path} ({e})"
+                    )
                     self.clear_job_metadata(prompt_id)
                     return None
 
@@ -3710,7 +3800,9 @@ class ComfyUIClient:
 
             # Extract metadata for Supabase from nested settings
             extra_metadata = {
-                "model_name": settings.get("model_name") or settings.get("model_type") or settings.get("model_mode"),
+                "model_name": settings.get("model_name")
+                or settings.get("model_type")
+                or settings.get("model_mode"),
                 "resolution": settings.get("resolution"),
                 "aspect_ratio": settings.get("aspect_ratio"),
                 "num_frames": settings.get("num_frames"),
@@ -3892,9 +3984,13 @@ class ComfyUIClient:
                             try:
                                 storage_client = get_storage_client()
                                 storage_client.put("generated", filename, resp.content)
-                                logger.info(f"📤 Video uploaded to storage: generated/{filename}")
+                                logger.info(
+                                    f"📤 Video uploaded to storage: generated/{filename}"
+                                )
                             except Exception as e:
-                                logger.warning(f"⚠️ Storage upload failed (non-fatal): {e}")
+                                logger.warning(
+                                    f"⚠️ Storage upload failed (non-fatal): {e}"
+                                )
 
                             # Auto-upload to user storage if prompt_id is provided
                             if prompt_id:
@@ -3959,9 +4055,13 @@ class ComfyUIClient:
                             try:
                                 storage_client = get_storage_client()
                                 storage_client.put("generated", filename, resp.content)
-                                logger.info(f"📤 Image uploaded to storage: generated/{filename}")
+                                logger.info(
+                                    f"📤 Image uploaded to storage: generated/{filename}"
+                                )
                             except Exception as e:
-                                logger.warning(f"⚠️ Storage upload failed (non-fatal): {e}")
+                                logger.warning(
+                                    f"⚠️ Storage upload failed (non-fatal): {e}"
+                                )
 
                             # Auto-upload to user storage if prompt_id is provided
                             if prompt_id:

@@ -11,7 +11,7 @@ from typing import Optional, List
 from datetime import datetime
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 import httpx
 
@@ -732,16 +732,18 @@ async def list_generated_media(
             item_type = "video" if ext in video_exts else "image"
             if type != "all" and item_type != type:
                 continue
-            media.append({
-                "name": Path(key).name,
-                "type": item_type,
-                "url": f"/media/generated/{key}",
-                "source": "generated",
-                "size": obj.get("size", 0),
-                "modified": obj.get("modified_at", ""),
-                "mtime": 0,
-                "has_metadata": False,
-            })
+            media.append(
+                {
+                    "name": Path(key).name,
+                    "type": item_type,
+                    "url": f"/media/generated/{key}",
+                    "source": "generated",
+                    "size": obj.get("size", 0),
+                    "modified": obj.get("modified_at", ""),
+                    "mtime": 0,
+                    "has_metadata": False,
+                }
+            )
 
         # List comfyui-local bucket
         for obj in storage.list("comfyui-local"):
@@ -752,16 +754,18 @@ async def list_generated_media(
             item_type = "video" if ext in video_exts else "image"
             if type != "all" and item_type != type:
                 continue
-            media.append({
-                "name": Path(key).name,
-                "type": item_type,
-                "url": f"/comfyui/output/{Path(key).name}",
-                "source": "comfyui-local",
-                "size": obj.get("size", 0),
-                "modified": obj.get("modified_at", ""),
-                "mtime": 0,
-                "has_metadata": False,
-            })
+            media.append(
+                {
+                    "name": Path(key).name,
+                    "type": item_type,
+                    "url": f"/comfyui/output/{Path(key).name}",
+                    "source": "comfyui-local",
+                    "size": obj.get("size", 0),
+                    "modified": obj.get("modified_at", ""),
+                    "mtime": 0,
+                    "has_metadata": False,
+                }
+            )
     except Exception as e:
         logger.warning(f"⚠️ Storage list failed, falling back to local scan: {e}")
         # Fallback to local scan
@@ -770,23 +774,34 @@ async def list_generated_media(
             (COMFYUI_OUTPUT_DIR, "/comfyui/output", "ComfyUI/output"),
         ]:
             if src_dir.exists():
-                for ext_pat in ["*.mp4", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.webp"]:
+                for ext_pat in [
+                    "*.mp4",
+                    "*.webm",
+                    "*.png",
+                    "*.jpg",
+                    "*.jpeg",
+                    "*.webp",
+                ]:
                     for fp in src_dir.glob(ext_pat):
                         is_video = fp.suffix.lower() in video_exts
                         item_type = "video" if is_video else "image"
                         if type != "all" and item_type != type:
                             continue
                         stat = fp.stat()
-                        media.append({
-                            "name": fp.name,
-                            "type": item_type,
-                            "url": f"{url_prefix}/{fp.name}",
-                            "source": source,
-                            "size": stat.st_size,
-                            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                            "mtime": stat.st_mtime,
-                            "has_metadata": False,
-                        })
+                        media.append(
+                            {
+                                "name": fp.name,
+                                "type": item_type,
+                                "url": f"{url_prefix}/{fp.name}",
+                                "source": source,
+                                "size": stat.st_size,
+                                "modified": datetime.fromtimestamp(
+                                    stat.st_mtime
+                                ).isoformat(),
+                                "mtime": stat.st_mtime,
+                                "has_metadata": False,
+                            }
+                        )
 
     # Sort by modified (newest first)
     media.sort(key=lambda m: m.get("modified", ""), reverse=True)
@@ -807,10 +822,14 @@ async def get_generated_file(
     try:
         storage = get_storage_client()
         data, content_type, _ = storage.get_with_metadata("generated", filename)
-        return Response(content=data, media_type=content_type, headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
-            "Cache-Control": "public, max-age=3600",
-        })
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=404, detail="File not found")
@@ -828,10 +847,14 @@ async def get_comfyui_file(
     try:
         storage = get_storage_client()
         data, content_type, _ = storage.get_with_metadata("comfyui-local", filename)
-        return Response(content=data, media_type=content_type, headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
-            "Cache-Control": "public, max-age=3600",
-        })
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=404, detail="File not found")
