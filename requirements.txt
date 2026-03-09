@@ -30,7 +30,7 @@ gguf==0.18.0
 llama-cpp-python==0.3.16
 
 # Video processing
-imageio==2.37.2
+imageio==2.37.3
 imageio-ffmpeg==0.6.0
 opencv-python==4.13.0.92
 opencv-python-headless==4.13.0.92

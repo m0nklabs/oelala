@@ -74,7 +74,9 @@ class LLMJob:
             d["started_at"] = self.started_at
         if self.completed_at:
             d["completed_at"] = self.completed_at
-            d["processing_time"] = round(self.completed_at - (self.started_at or self.created_at), 2)
+            d["processing_time"] = round(
+                self.completed_at - (self.started_at or self.created_at), 2
+            )
         if self.result is not None:
             d["result"] = self.result
         if self.error is not None:
@@ -182,7 +184,9 @@ class LLMQueueManager:
                     )
                 else:
                     job.status = "failed"
-                    job.error = "LLM generation returned no result (Guardian unavailable?)"
+                    job.error = (
+                        "LLM generation returned no result (Guardian unavailable?)"
+                    )
                     logger.warning(f"❌ LLM job {job_id} failed: no result")
             except Exception as exc:
                 job.status = "failed"
@@ -256,12 +260,8 @@ class LLMQueueManager:
             "processing": sum(
                 1 for j in self._jobs.values() if j.status == "processing"
             ),
-            "completed": sum(
-                1 for j in self._jobs.values() if j.status == "completed"
-            ),
-            "failed": sum(
-                1 for j in self._jobs.values() if j.status == "failed"
-            ),
+            "completed": sum(1 for j in self._jobs.values() if j.status == "completed"),
+            "failed": sum(1 for j in self._jobs.values() if j.status == "failed"),
             "total_tracked": len(self._jobs),
         }
 

@@ -124,7 +124,9 @@ class StorageClient:
         # [MARK1] Dual-write to Backblaze B2 (if configured)
         if b2_client.is_configured():
             try:
-                b2_client.put(bucket, key, data, content_type or "application/octet-stream")
+                b2_client.put(
+                    bucket, key, data, content_type or "application/octet-stream"
+                )
             except Exception as e:
                 logger.error(f"B2 dual-write failed: {e}")
 
@@ -217,33 +219,32 @@ class StorageClient:
         path.write_bytes(data)
         return path
 
-    def move(self, src_bucket: str, src_key: str, dest_bucket: str, dest_key: str) -> bool:
+    def move(
+        self, src_bucket: str, src_key: str, dest_bucket: str, dest_key: str
+    ) -> bool:
         """
         Move/rename an object from source to destination.
-        
+
         Args:
             src_bucket: Source bucket name
             src_key: Source object key
             dest_bucket: Destination bucket name
             dest_key: Destination object key
-            
+
         Returns:
             True if moved successfully
         """
         url = f"{self.api_url}/{src_bucket}/{src_key}?action=move"
-        payload = {
-            "dest_bucket": dest_bucket,
-            "dest_key": dest_key
-        }
-        
+        payload = {"dest_bucket": dest_bucket, "dest_key": dest_key}
+
         headers = self._get_auth_headers(is_write=True)
         resp = self.client.post(url, json=payload, headers=headers)
-        
+
         if resp.status_code == 200:
             return True
         elif resp.status_code == 404:
             return False
-            
+
         resp.raise_for_status()
         return False
 
@@ -542,6 +543,7 @@ def get(bucket: str, key: str) -> bytes:
 def move(src_bucket: str, src_key: str, dest_bucket: str, dest_key: str) -> bool:
     """Move an object using the default client."""
     return get_client().move(src_bucket, src_key, dest_bucket, dest_key)
+
 
 def delete(bucket: str, key: str) -> bool:
     """Delete an object using the default client."""

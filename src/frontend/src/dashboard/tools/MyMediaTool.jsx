@@ -219,12 +219,12 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     const saved = localStorage.getItem('oelala_media_type_filter')
     return saved && ['all', 'video', 'image', 'audio', 'prompts'].includes(saved) ? saved : filterProp
   }) // 'all', 'video', 'image', 'audio', 'prompts' — internal state from dropdown
-  
+
   const [currentFolder, setCurrentFolder] = useState('/')
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [moveDestFolder, setMoveDestFolder] = useState('')
   const [moving, setMoving] = useState(false)
-  
+
   const [publishModalItem, setPublishModalItem] = useState(null) // Item to publish
   const [publishedItems, setPublishedItems] = useState(new Set()) // Set of published storage paths
 
@@ -648,7 +648,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
 
       // source file name as it belongs in the bucket
       const srcFilename = item.filename
-      
+
       // Calculate new filename (basename only to avoid nesting deeper than 1)
       const baseName = srcFilename.split('/').pop()
       const destFilename = destPrefix + baseName
@@ -682,11 +682,11 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     setMoving(false)
     setShowMoveModal(false)
     setMoveDestFolder('')
-    
+
     if (failCount > 0) {
       setError(`Moved ${successCount} items, failed to move ${failCount} items.`)
     }
-    
+
     setSelectedItems(new Set())
     await fetchMedia()
   }
@@ -2803,7 +2803,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                 <Folder size={18} />
                 Move {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''}
               </h3>
-              <button 
+              <button
                 className="prompt-popup-close"
                 onClick={() => setShowMoveModal(false)}
                 disabled={moving}
@@ -2811,12 +2811,12 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                 <X size={20} />
               </button>
             </div>
-            
+
             <div style={{ padding: '16px 0' }}>
               <p style={{ color: 'var(--text-muted)', marginBottom: '16px', fontSize: '0.9rem' }}>
                 Moved items can be organized in subdirectories one level deep. Use '/' for the root directory.
               </p>
-              
+
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
                   Target Folder
@@ -2842,7 +2842,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                     }
                   }}
                 />
-                
+
                 {/* Suggestions */}
                 {folders.filter(f => f !== '/').length > 0 && (
                   <div style={{ marginTop: '12px' }}>
@@ -2883,7 +2883,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                   </div>
                 )}
               </div>
-              
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button
                   onClick={() => setShowMoveModal(false)}
