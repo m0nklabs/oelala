@@ -53,6 +53,7 @@ def _emit_event(job_id: str, event: str, data: dict):
         except Exception as e:
             logger.warning(f"Progress callback error: {e}")
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ def _save_index(data: dict) -> None:
 # Startup recovery — mark orphaned 'running' jobs as failed
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def recover_stuck_jobs() -> int:
     """
     Called at backend startup. Any job with status 'running' is orphaned
@@ -131,8 +133,7 @@ def recover_stuck_jobs() -> int:
             job["finished_at"] = time.time()
             recovered += 1
             logger.warning(
-                f"🔄 Recovered orphaned training job {job_id} "
-                f"(was at step {last_step})"
+                f"🔄 Recovered orphaned training job {job_id} (was at step {last_step})"
             )
     if recovered:
         _save_index(index)
@@ -159,6 +160,7 @@ def _extract_last_step(log_path: Path) -> int:
 # GPU device selection
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _select_training_device() -> str:
     """
     Pick the best CUDA device for training.
@@ -167,6 +169,7 @@ def _select_training_device() -> str:
     """
     try:
         import torch
+
         if not torch.cuda.is_available():
             logger.warning("⚠️ No CUDA available, training will be very slow on CPU")
             return "cpu"
@@ -176,8 +179,8 @@ def _select_training_device() -> str:
         for i in range(torch.cuda.device_count()):
             free, total = torch.cuda.mem_get_info(i)
             name = torch.cuda.get_device_name(i)
-            free_gb = free / (1024 ** 3)
-            total_gb = total / (1024 ** 3)
+            free_gb = free / (1024**3)
+            total_gb = total / (1024**3)
             logger.info(
                 f"🔍 GPU {i} ({name}): {free_gb:.1f}GB free / {total_gb:.1f}GB total"
             )
@@ -185,7 +188,9 @@ def _select_training_device() -> str:
                 best_free = free
                 best_device = f"cuda:{i}"
 
-        logger.info(f"✅ Selected training device: {best_device} ({best_free / (1024**3):.1f}GB free)")
+        logger.info(
+            f"✅ Selected training device: {best_device} ({best_free / (1024**3):.1f}GB free)"
+        )
         return best_device
     except Exception as e:
         logger.warning(f"⚠️ GPU detection failed ({e}), defaulting to cuda:0")
@@ -405,11 +410,15 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
         job["started_at"] = time.time()
         _save_index({**index, job_id: job})
 
-        _emit_event(job_id, "started", {
-            "name": job.get("name", ""),
-            "trigger": job.get("trigger", ""),
-            "steps_total": job.get("steps_total", 0),
-        })
+        _emit_event(
+            job_id,
+            "started",
+            {
+                "name": job.get("name", ""),
+                "trigger": job.get("trigger", ""),
+                "steps_total": job.get("steps_total", 0),
+            },
+        )
 
         try:
             env = os.environ.copy()
@@ -443,10 +452,14 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
                     job["lora_path"] = str(dest)
                     job["status"] = "done"
                     logger.info(f"✅ Face LoRA training done: {dest}")
-                    _emit_event(job_id, "completed", {
-                        "lora_path": str(dest),
-                        "trigger": trigger,
-                    })
+                    _emit_event(
+                        job_id,
+                        "completed",
+                        {
+                            "lora_path": str(dest),
+                            "trigger": trigger,
+                        },
+                    )
                 else:
                     job["status"] = "failed"
                     job["error"] = "Training finished but no output LoRA found"
@@ -497,11 +510,15 @@ def _update_progress_from_log(job_id: str, log_path: Path) -> None:
                 # Broadcast progress via WebSocket
                 steps_total = job.get("steps_total", 0)
                 progress = round((step / steps_total) * 100) if steps_total else 0
-                _emit_event(job_id, "progress", {
-                    "steps_done": step,
-                    "steps_total": steps_total,
-                    "progress": progress,
-                })
+                _emit_event(
+                    job_id,
+                    "progress",
+                    {
+                        "steps_done": step,
+                        "steps_total": steps_total,
+                        "progress": progress,
+                    },
+                )
     except Exception:
         pass
 

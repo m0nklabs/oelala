@@ -27,6 +27,7 @@ def _get_storage():
     global _storage_client
     if _storage_client is None:
         from storage_client import get_client as get_storage_client
+
         _storage_client = get_storage_client()
     return _storage_client
 
@@ -37,6 +38,7 @@ def _gen_key(user_id: str, prompt_id: str, filename: str) -> str:
 
 
 # ── Save at job start ───────────────────────────────────────────────────────
+
 
 def save_gen_start_artifacts(
     user_id: str,
@@ -59,8 +61,13 @@ def save_gen_start_artifacts(
 
         # 2. Manifest with full prompt + all settings
         private_keys = {
-            "user_id", "_start_time", "_job_type", "_cloud_completed",
-            "_cloud_status", "_cloud_error", "_prompt_full",
+            "user_id",
+            "_start_time",
+            "_job_type",
+            "_cloud_completed",
+            "_cloud_status",
+            "_cloud_error",
+            "_prompt_full",
             "runpod_endpoint_id",
         }
         manifest = {
@@ -71,7 +78,8 @@ def save_gen_start_artifacts(
             "compute_target": job_info.get("compute_target", "local"),
             "job_type": job_info.get("job_type", "unknown"),
             "settings": {
-                k: v for k, v in job_info.items()
+                k: v
+                for k, v in job_info.items()
                 if k not in private_keys and not k.startswith("_")
             },
         }
@@ -104,6 +112,7 @@ def save_gen_start_artifacts(
 
 
 # ── Save at job completion ──────────────────────────────────────────────────
+
 
 def save_gen_logs(
     user_id: str,
@@ -140,6 +149,7 @@ def save_gen_logs(
 
 # ── Extract execution log from ComfyUI history ─────────────────────────────
 
+
 def format_comfyui_history_log(prompt_id: str, job_data: dict) -> str:
     """Format ComfyUI history data as a human-readable execution log.
 
@@ -157,7 +167,9 @@ def format_comfyui_history_log(prompt_id: str, job_data: dict) -> str:
     messages = status.get("messages", [])
     for msg_type, msg_data in messages:
         if msg_type == "execution_start":
-            lines.append(f"[execution_start] prompt_id={msg_data.get('prompt_id', '?')}")
+            lines.append(
+                f"[execution_start] prompt_id={msg_data.get('prompt_id', '?')}"
+            )
         elif msg_type == "execution_cached":
             cached = msg_data.get("nodes", [])
             if cached:

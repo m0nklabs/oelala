@@ -143,7 +143,7 @@ async def get_current_user(
         token = credentials.credentials
     elif "token" in request.query_params:
         token = request.query_params.get("token")
-        
+
     if not token:
         logger.info("🔐 AUTH: No credentials provided")
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -176,7 +176,7 @@ async def get_optional_user(
         token = credentials.credentials
     elif "token" in request.query_params:
         token = request.query_params.get("token")
-        
+
     if not token:
         return None
 

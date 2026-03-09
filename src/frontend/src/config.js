@@ -38,10 +38,10 @@ const getMediaUrl = (url, signedUrl = null) => {
   if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
     return finalUrl
   }
-  
+
   // Otherwise prepend backend base
   let fullUrl = `${BACKEND_BASE}${finalUrl}`
-  
+
   // Try to append token from localStorage for protected media endpoints accessed via img/video src
   try {
     const sbKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
@@ -55,7 +55,7 @@ const getMediaUrl = (url, signedUrl = null) => {
   } catch (e) {
     // Ignore localStorage access errors
   }
-  
+
   return fullUrl
 }
 

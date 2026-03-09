@@ -73,7 +73,6 @@ def _store_generation_time(output_url: str, processing_time: float):
 
     Stored in a JSON file so it survives restarts.
     """
-    import os
     from pathlib import Path
 
     try:
@@ -133,7 +132,9 @@ async def backfill_generation_times_from_comfyui():
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url)
             if resp.status_code != 200:
-                logger.warning(f"ComfyUI history backfill failed: HTTP {resp.status_code}")
+                logger.warning(
+                    f"ComfyUI history backfill failed: HTTP {resp.status_code}"
+                )
                 return 0
             history = resp.json()
     except Exception as e:
