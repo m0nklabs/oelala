@@ -6442,6 +6442,7 @@ async def _submit_to_runpod(
     lora_downloads: list = None,
     prompt_full: str = None,
     input_image_path: str = None,
+    endpoint_id: str = None,
 ) -> dict:
     """Submit a ComfyUI workflow to RunPod cloud GPU instead of local."""
     if not _runpod or not _runpod.has_endpoint():
@@ -6457,10 +6458,12 @@ async def _submit_to_runpod(
         extra["lora_downloads"] = lora_downloads
         logger.info(f"☁️ Including {len(lora_downloads)} LoRA download(s) in RunPod job")
 
-    job = await _runpod.submit_workflow(workflow, extra_input=extra or None)
-    logger.info(
-        f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})"
+    job = await _runpod.submit_workflow(
+        workflow,
+        endpoint_id=endpoint_id,
+        extra_input=extra or None,
     )
+    logger.info(f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})")
 
     # Track RunPod job alongside local job tracking
     job_info["compute_target"] = "cloud"
@@ -7689,6 +7692,19 @@ async def generate_cloud_max_async(
 
     width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
     duration_seconds = num_frames / fps if fps > 0 else 5
+    if mode == "t2v":
+        pixel_frame_budget = width * height * num_frames
+        max_pixel_frame_budget = 100_000_000
+        if pixel_frame_budget > max_pixel_frame_budget:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cloud Max T2V exceeds the current serverless safety budget. "
+                    "Lower duration or resolution and stay under roughly 100M pixel-frames "
+                    f"(received {pixel_frame_budget:,})."
+                ),
+            )
+
     credits_required = calculate_credits(
         "generate_wan22_comfyui",
         width=width,
@@ -8439,7 +8455,7 @@ async def generate_text_video(
     long_edge = 480 if resolution == "480p" else 720
 
     # ── Cloud routing ────────────────────────────────────────────────
-    if compute_target == "cloud" and model_type == "wan22":
+    if compute_target == "cloud":
         if not _runpod or not _runpod.has_endpoint():
             raise HTTPException(
                 status_code=503,
@@ -8448,56 +8464,86 @@ async def generate_text_video(
 
         output_prefix = f"oelala_t2v_cloud_{timestamp}"
 
-        # Build cloud-quality workflow (fp8 native UNETLoader, no DisTorch2)
-        workflow = comfyui.build_cloud_max_t2v_workflow(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            fps=fps,
-            steps=actual_steps,
-            cfg=actual_cfg,
-            seed=actual_seed,
-            output_prefix=output_prefix,
-            high_noise_steps=high_noise_steps,
-            shift=shift,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            lora_configs=parsed_lora_configs,
-            aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-        )
+        if model_type == "wan22":
+            workflow = comfyui.build_cloud_max_t2v_workflow(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                num_frames=num_frames,
+                fps=fps,
+                steps=actual_steps,
+                cfg=actual_cfg,
+                seed=actual_seed,
+                output_prefix=output_prefix,
+                high_noise_steps=high_noise_steps,
+                shift=shift,
+                sampler_name=sampler_name,
+                scheduler=scheduler,
+                lora_configs=parsed_lora_configs,
+                aspect_ratio=aspect_ratio,
+                long_edge=long_edge,
+            )
+            cloud_job_info = {
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+                "steps": actual_steps,
+                "seed": actual_seed,
+                "output_prefix": output_prefix,
+                "created_at": timestamp,
+                "lora_count": len(parsed_lora_configs),
+                "post_processing": post_processing_steps,
+                "job_type": "wan22_t2v",
+                "cfg": actual_cfg,
+                "shift": shift,
+                "sampler": sampler_name,
+                "scheduler": scheduler,
+                "model_mode": "wan2.2",
+                "compute_target": "cloud",
+                "user_id": user.id,
+                "credits_required": credits_required,
+            }
+            cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        else:
+            workflow = build_ltx2_t2v_workflow(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                width=width,
+                height=height,
+                num_frames=num_frames,
+                steps=actual_steps,
+                cfg=actual_cfg,
+                seed=actual_seed,
+                filename_prefix=output_prefix,
+            )
+            cloud_job_info = {
+                "prompt": prompt[:100],
+                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
+                "num_frames": num_frames,
+                "fps": fps,
+                "steps": actual_steps,
+                "seed": actual_seed,
+                "output_prefix": output_prefix,
+                "created_at": timestamp,
+                "lora_count": 0,
+                "post_processing": post_processing_steps,
+                "job_type": "ltx2_t2v",
+                "cfg": actual_cfg,
+                "model_mode": "ltx2",
+                "compute_target": "cloud",
+                "user_id": user.id,
+                "credits_required": credits_required,
+            }
+            cloud_lora_dl = []
+
         if not workflow:
             raise HTTPException(
-                status_code=500, detail="Failed to build cloud T2V workflow"
+                status_code=500,
+                detail=f"Failed to build cloud {model_type} T2V workflow",
             )
 
-        cloud_job_info = {
-            "prompt": prompt[:100],
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "steps": actual_steps,
-            "seed": actual_seed,
-            "output_prefix": output_prefix,
-            "created_at": timestamp,
-            "lora_count": len(parsed_lora_configs),
-            "post_processing": post_processing_steps,
-            "job_type": "wan22_t2v",
-            "cfg": actual_cfg,
-            "shift": shift,
-            "sampler": sampler_name,
-            "scheduler": scheduler,
-            "model_mode": "wan2.2",
-            "compute_target": "cloud",
-            "user_id": user.id,
-            "credits_required": credits_required,
-        }
-        cloud_lora_dl = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
         result = await _submit_to_runpod(
             workflow=workflow,
             user_id=user.id,
@@ -8506,10 +8552,11 @@ async def generate_text_video(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        await deduct_credits(
-            user, credits_required, result["prompt_id"], "Wan2.2 T2V (cloud)"
+        cloud_label = "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2 T2V (cloud)"
+        await deduct_credits(user, credits_required, result["prompt_id"], cloud_label)
+        logger.info(
+            f"☁️ T2V cloud job submitted ({model_type}): {result.get('runpod_job_id')}"
         )
-        logger.info(f"☁️ T2V cloud job submitted: {result.get('runpod_job_id')}")
         return result
 
     # ── Local routing ────────────────────────────────────────────────

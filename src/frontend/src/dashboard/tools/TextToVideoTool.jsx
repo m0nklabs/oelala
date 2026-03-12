@@ -4,7 +4,7 @@ import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { sendClientLog } from '../../logging'
-import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu, Zap, Pencil, Settings2, Save, Check, X, Layers, HelpCircle, Sliders } from 'lucide-react'
+import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu, Zap, Pencil, Settings2, Save, Check, X, Layers, HelpCircle, Sliders, Dice5 } from 'lucide-react'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
@@ -76,6 +76,54 @@ const T2V_DEFAULTS = {
   clipCount: 1,
 }
 
+const RANDOM_T2V_RECIPES = [
+  {
+    aspectRatio: '16:9',
+    concept: 'A lone biker carving through a rain-soaked neon megacity at night, reflections everywhere, cinematic speed and atmosphere',
+  },
+  {
+    aspectRatio: '9:16',
+    concept: 'A fashion model stepping through wind, fabric, smoke, and strobing light on an impossible futuristic runway',
+  },
+  {
+    aspectRatio: '16:9',
+    concept: 'A massive ancient creature emerging from a stormy ocean beside ruined cliffs, scale, mist, spray, and camera drama',
+  },
+  {
+    aspectRatio: '9:16',
+    concept: 'A spellcaster floating above a bioluminescent forest while glowing particles swirl and the camera rises through the scene',
+  },
+  {
+    aspectRatio: '1:1',
+    concept: 'A surreal mechanical flower opening in slow motion, revealing a tiny luminous world inside, elegant macro cinematography',
+  },
+  {
+    aspectRatio: '16:9',
+    concept: 'A drifting astronaut crossing a shattered crystal ring in deep space with debris, lens flares, and majestic movement',
+  },
+]
+
+const RANDOM_T2V_BEST_SETTINGS = {
+  modelType: 'cloud_max',
+  duration: 5,
+  resolution: '720p',
+  fps: 16,
+  cameraMotion: '',
+  steps: 25,
+  cfg: 3.0,
+  seed: -1,
+  computeTarget: 'cloud',
+  loraConfigs: [],
+  unetHighNoise: 'wan2.2_t2v_14B_Q6_K.gguf',
+  unetLowNoise: '',
+  extendMode: false,
+  clipCount: 1,
+  postUpscale: false,
+  postUpscaleScale: 2,
+  postInterpolate: false,
+  postInterpolateFps: 60,
+}
+
 export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { user, requestLogin } = useAuth()
   const { nsfwEnabled } = useNSFW()
@@ -139,6 +187,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [cameraMotion, setCameraMotion] = useState('')
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [isRefining, setIsRefining] = useState(false)
+  const [isRandomGenerating, setIsRandomGenerating] = useState(false)
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
   const [enhanceModel, setEnhanceModel] = useState(DEFAULT_PROMPT_LLM)
@@ -208,11 +257,17 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     setImportModal(null)
   }
 
-  // Calculate max duration based on resolution
+  // Cloud Max T2V times out on the current RunPod profile once pixel-frame count
+  // gets too high, so cap duration more aggressively than local presets.
   const maxDuration = useMemo(() => {
+    if (modelType === 'cloud_max') {
+      if (resolution === '720p') return 5
+      if (resolution === '576p') return 8
+      if (resolution === '480p') return 12
+    }
     const preset = RESOLUTION_PRESETS[resolution]
     return preset?.max_duration || 30
-  }, [resolution])
+  }, [modelType, resolution])
 
   // Clamp duration when max changes
   useEffect(() => {
@@ -365,7 +420,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     setIsRefining(false)
   }
 
-  const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting, [prompt, submitting])
+  const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting && !isRandomGenerating, [prompt, submitting, isRandomGenerating])
 
   // Calculate estimated generation time
   const numFrames = duration * fps
@@ -373,14 +428,65 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     return estimateT2VTime({ resolution, numFrames: duration * fps, steps, t2iSteps })
   }, [resolution, duration, fps, steps, t2iSteps])
 
-  const handleSubmit = async () => {
+  const applyRecipeSettings = (settings) => {
+    if (settings.prompt !== undefined) setPrompt(settings.prompt)
+    if (settings.negativePrompt !== undefined) setNegativePrompt(settings.negativePrompt)
+    if (settings.modelType !== undefined) setModelType(settings.modelType)
+    if (settings.duration !== undefined) setDuration(settings.duration)
+    if (settings.aspectRatio !== undefined) setAspectRatio(settings.aspectRatio)
+    if (settings.resolution !== undefined) setResolution(settings.resolution)
+    if (settings.fps !== undefined) setFps(settings.fps)
+    if (settings.cameraMotion !== undefined) setCameraMotion(settings.cameraMotion)
+    if (settings.steps !== undefined) setSteps(settings.steps)
+    if (settings.cfg !== undefined) setCfg(settings.cfg)
+    if (settings.seed !== undefined) setSeed(settings.seed)
+    if (settings.computeTarget !== undefined) setComputeTarget(settings.computeTarget)
+    if (settings.loraConfigs !== undefined) setLoraConfigs(settings.loraConfigs)
+    if (settings.unetHighNoise !== undefined) setUnetHighNoise(settings.unetHighNoise)
+    if (settings.unetLowNoise !== undefined) setUnetLowNoise(settings.unetLowNoise)
+    if (settings.extendMode !== undefined) setExtendMode(settings.extendMode)
+    if (settings.clipCount !== undefined) setClipCount(settings.clipCount)
+    if (settings.postUpscale !== undefined) setPostUpscale(settings.postUpscale)
+    if (settings.postUpscaleScale !== undefined) setPostUpscaleScale(settings.postUpscaleScale)
+    if (settings.postInterpolate !== undefined) setPostInterpolate(settings.postInterpolate)
+    if (settings.postInterpolateFps !== undefined) setPostInterpolateFps(settings.postInterpolateFps)
+    if (settings.postAudio !== undefined) setPostAudio(settings.postAudio)
+    if (settings.postAudioFile !== undefined) setPostAudioFile(settings.postAudioFile)
+  }
+
+  const queueVideoJob = async (overrides = {}) => {
     // Check if user is logged in
     if (!user) {
       requestLogin('Log in om te genereren')
       return
     }
 
-    if (!prompt.trim()) {
+    const resolved = {
+      prompt,
+      negativePrompt,
+      modelType,
+      duration,
+      aspectRatio,
+      resolution,
+      fps,
+      cameraMotion,
+      steps,
+      cfg,
+      seed,
+      computeTarget,
+      loraConfigs,
+      extendMode,
+      clipCount,
+      postUpscale,
+      postUpscaleScale,
+      postInterpolate,
+      postInterpolateFps,
+      postAudio,
+      postAudioFile,
+      ...overrides,
+    }
+
+    if (!resolved.prompt.trim()) {
       setError('Prompt is required')
       return
     }
@@ -390,32 +496,32 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     setLastQueued(null)
 
     // Build prompt with camera motion prefix
-    const motionPrefix = getCameraMotionPrefix(cameraMotion)
-    const finalPrompt = motionPrefix + prompt
+    const motionPrefix = getCameraMotionPrefix(resolved.cameraMotion)
+    const finalPrompt = motionPrefix + resolved.prompt
 
-    const calcNumFrames = duration * fps
+    const calcNumFrames = resolved.duration * resolved.fps
     const formData = new FormData()
     formData.append('prompt', finalPrompt)
     formData.append('num_frames', String(calcNumFrames))
-    formData.append('model_type', modelType)
-    formData.append('aspect_ratio', aspectRatio)
-    formData.append('resolution', resolution)
-    formData.append('fps', String(fps))
-    formData.append('compute_target', computeTarget)
+    formData.append('model_type', resolved.modelType)
+    formData.append('aspect_ratio', resolved.aspectRatio)
+    formData.append('resolution', resolved.resolution)
+    formData.append('fps', String(resolved.fps))
+    formData.append('compute_target', resolved.computeTarget)
 
     // Add negative prompt
-    formData.append('negative_prompt', negativePrompt)
+    formData.append('negative_prompt', resolved.negativePrompt)
 
     // Add post-processing chain if any options selected
     const postProcessingSteps = []
-    if (postUpscale) {
-      postProcessingSteps.push({ type: 'upscale', scale: postUpscaleScale, model: 'realesrgan-x4plus' })
+    if (resolved.postUpscale) {
+      postProcessingSteps.push({ type: 'upscale', scale: resolved.postUpscaleScale, model: 'realesrgan-x4plus' })
     }
-    if (postInterpolate) {
-      postProcessingSteps.push({ type: 'interpolate', target_fps: postInterpolateFps })
+    if (resolved.postInterpolate) {
+      postProcessingSteps.push({ type: 'interpolate', target_fps: resolved.postInterpolateFps })
     }
-    if (postAudio && postAudioFile) {
-      formData.append('post_audio_file', postAudioFile)
+    if (resolved.postAudio && resolved.postAudioFile) {
+      formData.append('post_audio_file', resolved.postAudioFile)
       postProcessingSteps.push({ type: 'add_audio' })
     }
     if (postProcessingSteps.length > 0) {
@@ -423,28 +529,35 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     }
 
     // LoRA parameters
-    if (loraConfigs.length > 0) {
-      formData.append('lora_configs', JSON.stringify(loraConfigs))
+    if (resolved.loraConfigs.length > 0) {
+      formData.append('lora_configs', JSON.stringify(resolved.loraConfigs))
     }
 
     // Extend mode
-    if (extendMode && clipCount > 1) {
+    if (resolved.extendMode && resolved.clipCount > 1) {
       formData.append('extend_mode', 'true')
-      formData.append('clip_count', String(clipCount))
+      formData.append('clip_count', String(resolved.clipCount))
     }
 
     try {
-      if (DEBUG) console.debug('🎬 T2V request:', { prompt, modelType, numFrames: calcNumFrames, resolution, fps, duration })
+      if (DEBUG) console.debug('🎬 T2V request:', {
+        prompt: resolved.prompt,
+        modelType: resolved.modelType,
+        numFrames: calcNumFrames,
+        resolution: resolved.resolution,
+        fps: resolved.fps,
+        duration: resolved.duration,
+      })
 
       let t2vEndpoint = `${BACKEND_BASE}/generate-text`
 
       // Cloud Max uses its own endpoint with mode=t2v
-      if (modelType === 'cloud_max') {
+      if (resolved.modelType === 'cloud_max') {
         t2vEndpoint = `${BACKEND_BASE}/generate-cloud-max-async`
         formData.append('mode', 't2v')
-        formData.append('steps', String(steps))
-        formData.append('cfg', String(cfg))
-        formData.append('seed', String(seed))
+        formData.append('steps', String(resolved.steps))
+        formData.append('cfg', String(resolved.cfg))
+        formData.append('seed', String(resolved.seed))
         formData.append('shift', '8.0')
         formData.append('high_noise_steps', '12')
         formData.append('sampler_name', 'dpmpp_2m')
@@ -452,14 +565,20 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       }
 
       // Wan22 cloud routing — send extra cloud params via /generate-text
-      if (modelType === 'wan22' && computeTarget === 'cloud') {
-        formData.append('steps', String(steps))
-        formData.append('cfg', String(cfg))
-        formData.append('seed', String(seed))
+      if (resolved.modelType === 'wan22' && resolved.computeTarget === 'cloud') {
+        formData.append('steps', String(resolved.steps))
+        formData.append('cfg', String(resolved.cfg))
+        formData.append('seed', String(resolved.seed))
         formData.append('shift', '8.0')
         formData.append('high_noise_steps', '12')
         formData.append('sampler_name', 'dpmpp_2m')
         formData.append('scheduler', 'beta')
+      }
+
+      if (resolved.modelType === 'ltx2') {
+        formData.append('steps', String(resolved.steps))
+        formData.append('cfg', String(resolved.cfg))
+        formData.append('seed', String(resolved.seed))
       }
 
       const result = await postForm(t2vEndpoint, formData)
@@ -479,7 +598,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       // Show queued confirmation
       setLastQueued({
         promptId,
-        prompt: prompt.substring(0, 40) + (prompt.length > 40 ? '...' : '')
+        prompt: resolved.prompt.substring(0, 40) + (resolved.prompt.length > 40 ? '...' : '')
       })
 
       // Notify queue indicator - job will be tracked in queue panel
@@ -497,6 +616,51 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleSubmit = async () => {
+    await queueVideoJob()
+  }
+
+  const handleRandomProVideo = async () => {
+    if (isRandomGenerating || submitting) return
+    if (!user) {
+      requestLogin('Log in om random pro video\'s te genereren')
+      return
+    }
+
+    setIsRandomGenerating(true)
+    setError('')
+
+    const recipe = RANDOM_T2V_RECIPES[Math.floor(Math.random() * RANDOM_T2V_RECIPES.length)]
+    const result = await llm.enhance({
+      input: recipe.concept,
+      mode: 'refine',
+      include_negative: true,
+      include_motion: true,
+      model: enhanceModel,
+      refine_instruction: 'Turn this into a premium text-to-video prompt with one clear main subject, strong visible motion, cinematic camera language, rich atmosphere, and temporal coherence. Avoid dialogue, subtitles, logos, text overlays, split screens, and hard scene cuts.',
+    })
+
+    if (!result) {
+      setError(llm.error ? `Random T2V failed: ${llm.error}` : 'Random T2V prompt generation failed')
+      setIsRandomGenerating(false)
+      return
+    }
+
+    const mergedPrompt = [result.prompt, result.motion_prompt].filter(Boolean).join(', ')
+    const randomRecipe = {
+      ...RANDOM_T2V_BEST_SETTINGS,
+      aspectRatio: recipe.aspectRatio,
+      prompt: mergedPrompt,
+      negativePrompt: result.negative_prompt || T2V_DEFAULTS.negativePrompt,
+      postAudio: false,
+      postAudioFile: null,
+    }
+
+    applyRecipeSettings(randomRecipe)
+    await queueVideoJob(randomRecipe)
+    setIsRandomGenerating(false)
   }
 
   return (
@@ -702,11 +866,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   setDuration(5)
                   setSteps(20)
                   setCfg(3.0)
-                  if (computeTarget === 'cloud') setComputeTarget('local')
                 } else if (newMode === 'cloud_max') {
                   setResolution('720p')
                   setAspectRatio('9:16')
-                  setDuration(8)
+                  setDuration(5)
                   setSteps(25)
                   setCfg(3.0)
                   setComputeTarget('cloud')
@@ -738,7 +901,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f472b6' }}>
               <span style={{ fontWeight: 600 }}>Cloud Max — bf16 Full Precision</span> | <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>Unquantized bf16 | 48GB VRAM | 25 steps | Maximum quality</div>
-              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>~$1.22/hr | Cloud-only | Up to 720p 30s</div>
+              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>~$1.22/hr | Cloud-only | Safe default: 720p 5s on current serverless worker</div>
             </div>
           ) : modelType === 'wan22' ? (
             <div className="info-badge" style={{ marginTop: '8px' }}>
@@ -747,8 +910,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>LTX-2 19B</span> | <span style={{ color: '#86efac' }}>Direct T2V</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>Faster inference | No T2I pass | Uses Gemma 3 text encoder</div>
+              <span style={{ fontWeight: 600 }}>LTX-2 19B</span> | <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod Single-GPU' : 'Direct T2V'}</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>{computeTarget === 'cloud' ? 'On-demand cloud worker | Shared Docker image | Uses LTX nodes + GGUF loaders' : 'Faster inference | No T2I pass | Uses Gemma 3 text encoder'}</div>
             </div>
           )}
 
@@ -1481,29 +1644,60 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         </div>
       )}
 
-      <button
-        className="primary-btn"
-        type="button"
-        disabled={!canSubmit}
-        onClick={handleSubmit}
-        style={{
-          height: '48px', fontSize: '1rem',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          backgroundColor: '#e5e5e5', color: 'black'
-        }}
-      >
-        {submitting ? (
-          <>
-            <Loader2 size={18} className="animate-spin" />
-            Queueing...
-          </>
-        ) : (
-          <>
-            <Sparkles size={18} />
-            Generate Video
-          </>
-        )}
-      </button>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '10px' }}>
+        <button
+          className="primary-btn"
+          type="button"
+          disabled={submitting || isRandomGenerating || llm.isLoading}
+          onClick={handleRandomProVideo}
+          style={{
+            height: '48px', fontSize: '0.95rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+            background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)', color: 'white'
+          }}
+          title="Generate a random premium T2V with LLM prompt + best Cloud Max settings"
+        >
+          {isRandomGenerating ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              Cooking Random Pro...
+            </>
+          ) : (
+            <>
+              <Dice5 size={18} />
+              Random Pro T2V
+            </>
+          )}
+        </button>
+
+        <button
+          className="primary-btn"
+          type="button"
+          disabled={!canSubmit}
+          onClick={handleSubmit}
+          style={{
+            height: '48px', fontSize: '1rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+            backgroundColor: '#e5e5e5', color: 'black'
+          }}
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              Queueing...
+            </>
+          ) : (
+            <>
+              <Sparkles size={18} />
+              Generate Video
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="info-badge" style={{ marginTop: '8px', textAlign: 'center', borderColor: 'rgba(236, 72, 153, 0.35)' }}>
+        Random Pro T2V uses Guardian to invent a fresh motion-heavy prompt, then queues it with the safe Cloud Max preset for the current RunPod worker.
+      </div>
 
       <div className="info-badge" style={{ marginTop: '12px', textAlign: 'center' }}>
         {modelType === 'ltx2'

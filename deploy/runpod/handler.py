@@ -43,6 +43,7 @@ import logging
 import io
 import glob
 import shutil
+from dataclasses import dataclass
 from collections import deque
 from pathlib import Path
 from typing import Iterator
@@ -73,6 +74,17 @@ DEFAULT_CACHED_MODEL_DIRS = [
 ]
 
 _cached_roots_logged = False
+
+
+@dataclass(frozen=True)
+class WorkflowModelPrepResult:
+    requested_count: int = 0
+    linked_count: int = 0
+    downloaded_count: int = 0
+
+    @property
+    def prepared_count(self) -> int:
+        return self.linked_count + self.downloaded_count
 
 # ---- Cloud Max model definitions ----
 # Source: Comfy-Org/Wan_2.2_ComfyUI_Repackaged on HuggingFace
@@ -151,6 +163,36 @@ CLOUD_MAX_MODELS = [
     },
 ]
 PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_MAX_MODELS}
+NODE_MANAGED_MODEL_DIRS = [
+    "audio_vae",
+    "checkpoints",
+    "clip",
+    "clip_vision",
+    "diffusion_models",
+    "latent_upscale_models",
+    "loras",
+    "text_encoders",
+    "unet",
+    "upscale_models",
+    "vae",
+]
+NODE_MANAGED_MODEL_FILENAMES = {
+    "LTX2_video_vae_bf16.safetensors",
+    "gemma_3_12B_it_nvfp4.safetensors",
+    "ltx-2-19b-dev-Q4_K_M.gguf",
+    "ltx-2-19b-distilled-fp8.safetensors",
+    "ltx-2-19b-distilled_Q4_K_M.gguf",
+    "ltx-2-19b-embeddings_connector_bf16.safetensors",
+}
+WORKFLOW_MODEL_INPUT_KEYS = (
+    "clip_name",
+    "clip_name1",
+    "clip_name2",
+    "gemma_path",
+    "ltxv_path",
+    "unet_name",
+    "vae_name",
+)
 
 
 # ---- Model Setup ----
@@ -170,10 +212,7 @@ def setup_model_links():
         logger.info(f"ℹ️ No network volume at {volume_models}")
         return False
 
-    model_dirs = [
-        "checkpoints", "diffusion_models", "unet", "vae", "text_encoders",
-        "clip", "loras", "upscale_models", "clip_vision",
-    ]
+    model_dirs = NODE_MANAGED_MODEL_DIRS
 
     linked = 0
     for d in model_dirs:
@@ -193,6 +232,13 @@ def setup_model_links():
 
     logger.info(f"✅ Model symlinks: {linked} files linked")
     return linked > 0
+
+
+def ensure_model_directories() -> None:
+    """Create the ComfyUI model folders used by the shared Wan + LTX worker."""
+    comfyui_models = Path("/comfyui/models")
+    for model_dir in NODE_MANAGED_MODEL_DIRS:
+        (comfyui_models / model_dir).mkdir(parents=True, exist_ok=True)
 
 
 def _is_startup_required(model: dict) -> bool:
@@ -553,8 +599,13 @@ def _model_state_for_log(model: dict) -> str:
 
 def _detect_workflow_family(referenced: set[str]) -> str:
     """Infer the Cloud Max workflow family from referenced model names."""
+    has_ltx = any(name in NODE_MANAGED_MODEL_FILENAMES or name.startswith("ltx-") for name in referenced)
     has_i2v = any("i2v" in name for name in referenced) or "clip_vision_h.safetensors" in referenced
     has_t2v = any("t2v" in name for name in referenced)
+    if has_ltx and (has_i2v or has_t2v):
+        return "ltx-mixed"
+    if has_ltx:
+        return "ltx"
     if has_i2v and has_t2v:
         return "mixed"
     if has_i2v:
@@ -728,12 +779,12 @@ def restart_comfyui():
         raise RuntimeError("ComfyUI failed to restart after downloading models")
 
 
-def ensure_workflow_models(workflow: dict, job=None) -> int:
+def ensure_workflow_models(workflow: dict, job=None) -> WorkflowModelPrepResult:
     """Ensure workflow-referenced optional models exist before queueing."""
     referenced = set()
     for node in workflow.values():
         inputs = node.get("inputs", {})
-        for key in ("unet_name", "clip_name", "vae_name"):
+        for key in WORKFLOW_MODEL_INPUT_KEYS:
             value = inputs.get(key)
             if isinstance(value, str):
                 referenced.add(value)
@@ -745,6 +796,23 @@ def ensure_workflow_models(workflow: dict, job=None) -> int:
             ", ".join(sorted(referenced)),
         )
 
+    node_managed_missing = sorted(
+        filename
+        for filename in referenced
+        if filename in NODE_MANAGED_MODEL_FILENAMES
+        and not (Path("/comfyui/models") / _node_managed_model_dir(filename) / filename).exists()
+    )
+    if node_managed_missing:
+        logger.info(
+            "🧩 LTX node-managed models will resolve on first use: %s",
+            ", ".join(node_managed_missing),
+        )
+        if job:
+            _progress(
+                job,
+                f"Preparing LTX runtime for {len(node_managed_missing)} node-managed model(s)...",
+            )
+
     requested = [
         model["filename"]
         for model in CLOUD_MAX_MODELS
@@ -753,7 +821,7 @@ def ensure_workflow_models(workflow: dict, job=None) -> int:
     if not requested:
         if referenced:
             logger.info("✅ Workflow model check: all referenced models already available")
-        return 0
+        return WorkflowModelPrepResult()
 
     cache_ready = []
     download_needed = []
@@ -770,12 +838,35 @@ def ensure_workflow_models(workflow: dict, job=None) -> int:
         logger.warning("⬇️ Workflow models still require download: %s", ", ".join(download_needed))
 
     if job:
-        _progress(job, f"Downloading {len(requested)} required model(s) for workflow...")
+        if cache_ready and download_needed:
+            _progress(
+                job,
+                f"Preparing {len(requested)} required model(s): linking {len(cache_ready)} from cache, downloading {len(download_needed)}...",
+            )
+        elif cache_ready:
+            _progress(job, f"Linking {len(cache_ready)} required model(s) from cache...")
+        else:
+            _progress(job, f"Downloading {len(download_needed)} required model(s) for workflow...")
 
-    downloaded = download_requested_models(requested)
-    if downloaded > 0:
+    prepared = download_requested_models(requested)
+    linked = min(len(cache_ready), prepared)
+    downloaded = max(prepared - linked, 0)
+    if prepared > 0:
         restart_comfyui()
-    return downloaded
+    return WorkflowModelPrepResult(
+        requested_count=len(requested),
+        linked_count=linked,
+        downloaded_count=downloaded,
+    )
+
+
+def _node_managed_model_dir(filename: str) -> str:
+    """Return the expected ComfyUI model directory for node-managed assets."""
+    if filename == "LTX2_video_vae_bf16.safetensors":
+        return "vae"
+    if filename.endswith(".gguf"):
+        return "unet"
+    return "text_encoders"
 
 
 def ensure_models():
@@ -789,6 +880,8 @@ def ensure_models():
     comfyui_models = Path("/comfyui/models")
     volume_path = Path(MODEL_VOLUME)
     volume_models = _writable_volume_models_dir()
+
+    ensure_model_directories()
 
     if not volume_path.exists():
         logger.info(f"📁 Network Volume not mounted at {volume_path}; public models will use container disk")
@@ -1281,9 +1374,17 @@ def handler(event: dict) -> dict:
             download_loras(lora_downloads, job=event)
 
         # Download optional workflow models on demand (e.g. Cloud Max T2V fp8 models)
-        downloaded_models = ensure_workflow_models(workflow, job=event)
-        if downloaded_models > 0:
-            _progress(event, f"Reloaded ComfyUI after downloading {downloaded_models} model(s)")
+        workflow_models = ensure_workflow_models(workflow, job=event)
+        if workflow_models.prepared_count > 0:
+            if workflow_models.linked_count and workflow_models.downloaded_count:
+                _progress(
+                    event,
+                    f"Reloaded ComfyUI after linking {workflow_models.linked_count} cached and downloading {workflow_models.downloaded_count} model(s)",
+                )
+            elif workflow_models.linked_count:
+                _progress(event, f"Reloaded ComfyUI after linking {workflow_models.linked_count} cached model(s)")
+            else:
+                _progress(event, f"Reloaded ComfyUI after downloading {workflow_models.downloaded_count} model(s)")
 
         # Queue the workflow
         _progress(event, "Queuing workflow in ComfyUI...")

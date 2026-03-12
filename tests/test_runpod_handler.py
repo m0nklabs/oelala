@@ -262,7 +262,10 @@ def test_ensure_workflow_models_downloads_only_referenced_t2v_models(monkeypatch
 
     prepared = module.ensure_workflow_models(workflow)
 
-    assert prepared == 4
+    assert prepared.requested_count == 4
+    assert prepared.linked_count == 0
+    assert prepared.downloaded_count == 4
+    assert prepared.prepared_count == 4
     assert set(requested) == {
         "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
         "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
@@ -272,6 +275,42 @@ def test_ensure_workflow_models_downloads_only_referenced_t2v_models(monkeypatch
     assert "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" not in requested
     assert "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" not in requested
     assert "clip_vision_h.safetensors" not in requested
+
+
+def test_ensure_workflow_models_reports_cache_links_without_fake_downloads(monkeypatch):
+    """Cache-only workflow prep should report linked models without counting downloads."""
+    module = _load_handler_module(monkeypatch)
+
+    workflow = {
+        "1": {
+            "class_type": "UNETLoader",
+            "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"},
+        },
+        "2": {
+            "class_type": "UNETLoader",
+            "inputs": {"unet_name": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors"},
+        },
+    }
+
+    model_names = {
+        "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+    }
+    monkeypatch.setattr(module, "_is_model_present", lambda model: False)
+    monkeypatch.setattr(
+        module,
+        "_find_cached_model_source",
+        lambda model, emit_logs=False: Path("/cache") / model["filename"] if model["filename"] in model_names else None,
+    )
+    monkeypatch.setattr(module, "download_requested_models", lambda filenames: len(filenames))
+    monkeypatch.setattr(module, "restart_comfyui", lambda: None)
+
+    prepared = module.ensure_workflow_models(workflow)
+
+    assert prepared.requested_count == 2
+    assert prepared.linked_count == 2
+    assert prepared.downloaded_count == 0
+    assert prepared.prepared_count == 2
 
 
 def test_detect_workflow_family_distinguishes_t2v_i2v_and_mixed(monkeypatch):

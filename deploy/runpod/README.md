@@ -8,7 +8,7 @@ Deploy Oelala's ComfyUI video generation pipeline to RunPod Serverless GPUs.
 oelala-backend (FastAPI)
 ├── Local ComfyUI (28GB dual-GPU) → default, low-latency jobs
 └── RunPod Serverless → heavy/burst jobs (A40/A100/H100)
-    └── Docker: ComfyUI + GGUF + VHS + KJNodes + Florence2 + RIFE
+    └── Docker: ComfyUI + GGUF + VHS + KJNodes + LTXVideo helpers
         └── handler.py → receives workflow JSON, queues in ComfyUI, returns output
 ```
 
@@ -16,7 +16,7 @@ oelala-backend (FastAPI)
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | ComfyUI worker image with essential custom nodes |
+| `Dockerfile` | ComfyUI worker image with Wan + LTX custom nodes |
 | `handler.py` | RunPod serverless handler — bridges API to ComfyUI |
 | `README.md` | This file |
 
@@ -127,7 +127,15 @@ RUNPOD_DEBUG=false
 - No attached Network Volume.
 - Accept public/general model downloads on container disk or RunPod cached-model storage.
 
-This is the best fit when Cloud Max is a burst path and local GPUs remain the primary path.
+This is the best fit when Cloud Max and LTX-2 are burst paths and local GPUs remain the primary path.
+
+### Single image, multi-model worker
+
+The current worker image is intended to stay shared across cloud video modes.
+
+- Wan 2.2 cloud jobs still use the existing Cloud Max workflow path.
+- LTX-2 cloud jobs reuse the same worker image, but only pull in LTX-related nodes/models when a workflow references them.
+- This avoids maintaining a second RunPod image unless model pressure or cold-start time proves it necessary.
 
 ### Best EU availability
 
@@ -220,6 +228,7 @@ RunPod currently supports only one cached model per endpoint. For Oelala that me
 - Mode-specific assets stay on-demand:
     - T2V jobs pull/link only the `wan2.2_t2v_*` UNETs they reference.
     - I2V jobs pull/link only the `wan2.2_i2v_*` UNETs plus `clip_vision_h.safetensors`.
+    - LTX-2 jobs use the same worker image with the LTX/GGUF node stack and resolve their own model assets only when those workflows are queued.
 - This avoids wasting cold-start time on I2V-only assets when the job is T2V, while still using RunPod cached-model storage whenever those files are available.
 
 This gives the best cost/performance balance without forcing every Cloud Max job to pay for multi-GB Hugging Face downloads inside a running worker.

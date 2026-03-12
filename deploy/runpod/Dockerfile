@@ -38,9 +38,18 @@ WORKDIR /comfyui/custom_nodes
 RUN git clone --depth 1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     pip install --no-cache-dir -r ComfyUI-VideoHelperSuite/requirements.txt
 
+# GGUF loaders (required for LTX-2 GGUF workflows)
+RUN git clone --depth 1 https://github.com/city96/ComfyUI-GGUF.git && \
+    pip install --no-cache-dir -r ComfyUI-GGUF/requirements.txt 2>/dev/null || true
+
 # KJNodes (ImageResizeKJv2 for input image resize)
 RUN git clone --depth 1 https://github.com/kijai/ComfyUI-KJNodes.git && \
     pip install --no-cache-dir -r ComfyUI-KJNodes/requirements.txt 2>/dev/null || true
+
+# LTXVideo helpers for LTX-2 T2V/I2V workflows.
+# LTX-2 core is built into modern ComfyUI, this repo adds the higher-level nodes/workflows.
+RUN git clone --depth 1 https://github.com/Lightricks/ComfyUI-LTXVideo.git && \
+    pip install --no-cache-dir -r ComfyUI-LTXVideo/requirements.txt 2>/dev/null || true
 
 # NOTE: Cloud Max uses native UNETLoader (fp8_scaled) — no GGUF node needed
 # NOTE: No MultiGPU/DisTorch2/BlockSwap — single 48GB+ GPU

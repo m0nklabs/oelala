@@ -1336,9 +1336,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>⚡ LTX-2 19B</span> • <span style={{ color: '#86efac' }}>Single Model</span>
+              <span style={{ fontWeight: 600 }}>⚡ LTX-2 19B</span> • <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod Single-GPU' : 'Single Model'}</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
                 Faster inference • No high/low noise • Uses Gemma 3 text encoder
+              </div>
+              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
+                {computeTarget === 'cloud'
+                  ? 'Shared RunPod worker with LTX nodes + GGUF loaders, prepared on demand'
+                  : 'Local ComfyUI path with direct LTX workflow'}
               </div>
             </div>
           )}
@@ -1386,6 +1391,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
             {computeTarget === 'cloud' && (
               <span style={{ fontSize: '10px', color: '#10b981' }}>RunPod GPU</span>
+            )}
+            {modelMode === 'ltx2' && computeTarget === 'cloud' && (
+              <span style={{ fontSize: '10px', color: '#86efac' }}>shared LTX worker</span>
             )}
           </div>
         </div>
