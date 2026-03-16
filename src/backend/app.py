@@ -6463,7 +6463,9 @@ async def _submit_to_runpod(
         endpoint_id=endpoint_id,
         extra_input=extra or None,
     )
-    logger.info(f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})")
+    logger.info(
+        f"☁️ RunPod job submitted: {job.id} (prompt_id={prompt_id}, user={user_id})"
+    )
 
     # Track RunPod job alongside local job tracking
     job_info["compute_target"] = "cloud"
@@ -8504,7 +8506,11 @@ async def generate_text_video(
                 "user_id": user.id,
                 "credits_required": credits_required,
             }
-            cloud_lora_dl = _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+            cloud_lora_dl = (
+                _build_lora_download_list(parsed_lora_configs)
+                if parsed_lora_configs
+                else []
+            )
         else:
             workflow = build_ltx2_t2v_workflow(
                 prompt=prompt,
@@ -8552,7 +8558,9 @@ async def generate_text_video(
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
         )
-        cloud_label = "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2 T2V (cloud)"
+        cloud_label = (
+            "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2 T2V (cloud)"
+        )
         await deduct_credits(user, credits_required, result["prompt_id"], cloud_label)
         logger.info(
             f"☁️ T2V cloud job submitted ({model_type}): {result.get('runpod_job_id')}"

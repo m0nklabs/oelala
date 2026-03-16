@@ -1,6 +1,6 @@
 # RunPod Serverless GPU Tier IDs
 
-> **Last updated**: 2026-03-07  
+> **Last updated**: 2026-03-07
 > **Source**: Discovered by enabling all GPU checkboxes in RunPod UI and reading back via API.
 
 ## Critical: GPU ID Format
