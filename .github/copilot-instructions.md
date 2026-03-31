@@ -48,7 +48,8 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Dependencies**: Avoid adding dependencies unless they are clearly justified; mention any new dependency explicitly.
 - **Scope**: Don’t introduce new features beyond what is requested.
 - **Focus**: Keep changes focused; do not reformat unrelated files.
-- **Documentation**: Don’t delete or prune documentation files/directories unless the user explicitly requests it.
+- **Documentation**: Don't delete or prune documentation files/directories unless the user explicitly requests it.
+- **Log Integrity**: NEVER delete or modify existing log entries (event logs, grow logs, deadline logs, snooze records, etc.). Logs are historical records — they happened. You may MOVE logs to a better centralized location, but the original text must be preserved verbatim. Errors, outdated entries, and entries written by other agents/LLMs stay exactly as written. Only ADD new entries; never rewrite, summarize, or remove old ones.
 - **Scratchpad**: Treat directories like `research/` or `scratch/` as local-only scratch space and keep them out of git via `.gitignore`.
 - **Canonical Requirements**: Canonical requirements must be written into `docs/*`.
 - **CHANGELOG Required**: Every PR MUST add a changelog fragment file in `changelog/` directory (NOT direct CHANGELOG.md edits). This prevents merge conflicts.
