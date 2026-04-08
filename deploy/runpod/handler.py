@@ -101,7 +101,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 I2V high noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "startup_required": False,
+        "startup_required": True,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -111,7 +111,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 I2V low noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "startup_required": False,
+        "startup_required": True,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -159,7 +159,7 @@ CLOUD_MAX_MODELS = [
         "filename": "clip_vision_h.safetensors",
         "size_gb": 1.26,
         "description": "CLIP Vision H (I2V conditioning)",
-        "startup_required": False,
+        "startup_required": True,
     },
 ]
 PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_MAX_MODELS}
