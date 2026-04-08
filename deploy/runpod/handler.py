@@ -121,7 +121,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 T2V high noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "startup_required": False,
+        "startup_required": True,
     },
     {
         "hf_repo": HF_REPO_22,
@@ -131,7 +131,7 @@ CLOUD_MAX_MODELS = [
         "size_gb": 14.3,
         "description": "Wan 2.2 T2V low noise 14B fp8_scaled",
         "persist_on_volume": True,
-        "startup_required": False,
+        "startup_required": True,
     },
     {
         "hf_repo": HF_REPO_22,

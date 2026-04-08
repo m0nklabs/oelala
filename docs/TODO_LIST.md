@@ -141,3 +141,22 @@ Based on project priorities:
 1. **Face system testing** - All code is built, needs end-to-end validation
 2. **UI polish** - Continue CSS class migration for remaining inline styles
 3. **oelala-storage #24** - Distributed storage network (MEGA)
+
+---
+
+## 🔮 Future: RunPod Multi-Endpoint Architecture
+
+> **When**: When traffic volume justifies it (multiple concurrent users)  
+> **Why**: Current single endpoint downloads ALL models (~70GB) at startup even though each job only needs ~30GB  
+
+**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models  
+**Future** (higher traffic): Split into dedicated endpoints per workflow family  
+
+| Endpoint | Models | Startup Download |
+|----------|--------|-----------------|
+| `oelala-cloud-i2v` | I2V high/low noise + CLIP Vision + shared core | ~42GB |
+| `oelala-cloud-t2v` | T2V high/low noise + shared core | ~40GB |
+
+**Benefits**: Faster cold starts (30GB less per endpoint), each endpoint only loads what it needs  
+**Trade-off**: 2x cold start probability at low traffic (each endpoint idles independently)  
+**Trigger**: Split when avg >5 jobs/hour sustained, or when cold start cost becomes a user complaint
