@@ -2349,18 +2349,88 @@ def _resolve_lora_path(name: str) -> tuple[Path, str] | tuple[None, None]:
     return None, None
 
 
+def _sanitize_lora_configs_for_single_stage(lora_configs: list) -> list:
+    """
+    Convert Wan2.2 dual-stage LoRA configs ({high, low, strength}) to
+    single-stage format ({name, strength}) for LTX-2.3 workflows.
+    
+    Wan LoRAs use separate high/low noise models, LTX uses a single model.
+    If a Wan-format config is detected, only the 'high' key is kept as 'name'.
+    Already-correct single-stage configs ({name, strength}) pass through unchanged.
+    """
+    sanitized = []
+    for config in lora_configs:
+        if "name" in config and config["name"]:
+            # Already single-stage format
+            sanitized.append(config)
+        elif "high" in config and config["high"]:
+            # Wan2.2 dual-stage → convert to single-stage
+            logger.warning(
+                f"⚠️ Converting Wan2.2 dual-stage LoRA to single-stage for LTX: "
+                f"high={config.get('high')} (low={config.get('low')} dropped)"
+            )
+            sanitized.append({
+                "name": config["high"],
+                "strength": config.get("strength", 1.0),
+            })
+        else:
+            logger.warning(f"⚠️ Skipping LoRA config with no name/high key: {config}")
+    return sanitized
+
+
+def _filter_loras_by_model_compat(lora_configs: list, target_model: str) -> list:
+    """
+    Filter LoRA configs to only include LoRAs compatible with the target model.
+    Uses filename-based base_model derivation (same logic as lora_scanner).
+
+    Args:
+        lora_configs: List of LoRA config dicts ({name, strength} or {high, low, strength}).
+        target_model: Target model type, e.g. "ltx", "wan2.2".
+
+    Returns:
+        Filtered list with only compatible LoRAs. Incompatible ones are logged + dropped.
+    """
+    from lora_scanner import _derive_base_model
+
+    compatible = []
+    for config in lora_configs:
+        # Get the LoRA filename from whichever key is present
+        lora_name = config.get("name") or config.get("high") or ""
+        if not lora_name:
+            continue
+        base_model = _derive_base_model(lora_name)
+        # Compatible if: base_model matches target, OR base_model is unknown (generic LoRA)
+        if base_model == target_model or base_model == "":
+            compatible.append(config)
+        else:
+            logger.warning(
+                f"🚫 LoRA '{lora_name}' is for {base_model}, incompatible with "
+                f"{target_model} — skipping (won't send to cloud worker)"
+            )
+    if len(compatible) < len(lora_configs):
+        logger.info(
+            f"🔍 LoRA compat filter: {len(compatible)}/{len(lora_configs)} "
+            f"passed for target={target_model}"
+        )
+    return compatible
+
+
 def _build_lora_download_list(lora_configs: list) -> list:
     """
     Build signed download URLs for LoRAs needed by a cloud job.
     Only includes LoRAs that exist locally on the SSD.
     Handles names with or without .safetensors extension.
+    Supports both Wan2.2 format ({high, low, strength}) and
+    single-stage format ({name, strength}) used by LTX-2.3.
     Returns list of {filename, url} dicts.
     """
     base_url = os.getenv("BACKEND_PUBLIC_URL", "https://api.oelala.xyz")
     downloads = []
     seen = set()
     for config in lora_configs:
-        for key in ("high", "low"):
+        # Collect all LoRA names from this config — supports both formats
+        keys_to_check = ["high", "low", "name"]
+        for key in keys_to_check:
             name = config.get(key, "")
             if not name or name in seen:
                 continue
@@ -7854,6 +7924,8 @@ async def generate_cloud_max_async(
             input_images_b64[image_name] = input_images_b64.pop(input_filename)
 
     # Build workflow
+    # Cloud-max is Wan2.2 only — filter out incompatible LoRAs
+    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "wan2.2")
     if mode == "i2v":
         workflow = comfyui.build_cloud_max_i2v_workflow(
             image_name=image_name,
@@ -7967,6 +8039,7 @@ async def generate_ltx2_i2v_async(
     steps: int = Form(20, description="Sampling steps (LTX-2 needs ~20)"),
     cfg: float = Form(3.0, description="CFG guidance scale"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
+    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, strength}, ...]"),
     post_processing: str = Form(
         "", description="JSON array of post-processing steps [{type, ...}, ...]"
     ),
@@ -8071,6 +8144,18 @@ async def generate_ltx2_i2v_async(
         seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
     )
 
+    # Parse LoRA configs
+    parsed_lora_configs = []
+    if lora_configs:
+        try:
+            parsed_lora_configs = json.loads(lora_configs)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
+    # LTX-2.3 uses single-stage LoRAs — sanitize any Wan2.2 dual-stage configs
+    parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
+    # Filter out LoRAs incompatible with LTX architecture
+    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "ltx")
+
     # Build LTX-2 I2V workflow
     workflow = build_ltx2_i2v_workflow(
         image_name=image_name,
@@ -8109,6 +8194,7 @@ async def generate_ltx2_i2v_async(
             seed=actual_seed,
             strength=1.0,
             output_prefix=output_prefix,
+            lora_configs=parsed_lora_configs,
         )
         if not cloud_workflow:
             raise HTTPException(
@@ -8131,14 +8217,21 @@ async def generate_ltx2_i2v_async(
             "job_type": "ltx23_i2v",
             "cfg": cfg,
             "model_mode": "ltx2",
+            "lora_count": len(parsed_lora_configs),
             "user_id": user.id,
             "credits_required": credits_required,
         }
+        cloud_lora_dl = (
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
+        )
         result = await _submit_to_runpod(
             workflow=cloud_workflow,
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             images=input_images_b64 if input_images_b64 else None,
             prompt_full=prompt,
             endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID"),
@@ -8597,6 +8690,8 @@ async def generate_text_video(
         output_prefix = f"oelala_t2v_cloud_{timestamp}"
 
         if model_type == "wan22":
+            # Filter out LoRAs incompatible with Wan2.2 architecture
+            parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "wan2.2")
             workflow = comfyui.build_cloud_max_t2v_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -8643,6 +8738,10 @@ async def generate_text_video(
             )
         else:
             # LTX-2.3 22B cloud workflow (80 GB+ GPU)
+            # Sanitize Wan2.2 dual-stage LoRA configs to single-stage for LTX
+            parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
+            # Filter out LoRAs incompatible with LTX architecture
+            parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "ltx")
             workflow = comfyui.build_cloud_ltx23_t2v_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -8654,6 +8753,7 @@ async def generate_text_video(
                 output_prefix=output_prefix,
                 aspect_ratio=aspect_ratio,
                 long_edge=long_edge,
+                lora_configs=parsed_lora_configs,
             )
             cloud_job_info = {
                 "prompt": prompt[:100],
@@ -8665,7 +8765,7 @@ async def generate_text_video(
                 "seed": actual_seed,
                 "output_prefix": output_prefix,
                 "created_at": timestamp,
-                "lora_count": 0,
+                "lora_count": len(parsed_lora_configs),
                 "post_processing": post_processing_steps,
                 "job_type": "ltx23_t2v",
                 "cfg": actual_cfg,
@@ -8674,7 +8774,11 @@ async def generate_text_video(
                 "user_id": user.id,
                 "credits_required": credits_required,
             }
-            cloud_lora_dl = []
+            cloud_lora_dl = (
+                _build_lora_download_list(parsed_lora_configs)
+                if parsed_lora_configs
+                else []
+            )
 
         if not workflow:
             raise HTTPException(
