@@ -144,6 +144,17 @@ Based on project priorities:
 
 ---
 
+## 🔮 v2 Backlog
+
+### Unified Tool Parameter Components
+> **When**: v2, or when adding new tools becomes copy-paste heavy  
+> **Why**: All 11 tools reuse the same UI patterns (prompt fields, model selectors, CFG sliders, seed inputs, file uploaders, advanced toggles) but each implements them inline. Duplicated code across ~22,000 lines.  
+> **What**: Extract shared components: `<PromptField>`, `<ModelSelector>`, `<ResolutionPicker>`, `<AdvancedToggle>`, `<FileUploader>`, `<CFGSlider>`, `<SeedInput>`. Each tool declares a config object; a `<ToolParamsRenderer>` renders the right components in order.  
+> **Risk**: High — touches all 11 tool files. Do after feature-freeze, not during active development.  
+> **Current mitigation**: CSS-level uniformity via `.grok-card`, `.form-group`, `.form-select` classes in App.css. Visual consistency is already there; this is a code-quality improvement.
+
+---
+
 ## 🔮 Future: RunPod Multi-Endpoint Architecture
 
 > **When**: When traffic volume justifies it (multiple concurrent users)  
