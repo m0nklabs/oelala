@@ -307,13 +307,20 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     fetchLoras()
   }, [])
 
-  // Filter LoRAs based on NSFW setting
+  // Filter LoRAs based on NSFW setting and model type compatibility
   const filteredLoras = useMemo(() => {
-    if (nsfwEnabled) return availableLoras
-    const filterList = (list) => (list || []).filter(l => !l.nsfw)
+    const filterList = (list) => {
+      let items = list || []
+      if (!nsfwEnabled) items = items.filter(l => !l.nsfw)
+      return items
+    }
+    // Model-type category filter: LTX only sees ltx/, Wan sees everything else
+    const isLtx = modelType === 'ltx2'
+    const categoryFilter = (cat) => isLtx ? cat === 'ltx' : cat !== 'ltx'
     const filteredByCategory = {}
     if (availableLoras.by_category) {
       Object.keys(availableLoras.by_category).forEach(cat => {
+        if (!categoryFilter(cat)) return
         const filtered = filterList(availableLoras.by_category[cat])
         if (filtered.length > 0) filteredByCategory[cat] = filtered
       })
@@ -325,7 +332,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       loras: filterList(availableLoras.loras),
       by_category: filteredByCategory,
     }
-  }, [availableLoras, nsfwEnabled])
+  }, [availableLoras, nsfwEnabled, modelType])
 
   // Fetch available unet models on mount
   useEffect(() => {
@@ -854,6 +861,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               onChange={(e) => {
                 const newMode = e.target.value
                 setModelType(newMode)
+                // Clear LoRA configs when switching model architecture (incompatible)
+                setLoraConfigs([])
                 if (newMode === 'wan22') {
                   setResolution('480p')
                   setAspectRatio('9:16')
@@ -1468,14 +1477,22 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                           Remove
                         </button>
                       </div>
-                      {/* High Noise LoRA */}
+                      {/* LoRA selector — single for LTX-2.3, dual high/low for Wan2.2 */}
                       <div style={{ marginBottom: '8px' }}>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          High Noise (steps 0-3)
+                          {modelType === 'ltx2' ? 'LoRA' : 'High Noise (steps 0-3)'}
                         </label>
                         <select
-                          value={config.high || ''}
-                          onChange={(e) => { const nc = [...loraConfigs]; nc[idx] = { ...config, high: e.target.value }; setLoraConfigs(nc) }}
+                          value={config.name || config.high || ''}
+                          onChange={(e) => {
+                            const nc = [...loraConfigs]
+                            if (modelType === 'ltx2') {
+                              nc[idx] = { ...config, name: e.target.value }
+                            } else {
+                              nc[idx] = { ...config, high: e.target.value }
+                            }
+                            setLoraConfigs(nc)
+                          }}
                           style={{ width: '100%', padding: '6px 10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem' }}
                         >
                           <option value="">None</option>
@@ -1488,7 +1505,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                           ))}
                         </select>
                       </div>
-                      {/* Low Noise LoRA */}
+                      {/* Low Noise LoRA — only for Wan2.2 dual-pass */}
+                      {modelType !== 'ltx2' && (
                       <div style={{ marginBottom: '8px' }}>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
                           Low Noise (steps 3+)
@@ -1508,6 +1526,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                           ))}
                         </select>
                       </div>
+                      )}
                       {/* Strength slider */}
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
@@ -1524,7 +1543,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   ))}
 
                   <button
-                    onClick={() => setLoraConfigs([...loraConfigs, { high: '', low: '', strength: 1.0 }])}
+                    onClick={() => setLoraConfigs([...loraConfigs, modelType === 'ltx2' ? { name: '', strength: 1.0 } : { high: '', low: '', strength: 1.0 }])}
                     style={{
                       padding: '8px 12px', backgroundColor: 'transparent', border: '1px dashed var(--border-color)',
                       borderRadius: '6px', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem',
