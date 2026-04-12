@@ -3346,6 +3346,7 @@ class ComfyUIClient:
         text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
         aspect_ratio: str = "9:16",
         long_edge: int = 768,
+        lora_configs: Optional[list] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Build LTX-2.3 22B Cloud T2V workflow — single-stage distilled pipeline.
@@ -3510,9 +3511,39 @@ class ComfyUIClient:
             },
         }
 
+        # ── LoRA chain (single-stage: insert between checkpoint and CFGGuider) ──
+        if lora_configs:
+            current_model = ["1", 0]  # CheckpointLoaderSimple MODEL output
+            lora_node_id = 100
+            for i, config in enumerate(lora_configs):
+                lora_name = config.get("high") or config.get("name", "")
+                if not lora_name:
+                    continue
+                strength = config.get("strength", 1.0)
+                node_id = str(lora_node_id + i)
+                workflow[node_id] = {
+                    "class_type": "LoraLoaderModelOnly",
+                    "inputs": {
+                        "lora_name": lora_name,
+                        "strength_model": strength,
+                        "model": current_model,
+                    },
+                }
+                current_model = [node_id, 0]
+                logger.info(
+                    f"🎨 LTX-2.3 T2V LoRA #{i + 1}: {lora_name} @ {strength}"
+                )
+            # Wire final LoRA output to CFGGuider
+            workflow["7"]["inputs"]["model"] = current_model
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = (
+                f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            )
         logger.info(
             f"☁️ Built LTX-2.3 Cloud T2V: {width}x{height}, "
-            f"{num_frames}f@{fps}fps, 8-step distilled"
+            f"{num_frames}f@{fps}fps, 8-step distilled{lora_info}"
         )
         return workflow
 
@@ -3530,6 +3561,7 @@ class ComfyUIClient:
         output_prefix: str = "oelala_ltx23_i2v",
         checkpoint: str = "ltx-2.3-22b-distilled.safetensors",
         text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
+        lora_configs: Optional[list] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Build LTX-2.3 22B Cloud I2V workflow — image-to-video with
@@ -3706,9 +3738,39 @@ class ComfyUIClient:
             },
         }
 
+        # ── LoRA chain (single-stage: insert between checkpoint and CFGGuider) ──
+        if lora_configs:
+            current_model = ["1", 0]  # CheckpointLoaderSimple MODEL output
+            lora_node_id = 100
+            for i, config in enumerate(lora_configs):
+                lora_name = config.get("high") or config.get("name", "")
+                if not lora_name:
+                    continue
+                strength_lora = config.get("strength", 1.0)
+                node_id = str(lora_node_id + i)
+                workflow[node_id] = {
+                    "class_type": "LoraLoaderModelOnly",
+                    "inputs": {
+                        "lora_name": lora_name,
+                        "strength_model": strength_lora,
+                        "model": current_model,
+                    },
+                }
+                current_model = [node_id, 0]
+                logger.info(
+                    f"🎨 LTX-2.3 I2V LoRA #{i + 1}: {lora_name} @ {strength_lora}"
+                )
+            # Wire final LoRA output to CFGGuider
+            workflow["10"]["inputs"]["model"] = current_model
+
+        lora_info = ""
+        if lora_configs and len(lora_configs) > 0:
+            lora_info = (
+                f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
+            )
         logger.info(
             f"☁️ Built LTX-2.3 Cloud I2V: {width}x{height}, "
-            f"{num_frames}f@{fps}fps, strength={strength}, 8-step distilled"
+            f"{num_frames}f@{fps}fps, strength={strength}, 8-step distilled{lora_info}"
         )
         return workflow
 

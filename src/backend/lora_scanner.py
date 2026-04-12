@@ -78,6 +78,8 @@ def _derive_tags(filename: str, category: str) -> List[str]:
     # Model type
     if "wan" in lower or "w22" in lower:
         tags.append("wan2.2")
+    if "ltx" in lower:
+        tags.append("ltx")
     if "sdxl" in lower:
         tags.append("sdxl")
     if "pony" in lower:
@@ -134,6 +136,8 @@ def _derive_base_model(filename: str) -> str:
     lower = filename.lower()
     if "wan" in lower or "w22" in lower:
         return "wan2.2"
+    if "ltx" in lower:
+        return "ltx"
     if "sdxl" in lower or "xl" in lower:
         return "sdxl"
     if "pony" in lower:
