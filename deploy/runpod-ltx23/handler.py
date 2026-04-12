@@ -386,42 +386,50 @@ def save_input_images(images: Dict[str, str]) -> Dict[str, str]:
     return saved
 
 
-def download_loras(lora_configs: List[Dict[str, Any]]) -> bool:
-    """Download any requested LoRAs from HuggingFace."""
-    if not lora_configs:
+def download_loras(lora_downloads: List[Dict[str, Any]]) -> bool:
+    """Download LoRA files from backend URL for cloud jobs.
+
+    Expects list of {"filename": "...", "url": "https://..."} dicts,
+    matching the format sent by _build_lora_download_list() in the backend.
+    """
+    if not lora_downloads:
         return True
 
     lora_dir = Path(COMFYUI_PATH) / "models" / "loras"
     lora_dir.mkdir(parents=True, exist_ok=True)
 
-    for config in lora_configs:
-        name = config.get("name", "")
-        repo = config.get("repo", "")
-        hf_path = config.get("hf_path", name)
+    for lora in lora_downloads:
+        filename = lora.get("filename", "")
+        url = lora.get("url", "")
 
-        if not name or not repo:
+        if not filename or not url:
+            logger.warning(f"⚠️ Skipping LoRA entry with missing filename/url: {lora}")
             continue
 
-        target = lora_dir / name
+        target = lora_dir / filename
         if target.exists():
-            logger.info(f"✅ LoRA already present: {name}")
+            logger.info(f"✅ LoRA already present: {filename}")
             continue
 
-        logger.info(f"⬇️  Downloading LoRA: {name} from {repo}...")
+        logger.info(f"⬇️  Downloading LoRA: {filename}...")
         try:
-            from huggingface_hub import hf_hub_download
-            kwargs = {
-                "repo_id": repo,
-                "filename": hf_path,
-                "local_dir": str(lora_dir),
-                "local_dir_use_symlinks": False,
-            }
-            if HF_TOKEN:
-                kwargs["token"] = HF_TOKEN
-            hf_hub_download(**kwargs)
-            logger.info(f"✅ LoRA downloaded: {name}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            resp = requests.get(url, stream=True, timeout=600)
+            resp.raise_for_status()
+
+            tmp = target.with_suffix(".download")
+            total = int(resp.headers.get("content-length", 0))
+            received = 0
+            with open(tmp, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
+                    f.write(chunk)
+                    received += len(chunk)
+            tmp.rename(target)
+
+            size_mb = target.stat().st_size / (1024 * 1024)
+            logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
         except Exception as e:
-            logger.error(f"❌ Failed to download LoRA {name}: {e}")
+            logger.error(f"❌ Failed to download LoRA {filename}: {e}")
             return False
 
     return True
@@ -574,7 +582,7 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     {
         "workflow": { ... ComfyUI API workflow ... },
         "images": { "name": "base64data", ... },  # optional
-        "loras": [ {"name": "...", "repo": "...", "strength": 1.0} ],  # optional
+        "lora_downloads": [ {"filename": "...", "url": "https://..."} ],  # optional
     }
     """
     job_id = event.get("id", "unknown")
@@ -591,7 +599,7 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
             return {"error": "No workflow provided"}
 
         images = job_input.get("images", {})
-        lora_configs = job_input.get("loras", [])
+        lora_downloads = job_input.get("lora_downloads", [])
 
         # 2. Check CUDA
         if not wait_for_cuda():
@@ -620,10 +628,10 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
             log_lines.append(f"Saved {len(saved_images)} input image(s)")
 
         # 6. Download LoRAs
-        if lora_configs:
-            if not download_loras(lora_configs):
+        if lora_downloads:
+            if not download_loras(lora_downloads):
                 return {"error": "Failed to download required LoRAs"}
-            log_lines.append(f"Downloaded {len(lora_configs)} LoRA(s)")
+            log_lines.append(f"Downloaded {len(lora_downloads)} LoRA(s)")
 
         # 7. Queue workflow
         prompt_id = queue_workflow(workflow)
