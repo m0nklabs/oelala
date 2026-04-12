@@ -44,9 +44,9 @@ const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 // T2V Model modes (aligned with I2V MODEL_MODES format)
 const MODEL_MODES = [
-  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 25 steps • Maximum quality' },
+  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
   { value: 'wan22', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass T2V via ComfyUI' },
-  { value: 'ltx2', label: '⚡ LTX-2 19B Distilled', desc: 'Fast direct text-to-video' },
+  { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
 
 const T2V_DEFAULTS = {
@@ -559,7 +559,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         formData.append('cfg', String(resolved.cfg))
         formData.append('seed', String(resolved.seed))
         formData.append('shift', '8.0')
-        formData.append('high_noise_steps', '12')
+        formData.append('high_noise_steps', '8')
         formData.append('sampler_name', 'dpmpp_2m')
         formData.append('scheduler', 'beta')
       }
@@ -570,7 +570,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         formData.append('cfg', String(resolved.cfg))
         formData.append('seed', String(resolved.seed))
         formData.append('shift', '8.0')
-        formData.append('high_noise_steps', '12')
+        formData.append('high_noise_steps', '8')
         formData.append('sampler_name', 'dpmpp_2m')
         formData.append('scheduler', 'beta')
       }
@@ -866,11 +866,12 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   setDuration(5)
                   setSteps(20)
                   setCfg(3.0)
+                  setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
                 } else if (newMode === 'cloud_max') {
                   setResolution('720p')
                   setAspectRatio('9:16')
                   setDuration(5)
-                  setSteps(25)
+                  setSteps(15)
                   setCfg(3.0)
                   setComputeTarget('cloud')
                 }
@@ -910,7 +911,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>LTX-2 19B</span> | <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod Single-GPU' : 'Direct T2V'}</span>
+              <span style={{ fontWeight: 600 }}>LTX-2.3 22B</span> | <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod 80GB GPU' : 'Direct T2V'}</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>{computeTarget === 'cloud' ? 'On-demand cloud worker | Shared Docker image | Uses LTX nodes + GGUF loaders' : 'Faster inference | No T2I pass | Uses Gemma 3 text encoder'}</div>
             </div>
           )}
@@ -1701,7 +1702,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
       <div className="info-badge" style={{ marginTop: '12px', textAlign: 'center' }}>
         {modelType === 'ltx2'
-          ? 'LTX-2 generates video directly from text (faster)'
+          ? 'LTX-2.3 22B — fast 8-step distilled generation on cloud GPU'
           : modelType === 'cloud_max'
             ? 'Cloud Max uses full bf16 precision on cloud GPU (highest quality)'
             : 'Wan2.2 first generates an image, then animates it (higher quality)'}

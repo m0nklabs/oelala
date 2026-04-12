@@ -145,10 +145,10 @@ const PROFILE_KEY = 'oelala_media_profile'
 
 // Monitor profiles: columns only
 const MONITOR_PROFILES = {
-  '1280x1024': { cols: 4, label: '1280×1024' },
-  '1080p': { cols: 5, label: '1080p' },
-  '1440p': { cols: 6, label: '1440p' },
-  '4k': { cols: 8, label: '4K' },
+  '1280x1024': { cols: 6, label: '1280×1024' },
+  '1080p': { cols: 8, label: '1080p' },
+  '1440p': { cols: 10, label: '1440p' },
+  '4k': { cols: 12, label: '4K' },
 }
 
 // Auto-detect best profile based on viewport width
@@ -310,10 +310,10 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   useEffect(() => {
     const calculateHeight = () => {
       if (containerRef.current) {
-        const containerWidth = containerRef.current.clientWidth - 32 // minus padding
-        const gap = 12
+        const containerWidth = containerRef.current.clientWidth - 24 // minus padding
+        const gap = 8
         const cellWidth = (containerWidth - (gap * (gridSize - 1))) / gridSize
-        const height = Math.round(cellWidth * (16 / 9)) // 9:16 portrait = width * 16/9
+        const height = Math.round(cellWidth * (4 / 3)) // 3:4 portrait aspect ratio
         setThumbHeight(height)
       }
     }
@@ -369,12 +369,11 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
     // First filter by current folder
     filtered = filtered.filter(item => {
       if (!item.filename) return false
-      const parts = item.filename.split('/')
       if (currentFolder === '/') {
-        return parts.length === 1
-      } else {
-        return parts.length > 1 && '/' + parts[0] === currentFolder
+        return true  // Root = show ALL items across all folders
       }
+      const parts = item.filename.split('/')
+      return parts.length > 1 && '/' + parts[0] === currentFolder
     })
 
     // Then filter by favorites
@@ -858,14 +857,28 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
       backgroundColor: 'var(--bg-primary)'
     }}>
       <style>{`
         /* ========== MEDIA GRID ========== */
         .media-grid {
           display: grid;
-          gap: 12px;
-          padding: 16px;
+          gap: 8px;
+          padding: 12px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        /* ========== CARD WRAPPER ========== */
+        .media-card-wrapper {
+          min-width: 0;
+        }
+        .media-card-wrapper:hover .thumb-card {
+          outline: 2px solid var(--accent-color, #a855f7);
+          z-index: 10;
         }
 
         /* ========== THUMBNAIL CARD ========== */
@@ -877,19 +890,14 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           cursor: pointer;
           background: #111;
         }
-        .thumb-card:hover {
-          outline: 2px solid var(--accent-color, #a855f7);
-          z-index: 10;
-        }
         .thumb-card.selected {
           outline: 3px solid var(--accent-color, #a855f7);
         }
         .thumb-card video,
         .thumb-card img {
           width: 100%;
-          height: 100%;
-          object-fit: cover;
           display: block;
+          border-radius: 8px;
         }
 
         /* ========== AUDIO THUMBNAIL ========== */
@@ -1235,27 +1243,18 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           white-space: nowrap;
         }
 
-        /* ========== MEDIA OVERLAY (hover info) ========== */
-        .media-overlay {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          padding: 8px;
-          background: linear-gradient(transparent, rgba(0,0,0,0.8));
-          opacity: 0;
-          transition: opacity 0.15s;
+        /* ========== MEDIA INFO BAR (below thumbnail) ========== */
+        .media-info-bar {
+          padding: 5px 4px 2px;
           display: flex;
           justify-content: space-between;
-          align-items: flex-end;
+          align-items: center;
           gap: 4px;
-        }
-        .thumb-card:hover .media-overlay {
-          opacity: 1;
+          position: relative;
         }
         .media-filename {
           font-size: 0.7rem;
-          color: #fff;
+          color: rgba(255,255,255,0.6);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -1263,7 +1262,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
         }
         .media-size {
           font-size: 0.65rem;
-          color: rgba(255,255,255,0.6);
+          color: rgba(255,255,255,0.35);
           display: flex;
           align-items: center;
           gap: 8px;
@@ -1280,6 +1279,11 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           display: flex;
           gap: 4px;
           flex-shrink: 0;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+        .media-card-wrapper:hover .overlay-buttons {
+          opacity: 1;
         }
         .overlay-btn {
           padding: 4px;
@@ -1416,24 +1420,24 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           cursor: not-allowed;
         }
         .header-btn {
-          padding: 6px 10px;
-          border-radius: 6px;
+          padding: 4px 8px;
+          border-radius: 5px;
           border: none;
           background: rgba(255,255,255,0.1);
           color: var(--text-muted);
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           cursor: pointer;
         }
         .header-btn:hover {
           background: rgba(255,255,255,0.2);
         }
         .sort-select {
-          padding: 6px 10px;
-          border-radius: 6px;
+          padding: 4px 6px;
+          border-radius: 5px;
           border: 1px solid var(--border-color);
           background: #1a1a1a;
           color: #e5e5e5;
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           cursor: pointer;
           outline: none;
         }
@@ -1442,8 +1446,8 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           color: #e5e5e5;
         }
         .sort-btn {
-          padding: 6px 8px;
-          border-radius: 6px;
+          padding: 4px 6px;
+          border-radius: 5px;
           border: none;
           background: rgba(255,255,255,0.1);
           color: var(--text-muted);
@@ -1464,18 +1468,14 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
 
       {/* Header with selection controls */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '12px 16px',
+        padding: '6px 10px',
         borderBottom: '1px solid var(--border-color)',
         backgroundColor: 'var(--bg-secondary)',
-        flexWrap: 'wrap',
-        gap: '10px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>My Media</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+        {/* Row 1: Title + stats */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.8rem' }}>My Media</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
             {filter === 'prompts' ? (
               <>💬 {sortedMediaList.length} items with prompts</>
             ) : (
@@ -1485,7 +1485,8 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* Row 2: All controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
           {/* Media type dropdown */}
           <select
             className="sort-select"
@@ -1515,7 +1516,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
               }}
               style={{ fontWeight: 500, minWidth: '120px' }}
             >
-              <option value="/">📂 Root (/)</option>
+              <option value="/">📂 All</option>
               {folders.filter(f => f !== '/').map(f => (
                 <option key={f} value={f}>📂 {f.substring(1)}</option>
               ))}
@@ -1534,10 +1535,10 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                 background: 'rgba(255,255,255,0.08)',
                 border: '1px solid var(--border-color)',
                 borderRadius: '6px',
-                padding: '6px 8px 6px 28px',
+                padding: '4px 6px 4px 26px',
                 color: 'var(--text-primary)',
-                fontSize: '0.85rem',
-                width: '200px',
+                fontSize: '0.75rem',
+                width: '160px',
                 outline: 'none',
               }}
             />
@@ -1560,11 +1561,11 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           </div>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
+          <div style={{ width: '1px', height: '16px', background: 'var(--border-color)', margin: '0 2px' }} />
 
           {/* Filter controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Filter size={14} style={{ color: 'var(--text-muted)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <Filter size={12} style={{ color: 'var(--text-muted)' }} />
             <select
               className="sort-select"
               value={filterBy}
@@ -1587,8 +1588,8 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                 style={{
                   background: !hideStartImages ? 'var(--accent-color, #a855f7)' : undefined,
                   color: !hideStartImages ? '#fff' : undefined,
-                  fontSize: '0.75rem',
-                  padding: '4px 8px'
+                  fontSize: '0.7rem',
+                  padding: '3px 6px'
                 }}
               >
                 📸{hideStartImages ? '' : '✓'}
@@ -1597,11 +1598,11 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           </div>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
+          <div style={{ width: '1px', height: '16px', background: 'var(--border-color)', margin: '0 2px' }} />
 
           {/* Sort controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <ArrowUpDown size={14} style={{ color: 'var(--text-muted)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <ArrowUpDown size={12} style={{ color: 'var(--text-muted)' }} />
             <select
               className="sort-select"
               value={sortBy}
@@ -1623,10 +1624,10 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           </div>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
+          <div style={{ width: '1px', height: '16px', background: 'var(--border-color)', margin: '0 2px' }} />
 
           {/* Monitor profile dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>🖥️</span>
             <select
               className="sort-select"
@@ -1647,7 +1648,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           </div>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
+          <div style={{ width: '1px', height: '16px', background: 'var(--border-color)', margin: '0 2px' }} />
 
           {/* Selection info and actions */}
           {selectedItems.size > 0 && (
@@ -2154,10 +2155,9 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
           }}
         >
           {sortedMediaList.slice(0, visibleCount).map((item, idx) => (
+            <div key={item.filename} className="media-card-wrapper">
             <div
-              key={item.filename}
               className={`thumb-card ${selectedItems.has(idx) ? 'selected' : ''}`}
-              style={{ height: `${thumbHeight}px` }}
               onClick={(e) => handleItemClick(idx, e)}
             >
               {/* Selection checkbox */}
@@ -2274,9 +2274,10 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                 )
               })()}
 
-              <div className="media-overlay" onClick={(e) => e.stopPropagation()}>
+            </div>{/* end thumb-card */}
+              <div className="media-info-bar" onClick={(e) => e.stopPropagation()}>
                 <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                  <div className="media-filename">{item.filename}</div>
+                  <div className="media-filename">{item.name || item.filename?.split('/').pop() || item.filename}</div>
                   <div className="media-size">
                     {formatSize(item.size)}
                     {(item.type === 'video' || item.type === 'audio') && videoDurations[item.filename] && (

@@ -1,16 +1,17 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
-import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil } from 'lucide-react'
+import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil, ChevronDown, RotateCcw, Search, Volume2, MessageCircle, Video, Plus, X, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
+import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
-import useLLMEnhance from '../../hooks/useLLMEnhance'
-import LLMQueueIndicator from '../../components/LLMQueueIndicator'
-import { VISION_MODELS, DEFAULT_VISION_MODEL, PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
+
+import { VISION_MODELS, DEFAULT_VISION_MODEL } from '../../constants/llmModels'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
+import { TOOL_IDS } from '../nav'
 
 const CAPTION_MODES = [
   { id: 'brief', label: 'Brief', description: '1-line summary', group: 'caption' },
@@ -37,18 +38,34 @@ const MODELS = VISION_MODELS
 
 const I2T_DEFAULTS = {
   model: DEFAULT_VISION_MODEL, mode: 'detailed', nsfwIntensity: 3,
-  cameraMotion: '', motionModel: DEFAULT_PROMPT_LLM, detailLevel: 3,
+  cameraMotion: '', detailLevel: 3, includeMotion: true, motionHint: '',
 }
 
-export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, onImportConsumed = null }) {
+const SEND_TO_TOOLS = [
+  { id: TOOL_IDS.IMAGE_TO_VIDEO, label: '🎬 Image to Video', icon: '🎬' },
+  { id: TOOL_IDS.TEXT_TO_VIDEO, label: '🎥 Text to Video', icon: '🎥' },
+  { id: TOOL_IDS.TEXT_TO_IMAGE, label: '🖼️ Text to Image', icon: '🖼️' },
+  { id: TOOL_IDS.IMAGE_TO_IMAGE, label: '🎨 Image to Image', icon: '🎨' },
+]
+
+export default function ImageToTextTool({ onSendToTool, pendingImport = null, onImportConsumed = null }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('image_to_text', I2T_DEFAULTS)
+
+  // ── Restore session state (for back-navigation) ────────────────
+  const savedSession = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem('i2t_session')
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  }, [])
+
   const [file, setFile] = useState(null)
-  const [preview, setPreview] = useState(null)
+  const [preview, setPreview] = useState(savedSession?.preview || null)
   const [model, setModel] = useState(initial.model)
   const [mode, setMode] = useState(initial.mode)
-  const [caption, setCaption] = useState('')
-  const [motionPrompt, setMotionPrompt] = useState('')
+  const [caption, setCaption] = useState(savedSession?.caption || '')
+  const [negativePrompt, setNegativePrompt] = useState(savedSession?.negativePrompt || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isRefining, setIsRefining] = useState(false)
@@ -58,19 +75,50 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
   const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
-  const [motionModel, setMotionModel] = useState(initial.motionModel || DEFAULT_PROMPT_LLM)
   const [detailLevel, setDetailLevel] = useState(initial.detailLevel ?? 3)
-  const [motionLoading, setMotionLoading] = useState(false)
+  const [includeMotion, setIncludeMotion] = useState(initial.includeMotion ?? true)
+  const [motionHint, setMotionHint] = useState(initial.motionHint || '')
+
+  // ── Concept Studio state ────────────────────────────────────────
+  const [concept, setConcept] = useState(null)           // structured analysis from Analyze step
+  const [analyzing, setAnalyzing] = useState(false)      // loading state for Analyze
+  const [directorAudio, setDirectorAudio] = useState('') // ambient sound notes
+  const [dialogueLines, setDialogueLines] = useState([]) // [{subject, line}]
+  const [audioPrompt, setAudioPrompt] = useState('')     // generated audio prompt output
+  const [cameraDirection, setCameraDirection] = useState('') // LLM-driven camera direction text
+  const [conceptRefineText, setConceptRefineText] = useState('') // refinement prompt for concept
+  const [notesRefineText, setNotesRefineText] = useState('')     // refinement prompt for notes
+  const [refiningConcept, setRefiningConcept] = useState(false)  // loading state for concept refine
+  const [refiningNotes, setRefiningNotes] = useState(false)      // loading state for notes refine
+
+  // ── Restore file from session blob if we have a preview but no file ──
+  useEffect(() => {
+    if (savedSession?.preview && !file && savedSession.preview.startsWith('/')) {
+      apiFetch(savedSession.preview)
+        .then(r => r.ok ? r.blob() : null)
+        .then(blob => {
+          if (blob) {
+            const f = new File([blob], savedSession.previewFilename || 'restored.png', { type: blob.type || 'image/png' })
+            setFile(f)
+          }
+        })
+        .catch(() => {})
+    }
+    // Clear saved session after restore
+    sessionStorage.removeItem('i2t_session')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-save settings ──────────────────────────────────────────
-  const settingsSnapshot = useMemo(() => ({ model, mode, nsfwIntensity, cameraMotion, motionModel, detailLevel }), [model, mode, nsfwIntensity, cameraMotion, motionModel, detailLevel])
+  const settingsSnapshot = useMemo(() => ({
+    model, mode, nsfwIntensity, cameraMotion, detailLevel, includeMotion, motionHint,
+  }), [model, mode, nsfwIntensity, cameraMotion, detailLevel, includeMotion, motionHint])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
     setModel(d.model); setMode(d.mode); setNsfwIntensity(d.nsfwIntensity)
-    setCameraMotion(d.cameraMotion || '')
-    setMotionModel(d.motionModel || DEFAULT_PROMPT_LLM); setDetailLevel(d.detailLevel ?? 3)
+    setCameraMotion(d.cameraMotion || ''); setDetailLevel(d.detailLevel ?? 3)
+    setIncludeMotion(d.includeMotion ?? true); setMotionHint(d.motionHint || '')
   }, [resetDefaults])
 
   // Auto-open import modal when Dashboard sends a pendingImport
@@ -84,34 +132,38 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
     if (selected.image && importModal?.item) {
       const item = importModal.item
 
-      // If item is a video, use the companion .png (first frame) instead
-      let imageUrl, fetchUrl, imageFilename
+      // If item is a video, extract first frame client-side
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        const pngFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
-        const pngUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        imageUrl = pngUrl
-        fetchUrl = pngUrl
-        imageFilename = pngFilename
-        console.debug('🎬 I2T: video detected, using companion image:', pngFilename)
+        try {
+          const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+          console.debug('🎬 I2T: video detected, extracting first frame from:', item.filename)
+          const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+          setFile(fileObj)
+          setPreview(previewUrl)
+          setCaption('')
+          setError(null)
+          if (DEBUG) console.log('🖼️ Extracted first frame from video:', fileObj.name)
+        } catch (e) {
+          console.error('Failed to extract frame from video:', e)
+          setError('⚠️ Failed to extract first frame from video')
+        }
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-        fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
-        imageFilename = item.filename || item.url?.split('/').pop() || 'image.png'
-      }
-
-      try {
-        const response = await apiFetch(fetchUrl)
-        const blob = await response.blob()
-        const filename = imageFilename
-        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-        setFile(fileObj)
-        setPreview(imageUrl)
-        setCaption('')
-        setError(null)
-        if (DEBUG) console.log('🖼️ Imported image from creations:', filename)
-      } catch (e) {
-        console.error('Failed to load image from import:', e)
-        setError('⚠️ Failed to load image from import')
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+        const imageFilename = item.filename || item.url?.split('/').pop() || 'image.png'
+        try {
+          const response = await apiFetch(fetchUrl)
+          const blob = await response.blob()
+          const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
+          setFile(fileObj)
+          setPreview(imageUrl)
+          setCaption('')
+          setError(null)
+          if (DEBUG) console.log('🖼️ Imported image from creations:', imageFilename)
+        } catch (e) {
+          console.error('Failed to load image from import:', e)
+          setError('⚠️ Failed to load image from import')
+        }
       }
     }
     setImportModal(null)
@@ -119,22 +171,29 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
 
   const handleCreationsSelect = useCallback(async (item) => {
     try {
-      let imageUrl
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        // Extract first frame from video client-side
+        const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+        console.debug('🎬 I2T creations: extracting first frame from video:', item.filename)
+        const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+        setFile(fileObj)
+        setPreview(previewUrl)
+        setCaption('')
+        setError(null)
+        if (DEBUG) console.log('📁 I2T: extracted frame from video:', fileObj.name)
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        const response = await apiFetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+        const blob = await response.blob()
+        const filename = imageUrl.split('/').pop() || 'image.png'
+        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+        setFile(fileObj)
+        setPreview(imageUrl)
+        setCaption('')
+        setError(null)
+        if (DEBUG) console.log('📁 I2T: loaded from creations:', filename)
       }
-      const response = await apiFetch(imageUrl)
-      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
-      const blob = await response.blob()
-      const filename = imageUrl.split('/').pop() || 'image.png'
-      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-      setFile(fileObj)
-      setPreview(imageUrl)
-      setCaption('')
-      setError(null)
-      if (DEBUG) console.log('\ud83d\udcc1 I2T: loaded from creations:', filename)
     } catch (e) {
       console.error('Failed to load from creations:', e)
       setError('\u26a0\ufe0f Failed to load image from My Creations')
@@ -147,6 +206,7 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       setFile(f)
       setPreview(URL.createObjectURL(f))
       setCaption('')
+      setConcept(null)
       setError(null)
     }
   }, [])
@@ -158,10 +218,120 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
       setFile(f)
       setPreview(URL.createObjectURL(f))
       setCaption('')
+      setConcept(null)
       setError(null)
     }
   }, [])
 
+  // ── Step 1: Analyze image → structured concept ──────────────────
+  const handleAnalyze = async () => {
+    if (!user) { requestLogin('Log in om afbeeldingen te analyseren'); return }
+    if (!file) return
+
+    setAnalyzing(true)
+    setError(null)
+    setConcept(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('model', model)
+      formData.append('mode', 'concept')
+      formData.append('detail_level', detailLevel.toString())
+
+      const res = await apiFetch(`${BACKEND_BASE}/caption-image`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Analysis failed')
+      }
+
+      const data = await res.json()
+      const c = data.concept || {}
+      setConcept(c)
+
+      // Pre-fill director's notes from suggestions
+      if (c.suggested_motion) setMotionHint(c.suggested_motion)
+      if (c.suggested_audio) setDirectorAudio(c.suggested_audio)
+      if (c.suggested_dialogue?.length) setDialogueLines(c.suggested_dialogue)
+      if (c.suggested_camera) setCameraDirection(c.suggested_camera)
+
+      if (DEBUG) console.log('🔍 Concept analysis:', c)
+    } catch (err) {
+      console.error('Analyze error:', err)
+      setError(err.message)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  // ── Refine concept or director's notes via LLM ─────────────────
+  const handleRefine = async (target) => {
+    if (!user || !file || !concept) return
+
+    const prompt = target === 'notes' ? notesRefineText : conceptRefineText
+    if (!prompt.trim()) return
+
+    const setRefining = target === 'notes' ? setRefiningNotes : setRefiningConcept
+    setRefining(true)
+    setError(null)
+
+    try {
+      // Build current concept with live director's notes merged in
+      const currentConcept = {
+        ...concept,
+        suggested_motion: motionHint,
+        suggested_audio: directorAudio,
+        suggested_dialogue: dialogueLines,
+        suggested_camera: cameraDirection,
+      }
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('model', model)
+      formData.append('mode', 'concept')
+      formData.append('detail_level', detailLevel.toString())
+      formData.append('concept_context', JSON.stringify(currentConcept))
+      formData.append('refinement_prompt', prompt.trim())
+      formData.append('refinement_target', target)
+
+      const res = await apiFetch(`${BACKEND_BASE}/caption-image`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Refinement failed')
+      }
+
+      const data = await res.json()
+      const c = data.concept || {}
+      setConcept(c)
+
+      // Update director's notes from refined suggestions
+      if (c.suggested_motion) setMotionHint(c.suggested_motion)
+      if (c.suggested_audio) setDirectorAudio(c.suggested_audio)
+      if (c.suggested_dialogue?.length) setDialogueLines(c.suggested_dialogue)
+      if (c.suggested_camera) setCameraDirection(c.suggested_camera)
+
+      // Clear the refinement input after success
+      if (target === 'notes') setNotesRefineText('')
+      else setConceptRefineText('')
+
+      if (DEBUG) console.log(`✨ Concept refined (${target}):`, c)
+    } catch (err) {
+      console.error('Refine error:', err)
+      setError(err.message)
+    } finally {
+      setRefining(false)
+    }
+  }
+
+  // ── Step 2: Generate production prompt ──────────────────────────
   const handleCaption = async () => {
     if (!user) { requestLogin('Log in om afbeeldingen te analyseren'); return }
     if (!file) return
@@ -178,6 +348,25 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         formData.append('nsfw_intensity', nsfwIntensity.toString())
       }
       formData.append('detail_level', detailLevel.toString())
+      if (isPromptMode(mode)) formData.append('include_negative', 'true')
+      if (isPromptMode(mode)) formData.append('include_motion', includeMotion.toString())
+      if (isPromptMode(mode) && includeMotion && motionHint.trim()) {
+        formData.append('motion_hint', motionHint.trim())
+      }
+
+      // Pass concept context if we did an Analyze step
+      if (concept && isPromptMode(mode)) {
+        formData.append('concept_context', JSON.stringify(concept))
+      }
+
+      // Pass audio context if director's notes have audio/dialogue
+      const hasAudioNotes = directorAudio.trim() || dialogueLines.some(d => d.line?.trim())
+      if (hasAudioNotes && isPromptMode(mode)) {
+        formData.append('audio_context', JSON.stringify({
+          ambient: directorAudio.trim(),
+          dialogue: dialogueLines.filter(d => d.line?.trim()),
+        }))
+      }
 
       const res = await apiFetch(`${BACKEND_BASE}/caption-image`, {
         method: 'POST',
@@ -198,7 +387,8 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         if (motionPrefix) captionText = motionPrefix + captionText
       }
       setCaption(captionText)
-      setMotionPrompt('')  // Reset — user generates motion separately
+      setNegativePrompt(data.negative_prompt || '')
+      if (data.audio_prompt) setAudioPrompt(data.audio_prompt)
 
       if (DEBUG) console.log('🖼️ Caption result:', data)
     } catch (err) {
@@ -209,71 +399,94 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
     }
   }
 
-  // Generate motion prompt from caption using T2T LLM
-  const handleGenerateMotion = async () => {
-    if (!caption.trim() || motionLoading) return
-    setMotionLoading(true)
-    setError(null)
-    try {
-      const res = await apiFetch(`${BACKEND_BASE}/generate-motion-prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: caption.trim(), model: motionModel }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Motion prompt generation failed')
-      }
-      const data = await res.json()
-      setMotionPrompt(data.motion_prompt || '')
-      if (DEBUG) console.log('🎬 Motion prompt:', data)
-    } catch (err) {
-      console.error('Motion prompt error:', err)
-      setError(err.message)
-    } finally {
-      setMotionLoading(false)
-    }
-  }
-
-  // LLM prompt enhancement queue
-  const llm = useLLMEnhance()
-
-  // Refine/improve caption with LLM — preserves original intent (via async queue)
+  // Refine/tweak all outputs with user suggestion via dedicated endpoint
   const handleRefineCaption = async () => {
-    if (!caption.trim() || isRefining) return
+    if (!caption.trim() || isRefining || !refineInstruction.trim()) return
     setIsRefining(true)
     setError(null)
 
-    const result = await llm.enhance({
-      input: caption.trim(),
-      mode: 'refine',
-      model: model,
-      include_negative: false,
-      include_motion: isPromptMode(mode),
-      refine_instruction: refineInstruction.trim() || null,
-    })
+    try {
+      const res = await apiFetch(`${BACKEND_BASE}/refine-caption`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          positive: caption.trim(),
+          negative: negativePrompt || null,
+          suggestion: refineInstruction.trim(),
+        }),
+      })
 
-    if (result) {
-      setCaption(result.prompt)
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Refine failed')
+      }
+
+      const data = await res.json()
+      if (data.positive) setCaption(data.positive)
+      if (data.negative !== undefined) setNegativePrompt(data.negative || '')
       setRefineInstruction('')
       setShowRefineInput(false)
-    } else if (llm.error) {
-      setError(`Refine failed: ${llm.error}`)
-    }
-    setIsRefining(false)
-  }
-
-  const handleCopy = () => {
-    if (caption) {
-      navigator.clipboard.writeText(caption)
+    } catch (err) {
+      console.error('Refine error:', err)
+      setError(`Refine failed: ${err.message}`)
+    } finally {
+      setIsRefining(false)
     }
   }
 
-  const handleSendToPrompt = () => {
-    if (caption && onSendToPrompt) {
-      onSendToPrompt(caption)
+  const handleCopyPositive = () => { if (caption) navigator.clipboard.writeText(caption) }
+  const handleCopyNegative = () => { if (negativePrompt) navigator.clipboard.writeText(negativePrompt) }
+
+  const [showSendMenu, setShowSendMenu] = useState(false)
+
+  // ── Save session state & send to tool ───────────────────────────
+  const handleSendToTool = (toolId) => {
+    if (caption && onSendToTool) {
+      // Save I2T state to sessionStorage so user can navigate back
+      try {
+        sessionStorage.setItem('i2t_session', JSON.stringify({
+          caption,
+          negativePrompt,
+          preview: (preview && !preview.startsWith('blob:')) ? preview : null,
+          previewFilename: file?.name || null,
+        }))
+      } catch { /* quota exceeded — best effort */ }
+
+      onSendToTool(toolId, {
+        item: {
+          filename: file?.name || 'i2t-image.png',
+          type: 'image',
+          url: preview,
+          _file: file,  // direct File blob for tools that support it
+        },
+        workflow: {
+          positive: caption,
+          negative: negativePrompt || undefined,
+          audio: audioPrompt || undefined,
+        },
+      })
+      setShowSendMenu(false)
     }
   }
+
+  // ── Clear all state ─────────────────────────────────────────────
+  const handleClearAll = useCallback(() => {
+    setFile(null)
+    setPreview(null)
+    setCaption('')
+    setNegativePrompt('')
+    setAudioPrompt('')
+    setConcept(null)
+    setDirectorAudio('')
+    setDialogueLines([])
+    setConceptRefineText('')
+    setNotesRefineText('')
+    setError(null)
+    setShowRefineInput(false)
+    setRefineInstruction('')
+    setShowSendMenu(false)
+    sessionStorage.removeItem('i2t_session')
+  }, [])
 
   return (
     <div className="tool-container">
@@ -296,7 +509,26 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
             <ImageIcon size={16} />
             Upload Image
           </div>
-          <ResetDefaultsButton onReset={handleResetDefaults} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {(file || caption) && (
+              <button
+                className="icon-btn"
+                onClick={handleClearAll}
+                title="Clear all & start fresh"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  padding: '4px 10px', fontSize: '0.72rem', fontWeight: 600,
+                  color: 'var(--text-muted, #888)', background: 'transparent',
+                  border: '1px solid var(--border-color, #444)', borderRadius: '6px',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                <RotateCcw size={12} />
+                Clear
+              </button>
+            )}
+            <ResetDefaultsButton onReset={handleResetDefaults} />
+          </div>
         </div>
 
         <div
@@ -338,17 +570,258 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
         />
       </div>
 
-      {/* Caption Settings Card */}
+      {/* ── Step 1: Analyze Button ────────────────────────────────── */}
+      {file && !concept && (
+        <button
+          className="primary-btn"
+          onClick={handleAnalyze}
+          disabled={analyzing}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          {analyzing ? (
+            <>
+              <Loader2 size={18} className="spin" />
+              Analyzing image...
+            </>
+          ) : (
+            <>
+              <Search size={18} />
+              🔍 Analyze Image
+            </>
+          )}
+        </button>
+      )}
+
+      {/* ── Concept Card — shows after analysis ───────────────────── */}
+      {concept && (
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Search size={16} />
+              Concept Analysis
+            </div>
+            <button
+              className="icon-btn"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              title="Re-analyze"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                padding: '4px 10px', fontSize: '0.72rem', fontWeight: 600,
+                color: 'var(--text-muted, #888)', background: 'transparent',
+                border: '1px solid var(--border-color, #444)', borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              {analyzing ? <Loader2 size={12} className="spin" /> : <RotateCcw size={12} />}
+              Re-analyze
+            </button>
+          </div>
+
+          {/* Scene */}
+          {concept.scene && (
+            <div className="i2t-concept-field">
+              <span className="i2t-concept-label">🎬 Scene</span>
+              <p className="i2t-concept-text">{concept.scene}</p>
+            </div>
+          )}
+
+          {/* Subjects */}
+          {concept.subjects?.length > 0 && (
+            <div className="i2t-concept-field">
+              <span className="i2t-concept-label">👤 Subjects</span>
+              {concept.subjects.map((s, i) => (
+                <div key={i} className="i2t-concept-subject">
+                  <strong>{s.label}</strong>
+                  <span style={{ color: 'var(--text-muted, #888)', fontSize: '0.78rem' }}>
+                    {s.position && ` (${s.position})`}
+                  </span>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary, #ccc)' }}>
+                    {s.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Mood */}
+          {concept.mood && (
+            <div className="i2t-concept-field">
+              <span className="i2t-concept-label">🎭 Mood</span>
+              <p className="i2t-concept-text">{concept.mood}</p>
+            </div>
+          )}
+
+          {/* ── Concept Refinement Input ──────────────────────────── */}
+          <div className="i2t-refine-row">
+            <input
+              type="text"
+              value={conceptRefineText}
+              onChange={(e) => setConceptRefineText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !refiningConcept) handleRefine('concept') }}
+              placeholder="Refine concept… e.g. 'make it more dramatic' or 'focus on background details'"
+              className="i2t-refine-input"
+              disabled={refiningConcept}
+            />
+            <button
+              className="i2t-refine-btn"
+              onClick={() => handleRefine('concept')}
+              disabled={refiningConcept || !conceptRefineText.trim()}
+              title="Refine concept with AI"
+            >
+              {refiningConcept ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
+              Refine
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Director's Notes — editable suggestions ───────────────── */}
+      {concept && (
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Video size={16} />
+              Director's Notes
+            </div>
+          </div>
+
+          {/* Motion */}
+          <div className="form-group">
+            <label className="grok-section-label">🎬 Motion</label>
+            <textarea
+              value={motionHint}
+              onChange={(e) => setMotionHint(e.target.value)}
+              rows={2}
+              placeholder="How subjects and scene elements move..."
+              className="i2t-director-textarea"
+            />
+          </div>
+
+          {/* Audio / Ambient */}
+          <div className="form-group">
+            <label className="grok-section-label">🔊 Audio & Ambient</label>
+            <textarea
+              value={directorAudio}
+              onChange={(e) => setDirectorAudio(e.target.value)}
+              rows={2}
+              placeholder="Environmental sounds, music mood, ambience..."
+              className="i2t-director-textarea"
+            />
+          </div>
+
+          {/* Dialogue per subject */}
+          <div className="form-group">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label className="grok-section-label">💬 Dialogue</label>
+              <button
+                className="icon-btn"
+                onClick={() => setDialogueLines(prev => [...prev, { subject: '', line: '' }])}
+                title="Add dialogue line"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '3px',
+                  padding: '3px 8px', fontSize: '0.7rem',
+                  color: 'var(--accent-color, #8b5cf6)', background: 'transparent',
+                  border: '1px solid var(--accent-color, #8b5cf6)', borderRadius: '5px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={11} /> Add
+              </button>
+            </div>
+            {dialogueLines.length === 0 && (
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted, #666)', margin: '4px 0', fontStyle: 'italic' }}>
+                No dialogue — add lines for characters to speak in the video.
+              </p>
+            )}
+            {dialogueLines.map((dl, i) => (
+              <div key={i} className="i2t-dialogue-row">
+                <input
+                  type="text"
+                  value={dl.subject}
+                  onChange={(e) => {
+                    const updated = [...dialogueLines]
+                    updated[i] = { ...updated[i], subject: e.target.value }
+                    setDialogueLines(updated)
+                  }}
+                  placeholder="Who"
+                  className="i2t-dialogue-who"
+                />
+                <input
+                  type="text"
+                  value={dl.line}
+                  onChange={(e) => {
+                    const updated = [...dialogueLines]
+                    updated[i] = { ...updated[i], line: e.target.value }
+                    setDialogueLines(updated)
+                  }}
+                  placeholder="What they say..."
+                  className="i2t-dialogue-line"
+                />
+                <button
+                  className="icon-btn"
+                  onClick={() => setDialogueLines(prev => prev.filter((_, j) => j !== i))}
+                  title="Remove"
+                  style={{
+                    width: '24px', height: '24px', padding: '4px',
+                    color: 'var(--text-muted, #666)', background: 'transparent',
+                    border: 'none', cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Camera Direction — LLM-driven, editable text */}
+          <div className="form-group">
+            <label className="grok-section-label">🎥 Camera Direction</label>
+            <textarea
+              value={cameraDirection}
+              onChange={(e) => setCameraDirection(e.target.value)}
+              rows={2}
+              placeholder="Camera movement, shot type, composition... e.g. 'slow dolly-in from wide to medium close-up on subject'"
+              className="i2t-director-textarea"
+            />
+          </div>
+
+          {/* ── Notes Refinement Input ────────────────────────────── */}
+          <div className="i2t-refine-row">
+            <input
+              type="text"
+              value={notesRefineText}
+              onChange={(e) => setNotesRefineText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !refiningNotes) handleRefine('notes') }}
+              placeholder="Refine notes… e.g. 'more action' or 'add suspenseful music'"
+              className="i2t-refine-input"
+              disabled={refiningNotes}
+            />
+            <button
+              className="i2t-refine-btn"
+              onClick={() => handleRefine('notes')}
+              disabled={refiningNotes || !notesRefineText.trim()}
+              title="Refine director's notes with AI"
+            >
+              {refiningNotes ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
+              Refine
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Card */}
       <div className="grok-card">
         <div className="grok-card-header">
           <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Wand2 size={16} />
-            Caption Settings
+            Settings
           </div>
         </div>
 
+        {/* Vision Model */}
         <div className="form-group">
-          <label className="grok-section-label">Vision Model (I2T)</label>
+          <label className="grok-section-label">Vision Model</label>
           <select className="form-select" value={model} onChange={(e) => setModel(e.target.value)}>
             {MODELS.map((m) => (
               <option key={m.id} value={m.id}>
@@ -358,7 +831,22 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
           </select>
         </div>
 
-        {/* Detail Level Slider */}
+        {/* Prompt Generator — dropdown */}
+        <div className="form-group">
+          <label className="grok-section-label">Prompt Generator</label>
+          <select
+            className="form-select"
+            value={isPromptMode(mode) ? mode : ''}
+            onChange={(e) => setMode(e.target.value || 'detailed')}
+          >
+            <option value="">None (caption only)</option>
+            {CAPTION_MODES.filter(m => m.group === 'prompt').map((m) => (
+              <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Detail Level */}
         <div className="form-group">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <label style={{ margin: 0 }}>Detail Level</label>
@@ -387,36 +875,56 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
           </div>
         </div>
 
-        <div className="form-group">
-          <label className="grok-section-label">Prompt Generator <span style={{ fontSize: '0.7rem', color: 'var(--text-muted, #666)', fontWeight: 'normal' }}>(optional — click again to deselect)</span></label>
-          <div className="button-group">
-            {CAPTION_MODES.filter(m => m.group === 'prompt').map((m) => (
-              <button
-                key={m.id}
-                className={`btn-option ${mode === m.id ? 'active' : ''} ${m.id === 'prompt_nsfw' ? 'btn-option--nsfw' : ''}`}
-                onClick={() => setMode(mode === m.id ? 'detailed' : m.id)}
-                title={m.description}
-              >
-                {m.label}
-              </button>
-            ))}
+        {/* Camera Motion — prompt modes only, when no concept analysis done */}
+        {isPromptMode(mode) && !concept && (
+          <div className="form-group">
+            <CameraMotionSelector
+              value={cameraMotion}
+              onChange={setCameraMotion}
+            />
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
+              Prepended to prompt — ready for T2V / I2V.
+            </p>
           </div>
+        )}
 
-          {/* Camera Motion Selector — shown for all prompt modes (I2V, T2I, NSFW) */}
-          {isPromptMode(mode) && (
-            <div style={{ marginTop: '12px' }}>
-              <CameraMotionSelector
-                value={cameraMotion}
-                onChange={setCameraMotion}
+        {/* Include Motion — prompt modes only, when no concept analysis done */}
+        {isPromptMode(mode) && !concept && (
+          <div className="form-group" style={{ marginTop: '4px' }}>
+            <label className="i2t-checkbox">
+              <input
+                type="checkbox"
+                checked={includeMotion}
+                onChange={(e) => setIncludeMotion(e.target.checked)}
               />
-              <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
-                Selected motion is prepended to the generated prompt — ready for T2V / I2V.
-              </p>
-            </div>
-          )}
+              <span className="i2t-checkbox-label">🎬 Include Motion in Prompt</span>
+              <span className="i2t-checkbox-desc">Subject animation, movement, dynamics</span>
+            </label>
+            {includeMotion && (
+              <input
+                type="text"
+                value={motionHint}
+                onChange={(e) => setMotionHint(e.target.value)}
+                placeholder="e.g., walking towards camera, hair blowing in wind..."
+                style={{
+                  marginTop: '6px',
+                  width: '100%',
+                  background: 'var(--bg-input, #1a1a1a)',
+                  border: '1px solid var(--border-color, #444)',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-primary, #eee)',
+                  outline: 'none',
+                }}
+              />
+            )}
+          </div>
+        )}
 
-          {/* NSFW Intensity Slider */}
-          {mode === 'prompt_nsfw' && (
+        {/* NSFW Intensity — NSFW mode only */}
+        {mode === 'prompt_nsfw' && (
+          <div className="form-group">
             <div className="nsfw-intensity-section">
               <div className="nsfw-intensity-header">
                 <label>Intensity</label>
@@ -449,14 +957,15 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
                 {NSFW_LEVELS.find(l => l.value === nsfwIntensity)?.description}
               </p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <button
-        className="btn-primary btn-large"
+        className="primary-btn"
         onClick={handleCaption}
         disabled={!file || loading}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
       >
         {loading ? (
           <>
@@ -493,13 +1002,13 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
               }}
               onClick={() => setShowRefineInput(!showRefineInput)}
               disabled={!caption.trim()}
-              title="Refine/improve with AI (keeps original intent)"
+              title="Refine all outputs with AI"
             >
               <Pencil size={14} />
             </button>
           </div>
 
-          {/* Refine instruction input */}
+          {/* Refine instruction input — refines all outputs at once */}
           {showRefineInput && (
             <div style={{
               marginTop: '8px',
@@ -516,8 +1025,8 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
                 type="text"
                 value={refineInstruction}
                 onChange={(e) => setRefineInstruction(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && caption.trim()) handleRefineCaption() }}
-                placeholder="What to improve? (e.g., more detail, different style...) — leave empty for general polish"
+                onKeyDown={(e) => { if (e.key === 'Enter' && refineInstruction.trim()) handleRefineCaption() }}
+                placeholder="How to improve? (e.g., more cinematic, add rain, darker mood...)"
                 style={{
                   flex: 1,
                   background: 'var(--bg-input, #1a1a1a)',
@@ -546,113 +1055,143 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
                   cursor: 'pointer',
                 }}
                 onClick={handleRefineCaption}
-                disabled={isRefining || !caption.trim()}
-                title="Refine with AI"
+                disabled={isRefining || !refineInstruction.trim()}
+                title="Refine all outputs with AI suggestion"
               >
                 {isRefining ? <Loader2 size={12} className="spin" /> : <Pencil size={12} />}
                 <span>{isRefining ? 'Refining...' : 'Refine'}</span>
-                <LLMQueueIndicator queuePosition={llm.queuePosition} isLoading={llm.isLoading} />
               </button>
             </div>
           )}
 
-          <div className="caption-result">
+          {/* ✨ Positive Prompt — always shown */}
+          <div className="caption-result" style={{ marginTop: '8px', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label className="i2t-output-label">✨ Positive Prompt</label>
+              <button
+                className="icon-btn"
+                style={{ width: '24px', height: '24px', padding: '4px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted, #888)', borderRadius: '4px' }}
+                onClick={handleCopyPositive}
+                title="Copy positive prompt"
+              >
+                <Copy size={13} />
+              </button>
+            </div>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              rows={isPromptMode(mode) ? 6 : 4}
+              rows={isPromptMode(mode) ? 5 : 4}
             />
-            <div className="caption-actions">
-              <button className="btn-secondary" onClick={handleCopy}>
-                <Copy size={16} />
-                Copy
-              </button>
-              {onSendToPrompt && (
-                <button className={isPromptMode(mode) ? 'btn-primary btn-glow' : 'btn-primary'} onClick={handleSendToPrompt}>
-                  <Send size={16} />
-                  Use as Prompt
-                </button>
-              )}
-            </div>
-            {isPromptMode(mode) && (
-              <p className="prompt-hint">
-                💡 Edit the prompt above, then send it directly to Image-to-Video or Text-to-Image
-              </p>
-            )}
           </div>
 
-          {/* Motion Prompt — Generate from caption using T2T LLM */}
+          {/* 🚫 Negative Prompt — always shown in prompt mode */}
           {isPromptMode(mode) && (
-            <div style={{
-              marginTop: '12px',
-              padding: '12px 16px',
-              background: 'rgba(139, 92, 246, 0.08)',
-              border: '1px solid rgba(139, 92, 246, 0.25)',
-              borderRadius: '10px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-primary, #eee)' }}>🎬 Motion Prompt</h4>
+            <div className="caption-result" style={{ marginTop: '10px', position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label className="i2t-output-label">🚫 Negative Prompt</label>
                 <button
-                  className="btn-primary"
-                  style={{ padding: '5px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  onClick={handleGenerateMotion}
-                  disabled={motionLoading || !caption.trim()}
+                  className="icon-btn"
+                  style={{ width: '24px', height: '24px', padding: '4px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted, #888)', borderRadius: '4px' }}
+                  onClick={handleCopyNegative}
+                  title="Copy negative prompt"
                 >
-                  {motionLoading ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />}
-                  {motionLoading ? 'Generating...' : 'Generate Motion'}
+                  <Copy size={13} />
                 </button>
               </div>
+              <textarea
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                rows={3}
+                placeholder="Negative prompt will appear here..."
+              />
+            </div>
+          )}
 
-              <div style={{ marginBottom: motionPrompt ? '8px' : '0' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted, #888)' }}>Motion Model (T2T)</label>
-                <select
-                  value={motionModel}
-                  onChange={(e) => setMotionModel(e.target.value)}
-                  style={{ marginTop: '2px', fontSize: '0.8rem' }}
+          {/* 🔊 Audio Prompt — shown when audio context was used */}
+          {audioPrompt && (
+            <div className="caption-result" style={{ marginTop: '10px', position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label className="i2t-output-label">🔊 Audio Prompt</label>
+                <button
+                  className="icon-btn"
+                  style={{ width: '24px', height: '24px', padding: '4px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted, #888)', borderRadius: '4px' }}
+                  onClick={() => navigator.clipboard.writeText(audioPrompt)}
+                  title="Copy audio prompt"
                 >
-                  {PROMPT_LLM_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                  <Copy size={13} />
+                </button>
               </div>
+              <textarea
+                value={audioPrompt}
+                onChange={(e) => setAudioPrompt(e.target.value)}
+                rows={3}
+                placeholder="Audio description for LTX video with audio..."
+              />
+            </div>
+          )}
 
-              {motionPrompt && (
-                <>
-                  <textarea
-                    value={motionPrompt}
-                    onChange={(e) => setMotionPrompt(e.target.value)}
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(139, 92, 246, 0.3)',
-                      background: 'var(--bg-secondary, #1a1a1a)',
-                      color: 'var(--text-color, #fff)',
-                      fontFamily: 'inherit',
-                      fontSize: '0.85rem',
-                      resize: 'vertical',
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          {/* Send to Tool */}
+          {onSendToTool && (
+            <div style={{ marginTop: '12px', position: 'relative' }}>
+              <button
+                className={isPromptMode(mode) ? 'btn-primary btn-large btn-glow' : 'btn-primary btn-large'}
+                onClick={() => setShowSendMenu(!showSendMenu)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Send size={16} />
+                Use in Tool
+                <ChevronDown size={14} style={{ marginLeft: '4px', transform: showSendMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+              {showSendMenu && (
+                <div className="i2t-send-menu">
+                  {SEND_TO_TOOLS.map((tool) => (
                     <button
-                      className="btn-secondary"
-                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                      onClick={() => navigator.clipboard.writeText(motionPrompt)}
+                      key={tool.id}
+                      className="i2t-send-menu-item"
+                      onClick={() => handleSendToTool(tool.id)}
                     >
-                      <Copy size={14} /> Copy
+                      {tool.label}
                     </button>
-                  </div>
-                </>
+                  ))}
+                </div>
               )}
             </div>
           )}
+
         </div>
       )}
 
       <style>{`
+        .i2t-send-menu {
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          background: var(--bg-card, #1e1e1e);
+          border: 1px solid var(--border-color, #444);
+          border-radius: 10px;
+          overflow: hidden;
+          z-index: 50;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .i2t-send-menu-item {
+          display: block;
+          width: 100%;
+          padding: 10px 14px;
+          background: none;
+          border: none;
+          color: var(--text-primary, #eee);
+          font-size: 0.85rem;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .i2t-send-menu-item:hover {
+          background: var(--bg-hover, rgba(139, 92, 246, 0.15));
+        }
+        .i2t-send-menu-item + .i2t-send-menu-item {
+          border-top: 1px solid var(--border-color, #333);
+        }
         .upload-dropzone {
           border: 2px dashed var(--border-color, #444);
           border-radius: 12px;
@@ -823,6 +1362,170 @@ export default function ImageToTextTool({ onSendToPrompt, pendingImport = null, 
           margin-top: 8px;
           font-size: 0.85em;
           color: var(--text-muted, #888);
+        }
+        .i2t-checkbox {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          padding: 6px 8px;
+          border-radius: 6px;
+          transition: background 0.15s;
+        }
+        .i2t-checkbox:hover {
+          background: rgba(255,255,255,0.04);
+        }
+        .i2t-checkbox input[type="checkbox"] {
+          width: 16px;
+          height: 16px;
+          accent-color: var(--accent-color, #7c3aed);
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .i2t-checkbox-label {
+          font-size: 0.82rem;
+          font-weight: 600;
+          color: var(--text-primary, #eee);
+          white-space: nowrap;
+        }
+        .i2t-checkbox-desc {
+          font-size: 0.72rem;
+          color: var(--text-muted, #888);
+          margin-left: auto;
+        }
+        .i2t-output-label {
+          display: block;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: var(--text-muted, #aaa);
+          margin-bottom: 4px;
+        }
+        /* ── Concept Card styles ── */
+        .i2t-concept-field {
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .i2t-concept-field:last-child {
+          border-bottom: none;
+        }
+        .i2t-concept-label {
+          display: block;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: var(--accent-color, #8b5cf6);
+          margin-bottom: 4px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .i2t-concept-text {
+          margin: 0;
+          font-size: 0.85rem;
+          color: var(--text-primary, #ddd);
+          line-height: 1.4;
+        }
+        .i2t-concept-subject {
+          padding: 6px 10px;
+          margin: 4px 0;
+          background: rgba(255,255,255,0.03);
+          border-radius: 6px;
+          border-left: 2px solid var(--accent-color, #8b5cf6);
+        }
+        /* ── Director's Notes styles ── */
+        .i2t-director-textarea {
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 6px;
+          border: 1px solid var(--border-color, #444);
+          background: var(--bg-input, #1a1a1a);
+          color: var(--text-primary, #eee);
+          font-family: inherit;
+          font-size: 0.82rem;
+          resize: vertical;
+          outline: none;
+          transition: border-color 0.2s;
+        }
+        .i2t-director-textarea:focus {
+          border-color: var(--accent-color, #7c3aed);
+        }
+        .i2t-dialogue-row {
+          display: flex;
+          gap: 6px;
+          align-items: center;
+          margin-top: 6px;
+        }
+        .i2t-dialogue-who {
+          width: 100px;
+          flex-shrink: 0;
+          padding: 6px 8px;
+          border-radius: 6px;
+          border: 1px solid var(--border-color, #444);
+          background: var(--bg-input, #1a1a1a);
+          color: var(--accent-color, #a78bfa);
+          font-size: 0.8rem;
+          font-weight: 600;
+          outline: none;
+        }
+        .i2t-dialogue-line {
+          flex: 1;
+          padding: 6px 8px;
+          border-radius: 6px;
+          border: 1px solid var(--border-color, #444);
+          background: var(--bg-input, #1a1a1a);
+          color: var(--text-primary, #eee);
+          font-size: 0.8rem;
+          outline: none;
+        }
+        .i2t-dialogue-who:focus, .i2t-dialogue-line:focus {
+          border-color: var(--accent-color, #7c3aed);
+        }
+        /* ── Refinement input row ── */
+        .i2t-refine-row {
+          display: flex;
+          gap: 6px;
+          align-items: center;
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .i2t-refine-input {
+          flex: 1;
+          padding: 7px 10px;
+          border-radius: 6px;
+          border: 1px solid var(--border-color, #444);
+          background: var(--bg-input, #1a1a1a);
+          color: var(--text-primary, #eee);
+          font-size: 0.8rem;
+          outline: none;
+          transition: border-color 0.2s;
+        }
+        .i2t-refine-input:focus {
+          border-color: var(--accent-color, #7c3aed);
+        }
+        .i2t-refine-input::placeholder {
+          color: var(--text-muted, #666);
+          font-style: italic;
+        }
+        .i2t-refine-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 7px 12px;
+          border-radius: 6px;
+          border: 1px solid var(--accent-color, #8b5cf6);
+          background: rgba(139, 92, 246, 0.1);
+          color: var(--accent-color, #a78bfa);
+          font-size: 0.78rem;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.15s;
+        }
+        .i2t-refine-btn:hover:not(:disabled) {
+          background: rgba(139, 92, 246, 0.2);
+        }
+        .i2t-refine-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
         }
         .spin {
           animation: spin 1s linear infinite;

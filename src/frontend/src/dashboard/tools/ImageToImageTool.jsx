@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
+import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -126,28 +127,37 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     if (selected.image && importModal?.item) {
       const item = importModal.item
 
-      // If item is a video, use the companion .png (first frame) instead
-      let imageUrl, imageFilename
-      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        const pngFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
-        const pngUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        imageUrl = pngUrl
-        imageFilename = pngFilename
-        console.debug('🎬 I2I: video detected, using companion image:', pngFilename)
+      // If the sender passed a direct File blob (e.g. from Image-to-Text), use it directly
+      if (item._file instanceof File) {
+        const previewUrl = item.url?.startsWith('blob:') ? item.url : URL.createObjectURL(item._file)
+        updateFile(item._file, previewUrl)
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-        imageFilename = item.filename || imageUrl.split('/').pop()
-      }
+        // Fetch from URL (standard MyMedia flow)
+        if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+          try {
+            const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+            console.debug('🎬 I2I: video detected, extracting first frame:', item.filename)
+            const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+            updateFile(fileObj, previewUrl)
+          } catch (e) {
+            console.error('Failed to extract frame from video:', e)
+            setError('⚠️ Failed to extract first frame from video')
+          }
+        } else {
+          const imageUrl = getMediaUrl(item.url, item.signed_url)
+          const imageFilename = item.filename || imageUrl.split('/').pop()
 
-      try {
-        const response = await apiFetch(imageUrl)
-        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
-        const blob = await response.blob()
-        const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
-        updateFile(fileObj, imageUrl)
-      } catch (e) {
-        console.error('Failed to load image from import:', e)
-        setError('⚠️ Failed to load image from import')
+          try {
+            const response = await apiFetch(imageUrl)
+            if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+            const blob = await response.blob()
+            const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
+            updateFile(fileObj, imageUrl)
+          } catch (e) {
+            console.error('Failed to load image from import:', e)
+            setError('⚠️ Failed to load image from import')
+          }
+        }
       }
     }
     if (selected.positive)  setPrompt(String(selected.positive))
@@ -160,19 +170,20 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
   const handleCreationsSelect = useCallback(async (item) => {
     try {
-      let imageUrl, imageFilename
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        imageFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
+        const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+        console.debug('🎬 I2I creations: extracting first frame from video:', item.filename)
+        const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+        updateFile(fileObj, previewUrl)
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-        imageFilename = item.filename || imageUrl.split('/').pop()
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        const imageFilename = item.filename || imageUrl.split('/').pop()
+        const response = await apiFetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+        const blob = await response.blob()
+        const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
+        updateFile(fileObj, imageUrl)
       }
-      const response = await apiFetch(imageUrl)
-      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
-      const blob = await response.blob()
-      const fileObj = new File([blob], imageFilename, { type: blob.type || 'image/png' })
-      updateFile(fileObj, imageUrl)
     } catch (e) {
       console.error('Failed to load from creations:', e)
       setError('⚠️ Failed to load image from My Creations')

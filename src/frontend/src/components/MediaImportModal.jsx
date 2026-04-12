@@ -47,6 +47,7 @@ export default function MediaImportModal({ item, parsedData, availableFields, on
     image:     { icon: <ImageIcon size={14} />, label: 'Image',           group: 'source' },
     positive:  { icon: <FileText  size={14} />, label: 'Positive prompt', group: 'prompts' },
     negative:  { icon: <FileText  size={14} />, label: 'Negative prompt', group: 'prompts' },
+    audio:     { icon: <FileText  size={14} />, label: 'Audio prompt',    group: 'prompts' },
     steps:     { icon: <Settings2 size={14} />, label: 'Steps',           group: 'advanced' },
     cfg:       { icon: <Settings2 size={14} />, label: 'Prompt Strength / CFG', group: 'advanced' },
     sampler:   { icon: <Settings2 size={14} />, label: 'Sampler',         group: 'advanced' },

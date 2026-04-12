@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, uploadUserMedia, apiFetch, getUserMediaUrl } from '../../api'
+import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -21,12 +22,12 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 
 // Model mode options for I2V
 const MODEL_MODES = [
-  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 25 steps • Maximum quality' },
+  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
   { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
   { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality • Single-GPU BlockSwap • Lightning LoRA + NAG + TorchCompile' },
   { value: 'distorch2_q8', label: '🧪 DisTorch2 Q8 Experimental', desc: 'Q8 quality + DisTorch2 Multi-GPU + Selectable LoRAs' },
   { value: 'ultra_q8', label: '⚡ Ultra Q8 — Max VRAM', desc: 'Q8 quality • 3060 model cache + 5060Ti full compute + CPU overflow' },
-  { value: 'ltx2', label: '⚡ LTX-2 19B Distilled', desc: 'Fast single-pass, lower VRAM' },
+  { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
 
 // Resolution presets with dimensions per aspect ratio
@@ -238,45 +239,53 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   const handleApplyImport = (selected) => {
     if (selected.image && importModal?.item) {
-      // The item reference is in importModal; Dashboard already navigated here,
-      // image loading happens via selectCreation below or caller side.
-      // If we have the item, load it as input image via fetch.
       const item = importModal.item
 
-      // If item is a video, use the corresponding .png thumbnail instead
-      let imageUrl, imageFilename
-      if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        const pngFilename = item.filename.replace(/\.(mp4|webm|mov)$/i, '.png')
-        // Use relative path — Vite proxy handles /comfyui-output/ in dev,
-        // avoids CORS issues with StaticFiles mount not having CORS headers
-        const pngUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        imageUrl = pngUrl  // relative path, proxied by Vite
-        imageFilename = pngFilename
-        console.debug('🎬 Use in tool: video detected, using companion image:', pngFilename)
+      // If the sender passed a direct File blob (e.g. from Image-to-Text), use it directly
+      if (item._file instanceof File) {
+        setFile(item._file)
+        setPreviewUrl(item.url?.startsWith('blob:') ? item.url : URL.createObjectURL(item._file))
+        setUploadTab('file')
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-        imageFilename = item.filename || imageUrl.split('/').pop()
-      }
+        // Fetch from URL (standard MyMedia flow)
+        if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
+          const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+          console.debug('🎬 I2V: video detected, extracting first frame:', item.filename)
+          extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+            .then(({ file: fileObj, previewUrl }) => {
+              setFile(fileObj)
+              setPreviewUrl(previewUrl)
+              setUploadTab('file')
+            })
+            .catch((err) => {
+              console.warn('⚠️ Use in tool: failed to extract frame from video', err)
+            })
+        } else {
+          const imageUrl = getMediaUrl(item.url, item.signed_url)
+          const imageFilename = item.filename || imageUrl.split('/').pop()
 
-      apiFetch(imageUrl)
-        .then(r => {
-          if (!r.ok) throw new Error(`Failed to fetch image: ${r.status}`)
-          return r.blob()
-        })
-        .then(blob => {
-          const filename = imageFilename || imageUrl.split('/').pop()
-          const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-          setFile(fileObj)
-          setPreviewUrl(imageUrl)
-          setUploadTab('file')
-        })
-        .catch((err) => {
-          console.warn('⚠️ Use in tool: failed to load image', err)
-        })
+          apiFetch(imageUrl)
+            .then(r => {
+              if (!r.ok) throw new Error(`Failed to fetch image: ${r.status}`)
+              return r.blob()
+            })
+            .then(blob => {
+              const filename = imageFilename || imageUrl.split('/').pop()
+              const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+              setFile(fileObj)
+              setPreviewUrl(imageUrl)
+              setUploadTab('file')
+            })
+            .catch((err) => {
+              console.warn('⚠️ Use in tool: failed to load image', err)
+            })
+        }
+      }
     }
     // Coerce all values to proper types — metadata may have numbers instead of strings
     if (selected.positive)  setPrompt(String(selected.positive))
     if (selected.negative)  setNegativePrompt(String(selected.negative))
+    if (selected.audio)     setAudioPromptImported(String(selected.audio))
     if (selected.steps)     setSteps(Number(selected.steps) || selected.steps)
     if (selected.cfg)       setCfg(Number(selected.cfg) || selected.cfg)
     if (selected.seed)      setSeed(String(selected.seed))
@@ -290,6 +299,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     setImportModal(null)
   }
   const [imageDescription, setImageDescription] = useState('')  // Store vision analysis result
+  const [audioPromptImported, setAudioPromptImported] = useState('')  // Audio prompt from I2T concept studio
 
   // LoRA state - now supports multiple LoRAs with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
@@ -1018,7 +1028,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         <MediaImportModal
           item={importModal.item}
           parsedData={importModal.workflow}
-          availableFields={['image', 'positive', 'negative', 'steps', 'cfg', 'seed', 'loras']}
+          availableFields={['image', 'positive', 'negative', 'audio', 'steps', 'cfg', 'seed', 'loras']}
           onApply={handleApplyImport}
           onClose={() => setImportModal(null)}
         />
@@ -1224,6 +1234,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setDuration(5)
                   setSteps(20)  // LTX-2 needs more steps
                   setCfg(3.0)
+                  setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
                 } else if (newMode === 'blockswap_q8' || newMode === 'distorch2_q8') {
                   setResolution('720p')
                   setAspectRatio('9:16')
@@ -1246,10 +1257,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setResolution('720p')
                   setAspectRatio('9:16')
                   setDuration(8)
-                  setSteps(25)
+                  setSteps(15)
                   setCfg(3.0)
                   setBsShift(8.0)
-                  setBsHighNoiseSteps(12)
+                  setBsHighNoiseSteps(8)
                   setComputeTarget('cloud')  // Cloud Max is cloud-only
                 }
               }}
@@ -1336,7 +1347,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>⚡ LTX-2 19B</span> • <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod Single-GPU' : 'Single Model'}</span>
+              <span style={{ fontWeight: 600 }}>⚡ LTX-2.3 22B</span> • <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod 80GB GPU' : 'Single Model'}</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
                 Faster inference • No high/low noise • Uses Gemma 3 text encoder
               </div>
@@ -1393,7 +1404,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               <span style={{ fontSize: '10px', color: '#10b981' }}>RunPod GPU</span>
             )}
             {modelMode === 'ltx2' && computeTarget === 'cloud' && (
-              <span style={{ fontSize: '10px', color: '#86efac' }}>shared LTX worker</span>
+              <span style={{ fontSize: '10px', color: '#86efac' }}>LTX-2.3 80GB worker</span>
             )}
           </div>
         </div>
@@ -1824,6 +1835,51 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           )}
         </div>
+
+        {/* Audio Prompt — imported from Concept Studio */}
+        {audioPromptImported && (
+          <div style={{ marginTop: '12px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '8px 0',
+            }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                🔊 Audio Prompt
+              </span>
+              <button
+                onClick={() => setAudioPromptImported('')}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: '0.7rem', padding: '2px 6px',
+                }}
+                title="Clear audio prompt"
+              >✕</button>
+            </div>
+            <textarea
+              className="form-textarea"
+              value={audioPromptImported}
+              onChange={(e) => setAudioPromptImported(e.target.value)}
+              rows={2}
+              placeholder="Audio description for LTX..."
+              style={{
+                backgroundColor: '#0f0f0f',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: '8px',
+                resize: 'vertical',
+                minHeight: '50px',
+                padding: '10px',
+                width: '100%',
+                boxSizing: 'border-box',
+                fontSize: '0.85rem',
+              }}
+            />
+            <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: 'var(--text-muted, #666)' }}>
+              Used for LTX-2 audio-enabled video generation.
+            </p>
+          </div>
+        )}
 
         {/* Prompt Strength Slider */}
         <div style={{ marginTop: '16px' }}>

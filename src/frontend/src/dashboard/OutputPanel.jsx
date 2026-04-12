@@ -123,7 +123,7 @@ export default function OutputPanel({ output, refreshToken, onSelectHistoryVideo
   }, [output])
 
   return (
-    <section className="output-panel">
+    <section className="output-panel" style={{ alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', gap: '8px' }}>
         <button
           className="icon-btn"

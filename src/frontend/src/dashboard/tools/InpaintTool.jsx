@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Paintbrush, Eraser, Undo2, Redo2, Loader2, Upload, Wand2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
+import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -88,34 +89,47 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
     if (selected.image && importModal?.item) {
       const item = importModal.item
 
-      // If item is a video, use the companion .png (first frame) instead
-      let imageUrl
+      // If item is a video, extract first frame client-side
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        console.debug('🎬 Inpaint: video detected, using companion image')
-      } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-      }
-
-      try {
-        const response = await apiFetch(imageUrl)
-        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
-        const blob = await response.blob()
-        const filename = imageUrl.split('/').pop() || 'image.png'
-        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-        const url = URL.createObjectURL(fileObj)
-        const img = new Image()
-        img.onload = () => {
-          setSourceImage({ url, width: img.width, height: img.height, file: fileObj })
-          setHistory([])
-          setHistoryIndex(-1)
-          setZoom(1)
-          if (DEBUG) console.log('🎨 Inpaint imported image:', filename)
+        try {
+          const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+          console.debug('🎬 Inpaint: video detected, extracting first frame')
+          const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+          const img = new Image()
+          img.onload = () => {
+            setSourceImage({ url: previewUrl, width: img.width, height: img.height, file: fileObj })
+            setHistory([])
+            setHistoryIndex(-1)
+            setZoom(1)
+            if (DEBUG) console.log('🎨 Inpaint extracted frame from video:', fileObj.name)
+          }
+          img.src = previewUrl
+        } catch (e) {
+          console.error('Failed to extract frame from video:', e)
+          setError('⚠️ Failed to extract first frame from video')
         }
-        img.src = url
-      } catch (e) {
-        console.error('Failed to load image from import:', e)
-        setError('⚠️ Failed to load image from import')
+      } else {
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        try {
+          const response = await apiFetch(imageUrl)
+          if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+          const blob = await response.blob()
+          const filename = imageUrl.split('/').pop() || 'image.png'
+          const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+          const url = URL.createObjectURL(fileObj)
+          const img = new Image()
+          img.onload = () => {
+            setSourceImage({ url, width: img.width, height: img.height, file: fileObj })
+            setHistory([])
+            setHistoryIndex(-1)
+            setZoom(1)
+            if (DEBUG) console.log('🎨 Inpaint imported image:', filename)
+          }
+          img.src = url
+        } catch (e) {
+          console.error('Failed to load image from import:', e)
+          setError('⚠️ Failed to load image from import')
+        }
       }
     }
     if (selected.positive)  setPrompt(String(selected.positive))
@@ -301,30 +315,40 @@ export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, o
 
   const handleCreationsSelect = useCallback(async (item) => {
     try {
-      let imageUrl
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
+        const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+        console.debug('🎬 Inpaint creations: extracting first frame from video:', item.filename)
+        const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+        const img = new Image()
+        img.onload = () => {
+          setSourceImage({ url: previewUrl, width: img.width, height: img.height, file: fileObj })
+          setHistory([])
+          setHistoryIndex(-1)
+          setZoom(1)
+          if (DEBUG) console.log('📁 Inpaint: extracted frame from video:', fileObj.name)
+        }
+        img.src = previewUrl
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        const response = await apiFetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
+        const blob = await response.blob()
+        const filename = imageUrl.split('/').pop() || 'image.png'
+        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+        const url = URL.createObjectURL(fileObj)
+        const img = new Image()
+        img.onload = () => {
+          setSourceImage({ url, width: img.width, height: img.height, file: fileObj })
+          setHistory([])
+          setHistoryIndex(-1)
+          setZoom(1)
+          if (DEBUG) console.log('📁 Inpaint: loaded from creations:', filename)
+        }
+        img.src = url
       }
-      const response = await apiFetch(imageUrl)
-      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
-      const blob = await response.blob()
-      const filename = imageUrl.split('/').pop() || 'image.png'
-      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-      const url = URL.createObjectURL(fileObj)
-      const img = new Image()
-      img.onload = () => {
-        setSourceImage({ url, width: img.width, height: img.height, file: fileObj })
-        setHistory([])
-        setHistoryIndex(-1)
-        setZoom(1)
-        if (DEBUG) console.log('\ud83d\udcc1 Inpaint: loaded from creations:', filename)
-      }
-      img.src = url
     } catch (e) {
       console.error('Failed to load from creations:', e)
-      setError('\u26a0\ufe0f Failed to load image from My Creations')
+      setError('⚠️ Failed to load image from My Creations')
     }
   }, [])
 

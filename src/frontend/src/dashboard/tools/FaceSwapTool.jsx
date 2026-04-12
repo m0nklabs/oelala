@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
+import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -132,30 +133,40 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
     if (selected.image && importModal?.item) {
       const item = importModal.item
 
-      // If item is a video, use the companion .png (first frame) instead
-      let imageUrl
+      // If item is a video, extract first frame client-side
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        console.debug('🎬 FaceSwap: video detected, using companion image')
+        try {
+          const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+          console.debug('🎬 FaceSwap: video detected, extracting first frame')
+          const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+          setTargetFile(fileObj)
+          setTargetPreview(previewUrl)
+          setResult(null)
+          setError(null)
+          setDetectedFaces(null)
+          if (DEBUG) console.log('👤 FaceSwap imported target from video:', fileObj.name)
+        } catch (e) {
+          console.error('Failed to extract frame from video:', e)
+          setError('⚠️ Failed to extract first frame from video')
+        }
       } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-      }
-
-      try {
-        const response = await apiFetch(imageUrl)
-        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
-        const blob = await response.blob()
-        const filename = imageUrl.split('/').pop() || 'image.png'
-        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-        setTargetFile(fileObj)
-        setTargetPreview(URL.createObjectURL(fileObj))
-        setResult(null)
-        setError(null)
-        setDetectedFaces(null)
-        if (DEBUG) console.log('👤 FaceSwap imported target:', filename)
-      } catch (e) {
-        console.error('Failed to load image from import:', e)
-        setError('⚠️ Failed to load image from import')
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        try {
+          const response = await apiFetch(imageUrl)
+          if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+          const blob = await response.blob()
+          const filename = imageUrl.split('/').pop() || 'image.png'
+          const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+          setTargetFile(fileObj)
+          setTargetPreview(URL.createObjectURL(fileObj))
+          setResult(null)
+          setError(null)
+          setDetectedFaces(null)
+          if (DEBUG) console.log('👤 FaceSwap imported target:', filename)
+        } catch (e) {
+          console.error('Failed to load image from import:', e)
+          setError('⚠️ Failed to load image from import')
+        }
       }
     }
     setImportModal(null)

@@ -407,14 +407,14 @@ body {
 }
 
 .controls-panel {
-  width: 400px;
+  width: 320px;
   min-width: 0;
   border-right: 1px solid var(--border-color);
   background-color: var(--bg-root);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  padding: 24px;
+  padding: 16px;
   transition: width 0.2s ease, padding 0.2s ease;
 }
 
@@ -435,25 +435,24 @@ body {
 
 .output-panel {
   flex: 1;
+  min-width: 0;
   background-color: #000; /* Pure black for media */
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
   overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
 }
 
 /* Forms & Inputs */
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 0.85rem;
+  margin-bottom: 5px;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -465,15 +464,15 @@ body {
   background-color: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 7px 10px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   transition: border-color 0.15s ease;
 }
 
 .form-textarea {
-  min-height: 100px;
+  min-height: 80px;
   resize: vertical;
 }
 
@@ -554,31 +553,31 @@ body {
 
 /* Grok-style Cards */
 .grok-card {
-  background-color: #121212; /* Slightly lighter than root */
+  background-color: #121212;
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 24px;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
 }
 
 .grok-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .grok-card-title {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .grok-section-label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   display: block;
 }
 
@@ -592,15 +591,15 @@ body {
 .aspect-btn {
   background-color: var(--bg-root);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 6px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s;
-  height: 80px;
+  height: 60px;
 }
 
 .aspect-btn:hover {
@@ -628,14 +627,14 @@ body {
 /* Upload Box (Grok Style) */
 .upload-box {
   border: 1px dashed var(--border-color);
-  border-radius: 12px;
+  border-radius: 10px;
   background-color: #0f0f0f;
-  padding: 32px 20px;
+  padding: 20px 14px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   transition: border-color 0.2s;
 }
 

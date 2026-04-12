@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef, lazy, Suspense } from 'react'
+import React, { useEffect, useMemo, useState, useRef, useCallback, lazy, Suspense } from 'react'
 import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X, Loader2, PanelRightClose, PanelRight } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import Sidebar from './Sidebar'
@@ -11,7 +11,7 @@ import LoginModal from '../components/LoginModal'
 import { useNSFW } from '../contexts/NSFWContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useCredits } from '../contexts/CreditsContext'
-import { TOOL_IDS } from './nav'
+import { TOOL_IDS, NAV_GROUPS } from './nav'
 
 // Lazy load all tool components for code splitting
 const TextToVideoTool = lazy(() => import('./tools/TextToVideoTool'))
@@ -119,10 +119,18 @@ export default function Dashboard() {
   const [viewingProfile, setViewingProfile] = useState(null)
 
   // Send media item to a tool for import (component-level so all MyMediaTool instances can use it)
+  const [previousToolId, setPreviousToolId] = useState(null)
   const handleSendToTool = (toolId, importData) => {
+    setPreviousToolId(activeToolId)
     setPendingImport(importData)
     setActiveToolId(toolId)
   }
+  const handleGoBack = useCallback(() => {
+    if (previousToolId) {
+      setActiveToolId(previousToolId)
+      setPreviousToolId(null)
+    }
+  }, [previousToolId])
 
   // Legal modal state
   const [legalType, setLegalType] = useState(null)
@@ -257,11 +265,36 @@ export default function Dashboard() {
     }
 
     // Wrap tool component in Suspense for lazy loading
-    const wrapWithSuspense = (component) => (
-      <Suspense fallback={<ToolLoader />}>
-        {component}
-      </Suspense>
-    )
+    const wrapWithSuspense = (component) => {
+      // Find the previous tool's label for the back banner
+      const backLabel = previousToolId
+        ? NAV_GROUPS.flatMap(g => g.items).find(t => t.id === previousToolId)?.label || 'Previous Tool'
+        : null
+
+      return (
+        <Suspense fallback={<ToolLoader />}>
+          {backLabel && (
+            <button
+              onClick={handleGoBack}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '6px 12px', marginBottom: '8px',
+                background: 'rgba(139, 92, 246, 0.08)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '8px', cursor: 'pointer',
+                color: 'var(--accent-color, #a78bfa)',
+                fontSize: '0.8rem', fontWeight: 500,
+                transition: 'all 0.15s',
+                width: 'fit-content',
+              }}
+            >
+              ← Back to {backLabel}
+            </button>
+          )}
+          {component}
+        </Suspense>
+      )
+    }
 
     switch (activeToolId) {
       case TOOL_IDS.TEXT_TO_VIDEO:
@@ -286,7 +319,7 @@ export default function Dashboard() {
         return wrapWithSuspense(<TextToImageTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
 
       case TOOL_IDS.IMAGE_TO_TEXT:
-        return wrapWithSuspense(<ImageToTextTool pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
+        return wrapWithSuspense(<ImageToTextTool onSendToTool={handleSendToTool} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.PROMPT_GENERATOR:
         return wrapWithSuspense(<PromptGeneratorTool />)
 
@@ -355,6 +388,7 @@ export default function Dashboard() {
               activeToolId={activeToolId}
               onSelectTool={(id) => {
                 setActiveToolId(id)
+                setPreviousToolId(null)  // Clear back navigation on manual nav
                 setMobileNavOpen(false) // Close nav after selection
               }}
               collapsed={sidebarCollapsed}
@@ -388,12 +422,27 @@ export default function Dashboard() {
               refreshToken={queueRefreshToken}
               onJobComplete={(job) => {
                 setHistoryRefreshToken((n) => n + 1)
+                const url = job.signed_url || job.url
                 if (job.output_video) {
-                  const videoUrl = getMediaUrl(job.output_video, job.signed_url)
+                  const videoUrl = getMediaUrl(job.output_video, url)
                   setOutput({
                     kind: 'video',
                     url: videoUrl,
                     backendUrl: videoUrl,
+                  })
+                } else if (job.output_image) {
+                  const imageUrl = getMediaUrl(job.output_image, url)
+                  setOutput({
+                    kind: 'image',
+                    url: imageUrl,
+                    backendUrl: imageUrl,
+                  })
+                } else if (job.output_audio) {
+                  const audioUrl = getMediaUrl(job.output_audio, url)
+                  setOutput({
+                    kind: 'audio',
+                    url: audioUrl,
+                    backendUrl: audioUrl,
                   })
                 }
               }}
@@ -576,7 +625,7 @@ export default function Dashboard() {
                 onClose={() => setOutput(null)}
               />
             ) : (
-              <section className="output-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+              <section className="output-panel">
                 {i2vCreationsMode && (
                   <div style={{
                     padding: '12px 16px',

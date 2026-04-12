@@ -79,3 +79,58 @@ export function isImage(filename) {
 export function isAudio(filename) {
   return getMediaType(filename) === 'audio'
 }
+
+/**
+ * Extract the first frame from a video blob URL using <video> + <canvas>.
+ * Fetches the video via apiFetch, creates an object URL, draws frame 0 to canvas.
+ * @param {Function} apiFetchFn - The apiFetch function for authenticated fetches
+ * @param {string} fetchUrl - URL to fetch the video from (relative or absolute)
+ * @param {string} filename - Original video filename (used to derive .png name)
+ * @returns {Promise<{file: File, previewUrl: string}>} PNG File + preview object URL
+ */
+export async function extractVideoFirstFrame(apiFetchFn, fetchUrl, filename) {
+  const response = await apiFetchFn(fetchUrl)
+  const videoBlob = await response.blob()
+  const videoObjectUrl = URL.createObjectURL(videoBlob)
+
+  const file = await new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    video.muted = true
+    video.preload = 'auto'
+    video.playsInline = true
+
+    const cleanup = () => URL.revokeObjectURL(videoObjectUrl)
+
+    video.onloadeddata = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth || 640
+        canvas.height = video.videoHeight || 480
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0)
+        canvas.toBlob((blob) => {
+          cleanup()
+          if (blob) {
+            const pngName = (filename || 'frame.mp4').replace(/\.(mp4|webm|mov)$/i, '.png')
+            resolve(new File([blob], pngName, { type: 'image/png' }))
+          } else {
+            reject(new Error('Canvas toBlob returned null'))
+          }
+        }, 'image/png')
+      } catch (e) {
+        cleanup()
+        reject(e)
+      }
+    }
+
+    video.onerror = () => {
+      cleanup()
+      reject(new Error('Failed to load video for frame extraction'))
+    }
+
+    video.src = videoObjectUrl
+  })
+
+  const previewUrl = URL.createObjectURL(file)
+  return { file, previewUrl }
+}

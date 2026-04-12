@@ -13,6 +13,7 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   const [showPopup, setShowPopup] = useState(false)
   const [notifiedIds, setNotifiedIds] = useState(new Set())
   const popupRef = useRef(null)
+  const prevRunningRef = useRef([])
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -45,20 +46,40 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   // Check for completed jobs
   useEffect(() => {
     for (const job of completedJobs) {
-      if (!notifiedIds.has(job.prompt_id) && job.status === 'completed' && job.output_video) {
+      if (!notifiedIds.has(job.prompt_id) && job.status === 'completed' && (job.output_video || job.output_image || job.output_audio)) {
         if (onJobComplete) onJobComplete(job)
         setNotifiedIds(prev => new Set([...prev, job.prompt_id]))
       }
     }
   }, [completedJobs, notifiedIds, onJobComplete])
 
-  // Watch for jobs completing (running + pending cloud jobs)
+  // Watch for jobs completing (running + pending cloud jobs + recently disappeared)
   useEffect(() => {
     let cancelled = false
+
+    // Detect jobs that were running but disappeared from the queue (completed between polls)
+    const prevIds = new Set(prevRunningRef.current.map(j => j.prompt_id))
+    const currIds = new Set(queue.running.map(j => j.prompt_id))
+    const disappeared = prevRunningRef.current.filter(j => !currIds.has(j.prompt_id))
+    prevRunningRef.current = [...queue.running]
+
     const watchJobs = async () => {
       // Poll running jobs for completion
       for (const job of queue.running) {
         if (cancelled) return
+        const status = await checkJobStatus(job.prompt_id)
+        if (cancelled) return
+        if (status && (status.status === 'completed' || status.status === 'failed')) {
+          setCompletedJobs(prev => {
+            if (prev.some(j => j.prompt_id === status.prompt_id)) return prev
+            return [...prev, status].slice(-10)
+          })
+        }
+      }
+      // Poll jobs that disappeared from queue (race condition fix)
+      for (const job of disappeared) {
+        if (cancelled) return
+        if (notifiedIds.has(job.prompt_id)) continue
         const status = await checkJobStatus(job.prompt_id)
         if (cancelled) return
         if (status && (status.status === 'completed' || status.status === 'failed')) {
@@ -83,9 +104,9 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
         }
       }
     }
-    if (queue.running.length > 0 || queue.pending.some(j => j.compute_target === 'cloud')) watchJobs()
+    if (queue.running.length > 0 || disappeared.length > 0 || queue.pending.some(j => j.compute_target === 'cloud')) watchJobs()
     return () => { cancelled = true }
-  }, [queue.running, queue.pending, checkJobStatus])
+  }, [queue.running, queue.pending, checkJobStatus, notifiedIds])
 
   // Close popup on click outside
   useEffect(() => {
@@ -339,9 +360,9 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
             <X size={12} color="var(--text-muted)" />
           </button>
         )}
-        {status === 'completed' && job.output_video && (
+        {status === 'completed' && (job.output_video || job.output_image || job.output_audio) && (
           <a
-            href={getMediaUrl(job.output_video, job.signed_url)}
+            href={getMediaUrl(job.output_video || job.output_image || job.output_audio, job.signed_url)}
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: '#3b82f6', fontSize: '0.7rem' }}

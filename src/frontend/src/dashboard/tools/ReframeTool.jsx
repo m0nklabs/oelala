@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Frame, Upload, Loader2, Download, Copy, Move, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, getJson, apiFetch } from '../../api'
+import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -92,36 +93,50 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
     if (selected.image && importModal?.item) {
       const item = importModal.item
 
-      // If item is a video, use the companion .png (first frame) instead
-      let imageUrl
       if (item.type === 'video' && item.filename?.match(/\.(mp4|webm|mov)$/i)) {
-        imageUrl = item.url?.replace(/\.(mp4|webm|mov)$/i, '.png')
-        console.debug('🎬 Reframe: video detected, using companion image')
-      } else {
-        imageUrl = getMediaUrl(item.url, item.signed_url)
-      }
-
-      try {
-        const response = await apiFetch(imageUrl)
-        if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
-        const blob = await response.blob()
-        const filename = imageUrl.split('/').pop() || 'image.png'
-        const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
-        const url = URL.createObjectURL(fileObj)
-        const img = new Image()
-        img.onload = () => {
-          setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight })
-          setPreview(url)
-          setFile(fileObj)
-          setResult(null)
-          setError(null)
-          setLastQueued(null)
-          if (DEBUG) console.log('🖼️ Reframe imported image:', filename)
+        try {
+          const fetchUrl = item.signed_url || (item.url?.startsWith('/') ? item.url : `/${item.url}`)
+          console.debug('🎬 Reframe: video detected, extracting first frame')
+          const { file: fileObj, previewUrl } = await extractVideoFirstFrame(apiFetch, fetchUrl, item.filename)
+          const img = new Image()
+          img.onload = () => {
+            setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight })
+            setPreview(previewUrl)
+            setFile(fileObj)
+            setResult(null)
+            setError(null)
+            setLastQueued(null)
+            if (DEBUG) console.log('🖼️ Reframe extracted frame from video:', fileObj.name)
+          }
+          img.src = previewUrl
+        } catch (e) {
+          console.error('Failed to extract frame from video:', e)
+          setError('⚠️ Failed to extract first frame from video')
         }
-        img.src = url
-      } catch (e) {
-        console.error('Failed to load image from import:', e)
-        setError('⚠️ Failed to load image from import')
+      } else {
+        const imageUrl = getMediaUrl(item.url, item.signed_url)
+        try {
+          const response = await apiFetch(imageUrl)
+          if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+          const blob = await response.blob()
+          const filename = imageUrl.split('/').pop() || 'image.png'
+          const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+          const url = URL.createObjectURL(fileObj)
+          const img = new Image()
+          img.onload = () => {
+            setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight })
+            setPreview(url)
+            setFile(fileObj)
+            setResult(null)
+            setError(null)
+            setLastQueued(null)
+            if (DEBUG) console.log('🖼️ Reframe imported image:', filename)
+          }
+          img.src = url
+        } catch (e) {
+          console.error('Failed to load image from import:', e)
+          setError('⚠️ Failed to load image from import')
+        }
       }
     }
     if (selected.positive)  setPrompt(String(selected.positive))
