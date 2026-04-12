@@ -70,6 +70,7 @@ from pathlib import Path
 import logging
 from datetime import datetime
 import json
+import re
 from collections import deque
 import uuid
 from PIL import Image
@@ -198,6 +199,28 @@ except ImportError as e:
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> reasoning blocks from LLM output.
+    Handles both closed and unclosed <think> tags.
+    If the ENTIRE content is inside think tags, extract it rather than deleting everything."""
+    if not text or not text.strip():
+        return text
+    # First strip closed tags
+    stripped = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    # Then strip unclosed <think> (tag to end of string)
+    stripped = re.sub(r"<think>[\s\S]*$", "", stripped)
+    stripped = stripped.strip()
+    # If stripping removed everything but original had content, the actual
+    # content might have been INSIDE the think tags — extract it
+    if not stripped and len(text) > 20:
+        # Try extracting JSON from inside the think tags
+        inner = re.sub(r"</?think>", "", text).strip()
+        if inner:
+            return inner
+    return stripped
+
 
 # ─── Wire face_train_service into WebSocket progress broadcasts ──────────────
 if face_train_service and ws_manager:
@@ -2081,7 +2104,7 @@ _restore_cloud_jobs()
 # ── Background cloud job poller ─────────────────────────────────────────
 # Polls active (non-completed) cloud jobs every CLOUD_POLL_INTERVAL seconds
 # so completions are processed even if the frontend isn't watching.
-CLOUD_POLL_INTERVAL = int(os.getenv("CLOUD_POLL_INTERVAL", "30"))
+CLOUD_POLL_INTERVAL = int(os.getenv("CLOUD_POLL_INTERVAL", "10"))
 # Max age before a cloud job is considered abandoned (2 hours)
 CLOUD_JOB_MAX_AGE = int(os.getenv("CLOUD_JOB_MAX_AGE", "7200"))
 
@@ -2485,7 +2508,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         }
 
     try:
-        rp_job = await _runpod.get_job_status(runpod_job_id)
+        rp_job = await _runpod.get_job_status(runpod_job_id, endpoint_id=job_info.get("runpod_endpoint_id"))
     except Exception as e:
         error_str = str(e)
         # 404 = RunPod purged the job — it's gone forever
@@ -4210,17 +4233,22 @@ async def list_unified_media(
                     key = obj.get("key", "")
                     if not key or key == ".":
                         continue
+                    # Skip user generation artifacts that leaked into generated bucket
+                    if key.startswith("users/"):
+                        continue
                     # Keep full key as filename for proper deletion
                     filename = key
 
-                    # Determine type from extension
+                    # Determine type from extension — skip non-media files
                     ext = filename.lower().split(".")[-1] if "." in filename else ""
                     if ext in ("mp4", "webm", "mov", "avi"):
                         item_type = "video"
                     elif ext in ("mp3", "wav", "flac", "ogg"):
                         item_type = "audio"
-                    else:
+                    elif ext in ("png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff"):
                         item_type = "image"
+                    else:
+                        continue  # Skip non-media files (logs, json, etc.)
 
                     # Filter by type if specified
                     if type != "all" and item_type != type:
@@ -4355,6 +4383,33 @@ async def list_unified_media(
                         item["generation_time"] = gt
         except Exception as e:
             logger.debug(f"Generation times enrichment skipped: {e}")
+
+        # Deduplicate: if same file exists in both 'user' and 'generated' sources,
+        # keep only the 'user' version (generated is dev/admin archive, user is canonical)
+        if is_admin:
+            # Build set of basenames+sizes from user source for fast lookup
+            user_files = set()
+            for m in all_media:
+                if m.get("source") == "user":
+                    basename = m.get("filename", "").split("/")[-1] if "/" in m.get("filename", "") else m.get("filename", "")
+                    # Strip timestamp prefix (e.g. "20260408_151521_cloud_max..." -> "cloud_max...")
+                    # User storage prepends "YYYYMMDD_HHMMSS_" prefix
+                    user_files.add((basename, m.get("size", 0)))
+                    # Also add without the timestamp prefix for matching
+                    parts = basename.split("_", 2)
+                    if len(parts) >= 3 and len(parts[0]) == 8 and len(parts[1]) == 6:
+                        user_files.add((parts[2], m.get("size", 0)))
+
+            # Filter out generated items that exist in user storage (same base name + size)
+            before_count = len(all_media)
+            all_media = [
+                m for m in all_media
+                if m.get("source") != "generated"
+                or (m.get("filename", "").split("/")[-1] if "/" in m.get("filename", "") else m.get("filename", ""), m.get("size", 0)) not in user_files
+            ]
+            deduped = before_count - len(all_media)
+            if deduped:
+                logger.debug(f"🔄 Deduped {deduped} generated items already in user storage")
 
         # Count stats by source for admin
         stats = {
@@ -5122,6 +5177,14 @@ async def generate_image_legacy(
     if not prompt_id:
         raise HTTPException(status_code=500, detail="Failed to queue workflow")
 
+    # Register job for auto-upload on completion
+    client.register_job(
+        prompt_id=prompt_id,
+        user_id=user.id,
+        prompt=prompt,
+        settings={"job_type": "t2i", "width": width, "height": height, "seed": seed},
+    )
+
     # Deduct credits after successful queue
     await deduct_credits(user, credits_required, prompt_id, "SDXL T2I (legacy)")
     logger.info(f"📋 Legacy T2I queued: {prompt_id} (💰 -{credits_required} credits)")
@@ -5294,6 +5357,22 @@ async def generate_sdxl_image(
 
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue workflow")
+
+        # Register job for auto-upload on completion
+        client.register_job(
+            prompt_id=prompt_id,
+            user_id=user.id,
+            prompt=prompt,
+            settings={
+                "job_type": "t2i",
+                "model_name": checkpoint,
+                "width": width,
+                "height": height,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+            },
+        )
 
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "SDXL T2I")
@@ -6457,6 +6536,20 @@ async def _submit_to_runpod(
     if lora_downloads:
         extra["lora_downloads"] = lora_downloads
         logger.info(f"☁️ Including {len(lora_downloads)} LoRA download(s) in RunPod job")
+
+    # Log workflow settings being sent to RunPod
+    _wf_settings = []
+    for _nid, _node in workflow.items():
+        _ct = _node.get("class_type", "")
+        _inp = _node.get("inputs", {})
+        if _ct == "KSamplerAdvanced":
+            _lbl = "pass1" if _inp.get("add_noise") == "enable" else "pass2"
+            _wf_settings.append(f"{_lbl}: steps={_inp.get('steps')}, cfg={_inp.get('cfg')}, "
+                                f"sampler={_inp.get('sampler_name')}, range={_inp.get('start_at_step')}-{_inp.get('end_at_step')}")
+        elif _ct in ("WanImageToVideo", "EmptyWanLatentVideo"):
+            _wf_settings.append(f"video: {_inp.get('width')}x{_inp.get('height')}, {_inp.get('length')}f")
+    if _wf_settings:
+        logger.info(f"☁️ RunPod workflow settings: {' | '.join(_wf_settings)}")
 
     job = await _runpod.submit_workflow(
         workflow,
@@ -7641,10 +7734,10 @@ async def generate_cloud_max_async(
     ),
     fps: int = Form(16, description="Frames per second"),
     aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
-    steps: int = Form(25, description="Sampling steps (20-30 recommended)"),
+    steps: int = Form(15, description="Sampling steps (15-25 recommended)"),
     cfg: float = Form(3.0, description="CFG guidance scale (3.0-5.0 recommended)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    high_noise_steps: int = Form(12, description="Steps for high noise pass"),
+    high_noise_steps: int = Form(8, description="Steps for high noise pass"),
     shift: float = Form(8.0, description="ModelSamplingSD3 shift"),
     sampler_name: str = Form(
         "dpmpp_2m", description="Sampler: dpmpp_2m, euler, uni_pc"
@@ -7935,12 +8028,20 @@ async def generate_ltx2_i2v_async(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = f"ltx2_{timestamp}_{file.filename}"
     input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
+    content = await _save_upload(file, input_path)
+
+    # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
+    import base64 as _b64
+    input_images_b64 = {}
+    input_images_b64[input_filename] = _b64.b64encode(content).decode()
 
     # Upload to ComfyUI
     image_name = comfyui.upload_image(str(input_path))
     if not image_name:
         raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
+    # Use ComfyUI-assigned name as key so RunPod handler saves it with matching filename
+    if image_name != input_filename:
+        input_images_b64[image_name] = input_images_b64.pop(input_filename)
 
     # Parse post_processing chain
     parsed_post_processing = []
@@ -7989,8 +8090,30 @@ async def generate_ltx2_i2v_async(
             status_code=500, detail="Failed to build LTX-2 I2V workflow"
         )
 
+    # LTX-2.3 22B always routes to cloud (needs 80GB+ GPU)
+    if compute_target != "cloud":
+        compute_target = "cloud"
+        logger.info("🔄 LTX-2.3 I2V forced to cloud (80GB+ GPU required)")
+
     # Route to cloud if requested
     if compute_target == "cloud":
+        # Cloud uses LTX-2.3 22B (80 GB+ GPU) instead of LTX-2.0 19B
+        cloud_workflow = comfyui.build_cloud_ltx23_i2v_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            negative_prompt="low quality, blurry, distorted, artifacts, watermark",
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            fps=fps,
+            seed=actual_seed,
+            strength=1.0,
+            output_prefix=output_prefix,
+        )
+        if not cloud_workflow:
+            raise HTTPException(
+                status_code=500, detail="Failed to build LTX-2.3 I2V cloud workflow"
+            )
         cloud_job_info = {
             "prompt": prompt[:100],
             "resolution": resolution,
@@ -8002,24 +8125,26 @@ async def generate_ltx2_i2v_async(
             "output_prefix": output_prefix,
             "input_image": input_filename,
             "created_at": timestamp,
-            "model": "ltx2",
+            "model": "ltx23",
             "post_processing": parsed_post_processing,
             "post_audio_path": post_audio_path,
-            "job_type": "ltx2_i2v",
+            "job_type": "ltx23_i2v",
             "cfg": cfg,
             "model_mode": "ltx2",
             "user_id": user.id,
             "credits_required": credits_required,
         }
         result = await _submit_to_runpod(
-            workflow=workflow,
+            workflow=cloud_workflow,
             user_id=user.id,
             prompt_id=str(uuid.uuid4()),
             job_info=cloud_job_info,
+            images=input_images_b64 if input_images_b64 else None,
             prompt_full=prompt,
+            endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID"),
         )
         await deduct_credits(
-            user, credits_required, result["prompt_id"], "LTX-2 I2V (cloud)"
+            user, credits_required, result["prompt_id"], "LTX-2.3 I2V (cloud)"
         )
         return result
 
@@ -8361,7 +8486,7 @@ async def generate_text_video(
     lora_configs: str = Form("", description="JSON array of LoRA configs"),
     shift: float = Form(8.0, description="Shift value for cloud sampler"),
     high_noise_steps: int = Form(
-        12, description="High noise steps for cloud dual-pass"
+        8, description="High noise steps for cloud dual-pass"
     ),
     sampler_name: str = Form("dpmpp_2m", description="Sampler name for cloud"),
     scheduler: str = Form("beta", description="Scheduler for cloud"),
@@ -8456,6 +8581,11 @@ async def generate_text_video(
     # Map resolution to long_edge
     long_edge = 480 if resolution == "480p" else 720
 
+    # LTX-2.3 22B always routes to cloud (needs 80GB+ GPU)
+    if model_type == "ltx2" and compute_target != "cloud":
+        compute_target = "cloud"
+        logger.info("🔄 LTX-2.3 T2V forced to cloud (80GB+ GPU required)")
+
     # ── Cloud routing ────────────────────────────────────────────────
     if compute_target == "cloud":
         if not _runpod or not _runpod.has_endpoint():
@@ -8512,16 +8642,18 @@ async def generate_text_video(
                 else []
             )
         else:
-            workflow = build_ltx2_t2v_workflow(
+            # LTX-2.3 22B cloud workflow (80 GB+ GPU)
+            workflow = comfyui.build_cloud_ltx23_t2v_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 width=width,
                 height=height,
                 num_frames=num_frames,
-                steps=actual_steps,
-                cfg=actual_cfg,
+                fps=fps,
                 seed=actual_seed,
-                filename_prefix=output_prefix,
+                output_prefix=output_prefix,
+                aspect_ratio=aspect_ratio,
+                long_edge=long_edge,
             )
             cloud_job_info = {
                 "prompt": prompt[:100],
@@ -8535,9 +8667,9 @@ async def generate_text_video(
                 "created_at": timestamp,
                 "lora_count": 0,
                 "post_processing": post_processing_steps,
-                "job_type": "ltx2_t2v",
+                "job_type": "ltx23_t2v",
                 "cfg": actual_cfg,
-                "model_mode": "ltx2",
+                "model_mode": "ltx23",
                 "compute_target": "cloud",
                 "user_id": user.id,
                 "credits_required": credits_required,
@@ -8557,9 +8689,10 @@ async def generate_text_video(
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
+            endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID") if model_type != "wan22" else None,
         )
         cloud_label = (
-            "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2 T2V (cloud)"
+            "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2.3 T2V (cloud)"
         )
         await deduct_credits(user, credits_required, result["prompt_id"], cloud_label)
         logger.info(
@@ -8878,11 +9011,33 @@ async def caption_image(
     detail_level: Optional[int] = Form(
         3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"
     ),
+    include_negative: bool = Form(
+        False, description="Also generate a negative prompt"
+    ),
+    include_motion: bool = Form(
+        False, description="Also generate a motion/continuation prompt for video"
+    ),
+    motion_hint: Optional[str] = Form(
+        None, description="User hint for desired motion/action (e.g., 'walking towards camera, hair blowing')"
+    ),
+    audio_context: Optional[str] = Form(
+        None, description="JSON string with director's audio context: {ambient, dialogue: [{subject, line}]}"
+    ),
+    concept_context: Optional[str] = Form(
+        None, description="JSON string with concept analysis to enrich prompt generation"
+    ),
+    refinement_prompt: Optional[str] = Form(
+        None, description="User instruction to refine concept analysis or director's notes (e.g., 'make it more dramatic')"
+    ),
+    refinement_target: Optional[str] = Form(
+        None, description="What to refine: 'concept' (scene/subjects/mood) or 'notes' (motion/audio/dialogue/camera)"
+    ),
 ):
     """
     Generate a caption/description for an uploaded image.
     Uses Guardian vision LLM for high-quality captioning.
     Detail level controls output verbosity (1=brief, 5=exhaustive).
+    Modes: brief, detailed, tags, structured, prompt_i2v, prompt_t2i, prompt_nsfw, concept.
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -8950,11 +9105,481 @@ async def caption_image(
     with open(input_path, "rb") as f:
         image_b64 = _b64.b64encode(f.read()).decode("utf-8")
 
-    description = await analyze_image_with_vision(
+    # ── Concept analysis mode — structured scene breakdown ──
+    # JSON output is compact — 3072 is plenty for a full concept card
+    concept_max_tokens = 3072
+
+    if mode == "concept":
+        # Check if this is a REFINEMENT request (existing concept + user instruction)
+        if refinement_prompt and concept_context:
+            try:
+                current_concept = json.loads(concept_context)
+            except json.JSONDecodeError:
+                current_concept = {}
+
+            target = refinement_target or "concept"
+            # Compact JSON to save tokens — no indentation
+            current_json = json.dumps(current_concept, separators=(',', ':'))
+
+            if target == "notes":
+                concept_prompt = (
+                    "Update ONLY the director's notes in this JSON.\n"
+                    f"Current analysis: {current_json}\n\n"
+                    f"Instruction: \"{refinement_prompt}\"\n\n"
+                    "RULES:\n"
+                    "1. Copy scene, subjects, and mood EXACTLY — do NOT change them.\n"
+                    "2. Update ONLY: suggested_motion, suggested_audio, suggested_dialogue, suggested_camera.\n"
+                    "3. For suggested_dialogue: [{\"subject\":\"name\",\"line\":\"speech\"}]\n"
+                    "4. For suggested_camera: describe the complete camera direction as a cinematic sentence — "
+                    "shot type, movement, speed, composition changes, and how it serves the story.\n"
+                    "5. All notes should work together as a coherent director's cut.\n"
+                    "6. Output ONLY compact JSON on a single line. No markdown, no explanation.\n"
+                    "7. Same keys as the input."
+                )
+
+                # Notes refinement: text-only call (no image needed, avoids LLM reinterpreting visual)
+                import httpx
+                from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+
+                await wait_for_comfyui_idle()
+                await _free_comfy_vram()
+
+                vision_model = model or VISION_MODEL
+                text_body = {
+                    "model": vision_model,
+                    "messages": [
+                        {"role": "system", "content": "Output ONLY raw JSON. No markdown, no explanation."},
+                        {"role": "user", "content": concept_prompt},
+                    ],
+                    "max_tokens": 2048,
+                    "temperature": 0.3,
+                }
+
+                logger.info(f"🔮 Notes refinement (text-only): {refinement_prompt[:100]}")
+
+                async with httpx.AsyncClient(timeout=480.0, headers=_guardian_headers()) as client:
+                    response = await client.post(
+                        f"{GUARDIAN_BASE}/v1/chat/completions",
+                        json=text_body,
+                    )
+                    response.raise_for_status()
+                    resp_data = response.json()
+                    choice = resp_data["choices"][0]
+                    raw = choice["message"]["content"] or ""
+                    finish_reason = choice.get("finish_reason", "unknown")
+                    logger.info(f"🔮 Notes refine: finish_reason={finish_reason}, len={len(raw)}")
+
+                raw = _strip_think_tags(raw)
+                logger.info(f"🔮 Notes refine raw: {raw[:500] if raw else '(empty)'}")
+
+                # Parse JSON — find valid JSON block
+                json_matches = list(re.finditer(r"\{[\s\S]*\}", raw))
+                for match in reversed(json_matches):
+                    try:
+                        parsed = json.loads(match.group())
+                        if "suggested_motion" in parsed or "suggested_audio" in parsed:
+                            # Enforce: keep original scene/subjects/mood
+                            parsed["scene"] = current_concept.get("scene", "")
+                            parsed["subjects"] = current_concept.get("subjects", [])
+                            parsed["mood"] = current_concept.get("mood", "")
+                            logger.info(f"🔮 Notes refined: {len(parsed.get('suggested_dialogue', []))} dialogue lines")
+                            return {
+                                "concept": parsed,
+                                "model": vision_model,
+                                "mode": "concept",
+                            }
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ Notes refine JSON parse attempt failed: {e}")
+                        continue
+
+                # No silent fallback — raise error so frontend sees it
+                logger.error(f"❌ Notes refinement JSON parse failed. Raw LLM output:\n{raw}")
+                raise HTTPException(status_code=500, detail=f"Notes refinement failed: LLM returned invalid JSON. Raw: {raw[:300]}")
+            else:
+                # Concept refinement: text-only call (no image) — sending image confuses the model
+                # into describing what it sees instead of refining the JSON
+                concept_refine_prompt = (
+                    "Update the JSON based on the instruction.\n"
+                    f"Current analysis: {current_json}\n\n"
+                    f"Instruction: \"{refinement_prompt}\"\n\n"
+                    "RULES:\n"
+                    "1. Update scene, subjects, mood, suggested_motion, suggested_audio, suggested_dialogue, suggested_camera.\n"
+                    "2. For suggested_dialogue: [{\"subject\":\"name\",\"line\":\"speech\"}]\n"
+                    "3. Output ONLY compact JSON on a single line. No markdown, no explanation.\n"
+                    "4. Same keys as the input."
+                )
+
+                import httpx
+                from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+
+                await wait_for_comfyui_idle()
+                await _free_comfy_vram()
+
+                vision_model = model or VISION_MODEL
+                text_body = {
+                    "model": vision_model,
+                    "messages": [
+                        {"role": "system", "content": "Output ONLY raw JSON. No markdown, no explanation."},
+                        {"role": "user", "content": concept_refine_prompt},
+                    ],
+                    "max_tokens": 2048,
+                    "temperature": 0.3,
+                }
+
+                logger.info(f"🔮 Concept refinement (text-only, {target}): {refinement_prompt[:100]}")
+
+                async with httpx.AsyncClient(timeout=480.0, headers=_guardian_headers()) as client:
+                    response = await client.post(
+                        f"{GUARDIAN_BASE}/v1/chat/completions",
+                        json=text_body,
+                    )
+                    response.raise_for_status()
+                    resp_json = response.json()
+                    raw = resp_json["choices"][0]["message"]["content"] or ""
+                    finish_reason = resp_json["choices"][0].get("finish_reason", "unknown")
+                    logger.info(f"🔮 Concept refine: finish_reason={finish_reason}, len={len(raw)}")
+
+                raw = _strip_think_tags(raw)
+
+                # Parse JSON
+                json_matches = list(re.finditer(r"\{[\s\S]*\}", raw))
+                for match in reversed(json_matches):
+                    try:
+                        parsed = json.loads(match.group())
+                        if "scene" in parsed or "subjects" in parsed:
+                            logger.info(f"🔮 Concept refined: {len(parsed.get('subjects', []))} subjects")
+                            return {
+                                "concept": parsed,
+                                "model": vision_model,
+                                "mode": "concept",
+                            }
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ Concept refine JSON parse attempt failed: {e}")
+                        continue
+
+                logger.error(f"❌ Concept refinement JSON parse failed. Raw LLM output:\n{raw}")
+                raise HTTPException(status_code=500, detail=f"Concept refinement failed: LLM returned invalid JSON. Raw: {raw[:300]}")
+
+        else:
+            concept_prompt = (
+                "You are an expert cinematographer and video director analyzing this image for AI video production. "
+                "Analyze the image and respond with ONLY valid JSON (no markdown, no ``` fences, no explanation).\n"
+                "Return this exact structure:\n"
+                '{"scene": "description of overall scene and setting", '
+                '"subjects": [{"label": "descriptive name", "description": "detailed appearance", "position": "where in frame"}], '
+                '"mood": "atmosphere and emotional tone", '
+                '"suggested_motion": "how subjects and elements would naturally move in a video continuation", '
+                '"suggested_audio": "ambient sounds, music mood, environmental audio that fits this scene", '
+                '"suggested_dialogue": [{"subject": "label matching subjects array", "line": "suggested speech, narration, or vocal expression"}], '
+                '"suggested_camera": "complete camera direction as a single cinematic sentence: shot type (wide/medium/close-up/extreme close-up), '
+                'movement (pan, tilt, dolly, crane, orbit, tracking, handheld, steadicam), speed and rhythm, '
+                'composition changes, and how it serves the scene emotionally. '
+                'Example: slow dolly-in from wide establishing shot to medium close-up on subject, '
+                'slight upward tilt revealing the sky as music swells"}'
+                "\nBe cinematic, creative, and specific. If people are visible, ALWAYS suggest dialogue for each person. "
+                "For audio, consider environmental sounds, implied sounds, and mood-appropriate music or ambience. "
+                "For camera, think like a director: the camera movement should tell part of the story."
+            )
+            detail_prefix = detail_prefixes.get(detail_level, "")
+            if detail_prefix:
+                concept_prompt = detail_prefix + concept_prompt
+
+        raw = await analyze_image_with_vision(
+            image_b64, custom_prompt=concept_prompt, model_override=model,
+            max_tokens=concept_max_tokens,
+        )
+        raw = _strip_think_tags(raw)
+        logger.info(f"🔮 Concept raw (full): {raw}")
+
+        # Parse JSON response — find the last valid JSON block
+        json_matches = list(re.finditer(r"\{[\s\S]*\}", raw))
+        for match in reversed(json_matches):
+            try:
+                parsed = json.loads(match.group())
+                if "scene" in parsed or "subjects" in parsed:
+                    logger.info(f"🔮 Concept parsed: {len(parsed.get('subjects', []))} subjects detected")
+                    return {
+                        "concept": parsed,
+                        "model": model or VISION_MODEL,
+                        "mode": "concept",
+                    }
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ Concept JSON parse attempt failed: {e}")
+                continue
+
+        # No silent fallback — raise error so we can debug
+        logger.error(f"❌ Concept JSON parse failed. Raw LLM output:\n{raw}")
+        raise HTTPException(status_code=500, detail=f"Concept analysis failed: LLM returned invalid JSON. Raw: {raw[:300]}")
+
+    # ── Multi-output mode: positive + negative in prompt modes ──
+    # In prompt mode, always generate both positive and negative prompts.
+    # Motion/camera/action is baked INTO the positive prompt, not separate.
+    is_prompt = mode.startswith("prompt_")
+    is_nsfw = mode == "prompt_nsfw"
+
+    if is_prompt:
+        parts = []
+        parts.append(
+            'Analyze this image and respond with ONLY valid JSON (no markdown, no ``` fences, no explanation).'
+        )
+
+        # Inject concept context if provided (from the Analyze step)
+        concept_text = ""
+        if concept_context:
+            try:
+                cc = json.loads(concept_context)
+                concept_parts = []
+                if cc.get("scene"):
+                    concept_parts.append(f"Scene context: {cc['scene']}")
+                if cc.get("mood"):
+                    concept_parts.append(f"Mood: {cc['mood']}")
+                if cc.get("subjects"):
+                    subj_descs = [f"{s.get('label', 'subject')}: {s.get('description', '')}" for s in cc["subjects"]]
+                    concept_parts.append(f"Subjects: {'; '.join(subj_descs)}")
+                if concept_parts:
+                    concept_text = " Director's concept: " + ". ".join(concept_parts) + "."
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Inject audio/dialogue context for combined prompt generation
+        audio_text = ""
+        if audio_context:
+            try:
+                ac = json.loads(audio_context)
+                audio_parts = []
+                if ac.get("ambient"):
+                    audio_parts.append(f"ambient sounds: {ac['ambient']}")
+                if ac.get("dialogue"):
+                    for d in ac["dialogue"]:
+                        audio_parts.append(f"{d.get('subject', 'person')} says: \"{d.get('line', '')}\"")
+                if audio_parts:
+                    audio_text = " Audio direction: " + "; ".join(audio_parts) + "."
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Positive prompt instruction — includes motion/action naturally
+        # Inject motion hint if provided
+        motion_hint_text = ""
+        if include_motion and motion_hint and motion_hint.strip():
+            motion_hint_text = f" The user wants this specific motion/action: {motion_hint.strip()}. Incorporate this into the prompt."
+        elif include_motion:
+            motion_hint_text = " Include natural motion descriptions (subject animation, environmental movement)."
+
+        if mode == "prompt_i2v":
+            parts.append(
+                '"positive": a cinematic image-to-video prompt describing subject, their appearance, action, movement, '
+                "camera angle, lighting, and how the scene would naturally continue as a video. "
+                "Include camera motion (dolly, pan, tilt, tracking), subject animation (gestures, hair flowing, body movement), "
+                "and environmental motion where relevant."
+                f"{concept_text}{motion_hint_text}{audio_text} "
+                "Comma-separated, present tense, cinematic style."
+            )
+        elif mode == "prompt_t2i":
+            parts.append(
+                '"positive": a detailed text-to-image prompt with subject description, pose, clothing, setting, lighting, '
+                "art style, camera angle, quality boosters."
+                f"{concept_text}{motion_hint_text} "
+                "Comma-separated tag style."
+            )
+        elif is_nsfw:
+            nsfw_base = _build_nsfw_prompt(nsfw_intensity or 3)
+            parts.append(f'"positive": {nsfw_base}{motion_hint_text}')
+        else:
+            parts.append(
+                f'"positive": {caption_prompts.get(mode, caption_prompts["detailed"])}'
+            )
+
+        # Apply detail level
+        if detail_prefix:
+            parts[1] = detail_prefix + parts[1]
+
+        # Negative prompt — always included in prompt mode
+        neg_style = (
+            "explicit NSFW negative tags (deformed, bad anatomy, low quality, watermark, text, censored, pixelated)"
+            if is_nsfw
+            else "things to AVOID in AI generation (bad anatomy, blurry, low quality, watermark, distorted, artifacts, text)"
+        )
+        parts.append(f'"negative": {neg_style}. Keep it concise, comma-separated.')
+
+        # Audio prompt — when audio context is provided, generate audio description for LTX/TTS
+        has_audio = bool(audio_context)
+        if has_audio:
+            parts.append(
+                '"audio": a detailed audio description for AI video with audio generation. '
+                "Describe the soundscape: ambient sounds, environmental audio, speech/dialogue with tone and emotion, "
+                "music mood if appropriate. Include character dialogue naturally. "
+                "Example: 'gentle wind, birds chirping in distance, woman speaks softly: Hello there, footsteps on gravel'. "
+                "Keep it descriptive and cinematic."
+            )
+
+        expected_fields = '{"positive": "...", "negative": "..."'
+        if has_audio:
+            expected_fields += ', "audio": "..."'
+        expected_fields += '}'
+        combined_prompt = " ".join(parts) + f'\n\nRespond with exactly: {expected_fields}'
+
+        logger.info(
+            f"🔮 Multi-output caption: model={model}, mode={mode}"
+        )
+        raw = await analyze_image_with_vision(
+            image_b64, custom_prompt=combined_prompt, model_override=model,
+        )
+
+        # Strip think tags before parsing
+        raw = _strip_think_tags(raw)
+        logger.debug(f"🔮 Vision raw (stripped): {raw[:500]}")
+
+        # Parse JSON from response — find the last {} block (most likely the actual JSON)
+        json_matches = list(re.finditer(r"\{[^{}]*\}", raw))
+        if not json_matches:
+            # Try greedy match for nested objects
+            json_matches = list(re.finditer(r"\{[\s\S]*\}", raw))
+
+        for match in reversed(json_matches):
+            try:
+                parsed = json.loads(match.group())
+                if "positive" in parsed:
+                    caption_text = _strip_think_tags(parsed.get("positive", raw))
+                    neg_text = _strip_think_tags(parsed.get("negative", ""))
+                    audio_text_out = _strip_think_tags(parsed.get("audio", "")) if has_audio else None
+                    logger.info(f"🔮 Parsed pos={len(caption_text)}c neg={len(neg_text)}c audio={'yes' if audio_text_out else 'no'}")
+                    result = {
+                        "caption": caption_text,
+                        "negative_prompt": neg_text,
+                        "model": model or VISION_MODEL,
+                        "mode": mode,
+                    }
+                    if audio_text_out:
+                        result["audio_prompt"] = audio_text_out
+                    return result
+            except json.JSONDecodeError:
+                continue
+
+        # Fallback: return raw as caption
+        logger.warning("⚠️ Multi-output JSON parse failed, returning raw caption")
+        return {
+            "caption": _strip_think_tags(raw),
+            "negative_prompt": None,
+            "model": model or VISION_MODEL,
+            "mode": mode,
+        }
+
+    # ── Single-output mode (original behavior) ──
+    description = _strip_think_tags(await analyze_image_with_vision(
         image_b64, custom_prompt=custom_prompt, model_override=model
+    ))
+
+    return {"caption": description, "negative_prompt": None, "model": model or VISION_MODEL, "mode": mode}
+
+
+class RefineCaptionRequest(BaseModel):
+    """Request body for refining generated captions with user suggestions."""
+
+    positive: str = ""
+    negative: Optional[str] = None
+    suggestion: str  # User's refinement instruction
+    model: Optional[str] = None
+
+
+@app.post("/refine-caption")
+async def refine_caption(
+    req: RefineCaptionRequest,
+    user: User = Depends(get_current_user),
+):
+    """
+    Refine/tweak generated prompts based on user suggestions.
+    Takes the current outputs + a suggestion, returns improved versions.
+    """
+    if not req.suggestion.strip():
+        raise HTTPException(status_code=400, detail="suggestion is required")
+
+    t2t_model = req.model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
+    logger.info(f"✏️ Refining caption with suggestion: '{req.suggestion[:80]}...' model={t2t_model}")
+
+    # Build the refinement prompt
+    current = f"Current positive prompt:\n{req.positive}"
+    if req.negative:
+        current += f"\n\nCurrent negative prompt:\n{req.negative}"
+
+    fields = '{"positive": "...'
+    if req.negative is not None:
+        fields += '", "negative": "...'
+    fields += '"}'
+
+    system_prompt = (
+        "You are an expert prompt engineer for AI image and video generation. "
+        "The user has generated prompts from an image and wants to refine them. "
+        "Apply the user's suggestion while preserving the original subject and intent. "
+        "Respond with ONLY valid JSON (no markdown fences, no explanation). "
+        f"JSON structure: {fields}"
     )
 
-    return {"caption": description, "model": model or VISION_MODEL, "mode": mode}
+    user_prompt = (
+        f"{current}\n\n"
+        f"User's refinement instruction: {req.suggestion.strip()}\n\n"
+        f"Apply the refinement and return the improved prompts as JSON."
+    )
+
+    import httpx
+    from guardian_client import (
+        wait_for_comfyui_idle,
+        free_comfyui_vram as _free_comfy_vram,
+    )
+
+    await wait_for_comfyui_idle()
+    await _free_comfy_vram()
+
+    t2t_body = {
+        "model": t2t_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 1024,
+        "temperature": 0.7,
+    }
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(
+                timeout=120.0, headers=_guardian_headers()
+            ) as client:
+                response = await client.post(
+                    f"{GUARDIAN_BASE}/v1/chat/completions",
+                    json=t2t_body,
+                )
+                if response.status_code == 503 and attempt < max_retries - 1:
+                    import asyncio
+                    await asyncio.sleep(15)
+                    continue
+                response.raise_for_status()
+                result = response.json()
+                msg = result["choices"][0]["message"]
+                llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+                llm_output = _strip_think_tags(llm_output)
+
+                # Parse JSON
+                json_match = re.search(r"\{[\s\S]*\}", llm_output)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                    return {
+                        "positive": parsed.get("positive", req.positive),
+                        "negative": parsed.get("negative", req.negative),
+                    }
+
+                # Fallback: return raw as positive
+                return {"positive": llm_output, "negative": req.negative}
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                import asyncio
+                await asyncio.sleep(10)
+                continue
+            logger.error(f"Refine caption failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Refine failed: {str(e)}")
+
+    raise HTTPException(status_code=503, detail="Model still loading — try again")
 
 
 class MotionPromptRequest(BaseModel):
@@ -9037,17 +9662,12 @@ async def generate_motion_prompt(
                     result = resp.json()
                     msg = result["choices"][0]["message"]
                     # Prefer content over reasoning_content; strip thinking artifacts
-                    import re
-
                     motion_prompt = (msg.get("content") or "").strip()
                     reasoning = (msg.get("reasoning_content") or "").strip()
                     # If content is empty but reasoning exists, use reasoning
                     if not motion_prompt and reasoning:
                         motion_prompt = reasoning
-                    # Strip <think>...</think> blocks
-                    motion_prompt = re.sub(
-                        r"<think>.*?</think>\s*", "", motion_prompt, flags=re.DOTALL
-                    ).strip()
+                    motion_prompt = _strip_think_tags(motion_prompt)
                     # Strip common thinking patterns: lines starting with reasoning verbs/markers
                     # Keep only the last paragraph-block (the actual prompt output)
                     lines = motion_prompt.split("\n")
@@ -9374,6 +9994,7 @@ Generate as JSON."""
                 llm_output = (
                     msg.get("content") or msg.get("reasoning_content", "")
                 ).strip()
+                llm_output = _strip_think_tags(llm_output)
 
                 # Parse JSON from LLM output
                 if "```json" in llm_output:
@@ -9595,11 +10216,13 @@ async def get_llm_job(job_id: str, user: User = Depends(get_current_user)):
 # Image Analysis with Vision LLM (via Guardian proxy)
 # ─────────────────────────────────────────────────────────────────────────────
 
-VISION_MODEL = os.getenv("VISION_MODEL", "Gemma3-27B-it-vl-GLM-4.7-Uncensored-Heretic")
+VISION_MODEL = os.getenv("VISION_MODEL", "Huihui-gemma-4-26B-A4B-it-abliterated")
 
 
 async def analyze_image_with_vision(
-    image_base64: str, custom_prompt: str = None, model_override: Optional[str] = None
+    image_base64: str, custom_prompt: str = None, model_override: Optional[str] = None,
+    max_tokens: int = 1024, system_message: Optional[str] = None,
+    temperature: Optional[float] = None,
 ) -> str:
     """
     Use a vision LLM via Guardian proxy to analyze an image and return a description.
@@ -9609,6 +10232,7 @@ async def analyze_image_with_vision(
         image_base64: Base64 encoded image data
         custom_prompt: Optional custom prompt for the analysis
         model_override: Guardian model ID to use; falls back to VISION_MODEL env var
+        max_tokens: Maximum tokens for the response (default 1024, use 2048+ for structured JSON)
 
     Returns:
         Text description of the image
@@ -9646,25 +10270,30 @@ async def analyze_image_with_vision(
     await wait_for_comfyui_idle()
     await _free_comfy_vram()
 
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{img_mime};base64,{image_base64}"},
+                },
+                {
+                    "type": "text",
+                    "text": analysis_prompt,
+                },
+            ],
+        }
+    )
+
     vision_request_body = {
         "model": vision_model,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{img_mime};base64,{image_base64}"},
-                    },
-                    {
-                        "type": "text",
-                        "text": analysis_prompt,
-                    },
-                ],
-            }
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.3,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature if temperature is not None else 0.3,
     }
 
     # Retry loop for 503 (Guardian loading model after VRAM free)
@@ -9674,7 +10303,7 @@ async def analyze_image_with_vision(
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(
-                timeout=240.0, headers=_guardian_headers()
+                timeout=480.0, headers=_guardian_headers()
             ) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
@@ -9693,7 +10322,9 @@ async def analyze_image_with_vision(
                 response.raise_for_status()
                 result = response.json()
                 msg = result["choices"][0]["message"]
-                return (msg.get("content") or msg.get("reasoning_content", "")).strip()
+                raw = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+                raw = _strip_think_tags(raw)
+                return raw
 
         except httpx.ConnectError:
             logger.warning("Guardian not available for vision analysis")
@@ -9857,6 +10488,7 @@ Generate a compelling video scene as JSON. Include what happens, how things move
                 llm_output = (
                     msg.get("content") or msg.get("reasoning_content", "")
                 ).strip()
+                llm_output = _strip_think_tags(llm_output)
 
                 # Parse JSON from LLM output
                 if "```json" in llm_output:

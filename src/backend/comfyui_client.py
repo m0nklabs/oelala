@@ -114,14 +114,14 @@ T2V_GENERATION_MODES = {
         "default_frames": 41,
     },
     "ltx2": {
-        "name": "LTX-2 19B",
-        "description": "Lightricks LTX-2 19B distilled model, faster inference",
-        "workflow_file": "ltx2_distorch2_multigpu_api.json",
+        "name": "LTX-2.3 22B",
+        "description": "Lightricks LTX-2.3 22B distilled, fast 8-step generation",
+        "workflow_file": None,  # Uses cloud workflow builder
         "model_type": "ltx2",
         "default_steps": 8,
         "default_cfg": 1.0,
         "max_frames": 481,
-        "default_frames": 25,
+        "default_frames": 97,
     },
 }
 
@@ -3323,6 +3323,392 @@ class ComfyUIClient:
             f"☁️ Built Cloud Max T2V: {width}x{height}, {num_frames}f@{fps}fps, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
             f"shift={shift}, {sampler_name}/{scheduler}{lora_info}"
+        )
+        return workflow
+
+    # ─────────────────────────────────────────────────────────────────────
+    # LTX-2.3 22B Cloud Workflow Builders
+    # Single-stage distilled pipeline: 8-step ManualSigmas, CFGGuider,
+    # SamplerCustomAdvanced. Target: 80 GB+ cloud GPUs.
+    # ─────────────────────────────────────────────────────────────────────
+
+    def build_cloud_ltx23_t2v_workflow(
+        self,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts, watermark",
+        width: int = 768,
+        height: int = 512,
+        num_frames: int = 97,
+        fps: int = 25,
+        seed: int = -1,
+        output_prefix: str = "oelala_ltx23_t2v",
+        checkpoint: str = "ltx-2.3-22b-distilled.safetensors",
+        text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
+        aspect_ratio: str = "9:16",
+        long_edge: int = 768,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build LTX-2.3 22B Cloud T2V workflow — single-stage distilled pipeline.
+
+        Uses the 8-step distilled sigma schedule. No two-stage, no audio,
+        no upsamplers — clean single-pass generation for cloud.
+        """
+        # LTX frame count must be 8k+1
+        k = round((num_frames - 1) / 8)
+        k = max(1, k)
+        num_frames = 8 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # Calculate dimensions from aspect ratio
+        aspect_ratios = {
+            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
+            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
+            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+        }
+        ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
+
+        if ar_w >= ar_h:
+            height = long_edge
+            width = int(long_edge * ar_w / ar_h)
+        else:
+            width = long_edge
+            height = int(long_edge * ar_h / ar_w)
+
+        # LTX requires dimensions divisible by 32
+        width = (width // 32) * 32
+        height = (height // 32) * 32
+
+        logger.info(
+            f"☁️ Building LTX-2.3 Cloud T2V: {width}x{height}, "
+            f"{num_frames}f@{fps}fps, seed={seed}"
+        )
+
+        workflow = {}
+
+        # Node 1: CheckpointLoaderSimple — loads MODEL + CLIP + VAE
+        workflow["1"] = {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": checkpoint},
+        }
+
+        # Node 2: LTXAVTextEncoderLoader — Gemma 3 12B fp8 text encoder
+        workflow["2"] = {
+            "class_type": "LTXAVTextEncoderLoader",
+            "inputs": {
+                "text_encoder": text_encoder,
+                "ckpt_name": checkpoint,
+                "device": "default",
+            },
+        }
+
+        # Node 3: Positive prompt
+        workflow["3"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt, "clip": ["2", 0]},
+        }
+
+        # Node 4: Negative prompt
+        workflow["4"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_prompt, "clip": ["2", 0]},
+        }
+
+        # Node 5: LTXVConditioning — set frame rate on conditioning
+        workflow["5"] = {
+            "class_type": "LTXVConditioning",
+            "inputs": {
+                "positive": ["3", 0],
+                "negative": ["4", 0],
+                "frame_rate": float(fps),
+            },
+        }
+
+        # Node 6: EmptyLTXVLatentVideo — create latent
+        workflow["6"] = {
+            "class_type": "EmptyLTXVLatentVideo",
+            "inputs": {
+                "width": width,
+                "height": height,
+                "length": num_frames,
+                "batch_size": 1,
+            },
+        }
+
+        # Node 7: CFGGuider — cfg=1 for distilled model
+        workflow["7"] = {
+            "class_type": "CFGGuider",
+            "inputs": {
+                "model": ["1", 0],
+                "positive": ["5", 0],
+                "negative": ["5", 1],
+                "cfg": 1.0,
+            },
+        }
+
+        # Node 8: KSamplerSelect
+        workflow["8"] = {
+            "class_type": "KSamplerSelect",
+            "inputs": {"sampler_name": "euler_ancestral"},
+        }
+
+        # Node 9: ManualSigmas — 8-step distilled schedule
+        workflow["9"] = {
+            "class_type": "ManualSigmas",
+            "inputs": {
+                "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0",
+            },
+        }
+
+        # Node 10: RandomNoise
+        workflow["10"] = {
+            "class_type": "RandomNoise",
+            "inputs": {"noise_seed": seed},
+        }
+
+        # Node 11: SamplerCustomAdvanced — main sampling
+        workflow["11"] = {
+            "class_type": "SamplerCustomAdvanced",
+            "inputs": {
+                "noise": ["10", 0],
+                "guider": ["7", 0],
+                "sampler": ["8", 0],
+                "sigmas": ["9", 0],
+                "latent_image": ["6", 0],
+            },
+        }
+
+        # Node 12: VAEDecodeTiled — decode latent to pixels
+        workflow["12"] = {
+            "class_type": "VAEDecodeTiled",
+            "inputs": {
+                "samples": ["11", 1],  # denoised_output
+                "vae": ["1", 2],       # VAE from checkpoint
+                "tile_size": 512,
+                "overlap": 64,
+                "temporal_size": 512,
+                "temporal_overlap": 64,
+            },
+        }
+
+        # Node 13: VHS_VideoCombine — save video
+        workflow["13"] = {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {
+                "frame_rate": fps,
+                "loop_count": 0,
+                "filename_prefix": output_prefix,
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 17,
+                "save_metadata": True,
+                "trim_to_audio": False,
+                "pingpong": False,
+                "save_output": True,
+                "images": ["12", 0],
+            },
+        }
+
+        logger.info(
+            f"☁️ Built LTX-2.3 Cloud T2V: {width}x{height}, "
+            f"{num_frames}f@{fps}fps, 8-step distilled"
+        )
+        return workflow
+
+    def build_cloud_ltx23_i2v_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        negative_prompt: str = "low quality, blurry, distorted, artifacts, watermark",
+        width: int = 768,
+        height: int = 512,
+        num_frames: int = 97,
+        fps: int = 25,
+        seed: int = -1,
+        strength: float = 1.0,
+        output_prefix: str = "oelala_ltx23_i2v",
+        checkpoint: str = "ltx-2.3-22b-distilled.safetensors",
+        text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build LTX-2.3 22B Cloud I2V workflow — image-to-video with
+        LTXVImgToVideoConditionOnly from ComfyUI-LTXVideo.
+
+        Uses 8-step distilled sigma schedule. Image is preprocessed
+        with LTXVPreprocess and used to condition the latent.
+        """
+        # LTX frame count must be 8k+1
+        k = round((num_frames - 1) / 8)
+        k = max(1, k)
+        num_frames = 8 * k + 1
+
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        # LTX requires dimensions divisible by 32
+        width = (width // 32) * 32
+        height = (height // 32) * 32
+
+        logger.info(
+            f"☁️ Building LTX-2.3 Cloud I2V: {width}x{height}, "
+            f"{num_frames}f@{fps}fps, strength={strength}, seed={seed}"
+        )
+
+        workflow = {}
+
+        # Node 1: CheckpointLoaderSimple — MODEL + CLIP + VAE
+        workflow["1"] = {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": checkpoint},
+        }
+
+        # Node 2: LTXAVTextEncoderLoader — Gemma 3 12B fp8
+        workflow["2"] = {
+            "class_type": "LTXAVTextEncoderLoader",
+            "inputs": {
+                "text_encoder": text_encoder,
+                "ckpt_name": checkpoint,
+                "device": "default",
+            },
+        }
+
+        # Node 3: LoadImage — input image
+        workflow["3"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": image_name},
+        }
+
+        # Node 4: LTXVPreprocess — compress/noise condition the image
+        workflow["4"] = {
+            "class_type": "LTXVPreprocess",
+            "inputs": {
+                "image": ["3", 0],
+                "img_compression": 35,
+            },
+        }
+
+        # Node 5: Positive prompt
+        workflow["5"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt, "clip": ["2", 0]},
+        }
+
+        # Node 6: Negative prompt
+        workflow["6"] = {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_prompt, "clip": ["2", 0]},
+        }
+
+        # Node 7: LTXVConditioning — set frame rate
+        workflow["7"] = {
+            "class_type": "LTXVConditioning",
+            "inputs": {
+                "positive": ["5", 0],
+                "negative": ["6", 0],
+                "frame_rate": float(fps),
+            },
+        }
+
+        # Node 8: EmptyLTXVLatentVideo — create empty latent
+        workflow["8"] = {
+            "class_type": "EmptyLTXVLatentVideo",
+            "inputs": {
+                "width": width,
+                "height": height,
+                "length": num_frames,
+                "batch_size": 1,
+            },
+        }
+
+        # Node 9: LTXVImgToVideoConditionOnly — condition latent on image
+        workflow["9"] = {
+            "class_type": "LTXVImgToVideoConditionOnly",
+            "inputs": {
+                "vae": ["1", 2],       # VAE from checkpoint
+                "image": ["4", 0],     # preprocessed image
+                "latent": ["8", 0],    # empty latent
+                "strength": strength,
+            },
+        }
+
+        # Node 10: CFGGuider — cfg=1 for distilled
+        workflow["10"] = {
+            "class_type": "CFGGuider",
+            "inputs": {
+                "model": ["1", 0],
+                "positive": ["7", 0],
+                "negative": ["7", 1],
+                "cfg": 1.0,
+            },
+        }
+
+        # Node 11: KSamplerSelect
+        workflow["11"] = {
+            "class_type": "KSamplerSelect",
+            "inputs": {"sampler_name": "euler_ancestral"},
+        }
+
+        # Node 12: ManualSigmas — 8-step distilled schedule
+        workflow["12"] = {
+            "class_type": "ManualSigmas",
+            "inputs": {
+                "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0",
+            },
+        }
+
+        # Node 13: RandomNoise
+        workflow["13"] = {
+            "class_type": "RandomNoise",
+            "inputs": {"noise_seed": seed},
+        }
+
+        # Node 14: SamplerCustomAdvanced — main sampling
+        workflow["14"] = {
+            "class_type": "SamplerCustomAdvanced",
+            "inputs": {
+                "noise": ["13", 0],
+                "guider": ["10", 0],
+                "sampler": ["11", 0],
+                "sigmas": ["12", 0],
+                "latent_image": ["9", 0],  # image-conditioned latent
+            },
+        }
+
+        # Node 15: VAEDecodeTiled
+        workflow["15"] = {
+            "class_type": "VAEDecodeTiled",
+            "inputs": {
+                "samples": ["14", 1],  # denoised_output
+                "vae": ["1", 2],
+                "tile_size": 512,
+                "overlap": 64,
+                "temporal_size": 512,
+                "temporal_overlap": 64,
+            },
+        }
+
+        # Node 16: VHS_VideoCombine — save video
+        workflow["16"] = {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {
+                "frame_rate": fps,
+                "loop_count": 0,
+                "filename_prefix": output_prefix,
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 17,
+                "save_metadata": True,
+                "trim_to_audio": False,
+                "pingpong": False,
+                "save_output": True,
+                "images": ["15", 0],
+            },
+        }
+
+        logger.info(
+            f"☁️ Built LTX-2.3 Cloud I2V: {width}x{height}, "
+            f"{num_frames}f@{fps}fps, strength={strength}, 8-step distilled"
         )
         return workflow
 
