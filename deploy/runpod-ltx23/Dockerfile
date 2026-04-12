@@ -1,14 +1,17 @@
 # ============================================================
-# Oelala ComfyUI Worker for RunPod Serverless
+# Oelala LTX-2.3 Worker for RunPod Serverless
 # ============================================================
-# Lightweight ComfyUI container for Cloud Max Wan 2.2 video gen.
-# Public models come from RunPod cached-model storage or container-disk
-# Hugging Face downloads.
-# Optional RunPod Network Volume is reserved for LoRAs/private assets only.
-# Uses fp8_scaled precision (near-lossless, fits 48GB GPUs).
+# Lightweight ComfyUI container for LTX-2.3 22B video generation.
+# Models are downloaded at runtime from HuggingFace Hub with
+# RunPod caching for fast cold starts.
 #
-# Image size: ~8GB (no models baked in)
-# Target GPU: A6000/A40/L40S (48GB+ VRAM)
+# Required models (~59 GB total):
+#   - ltx-2.3-22b-distilled.safetensors   (46.1 GB, checkpoints)
+#   - gemma_3_12B_it_fp8_scaled.safetensors (13.2 GB, text_encoders)
+#
+# Image size: ~8 GB (no models baked in)
+# Target GPU: A100/H100/B200/GB200 (80 GB+ VRAM)
+# Container disk: 100 GB
 #
 # Deploy:  ./deploy.sh  (builds, tags, pushes, AND updates RunPod template)
 #
@@ -27,8 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ---- ComfyUI ----
-# ARG CACHE_DATE forces re-clone when changed; update to bust cache for Wan 2.2
-ARG CACHE_DATE=2026-03-04
+ARG CACHE_DATE=2026-04-12
 WORKDIR /comfyui
 RUN git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git . && \
     pip install --no-cache-dir -r requirements.txt
@@ -40,29 +42,24 @@ WORKDIR /comfyui/custom_nodes
 RUN git clone --depth 1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     pip install --no-cache-dir -r ComfyUI-VideoHelperSuite/requirements.txt
 
-# GGUF loaders (required for LTX-2 GGUF workflows)
-RUN git clone --depth 1 https://github.com/city96/ComfyUI-GGUF.git && \
-    pip install --no-cache-dir -r ComfyUI-GGUF/requirements.txt 2>/dev/null || true
-
-# KJNodes (ImageResizeKJv2 for input image resize)
-RUN git clone --depth 1 https://github.com/kijai/ComfyUI-KJNodes.git && \
-    pip install --no-cache-dir -r ComfyUI-KJNodes/requirements.txt 2>/dev/null || true
-
-# LTXVideo helpers for LTX-2 T2V/I2V workflows.
-# LTX-2 core is built into modern ComfyUI, this repo adds the higher-level nodes/workflows.
+# LTXVideo helpers (LTXVImgToVideoConditionOnly, enhanced LTX nodes)
 RUN git clone --depth 1 https://github.com/Lightricks/ComfyUI-LTXVideo.git && \
     pip install --no-cache-dir -r ComfyUI-LTXVideo/requirements.txt 2>/dev/null || true
 
-# NOTE: Cloud Max uses native UNETLoader (fp8_scaled) — no GGUF node needed
-# NOTE: No MultiGPU/DisTorch2/BlockSwap — single 48GB+ GPU
-# NOTE: No SageAttention — enough VRAM on cloud GPUs
+# KJNodes (ImageResizeKJv2 for input image resize in I2V)
+RUN git clone --depth 1 https://github.com/kijai/ComfyUI-KJNodes.git && \
+    pip install --no-cache-dir -r ComfyUI-KJNodes/requirements.txt 2>/dev/null || true
+
+# NOTE: No GGUF nodes — LTX-2.3 22B uses bf16 checkpoint (no quantized version yet)
+# NOTE: No MultiGPU/DisTorch2 — single 80 GB+ GPU has enough VRAM
+# NOTE: No SageAttention — enough VRAM headroom on 80 GB GPUs
 
 # ---- RunPod handler + HF download fallback ----
 WORKDIR /comfyui
 RUN pip install --no-cache-dir runpod requests httpx huggingface_hub
 
-# Create model directories (public models are resolved at runtime)
-RUN mkdir -p models/unet models/clip models/vae models/clip_vision models/loras
+# Create model directories (models downloaded at runtime)
+RUN mkdir -p models/checkpoints models/text_encoders models/vae models/loras
 
 COPY handler.py /comfyui/handler.py
 

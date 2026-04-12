@@ -1108,6 +1108,9 @@ def download_loras(lora_downloads: list, job=None):
             _progress(job, f"Downloading LoRA: {filename}...")
 
         try:
+            # Ensure parent dirs exist for LoRAs in subdirectories (e.g. "wan 2.2/file.safetensors")
+            target.parent.mkdir(parents=True, exist_ok=True)
+
             resp = requests.get(url, stream=True, timeout=600)
             resp.raise_for_status()
 
@@ -1132,6 +1135,7 @@ def download_loras(lora_downloads: list, job=None):
 
             # If saved to volume, also symlink into comfyui dir so ComfyUI finds it
             if volume_loras is not None and target_dir == volume_loras and not comfyui_target.exists():
+                comfyui_target.parent.mkdir(parents=True, exist_ok=True)
                 comfyui_target.symlink_to(target)
                 logger.info(f"🔗 Symlinked LoRA: {filename}")
 
@@ -1146,6 +1150,49 @@ def download_loras(lora_downloads: list, job=None):
     if downloaded > 0:
         logger.info(f"✅ Downloaded {downloaded} LoRA(s) on demand")
     return downloaded
+
+
+def _log_workflow_settings(workflow: dict) -> None:
+    """Extract and log key generation settings from a ComfyUI workflow."""
+    settings = {}
+    for node_id, node in workflow.items():
+        ct = node.get("class_type", "")
+        inputs = node.get("inputs", {})
+        if ct == "KSamplerAdvanced":
+            label = "pass1" if inputs.get("add_noise") == "enable" else "pass2"
+            settings[f"sampler_{label}"] = {
+                "steps": inputs.get("steps"),
+                "cfg": inputs.get("cfg"),
+                "sampler": inputs.get("sampler_name"),
+                "scheduler": inputs.get("scheduler"),
+                "start": inputs.get("start_at_step"),
+                "end": inputs.get("end_at_step"),
+            }
+        elif ct == "KSampler":
+            settings["sampler"] = {
+                "steps": inputs.get("steps"),
+                "cfg": inputs.get("cfg"),
+                "sampler": inputs.get("sampler_name"),
+                "scheduler": inputs.get("scheduler"),
+            }
+        elif ct in ("WanImageToVideo", "EmptyWanLatentVideo"):
+            settings["video"] = {
+                "width": inputs.get("width"),
+                "height": inputs.get("height"),
+                "frames": inputs.get("length"),
+            }
+        elif ct == "VHS_VideoCombine":
+            settings["output_fps"] = inputs.get("frame_rate")
+        elif ct == "UNETLoader":
+            name = inputs.get("unet_name", "")
+            existing = settings.get("models", [])
+            existing.append(name)
+            settings["models"] = existing
+        elif ct == "ModelSamplingSD3":
+            settings["shift"] = inputs.get("shift")
+    msg = f"📋 Workflow settings: {json.dumps(settings, default=str)}"
+    logger.info(msg)
+    print(msg, flush=True)
 
 
 def queue_workflow(workflow: dict) -> str:
@@ -1385,6 +1432,9 @@ def handler(event: dict) -> dict:
                 _progress(event, f"Reloaded ComfyUI after linking {workflow_models.linked_count} cached model(s)")
             else:
                 _progress(event, f"Reloaded ComfyUI after downloading {workflow_models.downloaded_count} model(s)")
+
+        # Log workflow settings for debugging
+        _log_workflow_settings(workflow)
 
         # Queue the workflow
         _progress(event, "Queuing workflow in ComfyUI...")

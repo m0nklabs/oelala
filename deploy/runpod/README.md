@@ -16,6 +16,7 @@ oelala-backend (FastAPI)
 
 | File | Purpose |
 |------|---------|
+| `deploy.sh` | **One-command deploy**: build → tag → push → update RunPod template |
 | `Dockerfile` | ComfyUI worker image with Wan + LTX custom nodes |
 | `handler.py` | RunPod serverless handler — bridges API to ComfyUI |
 | `README.md` | This file |
@@ -26,20 +27,29 @@ oelala-backend (FastAPI)
 2. Optional **RunPod Network Volume** for LoRAs/private assets only
 3. **Docker** to build the image
 
-## Build & Push
+## Build & Deploy
+
+**Always use `deploy.sh`** — it builds, tags, pushes, AND updates the RunPod template
+in one shot. This prevents the ":latest tag was pushed but RunPod still uses
+the old explicit tag" mistake.
 
 ```bash
 cd deploy/runpod
 
-# Build the image
-docker build -t oelala-comfyui-worker .
+# Full deploy: build → tag → push → update RunPod template
+./deploy.sh
 
-# Tag for Docker Hub or RunPod registry
-docker tag oelala-comfyui-worker <your-registry>/oelala-comfyui-worker:latest
+# Skip build (reuse existing :latest image)
+./deploy.sh --skip-build
 
-# Push
-docker push <your-registry>/oelala-comfyui-worker:latest
+# Preview what would happen
+./deploy.sh --dry-run
 ```
+
+> ⚠️ **NEVER manually `docker push :latest` without updating the RunPod template!**
+> RunPod templates use explicit dated tags (e.g. `20260408-135917`), not `:latest`.
+> If you push `:latest` only, RunPod will keep pulling the old tag and your
+> changes will never reach production. This mistake wasted 3 deploys on 2026-04-08.
 
 ## LoRA / Private Asset Storage
 
