@@ -491,6 +491,20 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - Uses `CreationsPickerModal` component but renders inline with `position: relative` styling.
 - Each tool manages its own picker state via `showCreationsPicker` / `setShowCreationsPicker`.
 
+## Reusable Frontend Components
+
+- **InfoTooltip**: `src/frontend/src/components/InfoTooltip.jsx` — hover "?" icon with auto-flip tooltip. Use for ALL parameter explanations across tools. Don't inline help text or create per-tool tooltip implementations.
+- **AISuggestPanel**: `src/frontend/src/components/AISuggestPanel.jsx` — sends prompt + current settings to `/ai-suggest` endpoint, returns optimized parameters. Integrate in tool forms where LLM-guided optimization makes sense.
+- When adding a new reusable component, place it in `src/frontend/src/components/` and document it here.
+
+## LoRA Registry
+
+- **Canonical metadata**: `docs/lora_registry.yaml` — YAML file with trigger words, recommended strengths, source URLs, tags, base model compatibility.
+- **Scanner enrichment**: `src/backend/lora_scanner.py` merges file-system discovery with registry metadata via `LoRARegistry` dataclass.
+- **API endpoints**: `/loras/registry` (full registry), `/loras/validate` (check consistency).
+- When adding a new LoRA: (1) place the file in `ComfyUI/models/loras/` or `/mnt/ssd/loras/`, (2) add metadata to `docs/lora_registry.yaml`, (3) scanner auto-discovers and enriches.
+- **RunPod private LoRAs**: Workers accept `HF_TOKEN` env var to download private LoRAs from Hugging Face during cold start.
+
 ## Technical Stack Reference
 
 **Infer from codebase.**
