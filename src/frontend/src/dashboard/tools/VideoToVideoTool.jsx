@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, Video, Loader2, Settings, ChevronDown, Wand2 } from 'lucide-react'
+import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
@@ -346,7 +347,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
       <div className="grok-card">
         <div className="form-group" style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="grok-section-label" style={{ marginBottom: 0 }}>Transform Strength</label>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Transform Strength <InfoTooltip text="How much the AI changes the original video. Low values preserve the original motion and details, high values allow more creative freedom but may lose the original content." /></label>
             <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{(denoise * 100).toFixed(0)}%</span>
           </div>
           <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
@@ -404,7 +405,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
         {showAdvanced && (
           <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-color)' }}>
             <div className="form-group" style={{ marginTop: '16px' }}>
-              <label className="grok-section-label">Output FPS</label>
+              <label className="grok-section-label">Output FPS <InfoTooltip text="Frames per second of the output video. Higher FPS = smoother playback but longer generation time. 16 is standard, 24 is cinema-quality." /></label>
               <div className="grok-toggle-group">
                 {[8, 12, 16, 24].map((f) => (
                   <button key={f} className={`grok-toggle-btn ${fps === f ? 'active' : ''}`} onClick={() => setFps(f)}>{f}</button>
@@ -413,7 +414,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
             </div>
 
             <div className="form-group">
-              <label className="grok-section-label">Max Frames</label>
+              <label className="grok-section-label">Max Frames <InfoTooltip text="Maximum number of frames to process from the input video. More frames = longer output but more VRAM and generation time needed." /></label>
               <select
                 className="form-input"
                 value={maxFrames}
@@ -434,7 +435,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
             <div style={{ display: 'flex', gap: '16px' }}>
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="grok-section-label">Steps</label>
+                <label className="grok-section-label">Steps <InfoTooltip text="Number of diffusion sampling steps. More steps = higher quality but longer generation. 20-30 is usually optimal." /></label>
                 <input
                   className="form-input"
                   type="number"
@@ -445,7 +446,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
                 />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="grok-section-label">CFG Scale</label>
+                <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance — how strictly the AI follows your prompt. Higher = more prompt adherence but less natural. 5-8 is a good range." /></label>
                 <input
                   className="form-input"
                   type="number"
@@ -459,7 +460,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
             </div>
 
             <div className="form-group">
-              <label className="grok-section-label">Seed</label>
+              <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for a random seed each time, or set a specific number to get the exact same result again." /></label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   className="form-input"
@@ -474,7 +475,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
             </div>
 
             <div className="form-group">
-              <label className="grok-section-label">Negative Prompt</label>
+              <label className="grok-section-label">Negative Prompt <InfoTooltip text="Describe what you DON'T want in the output. Common entries: blurry, low quality, distorted, extra limbs, watermark." /></label>
               <textarea
                 className="form-textarea"
                 value={negativePrompt}

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles } from 'lucide-react'
+import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
@@ -382,7 +383,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Prompt (describe desired changes)</label>
+          <label className="grok-section-label">Prompt (describe desired changes) <InfoTooltip text="Describe what you want the transformed image to look like. Be specific — e.g., 'anime style illustration' or 'oil painting with warm tones'. The AI uses this along with the denoise strength to guide the transformation." /></label>
           <textarea
             className="form-textarea"
             value={prompt}
@@ -394,7 +395,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label className="grok-section-label" style={{ marginBottom: 0 }}>Denoise Strength</label>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Denoise Strength <InfoTooltip text="How much freedom the AI has to change the original image. Low values (0.1-0.3) make subtle tweaks, high values (0.7-1.0) can completely reimagine the image from your prompt." /></label>
             <span className="nav-badge">{denoise.toFixed(2)}</span>
           </div>
           <input
@@ -419,7 +420,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Model</label>
+          <label className="grok-section-label">Model <InfoTooltip text="The checkpoint model determines the base art style and capabilities. SDXL models offer high quality with more control, while Flux models are faster." /></label>
           <select className="form-select" value={checkpoint} onChange={(e) => setCheckpoint(e.target.value)}>
             {CHECKPOINTS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -462,9 +463,9 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
 
         <div className="face-toggles">
-          <label className="toggle-row" title="IP-Adapter FaceID: Extracts face identity from source image and preserves it during generation">
+          <label className="toggle-row">
             <div className="toggle-info">
-              <span className="toggle-label">🛡️ Face Identity (IP-Adapter)</span>
+              <span className="toggle-label">🛡️ Face Identity (IP-Adapter) <InfoTooltip text="IP-Adapter FaceID Plus V2: Extracts face identity from the source image and preserves it during generation. Great for keeping someone's likeness while changing the style." size={12} /></span>
               <span className="toggle-desc">Preserves face from source image</span>
             </div>
             <input
@@ -496,9 +497,9 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             </div>
           )}
 
-          <label className="toggle-row" title="FaceDetailer: Auto-detects faces and refines them with a second pass using YOLO + SAM">
+          <label className="toggle-row">
             <div className="toggle-info">
-              <span className="toggle-label">✨ Face Detailer</span>
+              <span className="toggle-label">✨ Face Detailer <InfoTooltip text="FaceDetailer: Auto-detects faces using YOLO and refines them with a second diffusion pass using SAM segmentation. Greatly improves face quality in complex scenes." size={12} /></span>
               <span className="toggle-desc">Auto-detect &amp; refine faces</span>
             </div>
             <input
@@ -509,9 +510,9 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             <span className="toggle-slider" />
           </label>
 
-          <label className="toggle-row" title="GFPGAN v1.4: Final face quality enhancement pass for photorealistic faces">
+          <label className="toggle-row">
             <div className="toggle-info">
-              <span className="toggle-label">💎 Face Restore (GFPGAN)</span>
+              <span className="toggle-label">💎 Face Restore (GFPGAN) <InfoTooltip text="GFPGAN v1.4: Final face quality enhancement pass. Sharpens eyes, skin texture, and facial features for photorealistic results. Best used as a finishing touch." size={12} /></span>
               <span className="toggle-desc">Final polish on face quality</span>
             </div>
             <input
@@ -544,7 +545,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         {showAdvanced && (
           <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label className="grok-section-label">Negative Prompt</label>
+              <label className="grok-section-label">Negative Prompt <InfoTooltip text="Describe what you DON'T want in the output. Common entries: blurry, low quality, distorted, extra limbs, watermark, text." /></label>
               <textarea
                 className="form-textarea"
                 value={negativePrompt}
@@ -555,7 +556,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
-                <label className="grok-section-label">Steps</label>
+                <label className="grok-section-label">Steps <InfoTooltip text="Number of diffusion sampling steps. More steps = higher quality but slower. 20-30 steps is optimal for most use cases." /></label>
                 <input
                   className="form-input"
                   type="number"
@@ -566,7 +567,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label className="grok-section-label">CFG Scale</label>
+                <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance — how strictly the AI follows your prompt vs being creative. Higher = more prompt adherence. 5-8 is a good balance." /></label>
                 <input
                   className="form-input"
                   type="number"
@@ -581,7 +582,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
-                <label className="grok-section-label">Sampler</label>
+                <label className="grok-section-label">Sampler <InfoTooltip text="The algorithm used for the diffusion process. Euler is fast and reliable, DPM++ 2M produces high-quality results, Ancestral variants add more randomness." /></label>
                 <select className="form-select" value={sampler} onChange={(e) => setSampler(e.target.value)}>
                   <option value="euler">Euler</option>
                   <option value="euler_ancestral">Euler Ancestral</option>
@@ -591,7 +592,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label className="grok-section-label">Scheduler</label>
+                <label className="grok-section-label">Scheduler <InfoTooltip text="Controls how noise is distributed across sampling steps. Karras produces cleaner results at fewer steps, Normal is the default, Exponential can work well with specific samplers." /></label>
                 <select className="form-select" value={scheduler} onChange={(e) => setScheduler(e.target.value)}>
                   <option value="normal">Normal</option>
                   <option value="karras">Karras</option>
@@ -602,7 +603,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             </div>
 
             <div>
-              <label className="grok-section-label">Seed (-1 = random)</label>
+              <label className="grok-section-label">Seed (-1 = random) <InfoTooltip text="Random seed for reproducibility. Use -1 for a different result each time, or set a specific number to reproduce the exact same output." /></label>
               <input
                 className="form-input"
                 type="number"

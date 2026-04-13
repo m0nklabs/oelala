@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
+import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
@@ -513,7 +514,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
           <>
             {/* Batch Count */}
             <div className="form-group">
-              <label className="grok-section-label">Batch Count</label>
+              <label className="grok-section-label">Batch Count <InfoTooltip text="Number of images to generate at once. Higher = more variations to choose from, but takes longer. Start with 1 for quick testing, use 2-4 when exploring prompt ideas." /></label>
               <div className="grok-toggle-group">
                 {[1, 2, 3, 4].map((num) => (
                   <button
@@ -532,7 +533,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
               <>
                 <div className="form-group" style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Steps</label>
+                    <label className="grok-section-label">Steps <InfoTooltip text="Number of denoising iterations. Flux needs 10-30 steps. More = better quality but slower. 20 is a good default." /></label>
                     <span className="nav-badge">{steps}</span>
                   </div>
                   <input
@@ -547,7 +548,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
 
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Guidance</label>
+                    <label className="grok-section-label">Guidance <InfoTooltip text="Controls how much the model follows your prompt vs being creative. Low (1-3) = more creative freedom. High (7-10) = strict prompt adherence. Default: 3.5 for Flux." /></label>
                     <span className="nav-badge">{guidance}</span>
                   </div>
                   <input
@@ -562,7 +563,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 </div>
 
                 <div className="form-group">
-                  <label className="grok-section-label">Seed (-1 = random)</label>
+                  <label className="grok-section-label">Seed (-1 = random) <InfoTooltip text="Use -1 for a random seed. Set a specific number to reproduce the exact same image with identical settings." /></label>
                   <input
                     type="number"
                     value={seed}
@@ -585,7 +586,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
               <>
                 <div className="form-group" style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Steps</label>
+                    <label className="grok-section-label">Steps <InfoTooltip text="Denoising steps for Wan2.2 text-to-image. Uses multi-GPU DisTorch2 pipeline. 20-30 recommended for quality results." /></label>
                     <span className="nav-badge">{steps}</span>
                   </div>
                   <input
@@ -602,7 +603,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 </div>
 
                 <div className="form-group">
-                  <label className="grok-section-label">Seed (-1 = random)</label>
+                  <label className="grok-section-label">Seed (-1 = random) <InfoTooltip text="Use -1 for random. Set a specific seed to reproduce the exact same output." /></label>
                   <input
                     type="number"
                     value={seed}
@@ -625,7 +626,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
               <>
                 <div className="form-group" style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Steps</label>
+                    <label className="grok-section-label">Steps <InfoTooltip text="Denoising steps. More = better quality. 20-30 is good for SDXL. 50 for absolute best quality (slow)." /></label>
                     <span className="nav-badge">{steps}</span>
                   </div>
                   <input
@@ -640,7 +641,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
 
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">CFG Scale</label>
+                    <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance. Low (1-5) = creative, dreamy. Medium (7-10) = balanced. High (12-15) = strict prompt adherence but may over-saturate. Default: 7 for SDXL." /></label>
                     <span className="nav-badge">{cfg}</span>
                   </div>
                   <input
@@ -655,7 +656,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 </div>
 
                 <div className="form-group">
-                  <label className="grok-section-label">Sampler</label>
+                  <label className="grok-section-label">Sampler <InfoTooltip text="The sampling algorithm used for denoising. euler = simple/fast. dpmpp_2m = high quality. euler_ancestral = more variation. dpmpp_sde = slower but very detailed." /></label>
                   <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px' }}>
                     {['euler', 'euler_ancestral', 'dpmpp_2m', 'dpmpp_sde'].map((s) => (
                       <button
@@ -671,7 +672,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 </div>
 
                 <div className="form-group">
-                  <label className="grok-section-label">Scheduler</label>
+                  <label className="grok-section-label">Scheduler <InfoTooltip text="Controls the noise schedule curve. normal = standard. karras = smooth transitions (recommended for most). exponential = more aggressive. sgm_uniform = even spacing." /></label>
                   <div className="grok-toggle-group" style={{ flexWrap: 'wrap', gap: '4px' }}>
                     {['normal', 'karras', 'exponential', 'sgm_uniform'].map((s) => (
                       <button
@@ -687,7 +688,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 </div>
 
                 <div className="form-group">
-                  <label className="grok-section-label">Seed (-1 = random)</label>
+                  <label className="grok-section-label">Seed (-1 = random) <InfoTooltip text="Use -1 for random. Set a specific seed to reproduce the exact same image." /></label>
                   <input
                     type="number"
                     value={seed}
@@ -707,7 +708,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 {getModelType(model) === 'sdxl' && filteredLoras.length > 0 && (
                   <div className="form-group">
                     <label className="grok-section-label" style={{ marginBottom: '8px' }}>
-                      LoRAs (up to 3) {!nsfwEnabled && availableLoras.length > filteredLoras.length && (
+                      LoRAs (up to 3) <InfoTooltip text="LoRA (Low-Rank Adaptation) models add specific styles, characters, or concepts to your images. Stack up to 3 LoRAs. Adjust strength per LoRA — 0.5-0.8 is usually best." /> {!nsfwEnabled && availableLoras.length > filteredLoras.length && (
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
                           ({availableLoras.length - filteredLoras.length} hidden)
                         </span>

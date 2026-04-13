@@ -5,6 +5,7 @@ import {
   Cpu, Zap, Clock, Copy, CheckCheck
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
+import InfoTooltip from '../../components/InfoTooltip'
 import { apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -528,7 +529,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 function ProfilePicker({ profiles, selectedId, onSelect }) {
   return (
     <div>
-      <label className="grok-section-label">Source (saved profile)</label>
+      <label className="grok-section-label">Source (saved profile) <InfoTooltip text="Select a previously saved face profile. The face identity from this profile will be used as the swap source. Create profiles in the Profiles tab." /></label>
       <div className="upload-box" style={{ minHeight: '12rem', maxHeight: '16rem', overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {profiles.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '8px', color: 'var(--text-muted)', padding: '16px 0' }}>
@@ -677,7 +678,7 @@ function ProfilesPanel({ user, requestLogin }) {
           </div>
 
           <div className="form-group">
-            <label className="grok-section-label">Name *</label>
+            <label className="grok-section-label">Name * <InfoTooltip text="Give this face profile a recognizable name. You'll use this to select the face identity later when doing swaps." /></label>
             <input
               type="text"
               className="form-input"
@@ -700,10 +701,7 @@ function ProfilesPanel({ user, requestLogin }) {
 
           {/* Photo upload */}
           <div className="form-group">
-            <label className="grok-section-label">Reference Photos *</label>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              Multiple angles &amp; lighting conditions = better identity accuracy. Embeddings are averaged.
-            </p>
+            <label className="grok-section-label">Reference Photos * <InfoTooltip text="Upload multiple photos of the same person from different angles and lighting conditions. More variety = more accurate face identity embedding." /></label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
               {newPreviews.map((url, idx) => (
                 <div key={idx} style={{ position: 'relative' }}>
@@ -966,7 +964,7 @@ function TrainLoraPanel({ user, requestLogin }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div className="form-group">
-            <label className="grok-section-label">Person Name *</label>
+            <label className="grok-section-label">Person Name * <InfoTooltip text="The person's name for this LoRA. A trigger word will be auto-generated from this name to use in SDXL prompts." /></label>
             <input
               type="text"
               className="form-input"
@@ -980,7 +978,7 @@ function TrainLoraPanel({ user, requestLogin }) {
           </div>
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label className="grok-section-label">Training Steps</label>
+              <label className="grok-section-label">Training Steps <InfoTooltip text="Number of training iterations. More steps = more detailed face capture but longer training time. 800-1200 is recommended for most faces." /></label>
               <span className="nav-badge">{steps}</span>
             </div>
             <input
@@ -1001,7 +999,7 @@ function TrainLoraPanel({ user, requestLogin }) {
 
         {/* Photo upload */}
         <div className="form-group">
-          <label className="grok-section-label">Reference Photos * ({images.length} selected)</label>
+          <label className="grok-section-label">Reference Photos * ({images.length} selected) <InfoTooltip text="Upload clear photos of the person's face from multiple angles. 5-15 high-quality photos give the best results. Avoid group photos or obstructed faces." /></label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
             {previews.map((url, idx) => (
               <div key={idx} style={{ position: 'relative' }}>
@@ -1054,7 +1052,7 @@ function TrainLoraPanel({ user, requestLogin }) {
       {/* Training jobs */}
       {jobs.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label className="grok-section-label">Training Jobs</label>
+          <label className="grok-section-label">Training Jobs <InfoTooltip text="Active and completed LoRA training jobs. Training takes 10-30 minutes depending on step count and photo count." /></label>
           {jobs.map(job => {
             const progress = job.steps_total > 0 ? Math.round((job.steps_done / job.steps_total) * 100) : 0
             const StatusIcon = STATUS_ICONS[job.status] || Clock
@@ -1109,7 +1107,7 @@ function TrainLoraPanel({ user, requestLogin }) {
       {/* Ready LoRAs */}
       {loras.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label className="grok-section-label">Trained LoRAs — Ready to Use</label>
+          <label className="grok-section-label">Trained LoRAs — Ready to Use <InfoTooltip text="Completed face LoRAs that can be used in generation. Copy the trigger word and include it in your SDXL prompt to generate images with that person's face." /></label>
           {loras.map(lora => (
             <div key={lora.filename} className="grok-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderColor: 'rgba(34, 197, 94, 0.3)' }}>
               <Check size={16} style={{ color: '#22c55e', flexShrink: 0 }} />

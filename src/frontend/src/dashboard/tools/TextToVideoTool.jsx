@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { sendClientLog } from '../../logging'
 import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu, Zap, Pencil, Settings2, Save, Check, X, Layers, HelpCircle, Sliders, Dice5 } from 'lucide-react'
+import InfoTooltip from '../../components/InfoTooltip'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
@@ -13,6 +14,7 @@ import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 import { useToolProfile } from '../../hooks/useToolProfile'
+import AISuggestPanel from '../../components/AISuggestPanel'
 
 // Resolution presets with pixel dimensions per aspect ratio (aligned with I2V)
 const RESOLUTION_PRESETS = {
@@ -230,6 +232,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [postInterpolateFps, setPostInterpolateFps] = useState(60)
   const [postAudio, setPostAudio] = useState(false)
   const [postAudioFile, setPostAudioFile] = useState(null)
+  const [audioPromptImported, setAudioPromptImported] = useState(() => {
+    try { return localStorage.getItem('oelala_t2v_audio_prompt') || '' } catch { return '' }
+  })
 
   // Pending import modal state
   const [importModal, setImportModal] = useState(null)
@@ -254,6 +259,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         strength: l.strength ?? 1.0,
       })))
     }
+    if (selected.audio) setAudioPromptImported(String(selected.audio))
     setImportModal(null)
   }
 
@@ -273,6 +279,17 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   useEffect(() => {
     if (duration > maxDuration) setDuration(maxDuration)
   }, [maxDuration, duration])
+
+  // Persist audio prompt to localStorage on change
+  useEffect(() => {
+    try {
+      if (audioPromptImported) {
+        localStorage.setItem('oelala_t2v_audio_prompt', audioPromptImported)
+      } else {
+        localStorage.removeItem('oelala_t2v_audio_prompt')
+      }
+    } catch { /* ignore */ }
+  }, [audioPromptImported])
 
   // Fetch available T2V modes from backend
   useEffect(() => {
@@ -586,6 +603,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         formData.append('steps', String(resolved.steps))
         formData.append('cfg', String(resolved.cfg))
         formData.append('seed', String(resolved.seed))
+        // Audio prompt (from Concept Studio import or direct entry)
+        if (audioPromptImported && audioPromptImported.trim()) {
+          formData.append('audio_prompt', audioPromptImported.trim())
+        }
       }
 
       const result = await postForm(t2vEndpoint, formData)
@@ -624,6 +645,65 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       setSubmitting(false)
     }
   }
+
+  // AI Suggest: apply accepted suggestions to form state
+  const handleAISuggestApply = useCallback((changes) => {
+    if (changes.promptAppend?.length) {
+      setPrompt(prev => {
+        const addition = changes.promptAppend.join(', ')
+        return prev.trim() ? `${prev.trim()}, ${addition}` : addition
+      })
+    }
+    if (changes.promptReplace?.length) {
+      setPrompt(prev => {
+        let p = prev
+        for (const { find, replace } of changes.promptReplace) {
+          p = p.replace(find, replace)
+        }
+        return p
+      })
+    }
+    if (changes.negativeAppend?.length) {
+      setNegativePrompt(prev => {
+        const addition = changes.negativeAppend.join(', ')
+        return prev.trim() ? `${prev.trim()}, ${addition}` : addition
+      })
+    }
+    if (changes.lorasToAdd?.length) {
+      setLoraConfigs(prev => {
+        const newEntries = changes.lorasToAdd.map(l => {
+          // /loras endpoint returns "path" field, ai-suggest returns "filename" — match on both
+          const isHigh = availableLoras.high_noise?.some(h => h.path === l.filename || h.filename === l.filename)
+          const isLow = availableLoras.low_noise?.some(lo => lo.path === l.filename || lo.filename === l.filename)
+          return {
+            high: isHigh ? l.filename : '',
+            low: isLow ? l.filename : '',
+            strength: l.strength ?? 1.0,
+          }
+        })
+        return [...prev, ...newEntries]
+      })
+    }
+    if (changes.loraStrengthChanges && Object.keys(changes.loraStrengthChanges).length) {
+      setLoraConfigs(prev => prev.map(lc => {
+        if (changes.loraStrengthChanges[lc.high] !== undefined) {
+          return { ...lc, strength: changes.loraStrengthChanges[lc.high] }
+        }
+        if (changes.loraStrengthChanges[lc.low] !== undefined) {
+          return { ...lc, strength: changes.loraStrengthChanges[lc.low] }
+        }
+        return lc
+      }))
+    }
+    if (changes.settingChanges) {
+      const sc = changes.settingChanges
+      if (sc.steps !== undefined) setSteps(Number(sc.steps))
+      if (sc.cfg !== undefined) setCfg(Number(sc.cfg))
+      if (sc.fps !== undefined) setFps(Number(sc.fps))
+      if (sc.duration !== undefined) setDuration(Number(sc.duration))
+      if (sc.resolution !== undefined) setResolution(sc.resolution)
+    }
+  }, [availableLoras])
 
   const handleSubmit = async () => {
     await queueVideoJob()
@@ -854,7 +934,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Generation Mode</label>
+          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Max uses full precision on a cloud GPU. Wan2.2 uses local dual-GPU with quantized models. LTX-2.3 is optimized for fast cinematic video on cloud GPUs." /></label>
           <div style={{ position: 'relative' }}>
             <select
               value={modelType}
@@ -1219,6 +1299,62 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           )}
         </div>
 
+        {/* Audio Prompt — for LTX-2 audio-video generation */}
+        {modelType === 'ltx2' && (
+          <div style={{ marginTop: '12px' }}>
+            <div
+              onClick={() => !audioPromptImported && setAudioPromptImported(' ')}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 0',
+                cursor: audioPromptImported ? 'default' : 'pointer',
+              }}
+            >
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                🔊 Audio Prompt {!audioPromptImported && <span style={{ opacity: 0.5, fontSize: '0.75rem' }}>(click to add)</span>}
+              </span>
+              {audioPromptImported && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAudioPromptImported('') }}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--text-muted)',
+                    cursor: 'pointer', fontSize: '0.7rem', padding: '2px 6px',
+                  }}
+                  title="Clear audio prompt"
+                >✕</button>
+              )}
+            </div>
+            {audioPromptImported && (
+              <>
+                <textarea
+                  className="form-textarea"
+                  value={audioPromptImported.trim() === '' ? '' : audioPromptImported}
+                  onChange={(e) => setAudioPromptImported(e.target.value)}
+                  rows={2}
+                  placeholder="Describe the audio: ambient sounds, music, dialogue..."
+                  style={{
+                    backgroundColor: '#0f0f0f',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    borderRadius: '8px',
+                    resize: 'vertical',
+                    minHeight: '50px',
+                    padding: '10px',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: '0.85rem',
+                  }}
+                  autoFocus
+                />
+                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: 'var(--text-muted, #666)' }}>
+                  Generates video with synchronized audio via LTX-2 AudioVAE.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Prompt Strength / CFG Slider */}
         <div style={{ marginTop: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -1261,8 +1397,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         {/* Resolution */}
         <div className="form-group">
           <label className="grok-section-label">
-            Resolution
-            <span className="text-muted" style={{ fontWeight: 400 }}>{' (Higher = Better Quality, more VRAM)'}</span>
+            Resolution <InfoTooltip text="Higher resolution = sharper details but more VRAM and time. 480p for quick tests, 576p for standard, 720p for final renders. Use post-generation Upscale for high-res without VRAM cost." />
           </label>
           <div className="grok-toggle-group">
             {Object.entries(RESOLUTION_PRESETS).map(([key, preset]) => (
@@ -1286,6 +1421,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               <input type="checkbox" checked={postUpscale} onChange={(e) => setPostUpscale(e.target.checked)} style={{ width: '16px', height: '16px' }} />
               <span>Upscale</span>
             </label>
+            <InfoTooltip text="Generate fast at low resolution (480p), iterate on prompt & LoRAs, then upscale the best result to 720p/1080p. Saves VRAM and time — 90% of the value for 10% of the cost." />
             {postUpscale && (
               <>
                 <div className="grok-toggle-group" style={{ width: 'auto' }}>
@@ -1307,7 +1443,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
         {/* Aspect Ratio */}
         <div className="form-group">
-          <label className="grok-section-label">Aspect Ratio</label>
+          <label className="grok-section-label">Aspect Ratio <InfoTooltip text="The shape of your video. 9:16 = vertical (TikTok/Reels). 16:9 = horizontal (YouTube/cinema). 1:1 = square (Instagram)." /></label>
           <div className="grok-toggle-group">
             {ASPECT_RATIOS.map((ratio) => (
               <button key={ratio} className={`grok-toggle-btn ${aspectRatio === ratio ? 'active' : ''}`} onClick={() => setAspectRatio(ratio)} type="button">
@@ -1320,7 +1456,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         {/* Duration (seconds-based, aligned with I2V) */}
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="grok-section-label" style={{ marginBottom: 0 }}>Duration</label>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Duration <InfoTooltip text="Video length in seconds. Longer = more frames = more VRAM/time. 3-5s for testing, 8-20s for production." /></label>
             <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{duration}s ({duration * fps}f)</span>
           </div>
           <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
@@ -1352,7 +1488,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         {/* FPS */}
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="grok-section-label" style={{ marginBottom: 0 }}>Frame Rate (FPS)</label>
+            <label className="grok-section-label" style={{ marginBottom: 0 }}>Frame Rate (FPS) <InfoTooltip text="How smooth the motion looks. 8 fps = choppy/artistic. 16 fps = AI video standard. 24 fps = cinematic. Higher FPS = more frames = more VRAM." /></label>
             <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{fps} fps</span>
           </div>
           <div className="grok-toggle-group">
@@ -1370,7 +1506,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         {/* Extend Duration - Sequential Clips */}
         <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div className="grok-section-label" style={{ marginBottom: '4px' }}>Extend Duration</div>
+            <div className="grok-section-label" style={{ marginBottom: '4px' }}>Extend Duration <InfoTooltip text="Chain multiple video clips sequentially — each clip continues from the last frame of the previous one. Great for longer narratives without running out of VRAM." /></div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Chain multiple clips sequentially</div>
           </div>
           <label className="grok-switch">
@@ -1421,11 +1557,11 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', gap: '16px', marginTop: '16px' }}>
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="grok-section-label">Video Steps</label>
+                <label className="grok-section-label">Video Steps <InfoTooltip text="Number of denoising steps for the video generation phase. More steps = better quality but slower. 6 is fast; 8-12 for balanced quality." /></label>
                 <input className="form-input" type="number" value={steps} onChange={(e) => setSteps(parseInt(e.target.value) || 6)} min="1" max="30" />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="grok-section-label">Seed</label>
+                <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. -1 = random each time. Set a specific number to reproduce the exact same result with identical settings." /></label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input className="form-input" type="number" value={seed} onChange={(e) => setSeed(parseInt(e.target.value) || -1)} placeholder="-1 for random" style={{ flex: 1 }} />
                   <button className="icon-btn" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap', width: 'auto', padding: '0 12px', fontSize: '0.8rem' }}>Random</button>
@@ -1437,11 +1573,11 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             {modelType === 'wan22' && (
               <div style={{ display: 'flex', gap: '16px' }}>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label className="grok-section-label">T2I Steps</label>
+                  <label className="grok-section-label">T2I Steps <InfoTooltip text="Steps for the initial text-to-image phase (Wan2.2 generates an image first, then animates it). Higher = better starting image. 20 recommended." /></label>
                   <input className="form-input" type="number" value={t2iSteps} onChange={(e) => setT2iSteps(parseInt(e.target.value) || 20)} min="1" max="50" />
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label className="grok-section-label">T2I CFG</label>
+                  <label className="grok-section-label">T2I CFG <InfoTooltip text="Classifier-Free Guidance for the text-to-image phase. Controls how strictly the initial image follows your prompt. 6.0 is a good default." /></label>
                   <input className="form-input" type="number" value={t2iCfg} onChange={(e) => setT2iCfg(parseFloat(e.target.value) || 6.0)} min="1" max="20" step="0.5" />
                 </div>
               </div>
@@ -1642,6 +1778,21 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           Job queued! Check the Queue panel for progress.
         </div>
       )}
+
+      <AISuggestPanel
+        tool="t2v"
+        prompt={prompt}
+        negativePrompt={negativePrompt}
+        modelMode={modelType}
+        resolution={resolution}
+        steps={steps}
+        cfg={cfg}
+        fps={fps}
+        duration={duration}
+        loras={loraConfigs}
+        availableLoras={availableLoras}
+        onApply={handleAISuggestApply}
+      />
 
       {error && (
         <div style={{

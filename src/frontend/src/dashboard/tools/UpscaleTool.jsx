@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, ZoomIn, X, Loader2, Image as ImageIcon, Video, Sparkles } from 'lucide-react'
+import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
@@ -274,7 +275,7 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
 
           {/* Scale */}
           <div className="form-group">
-            <label className="grok-section-label">Scale Factor</label>
+            <label className="grok-section-label">Scale Factor <InfoTooltip text="How much to enlarge the image or video. 2x doubles the resolution, 4x quadruples it. Higher values need more processing time and VRAM." /></label>
             <div className="grok-toggle-group">
               {SCALE_OPTIONS.map(s => (
                 <button
@@ -297,7 +298,7 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
           {mediaType === 'image' && (
             <>
               <div className="form-group">
-                <label className="grok-section-label">Model</label>
+                <label className="grok-section-label">Model <InfoTooltip text="The AI model used for upscaling. Different models are optimized for faces, anime, or general-purpose enhancement. Pick the one matching your content." /></label>
                 <div className="grok-toggle-group" style={{ flexDirection: 'column' }}>
                   {IMAGE_MODELS.map(m => (
                     <button
@@ -315,7 +316,7 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
 
               {/* Face enhance toggle */}
               <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="grok-section-label" style={{ marginBottom: 0 }}>Face Enhancement (GFPGAN)</label>
+                <label className="grok-section-label" style={{ marginBottom: 0 }}>Face Enhancement (GFPGAN) <InfoTooltip text="Uses GFPGAN v1.4 to enhance facial details during upscaling. Recommended when the image contains faces — produces sharper eyes, skin, and facial features." /></label>
                 <label className="grok-switch">
                   <input
                     type="checkbox"
@@ -331,7 +332,7 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
           {/* Video-specific: preset */}
           {mediaType === 'video' && (
             <div className="form-group">
-              <label className="grok-section-label">Quality Preset</label>
+              <label className="grok-section-label">Quality Preset <InfoTooltip text="Balances quality vs speed for video upscaling. Higher quality presets use more frames and processing power but produce sharper results." /></label>
               <div className="grok-toggle-group" style={{ flexDirection: 'column' }}>
                 {VIDEO_PRESETS.map(p => (
                   <button

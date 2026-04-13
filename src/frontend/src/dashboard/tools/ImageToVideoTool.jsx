@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
+import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, uploadUserMedia, apiFetch, getUserMediaUrl } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
@@ -16,6 +17,7 @@ import { useToolProfile } from '../../hooks/useToolProfile'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
+import AISuggestPanel from '../../components/AISuggestPanel'
 import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
@@ -299,7 +301,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     setImportModal(null)
   }
   const [imageDescription, setImageDescription] = useState('')  // Store vision analysis result
-  const [audioPromptImported, setAudioPromptImported] = useState('')  // Audio prompt from I2T concept studio
+  const [audioPromptImported, setAudioPromptImported] = useState(() => {
+    try { return localStorage.getItem('oelala_i2v_audio_prompt') || '' } catch { return '' }
+  })
 
   // LoRA state - now supports multiple LoRAs with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
@@ -618,6 +622,17 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     }
   }, [prompt])
 
+  // Persist audio prompt to localStorage on change
+  useEffect(() => {
+    try {
+      if (audioPromptImported) {
+        localStorage.setItem('oelala_i2v_audio_prompt', audioPromptImported)
+      } else {
+        localStorage.removeItem('oelala_i2v_audio_prompt')
+      }
+    } catch { /* ignore */ }
+  }, [audioPromptImported])
+
   // Expose current params to parent for JSON download
   useEffect(() => {
     if (onParamsChange) {
@@ -820,6 +835,72 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  // AI Suggest: apply accepted suggestions to form state
+  const handleAISuggestApply = useCallback((changes) => {
+    // Append to prompt
+    if (changes.promptAppend?.length) {
+      setPrompt(prev => {
+        const addition = changes.promptAppend.join(', ')
+        return prev.trim() ? `${prev.trim()}, ${addition}` : addition
+      })
+    }
+    // Replace in prompt
+    if (changes.promptReplace?.length) {
+      setPrompt(prev => {
+        let p = prev
+        for (const { find, replace } of changes.promptReplace) {
+          p = p.replace(find, replace)
+        }
+        return p
+      })
+    }
+    // Append to negative prompt
+    if (changes.negativeAppend?.length) {
+      setNegativePrompt(prev => {
+        const addition = changes.negativeAppend.join(', ')
+        return prev.trim() ? `${prev.trim()}, ${addition}` : addition
+      })
+    }
+    // Add LoRAs
+    if (changes.lorasToAdd?.length) {
+      setLoraConfigs(prev => {
+        const newEntries = changes.lorasToAdd.map(l => {
+          // Determine if it's a high-noise or low-noise LoRA
+          // /loras endpoint returns "path" field, ai-suggest returns "filename" — match on both
+          const isHigh = availableLoras.high_noise?.some(h => h.path === l.filename || h.filename === l.filename)
+          const isLow = availableLoras.low_noise?.some(lo => lo.path === l.filename || lo.filename === l.filename)
+          return {
+            high: isHigh ? l.filename : '',
+            low: isLow ? l.filename : '',
+            strength: l.strength ?? 1.0,
+          }
+        })
+        return [...prev, ...newEntries]
+      })
+    }
+    // Adjust LoRA strengths
+    if (changes.loraStrengthChanges && Object.keys(changes.loraStrengthChanges).length) {
+      setLoraConfigs(prev => prev.map(lc => {
+        if (changes.loraStrengthChanges[lc.high] !== undefined) {
+          return { ...lc, strength: changes.loraStrengthChanges[lc.high] }
+        }
+        if (changes.loraStrengthChanges[lc.low] !== undefined) {
+          return { ...lc, strength: changes.loraStrengthChanges[lc.low] }
+        }
+        return lc
+      }))
+    }
+    // Apply setting changes
+    if (changes.settingChanges) {
+      const sc = changes.settingChanges
+      if (sc.steps !== undefined) setSteps(Number(sc.steps))
+      if (sc.cfg !== undefined) setCfg(Number(sc.cfg))
+      if (sc.fps !== undefined) setFps(Number(sc.fps))
+      if (sc.duration !== undefined) setDuration(Number(sc.duration))
+      if (sc.resolution !== undefined) setResolution(sc.resolution)
+    }
+  }, [availableLoras])
+
   const handleSubmit = async () => {
     // Check if user is logged in
     if (!user) {
@@ -926,6 +1007,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       formData.append('steps', String(steps))
       formData.append('cfg', String(cfg))
       formData.append('seed', String(seed))
+      // Audio prompt (from Concept Studio import or direct entry)
+      if (audioPromptImported && audioPromptImported.trim()) {
+        formData.append('audio_prompt', audioPromptImported.trim())
+      }
       // LoRA parameters
       if (loraConfigs.length > 0) {
         formData.append('lora_configs', JSON.stringify(loraConfigs))
@@ -1220,7 +1305,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Generation Mode</label>
+          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Max uses full precision on a cloud GPU for best quality. Local modes use your GPU with quantized models for faster/cheaper generation. LTX-2.3 is optimized for fast, cinematic video." /></label>
           <div style={{ position: 'relative' }}>
             <select
               value={modelMode}
@@ -1844,48 +1929,59 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           )}
         </div>
 
-        {/* Audio Prompt — imported from Concept Studio */}
-        {audioPromptImported && (
+        {/* Audio Prompt — for LTX-2 audio-video generation */}
+        {modelMode === 'ltx2' && (
           <div style={{ marginTop: '12px' }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '8px 0',
-            }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                🔊 Audio Prompt
-              </span>
-              <button
-                onClick={() => setAudioPromptImported('')}
-                style={{
-                  background: 'none', border: 'none', color: 'var(--text-muted)',
-                  cursor: 'pointer', fontSize: '0.7rem', padding: '2px 6px',
-                }}
-                title="Clear audio prompt"
-              >✕</button>
-            </div>
-            <textarea
-              className="form-textarea"
-              value={audioPromptImported}
-              onChange={(e) => setAudioPromptImported(e.target.value)}
-              rows={2}
-              placeholder="Audio description for LTX..."
+            <div
+              onClick={() => !audioPromptImported && setAudioPromptImported(' ')}
               style={{
-                backgroundColor: '#0f0f0f',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '8px',
-                resize: 'vertical',
-                minHeight: '50px',
-                padding: '10px',
-                width: '100%',
-                boxSizing: 'border-box',
-                fontSize: '0.85rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 0',
+                cursor: audioPromptImported ? 'default' : 'pointer',
               }}
-            />
-            <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: 'var(--text-muted, #666)' }}>
-              Used for LTX-2 audio-enabled video generation.
-            </p>
+            >
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                🔊 Audio Prompt {!audioPromptImported && <span style={{ opacity: 0.5, fontSize: '0.75rem' }}>(click to add)</span>}
+              </span>
+              {audioPromptImported && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAudioPromptImported('') }}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--text-muted)',
+                    cursor: 'pointer', fontSize: '0.7rem', padding: '2px 6px',
+                  }}
+                  title="Clear audio prompt"
+                >✕</button>
+              )}
+            </div>
+            {audioPromptImported && (
+              <>
+                <textarea
+                  className="form-textarea"
+                  value={audioPromptImported.trim() === '' ? '' : audioPromptImported}
+                  onChange={(e) => setAudioPromptImported(e.target.value)}
+                  rows={2}
+                  placeholder="Describe the audio: ambient sounds, music, dialogue..."
+                  style={{
+                    backgroundColor: '#0f0f0f',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    borderRadius: '8px',
+                    resize: 'vertical',
+                    minHeight: '50px',
+                    padding: '10px',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: '0.85rem',
+                  }}
+                  autoFocus
+                />
+                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: 'var(--text-muted, #666)' }}>
+                  Generates video with synchronized audio via LTX-2 AudioVAE.
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -1896,12 +1992,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Prompt Strength / CFG
               </label>
-              <span
-                title="How strictly the video follows your prompt. Low = subtle movement, High = dramatic action (may cause artifacts)"
-                style={{ cursor: 'help', opacity: 0.5 }}
-              >
-                <HelpCircle size={12} />
-              </span>
+              <InfoTooltip text="How strictly the video follows your prompt. Low (1.0) = natural, subtle movement. Medium (2-3) = balanced motion. High (4-5) = dramatic action but may cause visual artifacts. For LTX models, keep at 1.0 — they are distilled and don't need CFG guidance." size={12} />
             </div>
             <span style={{
               fontSize: '0.8rem',
@@ -2241,9 +2332,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         <div className="form-group">
           <label className="grok-section-label">
             Resolution
-            <span className="text-muted" style={{ fontWeight: 400 }}>
-              {' (Higher = Better Quality, more VRAM)'}
-            </span>
+            <InfoTooltip text="Higher resolution = sharper details, but uses more VRAM and takes longer. 480p is best for quick iterations. 720p for final renders. Use Upscale post-generation to get high resolution without the VRAM cost." />
           </label>
           <div className="grok-toggle-group">
             {Object.entries(RESOLUTION_PRESETS).map(([key, preset]) => (
@@ -2277,6 +2366,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               />
               <span>📈 Upscale</span>
             </label>
+            <InfoTooltip text="Generate fast at low resolution (480p), iterate on prompt & LoRAs until satisfied, then upscale only the best result to 720p/1080p. Saves VRAM and generation time — 90% of the value for 10% of the cost." />
             {postUpscale && (
               <>
                 <div className="grok-toggle-group" style={{ width: 'auto' }}>
@@ -2298,7 +2388,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         {/* Aspect Ratio */}
         <div className="form-group">
-          <label className="grok-section-label">Aspect Ratio</label>
+          <label className="grok-section-label">Aspect Ratio <InfoTooltip text="The shape of your video. 9:16 = vertical (phone/TikTok/Reels). 16:9 = horizontal (YouTube/cinema). 1:1 = square (Instagram). Choose based on where you'll share the video." /></label>
           <div className="grok-toggle-group">
             {ASPECT_RATIOS.map((ar) => (
               <button
@@ -2314,7 +2404,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="grok-section-label">Duration</label>
+            <label className="grok-section-label">Duration <InfoTooltip text="Length of the generated video in seconds. Longer = more frames = more VRAM and time. For quick tests, use 3-5 seconds. For production, 8-20 seconds depending on your GPU and resolution." /></label>
             <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{duration}s ({duration * fps}f)</span>
           </div>
           <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
@@ -2364,7 +2454,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         {/* FPS Control */}
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="grok-section-label">Frame Rate (FPS)</label>
+            <label className="grok-section-label">Frame Rate (FPS) <InfoTooltip text="Frames per second — how smooth the motion looks. 8 fps = choppy/artistic. 16 fps = standard for AI video. 24 fps = cinematic. Higher FPS generates more frames, using more VRAM and time." /></label>
             <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{fps} fps</span>
           </div>
           <div className="grok-toggle-group">
@@ -2387,7 +2477,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         {/* Model Version - only for non-Wan2.2, non-Cloud modes */}
         {modelMode !== 'wan2.2' && modelMode !== 'cloud_max' && (
           <div className="form-group">
-            <label className="grok-section-label">Model Version</label>
+            <label className="grok-section-label">Model Version <InfoTooltip text="V1 is the original model. V2 (Enhanced) features improved video quality, smoother motion, and optional audio generation capabilities." /></label>
             <div className="grok-toggle-group">
               <button
                 className={`grok-toggle-btn ${modelVersion === 'v1' ? 'active' : ''}`}
@@ -2505,7 +2595,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* Steps */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps</label>
+                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. More steps = better quality but slower. 4-6 is fast; 8 is recommended; 15-20 for maximum detail." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
                   </div>
                   <input
@@ -2522,7 +2612,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* High Noise Steps */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">High Noise Steps</label>
+                    <label className="grok-section-label">High Noise Steps <InfoTooltip text="How many of the total steps use the high-noise model before switching to the low-noise model. More high-noise steps = stronger composition." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsHighNoiseSteps} of {steps}</span>
                   </div>
                   <input
@@ -2539,7 +2629,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* Shift */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Model Shift</label>
+                    <label className="grok-section-label">Model Shift <InfoTooltip text="Controls the noise schedule shift for diffusion. Higher = more aggressive denoising early on. Default 8-9 works for most cases." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsShift.toFixed(1)}</span>
                   </div>
                   <input
@@ -2556,7 +2646,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* NAG Scale */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">NAG Scale</label>
+                    <label className="grok-section-label">NAG Scale <InfoTooltip text="Normalized Attention Guidance — controls how strongly the model follows your prompt. Higher values (10-15) = more prompt adherence but possible artifacts. Lower (3-5) = more natural but less controlled. Recommended: 11." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsNagScale.toFixed(1)}</span>
                   </div>
                   <input
@@ -2572,7 +2662,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
                 {/* Seed */}
                 <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="grok-section-label">Seed</label>
+                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for random. Set a specific number to get the exact same result with identical settings." /></label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number" value={seed}
@@ -2596,13 +2686,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={bsEnableFlorence2} onChange={(e) => setBsEnableFlorence2(e.target.checked)} style={{ width: '16px', height: '16px' }} />
                     <span>🔍 Florence2 Auto-Caption</span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(analyzes image for prompt)</span>
+                    <InfoTooltip text="Uses Florence2 vision model to automatically analyze your source image and generate a detailed description. This description supplements your prompt for better scene understanding and motion coherence." size={12} />
                   </label>
 
                   {/* RIFE Interpolation */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={bsEnableInterpolation} onChange={(e) => setBsEnableInterpolation(e.target.checked)} style={{ width: '16px', height: '16px' }} />
                     <span>🎞 RIFE 2x Frame Interpolation</span>
+                    <InfoTooltip text="Doubles the frame count after generation using RIFE optical flow interpolation. Turns 16fps into 32fps for silky smooth motion. Adds minimal processing time but can introduce ghosting on fast motion." size={12} />
                   </label>
                 </div>
 
@@ -2917,7 +3008,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* Steps */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps</label>
+                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. Cloud Max supports higher step counts (10-40) for best quality. 25 is recommended for production. More steps = better detail but longer render." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
                   </div>
                   <input
@@ -2934,7 +3025,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* CFG */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">CFG Scale</label>
+                    <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance — how strictly the model follows your prompt. Low (1-2) = creative freedom. Medium (3-5) = balanced. High (6-10) = strict adherence but may over-saturate. Recommended: 3.0 for Cloud Max." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
                   </div>
                   <input
@@ -2951,7 +3042,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* High Noise Steps */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">High Noise Steps</label>
+                    <label className="grok-section-label">High Noise Steps <InfoTooltip text="Steps using high-noise LoRA before switching to low-noise LoRA. More high-noise steps = stronger composition/structure." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsHighNoiseSteps} of {steps}</span>
                   </div>
                   <input
@@ -2968,7 +3059,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* Shift */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Model Shift</label>
+                    <label className="grok-section-label">Model Shift <InfoTooltip text="Controls the noise schedule shift. Higher = more aggressive denoising early. Default 8-9 for most cases." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsShift.toFixed(1)}</span>
                   </div>
                   <input
@@ -2984,7 +3075,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
                 {/* Seed */}
                 <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="grok-section-label">Seed</label>
+                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for random each time. Set a specific number to reproduce the exact same result." /></label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number" value={seed}
@@ -3195,7 +3286,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* Steps */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps</label>
+                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. 4-6 is fast, 6 is recommended for Wan2.2. Higher = better quality but slower." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
                   </div>
                   <input
@@ -3216,7 +3307,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
                 {/* Seed */}
                 <div className="form-group">
-                  <label className="grok-section-label">Seed</label>
+                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. -1 = random each generation. Set a specific number to reproduce results." /></label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number"
@@ -3818,6 +3909,21 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           ))}
         </div>
       </div>
+
+      <AISuggestPanel
+        tool="i2v"
+        prompt={prompt}
+        negativePrompt={negativePrompt}
+        modelMode={modelMode}
+        resolution={resolution}
+        steps={steps}
+        cfg={cfg}
+        fps={fps}
+        duration={duration}
+        loras={loraConfigs}
+        availableLoras={availableLoras}
+        onApply={handleAISuggestApply}
+      />
 
       {error && (
         <div style={{
