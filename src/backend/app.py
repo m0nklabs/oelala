@@ -2843,6 +2843,15 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
                 logger.info(f"☁️ Auto-uploaded cloud output: {storage_path}")
                 signed_url = get_signed_media_url(storage_path, expires_in=86400)
                 upload_ok = True
+                # Remove staging copy — the file now lives in user storage
+                try:
+                    storage = get_storage_client()
+                    parts = saved_path.replace("\\", "/").split("/", 1)
+                    if len(parts) == 2:
+                        storage.delete(parts[0], parts[1])
+                        logger.info(f"🗑️ Removed staging copy: {saved_path}")
+                except Exception as cleanup_err:
+                    logger.warning(f"⚠️ Failed to remove staging copy {saved_path}: {cleanup_err}")
     except Exception as e:
         logger.warning(f"☁️ Storage upload failed — will retry next poll cycle: {e}")
 
