@@ -3347,12 +3347,14 @@ class ComfyUIClient:
         aspect_ratio: str = "9:16",
         long_edge: int = 768,
         lora_configs: Optional[list] = None,
+        audio_prompt: Optional[str] = None,
+        audio_vae_checkpoint: str = "ltx2_audio_vae.safetensors",
     ) -> Optional[Dict[str, Any]]:
         """
         Build LTX-2.3 22B Cloud T2V workflow — single-stage distilled pipeline.
 
-        Uses the 8-step distilled sigma schedule. No two-stage, no audio,
-        no upsamplers — clean single-pass generation for cloud.
+        Uses the 8-step distilled sigma schedule. When audio_prompt is provided,
+        generates audio-video using MultimodalGuider + audio VAE.
         """
         # LTX frame count must be 8k+1
         k = round((num_frames - 1) / 8)
@@ -3404,10 +3406,15 @@ class ComfyUIClient:
             },
         }
 
+        # Build effective prompt (append audio description if provided)
+        effective_prompt = prompt
+        if audio_prompt:
+            effective_prompt = f"{prompt}\nAudio: {audio_prompt}"
+
         # Node 3: Positive prompt
         workflow["3"] = {
             "class_type": "CLIPTextEncode",
-            "inputs": {"text": prompt, "clip": ["2", 0]},
+            "inputs": {"text": effective_prompt, "clip": ["2", 0]},
         }
 
         # Node 4: Negative prompt
@@ -3468,48 +3475,178 @@ class ComfyUIClient:
             "inputs": {"noise_seed": seed},
         }
 
+        # ── Audio-Video Pipeline (conditional) ──────────────────────
+        sampler_latent_input = ["6", 0]  # default: empty video latent
+        sampler_guider_input = ["7", 0]  # default: CFGGuider
+
+        if audio_prompt:
+            # Node 20: LTXVAudioVAELoader — load audio VAE
+            workflow["20"] = {
+                "class_type": "LTXVAudioVAELoader",
+                "inputs": {"ckpt_name": audio_vae_checkpoint},
+            }
+
+            # Node 21: LTXVEmptyLatentAudio — empty audio latent matching video frames
+            workflow["21"] = {
+                "class_type": "LTXVEmptyLatentAudio",
+                "inputs": {
+                    "frames_number": num_frames,
+                    "frame_rate": fps,
+                    "batch_size": 1,
+                    "audio_vae": ["20", 0],
+                },
+            }
+
+            # Node 22: LTXVConcatAVLatent — combine video + audio latents
+            workflow["22"] = {
+                "class_type": "LTXVConcatAVLatent",
+                "inputs": {
+                    "video_latent": ["6", 0],   # empty video latent
+                    "audio_latent": ["21", 0],  # empty audio latent
+                },
+            }
+
+            # Node 23: GuiderParameters — VIDEO modality (cfg=1.0 for distilled)
+            workflow["23"] = {
+                "class_type": "GuiderParameters",
+                "inputs": {
+                    "modality": "VIDEO",
+                    "cfg": 1.0,
+                    "stg": 0.0,
+                    "perturb_attn": True,
+                    "rescale": 0.0,
+                    "modality_scale": 1.0,
+                    "skip_step": 0,
+                    "cross_attn": True,
+                },
+            }
+
+            # Node 24: GuiderParameters — AUDIO modality (chained from VIDEO)
+            workflow["24"] = {
+                "class_type": "GuiderParameters",
+                "inputs": {
+                    "modality": "AUDIO",
+                    "cfg": 1.0,
+                    "stg": 0.0,
+                    "perturb_attn": True,
+                    "rescale": 0.0,
+                    "modality_scale": 1.0,
+                    "skip_step": 0,
+                    "cross_attn": True,
+                    "parameters": ["23", 0],  # chain from VIDEO params
+                },
+            }
+
+            # Node 25: MultimodalGuider — replaces CFGGuider for AV generation
+            workflow["25"] = {
+                "class_type": "MultimodalGuider",
+                "inputs": {
+                    "model": ["1", 0],
+                    "positive": ["5", 0],
+                    "negative": ["5", 1],
+                    "parameters": ["24", 0],
+                    "skip_blocks": "",
+                },
+            }
+
+            sampler_latent_input = ["22", 0]  # combined AV latent
+            sampler_guider_input = ["25", 0]  # MultimodalGuider
+
+            logger.info("🔊 T2V Audio pipeline enabled — MultimodalGuider + AV latents")
+
         # Node 11: SamplerCustomAdvanced — main sampling
         workflow["11"] = {
             "class_type": "SamplerCustomAdvanced",
             "inputs": {
                 "noise": ["10", 0],
-                "guider": ["7", 0],
+                "guider": sampler_guider_input,
                 "sampler": ["8", 0],
                 "sigmas": ["9", 0],
-                "latent_image": ["6", 0],
+                "latent_image": sampler_latent_input,
             },
         }
 
-        # Node 12: VAEDecodeTiled — decode latent to pixels
-        workflow["12"] = {
-            "class_type": "VAEDecodeTiled",
-            "inputs": {
-                "samples": ["11", 1],  # denoised_output
-                "vae": ["1", 2],       # VAE from checkpoint
-                "tile_size": 512,
-                "overlap": 64,
-                "temporal_size": 512,
-                "temporal_overlap": 64,
-            },
-        }
+        # ── Post-sampling: video decode (always) + audio decode (if AV) ──
+        if audio_prompt:
+            # Node 26: LTXVSeparateAVLatent — split denoised AV latent
+            workflow["26"] = {
+                "class_type": "LTXVSeparateAVLatent",
+                "inputs": {
+                    "av_latent": ["11", 1],  # denoised_output from sampler
+                },
+            }
 
-        # Node 13: VHS_VideoCombine — save video
-        workflow["13"] = {
-            "class_type": "VHS_VideoCombine",
-            "inputs": {
-                "frame_rate": fps,
-                "loop_count": 0,
-                "filename_prefix": output_prefix,
-                "format": "video/h264-mp4",
-                "pix_fmt": "yuv420p",
-                "crf": 17,
-                "save_metadata": True,
-                "trim_to_audio": False,
-                "pingpong": False,
-                "save_output": True,
-                "images": ["12", 0],
-            },
-        }
+            # Node 12: VAEDecodeTiled — decode VIDEO latent
+            workflow["12"] = {
+                "class_type": "VAEDecodeTiled",
+                "inputs": {
+                    "samples": ["26", 0],  # video_latent from separator
+                    "vae": ["1", 2],
+                    "tile_size": 512,
+                    "overlap": 64,
+                    "temporal_size": 512,
+                    "temporal_overlap": 64,
+                },
+            }
+
+            # Node 27: LTXVAudioVAEDecode — decode AUDIO latent
+            workflow["27"] = {
+                "class_type": "LTXVAudioVAEDecode",
+                "inputs": {
+                    "samples": ["26", 1],    # audio_latent from separator
+                    "audio_vae": ["20", 0],  # audio VAE from loader
+                },
+            }
+
+            # Node 13: VHS_VideoCombine — save video WITH audio
+            workflow["13"] = {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 17,
+                    "save_metadata": True,
+                    "trim_to_audio": True,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["12", 0],
+                    "audio": ["27", 0],  # decoded audio waveform
+                },
+            }
+        else:
+            # Node 12: VAEDecodeTiled — decode video-only latent
+            workflow["12"] = {
+                "class_type": "VAEDecodeTiled",
+                "inputs": {
+                    "samples": ["11", 1],  # denoised_output
+                    "vae": ["1", 2],
+                    "tile_size": 512,
+                    "overlap": 64,
+                    "temporal_size": 512,
+                    "temporal_overlap": 64,
+                },
+            }
+
+            # Node 13: VHS_VideoCombine — save video (no audio)
+            workflow["13"] = {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 17,
+                    "save_metadata": True,
+                    "trim_to_audio": False,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["12", 0],
+                },
+            }
 
         # ── LoRA chain (single-stage: insert between checkpoint and CFGGuider) ──
         if lora_configs:
@@ -3533,17 +3670,19 @@ class ComfyUIClient:
                 logger.info(
                     f"🎨 LTX-2.3 T2V LoRA #{i + 1}: {lora_name} @ {strength}"
                 )
-            # Wire final LoRA output to CFGGuider
-            workflow["7"]["inputs"]["model"] = current_model
+            # Wire final LoRA output to guider (CFGGuider or MultimodalGuider)
+            guider_node = "25" if audio_prompt else "7"
+            workflow[guider_node]["inputs"]["model"] = current_model
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
             lora_info = (
                 f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
             )
+        audio_info = " + audio" if audio_prompt else ""
         logger.info(
             f"☁️ Built LTX-2.3 Cloud T2V: {width}x{height}, "
-            f"{num_frames}f@{fps}fps, 8-step distilled{lora_info}"
+            f"{num_frames}f@{fps}fps, 8-step distilled{lora_info}{audio_info}"
         )
         return workflow
 
@@ -3562,6 +3701,8 @@ class ComfyUIClient:
         checkpoint: str = "ltx-2.3-22b-distilled.safetensors",
         text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
         lora_configs: Optional[list] = None,
+        audio_prompt: Optional[str] = None,
+        audio_vae_checkpoint: str = "ltx2_audio_vae.safetensors",
     ) -> Optional[Dict[str, Any]]:
         """
         Build LTX-2.3 22B Cloud I2V workflow — image-to-video with
@@ -3569,6 +3710,10 @@ class ComfyUIClient:
 
         Uses 8-step distilled sigma schedule. Image is preprocessed
         with LTXVPreprocess and used to condition the latent.
+
+        When audio_prompt is provided, enables audio-video generation:
+        appends audio description to prompt, adds audio VAE, empty audio
+        latent, MultimodalGuider, and audio decode/mux nodes.
         """
         # LTX frame count must be 8k+1
         k = round((num_frames - 1) / 8)
@@ -3620,10 +3765,17 @@ class ComfyUIClient:
             },
         }
 
+        # Combine audio description into the main prompt when audio is enabled
+        # LTX-2.3 AV model uses the same text encoder for both modalities
+        effective_prompt = prompt
+        if audio_prompt:
+            effective_prompt = f"{prompt}\nAudio: {audio_prompt}"
+            logger.info(f"🔊 Audio prompt appended: {audio_prompt[:80]}...")
+
         # Node 5: Positive prompt
         workflow["5"] = {
             "class_type": "CLIPTextEncode",
-            "inputs": {"text": prompt, "clip": ["2", 0]},
+            "inputs": {"text": effective_prompt, "clip": ["2", 0]},
         }
 
         # Node 6: Negative prompt
@@ -3695,48 +3847,183 @@ class ComfyUIClient:
             "inputs": {"noise_seed": seed},
         }
 
+        # ── Audio-Video Pipeline (conditional) ──────────────────────
+        # When audio_prompt is provided, we enable the full AV pipeline:
+        # - Load audio VAE, create empty audio latents
+        # - Concat video + audio latents
+        # - Use MultimodalGuider instead of CFGGuider
+        # - After sampling: separate, decode audio, mux into video
+        sampler_latent_input = ["9", 0]  # default: image-conditioned video latent
+        sampler_guider_input = ["10", 0]  # default: CFGGuider
+
+        if audio_prompt:
+            # Node 20: LTXVAudioVAELoader — load audio VAE
+            workflow["20"] = {
+                "class_type": "LTXVAudioVAELoader",
+                "inputs": {"ckpt_name": audio_vae_checkpoint},
+            }
+
+            # Node 21: LTXVEmptyLatentAudio — empty audio latent matching video frames
+            workflow["21"] = {
+                "class_type": "LTXVEmptyLatentAudio",
+                "inputs": {
+                    "frames_number": num_frames,
+                    "frame_rate": fps,
+                    "batch_size": 1,
+                    "audio_vae": ["20", 0],
+                },
+            }
+
+            # Node 22: LTXVConcatAVLatent — combine video + audio latents
+            workflow["22"] = {
+                "class_type": "LTXVConcatAVLatent",
+                "inputs": {
+                    "video_latent": ["9", 0],   # image-conditioned video latent
+                    "audio_latent": ["21", 0],  # empty audio latent
+                },
+            }
+
+            # Node 23: GuiderParameters — VIDEO modality (cfg=1.0 for distilled)
+            workflow["23"] = {
+                "class_type": "GuiderParameters",
+                "inputs": {
+                    "modality": "VIDEO",
+                    "cfg": 1.0,
+                    "stg": 0.0,
+                    "perturb_attn": True,
+                    "rescale": 0.0,
+                    "modality_scale": 1.0,
+                    "skip_step": 0,
+                    "cross_attn": True,
+                },
+            }
+
+            # Node 24: GuiderParameters — AUDIO modality (chained from VIDEO)
+            workflow["24"] = {
+                "class_type": "GuiderParameters",
+                "inputs": {
+                    "modality": "AUDIO",
+                    "cfg": 1.0,
+                    "stg": 0.0,
+                    "perturb_attn": True,
+                    "rescale": 0.0,
+                    "modality_scale": 1.0,
+                    "skip_step": 0,
+                    "cross_attn": True,
+                    "parameters": ["23", 0],  # chain from VIDEO params
+                },
+            }
+
+            # Node 25: MultimodalGuider — replaces CFGGuider for AV generation
+            workflow["25"] = {
+                "class_type": "MultimodalGuider",
+                "inputs": {
+                    "model": ["1", 0],
+                    "positive": ["7", 0],
+                    "negative": ["7", 1],
+                    "parameters": ["24", 0],
+                    "skip_blocks": "",
+                },
+            }
+
+            sampler_latent_input = ["22", 0]  # combined AV latent
+            sampler_guider_input = ["25", 0]  # MultimodalGuider
+
+            logger.info("🔊 Audio pipeline enabled — MultimodalGuider + AV latents")
+
         # Node 14: SamplerCustomAdvanced — main sampling
         workflow["14"] = {
             "class_type": "SamplerCustomAdvanced",
             "inputs": {
                 "noise": ["13", 0],
-                "guider": ["10", 0],
+                "guider": sampler_guider_input,
                 "sampler": ["11", 0],
                 "sigmas": ["12", 0],
-                "latent_image": ["9", 0],  # image-conditioned latent
+                "latent_image": sampler_latent_input,
             },
         }
 
-        # Node 15: VAEDecodeTiled
-        workflow["15"] = {
-            "class_type": "VAEDecodeTiled",
-            "inputs": {
-                "samples": ["14", 1],  # denoised_output
-                "vae": ["1", 2],
-                "tile_size": 512,
-                "overlap": 64,
-                "temporal_size": 512,
-                "temporal_overlap": 64,
-            },
-        }
+        # ── Post-sampling: video decode (always) + audio decode (if AV) ──
+        if audio_prompt:
+            # Node 26: LTXVSeparateAVLatent — split denoised AV latent
+            workflow["26"] = {
+                "class_type": "LTXVSeparateAVLatent",
+                "inputs": {
+                    "av_latent": ["14", 1],  # denoised_output from sampler
+                },
+            }
 
-        # Node 16: VHS_VideoCombine — save video
-        workflow["16"] = {
-            "class_type": "VHS_VideoCombine",
-            "inputs": {
-                "frame_rate": fps,
-                "loop_count": 0,
-                "filename_prefix": output_prefix,
-                "format": "video/h264-mp4",
-                "pix_fmt": "yuv420p",
-                "crf": 17,
-                "save_metadata": True,
-                "trim_to_audio": False,
-                "pingpong": False,
-                "save_output": True,
-                "images": ["15", 0],
-            },
-        }
+            # Node 15: VAEDecodeTiled — decode VIDEO latent (from separated output)
+            workflow["15"] = {
+                "class_type": "VAEDecodeTiled",
+                "inputs": {
+                    "samples": ["26", 0],  # video_latent from separator
+                    "vae": ["1", 2],
+                    "tile_size": 512,
+                    "overlap": 64,
+                    "temporal_size": 512,
+                    "temporal_overlap": 64,
+                },
+            }
+
+            # Node 27: LTXVAudioVAEDecode — decode AUDIO latent
+            workflow["27"] = {
+                "class_type": "LTXVAudioVAEDecode",
+                "inputs": {
+                    "samples": ["26", 1],    # audio_latent from separator
+                    "audio_vae": ["20", 0],  # audio VAE from loader
+                },
+            }
+
+            # Node 16: VHS_VideoCombine — save video WITH audio
+            workflow["16"] = {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 17,
+                    "save_metadata": True,
+                    "trim_to_audio": True,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["15", 0],
+                    "audio": ["27", 0],  # decoded audio waveform
+                },
+            }
+        else:
+            # Node 15: VAEDecodeTiled — decode video-only latent
+            workflow["15"] = {
+                "class_type": "VAEDecodeTiled",
+                "inputs": {
+                    "samples": ["14", 1],  # denoised_output
+                    "vae": ["1", 2],
+                    "tile_size": 512,
+                    "overlap": 64,
+                    "temporal_size": 512,
+                    "temporal_overlap": 64,
+                },
+            }
+
+            # Node 16: VHS_VideoCombine — save video (no audio)
+            workflow["16"] = {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 17,
+                    "save_metadata": True,
+                    "trim_to_audio": False,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["15", 0],
+                },
+            }
 
         # ── LoRA chain (single-stage: insert between checkpoint and CFGGuider) ──
         if lora_configs:
@@ -3760,17 +4047,19 @@ class ComfyUIClient:
                 logger.info(
                     f"🎨 LTX-2.3 I2V LoRA #{i + 1}: {lora_name} @ {strength_lora}"
                 )
-            # Wire final LoRA output to CFGGuider
-            workflow["10"]["inputs"]["model"] = current_model
+            # Wire final LoRA output to guider (CFGGuider or MultimodalGuider)
+            guider_node = "25" if audio_prompt else "10"
+            workflow[guider_node]["inputs"]["model"] = current_model
 
         lora_info = ""
         if lora_configs and len(lora_configs) > 0:
             lora_info = (
                 f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
             )
+        audio_info = " + audio" if audio_prompt else ""
         logger.info(
             f"☁️ Built LTX-2.3 Cloud I2V: {width}x{height}, "
-            f"{num_frames}f@{fps}fps, strength={strength}, 8-step distilled{lora_info}"
+            f"{num_frames}f@{fps}fps, strength={strength}, 8-step distilled{lora_info}{audio_info}"
         )
         return workflow
 

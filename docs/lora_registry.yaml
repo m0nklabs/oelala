@@ -1,0 +1,785 @@
+# LoRA Usage Registry
+# Machine-readable metadata for all LoRA models.
+# Used by the backend + LLM validation to ensure LoRAs are used correctly
+# (correct strength, trigger words in prompt, compatible base model, etc.)
+#
+# Source URLs included so descriptions can be re-checked when publishers
+# release new versions or update usage instructions.
+#
+# Last updated: 2026-04-13
+
+# ─── LTX 2.3 LoRAs ───────────────────────────────────────────────────────────
+
+- filename: "ltx/DR34ML4Y_LTXXX_PREVIEW_RC1.safetensors"
+  display_name: "DR34ML4Y All-In-One NSFW (LTX 2.3)"
+  base_model: "ltx"
+  creator: "c0ur4ge (DR34MSC4PE)"
+  version: "LT3X Preview RC1"
+  source_url: "https://civitai.com/models/1811313"
+  civitai_model_id: 1811313
+  trigger_words: ["m15510n4ry", "bl0wj0b", "d0ubl3_bj", "d0gg1e", "c0wg1rl"]
+  trigger_mode: "required"
+  trigger_examples:
+    - "m15510n4ry, a woman on her back with legs spread"
+    - "bl0wj0b, a woman performing oral on a man"
+    - "d0gg1e, a woman bent over from behind"
+    - "c0wg1rl, a woman in the reverse cowgirl position"
+    - "d0ubl3_bj, two women performing a double blowjob"
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    All-In-One multi-concept NSFW LoRA. Handles missionary, blowjob, double
+    blowjob, doggy, and cowgirl — all via trigger words. LTX 2.3 tech preview:
+    trigger words work but prompts need to be more verbose (LTX style).
+    May produce more artifacts than base model. Doggy keyword may struggle
+    on LTX — experiment with verbose prompting. Example workflows:
+    https://huggingface.co/RuneXX/LTX-2.3-Workflows/tree/main
+  last_checked: "2026-04-13"
+
+- filename: "ltx/LTX-2.3 - Ahegao Face v1.safetensors"
+  display_name: "Ahegao Face (LTX 2.3)"
+  base_model: "ltx"
+  creator: "playtime_ai_"
+  version: "LTX-2.3 v1"
+  source_url: "https://civitai.com/models/2138899"
+  civitai_model_id: 2138899
+  trigger_words: []
+  trigger_mode: "natural_language"  # Describe the action naturally in prompt
+  trigger_examples:
+    - "She makes the ahegao face by sticking her tongue out and crossing her eyes."
+    - "ahegao expression, tongue out, eyes rolling back"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    No specific trigger word needed. Use natural language describing the ahegao
+    expression in the positive prompt. Multi-platform model (also available for
+    Wan 2.2 T2V, Pony, Illustrious, SDXL, Flux Klein).
+  last_checked: "2026-04-13"
+
+- filename: "ltx/SexGod_Nudity_LTX23_v2_0.safetensors"
+  display_name: "SexGod Nudity (LTX 2.3)"
+  base_model: "ltx"
+  creator: "sexgod1979"
+  version: "v2.0"
+  source_url: "https://civitai.com/models/2308157"
+  civitai_model_id: 2308157
+  trigger_words: ["LTXNUDES"]
+  trigger_mode: "required"  # Trigger word MUST appear in positive prompt
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Trigger word "LTXNUDES" is REQUIRED in positive prompt. Trained on 105
+    high-res nude female videos. Best results with strong starting image (I2V).
+    ~417 frames recommended (10-15s videos). Trained at 768+ pixel buckets.
+    Use undistilled base model (GGUF bf16 or Q_8) with detailer lora at 1.0.
+    Use Kijai distil lora at 0.60 if using distilled base.
+  last_checked: "2026-04-13"
+
+- filename: "ltx/bounceV2_LTX23_I2V.comfy.safetensors"
+  display_name: "Bouncing Boobs V2 (LTX 2.3)"
+  base_model: "ltx"
+  creator: "ai_build_art"
+  version: "LTX 2.3 V2"
+  source_url: "https://civitai.com/models/1343431"
+  civitai_model_id: 1343431
+  trigger_words:
+    - "her breast is bouncing up and down"
+    - "her breast is bouncing from left to right"
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v"]
+  usage_notes: >
+    Use one of the trigger phrases in positive prompt. First LTX 2.3 version,
+    creator notes "room for improvement". Also has Wan 2.2 I2V high/low noise
+    versions.
+  last_checked: "2026-04-13"
+
+- filename: "ltx/head_swap_v3_rank_adaptive_fro_098.safetensors"
+  display_name: "BFS Head Swap V3 (LTX 2.3)"
+  base_model: "ltx"
+  creator: "NRDX"
+  version: "V3 Focus Head"
+  source_url: "https://civitai.com/models/2027766"
+  civitai_model_id: 2027766
+  trigger_words: ["head_swap:"]
+  trigger_mode: "required"
+  trigger_format: "head_swap: FACE: [describe the new face] ACTION: [describe the action]"
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v"]
+  usage_notes: >
+    V3 uses persistent-template conditioning — keeps new face visible throughout
+    entire guide sequence (unlike V1/V2 which relied on Frame 0 only).
+    PROMPT FORMAT: "head_swap: FACE: [describe new face] ACTION: [describe action]"
+    No Wan 2.2 video version exists from this creator.
+  last_checked: "2026-04-13"
+
+- filename: "ltx/ltx2.3_nsfw_furry.safetensors"
+  display_name: "NSFW Furry (LTX 2.3)"
+  base_model: "ltx"
+  creator: "mylo1337"
+  version: "v2.0 step 36000"
+  source_url: "https://civitai.com/models/2310920"
+  civitai_model_id: 2310920
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v"]
+  usage_notes: >
+    No trigger word needed. WARNING: may cause desaturation at full strength
+    when using fp8 base model. Use GGUF version of base model if desaturation
+    occurs, or lower strength to 0.7-0.8. Retrained from scratch for LTX 2.3
+    with 5x lower learning rate. Also has merge versions available.
+  last_checked: "2026-04-13"
+
+- filename: "ltx/ltxdeepthroat_v01.safetensors"
+  display_name: "Deepthroat (LTX 2.3)"
+  base_model: "ltx"
+  creator: "daring_l"
+  version: "v0.1"
+  source_url: "https://civitai.com/models/2476698"
+  civitai_model_id: 2476698
+  trigger_words: ["LTXdeepthroat"]
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Trigger word "LTXdeepthroat" REQUIRED in positive prompt. Early release
+    (v0.1), rank 64 (~1GB). Audio glottal sounds need more work per creator.
+    Same creator as sfbehind LTX.
+  last_checked: "2026-04-13"
+
+- filename: "ltx/sfbehind_LTX2_3_v0_1.safetensors"
+  display_name: "Sex From Behind (LTX 2.3)"
+  base_model: "ltx"
+  creator: "daring_l"
+  version: "LTX-2.3 v1"
+  source_url: "https://civitai.com/models/2298764"
+  civitai_model_id: 2298764
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v"]
+  usage_notes: >
+    No specific trigger word. Positions: doggy style, prone, top-down
+    bottom-up — all facing camera. Same creator has separate Wan 2.2 I2V
+    version.
+  last_checked: "2026-04-13"
+
+# ─── Wan 2.2 LoRAs (dual noise) ──────────────────────────────────────────────
+
+- filename: "NSFW-22-H-e8.safetensors"
+  display_name: "NSFW General (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "e8"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "NSFW-22-L-e8.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    General NSFW enhancement LoRA for Wan 2.2. Use BOTH high and low noise
+    variants together. No specific trigger word needed.
+  last_checked: "2026-04-13"
+
+- filename: "SmoothXXXAnimation_High.safetensors"
+  display_name: "Smooth XXX Animation (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.0]
+  noise_type: "dual"
+  paired_with: "SmoothXXXAnimation_Low.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Smooth animation for NSFW content. Use BOTH high and low noise variants.
+    No trigger word needed.
+  last_checked: "2026-04-13"
+
+- filename: "BounceHighWan2_2.safetensors"
+  display_name: "Bouncing Boobs (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "ai_build_art"
+  version: "V2"
+  source_url: "https://civitai.com/models/1343431"
+  civitai_model_id: 1343431
+  trigger_words: ["her breasts are bouncing"]
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "BounceLowWan2_2.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Trigger phrase "her breasts are bouncing" should be in positive prompt.
+    Use BOTH high and low noise variants. I2V only for Wan 2.2.
+  last_checked: "2026-04-13"
+
+- filename: "WAN-2.2-I2V-POV-Cowgirl-HIGH-v1.0-fixed.safetensors"
+  display_name: "POV Cowgirl (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1.0-fixed"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    POV cowgirl position. Use BOTH high and low noise variants.
+    I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "W22_POV_Cowgirl_Insertion_i2v_HN_v1A.safetensors"
+  display_name: "POV Cowgirl Insertion A (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1A"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "W22_POV_Cowgirl_Insertion_i2v_LN_v1.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    POV cowgirl insertion variant A. Use BOTH high and low noise variants.
+    I2V only. Also has v1B variant.
+  last_checked: "2026-04-13"
+
+- filename: "WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors"
+  display_name: "POV Titfuck / Paizuri (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "TwoMoreLurker"
+  version: "v1.0"
+  source_url: "https://civitai.com/models/2070335"
+  civitai_model_id: 2070335
+  trigger_words: ["titJob", "girlMove", "manMove", "gather", "fingersTogether"]
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Trigger words control the action: "titJob" (general), "girlMove" (girl
+    moves), "manMove" (man moves), "gather" (squeeze together),
+    "fingersTogether" (hands together). Use BOTH high and low noise variants.
+  last_checked: "2026-04-13"
+
+- filename: "wan 2.2/DR34ML4Y_I2V_14B_HIGH.safetensors"
+  display_name: "DR34ML4Y All-In-One NSFW I2V v1 (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "c0ur4ge (DR34MSC4PE)"
+  version: "v1.0 I2V 14B"
+  source_url: "https://civitai.com/models/1811313"
+  civitai_model_id: 1811313
+  trigger_words: ["m15510n4ry", "bl0wj0b", "d0ubl3_bj", "d0gg1e", "c0wg1rl"]
+  trigger_mode: "required"
+  trigger_examples:
+    - "m15510n4ry, missionary sex, woman on her back"
+    - "bl0wj0b, close-up blowjob"
+    - "d0gg1e, doggy style from behind"
+    - "c0wg1rl, reverse cowgirl position"
+    - "d0ubl3_bj, two women double blowjob"
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.2]
+  noise_type: "dual"
+  paired_with: "wan 2.2/DR34ML4Y_I2V_14B_LOW.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    All-In-One multi-concept NSFW LoRA v1.0. Handles missionary, blowjob,
+    double blowjob, doggy, and cowgirl — all via trigger words. Use BOTH
+    high and low noise variants. V2 also available on CivitAI with improved
+    training. Note: also specify woman is on her back for missionary/cowgirl
+    to avoid concept mix-ups.
+  last_checked: "2026-04-13"
+
+- filename: "DR34MJOB_I2V_14b_HighNoise.safetensors"
+  display_name: "DR34MJOB Blowjob I2V (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "c0ur4ge (DR34MSC4PE)"
+  version: "14B"
+  source_url: "https://civitai.com/models/1811313"
+  civitai_model_id: 1811313
+  trigger_words: ["bl0wj0b", "d0ubl3_bj"]
+  trigger_mode: "required"
+  trigger_examples:
+    - "bl0wj0b, a woman performing oral on a man's erect penis"
+    - "d0ubl3_bj, two women performing a double blowjob"
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.2]
+  noise_type: "dual"
+  paired_with: "DR34MJOB_I2V_14b_LowNoise.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Blowjob-focused variant from DR34MSC4PE. Use trigger words "bl0wj0b" or
+    "d0ubl3_bj". Use BOTH high and low noise variants. I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "sfbehind_v2.1_high_noise.safetensors"
+  display_name: "Sex From Behind v2.1 (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "daring_l"
+  version: "v2.1"
+  source_url: "https://civitai.com/models/2227622"
+  civitai_model_id: 2227622
+  trigger_words: ["sfb3hind", "sfbehind"]
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "sfbehind_v2.1_low_noise.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Trigger word "sfb3hind" or "sfbehind" should be in positive prompt.
+    Positions: doggy style, prone, top-down bottom-up — all facing camera.
+    Use BOTH high and low noise variants. Same creator as LTX sfbehind.
+  last_checked: "2026-04-13"
+
+- filename: "WAN-2.2-I2V-BreastPlay-HIGH-v2.safetensors"
+  display_name: "Breast Play V2 (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v2"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "WAN-2.2-I2V-BreastPlay-LOW-v2.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Breast play animation. Use BOTH high and low noise variants. I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "wan22-f4c3spl4sh-100epoc-high-k3nk.safetensors"
+  display_name: "Facesplash (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "K3NK"
+  version: "100 epoch"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: ["f4c3spl4sh"]
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Trigger word "f4c3spl4sh" should be in positive prompt. K3NK style
+    encoded trigger words. Use BOTH high (100 epoch) and low (154 epoch)
+    noise variants.
+  last_checked: "2026-04-13"
+
+- filename: "wan_2.2_i2v_slap_high_v2.0.safetensors"
+  display_name: "Slap (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v2.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "wan_2.2_i2v_slap_low_v2.0.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Slap motion LoRA. Also has T2V variants. Use BOTH high and low noise variants.
+  last_checked: "2026-04-13"
+
+- filename: "WAN-2.2-I2V-HandjobBlowjobCombo-HIGH-v1.safetensors"
+  display_name: "Handjob Blowjob Combo (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "WAN-2.2-I2V-HandjobBlowjobCombo-LOW-v1.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Combined handjob + blowjob model. Use BOTH high and low noise variants.
+    I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "wan22.r3v3rs3_c0wg1rl-14b-High-i2v_e70.safetensors"
+  display_name: "Reverse Cowgirl (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "ERA5ER"
+  version: "e70"
+  source_url: "https://civitai.com/models/1428098"
+  civitai_model_id: 1428098
+  trigger_words: ["r3v3rs3_c0wg1rl", "c0wg1rl"]
+  trigger_mode: "required"
+  trigger_examples:
+    - "r3v3rs3_c0wg1rl, straddling him in the reverse cowgirl position"
+    - "c0wg1rl, riding in cowgirl position"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Trigger word "r3v3rs3_c0wg1rl" or "c0wg1rl" REQUIRED in positive prompt.
+    Combined cowgirl + reverse cowgirl model. Also has T2V versions.
+  last_checked: "2026-04-13"
+
+- filename: "bbcRide_wan22_I2V_high_e30.safetensors"
+  display_name: "BBC Ride (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "dngstn32"
+  version: "e30"
+  source_url: "https://civitai.com/models/1452829"
+  civitai_model_id: 1452829
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "bbcRide_wan22_I2V_low_e30.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    BBC ride position. Use BOTH high and low noise variants. Also has T2V
+    versions. Re-trained from Wan 2.1 for Wan 2.2. I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "Wan22_CumV2_High.safetensors"
+  display_name: "Cum V2 (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "V2"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "Wan22_CumV2_Low.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Cumshot effect LoRA. Use BOTH high and low noise variants.
+  last_checked: "2026-04-13"
+
+- filename: "23High noise-Cumshot Aesthetics.safetensors"
+  display_name: "Cumshot Aesthetics (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.0]
+  noise_type: "dual"
+  paired_with: "56Low noise-Cumshot Aesthetics.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Cumshot aesthetics. Use BOTH high (23) and low (56) noise variants.
+  last_checked: "2026-04-13"
+
+- filename: "wan2.2_i2v_highnoise_pov_missionary_v1.0.safetensors"
+  display_name: "POV Missionary (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "dtwr434"
+  version: "v1.0"
+  source_url: "https://civitai.com/models/1331682"
+  civitai_model_id: 1331682
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "wan2.2_i2v_lownoise_pov_missionary_v1.0.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    POV missionary position. No trigger word needed. Also has T2V variants
+    and older Wan 2.1 versions. Workflows included in CivitAI download.
+  last_checked: "2026-04-13"
+
+- filename: "anal_insertion_HIGH_V01.safetensors"
+  display_name: "Anal Insertion (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v01"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "anal_insertion_LOW_V01.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Anal insertion motion. Use BOTH high and low noise variants. I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "ManAndHisLivingCocksleeve_v1_5750H.safetensors"
+  display_name: "Living Cocksleeve (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1_5750"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "ManAndHisLivingCocksleeve_v1_5750L.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Use BOTH high (H) and low (L) noise variants. I2V only.
+  last_checked: "2026-04-13"
+
+# ─── Wan 2.2 Deepthroat LoRAs ────────────────────────────────────────────────
+
+- filename: "deepthroat/jfj-deepthroat-W22-T2V-HN-v1.safetensors"
+  display_name: "Deepthroat JFJ T2V (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "JeeFJ"
+  version: "v1"
+  source_url: "https://civitai.com/models/1497390"
+  civitai_model_id: 1497390
+  trigger_words: ["blowjob", "deepthroat"]
+  trigger_mode: "required"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "deepthroat/jfj-deepthroat-W22-T2V-LN-v1.safetensors"
+  modes: ["t2v"]
+  usage_notes: >
+    JeeFJ's version — T2V only. Trigger words "blowjob" and/or "deepthroat"
+    needed. Also has I2V variants.
+  last_checked: "2026-04-13"
+
+- filename: "deepthroat/Wan22_ThroatV3_High.safetensors"
+  display_name: "Deepthroat/Facefuck V3 (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "Civitaiwolfxx"
+  version: "V3"
+  source_url: "https://civitai.com/models/2023407"
+  civitai_model_id: 2023407
+  trigger_words: []
+  trigger_mode: "natural_language"
+  trigger_examples:
+    - "a woman is kneeling in front of a man, she is giving him a deepthroat blowjob"
+    - "he starts face fucking her, he thrusts his hips back and forth"
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "deepthroat/Wan22_ThroatV3_Low.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Combined deepthroat + face fuck model. Use detailed scenario prompts
+    rather than single trigger words. V3 is latest version. I2V only.
+  last_checked: "2026-04-13"
+
+- filename: "deepthroat/wan22-ultimatedeepthroat-i2v-102epoc-high-k3nk.safetensors"
+  display_name: "Ultimate Deepthroat K3NK (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "K3NK"
+  version: "102 epoch"
+  source_url: "https://civitai.com/models/1874811"
+  civitai_model_id: 1874811
+  trigger_words: []
+  trigger_mode: "natural_language"
+  trigger_examples:
+    - "a woman in front of a penis, she engages in a deep throat blowjob, she swallows the penis all the way"
+    - "Her lips touches the man's groin. Her nose smashes against the man's hips."
+  recommended_strength: 1.0
+  strength_range: [0.7, 1.2]
+  noise_type: "dual"
+  paired_with: "deepthroat/wan22-ultimatedeepthroat-I2V-101epoc-low-k3nk.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    K3NK's version — descriptive natural language prompts. Use detailed scenario
+    descriptions. I2V only.
+  last_checked: "2026-04-13"
+
+# ─── Speed/Distill LoRAs ─────────────────────────────────────────────────────
+
+- filename: "wan/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors"
+  display_name: "LightX2V Step Distill (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "ModelTC"
+  version: "v2 rank256 bf16"
+  source_url: "https://huggingface.co/ModelTC/lightx2v_loras"
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2v"]
+  usage_notes: >
+    Step distillation LoRA — allows fewer inference steps for faster generation.
+    T2V only. Use with standard Wan 2.2 T2V pipeline.
+  last_checked: "2026-04-13"
+
+- filename: "Wan2.2_I2V_Lightning_4steps_Seko_HIGH.safetensors"
+  display_name: "Lightning 4-Step Seko (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "Seko"
+  version: "V1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.0]
+  noise_type: "dual"
+  paired_with: "Wan2.2_I2V_Lightning_4steps_Seko_LOW.safetensors"
+  modes: ["i2v"]
+  usage_notes: >
+    Speed LoRA — enables 4-step inference instead of 20+. Use with appropriate
+    sampler settings. I2V only. Use BOTH high and low noise variants.
+  last_checked: "2026-04-13"
+
+# ─── Wan 2.2 Cumshot LoRAs ────────────────────────────────────────────────────
+
+- filename: "Wan2.2 - T2V - Cum Shot - HIGH 14B.safetensors"
+  display_name: "Cumshot T2V (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "14B"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "dual"
+  paired_with: "Wan2.2 - T2V - Cum Shot - LOW 14B.safetensors"
+  modes: ["t2v"]
+  usage_notes: >
+    T2V cumshot LoRA. Use BOTH high and low noise variants.
+  last_checked: "2026-04-13"
+
+- filename: "wan_cumshot_i2v.safetensors"
+  display_name: "Cumshot I2V (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v"]
+  usage_notes: >
+    I2V cumshot LoRA, single file (no dual noise pair).
+  last_checked: "2026-04-13"
+
+# ─── Miscellaneous LoRAs ─────────────────────────────────────────────────────
+
+- filename: "bfs_head_swap_v4.safetensors"
+  display_name: "BFS Head Swap V4"
+  base_model: "qwen_image_edit"
+  creator: "NRDX"
+  version: "V4 Focus Head"
+  source_url: "https://civitai.com/models/2027766"
+  civitai_model_id: 2027766
+  trigger_words: ["h34d_sw4p:"]
+  trigger_mode: "required"
+  trigger_format: "h34d_sw4p: replace the head of Picture 1 by the head from Picture 2..."
+  recommended_strength: 1.0
+  strength_range: [0.8, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["image_edit"]
+  usage_notes: >
+    WARNING: This is a QWEN IMAGE EDIT LoRA, NOT a Wan 2.2 video LoRA!
+    V4 is for Qwen2509 model. Do NOT use with Wan 2.2 video pipelines.
+  last_checked: "2026-04-13"
+
+- filename: "masturbation_cumshot_v1.1_e310.safetensors"
+  display_name: "Masturbation Cumshot (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "v1.1 e310"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    Single-file LoRA (no dual noise pair). Combined masturbation + cumshot.
+  last_checked: "2026-04-13"
+
+- filename: "wan-nsfw-e14-fixed.safetensors"
+  display_name: "Wan NSFW Fixed (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "e14-fixed"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: >
+    General NSFW enhancement, single-file (no dual noise). Fixed version.
+  last_checked: "2026-04-13"

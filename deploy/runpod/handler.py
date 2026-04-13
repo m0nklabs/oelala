@@ -1111,7 +1111,11 @@ def download_loras(lora_downloads: list, job=None):
             # Ensure parent dirs exist for LoRAs in subdirectories (e.g. "wan 2.2/file.safetensors")
             target.parent.mkdir(parents=True, exist_ok=True)
 
-            resp = requests.get(url, stream=True, timeout=600)
+            headers = {}
+            hf_token = lora.get("hf_token", "")
+            if hf_token:
+                headers["Authorization"] = f"Bearer {hf_token}"
+            resp = requests.get(url, stream=True, timeout=600, headers=headers)
             resp.raise_for_status()
 
             total = int(resp.headers.get("content-length", 0))

@@ -67,6 +67,7 @@ const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurat
             playsInline
             preload="metadata"
             onLoadedMetadata={handleLoadedMetadata}
+            onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#1a1a2e;color:#555;font-size:12px">⚠️ Failed</div>'; }}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         ) : (
@@ -110,6 +111,7 @@ const LazyMedia = React.memo(({ item, getMediaUrl, videoDurations, setVideoDurat
           alt={item.filename}
           loading="lazy"
           onLoad={handleImageLoad}
+          onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#1a1a2e;color:#555;font-size:12px">⚠️ Failed</div>'; }}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       ) : (

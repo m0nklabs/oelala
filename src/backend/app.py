@@ -1850,9 +1850,16 @@ async def list_loras():
         "choke",
     ]
 
+    # Model name patterns that cause false positives with NSFW keywords
+    # e.g., "LTXXX" is a stylized "LTX" model name, not adult "XXX"
+    MODEL_NAME_STRIPS = ["ltxxx", "ltx-xxx"]
+
     def is_nsfw(name: str, path: str) -> bool:
         """Check if a LoRA is NSFW based on name/path."""
         check_str = f"{name} {path}".lower()
+        # Strip model name patterns that cause false positives
+        for strip in MODEL_NAME_STRIPS:
+            check_str = check_str.replace(strip, "ltx")
         # Check for NSFW keywords
         for kw in NSFW_KEYWORDS:
             if kw in check_str:
@@ -1931,6 +1938,325 @@ async def list_loras():
         "by_category": by_category,
         "count": len(all_loras),
     }
+
+
+@app.get("/loras/registry")
+async def get_lora_registry():
+    """Get all LoRAs enriched with registry metadata (trigger words, strengths, source URLs)."""
+    from lora_scanner import lora_cache
+
+    all_loras = lora_cache.get_all()
+    return {
+        "loras": [lora_cache.to_dict(l) for l in all_loras],
+        "count": len(all_loras),
+        "registry_count": sum(1 for l in all_loras if l.registry is not None),
+    }
+
+
+@app.post("/loras/validate")
+async def validate_lora_config(request: Request):
+    """Validate LoRA usage: check trigger words in prompt, strength ranges, dual-noise pairs.
+
+    Body: {"loras": [{"filename": "...", "strength": 1.0}], "positive_prompt": "..."}
+    """
+    from lora_scanner import validate_lora_batch
+    from dataclasses import asdict
+
+    body = await request.json()
+    loras = body.get("loras", [])
+    prompt = body.get("positive_prompt", "")
+
+    if not loras:
+        return {"validations": [], "all_valid": True}
+
+    results = validate_lora_batch(loras, prompt)
+    return {
+        "validations": [asdict(v) for v in results],
+        "all_valid": all(v.is_valid for v in results),
+    }
+
+
+@app.post("/ai-suggest")
+async def ai_suggest_settings(request: Request, user: User = Depends(get_current_user)):
+    """Analyze current generation settings with LLM and suggest improvements.
+
+    Takes current form state (prompt, LoRAs, resolution, etc.) and available LoRA
+    registry data. Returns actionable suggestions the user can accept/reject.
+
+    Body: {
+        "prompt": str,
+        "negative_prompt": str,
+        "tool": "i2v" | "t2v",
+        "model_mode": str,
+        "resolution": str,
+        "steps": int,
+        "cfg": float,
+        "fps": int,
+        "duration": int,
+        "loras": [{"filename": str, "strength": float}],
+        "model": str | null  # LLM model override
+    }
+    """
+    import httpx
+
+    body = await request.json()
+    prompt = body.get("prompt", "").strip()
+    negative_prompt = body.get("negative_prompt", "").strip()
+    tool = body.get("tool", "i2v")
+    model_mode = body.get("model_mode", "")
+    resolution = body.get("resolution", "")
+    steps = body.get("steps", 6)
+    cfg = body.get("cfg", 3.0)
+    fps = body.get("fps", 16)
+    duration = body.get("duration", 5)
+    current_loras = body.get("loras", [])
+    model_override = body.get("model")
+
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required for suggestions")
+
+    # Load LoRA registry for context
+    from lora_scanner import lora_cache
+    all_loras = lora_cache.get_all()
+
+    # Map model_mode to base_model for LoRA filtering
+    BASE_MODEL_MAP = {
+        "wan2.2": "wan2.2",
+        "wan22_standard": "wan2.2",
+        "wan22_distorch": "wan2.2",
+        "cloud_max": "wan2.2",
+        "ltx2": "ltx",
+        "ltx23": "ltx",
+    }
+    required_base = BASE_MODEL_MAP.get(model_mode, "")
+
+    # Build compact LoRA catalog for LLM context — minimal fields to keep prompt small
+    lora_catalog = []
+    for lora in all_loras:
+        if lora.registry and lora.registry.modes:
+            if tool not in lora.registry.modes:
+                continue
+        # Filter by base model compatibility
+        lora_base = lora.base_model or (lora.registry.base_model if lora.registry else "")
+        if required_base and lora_base and lora_base != required_base:
+            continue
+        entry = {
+            "filename": lora.path,
+            "name": lora.registry.display_name if lora.registry else lora.name,
+        }
+        if lora.registry:
+            if lora.registry.trigger_words:
+                entry["trigger_words"] = lora.registry.trigger_words
+            if lora.registry.trigger_mode and lora.registry.trigger_mode != "none":
+                entry["trigger_mode"] = lora.registry.trigger_mode
+            entry["strength"] = lora.registry.recommended_strength
+        lora_catalog.append(entry)
+
+    # Build current settings summary
+    current_lora_info = []
+    for lc in current_loras:
+        fn = lc.get("filename", "")
+        strength = lc.get("strength", 1.0)
+        # Find registry info
+        reg_info = next((l for l in all_loras if l.path == fn or l.filename == fn), None)
+        info = {"filename": fn, "strength": strength}
+        if reg_info and reg_info.registry:
+            info["trigger_words"] = reg_info.registry.trigger_words
+            info["trigger_mode"] = reg_info.registry.trigger_mode
+            info["recommended_strength"] = reg_info.registry.recommended_strength
+        current_lora_info.append(info)
+
+    # Model-specific constraints for the LLM
+    MODEL_CONSTRAINTS = {
+        "wan2.2": {
+            "cfg_range": "1.0-5.0 (default 1.0, higher = stronger prompt adherence but more artifacts)",
+            "steps_range": "4-30 (default 6, higher = better quality but slower)",
+            "notes": "Wan 2.2 supports CFG guidance. LoRAs are dual-noise (high+low pairs).",
+        },
+        "wan22_standard": {
+            "cfg_range": "1.0-5.0 (default 1.0, higher = stronger prompt adherence but more artifacts)",
+            "steps_range": "4-30 (default 6, higher = better quality but slower)",
+            "notes": "Wan 2.2 supports CFG guidance. LoRAs are dual-noise (high+low pairs).",
+        },
+        "cloud_max": {
+            "cfg_range": "1.0-5.0 (default 1.0)",
+            "steps_range": "4-30 (default 6)",
+            "notes": "Wan 2.2 on cloud GPU. Same constraints as wan2.2.",
+        },
+        "ltx2": {
+            "cfg_range": "1.0 ONLY — DO NOT suggest changing CFG. LTX 2.3 distilled is trained without classifier-free guidance. Any value above 1.0 DEGRADES quality.",
+            "steps_range": "6-10 (default 8, distilled model needs few steps)",
+            "notes": "LTX 2.3 distilled model. CFG must stay at 1.0. Do NOT suggest CFG changes.",
+        },
+        "ltx23": {
+            "cfg_range": "1.0 ONLY — DO NOT suggest changing CFG.",
+            "steps_range": "6-10 (default 8)",
+            "notes": "LTX 2.3 distilled. CFG must stay at 1.0.",
+        },
+    }
+    constraints = MODEL_CONSTRAINTS.get(model_mode, {})
+    constraints_text = ""
+    if constraints:
+        constraints_text = f"\nModel constraints for {model_mode}:\n- CFG: {constraints['cfg_range']}\n- Steps: {constraints['steps_range']}\n- {constraints['notes']}"
+
+    system_prompt = f"""You are an AI video generation settings optimizer. Analyze user settings and suggest concrete improvements. Max 6 suggestions. Output ONLY a valid JSON array.
+{constraints_text}
+
+Each suggestion: {{"id":"s1","type":"TYPE","title":"Short title","description":"Why","priority":"high|medium|low","apply":{{...}}}}
+
+Types and apply shapes:
+- prompt_add: {{"text":"append this"}}
+- prompt_replace: {{"find":"old","replace":"new"}}
+- negative_add: {{"text":"append this"}}
+- lora_add: {{"filename":"path.safetensors","strength":1.0,"trigger_words":["w"]}}
+- lora_strength: {{"filename":"path.safetensors","new_strength":0.8}}
+- lora_trigger: {{"text":"trigger words to add","lora_filename":"path.safetensors"}}
+- setting_change: {{"setting":"steps|cfg|fps|resolution","value":6}}"""
+
+    user_prompt = f"""Analyze these {tool.upper()} settings and suggest improvements.
+
+Tool: {tool.upper()}, Model: {model_mode}, Resolution: {resolution}
+Steps: {steps}, CFG: {cfg}, FPS: {fps}, Duration: {duration}s
+Prompt: "{prompt}"
+Negative: "{negative_prompt[:200]}"
+
+Active LoRAs: {json.dumps(current_lora_info, separators=(',',':')) if current_lora_info else "None"}
+
+Available LoRAs (suggest from these only):
+{json.dumps(lora_catalog, separators=(',',':'))}
+
+Focus on: missing trigger words, strength adjustments, matching LoRAs not yet active, prompt improvements. Return JSON array."""
+
+    # Determine LLM model — prefer Gemma 4 (fast MoE, good at structured JSON)
+    AI_SUGGEST_MODEL = "Huihui-gemma-4-26B-A4B-it-abliterated"
+    ai_settings = load_ai_settings()
+    model = (
+        model_override
+        or AI_SUGGEST_MODEL
+    )
+
+    # Gemma 4 26B needs ~14GB VRAM — free ComfyUI first
+    from guardian_client import (
+        wait_for_comfyui_idle,
+        free_comfyui_vram as _free_comfy_vram,
+    )
+    await wait_for_comfyui_idle()
+    await _free_comfy_vram()
+
+    # Retry loop for 503 (Guardian reloading model)
+    max_retries = 3
+    retry_delay = 15
+    data = None
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=300.0, headers=_guardian_headers()) as client:
+                resp = await client.post(
+                    f"{GUARDIAN_BASE}/v1/chat/completions",
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 4096,
+                    },
+                )
+
+                if resp.status_code == 503 and attempt < max_retries - 1:
+                    logger.info(f"⏳ Guardian 503 (model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+
+                resp.raise_for_status()
+                data = resp.json()
+                break
+
+        except httpx.ReadTimeout:
+            if attempt < max_retries - 1:
+                logger.warning(f"⏳ AI suggest timeout, retry {attempt + 1}/{max_retries}...")
+                continue
+            logger.error("AI suggest error: LLM request timed out after retries")
+            raise HTTPException(status_code=504, detail="LLM took too long to respond. Try again or use a shorter prompt.")
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail="Guardian LLM not available")
+        except Exception as e:
+            if "503" in str(e) and attempt < max_retries - 1:
+                logger.info(f"⏳ Guardian 503, retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+                continue
+            raise
+
+    if data is None:
+        raise HTTPException(status_code=503, detail="Guardian still loading model after retries — try again")
+
+    try:
+        finish_reason = data.get("choices", [{}])[0].get("finish_reason", "unknown")
+        logger.info(f"🐛 AI suggest LLM responded: finish_reason={finish_reason}, model={data.get('model','?')}")
+
+        msg = data["choices"][0]["message"]
+        content = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+        content = _strip_think_tags(content)
+        logger.info(f"🐛 AI suggest LLM response ({len(content)} chars, finish={finish_reason}): {content[:300]}")
+
+        # Parse JSON from response (handle markdown code blocks)
+        if not content:
+            detail = "LLM returned empty response" + (" (hit token limit)" if finish_reason == "length" else "") + ". Try again."
+            logger.warning(f"AI suggest: {detail}")
+            return JSONResponse(status_code=502, content={"detail": detail})
+        if content.startswith("```"):
+            # Remove markdown code fences
+            lines = content.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            content = "\n".join(lines).strip()
+
+        # Try to extract JSON array if LLM added extra text around it
+        if not content.startswith("["):
+            start = content.find("[")
+            end = content.rfind("]")
+            if start != -1 and end != -1:
+                content = content[start:end + 1]
+
+        suggestions = json.loads(content)
+        if not isinstance(suggestions, list):
+            suggestions = []
+
+        # Validate and sanitize suggestions
+        valid_types = {"prompt_add", "prompt_replace", "negative_add", "lora_add", "lora_strength", "lora_trigger", "setting_change"}
+        sanitized = []
+        for s in suggestions:
+            if isinstance(s, dict) and s.get("type") in valid_types and "apply" in s:
+                sanitized.append({
+                    "id": s.get("id", f"s{len(sanitized)}"),
+                    "type": s["type"],
+                    "title": s.get("title", "Suggestion"),
+                    "description": s.get("description", ""),
+                    "priority": s.get("priority", "medium"),
+                    "apply": s["apply"],
+                    "checked": True,
+                })
+        sanitized.sort(key=lambda x: {"high": 0, "medium": 1, "low": 2}.get(x["priority"], 1))
+
+        return {
+            "suggestions": sanitized,
+            "model_used": model,
+            "settings_analyzed": {
+                "tool": tool,
+                "model_mode": model_mode,
+                "resolution": resolution,
+                "active_loras": len(current_loras),
+            },
+        }
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM suggestions JSON: {e}")
+        raise HTTPException(status_code=502, detail="LLM returned invalid suggestion format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI suggest error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=str(e) or type(e).__name__)
 
 
 @app.get("/unet-models")
@@ -2302,6 +2628,47 @@ def record_generation_complete(
 # LoRA source directory (SSD)
 LORA_DIR = Path("/mnt/ssd/loras")
 
+# HuggingFace CDN sources for LoRAs — faster than self-hosted download.
+# Map: resolved_filename → {"repo": "user/repo", "path": "file_in_repo.safetensors"}
+# LoRAs listed here are downloaded from HF CDN by RunPod workers.
+# LoRAs NOT listed here fall back to self-hosted download via api.oelala.xyz.
+LORA_HF_SOURCES: dict[str, dict[str, str]] = {
+    "ltx/DR34ML4Y_LTXXX_PREVIEW_RC1.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/DR34ML4Y_LTXXX_PREVIEW_RC1.safetensors",
+    },
+    "ltx/LTX-2.3 - Ahegao Face v1.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/LTX-2.3 - Ahegao Face v1.safetensors",
+    },
+    "ltx/SexGod_Nudity_LTX23_v2_0.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/SexGod_Nudity_LTX23_v2_0.safetensors",
+    },
+    "ltx/bounceV2_LTX23_I2V.comfy.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/bounceV2_LTX23_I2V.comfy.safetensors",
+    },
+    "ltx/head_swap_v3_rank_adaptive_fro_098.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/head_swap_v3_rank_adaptive_fro_098.safetensors",
+    },
+    "ltx/ltx2.3_nsfw_furry.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/ltx2.3_nsfw_furry.safetensors",
+    },
+    "ltx/ltxdeepthroat_v01.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/ltxdeepthroat_v01.safetensors",
+    },
+    "ltx/sfbehind_LTX2_3_v0_1.safetensors": {
+        "repo": "m0nk111/oelala-loras",
+        "path": "ltx/sfbehind_LTX2_3_v0_1.safetensors",
+    },
+}
+# HF token for private repos (optional — public repos don't need it)
+HF_LORA_TOKEN = os.getenv("HF_LORA_TOKEN", "")
+
 # Cache for completed cloud jobs (prevent re-processing on repeated polls)
 _cloud_completed_cache: dict[str, dict] = {}
 
@@ -2417,9 +2784,9 @@ def _filter_loras_by_model_compat(lora_configs: list, target_model: str) -> list
 
 def _build_lora_download_list(lora_configs: list) -> list:
     """
-    Build signed download URLs for LoRAs needed by a cloud job.
-    Only includes LoRAs that exist locally on the SSD.
-    Handles names with or without .safetensors extension.
+    Build download URLs for LoRAs needed by a cloud job.
+    Prefers HuggingFace CDN for LoRAs listed in LORA_HF_SOURCES,
+    falls back to self-hosted download via api.oelala.xyz.
     Supports both Wan2.2 format ({high, low, strength}) and
     single-stage format ({name, strength}) used by LTX-2.3.
     Returns list of {filename, url} dicts.
@@ -2441,13 +2808,27 @@ def _build_lora_download_list(lora_configs: list) -> list:
                 continue
             # Update config in-place so workflow builder gets the correct filename
             config[key] = resolved_name
-            token = _lora_download_token(resolved_name)
-            downloads.append(
-                {
-                    "filename": resolved_name,
-                    "url": f"{base_url}/loras/download/{resolved_name}?token={token}",
-                }
-            )
+
+            # Prefer HuggingFace CDN if source is mapped
+            hf_source = LORA_HF_SOURCES.get(resolved_name)
+            if hf_source:
+                hf_repo = hf_source["repo"]
+                hf_path = hf_source.get("path", resolved_name)
+                hf_url = f"https://huggingface.co/{hf_repo}/resolve/main/{hf_path}"
+                entry: dict = {"filename": resolved_name, "url": hf_url}
+                if HF_LORA_TOKEN:
+                    entry["hf_token"] = HF_LORA_TOKEN
+                downloads.append(entry)
+                logger.info(f"☁️ LoRA via HF CDN: {resolved_name} → {hf_repo}")
+            else:
+                # Fallback: self-hosted download
+                token = _lora_download_token(resolved_name)
+                downloads.append(
+                    {
+                        "filename": resolved_name,
+                        "url": f"{base_url}/loras/download/{resolved_name}?token={token}",
+                    }
+                )
     if downloads:
         logger.info(f"☁️ Built {len(downloads)} LoRA download URL(s) for cloud job")
     return downloads
@@ -3418,11 +3799,11 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
     )
 
 
-@app.get("/media/generated/{filename}")
+@app.get("/media/generated/{filename:path}")
 async def get_generated_media(
     filename: str, request: Request, user: User = Depends(get_current_user)
 ):
-    """Serve files from generated bucket via oelala-storage (admin only)."""
+    """Serve files from generated bucket via oelala-storage (authenticated users)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -8049,6 +8430,7 @@ async def generate_ltx2_i2v_async(
     cfg: float = Form(3.0, description="CFG guidance scale"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     lora_configs: str = Form("", description="JSON array of LoRA configs [{high, strength}, ...]"),
+    audio_prompt: str = Form("", description="Audio description prompt for AV generation (LTX-2.3)"),
     post_processing: str = Form(
         "", description="JSON array of post-processing steps [{type, ...}, ...]"
     ),
@@ -8204,6 +8586,7 @@ async def generate_ltx2_i2v_async(
             strength=1.0,
             output_prefix=output_prefix,
             lora_configs=parsed_lora_configs,
+            audio_prompt=audio_prompt if audio_prompt else None,
         )
         if not cloud_workflow:
             raise HTTPException(
@@ -8592,12 +8975,14 @@ async def generate_text_video(
     ),
     sampler_name: str = Form("dpmpp_2m", description="Sampler name for cloud"),
     scheduler: str = Form("beta", description="Scheduler for cloud"),
+    audio_prompt: str = Form("", description="Audio description prompt for AV generation (LTX-2.3)"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
     Generate video from text prompt via ComfyUI T2V workflow.
     Supports multiple models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
     Supports cloud routing via compute_target='cloud' (RunPod).
+    When audio_prompt is provided with ltx2, generates audio-video.
     Requires authentication and credits.
     """
     if not get_comfyui_client:
@@ -8763,6 +9148,7 @@ async def generate_text_video(
                 aspect_ratio=aspect_ratio,
                 long_edge=long_edge,
                 lora_configs=parsed_lora_configs,
+                audio_prompt=audio_prompt if audio_prompt else None,
             )
             cloud_job_info = {
                 "prompt": prompt[:100],
@@ -9438,6 +9824,7 @@ async def caption_image(
 
         # Inject concept context if provided (from the Analyze step)
         concept_text = ""
+        director_notes_text = ""
         if concept_context:
             try:
                 cc = json.loads(concept_context)
@@ -9451,6 +9838,18 @@ async def caption_image(
                     concept_parts.append(f"Subjects: {'; '.join(subj_descs)}")
                 if concept_parts:
                     concept_text = " Director's concept: " + ". ".join(concept_parts) + "."
+
+                # Build mandatory director's notes for the VISUAL prompt (motion + camera only)
+                notes = []
+                if cc.get("suggested_motion"):
+                    notes.append(f"Motion/action: {cc['suggested_motion']}")
+                if cc.get("suggested_camera"):
+                    notes.append(f"Camera movement: {cc['suggested_camera']}")
+                if notes:
+                    director_notes_text = (
+                        " MANDATORY director's notes that MUST be woven into the prompt: "
+                        + ". ".join(notes) + "."
+                    )
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -9484,19 +9883,19 @@ async def caption_image(
                 "camera angle, lighting, and how the scene would naturally continue as a video. "
                 "Include camera motion (dolly, pan, tilt, tracking), subject animation (gestures, hair flowing, body movement), "
                 "and environmental motion where relevant."
-                f"{concept_text}{motion_hint_text}{audio_text} "
+                f"{concept_text}{director_notes_text}{motion_hint_text}{audio_text} "
                 "Comma-separated, present tense, cinematic style."
             )
         elif mode == "prompt_t2i":
             parts.append(
                 '"positive": a detailed text-to-image prompt with subject description, pose, clothing, setting, lighting, '
                 "art style, camera angle, quality boosters."
-                f"{concept_text}{motion_hint_text} "
+                f"{concept_text}{director_notes_text}{motion_hint_text} "
                 "Comma-separated tag style."
             )
         elif is_nsfw:
             nsfw_base = _build_nsfw_prompt(nsfw_intensity or 3)
-            parts.append(f'"positive": {nsfw_base}{motion_hint_text}')
+            parts.append(f'"positive": {nsfw_base}{director_notes_text}{motion_hint_text}')
         else:
             parts.append(
                 f'"positive": {caption_prompts.get(mode, caption_prompts["detailed"])}'
@@ -9514,13 +9913,63 @@ async def caption_image(
         )
         parts.append(f'"negative": {neg_style}. Keep it concise, comma-separated.')
 
-        # Audio prompt — when audio context is provided, generate audio description for LTX/TTS
-        has_audio = bool(audio_context)
+        # Audio prompt — when audio context or concept dialogue/audio is provided
+        # Check if concept_context has dialogue or ambient audio that should trigger audio generation
+        concept_has_audio = False
+        if concept_context:
+            try:
+                cc_audio = json.loads(concept_context)
+                concept_has_audio = bool(cc_audio.get("suggested_audio")) or bool(
+                    cc_audio.get("suggested_dialogue") and any(
+                        (d.get("line", "").strip() if isinstance(d, dict) else str(d).strip())
+                        for d in cc_audio["suggested_dialogue"]
+                    )
+                )
+            except (json.JSONDecodeError, TypeError):
+                pass
+        has_audio = bool(audio_context) or concept_has_audio
         if has_audio:
+            # Build explicit dialogue/ambient reference so the LLM includes them in the audio field
+            audio_ref_parts = []
+            # From audio_context form field
+            if audio_context:
+                try:
+                    ac = json.loads(audio_context)
+                    if ac.get("ambient"):
+                        audio_ref_parts.append(f"Ambient: {ac['ambient']}")
+                    if ac.get("dialogue"):
+                        for d in ac["dialogue"]:
+                            subj = d.get("subject", "person")
+                            line = d.get("line", "")
+                            if line.strip():
+                                audio_ref_parts.append(f'{subj} says: "{line}"')
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            # From concept_context director's notes (dialogue + ambient)
+            if concept_context:
+                try:
+                    cc_audio = json.loads(concept_context)
+                    if cc_audio.get("suggested_audio") and not any("Ambient:" in p for p in audio_ref_parts):
+                        audio_ref_parts.append(f"Ambient: {cc_audio['suggested_audio']}")
+                    if cc_audio.get("suggested_dialogue"):
+                        for d in cc_audio["suggested_dialogue"]:
+                            if isinstance(d, dict) and d.get("line", "").strip():
+                                ref = f'{d.get("subject", "person")} says: "{d["line"]}"'
+                                if ref not in audio_ref_parts:
+                                    audio_ref_parts.append(ref)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            audio_ref = ""
+            if audio_ref_parts:
+                audio_ref = (
+                    " The user provided these audio/dialogue notes that MUST be included: "
+                    + "; ".join(audio_ref_parts) + "."
+                )
             parts.append(
                 '"audio": a detailed audio description for AI video with audio generation. '
                 "Describe the soundscape: ambient sounds, environmental audio, speech/dialogue with tone and emotion, "
-                "music mood if appropriate. Include character dialogue naturally. "
+                "music mood if appropriate. Include ALL character dialogue with natural delivery cues (tone, emotion, pacing)."
+                f"{audio_ref} "
                 "Example: 'gentle wind, birds chirping in distance, woman speaks softly: Hello there, footsteps on gravel'. "
                 "Keep it descriptive and cinematic."
             )

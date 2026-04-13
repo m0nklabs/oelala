@@ -2,7 +2,8 @@
 LoRA Scanner — Scans and caches LoRA model metadata.
 
 Discovers LoRA files from ComfyUI model paths and /mnt/ssd/loras/,
-extracts metadata from safetensors headers, and caches results.
+extracts metadata from safetensors headers, enriches with registry
+data (trigger words, strength, source URLs), and caches results.
 """
 
 import json
@@ -12,7 +13,9 @@ import struct
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 logger = logging.getLogger("lora_scanner")
 
@@ -29,6 +32,32 @@ LORA_DIRS: List[Path] = [
     Path("/mnt/ssd/loras"),
     Path("/home/flip/oelala/ComfyUI/models/loras"),
 ]
+
+# Registry file with usage metadata (trigger words, strengths, source URLs)
+REGISTRY_PATH = Path(__file__).resolve().parent.parent.parent / "docs" / "lora_registry.yaml"
+
+
+@dataclass
+class LoRARegistry:
+    """Usage metadata from the LoRA registry for a single LoRA."""
+
+    trigger_words: List[str] = field(default_factory=list)
+    trigger_mode: str = ""  # "none" | "required" | "natural_language"
+    trigger_format: str = ""  # Pattern for structured triggers
+    trigger_examples: List[str] = field(default_factory=list)
+    recommended_strength: float = 1.0
+    strength_range: List[float] = field(default_factory=lambda: [0.5, 1.2])
+    source_url: Optional[str] = None
+    civitai_model_id: Optional[int] = None
+    display_name: str = ""
+    creator: str = ""
+    version: str = ""
+    usage_notes: str = ""
+    noise_type: str = ""  # "single" | "dual"
+    paired_with: Optional[str] = None
+    modes: List[str] = field(default_factory=list)
+    base_model: str = ""  # e.g., "wan2.2", "ltx", "sdxl"
+    last_checked: str = ""
 
 
 @dataclass
@@ -49,6 +78,7 @@ class LoRAInfo:
     noise_level: str = ""  # "high", "low", or ""
     format: str = ""  # From safetensors metadata
     rank: str = ""  # LoRA rank if detectable
+    registry: Optional[LoRARegistry] = None  # Enriched metadata from registry
 
 
 def _derive_name(filename: str) -> str:
@@ -132,8 +162,9 @@ def _derive_noise_level(filename: str) -> str:
 
 
 def _derive_base_model(filename: str) -> str:
-    """Derive base model from filename."""
+    """Derive base model from filename or path."""
     lower = filename.lower()
+    # Check full path including subdirectories
     if "wan" in lower or "w22" in lower:
         return "wan2.2"
     if "ltx" in lower:
@@ -168,11 +199,168 @@ def _make_id(path: str) -> str:
     return hashlib.md5(path.encode()).hexdigest()[:12]
 
 
-def scan_lora_directory(lora_dir: Path) -> List[LoRAInfo]:
+def _load_registry() -> Dict[str, LoRARegistry]:
+    """Load the LoRA registry YAML and return a dict keyed by filename."""
+    if not REGISTRY_PATH.exists():
+        logger.warning(f"⚠️ LoRA registry not found at {REGISTRY_PATH}")
+        return {}
+    try:
+        with open(REGISTRY_PATH, "r") as f:
+            entries = yaml.safe_load(f)
+        if not entries or not isinstance(entries, list):
+            return {}
+
+        registry: Dict[str, LoRARegistry] = {}
+        for entry in entries:
+            fn = entry.get("filename", "")
+            if not fn:
+                continue
+            registry[fn] = LoRARegistry(
+                trigger_words=entry.get("trigger_words", []),
+                trigger_mode=entry.get("trigger_mode", "none"),
+                trigger_format=entry.get("trigger_format", ""),
+                trigger_examples=entry.get("trigger_examples", []),
+                recommended_strength=float(entry.get("recommended_strength", 1.0)),
+                strength_range=entry.get("strength_range", [0.5, 1.2]),
+                source_url=entry.get("source_url"),
+                civitai_model_id=entry.get("civitai_model_id"),
+                display_name=entry.get("display_name", ""),
+                creator=entry.get("creator", ""),
+                version=entry.get("version", ""),
+                usage_notes=entry.get("usage_notes", "").strip(),
+                noise_type=entry.get("noise_type", ""),
+                paired_with=entry.get("paired_with"),
+                modes=entry.get("modes", []),
+                base_model=entry.get("base_model", ""),
+                last_checked=entry.get("last_checked", ""),
+            )
+        debug_log(f"Loaded {len(registry)} entries from LoRA registry")
+        return registry
+    except Exception as e:
+        logger.error(f"❌ Failed to load LoRA registry: {e}")
+        return {}
+
+
+def _enrich_with_registry(lora: LoRAInfo, registry: Dict[str, LoRARegistry]) -> None:
+    """Enrich a LoRAInfo with registry metadata (in-place)."""
+    # Try exact path match first, then filename-only match
+    reg = registry.get(lora.path) or registry.get(lora.filename)
+    if reg:
+        lora.registry = reg
+        # Override display name from registry if available
+        if reg.display_name:
+            lora.name = reg.display_name
+        # Override base_model from registry if scanner couldn't detect it
+        if not lora.base_model and reg.base_model:
+            lora.base_model = reg.base_model
+
+
+@dataclass
+class LoRAValidation:
+    """Result of validating a LoRA configuration against its registry entry."""
+
+    lora_filename: str
+    is_valid: bool
+    warnings: List[str] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+    suggestions: List[str] = field(default_factory=list)
+
+
+def validate_lora_usage(
+    lora_filename: str,
+    positive_prompt: str,
+    strength: float,
+    registry: Optional[Dict[str, LoRARegistry]] = None,
+) -> LoRAValidation:
+    """Validate that a LoRA is being used correctly.
+
+    Checks:
+    - Required trigger words are in the positive prompt
+    - Strength is within recommended range
+    - Dual-noise pair is being used if applicable
+    """
+    result = LoRAValidation(lora_filename=lora_filename, is_valid=True)
+
+    if registry is None:
+        registry = _load_registry()
+
+    reg = registry.get(lora_filename)
+    if not reg:
+        result.warnings.append(f"No registry entry found for '{lora_filename}'")
+        return result
+
+    prompt_lower = positive_prompt.lower()
+
+    # Check trigger words
+    if reg.trigger_mode == "required" and reg.trigger_words:
+        found = any(tw.lower() in prompt_lower for tw in reg.trigger_words)
+        if not found:
+            result.is_valid = False
+            result.errors.append(
+                f"Missing required trigger word(s): {reg.trigger_words}. "
+                f"At least one must appear in the positive prompt."
+            )
+            if reg.trigger_format:
+                result.suggestions.append(f"Prompt format: {reg.trigger_format}")
+            elif reg.trigger_examples:
+                result.suggestions.append(
+                    f"Example: {reg.trigger_examples[0]}"
+                )
+
+    elif reg.trigger_mode == "natural_language":
+        # Can't enforce, but suggest
+        if reg.trigger_examples:
+            result.suggestions.append(
+                f"Natural language trigger — describe the action. "
+                f"Example: {reg.trigger_examples[0]}"
+            )
+
+    # Check strength range
+    if reg.strength_range and len(reg.strength_range) == 2:
+        lo, hi = reg.strength_range
+        if strength < lo or strength > hi:
+            result.warnings.append(
+                f"Strength {strength} is outside recommended range "
+                f"[{lo}, {hi}]. Recommended: {reg.recommended_strength}"
+            )
+
+    # Check dual-noise pair
+    if reg.noise_type == "dual" and reg.paired_with:
+        result.suggestions.append(
+            f"Dual-noise LoRA — should be used together with '{reg.paired_with}'"
+        )
+
+    return result
+
+
+def validate_lora_batch(
+    loras: List[Dict[str, Any]],
+    positive_prompt: str,
+) -> List[LoRAValidation]:
+    """Validate multiple LoRA configs at once.
+
+    Each lora dict should have 'filename' and 'strength' keys.
+    """
+    registry = _load_registry()
+    results = []
+    for lora_cfg in loras:
+        fn = lora_cfg.get("filename", "")
+        strength = float(lora_cfg.get("strength", 1.0))
+        results.append(validate_lora_usage(fn, positive_prompt, strength, registry))
+    return results
+
+
+def scan_lora_directory(
+    lora_dir: Path,
+    registry: Optional[Dict[str, LoRARegistry]] = None,
+) -> List[LoRAInfo]:
     """Scan a single LoRA directory for models."""
     results = []
     if not lora_dir.exists():
         return results
+
+    if registry is None:
+        registry = _load_registry()
 
     for filepath in lora_dir.rglob("*.safetensors"):
         try:
@@ -197,12 +385,13 @@ def scan_lora_directory(lora_dir: Path) -> List[LoRAInfo]:
                 modified=stat.st_mtime,
                 category=category,
                 tags=_derive_tags(filepath.name, category),
-                base_model=_derive_base_model(filepath.name),
+                base_model=_derive_base_model(rel_path),
                 noise_level=_derive_noise_level(filepath.name),
                 format=meta.get("format", ""),
                 rank=meta.get("rank", ""),
             )
             results.append(info)
+            _enrich_with_registry(info, registry)
         except Exception as e:
             debug_log(f"Error scanning {filepath}: {e}")
 
@@ -228,9 +417,10 @@ class LoRACache:
         """Scan all LoRA directories."""
         debug_log("Starting LoRA scan...")
         start = time.time()
+        registry = _load_registry()
         all_loras = []
         for lora_dir in LORA_DIRS:
-            loras = scan_lora_directory(lora_dir)
+            loras = scan_lora_directory(lora_dir, registry)
             all_loras.extend(loras)
             debug_log(f"Found {len(loras)} LoRAs in {lora_dir}")
 
@@ -288,7 +478,28 @@ class LoRACache:
 
     def to_dict(self, lora: LoRAInfo) -> Dict:
         """Convert LoRAInfo to API-friendly dict."""
-        return asdict(lora)
+        d = asdict(lora)
+        # Flatten registry into top-level keys for API convenience
+        reg = d.pop("registry", None)
+        if reg:
+            d["trigger_words"] = reg.get("trigger_words", [])
+            d["trigger_mode"] = reg.get("trigger_mode", "none")
+            d["trigger_format"] = reg.get("trigger_format", "")
+            d["trigger_examples"] = reg.get("trigger_examples", [])
+            d["recommended_strength"] = reg.get("recommended_strength", 1.0)
+            d["strength_range"] = reg.get("strength_range", [])
+            d["source_url"] = reg.get("source_url")
+            d["civitai_model_id"] = reg.get("civitai_model_id")
+            d["creator"] = reg.get("creator", "")
+            d["version"] = reg.get("version", "")
+            d["usage_notes"] = reg.get("usage_notes", "")
+            d["noise_type"] = reg.get("noise_type", "")
+            d["paired_with"] = reg.get("paired_with")
+            d["modes"] = reg.get("modes", [])
+            d["has_registry"] = True
+        else:
+            d["has_registry"] = False
+        return d
 
 
 # Global singleton

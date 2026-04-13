@@ -61,7 +61,7 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
   }, [])
 
   const [file, setFile] = useState(null)
-  const [preview, setPreview] = useState(savedSession?.preview || null)
+  const [preview, setPreview] = useState(savedSession?.preview?.startsWith('data:') ? savedSession.preview : (savedSession?.preview || null))
   const [model, setModel] = useState(initial.model)
   const [mode, setMode] = useState(initial.mode)
   const [caption, setCaption] = useState(savedSession?.caption || '')
@@ -80,31 +80,58 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
   const [motionHint, setMotionHint] = useState(initial.motionHint || '')
 
   // ── Concept Studio state ────────────────────────────────────────
-  const [concept, setConcept] = useState(null)           // structured analysis from Analyze step
+  const [concept, setConcept] = useState(savedSession?.concept || null)           // structured analysis from Analyze step
   const [analyzing, setAnalyzing] = useState(false)      // loading state for Analyze
-  const [directorAudio, setDirectorAudio] = useState('') // ambient sound notes
-  const [dialogueLines, setDialogueLines] = useState([]) // [{subject, line}]
-  const [audioPrompt, setAudioPrompt] = useState('')     // generated audio prompt output
-  const [cameraDirection, setCameraDirection] = useState('') // LLM-driven camera direction text
+  const [directorAudio, setDirectorAudio] = useState(savedSession?.directorAudio || '') // ambient sound notes
+  const [dialogueLines, setDialogueLines] = useState(savedSession?.dialogueLines || []) // [{subject, line}]
+  const [audioPrompt, setAudioPrompt] = useState(savedSession?.audioPrompt || '')     // generated audio prompt output
+  const [cameraDirection, setCameraDirection] = useState(savedSession?.cameraDirection || '') // LLM-driven camera direction text
   const [conceptRefineText, setConceptRefineText] = useState('') // refinement prompt for concept
   const [notesRefineText, setNotesRefineText] = useState('')     // refinement prompt for notes
   const [refiningConcept, setRefiningConcept] = useState(false)  // loading state for concept refine
   const [refiningNotes, setRefiningNotes] = useState(false)      // loading state for notes refine
+  const [restoringFile, setRestoringFile] = useState(!!savedSession?.preview) // true while restoring file from session
 
-  // ── Restore file from session blob if we have a preview but no file ──
+  // ── Persist file as data URL for session restore ────────────────
+  const [fileDataUrl, setFileDataUrl] = useState(null)
   useEffect(() => {
-    if (savedSession?.preview && !file && savedSession.preview.startsWith('/')) {
-      apiFetch(savedSession.preview)
-        .then(r => r.ok ? r.blob() : null)
-        .then(blob => {
-          if (blob) {
-            const f = new File([blob], savedSession.previewFilename || 'restored.png', { type: blob.type || 'image/png' })
-            setFile(f)
+    if (!file) { setFileDataUrl(null); return }
+    const reader = new FileReader()
+    reader.onload = () => setFileDataUrl(reader.result)
+    reader.onerror = () => setFileDataUrl(null)
+    reader.readAsDataURL(file)
+  }, [file])
+
+  // ── Restore file from session (data URL or server URL) ──────────
+  useEffect(() => {
+    if (!savedSession?.preview) { setRestoringFile(false); return }
+    const restoreFile = async () => {
+      try {
+        let blob = null
+        if (savedSession.preview.startsWith('data:')) {
+          // Fast path: data URL → blob directly
+          const resp = await fetch(savedSession.preview)
+          blob = await resp.blob()
+        } else if (savedSession.preview.startsWith('/')) {
+          // Server URL: fetch via API
+          const resp = await apiFetch(savedSession.preview)
+          if (resp.ok) blob = await resp.blob()
+        }
+        if (blob) {
+          const f = new File([blob], savedSession.previewFilename || 'restored.png', { type: blob.type || 'image/png' })
+          setFile(f)
+          // Use a blob URL for display instead of the data URL
+          if (savedSession.preview.startsWith('data:')) {
+            setPreview(URL.createObjectURL(f))
           }
-        })
-        .catch(() => {})
+        }
+      } catch (e) {
+        console.warn('Failed to restore I2T file from session:', e)
+      } finally {
+        setRestoringFile(false)
+      }
     }
-    // Clear saved session after restore
+    restoreFile()
     sessionStorage.removeItem('i2t_session')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -355,8 +382,16 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
       }
 
       // Pass concept context if we did an Analyze step
+      // Merge in live director's notes (user may have edited cameraDirection etc.)
       if (concept && isPromptMode(mode)) {
-        formData.append('concept_context', JSON.stringify(concept))
+        const liveContext = {
+          ...concept,
+          suggested_camera: cameraDirection || concept.suggested_camera,
+          suggested_motion: motionHint || concept.suggested_motion,
+          suggested_audio: directorAudio || concept.suggested_audio,
+          suggested_dialogue: dialogueLines?.length ? dialogueLines : concept.suggested_dialogue,
+        }
+        formData.append('concept_context', JSON.stringify(liveContext))
       }
 
       // Pass audio context if director's notes have audio/dialogue
@@ -385,6 +420,11 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
       if (isPromptMode(mode) && cameraMotion) {
         const motionPrefix = getCameraMotionPrefix(cameraMotion)
         if (motionPrefix) captionText = motionPrefix + captionText
+      }
+      // Prepend LLM-driven camera direction if present and not already in caption
+      const camDir = cameraDirection?.trim()
+      if (isPromptMode(mode) && camDir && !captionText.toLowerCase().includes(camDir.toLowerCase().slice(0, 20))) {
+        captionText = camDir + ', ' + captionText
       }
       setCaption(captionText)
       setNegativePrompt(data.negative_prompt || '')
@@ -444,13 +484,27 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
     if (caption && onSendToTool) {
       // Save I2T state to sessionStorage so user can navigate back
       try {
+        // Use fileDataUrl for blob: previews so we can restore the image later
+        const persistPreview = preview?.startsWith('blob:') ? fileDataUrl : preview
         sessionStorage.setItem('i2t_session', JSON.stringify({
           caption,
           negativePrompt,
-          preview: (preview && !preview.startsWith('blob:')) ? preview : null,
+          preview: persistPreview || null,
           previewFilename: file?.name || null,
+          audioPrompt: audioPrompt || null,
+          concept: concept || null,
+          directorAudio: directorAudio || null,
+          dialogueLines: dialogueLines?.length ? dialogueLines : null,
+          cameraDirection: cameraDirection || null,
         }))
       } catch { /* quota exceeded — best effort */ }
+
+      // Build final positive prompt — ensure camera direction is included
+      let finalPositive = caption
+      const camDir = cameraDirection?.trim()
+      if (camDir && !finalPositive.toLowerCase().includes(camDir.toLowerCase().slice(0, 30))) {
+        finalPositive = camDir + ', ' + finalPositive
+      }
 
       onSendToTool(toolId, {
         item: {
@@ -460,7 +514,7 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
           _file: file,  // direct File blob for tools that support it
         },
         workflow: {
-          positive: caption,
+          positive: finalPositive,
           negative: negativePrompt || undefined,
           audio: audioPrompt || undefined,
         },
@@ -590,6 +644,17 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
             </>
           )}
         </button>
+      )}
+
+      {/* ── File restore notice — concept exists but file lost ────── */}
+      {concept && !file && !restoringFile && (
+        <div style={{
+          padding: '10px 14px', margin: '0 0 8px',
+          background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.25)',
+          borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary, #ccc)',
+        }}>
+          ⚠️ Re-upload your image to use Refine and Generate Prompt — your concept and notes are preserved.
+        </div>
       )}
 
       {/* ── Concept Card — shows after analysis ───────────────────── */}
@@ -964,10 +1029,15 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
       <button
         className="primary-btn"
         onClick={handleCaption}
-        disabled={!file || loading}
+        disabled={!file || loading || restoringFile}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
       >
-        {loading ? (
+        {restoringFile ? (
+          <>
+            <Loader2 size={18} className="spin" />
+            Restoring image...
+          </>
+        ) : loading ? (
           <>
             <Loader2 size={18} className="spin" />
             {isPromptMode(mode) ? 'Generating prompt...' : 'Generating caption...'}

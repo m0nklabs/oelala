@@ -81,6 +81,15 @@ LTX23_MODELS = [
         "description": "Gemma 3 12B text encoder (fp8 scaled)",
         "startup_required": True,
     },
+    {
+        "filename": "ltx2_audio_vae.safetensors",
+        "repo": "novoluz/ltx2_audio_vae_bf16",
+        "hf_path": "LTX2_audio_vae_bf16.safetensors",
+        "target_dir": "checkpoints",
+        "size_gb": 0.22,
+        "description": "LTX-2 Audio VAE (bf16)",
+        "startup_required": False,
+    },
 ]
 
 PUBLIC_MODEL_FILENAMES = {model["filename"] for model in LTX23_MODELS}
@@ -414,7 +423,11 @@ def download_loras(lora_downloads: List[Dict[str, Any]]) -> bool:
         logger.info(f"⬇️  Downloading LoRA: {filename}...")
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            resp = requests.get(url, stream=True, timeout=600)
+            headers = {}
+            hf_token = lora.get("hf_token", "")
+            if hf_token:
+                headers["Authorization"] = f"Bearer {hf_token}"
+            resp = requests.get(url, stream=True, timeout=600, headers=headers)
             resp.raise_for_status()
 
             tmp = target.with_suffix(".download")
