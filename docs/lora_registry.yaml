@@ -192,7 +192,7 @@
 # ─── Wan 2.2 LoRAs (dual noise) ──────────────────────────────────────────────
 
 - filename: "NSFW-22-H-e8.safetensors"
-  display_name: "NSFW General (Wan 2.2)"
+  display_name: "NSFW General High (Wan 2.2)"
   base_model: "wan2.2"
   creator: "unknown"
   version: "e8"
@@ -202,13 +202,13 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "NSFW-22-L-e8.safetensors"
   modes: ["i2v", "t2v"]
   usage_notes: >
-    General NSFW enhancement LoRA for Wan 2.2. Use BOTH high and low noise
-    variants together. No specific trigger word needed.
-  last_checked: "2026-04-13"
+    General NSFW enhancement LoRA for Wan 2.2 (high noise variant).
+    Use with NSFW-22-L-e8 as the low noise pair.
+  last_checked: "2026-07-23"
 
 - filename: "SmoothXXXAnimation_High.safetensors"
   display_name: "Smooth XXX Animation (Wan 2.2)"
@@ -221,7 +221,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.5, 1.0]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "SmoothXXXAnimation_Low.safetensors"
   modes: ["i2v", "t2v"]
   usage_notes: >
@@ -240,7 +240,7 @@
   trigger_mode: "required"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "BounceLowWan2_2.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -259,7 +259,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -278,7 +278,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "W22_POV_Cowgirl_Insertion_i2v_LN_v1.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -297,7 +297,7 @@
   trigger_mode: "required"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -323,7 +323,7 @@
     - "d0ubl3_bj, two women double blowjob"
   recommended_strength: 1.0
   strength_range: [0.8, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "wan 2.2/DR34ML4Y_I2V_14B_LOW.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -348,7 +348,7 @@
     - "d0ubl3_bj, two women performing a double blowjob"
   recommended_strength: 1.0
   strength_range: [0.8, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "DR34MJOB_I2V_14b_LowNoise.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -367,7 +367,7 @@
   trigger_mode: "required"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "sfbehind_v2.1_low_noise.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -387,7 +387,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "WAN-2.2-I2V-BreastPlay-LOW-v2.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -405,7 +405,7 @@
   trigger_mode: "required"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors"
   modes: ["i2v", "t2v"]
   usage_notes: >
@@ -425,7 +425,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "wan_2.2_i2v_slap_low_v2.0.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -443,7 +443,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "WAN-2.2-I2V-HandjobBlowjobCombo-LOW-v1.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -465,7 +465,7 @@
     - "c0wg1rl, riding in cowgirl position"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -484,7 +484,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "bbcRide_wan22_I2V_low_e30.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -503,7 +503,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "Wan22_CumV2_Low.safetensors"
   modes: ["i2v", "t2v"]
   usage_notes: >
@@ -521,7 +521,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.5, 1.0]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "56Low noise-Cumshot Aesthetics.safetensors"
   modes: ["i2v", "t2v"]
   usage_notes: >
@@ -539,7 +539,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "wan2.2_i2v_lownoise_pov_missionary_v1.0.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -558,7 +558,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "anal_insertion_LOW_V01.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -576,7 +576,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "ManAndHisLivingCocksleeve_v1_5750L.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -596,7 +596,7 @@
   trigger_mode: "required"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "deepthroat/jfj-deepthroat-W22-T2V-LN-v1.safetensors"
   modes: ["t2v"]
   usage_notes: >
@@ -618,7 +618,7 @@
     - "he starts face fucking her, he thrusts his hips back and forth"
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "deepthroat/Wan22_ThroatV3_Low.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -640,7 +640,7 @@
     - "Her lips touches the man's groin. Her nose smashes against the man's hips."
   recommended_strength: 1.0
   strength_range: [0.7, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "deepthroat/wan22-ultimatedeepthroat-I2V-101epoc-low-k3nk.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -680,7 +680,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.8, 1.0]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "Wan2.2_I2V_Lightning_4steps_Seko_LOW.safetensors"
   modes: ["i2v"]
   usage_notes: >
@@ -701,7 +701,7 @@
   trigger_mode: "none"
   recommended_strength: 1.0
   strength_range: [0.6, 1.2]
-  noise_type: "dual"
+  noise_type: "high"
   paired_with: "Wan2.2 - T2V - Cum Shot - LOW 14B.safetensors"
   modes: ["t2v"]
   usage_notes: >
@@ -783,3 +783,538 @@
   usage_notes: >
     General NSFW enhancement, single-file (no dual noise). Fixed version.
   last_checked: "2026-04-13"
+
+# ─── Wan 2.2 LoRAs (bounce/expressive) ──────────────────────────────────────
+
+- filename: "bounce_test_HighNoise-000005.safetensors"
+  display_name: "Bounce Test High Noise (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "000005"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.2]
+  noise_type: "high"
+  paired_with: "bounce_test_LowNoise-000005.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: "Bounce motion LoRA, high noise variant. Use with low noise pair."
+  last_checked: "2026-07-23"
+
+- filename: "bounce_test_LowNoise-000005.safetensors"
+  display_name: "Bounce Test Low Noise (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "000005"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.2]
+  noise_type: "low"
+  paired_with: "bounce_test_HighNoise-000005.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: "Bounce motion LoRA, low noise variant. Use with high noise pair."
+  last_checked: "2026-07-23"
+
+- filename: "Expressive_H-000001.safetensors"
+  display_name: "Expressive H (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "000001"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.5, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["i2v", "t2v"]
+  usage_notes: "Expressive motion/expression enhancement for Wan 2.2 video."
+  last_checked: "2026-07-23"
+
+# ─── SDXL Sliders & Detail LoRAs ────────────────────────────────────────────
+
+- filename: "Add_Details_v1.2(1).safetensors"
+  display_name: "Add Details v1.2 (copy)"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v1.2"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.7
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Detail enhancement slider for SDXL. Duplicate file."
+  last_checked: "2026-07-23"
+
+- filename: "Add_Details_v1.2.safetensors"
+  display_name: "Add Details v1.2"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v1.2"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.7
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Detail enhancement slider for SDXL images."
+  last_checked: "2026-07-23"
+
+- filename: "Dramatic Lighting Slider.safetensors"
+  display_name: "Dramatic Lighting Slider"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.7
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Controls dramatic lighting intensity via slider weight."
+  last_checked: "2026-07-23"
+
+- filename: "ShinySkinSlider3.0_800steps.safetensors"
+  display_name: "Shiny Skin Slider 3.0"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "3.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.6
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Slider to increase/decrease shiny skin appearance."
+  last_checked: "2026-07-23"
+
+- filename: "Skin Color_alpha1.0_rank4_noxattn_250steps.safetensors"
+  display_name: "Skin Color Slider (250 steps)"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "250steps"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.5
+  strength_range: [0.2, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Skin color adjustment slider. Rank 4, no cross-attention."
+  last_checked: "2026-07-23"
+
+- filename: "Skin Color_alpha1.0_rank4_noxattn_last.safetensors"
+  display_name: "Skin Color Slider (final)"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "last"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.5
+  strength_range: [0.2, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Skin color adjustment slider (final checkpoint). Rank 4, no cross-attention."
+  last_checked: "2026-07-23"
+
+- filename: "body_weight_slider_v1.safetensors"
+  display_name: "Body Weight Slider v1"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.5
+  strength_range: [0.2, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Adjusts body weight/build via slider weight."
+  last_checked: "2026-07-23"
+
+- filename: "Realism Lora By Stable Yogi_V3_Lite.safetensors"
+  display_name: "Realism LoRA V3 Lite"
+  base_model: "sdxl"
+  creator: "Stable Yogi"
+  version: "V3 Lite"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.7
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Enhances realism in SDXL generations."
+  last_checked: "2026-07-23"
+
+- filename: "Real_Beauty.safetensors"
+  display_name: "Real Beauty"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.7
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Beauty/attractiveness enhancement LoRA for SDXL."
+  last_checked: "2026-07-23"
+
+- filename: "natural_breasts_v1.safetensors"
+  display_name: "Natural Breasts v1"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.6
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Adjusts breast rendering towards more natural appearance."
+  last_checked: "2026-07-23"
+
+- filename: "skindentation_v1.safetensors"
+  display_name: "Skindentation v1"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.6
+  strength_range: [0.3, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Adds skin indentation detail (pressure marks on skin)."
+  last_checked: "2026-07-23"
+
+# ─── SDXL/Pony NSFW Content LoRAs ───────────────────────────────────────────
+
+- filename: "Cumtube-000020.safetensors"
+  display_name: "Cumtube"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "000020"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "NSFW content LoRA for SDXL."
+  last_checked: "2026-07-23"
+
+- filename: "NSFW-22-L-e8.safetensors"
+  display_name: "NSFW General Low (Wan 2.2)"
+  base_model: "wan2.2"
+  creator: "unknown"
+  version: "e8"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "low"
+  paired_with: "NSFW-22-H-e8.safetensors"
+  modes: ["i2v", "t2v"]
+  usage_notes: "General NSFW enhancement LoRA for Wan 2.2 (low noise variant). Use with NSFW-22-H-e8 as the high noise pair."
+  last_checked: "2026-07-23"
+
+- filename: "Penis_Pump (1).safetensors"
+  display_name: "Penis Pump"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "NSFW concept LoRA for SDXL."
+  last_checked: "2026-07-23"
+
+- filename: "realcumv5_final.safetensors"
+  display_name: "RealCum v5 Final"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v5 final"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "NSFW realism content LoRA for SDXL."
+  last_checked: "2026-07-23"
+
+- filename: "realcumv6.55.safetensors"
+  display_name: "RealCum v6.55"
+  base_model: "sdxl"
+  creator: "unknown"
+  version: "v6.55"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "NSFW realism content LoRA for SDXL. Updated version."
+  last_checked: "2026-07-23"
+
+# ─── Sounding LoRAs (Illustrious/NoobAI) ────────────────────────────────────
+
+- filename: "sounding/DildosoundV1.safetensors"
+  display_name: "Dildosound V1"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "V1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/Femdom_Sounding_-_Urethral_Insertion.safetensors"
+  display_name: "Femdom Sounding"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/Furry_urethral_label_ver-000007.safetensors"
+  display_name: "Furry Urethral"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "000007"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/Illustrious_Urethral_Fingering.safetensors"
+  display_name: "Illustrious Urethral Fingering"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA, explicitly for Illustrious base."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/JAV_GTJ130_IL_V1.safetensors"
+  display_name: "JAV GTJ130 IL V1"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "V1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "JAV concept LoRA for Illustrious (IL suffix)."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/Sounding_Rod_Urethral_Insertion_Concept_LoRA.safetensors"
+  display_name: "Sounding Rod Concept"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding rod concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/Urethral_sounding.safetensors"
+  display_name: "Urethral Sounding"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/checkpoint-e100_s1100.safetensors"
+  display_name: "Sounding Checkpoint e100"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "e100_s1100"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/futanari_urethral_penetration.safetensors"
+  display_name: "Futanari Urethral Penetration"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA for Illustrious-based models."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/penis_in_penis-NOOB-VPRED1.0-V1.0-loha-32-drop0.1-2025-03-06_17-25-51-save-4378-11-0.safetensors"
+  display_name: "Penis in Penis (NoobAI)"
+  base_model: "noob"
+  creator: "unknown"
+  version: "V1.0"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Trained on NoobAI (NOOB-VPRED), LoHA rank 32."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/penis_in_penis_full-NAI-VPRED1.0-V1-loha-dim16conv8alpha1-drop0.1-SNR5-000025.safetensors"
+  display_name: "Penis in Penis Full (NAI)"
+  base_model: "nai"
+  creator: "unknown"
+  version: "V1"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Trained on NAI (NAI-VPRED), LoHA dim16/conv8. SNR5 noise offset."
+  last_checked: "2026-07-23"
+
+- filename: "sounding/urethral insertion 2 epoch.safetensors"
+  display_name: "Urethral Insertion (2 epoch)"
+  base_model: "illustrious"
+  creator: "unknown"
+  version: "2 epoch"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.4, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i", "i2i"]
+  usage_notes: "Sounding concept LoRA, early checkpoint (2 epochs)."
+  last_checked: "2026-07-23"

@@ -146,18 +146,26 @@ def _derive_tags(filename: str, category: str) -> List[str]:
 
 def _derive_noise_level(filename: str) -> str:
     """Derive noise level from filename."""
-    lower = filename.lower()
-    if any(x in lower for x in ["highnoise", "high_noise", "high noise", "_hn", "-hn"]):
+    import re
+    # Strip extension before analysis
+    stem = filename.rsplit(".", 1)[0]
+    stem_lower = stem.lower()
+    if any(x in stem_lower for x in ["highnoise", "high_noise", "high noise", "_hn", "-hn"]):
         return "high"
-    if any(x in lower for x in ["lownoise", "low_noise", "low noise", "_ln", "-ln"]):
+    if any(x in stem_lower for x in ["lownoise", "low_noise", "low noise", "_ln", "-ln"]):
         return "low"
-    if "high" in lower and "noise" not in lower:
-        # Check if "high" is part of the name (e.g., "HIGH-v1")
-        if "high" in lower.split("-") or "high" in lower.split("_"):
-            return "high"
-    if "low" in lower and "noise" not in lower:
-        if "low" in lower.split("-") or "low" in lower.split("_"):
-            return "low"
+    # Split on delimiters AND CamelCase boundaries (split BEFORE lowering)
+    expanded = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', stem)
+    tokens = [t.lower() for t in re.split(r'[-_\s]+', expanded) if t]
+    if "high" in tokens:
+        return "high"
+    if "low" in tokens:
+        return "low"
+    # Check trailing H/L suffixes (e.g., 5750H, 5750L)
+    if re.search(r'\d+h$', stem_lower):
+        return "high"
+    if re.search(r'\d+l$', stem_lower):
+        return "low"
     return ""
 
 
@@ -169,12 +177,20 @@ def _derive_base_model(filename: str) -> str:
         return "wan2.2"
     if "ltx" in lower:
         return "ltx"
+    # I2V/T2V without ltx → wan2.2 (only Wan uses these LoRA modes)
+    if ("i2v" in lower or "t2v" in lower) and "ltx" not in lower:
+        return "wan2.2"
     if "sdxl" in lower or "xl" in lower:
         return "sdxl"
-    if "pony" in lower:
+    if "pony" in lower or lower.endswith("-pn.safetensors") or "_pn." in lower:
         return "pony"
     if "sd15" in lower or "sd1.5" in lower:
         return "sd1.5"
+    # Subdirectory-based detection
+    if lower.startswith("qwen_image/") or lower.startswith("qwen_image\\"):
+        return "qwen_image_edit"
+    if lower.startswith("ltx/") or lower.startswith("ltx\\"):
+        return "ltx"
     return ""
 
 
@@ -253,6 +269,9 @@ def _enrich_with_registry(lora: LoRAInfo, registry: Dict[str, LoRARegistry]) -> 
         # Override base_model from registry if scanner couldn't detect it
         if not lora.base_model and reg.base_model:
             lora.base_model = reg.base_model
+        # Override noise_level from registry noise_type if scanner missed it
+        if not lora.noise_level and reg.noise_type and reg.noise_type in ("high", "low"):
+            lora.noise_level = reg.noise_type
 
 
 @dataclass
@@ -423,6 +442,19 @@ class LoRACache:
             loras = scan_lora_directory(lora_dir, registry)
             all_loras.extend(loras)
             debug_log(f"Found {len(loras)} LoRAs in {lora_dir}")
+
+        # Second pass: inherit base_model/modes from paired_with references
+        # If LoRA A has paired_with=B, then B should inherit A's base_model and modes
+        by_filename = {l.filename: l for l in all_loras}
+        by_path = {l.path: l for l in all_loras}
+        for lora in all_loras:
+            if lora.registry and lora.registry.paired_with:
+                pair = by_filename.get(lora.registry.paired_with) or by_path.get(lora.registry.paired_with)
+                if pair and not pair.base_model:
+                    source_base = lora.base_model or (lora.registry.base_model if lora.registry else "")
+                    if source_base:
+                        pair.base_model = source_base
+                        debug_log(f"Inherited base_model '{source_base}' for {pair.path} from pair {lora.path}")
 
         # Sort by name
         all_loras.sort(key=lambda x: x.name.lower())
