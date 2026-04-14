@@ -584,6 +584,17 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"❌ Failed to collect outputs: {e}")
 
+    # Qwen Edit model produces reference reconstruction + edit result.
+    # Only return the LAST image — that's the actual edited output.
+    if len(outputs) > 1:
+        image_outputs = [o for o in outputs if o.get("type", "").startswith("image/")]
+        if len(image_outputs) > 1:
+            logger.info(
+                f"🔍 Qwen Edit produced {len(image_outputs)} images, "
+                f"keeping only the last (edited result)"
+            )
+            outputs = [image_outputs[-1]]
+
     return outputs
 
 

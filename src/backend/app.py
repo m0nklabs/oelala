@@ -12490,6 +12490,8 @@ def _build_qwen_edit_workflow(
     image_filename: str,
     instruction: str,
     negative_prompt: str = "",
+    width: int = 1024,
+    height: int = 1024,
     steps: int = 40,
     cfg: float = 4.0,
     seed: int = 42,
@@ -12506,6 +12508,8 @@ def _build_qwen_edit_workflow(
         image_filename: ComfyUI-uploaded filename of source image
         instruction: Natural language edit instruction (e.g. "remove the background")
         negative_prompt: What to avoid
+        width: Output width (must be multiple of 16)
+        height: Output height (must be multiple of 16)
         steps: Sampling steps (40 normal, 4 with lightning)
         cfg: CFG scale (4.0 normal, 1.0 with lightning)
         seed: Random seed
@@ -12552,8 +12556,8 @@ def _build_qwen_edit_workflow(
         "5": {
             "class_type": "EmptySD3LatentImage",
             "inputs": {
-                "width": 1024,
-                "height": 1024,
+                "width": width,
+                "height": height,
                 "batch_size": 1,
             },
         },
@@ -12666,6 +12670,8 @@ async def generate_qwen_edit(
     file: UploadFile = File(...),
     instruction: str = Form(..., description="Edit instruction (e.g. 'remove the background')"),
     negative_prompt: str = Form("", description="What to avoid"),
+    width: int = Form(1024, description="Output width (multiple of 16, 512-2048)"),
+    height: int = Form(1024, description="Output height (multiple of 16, 512-2048)"),
     steps: int = Form(40, description="Sampling steps (40 normal, 4 lightning)"),
     cfg: float = Form(4.0, description="CFG guidance (4.0 normal, 1.0 lightning)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
@@ -12707,7 +12713,7 @@ async def generate_qwen_edit(
 
     logger.info(
         f"🎨 Qwen Edit request: '{instruction[:60]}...' "
-        f"(steps={steps}, cfg={cfg}, lightning={lightning}, loras={len(parsed_lora_configs)}) [user={user.id}]"
+        f"({width}x{height}, steps={steps}, cfg={cfg}, lightning={lightning}, loras={len(parsed_lora_configs)}) [user={user.id}]"
     )
 
     # Credit calculation — Qwen Edit is a premium feature
@@ -12749,11 +12755,17 @@ async def generate_qwen_edit(
             _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
         )
 
+        # Clamp and round resolution to multiples of 16
+        width = max(512, min(2048, (width // 16) * 16))
+        height = max(512, min(2048, (height // 16) * 16))
+
         # Build workflow
         workflow = _build_qwen_edit_workflow(
             image_filename=upload_filename,
             instruction=instruction,
             negative_prompt=negative_prompt,
+            width=width,
+            height=height,
             steps=steps,
             cfg=cfg,
             seed=seed,
@@ -12773,6 +12785,8 @@ async def generate_qwen_edit(
             "settings": {
                 "instruction": instruction,
                 "negative_prompt": negative_prompt,
+                "width": width,
+                "height": height,
                 "steps": steps,
                 "cfg": cfg,
                 "seed": seed,
@@ -12812,6 +12826,8 @@ async def generate_qwen_edit(
             "meta": {
                 "instruction": instruction,
                 "seed": seed,
+                "width": width,
+                "height": height,
                 "steps": steps,
                 "cfg": cfg,
                 "lightning": lightning,
