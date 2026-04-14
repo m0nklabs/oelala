@@ -237,16 +237,23 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   const [gridToolMenuItem, setGridToolMenuItem] = useState(null)
   const [gridToolMenuData, setGridToolMenuData] = useState(null)
   const SEND_TO_TOOLS = [
-    { id: 'image-to-video', label: '🎬 Image to Video' },
-    { id: 'text-to-video',  label: '📝 Text to Video' },
-    { id: 'text-to-image',  label: '🖼️ Text to Image' },
-    { id: 'image-to-image', label: '🔄 Image to Image' },
-    { id: 'image-to-text',  label: '📷 Image to Text' },
-    { id: 'inpaint',        label: '🎨 Inpaint' },
-    { id: 'reframe',        label: '📐 Reframe' },
-    { id: 'face-swap',      label: '👤 Face Swap' },
-    { id: 'upscale',         label: '🔍 Upscale' },
+    { id: 'image-to-video', label: '🎬 Image to Video', accepts: ['image'] },
+    { id: 'text-to-video',  label: '📝 Text to Video',  accepts: ['image'] },
+    { id: 'text-to-image',  label: '🖼️ Text to Image',  accepts: ['image'] },
+    { id: 'image-to-image', label: '🔄 Image to Image', accepts: ['image'] },
+    { id: 'image-to-text',  label: '📷 Image to Text',  accepts: ['image'] },
+    { id: 'inpaint',        label: '🎨 Inpaint',        accepts: ['image'] },
+    { id: 'reframe',        label: '📐 Reframe',        accepts: ['image', 'video'] },
+    { id: 'face-swap',      label: '👤 Face Swap',      accepts: ['image'] },
+    { id: 'upscale',         label: '🔍 Upscale',        accepts: ['image', 'video'] },
   ]
+
+  // Filter tools by media type
+  const getApplicableTools = useCallback((item) => {
+    if (!item) return SEND_TO_TOOLS
+    const type = getMediaType(item.filename)
+    return SEND_TO_TOOLS.filter(t => t.accepts.includes(type))
+  }, [])
 
   // Close the dropdown when the lightbox switches items
   useEffect(() => { setSend2ToolMenu(false) }, [selectedIndex])
@@ -2298,6 +2305,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                         onClick={async (e) => {
                           e.stopPropagation()
                           e.preventDefault()
+                          const tools = getApplicableTools(item)
                           // Toggle: if already open for this item, close it
                           if (gridToolMenuItem && gridToolMenuItem.filename === item.filename) {
                             setGridToolMenuItem(null)
@@ -2314,9 +2322,10 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                                 workflowData = parseComfyWorkflow(json.metadata || {})
                               }
                             } catch (_) { /* no metadata */ }
-                            // If only one tool, send directly
-                            if (SEND_TO_TOOLS.length === 1) {
-                              onSendToTool(SEND_TO_TOOLS[0].id, { item, workflow: workflowData })
+                            // If only one applicable tool, send directly — no dropdown
+                            if (tools.length <= 1) {
+                              const target = tools[0] || SEND_TO_TOOLS[0]
+                              onSendToTool(target.id, { item, workflow: workflowData })
                             } else {
                               setGridToolMenuItem(item)
                               setGridToolMenuData(workflowData)
@@ -2345,7 +2354,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                             overflow: 'hidden',
                           }}
                         >
-                          {SEND_TO_TOOLS.map(tool => (
+                          {getApplicableTools(item).map(tool => (
                             <button
                               key={tool.id}
                               onClick={() => {
@@ -2556,13 +2565,33 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                     disabled={send2ToolLoading}
                     onClick={async (e) => {
                       e.stopPropagation()
-                      setSend2ToolMenu(prev => !prev)
+                      const tools = getApplicableTools(selectedItem)
+                      if (tools.length === 1) {
+                        // Single applicable tool — send directly, no dropdown
+                        setSend2ToolLoading(true)
+                        try {
+                          let workflowData = {}
+                          try {
+                            const res = await apiFetch(`/comfyui-metadata/${selectedItem.filename}`)
+                            if (res.ok) {
+                              const json = await res.json()
+                              workflowData = parseComfyWorkflow(json.metadata || {})
+                            }
+                          } catch (_) { /* no metadata */ }
+                          onSendToTool(tools[0].id, { item: selectedItem, workflow: workflowData })
+                          setSelectedIndex(null)
+                        } finally {
+                          setSend2ToolLoading(false)
+                        }
+                      } else {
+                        setSend2ToolMenu(prev => !prev)
+                      }
                     }}
                     title="Use in tool"
                     style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <Wand2 size={16} />
-                    <ChevronDown size={12} />
+                    {getApplicableTools(selectedItem).length > 1 && <ChevronDown size={12} />}
                   </button>
                   {send2ToolMenu && (
                     <div
@@ -2583,7 +2612,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                       {send2ToolLoading && (
                         <div style={{ padding: '10px 14px', color: '#a78bfa', fontSize: '0.8rem' }}>Fetching metadata…</div>
                       )}
-                      {!send2ToolLoading && SEND_TO_TOOLS.map(tool => (
+                      {!send2ToolLoading && getApplicableTools(selectedItem).map(tool => (
                         <button
                           key={tool.id}
                           onClick={async () => {

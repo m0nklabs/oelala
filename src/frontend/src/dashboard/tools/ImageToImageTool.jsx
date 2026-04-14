@@ -41,7 +41,40 @@ const I2I_DEFAULTS = {
   // Edit mode
   instruction: '',
   lightning: false,
+  editAspectRatio: '1:1',
+  editResolution: '1024',
   loraConfigs: [],
+}
+
+const EDIT_RESOLUTION_PRESETS = {
+  '768':  { label: '768',  desc: 'Fast' },
+  '1024': { label: '1024', desc: 'Standard' },
+  '1280': { label: '1280', desc: 'High' },
+  '1536': { label: '1536', desc: 'Ultra' },
+}
+
+const EDIT_ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2']
+
+// Calculate width × height from base resolution + aspect ratio (clamped to multiples of 16)
+function getEditDimensions(baseRes, aspectRatio) {
+  const base = parseInt(baseRes)
+  const [aw, ah] = aspectRatio.split(':').map(Number)
+  const ratio = aw / ah
+  let w, h
+  if (ratio >= 1) {
+    w = base
+    h = Math.round(base / ratio)
+  } else {
+    h = base
+    w = Math.round(base * ratio)
+  }
+  // Clamp to multiples of 16
+  w = Math.round(w / 16) * 16
+  h = Math.round(h / 16) * 16
+  // Clamp to backend limits
+  w = Math.max(512, Math.min(2048, w))
+  h = Math.max(512, Math.min(2048, h))
+  return { width: w, height: h }
 }
 
 const EXAMPLE_INSTRUCTIONS = [
@@ -90,6 +123,8 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   // ── Edit mode state ─────────────────────────────────────────────
   const [instruction, setInstruction] = useState(initial.instruction || '')
   const [lightning, setLightning] = useState(initial.lightning || false)
+  const [editAspectRatio, setEditAspectRatio] = useState(initial.editAspectRatio || '1:1')
+  const [editResolution, setEditResolution] = useState(initial.editResolution || '1024')
   const [availableLoras, setAvailableLoras] = useState({ by_category: {} })
   const [loraConfigs, setLoraConfigs] = useState(initial.loraConfigs || [])
   const [showLoraPanel, setShowLoraPanel] = useState(false)
@@ -99,11 +134,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     mode, prompt, negativePrompt, denoise, checkpoint, preset,
     faceId, faceDetailer, faceRestore, faceIdWeight,
     steps, cfg, seed, sampler, scheduler,
-    instruction, lightning, loraConfigs,
+    instruction, lightning, editAspectRatio, editResolution, loraConfigs,
   }), [mode, prompt, negativePrompt, denoise, checkpoint, preset,
     faceId, faceDetailer, faceRestore, faceIdWeight,
     steps, cfg, seed, sampler, scheduler,
-    instruction, lightning, loraConfigs])
+    instruction, lightning, editAspectRatio, editResolution, loraConfigs])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
@@ -115,6 +150,8 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     setFaceIdWeight(d.faceIdWeight)
     setSteps(d.steps); setCfg(d.cfg); setSeed(d.seed); setSampler(d.sampler); setScheduler(d.scheduler)
     setInstruction(d.instruction || ''); setLightning(d.lightning || false)
+    setEditAspectRatio(d.editAspectRatio || '1:1')
+    setEditResolution(d.editResolution || '1024')
     setLoraConfigs(d.loraConfigs || [])
   }, [resetDefaults])
 
@@ -355,6 +392,9 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         formData.append('cfg', String(cfg))
         formData.append('seed', String(seed))
         formData.append('lightning', String(lightning))
+        const editDims = getEditDimensions(editResolution, editAspectRatio)
+        formData.append('width', String(editDims.width))
+        formData.append('height', String(editDims.height))
         if (loraConfigs.length > 0) {
           formData.append('lora_configs', JSON.stringify(loraConfigs.filter(c => c.name)))
         }
@@ -766,6 +806,68 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             rows={2}
             placeholder="Optional: what to avoid..."
           />
+        </div>
+      </div>
+
+      {/* Resolution & Aspect Ratio Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            Resolution & Ratio
+            <InfoTooltip text="Pick a base resolution and aspect ratio. Higher resolution = more detail but slower. The actual pixel dimensions are shown below." />
+          </div>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+            {getEditDimensions(editResolution, editAspectRatio).width}×{getEditDimensions(editResolution, editAspectRatio).height}
+          </span>
+        </div>
+
+        {/* Resolution toggle */}
+        <div className="form-group" style={{ marginBottom: '12px' }}>
+          <label className="grok-section-label" style={{ fontSize: '0.75rem' }}>Resolution</label>
+          <div className="grok-toggle-group">
+            {Object.entries(EDIT_RESOLUTION_PRESETS).map(([key, preset]) => (
+              <button
+                key={key}
+                className={`grok-toggle-btn ${editResolution === key ? 'active' : ''}`}
+                onClick={() => setEditResolution(key)}
+                type="button"
+              >
+                {preset.label}
+                <span style={{ fontSize: '0.65rem', opacity: 0.7, display: 'block' }}>
+                  {preset.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Aspect ratio buttons */}
+        <div className="form-group">
+          <label className="grok-section-label" style={{ fontSize: '0.75rem' }}>Aspect Ratio</label>
+          <div className="aspect-grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+            {EDIT_ASPECT_RATIOS.map((label) => {
+              const [aw, ah] = label.split(':').map(Number)
+              const ratio = aw / ah
+              const maxDim = 22
+              const w = ratio >= 1 ? maxDim : Math.round(maxDim * ratio)
+              const h = ratio >= 1 ? Math.round(maxDim / ratio) : maxDim
+              const dims = getEditDimensions(editResolution, label)
+              return (
+                <button
+                  key={label}
+                  className={`aspect-btn ${editAspectRatio === label ? 'active' : ''}`}
+                  onClick={() => setEditAspectRatio(label)}
+                  style={{ height: '60px' }}
+                  title={`${dims.width}×${dims.height}`}
+                >
+                  <div className="aspect-icon" style={{ background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', marginBottom: '4px' }}>
+                    <div style={{ width: `${w}px`, height: `${h}px`, border: '1px solid currentColor' }} />
+                  </div>
+                  <span className="aspect-label" style={{ fontSize: '0.6rem' }}>{label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
