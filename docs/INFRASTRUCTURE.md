@@ -1,6 +1,6 @@
 # Oelala Infrastructure Inventory
 
-> Last Updated: 2026-03-06
+> Last Updated: 2026-07-14
 
 This document is the canonical infrastructure snapshot for Oelala.
 
@@ -9,7 +9,7 @@ This document is the canonical infrastructure snapshot for Oelala.
 | Repository | Purpose |
 |------------|---------|
 | `m0nklabs/oelala` | main product: frontend, backend, workflows, docs, gallery, billing, admin |
-| `m0nklabs/oelala-storage` | object storage, retention, signed URLs, node sync/replication groundwork |
+| `m0nklabs/oelala-storage` | ⚠️ **Deprecated** — replaced by MinIO. Historical Go-based storage service. |
 | `m0nk111/llama-cpp-guardian` | local LLM proxy/control plane for prompt and analysis support paths |
 
 ## Capability Ownership
@@ -17,7 +17,7 @@ This document is the canonical infrastructure snapshot for Oelala.
 | Capability | Primary Repo |
 |------------|--------------|
 | Product UI, tool workflows, gallery, credits, admin | `oelala` |
-| Object storage, metadata, dedup, GC, signed access | `oelala-storage` |
+| S3-compatible object storage (MinIO) | MinIO (local service) |
 | Local LLM proxying, model switching, benchmarks, sessions | `llama_cpp_guardian` |
 
 ## Core Services
@@ -27,8 +27,8 @@ This document is the canonical infrastructure snapshot for Oelala.
 | frontend | ai-kvm2 | 5174 | `oelala-frontend.service` |
 | backend | ai-kvm2 | 7998 | `oelala-backend.service` |
 | ComfyUI | ai-kvm2 | 8188 | `comfyui.service` |
-| storage primary | ai-kvm2 | 7990 | `oelala-storage.service` |
-| storage node-01 | ai-kvm2 | 7993 | `oelala-node-01.service` |
+| MinIO S3 API | ai-kvm2 | 9000 | `minio.service` |
+| MinIO Console | ai-kvm2 | 9001 | `minio.service` |
 
 ## Machines
 
@@ -43,10 +43,7 @@ This document is the canonical infrastructure snapshot for Oelala.
 |----------|-------|
 | `oelala.xyz` | frontend |
 | `api.oelala.xyz` | backend |
-| `storage.oelala.xyz` | storage primary public endpoint |
-| `storage2.oelala.xyz` | remote storage node public endpoint |
-| `storage-main.oelala.xyz` | explicit primary-node naming used in storage rollout docs/config |
-| `storage-node-01.oelala.xyz` | explicit local node-01 naming used in storage rollout docs/config |
+| `storage.oelala.xyz` | MinIO S3 API (via Cloudflare tunnel) |
 
 ## Cloudflare Tunnels
 
@@ -57,13 +54,18 @@ This document is the canonical infrastructure snapshot for Oelala.
 
 Rule: each node should own its own tunnel rather than depending on another node for ingress.
 
-## Storage Nodes
+## Storage
 
-| Node | Role | Notes |
-|------|------|-------|
-| primary | coordinator / primary | main storage entrypoint |
-| node-01 | additional local node | separate local service ports |
-| node-02 | remote node | autonomous remote host |
+Storage is provided by **MinIO** (S3-compatible object storage), replacing the previous custom oelala-storage Go service.
+
+| Component | Details |
+|-----------|---------|
+| Service | MinIO |
+| S3 API port | 9000 |
+| Console port | 9001 |
+| systemd unit | `minio.service` |
+| Health check | `/minio/health/live` |
+| Access | MinIO access key / secret key |
 
 ## GPU Inventory
 
@@ -78,25 +80,25 @@ Preferred DisTorch2 allocation:
 cuda:0,10gb;cuda:1,15gb;cpu,*
 ```
 
-## Storage/Auth Conventions
+## Storage Access
 
-### Storage API
+### MinIO S3 API
 
-```http
-Authorization: Bearer <token>
+Authentication uses MinIO access key / secret key (configured in `.env`):
+
+```
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=<access-key>
+MINIO_SECRET_KEY=<secret-key>
 ```
 
-### Storage Admin
+### Presigned URLs
 
-```http
-X-Admin-Secret: <secret>
-```
+The backend generates S3 presigned URLs for time-limited media access.
 
 ### Retention
 
-```http
-X-Expires-At: <RFC3339 timestamp>
-```
+Retention is managed via MinIO bucket lifecycle rules configured by the backend.
 
 ## External Vendors / Platforms
 

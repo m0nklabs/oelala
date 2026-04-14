@@ -1,24 +1,30 @@
 # Media Storage Architecture
 
-> **Last Updated**: 2026-01-15
-> **Related Project**: [oelala-storage](https://github.com/m0nklabs/oelala-storage) (separate repo)
-> **Canonical Docs**: [oelala-storage/docs/VISION.md](../../oelala-storage/docs/VISION.md)
+> ⚠️ **LARGELY SUPERSEDED** — The custom oelala-storage Go service described in this document
+> has been replaced by **MinIO** (S3-compatible object storage on port 9000).
+> See [`MINIO_MIGRATION_PLAN.md`](./MINIO_MIGRATION_PLAN.md) for the new setup.
+> The backend now uses the `minio` Python SDK via `storage_client.py`.
+> This document is retained for historical context and high-level storage design principles.
+
+> **Last Updated**: 2026-07-14
+> **Previous Storage**: oelala-storage (Go, deprecated)
+> **Current Storage**: MinIO (S3-compatible, port 9000/9001)
 
 ---
 
 ## 🎯 Key Concept: Separation of Concerns
 
-**oelala-backend is the "brain", oelala-storage is the "dumb" storage.**
+**oelala-backend is the "brain", MinIO is the "dumb" storage.**
 
-| Responsibility | oelala-backend | oelala-storage |
-|---------------|----------------|----------------|
+| Responsibility | oelala-backend | MinIO |
+|---------------|----------------|-------|
 | User authentication | ✅ | ❌ |
 | Access control (who sees what) | ✅ | ❌ |
-| Retention policies | ✅ (sets `X-Expires-At`) | ❌ (just executes) |
+| Retention policies | ✅ (sets lifecycle rules) | ❌ (just executes) |
 | Tier/quota logic | ✅ | ❌ |
-| Storing files | ❌ | ✅ |
-| Deduplication | ❌ | ✅ |
-| CDN/replication | ❌ | ✅ |
+| Storing files | ❌ | ✅ (S3 API) |
+| Deduplication | ❌ | ✅ (content-hash keys) |
+| Replication | ❌ | ✅ (MinIO built-in) |
 
 ---
 
@@ -26,44 +32,44 @@
 
 Storage is split into two components:
 1. **oelala** - Main application (this repo) - handles generation, UI, business logic
-2. **oelala-storage** - Standalone storage service (separate repo) - handles files, sync, caching
+2. **MinIO** - S3-compatible object storage service - handles files, buckets, presigned URLs
 
-### oelala-storage Architecture
+### Storage Architecture (Current — MinIO)
 
-oelala-storage is a **client/server/CDN** system:
+MinIO provides standard **S3-compatible** object storage:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  oelala-backend (this repo)                                    │
 │                                                                │
 │  • Determines who can see what                                 │
-│  • Sets retention via X-Expires-At header                     │
+│  • Sets retention via lifecycle rules                          │
 │  • Manages user tiers/quotas                                  │
+│  • Generates S3 presigned URLs for media access               │
 │                                                                │
 │                        │                                       │
 │                        ▼                                       │
 │  ┌──────────────────────────────────────────────────────────┐ │
-│  │  oelala-storage Coordinator (CDN entry point)            │ │
+│  │  MinIO (S3-compatible object storage)                    │ │
 │  │                                                          │ │
-│  │  • Routes requests to correct node                       │ │
-│  │  • Manages replication                                   │ │
-│  │  • Handles deduplication                                 │ │
-│  │                                                          │ │
-│  │               ┌─────────┬─────────┐                     │ │
-│  │               ▼         ▼         ▼                     │ │
-│  │            Node 1    Node 2    Node 3                   │ │
-│  │            500GB     200GB     1TB                      │ │
+│  │  • S3 API on port 9000                                   │ │
+│  │  • Admin Console on port 9001                            │ │
+│  │  • Bucket-based organization                             │ │
+│  │  • Built-in lifecycle/retention                          │ │
+│  │  • systemd: minio.service                               │ │
 │  └──────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────┘
 ```
 
 ## Current Status ✅
 
-### oelala-storage Service
-- **Mode**: Standalone (coordinator + node combined)
-- **Port**: 7990 (HTTP), 7991 (gRPC), 7992 (Metrics)
-- **Status**: Running as systemd service
-- **Storage Path**: `/home/flip/oelala/media/`
+### MinIO Storage Service
+- **Type**: S3-compatible object storage
+- **S3 API Port**: 9000
+- **Console Port**: 9001
+- **systemd unit**: `minio.service`
+- **Health check**: `/minio/health/live`
+- **Access**: MinIO access key / secret key (via `minio` Python SDK)
 
 ### User-Scoped Storage
 Each user gets their own bucket (directory) based on Supabase user ID:
@@ -96,13 +102,13 @@ DELETE /user/media/{type}/{file} → Delete file
 
 All endpoints require JWT authentication (`Authorization: Bearer <token>`).
 
-### oelala-storage (Go) - S3-compatible
+### MinIO (S3-compatible) - Object Storage
 ```
-PUT    /{bucket}/{key}        → Upload file
-GET    /{bucket}/{key}        → Download file
-DELETE /{bucket}/{key}        → Delete file
-GET    /{bucket}              → List bucket contents
-HEAD   /{bucket}/{key}        → Get file metadata
+PUT    /{bucket}/{key}        → Upload file (S3 PutObject)
+GET    /{bucket}/{key}        → Download file (S3 GetObject)
+DELETE /{bucket}/{key}        → Delete file (S3 RemoveObject)
+GET    /{bucket}              → List bucket contents (S3 ListObjects)
+HEAD   /{bucket}/{key}        → Get file metadata (S3 StatObject)
 ```
 
 ## Access Control
@@ -175,8 +181,8 @@ HEAD   /{bucket}/{key}        → Get file metadata
 | Background auto-upload for async | ⏳ Todo | Critical (#15) |
 | Storage quota tracking | ⏳ Todo | High (#33) |
 | Retention policies via `X-Expires-At` | ⏳ Todo | Medium (#71) |
-| ✅ Signed URL generation | ✅ Done | - |
-| User bucket support in storage | ⏳ Todo | Critical (oelala-storage) |
+| ✅ Signed URL generation | ✅ Done (S3 presigned URLs) | - |
+| ~~User bucket support in storage~~ | ✅ Done (MinIO buckets) | - |
 
 ---
 
@@ -187,12 +193,11 @@ HEAD   /{bucket}/{key}        → Get file metadata
 oelala-backend determines retention, NOT storage:
 
 ```python
-# When uploading to storage
-headers = {
-    "X-User-ID": user_id,
-    "X-Expires-At": (datetime.now() + timedelta(days=180)).isoformat(),  # 6 months EU
-}
-storage_client.put(bucket, key, data, headers=headers)
+# When uploading to MinIO, lifecycle rules handle retention.
+# Backend sets object tags or uses bucket lifecycle policies:
+from minio import Minio
+client = Minio(endpoint, access_key=key, secret_key=secret)
+client.put_object(bucket, key, data, length, metadata={"X-Expires-At": expiry})
 ```
 
 ### Retention Rules (Backend enforces)
@@ -204,19 +209,21 @@ storage_client.put(bucket, key, data, headers=headers)
 | Deleted account media | 2 years + 6 months | Legal requirements |
 | Published content | Until unpublished | User controls |
 
-### What Storage Does
+### What MinIO Does
 
-Storage just executes what backend tells it:
-1. Receives `X-Expires-At` header on upload
-2. Stores expiration in file metadata
-3. GC job deletes expired files periodically
-4. Backend can delete files early if needed
+MinIO executes storage operations as directed by the backend:
+1. Stores objects in S3-compatible buckets
+2. Lifecycle rules handle expiration (configured per-bucket)
+3. Backend can delete objects early if needed
+4. Presigned URLs provide time-limited access
 
 ---
 
-## 🔗 oelala-storage Architecture
+## 🔗 Storage Architecture (Historical — oelala-storage)
 
-See [oelala-storage/docs/VISION.md](../../oelala-storage/docs/VISION.md) for the canonical architecture.
+> ⚠️ The oelala-storage Go service described below has been **superseded by MinIO**.
+> This section is kept for historical reference only.
+> See [MINIO_MIGRATION_PLAN.md](./MINIO_MIGRATION_PLAN.md) for the current architecture.
 
 **Current Mode**: Standalone (single node, coordinator + storage combined)
 
