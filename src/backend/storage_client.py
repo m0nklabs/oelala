@@ -145,16 +145,19 @@ class StorageClient:
         Returns:
             File content as bytes
         """
-        # [MARK1] Try Backblaze B2 first if configured
-        if b2_client.is_configured():
-            b2_data = b2_client.get(bucket, key)
-            if b2_data is not None:
-                return b2_data
-
+        # [MARK1] Try oelala-storage first, B2 only as last-resort fallback
         url = f"/{bucket}/{key}"
-        resp = self.client.get(url)
-        resp.raise_for_status()
-        return resp.content
+        try:
+            resp = self.client.get(url)
+            resp.raise_for_status()
+            return resp.content
+        except Exception:
+            if b2_client.is_configured():
+                b2_data = b2_client.get(bucket, key)
+                if b2_data is not None:
+                    logger.warning(f"B2 fallback used for {bucket}/{key} (primary storage failed)")
+                    return b2_data
+            raise
 
     def get_with_metadata(self, bucket: str, key: str) -> Tuple[bytes, str, int]:
         """
@@ -167,17 +170,20 @@ class StorageClient:
         Returns:
             Tuple of (content_bytes, content_type, content_length)
         """
-        # [MARK1] Try Backblaze B2 first
-        if b2_client.is_configured():
-            b2_meta = b2_client.get_with_metadata(bucket, key)
-            if b2_meta is not None:
-                return b2_meta
-
+        # [MARK1] Try oelala-storage first, B2 only as last-resort fallback
         url = f"/{bucket}/{key}"
-        resp = self.client.get(url)
-        resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "application/octet-stream")
-        return resp.content, content_type, len(resp.content)
+        try:
+            resp = self.client.get(url)
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "application/octet-stream")
+            return resp.content, content_type, len(resp.content)
+        except Exception:
+            if b2_client.is_configured():
+                b2_meta = b2_client.get_with_metadata(bucket, key)
+                if b2_meta is not None:
+                    logger.warning(f"B2 fallback used for {bucket}/{key} (primary storage failed)")
+                    return b2_meta
+            raise
 
     def stream(self, bucket: str, key: str):
         """
