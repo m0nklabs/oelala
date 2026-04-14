@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-04-14
+
+### Added
+- **Qwen Image Edit 2511 RunPod Worker**: Full cloud infrastructure for instruction-based image editing
+  - `deploy/runpod-qwen/` — handler, Dockerfile, deploy script
+  - RunPod serverless endpoint `oelala-qwen` (ID: `8djiexluyybooj`, template: `ed2614hd8k`)
+  - Backend endpoint `/generate-qwen-edit` with width/height/steps/cfg/seed/lightning/lora_configs params
+  - ComfyUI workflow builder `_build_qwen_edit_workflow()` based on official v2509 reference
+- **I2I Edit Mode Resolution Controls**: Full resolution + aspect ratio picker
+  - 4 resolution tiers: 768 (Fast), 1024 (Standard), 1280 (High), 1536 (Ultra)
+  - 7 aspect ratios with dynamic pixel dimension calculation (clamped to multiples of 16)
+  - Settings persistence via `useToolSettings`
+
+### Changed
+- **"Use in tool" smart filtering**: Media type-aware tool selection in MyMedia
+  - Each tool tagged with `accepts: ['image']` / `['video']` filter
+  - Auto-sends directly when only 1 applicable tool (no popup needed)
+  - Dropdown only shown when multiple tools apply
+
+### Fixed
+- **Qwen Edit workflow validation**: Fixed 5 structural bugs in ComfyUI node graph
+- **Double output filter**: Handler returns only the edit result, not reference reconstruction
+
+---
+
 ## [0.10.0] - 2026-03-02
 
 ### Added
