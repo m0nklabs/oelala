@@ -147,27 +147,27 @@ Based on project priorities:
 ## 🔮 v2 Backlog
 
 ### Unified Tool Parameter Components
-> **When**: v2, or when adding new tools becomes copy-paste heavy  
-> **Why**: All 11 tools reuse the same UI patterns (prompt fields, model selectors, CFG sliders, seed inputs, file uploaders, advanced toggles) but each implements them inline. Duplicated code across ~22,000 lines.  
-> **What**: Extract shared components: `<PromptField>`, `<ModelSelector>`, `<ResolutionPicker>`, `<AdvancedToggle>`, `<FileUploader>`, `<CFGSlider>`, `<SeedInput>`. Each tool declares a config object; a `<ToolParamsRenderer>` renders the right components in order.  
-> **Risk**: High — touches all 11 tool files. Do after feature-freeze, not during active development.  
+> **When**: v2, or when adding new tools becomes copy-paste heavy
+> **Why**: All 11 tools reuse the same UI patterns (prompt fields, model selectors, CFG sliders, seed inputs, file uploaders, advanced toggles) but each implements them inline. Duplicated code across ~22,000 lines.
+> **What**: Extract shared components: `<PromptField>`, `<ModelSelector>`, `<ResolutionPicker>`, `<AdvancedToggle>`, `<FileUploader>`, `<CFGSlider>`, `<SeedInput>`. Each tool declares a config object; a `<ToolParamsRenderer>` renders the right components in order.
+> **Risk**: High — touches all 11 tool files. Do after feature-freeze, not during active development.
 > **Current mitigation**: CSS-level uniformity via `.grok-card`, `.form-group`, `.form-select` classes in App.css. Visual consistency is already there; this is a code-quality improvement.
 
 ---
 
 ## 🔮 Future: RunPod Multi-Endpoint Architecture
 
-> **When**: When traffic volume justifies it (multiple concurrent users)  
-> **Why**: Current single endpoint downloads ALL models (~70GB) at startup even though each job only needs ~30GB  
+> **When**: When traffic volume justifies it (multiple concurrent users)
+> **Why**: Current single endpoint downloads ALL models (~70GB) at startup even though each job only needs ~30GB
 
-**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models  
-**Future** (higher traffic): Split into dedicated endpoints per workflow family  
+**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models
+**Future** (higher traffic): Split into dedicated endpoints per workflow family
 
 | Endpoint | Models | Startup Download |
 |----------|--------|-----------------|
 | `oelala-cloud-i2v` | I2V high/low noise + CLIP Vision + shared core | ~42GB |
 | `oelala-cloud-t2v` | T2V high/low noise + shared core | ~40GB |
 
-**Benefits**: Faster cold starts (30GB less per endpoint), each endpoint only loads what it needs  
-**Trade-off**: 2x cold start probability at low traffic (each endpoint idles independently)  
+**Benefits**: Faster cold starts (30GB less per endpoint), each endpoint only loads what it needs
+**Trade-off**: 2x cold start probability at low traffic (each endpoint idles independently)
 **Trigger**: Split when avg >5 jobs/hour sustained, or when cold start cost becomes a user complaint

@@ -1047,12 +1047,18 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
         storage = get_storage_client()
         storage_health = storage.health()
         health["services"]["storage"] = {
-            "status": "online" if storage_health.get("status") == "healthy" else "error",
+            "status": "online"
+            if storage_health.get("status") == "healthy"
+            else "error",
             "port": 9000,
             "backend": "minio",
         }
     except Exception:
-        health["services"]["storage"] = {"status": "offline", "port": 9000, "backend": "minio"}
+        health["services"]["storage"] = {
+            "status": "offline",
+            "port": 9000,
+            "backend": "minio",
+        }
 
     # Disk usage
     for name, path in [

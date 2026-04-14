@@ -1,18 +1,18 @@
 # Story Writer — Vision & Architecture
 
-> **Status**: Vision / Design Phase  
-> **Author**: Flip + MARK1  
-> **Created**: 2026-04-12  
+> **Status**: Vision / Design Phase
+> **Author**: Flip + MARK1
+> **Created**: 2026-04-12
 > **Last Updated**: 2026-04-12
 
 ## TL;DR
 
 A tool that turns reference images + a story idea into a complete AI-generated movie.
 
-Upload reference images → LLM writes a screenplay with per-scene director instructions → 
+Upload reference images → LLM writes a screenplay with per-scene director instructions →
 AI generates 15-second video clips per scene → stitch into a cohesive movie.
 
-**Goal**: Make movie creation accessible through scripting and LLM assistance. 
+**Goal**: Make movie creation accessible through scripting and LLM assistance.
 No camera, no actors, no budget — just vision.
 
 ---
@@ -109,7 +109,7 @@ No camera, no actors, no budget — just vision.
 | Scene-based generation queue | ❌ Not built | Need batch orchestration |
 | Storyboard UI | ❌ Not built | New frontend component |
 
-**Bottom line**: ~60% of the infrastructure exists. The missing pieces are orchestration, 
+**Bottom line**: ~60% of the infrastructure exists. The missing pieces are orchestration,
 multi-image aggregation, story writing, and the storyboard UI.
 
 ---

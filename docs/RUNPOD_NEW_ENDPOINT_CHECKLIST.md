@@ -1,7 +1,7 @@
 # RunPod: New Serverless Endpoint Checklist
 
-> **Created**: 2026-04-14  
-> **Why**: We kept forgetting steps and wasting deploys. This is the canonical checklist.  
+> **Created**: 2026-04-14
+> **Why**: We kept forgetting steps and wasting deploys. This is the canonical checklist.
 > **Rule**: Follow ALL steps IN ORDER. Do not skip. Do not "do it later".
 
 ## Pre-requisites
@@ -52,8 +52,8 @@ cd deploy/runpod-{name}
 ./deploy.sh
 ```
 
-> **⚠️ CRITICAL**: You MUST push the image BEFORE creating the template/endpoint.  
-> RunPod tries to pull the image when a worker spins up. If the image doesn't exist  
+> **⚠️ CRITICAL**: You MUST push the image BEFORE creating the template/endpoint.
+> RunPod tries to pull the image when a worker spins up. If the image doesn't exist
 > at GHCR, the worker will fail silently and jobs stay "IN_QUEUE" forever.
 
 ## Step 3: Create RunPod Serverless Template
@@ -149,8 +149,8 @@ RUNPOD_{NAME}_TEMPLATE_ID={template-id}
 sudo systemctl restart oelala-backend
 ```
 
-> **⚠️ CRITICAL**: The backend reads `.env` via systemd's `EnvironmentFile`.  
-> Changes to `.env` are NOT picked up until the service is restarted.  
+> **⚠️ CRITICAL**: The backend reads `.env` via systemd's `EnvironmentFile`.
+> Changes to `.env` are NOT picked up until the service is restarted.
 > Verify with: `sudo cat /proc/$(pgrep -f "uvicorn app:app" | tail -1)/environ | tr '\0' '\n' | grep RUNPOD_{NAME}`
 
 ## Step 6: Update Documentation
@@ -188,5 +188,5 @@ sudo systemctl restart oelala-backend
 
 ## The Golden Rule
 
-> **deploy.sh is the ONLY way to deploy.** It builds, tags, pushes, AND updates the template atomically.  
+> **deploy.sh is the ONLY way to deploy.** It builds, tags, pushes, AND updates the template atomically.
 > Never manually `docker push` without updating the template. RunPod uses explicit dated tags, not `:latest`.

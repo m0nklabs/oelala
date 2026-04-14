@@ -308,6 +308,7 @@ class StorageClient:
 
         try:
             from minio.commonconfig import CopySource
+
             self._ensure_bucket(dst_mb)
             self._minio.copy_object(dst_mb, dst_fk, CopySource(src_mb, src_fk))
             self._minio.remove_object(src_mb, src_fk)
@@ -345,7 +346,9 @@ class StorageClient:
                 "size": stat.size,
                 "exists": True,
                 "content_type": stat.content_type,
-                "last_modified": stat.last_modified.isoformat() if stat.last_modified else None,
+                "last_modified": stat.last_modified.isoformat()
+                if stat.last_modified
+                else None,
                 "etag": stat.etag,
             }
         except S3Error as e:
@@ -376,24 +379,36 @@ class StorageClient:
 
         # Merge base_prefix with caller-supplied prefix
         if base_prefix and prefix:
-            full_prefix = f"{base_prefix}/{prefix}" if not base_prefix.endswith("/") else f"{base_prefix}{prefix}"
+            full_prefix = (
+                f"{base_prefix}/{prefix}"
+                if not base_prefix.endswith("/")
+                else f"{base_prefix}{prefix}"
+            )
         elif base_prefix:
-            full_prefix = base_prefix if base_prefix.endswith("/") else f"{base_prefix}/"
+            full_prefix = (
+                base_prefix if base_prefix.endswith("/") else f"{base_prefix}/"
+            )
         else:
             full_prefix = prefix
 
         objects = []
         try:
-            for obj in self._minio.list_objects(minio_bucket, prefix=full_prefix, recursive=True):
+            for obj in self._minio.list_objects(
+                minio_bucket, prefix=full_prefix, recursive=True
+            ):
                 if obj.is_dir:
                     continue
-                objects.append({
-                    "key": obj.object_name,
-                    "size": obj.size,
-                    "content_type": "",
-                    "modified_at": obj.last_modified.isoformat() if obj.last_modified else "",
-                    "hash": obj.etag or "",
-                })
+                objects.append(
+                    {
+                        "key": obj.object_name,
+                        "size": obj.size,
+                        "content_type": "",
+                        "modified_at": obj.last_modified.isoformat()
+                        if obj.last_modified
+                        else "",
+                        "hash": obj.etag or "",
+                    }
+                )
         except S3Error as e:
             if e.code == "NoSuchBucket":
                 return []
@@ -588,7 +603,7 @@ class StorageClient:
             obj["user_id"] = user_id
             key = obj.get("key", "")
             if key.startswith(user_prefix):
-                key = key[len(user_prefix):]
+                key = key[len(user_prefix) :]
             parts = key.split("/", 1)
             if len(parts) >= 1:
                 obj["media_type"] = parts[0]

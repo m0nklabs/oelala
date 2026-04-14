@@ -191,6 +191,7 @@ class MediaService:
         """Lazy-init MinIO storage client."""
         if self._storage_client is None:
             from storage_client import get_client
+
             self._storage_client = get_client()
         return self._storage_client
 
@@ -370,7 +371,10 @@ class MediaService:
             key_path = path_parts[1] if len(path_parts) > 1 else ""
 
         storage_result = self.storage_client.put(
-            bucket_path, key_path, data, content_type=mime_type,
+            bucket_path,
+            key_path,
+            data,
+            content_type=mime_type,
         )
         storage_hash = storage_result.get("hash")
 
@@ -623,9 +627,9 @@ class MediaService:
         """
         # Tier-based quota limits
         tier_quotas = {
-            "free": 5 * 1024 * 1024 * 1024,     # 5 GB
-            "pro": 50 * 1024 * 1024 * 1024,      # 50 GB
-            "vip": 200 * 1024 * 1024 * 1024,     # 200 GB
+            "free": 5 * 1024 * 1024 * 1024,  # 5 GB
+            "pro": 50 * 1024 * 1024 * 1024,  # 50 GB
+            "vip": 200 * 1024 * 1024 * 1024,  # 200 GB
         }
 
         try:
@@ -654,7 +658,9 @@ class MediaService:
                         meta = record.get("metadata") or {}
                         used_bytes += meta.get("size_bytes", 0)
 
-            percent = round((used_bytes / quota_bytes) * 100, 1) if quota_bytes > 0 else 0
+            percent = (
+                round((used_bytes / quota_bytes) * 100, 1) if quota_bytes > 0 else 0
+            )
 
             return {
                 "used_bytes": used_bytes,

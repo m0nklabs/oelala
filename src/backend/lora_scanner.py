@@ -34,7 +34,9 @@ LORA_DIRS: List[Path] = [
 ]
 
 # Registry file with usage metadata (trigger words, strengths, source URLs)
-REGISTRY_PATH = Path(__file__).resolve().parent.parent.parent / "docs" / "lora_registry.yaml"
+REGISTRY_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "docs" / "lora_registry.yaml"
+)
 
 
 @dataclass
@@ -147,24 +149,29 @@ def _derive_tags(filename: str, category: str) -> List[str]:
 def _derive_noise_level(filename: str) -> str:
     """Derive noise level from filename."""
     import re
+
     # Strip extension before analysis
     stem = filename.rsplit(".", 1)[0]
     stem_lower = stem.lower()
-    if any(x in stem_lower for x in ["highnoise", "high_noise", "high noise", "_hn", "-hn"]):
+    if any(
+        x in stem_lower for x in ["highnoise", "high_noise", "high noise", "_hn", "-hn"]
+    ):
         return "high"
-    if any(x in stem_lower for x in ["lownoise", "low_noise", "low noise", "_ln", "-ln"]):
+    if any(
+        x in stem_lower for x in ["lownoise", "low_noise", "low noise", "_ln", "-ln"]
+    ):
         return "low"
     # Split on delimiters AND CamelCase boundaries (split BEFORE lowering)
-    expanded = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', stem)
-    tokens = [t.lower() for t in re.split(r'[-_\s]+', expanded) if t]
+    expanded = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", stem)
+    tokens = [t.lower() for t in re.split(r"[-_\s]+", expanded) if t]
     if "high" in tokens:
         return "high"
     if "low" in tokens:
         return "low"
     # Check trailing H/L suffixes (e.g., 5750H, 5750L)
-    if re.search(r'\d+h$', stem_lower):
+    if re.search(r"\d+h$", stem_lower):
         return "high"
-    if re.search(r'\d+l$', stem_lower):
+    if re.search(r"\d+l$", stem_lower):
         return "low"
     return ""
 
@@ -270,7 +277,11 @@ def _enrich_with_registry(lora: LoRAInfo, registry: Dict[str, LoRARegistry]) -> 
         if not lora.base_model and reg.base_model:
             lora.base_model = reg.base_model
         # Override noise_level from registry noise_type if scanner missed it
-        if not lora.noise_level and reg.noise_type and reg.noise_type in ("high", "low"):
+        if (
+            not lora.noise_level
+            and reg.noise_type
+            and reg.noise_type in ("high", "low")
+        ):
             lora.noise_level = reg.noise_type
 
 
@@ -322,9 +333,7 @@ def validate_lora_usage(
             if reg.trigger_format:
                 result.suggestions.append(f"Prompt format: {reg.trigger_format}")
             elif reg.trigger_examples:
-                result.suggestions.append(
-                    f"Example: {reg.trigger_examples[0]}"
-                )
+                result.suggestions.append(f"Example: {reg.trigger_examples[0]}")
 
     elif reg.trigger_mode == "natural_language":
         # Can't enforce, but suggest
@@ -449,12 +458,18 @@ class LoRACache:
         by_path = {l.path: l for l in all_loras}
         for lora in all_loras:
             if lora.registry and lora.registry.paired_with:
-                pair = by_filename.get(lora.registry.paired_with) or by_path.get(lora.registry.paired_with)
+                pair = by_filename.get(lora.registry.paired_with) or by_path.get(
+                    lora.registry.paired_with
+                )
                 if pair and not pair.base_model:
-                    source_base = lora.base_model or (lora.registry.base_model if lora.registry else "")
+                    source_base = lora.base_model or (
+                        lora.registry.base_model if lora.registry else ""
+                    )
                     if source_base:
                         pair.base_model = source_base
-                        debug_log(f"Inherited base_model '{source_base}' for {pair.path} from pair {lora.path}")
+                        debug_log(
+                            f"Inherited base_model '{source_base}' for {pair.path} from pair {lora.path}"
+                        )
 
         # Sort by name
         all_loras.sort(key=lambda x: x.name.lower())
