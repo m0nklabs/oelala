@@ -24,6 +24,7 @@
 ### Removed
 - **b2_client.py**: Deleted — Backblaze B2 dual-write/fallback removed. B2 interaction will be managed by MinIO ILM tiering.
 - **storage_nodes_api.py**: Deleted — storage node heartbeat/registration no longer needed (MinIO handles cluster internally).
+- **boto3** dependency removed from `requirements.txt` (was only used by deleted b2_client.py)
 - Removed `MEDIA_SIGNING_SECRET` dependency (replaced by MinIO presigned URLs)
 - Removed `STORAGE_NODE_API_KEY` (was `dev-secret-key-12345` default)
 - Removed B2 env vars from `.env.example` (`B2_ENDPOINT`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`)

@@ -45,8 +45,7 @@ pyogg==0.6.14a1
 httpx==0.28.1
 websocket-client==1.9.0
 
-# S3-compatible object storage clients
-boto3==1.42.88
+# S3-compatible object storage (MinIO SDK)
 minio==7.2.20
 
 # YAML parsing (LoRA registry)
