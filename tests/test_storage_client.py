@@ -498,3 +498,105 @@ class TestBackwardsCompat:
             secret_key="real-secret",
         )
         assert client._access_key == "real-key"
+
+
+class TestStat:
+    """Test stat() for full object metadata."""
+
+    def setup_method(self):
+        self.client = StorageClient(
+            base_url="http://localhost:9000",
+            access_key="test",
+            secret_key="test",
+        )
+
+    def test_stat_existing(self):
+        from datetime import datetime, timezone
+
+        mock_minio = MagicMock()
+        mock_stat = MagicMock()
+        mock_stat.size = 1024
+        mock_stat.content_type = "video/mp4"
+        mock_stat.etag = "abc123"
+        mock_stat.last_modified = datetime(2026, 4, 14, 12, 0, 0, tzinfo=timezone.utc)
+        mock_minio.stat_object.return_value = mock_stat
+        self.client._minio = mock_minio
+
+        result = self.client.stat("generated", "video.mp4")
+
+        assert result is not None
+        assert result["size"] == 1024
+        assert result["content_type"] == "video/mp4"
+        assert result["etag"] == "abc123"
+        assert result["last_modified"] == mock_stat.last_modified
+        mock_minio.stat_object.assert_called_once_with("oelala-generated", "video.mp4")
+
+    def test_stat_not_found(self):
+        from minio.error import S3Error
+
+        mock_minio = MagicMock()
+        mock_minio.stat_object.side_effect = S3Error(
+            "NoSuchKey", "NoSuchKey", "", "", "", ""
+        )
+        self.client._minio = mock_minio
+
+        result = self.client.stat("generated", "missing.mp4")
+        assert result is None
+
+    def test_stat_no_content_type(self):
+        mock_minio = MagicMock()
+        mock_stat = MagicMock()
+        mock_stat.size = 512
+        mock_stat.content_type = None
+        mock_stat.etag = "def456"
+        mock_stat.last_modified = None
+        mock_minio.stat_object.return_value = mock_stat
+        self.client._minio = mock_minio
+
+        result = self.client.stat("generated", "file.bin")
+        assert result["content_type"] == "application/octet-stream"
+        assert result["last_modified"] is None
+
+
+class TestGetObjectRange:
+    """Test get_object_range() for partial content retrieval."""
+
+    def setup_method(self):
+        self.client = StorageClient(
+            base_url="http://localhost:9000",
+            access_key="test",
+            secret_key="test",
+        )
+
+    def test_range_read(self):
+        mock_minio = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"partial content"
+        mock_minio.get_object.return_value = mock_resp
+        self.client._minio = mock_minio
+
+        result = self.client.get_object_range("generated", "video.mp4", offset=100, length=15)
+
+        assert result == b"partial content"
+        mock_minio.get_object.assert_called_once_with(
+            "oelala-generated", "video.mp4", offset=100, length=15
+        )
+        mock_resp.close.assert_called_once()
+        mock_resp.release_conn.assert_called_once()
+
+    def test_range_read_compound_bucket(self):
+        """Range reads should work with compound bucket resolution."""
+        mock_minio = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"user data"
+        mock_minio.get_object.return_value = mock_resp
+        self.client._minio = mock_minio
+
+        result = self.client.get_object_range(
+            "users/user123", "videos/clip.mp4", offset=0, length=9
+        )
+
+        assert result == b"user data"
+        mock_minio.get_object.assert_called_once_with(
+            "oelala-users", "user123/videos/clip.mp4", offset=0, length=9
+        )

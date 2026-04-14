@@ -251,6 +251,52 @@ class StorageClient:
             resp.close()
             resp.release_conn()
 
+    def stat(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+        """
+        Get full object metadata via stat_object.
+
+        Returns:
+            Dict with size, content_type, etag, last_modified, or None if not found.
+        """
+        minio_bucket, full_key = self._resolve(bucket, key)
+        try:
+            s = self._minio.stat_object(minio_bucket, full_key)
+            return {
+                "size": s.size,
+                "content_type": s.content_type or "application/octet-stream",
+                "etag": s.etag,
+                "last_modified": s.last_modified,
+            }
+        except S3Error as e:
+            if e.code in ("NoSuchKey", "NoSuchBucket"):
+                return None
+            raise
+
+    def get_object_range(
+        self, bucket: str, key: str, offset: int, length: int
+    ) -> bytes:
+        """
+        Download a byte range of an object.
+
+        Args:
+            bucket: Logical bucket name
+            key: Object key
+            offset: Start byte (inclusive)
+            length: Number of bytes to read
+
+        Returns:
+            Requested bytes
+        """
+        minio_bucket, full_key = self._resolve(bucket, key)
+        resp = self._minio.get_object(
+            minio_bucket, full_key, offset=offset, length=length
+        )
+        try:
+            return resp.read()
+        finally:
+            resp.close()
+            resp.release_conn()
+
     def stream(self, bucket: str, key: str):
         """
         Stream an object from storage. Returns a context manager yielding chunks.

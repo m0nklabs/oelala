@@ -14,7 +14,12 @@
 - `presigned_get()` and `presigned_put()` methods on StorageClient for native S3 presigned URLs
 - Bucket name mapping: `generated` → `oelala-generated`, `comfyui-local` → `oelala-comfyui`, `avatars` → `oelala-avatars`, `users` → `oelala-users`
 - New env vars: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (with fallback to old `STORAGE_URL`/`STORAGE_API_KEY`)
-- Unit tests: `tests/test_storage_client.py` (33 tests), `tests/test_media_service.py` (11 tests)
+- Unit tests: `tests/test_storage_client.py` (38 tests), `tests/test_media_service.py` (11 tests)
+
+### Fixed
+- **HTTP Range requests**: `_storage_proxy_response` and `/user/media/` endpoint now support `Range` headers for video/audio seeking in browsers (returns `206 Partial Content` with `Content-Range`).
+- **ETag / Last-Modified headers**: Storage proxy responses now include `ETag` and `Last-Modified` headers for proper HTTP caching and conditional requests.
+- **Accept-Ranges header**: All proxy responses advertise `Accept-Ranges: bytes` so browsers know partial content is supported.
 
 ### Removed
 - **b2_client.py**: Deleted — Backblaze B2 dual-write/fallback removed. B2 interaction will be managed by MinIO ILM tiering.
