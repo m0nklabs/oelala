@@ -801,10 +801,11 @@ async def toggle_like(media_id: str, user: User = Depends(get_current_user)):
 # Endpoint: Serve published media file (PUBLIC - no auth required)
 # ============================================================================
 @router.get("/{media_id}/file")
-async def get_published_media_file(media_id: str):
+async def get_published_media_file(media_id: str, request: Request):
     """
     Serve the actual media file for a published gallery item.
     This is PUBLIC - no authentication required for published content.
+    Supports HTTP Range requests for video/audio seeking.
 
     Media source priority:
     1. MinIO storage (user's cloud storage)
