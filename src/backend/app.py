@@ -12531,6 +12531,7 @@ def _build_qwen_edit_workflow(
             "inputs": {
                 "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
                 "type": "qwen_image",
+                "device": "default",
             },
         },
         # Load VAE
@@ -12547,57 +12548,45 @@ def _build_qwen_edit_workflow(
                 "image": image_filename,
             },
         },
-        # Scale source image for Qwen processing
+        # Empty latent for sampling (16-channel SD3-style, matches Qwen architecture)
         "5": {
-            "class_type": "FluxKontextImageScale",
+            "class_type": "EmptySD3LatentImage",
             "inputs": {
-                "image": ["4", 0],
-            },
-        },
-        # Encode source image to latent
-        "6": {
-            "class_type": "VAEEncode",
-            "inputs": {
-                "pixels": ["5", 0],
-                "vae": ["3", 0],
-            },
-        },
-        # Multi-reference latent method
-        "7": {
-            "class_type": "FluxKontextMultiReferenceLatentMethod",
-            "inputs": {
-                "method": "index_timestep_zero",
-                "latent": ["6", 0],
-            },
-        },
-        # Text encode with Qwen Image Edit Plus (supports image context)
-        "8": {
-            "class_type": "TextEncodeQwenImageEditPlus",
-            "inputs": {
-                "positive": instruction,
-                "negative": negative_prompt,
-                "clip": ["2", 0],
-                "image1": ["5", 0],
+                "width": 1024,
+                "height": 1024,
+                "batch_size": 1,
             },
         },
         # ModelSamplingAuraFlow (shift)
-        "9": {
+        "6": {
             "class_type": "ModelSamplingAuraFlow",
             "inputs": {
                 "shift": 3.1,
                 "model": ["1", 0],
             },
         },
-        # CFGNorm
-        "10": {
-            "class_type": "CFGNorm",
+        # Positive conditioning: instruction + image reference
+        "7": {
+            "class_type": "TextEncodeQwenImageEditPlus",
             "inputs": {
-                "weight": 1,
-                "model": ["9", 0],
+                "prompt": instruction,
+                "clip": ["2", 0],
+                "vae": ["3", 0],
+                "image1": ["4", 0],
+            },
+        },
+        # Negative conditioning: empty/negative prompt + same image reference
+        "8": {
+            "class_type": "TextEncodeQwenImageEditPlus",
+            "inputs": {
+                "prompt": negative_prompt if negative_prompt else "",
+                "clip": ["2", 0],
+                "vae": ["3", 0],
+                "image1": ["4", 0],
             },
         },
         # KSampler
-        "11": {
+        "9": {
             "class_type": "KSampler",
             "inputs": {
                 "seed": seed,
@@ -12606,26 +12595,26 @@ def _build_qwen_edit_workflow(
                 "sampler_name": "euler",
                 "scheduler": "simple",
                 "denoise": 1.0,
-                "model": ["10", 0],
-                "positive": ["8", 0],
-                "negative": ["8", 1],
-                "latent_image": ["7", 0],
+                "model": ["6", 0],
+                "positive": ["7", 0],
+                "negative": ["8", 0],
+                "latent_image": ["5", 0],
             },
         },
         # VAE Decode
-        "12": {
+        "10": {
             "class_type": "VAEDecode",
             "inputs": {
-                "samples": ["11", 0],
+                "samples": ["9", 0],
                 "vae": ["3", 0],
             },
         },
         # Save Image
-        "13": {
+        "11": {
             "class_type": "SaveImage",
             "inputs": {
                 "filename_prefix": "oelala_qwen_edit",
-                "images": ["12", 0],
+                "images": ["10", 0],
             },
         },
     }
@@ -12667,7 +12656,7 @@ def _build_qwen_edit_workflow(
         last_model_ref = [str(lora_node_id), 0]
 
     # Rewire ModelSamplingAuraFlow to take from last LoRA (or UNET if no LoRAs)
-    workflow["9"]["inputs"]["model"] = last_model_ref
+    workflow["6"]["inputs"]["model"] = last_model_ref
 
     return workflow
 
