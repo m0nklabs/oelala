@@ -104,7 +104,7 @@ class TestPut:
         assert result["bucket"] == "generated"
         assert result["key"] == "test.txt"
         assert result["size"] == len(data)
-        assert result["hash"] == hashlib.md5(data).hexdigest()
+        assert result["hash"] == hashlib.sha256(data).hexdigest()
         assert result["content_type"] == "text/plain"
 
         mock_minio.put_object.assert_called_once()

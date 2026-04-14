@@ -436,7 +436,7 @@ class MediaService:
             record_id = (
                 storage_hash[:16]
                 if storage_hash
-                else hashlib.md5(data).hexdigest()[:16]
+                else hashlib.sha256(data).hexdigest()[:16]
             )
             created_at = datetime.utcnow().isoformat()
             logger.warning("⚠️ Supabase not configured, metadata not synced")

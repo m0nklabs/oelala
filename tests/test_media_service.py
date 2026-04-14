@@ -56,11 +56,10 @@ class TestMediaServiceInit:
     }, clear=False)
     def test_falls_back_to_storage_url(self):
         """When MINIO_ENDPOINT not set, falls back to STORAGE_URL."""
-        # Clear MINIO_ENDPOINT if it exists
         import os
         os.environ.pop("MINIO_ENDPOINT", None)
         service = MediaService()
-        assert "fallback" in service.storage_url or "7990" in service.storage_url or "9000" in service.storage_url
+        assert service.storage_url == "http://fallback:7990"
 
 
 class TestMediaServiceSignedUrl:

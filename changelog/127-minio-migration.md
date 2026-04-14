@@ -1,5 +1,5 @@
 ### Changed
-- **storage_client.py**: Rewritten to use MinIO Python SDK (`minio>=7.2.20`) instead of httpx + custom oelala-storage HTTP API. Same public API surface — all callers (app.py, admin_api.py, gallery_api.py, comfyui_client.py, gen_artifacts.py, profile_api.py) continue to work unchanged.
+- **storage_client.py**: Rewritten to use MinIO Python SDK (`minio==7.2.20`) instead of httpx + custom oelala-storage HTTP API. Same public API surface — all callers (app.py, admin_api.py, gallery_api.py, comfyui_client.py, gen_artifacts.py, profile_api.py) continue to work unchanged.
 - **media_service.py**: Signed URLs now use MinIO's native S3 presigned URLs (SigV4) instead of custom HMAC-SHA256 scheme. Upload and delete operations use MinIO SDK via storage_client instead of raw httpx. User quota is calculated from Supabase `user_media` table instead of custom `/buckets/{user_id}` endpoint.
 - **admin_api.py**: Health check uses MinIO bucket-list instead of `localhost:7990/health`. Allowed systemd service list updated from `oelala-storage` to `minio`.
 - **app.py**: Storage proxy error handling uses `S3Error` instead of `httpx.HTTPStatusError`. Removed `storage_nodes_api` router registration.

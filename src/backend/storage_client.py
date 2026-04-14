@@ -196,7 +196,7 @@ class StorageClient:
 
         size = len(raw)
         ct = content_type or self._guess_content_type(key)
-        data_hash = hashlib.md5(raw).hexdigest()
+        data_hash = hashlib.sha256(raw).hexdigest()
 
         self._minio.put_object(
             minio_bucket,
