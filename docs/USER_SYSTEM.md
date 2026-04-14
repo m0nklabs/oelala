@@ -14,7 +14,7 @@ User authentication via Supabase Auth met OAuth providers.
 - Cloud gratis tier (50k MAU) voor development
 - Native passkeys support (future)
 - OAuth: Google, GitHub
-- JWT tokens → compatible met oelala-storage
+- JWT tokens → compatible met MinIO storage (via backend proxy)
 - Python + JS SDKs
 
 ---
@@ -135,7 +135,7 @@ On-demand login popup shown when guest tries to:
 - [ ] Avatar upload
 
 ### Phase 3: Integration
-- [ ] oelala-storage: user_id in paths
+- [x] MinIO storage: user_id in paths (bucket: oelala-users, prefix: {user_id}/)
 - [ ] Media ownership (migrate existing to dev account)
 - [ ] Per-user quotas
 - [ ] Generation history per user

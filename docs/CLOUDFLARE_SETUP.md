@@ -1,6 +1,6 @@
 # Cloudflare Integration Guide
 
-This document describes the current Cloudflare Tunnel and CDN caching setup for Oelala and oelala-storage.
+This document describes the current Cloudflare Tunnel and CDN caching setup for Oelala and MinIO storage.
 
 ## ⚠️ CORS & Caching Gotcha (CRITICAL)
 
@@ -36,11 +36,11 @@ Cloudflare caches responses **including CORS headers**. If a non-browser request
                     │   cloudflared daemon  │
                     │   (on your server)    │
                     └───────────┬───────────┘
-                                │ localhost:7990
+                                │ localhost:9000
                     ┌───────────▼───────────┐
-                    │   oelala-storage      │
-                    │   - Signed URLs       │
-                    │   - Auth middleware   │
+                    │   MinIO               │
+                    │   - S3 Presigned URLs │
+                    │   - Native S3 API    │
                     └───────────────────────┘
 ```
 
@@ -50,8 +50,8 @@ Cloudflare caches responses **including CORS headers**. If a non-browser request
 |----------|--------|--------|
 | `oelala.xyz` | `oelala-main` | frontend `localhost:5174` |
 | `api.oelala.xyz` | `oelala-main` | backend `localhost:7998` |
-| `storage.oelala.xyz` | `oelala-main` | storage `localhost:7990` |
-| `storage2.oelala.xyz` | `oelala-storage-node2` | remote storage node |
+| `storage.oelala.xyz` | `oelala-main` | MinIO `localhost:9000` |
+| `storage2.oelala.xyz` | `oelala-storage-node2` | remote MinIO node |
 
 ## Prerequisites
 
@@ -103,7 +103,7 @@ ingress:
     service: http://localhost:7998
 
   - hostname: storage.oelala.xyz
-    service: http://localhost:7990
+    service: http://localhost:9000
 
   - service: http_status:404
 ```
@@ -156,22 +156,26 @@ In the Cloudflare Dashboard, create cache rules for efficient media delivery:
 - Edge TTL: Override origin, 24 hours
 - Browser TTL: Override origin, 1 hour
 
-## Cache Headers from oelala-storage
+## Cache Headers from MinIO
 
-The server already sends appropriate cache headers for signed URLs:
+MinIO returns standard S3 cache headers. The backend proxy adds appropriate
+cache headers for proxied responses:
 
 ```
 Cache-Control: public, max-age=3600
+ETag: "..."
+Last-Modified: ...
+Accept-Ranges: bytes
 ```
 
 ## Verification
 
 ```bash
 # Test tunnel is working
-curl -I https://storage.oelala.xyz/health
+curl -I https://storage.oelala.xyz/minio/health/live
 
-# Test signed URL through CDN
-curl -I "https://storage.oelala.xyz/users/test/file.mp4?expires=1234567890&sig=abc123"
+# Test presigned URL through CDN
+curl -I "https://storage.oelala.xyz/oelala-generated/video.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&..."
 ```
 
 Check `CF-Cache-Status` header:
@@ -182,10 +186,10 @@ Check `CF-Cache-Status` header:
 
 ## Security Considerations
 
-1. **Signed URLs are time-limited**: Default 1 hour, configurable per request
-2. **Signature includes path**: Prevents reusing signature for different files
-3. **HMAC-SHA256**: Cryptographically secure signatures
-4. **No API keys exposed**: Signed URLs work without revealing auth tokens
+1. **Presigned URLs are time-limited**: Default 1 hour, configurable per request
+2. **Presigned URLs include path**: Prevents reusing signature for different files
+3. **AWS SigV4**: Standard S3 cryptographic signatures (replaces custom HMAC-SHA256)
+4. **No API keys exposed**: Presigned URLs work without revealing credentials
 
 ## Troubleshooting
 
@@ -200,9 +204,9 @@ cloudflared tunnel info oelala-main
 - Verify cache rules are enabled
 - Check if query string is included in cache key
 
-### Signed URL rejected
+### Presigned URL rejected
 - Check system time sync (NTP)
-- Verify `signing_secret` matches in both services
+- Verify MinIO access key / secret key are correct
 - Ensure URL hasn't expired
 
 ## Production Checklist
@@ -213,10 +217,9 @@ cloudflared tunnel info oelala-main
 - [ ] SSL/TLS set to "Full (strict)"
 - [ ] Rate limiting configured (optional)
 - [ ] Bot management enabled (optional)
-- [ ] `signing_secret` is strong (32+ bytes)
-- [ ] `signing_secret` matches in oelala-storage.yaml and .env
+- [ ] MinIO access credentials configured in backend `.env`
 
 ## Notes
 
 - Each storage node should have its own tunnel. Do not centralize node connectivity through another storage node.
-- The backend normally accesses storage with bearer auth and admin-secret headers; signed URLs are for controlled read access, not a replacement for service auth.
+- The backend accesses MinIO via the MinIO Python SDK with access key / secret key credentials. Presigned URLs are for controlled read access (browser clients), not a replacement for service auth.

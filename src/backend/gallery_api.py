@@ -866,20 +866,78 @@ async def get_published_media_file(media_id: str, request: Request):
             storage = get_storage_client()
             bucket = storage.user_bucket(user_id)
             key = storage.user_key(media_type_dir, filename)
-            if not storage.exists(bucket, key):
+
+            # Get metadata for Range / ETag / Last-Modified support
+            meta = storage.stat(bucket, f"{media_type_dir}/{filename}")
+            if meta is None:
                 raise FileNotFoundError(f"Not in storage: {filename}")
-            stream = storage.iter_user_media(user_id, media_type_dir, filename)
+
             debug_log(
-                f"Streaming from MinIO: {media_type_dir}/{filename} for user {user_id}"
+                f"Serving from MinIO: {media_type_dir}/{filename} for user {user_id}"
             )
 
+            headers = {
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "public, max-age=86400",
+                "Accept-Ranges": "bytes",
+            }
+            if meta.get("etag"):
+                headers["ETag"] = f'"{meta["etag"]}"'
+            if meta.get("last_modified"):
+                from email.utils import format_datetime
+                headers["Last-Modified"] = format_datetime(
+                    meta["last_modified"], usegmt=True
+                )
+
+            total_size = meta["size"]
+
+            # Handle Range request for video/audio seeking
+            range_header = request.headers.get("range")
+            if range_header and range_header.startswith("bytes="):
+                try:
+                    range_spec = range_header[6:]
+                    parts_r = range_spec.split("-")
+                    range_start = int(parts_r[0]) if parts_r[0] else 0
+                    range_end = (
+                        int(parts_r[1]) if parts_r[1] else total_size - 1
+                    )
+                    range_end = min(range_end, total_size - 1)
+
+                    if range_start > range_end or range_start >= total_size:
+                        headers["Content-Range"] = f"bytes */{total_size}"
+                        return Response(
+                            status_code=416,
+                            headers=headers,
+                            media_type=content_type,
+                        )
+
+                    content_length = range_end - range_start + 1
+                    content = storage.get_object_range(
+                        bucket,
+                        f"{media_type_dir}/{filename}",
+                        offset=range_start,
+                        length=content_length,
+                    )
+                    headers["Content-Range"] = (
+                        f"bytes {range_start}-{range_end}/{total_size}"
+                    )
+                    headers["Content-Length"] = str(content_length)
+                    return Response(
+                        content=content,
+                        status_code=206,
+                        media_type=content_type,
+                        headers=headers,
+                    )
+                except (ValueError, IndexError):
+                    pass  # Fall through to full response
+
+            # Full response — stream the object
+            stream = storage.iter_user_media(user_id, media_type_dir, filename)
+            headers["Content-Length"] = str(total_size)
             return StreamingResponse(
                 stream,
                 media_type=content_type,
-                headers={
-                    "Content-Disposition": f'inline; filename="{filename}"',
-                    "Cache-Control": "public, max-age=86400",
-                },
+                headers=headers,
             )
         except Exception as storage_err:
             debug_log(

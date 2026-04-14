@@ -60,17 +60,21 @@ The main functionality is complete! All MEGA issues for core features are done:
 
 ---
 
-## 📊 oelala-storage Status
+## 📊 Storage Status — MinIO Migration
 
-| Issue | Title | Priority | Status |
-|-------|-------|----------|--------|
-| #12 | Prometheus metrics | done | ✅ Closed |
-| #13 | Admin CLI | done | ✅ Closed (stats command added) |
-| #24 | MEGA: Distributed Storage Network | high | 🔄 Open |
-| #19 | MEGA: Operations & Observability | done | ✅ Closed (all sub-issues resolved) |
-| #10 | Webhook notifications | done | ✅ Closed (implemented 2026-03-05) |
-| #20 | MEGA: Platform & Deployment | done | ✅ Closed |
-| #7 | Windows installer | low | 🔄 Open |
+> oelala-storage (Go) is being replaced by MinIO. See issue #127 and `docs/MINIO_MIGRATION_PLAN.md`.
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Install MinIO, create buckets, systemd | ⏳ Infra (not in PR) |
+| 2 | Data migration (`mc mirror`) | ⏳ Infra (not in PR) |
+| 3 | Rewrite `storage_client.py` → MinIO SDK | ✅ Done (PR #128) |
+| 4 | Replace signed URLs → MinIO presigned | ✅ Done (PR #128) |
+| 5 | Replace quota → Supabase-based | ✅ Done (PR #128) |
+| 6 | Remove `b2_client.py`, B2 dual-write | ✅ Done (PR #128) |
+| 7 | Frontend config, admin panel, Cloudflare | 🔄 Partial (PR #128, Cloudflare is infra) |
+| 8 | Cleanup: dead code, docs | 🔄 In progress (PR #128) |
+| 9 | Verify zero data loss | ⏳ Infra (requires live systems) |
 
 ---
 
@@ -140,7 +144,7 @@ Based on project priorities:
 
 1. **Face system testing** - All code is built, needs end-to-end validation
 2. **UI polish** - Continue CSS class migration for remaining inline styles
-3. **oelala-storage #24** - Distributed storage network (MEGA)
+3. **MinIO migration** - Complete remaining infra phases (1, 2, 7-CF, 9)
 
 ---
 

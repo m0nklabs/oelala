@@ -1,9 +1,13 @@
 # Storage Migration Plan: Final State
 
-**Status**: ✅ COMPLETE (Phase 1-5 done, issue #110 closed)
+> ⚠️ **SUPERSEDED** — This document describes the old oelala-storage (Go) migration.
+> oelala-storage has been replaced by **MinIO** (S3-compatible object storage).
+> See `docs/MINIO_MIGRATION_PLAN.md` for the current migration plan and issue #127.
+
+**Status**: ⚠️ SUPERSEDED by MinIO migration (issue #127)
 **Created**: 2026-03-05
-**Updated**: 2026-03-06
-**Goal**: Keep oelala application state separate from media object storage, with storage nodes acting as the source of truth and local disk used only for temporary processing.
+**Updated**: 2026-04-14
+**Original Goal**: Keep oelala application state separate from media object storage, with storage nodes acting as the source of truth and local disk used only for temporary processing.
 
 ## Final Architecture
 
