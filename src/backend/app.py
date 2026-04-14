@@ -2024,7 +2024,7 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
         "wan2.2": "wan2.2",
         "wan22_standard": "wan2.2",
         "wan22_distorch": "wan2.2",
-        "cloud_max": "wan2.2",
+        "cloud_wan22": "wan2.2",
         "ltx2": "ltx",
         "ltx23": "ltx",
     }
@@ -2096,7 +2096,7 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
             "steps_range": "4-30 (default 6, higher = better quality but slower)",
             "notes": "Wan 2.2 supports CFG guidance. LoRAs are dual-noise (high+low pairs).",
         },
-        "cloud_max": {
+        "cloud_wan22": {
             "cfg_range": "1.0-5.0 (default 1.0)",
             "steps_range": "4-30 (default 6)",
             "notes": "Wan 2.2 on cloud GPU. Same constraints as wan2.2.",
@@ -2965,7 +2965,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     When the job completes, this function:
     1. Decodes the base64 video output from RunPod
-    2. Saves it locally to media/generated/cloud-max/
+    2. Saves it locally to media/generated/cloud-wan22/
     3. Uploads to oelala-storage via MediaService
     4. Returns the same response format as local jobs
     5. Saves raw ComfyUI logs to logs/cloud/
@@ -3182,25 +3182,25 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
         orig_name = f.get("filename", f"output_{i:03d}.mp4")
         ext = Path(orig_name).suffix or ".mp4"
-        save_name = f"cloud_max_{timestamp}_{i:03d}{ext}"
+        save_name = f"cloud_wan22_{timestamp}_{i:03d}{ext}"
 
         try:
             file_bytes = base64.b64decode(b64_data)
 
             # Save to oelala-storage instead of local disk
             storage = get_storage_client()
-            storage.put("generated", f"cloud-max/{save_name}", file_bytes)
+            storage.put("generated", f"cloud-wan22/{save_name}", file_bytes)
             logger.info(
-                f"☁️ Saved cloud output to storage: generated/cloud-max/{save_name} ({len(file_bytes)} bytes)"
+                f"☁️ Saved cloud output to storage: generated/cloud-wan22/{save_name} ({len(file_bytes)} bytes)"
             )
 
             mime = f.get("type", "video/mp4")
             if "video" in mime:
-                output_video = f"/media/generated/cloud-max/{save_name}"
-                saved_path = f"generated/cloud-max/{save_name}"
+                output_video = f"/media/generated/cloud-wan22/{save_name}"
+                saved_path = f"generated/cloud-wan22/{save_name}"
             elif "image" in mime:
-                output_image = f"/media/generated/cloud-max/{save_name}"
-                saved_path = f"generated/cloud-max/{save_name}"
+                output_image = f"/media/generated/cloud-wan22/{save_name}"
+                saved_path = f"generated/cloud-wan22/{save_name}"
         except Exception as e:
             logger.error(f"☁️ Failed to save cloud output file {i}: {e}")
 
@@ -3565,7 +3565,7 @@ async def get_comfyui_queue():
                 "resolution": info.get("resolution", ""),
                 "aspect_ratio": info.get("aspect_ratio", ""),
                 "num_frames": info.get("num_frames"),
-                "model_name": info.get("model_name", "Cloud Max"),
+                "model_name": info.get("model_name", "Cloud Wan22"),
                 "queue_position": 0,
             }
             # Completed-successfully jobs are hidden from queue
@@ -3786,9 +3786,16 @@ async def get_comfyui_output(filename: str, request: Request):
     return _storage_proxy_response("comfyui-local", filename, request)
 
 
+@app.get("/media/generated/cloud-wan22/{filename}")
+async def get_cloud_wan22_media(filename: str, request: Request):
+    """Serve Cloud Wan22 output files via oelala-storage proxy."""
+    return _storage_proxy_response("generated", f"cloud-wan22/{filename}", request)
+
+
+# Legacy alias — existing storage data is under cloud-max/
 @app.get("/media/generated/cloud-max/{filename}")
-async def get_cloud_max_media(filename: str, request: Request):
-    """Serve Cloud Max output files via oelala-storage proxy."""
+async def get_cloud_max_media_legacy(filename: str, request: Request):
+    """Backwards-compat: serve old cloud-max output files."""
     return _storage_proxy_response("generated", f"cloud-max/{filename}", request)
 
 
@@ -8200,12 +8207,12 @@ async def generate_ultra_q8_async(
 
 
 # =============================================================================
-# Cloud Max Async Endpoint (RunPod bf16 — cloud-only)
+# Cloud Wan22 Async Endpoint (RunPod bf16 — cloud-only)
 # =============================================================================
 
 
-@app.post("/generate-cloud-max-async")
-async def generate_cloud_max_async(
+@app.post("/generate-cloud-wan22-async")
+async def generate_cloud_wan22_async(
     file: UploadFile = File(None),
     prompt: str = Form("Motion, subject moving naturally, cinematic quality"),
     negative_prompt: str = Form(
@@ -8234,7 +8241,7 @@ async def generate_cloud_max_async(
     user: User = Depends(get_current_user),
 ):
     """
-    Queue Cloud Max video generation on RunPod — bf16 full precision.
+    Queue Cloud Wan22 video generation on RunPod — bf16 full precision.
 
     CLOUD-ONLY endpoint. Uses native ComfyUI UNETLoader with bf16 safetensors
     on 48GB+ GPUs (A6000/A40/L40S). No quantization, no multi-GPU tricks.
@@ -8246,7 +8253,7 @@ async def generate_cloud_max_async(
     if not _runpod or not _runpod.has_endpoint():
         raise HTTPException(
             status_code=503,
-            detail="Cloud Max requires a RunPod endpoint. Deploy one first.",
+            detail="Cloud Wan22 requires a RunPod endpoint. Deploy one first.",
         )
 
     if not get_comfyui_client:
@@ -8279,7 +8286,7 @@ async def generate_cloud_max_async(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Cloud Max T2V exceeds the current serverless safety budget. "
+                    "Cloud Wan22 T2V exceeds the current serverless safety budget. "
                     "Lower duration or resolution and stay under roughly 100M pixel-frames "
                     f"(received {pixel_frame_budget:,})."
                 ),
@@ -8291,10 +8298,10 @@ async def generate_cloud_max_async(
         height=height,
         duration_seconds=int(duration_seconds),
     )
-    # Cloud Max costs 2x credits (premium quality)
+    # Cloud Wan22 costs 2x credits (premium quality)
     credits_required = int(credits_required * 2)
     logger.info(
-        f"☁️ Cloud Max {mode.upper()} costs {credits_required} credits "
+        f"☁️ Cloud Wan22 {mode.upper()} costs {credits_required} credits "
         f"({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
     )
     await check_credits(user, credits_required)
@@ -8310,7 +8317,7 @@ async def generate_cloud_max_async(
     actual_seed = (
         seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
     )
-    output_prefix = f"oelala_cloud_max_{mode}_{timestamp}"
+    output_prefix = f"oelala_cloud_wan22_{mode}_{timestamp}"
 
     # Handle image upload for I2V
     image_name = None
@@ -8339,10 +8346,10 @@ async def generate_cloud_max_async(
             input_images_b64[image_name] = input_images_b64.pop(input_filename)
 
     # Build workflow
-    # Cloud-max is Wan2.2 only — filter out incompatible LoRAs
+    # Cloud-wan22 is Wan2.2 only — filter out incompatible LoRAs
     parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "wan2.2")
     if mode == "i2v":
-        workflow = comfyui.build_cloud_max_i2v_workflow(
+        workflow = comfyui.build_cloud_wan22_i2v_workflow(
             image_name=image_name,
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -8361,7 +8368,7 @@ async def generate_cloud_max_async(
             long_edge=long_edge,
         )
     else:
-        workflow = comfyui.build_cloud_max_t2v_workflow(
+        workflow = comfyui.build_cloud_wan22_t2v_workflow(
             prompt=prompt,
             negative_prompt=negative_prompt,
             num_frames=num_frames,
@@ -8381,7 +8388,7 @@ async def generate_cloud_max_async(
 
     if not workflow:
         raise HTTPException(
-            status_code=500, detail="Failed to build Cloud Max workflow"
+            status_code=500, detail="Failed to build Cloud Wan22 workflow"
         )
 
     # Build LoRA download URLs for cloud worker (on-demand upload)
@@ -8402,12 +8409,12 @@ async def generate_cloud_max_async(
         "input_image": input_filename,
         "created_at": timestamp,
         "lora_count": len(parsed_lora_configs),
-        "job_type": f"cloud_max_{mode}",
+        "job_type": f"cloud_wan22_{mode}",
         "cfg": cfg,
         "shift": shift,
         "sampler": sampler_name,
         "scheduler": scheduler,
-        "model_mode": "cloud_max",
+        "model_mode": "cloud_wan22",
         "compute_target": "cloud",
         "user_id": user.id,
         "credits_required": credits_required,
@@ -8426,10 +8433,10 @@ async def generate_cloud_max_async(
         user,
         credits_required,
         result["prompt_id"],
-        f"Cloud Max {mode.upper()} (RunPod bf16)",
+        f"Cloud Wan22 {mode.upper()} (RunPod bf16)",
     )
 
-    logger.info(f"☁️ Cloud Max {mode.upper()} job submitted to RunPod")
+    logger.info(f"☁️ Cloud Wan22 {mode.upper()} job submitted to RunPod")
     logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
     logger.info(f"   🎛️ {steps} steps, cfg={cfg}, {sampler_name}/{scheduler}")
     logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs")
@@ -9111,7 +9118,7 @@ async def generate_text_video(
         if model_type == "wan22":
             # Filter out LoRAs incompatible with Wan2.2 architecture
             parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "wan2.2")
-            workflow = comfyui.build_cloud_max_t2v_workflow(
+            workflow = comfyui.build_cloud_wan22_t2v_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 num_frames=num_frames,

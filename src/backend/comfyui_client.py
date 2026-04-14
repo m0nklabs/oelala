@@ -2747,7 +2747,7 @@ class ComfyUIClient:
         )
         return workflow
 
-    def build_cloud_max_i2v_workflow(
+    def build_cloud_wan22_i2v_workflow(
         self,
         image_name: str,
         prompt: str,
@@ -2759,7 +2759,7 @@ class ComfyUIClient:
         steps: int = 15,
         cfg: float = 3.0,
         seed: int = -1,
-        output_prefix: str = "oelala_cloud_max",
+        output_prefix: str = "oelala_cloud_wan22",
         high_noise_steps: int = 8,
         shift: float = 8.0,
         sampler_name: str = "dpmpp_2m",
@@ -2776,7 +2776,7 @@ class ComfyUIClient:
         diffusion_model: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Build Cloud Max I2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
+        Build Cloud Wan22 I2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
 
         Uses dedicated high/low noise models from Wan 2.2 for better temporal
         coherence and motion quality compared to Wan 2.1's single-model approach.
@@ -2828,7 +2828,7 @@ class ComfyUIClient:
         height = (height // 8) * 8
 
         logger.info(
-            f"☁️ Building Cloud Max I2V: {width}x{height}, {num_frames}f, "
+            f"☁️ Building Cloud Wan22 I2V: {width}x{height}, {num_frames}f, "
             f"{steps} steps, cfg={cfg}, shift={shift}, sampler={sampler_name}, "
             f"scheduler={scheduler}"
         )
@@ -2972,7 +2972,7 @@ class ComfyUIClient:
                     }
                     current_high_model = [nid, 0]
                     logger.info(
-                        f"🎨 Cloud Max High LoRA #{i + 1}: {high_name} @ {strength}"
+                        f"🎨 Cloud Wan22 High LoRA #{i + 1}: {high_name} @ {strength}"
                     )
 
                 # Low noise LoRA (falls back to high if not specified)
@@ -2989,7 +2989,7 @@ class ComfyUIClient:
                     }
                     current_low_model = [nid, 0]
                     logger.info(
-                        f"🎨 Cloud Max Low LoRA #{i + 1}: {low_name} @ {strength}"
+                        f"🎨 Cloud Wan22 Low LoRA #{i + 1}: {low_name} @ {strength}"
                     )
 
         # Node 20: KSamplerAdvanced — Pass 1 (High Noise)
@@ -3062,13 +3062,13 @@ class ComfyUIClient:
                 f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
             )
         logger.info(
-            f"☁️ Built Cloud Max I2V: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"☁️ Built Cloud Wan22 I2V: {width}x{height}, {num_frames}f@{fps}fps, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
             f"shift={shift}, {sampler_name}/{scheduler}{lora_info}"
         )
         return workflow
 
-    def build_cloud_max_t2v_workflow(
+    def build_cloud_wan22_t2v_workflow(
         self,
         prompt: str,
         negative_prompt: str = "low quality, blurry, distorted, artifacts, flickering, jitter",
@@ -3079,7 +3079,7 @@ class ComfyUIClient:
         steps: int = 15,
         cfg: float = 3.0,
         seed: int = -1,
-        output_prefix: str = "oelala_cloud_max_t2v",
+        output_prefix: str = "oelala_cloud_wan22_t2v",
         high_noise_steps: int = 8,
         shift: float = 8.0,
         sampler_name: str = "dpmpp_2m",
@@ -3095,9 +3095,9 @@ class ComfyUIClient:
         diffusion_model: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Build Cloud Max T2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
+        Build Cloud Wan22 T2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
 
-        Same architecture as Cloud Max I2V but without image conditioning.
+        Same architecture as Cloud Wan22 I2V but without image conditioning.
         Uses dedicated high/low noise T2V models from Wan 2.2 for better
         temporal coherence. fp8_scaled precision (~14.3GB each, fits 48GB GPU).
         """
@@ -3139,7 +3139,7 @@ class ComfyUIClient:
         height = (height // 8) * 8
 
         logger.info(
-            f"☁️ Building Cloud Max T2V: {width}x{height}, {num_frames}f, "
+            f"☁️ Building Cloud Wan22 T2V: {width}x{height}, {num_frames}f, "
             f"{steps} steps, cfg={cfg}, shift={shift}"
         )
 
@@ -3320,7 +3320,7 @@ class ComfyUIClient:
                 f", {len(lora_configs)} LoRA{'s' if len(lora_configs) > 1 else ''}"
             )
         logger.info(
-            f"☁️ Built Cloud Max T2V: {width}x{height}, {num_frames}f@{fps}fps, "
+            f"☁️ Built Cloud Wan22 T2V: {width}x{height}, {num_frames}f@{fps}fps, "
             f"{steps} steps (switch@{high_noise_steps}), cfg={cfg}, "
             f"shift={shift}, {sampler_name}/{scheduler}{lora_info}"
         )
@@ -4371,7 +4371,7 @@ class ComfyUIClient:
                     self.clear_job_metadata(prompt_id)
                     return None
             else:
-                # Try fetching from storage (path may be "generated/cloud-max/file.mp4")
+                # Try fetching from storage (path may be "generated/cloud-wan22/file.mp4")
                 try:
                     sc = get_storage_client()
                     parts = output_path.replace("\\", "/").split("/", 1)
@@ -4504,7 +4504,7 @@ class ComfyUIClient:
             if file_path.exists():
                 file_data = file_path.read_bytes()
             else:
-                # Try fetching from storage (path may be "generated/cloud-max/file.mp4")
+                # Try fetching from storage (path may be "generated/cloud-wan22/file.mp4")
                 try:
                     sc = get_storage_client()
                     parts = output_path.replace("\\", "/").split("/", 1)

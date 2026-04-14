@@ -46,7 +46,7 @@ const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4']
 
 // T2V Model modes (aligned with I2V MODEL_MODES format)
 const MODEL_MODES = [
-  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
+  { value: 'cloud_wan22', label: '☁️ Cloud Wan22 — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
   { value: 'wan22', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass T2V via ComfyUI' },
   { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
@@ -106,7 +106,7 @@ const RANDOM_T2V_RECIPES = [
 ]
 
 const RANDOM_T2V_BEST_SETTINGS = {
-  modelType: 'cloud_max',
+  modelType: 'cloud_wan22',
   duration: 5,
   resolution: '720p',
   fps: 16,
@@ -263,10 +263,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     setImportModal(null)
   }
 
-  // Cloud Max T2V times out on the current RunPod profile once pixel-frame count
+  // Cloud Wan22 T2V times out on the current RunPod profile once pixel-frame count
   // gets too high, so cap duration more aggressively than local presets.
   const maxDuration = useMemo(() => {
-    if (modelType === 'cloud_max') {
+    if (modelType === 'cloud_wan22') {
       if (resolution === '720p') return 5
       if (resolution === '576p') return 8
       if (resolution === '480p') return 12
@@ -575,9 +575,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
       let t2vEndpoint = `${BACKEND_BASE}/generate-text`
 
-      // Cloud Max uses its own endpoint with mode=t2v
-      if (resolved.modelType === 'cloud_max') {
-        t2vEndpoint = `${BACKEND_BASE}/generate-cloud-max-async`
+      // Cloud Wan22 uses its own endpoint with mode=t2v
+      if (resolved.modelType === 'cloud_wan22') {
+        t2vEndpoint = `${BACKEND_BASE}/generate-cloud-wan22-async`
         formData.append('mode', 't2v')
         formData.append('steps', String(resolved.steps))
         formData.append('cfg', String(resolved.cfg))
@@ -956,7 +956,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Max uses full precision on a cloud GPU. Wan2.2 uses local dual-GPU with quantized models. LTX-2.3 is optimized for fast cinematic video on cloud GPUs." /></label>
+          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Wan22 uses full precision on a cloud GPU. Wan2.2 uses local dual-GPU with quantized models. LTX-2.3 is optimized for fast cinematic video on cloud GPUs." /></label>
           <div style={{ position: 'relative' }}>
             <select
               value={modelType}
@@ -978,7 +978,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   setSteps(20)
                   setCfg(3.0)
                   setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
-                } else if (newMode === 'cloud_max') {
+                } else if (newMode === 'cloud_wan22') {
                   setResolution('720p')
                   setAspectRatio('9:16')
                   setDuration(5)
@@ -1009,9 +1009,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
           </div>
 
           {/* Model info badges */}
-          {modelType === 'cloud_max' ? (
+          {modelType === 'cloud_wan22' ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f472b6' }}>
-              <span style={{ fontWeight: 600 }}>Cloud Max — bf16 Full Precision</span> | <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
+              <span style={{ fontWeight: 600 }}>Cloud Wan22 — bf16 Full Precision</span> | <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>Unquantized bf16 | 48GB VRAM | 25 steps | Maximum quality</div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>~$1.22/hr | Cloud-only | Safe default: 720p 5s on current serverless worker</div>
             </div>
@@ -1033,15 +1033,15 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
-                onClick={() => { if (modelType !== 'cloud_max') setComputeTarget('local') }}
-                disabled={modelType === 'cloud_max'}
+                onClick={() => { if (modelType !== 'cloud_wan22') setComputeTarget('local') }}
+                disabled={modelType === 'cloud_wan22'}
                 style={{
                   padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: '1px solid',
                   borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
                   background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
                   color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: modelType === 'cloud_max' ? 'not-allowed' : 'pointer',
-                  opacity: modelType === 'cloud_max' ? 0.4 : 1, transition: 'all 0.15s ease',
+                  cursor: modelType === 'cloud_wan22' ? 'not-allowed' : 'pointer',
+                  opacity: modelType === 'cloud_wan22' ? 0.4 : 1, transition: 'all 0.15s ease',
                 }}
               >
                 Local
@@ -1848,7 +1848,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)', color: 'white'
           }}
-          title="Generate a random premium T2V with LLM prompt + best Cloud Max settings"
+          title="Generate a random premium T2V with LLM prompt + best Cloud Wan22 settings"
         >
           {isRandomGenerating ? (
             <>
@@ -1889,14 +1889,14 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       </div>
 
       <div className="info-badge" style={{ marginTop: '8px', textAlign: 'center', borderColor: 'rgba(236, 72, 153, 0.35)' }}>
-        Random Pro T2V uses Guardian to invent a fresh motion-heavy prompt, then queues it with the safe Cloud Max preset for the current RunPod worker.
+        Random Pro T2V uses Guardian to invent a fresh motion-heavy prompt, then queues it with the safe Cloud Wan22 preset for the current RunPod worker.
       </div>
 
       <div className="info-badge" style={{ marginTop: '12px', textAlign: 'center' }}>
         {modelType === 'ltx2'
           ? 'LTX-2.3 22B — fast 8-step distilled generation on cloud GPU'
-          : modelType === 'cloud_max'
-            ? 'Cloud Max uses full bf16 precision on cloud GPU (highest quality)'
+          : modelType === 'cloud_wan22'
+            ? 'Cloud Wan22 uses full bf16 precision on cloud GPU (highest quality)'
             : 'Wan2.2 first generates an image, then animates it (higher quality)'}
       </div>
     </div>

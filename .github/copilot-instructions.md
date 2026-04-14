@@ -511,9 +511,9 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - Check `requirements.txt`, `pyproject.toml`, `package.json`, `CMakeLists.txt`, etc.
 - Follow the versions and libraries specified in the configuration files.
 
-## RunPod Serverless (Cloud Max — Wan 2.2)
+## RunPod Serverless (Cloud Wan22 — Wan 2.2)
 
-- **Endpoint**: `x2x496ymkidl3m` ("oelala-cloud-max")
+- **Endpoint**: `x2x496ymkidl3m` ("oelala-wan22")
 - **Template**: `tkpy0pi8gt` ("oelala-comfyui-worker"), containerDisk=100GB
 - **Image**: `ghcr.io/m0nklabs/oelala-comfyui-worker` (dated tags, e.g. `20260408-135917`)
 - **RunPod LoRA Volume**: `ochebt0xbq` (`oelala-runpod-lora-eu-cz`), `EU-CZ-1`, `50GB`

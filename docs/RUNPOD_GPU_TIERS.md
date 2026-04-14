@@ -32,7 +32,7 @@ RunPod's API `gpuIds` field expects **architecture-tier IDs**, NOT GPU model nam
 | `BLACKWELL_96` | Blackwell | 96 GB | B200 | Next-gen |
 | `BLACKWELL_180` | Blackwell | 180 GB | GB200 / B300 | Low supply |
 
-## oelala-cloud-max Endpoint Config
+## oelala-cloud-wan22 Endpoint Config
 
 **Endpoint ID**: `x2x496ymkidl3m`
 
@@ -46,7 +46,7 @@ AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96
 
 ### Measured Startup Behavior
 
-- **Cold start** after scale-to-zero: about `447s` queue delay + `12s` execution for the tiny Cloud Max smoke workflow.
+- **Cold start** after scale-to-zero: about `447s` queue delay + `12s` execution for the tiny Cloud Wan22 smoke workflow.
 - **Warm start** with an already-idle worker: about `39s` queue delay + `12s` execution for the same workflow.
 - The active endpoint currently uses `workersMin=0`, `workersMax=1`, `idleTimeout=10`.
 

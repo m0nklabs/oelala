@@ -76,7 +76,7 @@ def decode_video_from_result(job_data: dict) -> tuple[bytes, str]:
 async def upload_to_storage(file_bytes: bytes, filename: str) -> str:
     """Upload the video bytes to oelala-storage. Returns the storage path."""
     bucket = "generated"
-    object_path = f"cloud-max/{filename}"
+    object_path = f"cloud-wan22/{filename}"
     url = f"{STORAGE_BASE_URL}/{bucket}/{object_path}"
     headers = {
         "Authorization": f"Bearer {STORAGE_API_KEY}",
@@ -150,7 +150,7 @@ async def main():
     # Build a canonical filename
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     ext = Path(orig_filename).suffix or ".mp4"
-    save_filename = f"cloud_max_recovered_{timestamp}_000{ext}"
+    save_filename = f"cloud_wan22_recovered_{timestamp}_000{ext}"
     print(f"   Save as: {save_filename}")
 
     if args.dry_run:

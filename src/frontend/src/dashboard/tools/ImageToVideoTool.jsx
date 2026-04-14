@@ -24,7 +24,7 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 
 // Model mode options for I2V
 const MODEL_MODES = [
-  { value: 'cloud_max', label: '☁️ Cloud Max — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
+  { value: 'cloud_wan22', label: '☁️ Cloud Wan22 — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
   { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
   { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality • Single-GPU BlockSwap • Lightning LoRA + NAG + TorchCompile' },
   { value: 'distorch2_q8', label: '🧪 DisTorch2 Q8 Experimental', desc: 'Q8 quality + DisTorch2 Multi-GPU + Selectable LoRAs' },
@@ -50,7 +50,7 @@ const RESOLUTION_PRESETS = {
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
     max_duration_ultra_q8: 30,
-    max_duration_cloud_max: 30,
+    max_duration_cloud_wan22: 30,
   },
   '576p': {
     label: '576p',
@@ -67,7 +67,7 @@ const RESOLUTION_PRESETS = {
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
     max_duration_ultra_q8: 30,
-    max_duration_cloud_max: 30,
+    max_duration_cloud_wan22: 30,
   },
   '720p': {
     label: '720p',
@@ -84,7 +84,7 @@ const RESOLUTION_PRESETS = {
     max_duration_blockswap_q8: 30,
     max_duration_distorch2_q8: 30,
     max_duration_ultra_q8: 8,  // 720p: 15.4GB peak@161f OOM, 14.5GB@129f safe with LoRAs
-    max_duration_cloud_max: 30,  // 48GB VRAM on cloud, no limit
+    max_duration_cloud_wan22: 30,  // 48GB VRAM on cloud, no limit
   },
 }
 
@@ -532,8 +532,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (modelMode === 'ultra_q8') {
       return preset.max_duration_ultra_q8 || 30
     }
-    if (modelMode === 'cloud_max') {
-      return preset.max_duration_cloud_max || 30
+    if (modelMode === 'cloud_wan22') {
+      return preset.max_duration_cloud_wan22 || 30
     }
     return preset.max_duration_wan22 || 30
   }, [resolution, modelMode])
@@ -1004,9 +1004,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       if (loraConfigs.length > 0) {
         formData.append('lora_configs', JSON.stringify(loraConfigs))
       }
-    } else if (modelMode === 'cloud_max') {
-      // Cloud Max — bf16 full precision on RunPod (cloud only)
-      endpoint = `${BACKEND_BASE}/generate-cloud-max-async`
+    } else if (modelMode === 'cloud_wan22') {
+      // Cloud Wan22 — bf16 full precision on RunPod (cloud only)
+      endpoint = `${BACKEND_BASE}/generate-cloud-wan22-async`
       formData.append('mode', 'i2v')
       formData.append('steps', String(steps))
       formData.append('cfg', String(cfg))
@@ -1323,7 +1323,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Max uses full precision on a cloud GPU for best quality. Local modes use your GPU with quantized models for faster/cheaper generation. LTX-2.3 is optimized for fast, cinematic video." /></label>
+          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Wan22 uses full precision on a cloud GPU for best quality. Local modes use your GPU with quantized models for faster/cheaper generation. LTX-2.3 is optimized for fast, cinematic video." /></label>
           <div style={{ position: 'relative' }}>
             <select
               value={modelMode}
@@ -1364,7 +1364,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setBsShift(9.0)
                   setBsHighNoiseSteps(4)
                   setBsNagScale(11.0)
-                } else if (newMode === 'cloud_max') {
+                } else if (newMode === 'cloud_wan22') {
                   setResolution('720p')
                   setAspectRatio('9:16')
                   setDuration(8)
@@ -1372,7 +1372,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setCfg(3.0)
                   setBsShift(8.0)
                   setBsHighNoiseSteps(8)
-                  setComputeTarget('cloud')  // Cloud Max is cloud-only
+                  setComputeTarget('cloud')  // Cloud Wan22 is cloud-only
                 }
               }}
               style={{
@@ -1409,9 +1409,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               }}
             />
           </div>
-          {modelMode === 'cloud_max' ? (
+          {modelMode === 'cloud_wan22' ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f472b6' }}>
-              <span style={{ fontWeight: 600 }}>☁️ Cloud Max — bf16 Full Precision</span> • <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
+              <span style={{ fontWeight: 600 }}>☁️ Cloud Wan22 — bf16 Full Precision</span> • <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
                 Unquantized bf16 • 48GB VRAM • Dual-pass high/low LoRA • 25 steps • Maximum quality
               </div>
@@ -1476,8 +1476,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
-                onClick={() => { if (modelMode !== 'cloud_max') setComputeTarget('local') }}
-                disabled={modelMode === 'cloud_max'}
+                onClick={() => { if (modelMode !== 'cloud_wan22') setComputeTarget('local') }}
+                disabled={modelMode === 'cloud_wan22'}
                 style={{
                   padding: '4px 10px',
                   fontSize: '11px',
@@ -1486,8 +1486,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
                   background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
                   color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: modelMode === 'cloud_max' ? 'not-allowed' : 'pointer',
-                  opacity: modelMode === 'cloud_max' ? 0.4 : 1,
+                  cursor: modelMode === 'cloud_wan22' ? 'not-allowed' : 'pointer',
+                  opacity: modelMode === 'cloud_wan22' ? 0.4 : 1,
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -2493,7 +2493,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         </div>
 
         {/* Model Version - only for non-Wan2.2, non-Cloud modes */}
-        {modelMode !== 'wan2.2' && modelMode !== 'cloud_max' && (
+        {modelMode !== 'wan2.2' && modelMode !== 'cloud_wan22' && (
           <div className="form-group">
             <label className="grok-section-label">Model Version <InfoTooltip text="V1 is the original model. V2 (Enhanced) features improved video quality, smoother motion, and optional audio generation capabilities." /></label>
             <div className="grok-toggle-group">
@@ -2994,8 +2994,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         )}
 
-        {/* Advanced Settings for Cloud Max — bf16 on RunPod */}
-        {modelMode === 'cloud_max' && (
+        {/* Advanced Settings for Cloud Wan22 — bf16 on RunPod */}
+        {modelMode === 'cloud_wan22' && (
           <div style={{
             backgroundColor: 'var(--bg-tertiary)',
             padding: '16px',
@@ -3016,7 +3016,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 fontWeight: 600,
                 color: 'var(--text-primary)'
               }}>
-                ☁️ Cloud Max Settings
+                ☁️ Cloud Wan22 Settings
               </div>
               <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
             </div>
@@ -3026,7 +3026,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* Steps */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. Cloud Max supports higher step counts (10-40) for best quality. 25 is recommended for production. More steps = better detail but longer render." /></label>
+                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. Cloud Wan22 supports higher step counts (10-40) for best quality. 25 is recommended for production. More steps = better detail but longer render." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
                   </div>
                   <input
@@ -3043,7 +3043,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 {/* CFG */}
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance — how strictly the model follows your prompt. Low (1-2) = creative freedom. Medium (3-5) = balanced. High (6-10) = strict adherence but may over-saturate. Recommended: 3.0 for Cloud Max." /></label>
+                    <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance — how strictly the model follows your prompt. Low (1-2) = creative freedom. Medium (3-5) = balanced. High (6-10) = strict adherence but may over-saturate. Recommended: 3.0 for Cloud Wan22." /></label>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
                   </div>
                   <input
@@ -3113,7 +3113,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   </div>
                 </div>
 
-                {/* Cloud Max LoRA Settings */}
+                {/* Cloud Wan22 LoRA Settings */}
                 <div style={{
                   paddingTop: '16px',
                   borderTop: '1px solid var(--border-color)'
@@ -3255,7 +3255,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   )}
                 </div>
 
-                {/* Cloud Max cost estimate */}
+                {/* Cloud Wan22 cost estimate */}
                 <div style={{
                   marginTop: '16px',
                   padding: '10px 12px',
@@ -3265,7 +3265,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   fontSize: '0.75rem',
                   color: 'var(--text-muted)'
                 }}>
-                  💰 Cloud Max uses 2× credits • GPU: A6000/A40 ($1.22/hr) • No local GPU needed
+                  💰 Cloud Wan22 uses 2× credits • GPU: A6000/A40 ($1.22/hr) • No local GPU needed
                 </div>
               </div>
             )}

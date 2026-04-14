@@ -86,13 +86,13 @@ class WorkflowModelPrepResult:
     def prepared_count(self) -> int:
         return self.linked_count + self.downloaded_count
 
-# ---- Cloud Max model definitions ----
+# ---- Cloud Wan22 model definitions ----
 # Source: Comfy-Org/Wan_2.2_ComfyUI_Repackaged on HuggingFace
 # Wan 2.2 uses dedicated high/low noise models for better temporal coherence.
 # fp8_scaled precision: near-bf16 quality, fits on 48GB GPUs (28.6GB total vs 57GB bf16).
 HF_REPO_22 = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 HF_REPO_21 = "Comfy-Org/Wan_2.1_ComfyUI_repackaged"  # CLIP Vision not in 2.2 repo
-CLOUD_MAX_MODELS = [
+CLOUD_WAN22_MODELS = [
     {
         "hf_repo": HF_REPO_22,
         "hf_path": "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
@@ -162,7 +162,7 @@ CLOUD_MAX_MODELS = [
         "startup_required": True,
     },
 ]
-PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_MAX_MODELS}
+PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_WAN22_MODELS}
 NODE_MANAGED_MODEL_DIRS = [
     "audio_vae",
     "checkpoints",
@@ -248,17 +248,17 @@ def _is_startup_required(model: dict) -> bool:
 
 def _startup_models() -> list[dict]:
     """Return models that should be prepared during worker startup."""
-    return [model for model in CLOUD_MAX_MODELS if _is_startup_required(model)]
+    return [model for model in CLOUD_WAN22_MODELS if _is_startup_required(model)]
 
 
 def _deferred_models() -> list[dict]:
     """Return models that are intentionally deferred until workflow demand."""
-    return [model for model in CLOUD_MAX_MODELS if not _is_startup_required(model)]
+    return [model for model in CLOUD_WAN22_MODELS if not _is_startup_required(model)]
 
 
 def download_models():
     """
-    Download startup-required Cloud Max models from HuggingFace if not already present.
+    Download startup-required Cloud Wan22 models from HuggingFace if not already present.
     Uses huggingface_hub for efficient downloading with resume support.
 
     Public/general models always download to the worker container disk.
@@ -272,7 +272,7 @@ def download_models():
     models_needed = []
 
     # Check which models are missing (check both volume and comfyui dirs)
-    for model in CLOUD_MAX_MODELS:
+    for model in CLOUD_WAN22_MODELS:
         # Skip mode-specific models at startup; they are resolved per workflow.
         if not _is_startup_required(model):
             logger.info(
@@ -287,7 +287,7 @@ def download_models():
             total_to_download += model["size_gb"]
 
     if not models_needed:
-        logger.info("✅ All Cloud Max models already downloaded")
+        logger.info("✅ All Cloud Wan22 models already downloaded")
         return True
 
     ok, capacity_error = _check_download_capacity(models_needed)
@@ -598,7 +598,7 @@ def _model_state_for_log(model: dict) -> str:
 
 
 def _detect_workflow_family(referenced: set[str]) -> str:
-    """Infer the Cloud Max workflow family from referenced model names."""
+    """Infer the Cloud Wan22 workflow family from referenced model names."""
     has_ltx = any(name in NODE_MANAGED_MODEL_FILENAMES or name.startswith("ltx-") for name in referenced)
     has_i2v = any("i2v" in name for name in referenced) or "clip_vision_h.safetensors" in referenced
     has_t2v = any("t2v" in name for name in referenced)
@@ -652,7 +652,7 @@ def _missing_models(
 ) -> list[dict]:
     """Return models that are still missing from both volume and local paths."""
     missing = []
-    for model in CLOUD_MAX_MODELS:
+    for model in CLOUD_WAN22_MODELS:
         if required_only and not _is_startup_required(model):
             continue
         if filenames and model["filename"] not in filenames:
@@ -815,7 +815,7 @@ def ensure_workflow_models(workflow: dict, job=None) -> WorkflowModelPrepResult:
 
     requested = [
         model["filename"]
-        for model in CLOUD_MAX_MODELS
+        for model in CLOUD_WAN22_MODELS
         if model["filename"] in referenced and not _is_model_present(model)
     ]
     if not requested:
@@ -826,7 +826,7 @@ def ensure_workflow_models(workflow: dict, job=None) -> WorkflowModelPrepResult:
     cache_ready = []
     download_needed = []
     for filename in requested:
-        model = next(item for item in CLOUD_MAX_MODELS if item["filename"] == filename)
+        model = next(item for item in CLOUD_WAN22_MODELS if item["filename"] == filename)
         if _find_cached_model_source(model, emit_logs=False):
             cache_ready.append(filename)
         else:
@@ -1424,7 +1424,7 @@ def handler(event: dict) -> dict:
             _progress(event, f"Downloading {len(lora_downloads)} LoRA(s)...")
             download_loras(lora_downloads, job=event)
 
-        # Download optional workflow models on demand (e.g. Cloud Max T2V fp8 models)
+        # Download optional workflow models on demand (e.g. Cloud Wan22 T2V fp8 models)
         workflow_models = ensure_workflow_models(workflow, job=event)
         if workflow_models.prepared_count > 0:
             if workflow_models.linked_count and workflow_models.downloaded_count:

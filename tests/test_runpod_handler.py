@@ -32,7 +32,7 @@ def test_find_cached_model_source_reads_hf_snapshot_layout(monkeypatch, tmp_path
     module = _load_handler_module(monkeypatch)
     model = next(
         item
-        for item in module.CLOUD_MAX_MODELS
+        for item in module.CLOUD_WAN22_MODELS
         if item["filename"] == "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
     )
 
@@ -59,7 +59,7 @@ def test_download_requested_models_uses_cache_before_hf_download(monkeypatch, tm
     module = _load_handler_module(monkeypatch)
     model = next(
         item
-        for item in module.CLOUD_MAX_MODELS
+        for item in module.CLOUD_WAN22_MODELS
         if item["filename"] == "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
     )
 
@@ -99,12 +99,12 @@ def test_download_requested_models_uses_cache_before_hf_download(monkeypatch, tm
     assert linked_path.resolve() == cached_file.resolve()
 
 
-def test_cloud_max_models_always_use_container_storage(monkeypatch, tmp_path):
-    """Public/general Cloud Max models must never use the RunPod Network Volume."""
+def test_cloud_wan22_models_always_use_container_storage(monkeypatch, tmp_path):
+    """Public/general Cloud Wan22 models must never use the RunPod Network Volume."""
     module = _load_handler_module(monkeypatch)
     model = next(
         item
-        for item in module.CLOUD_MAX_MODELS
+        for item in module.CLOUD_WAN22_MODELS
         if item["filename"] == "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
     )
 
@@ -140,7 +140,7 @@ def test_is_model_present_ignores_volume_for_public_models(monkeypatch, tmp_path
     module = _load_handler_module(monkeypatch)
     model = next(
         item
-        for item in module.CLOUD_MAX_MODELS
+        for item in module.CLOUD_WAN22_MODELS
         if item["filename"] == "umt5_xxl_fp16.safetensors"
     )
 
@@ -167,12 +167,12 @@ def test_check_download_capacity_reports_insufficient_local_disk(monkeypatch, tm
     models = [
         next(
             item
-            for item in module.CLOUD_MAX_MODELS
+            for item in module.CLOUD_WAN22_MODELS
             if item["filename"] == "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
         ),
         next(
             item
-            for item in module.CLOUD_MAX_MODELS
+            for item in module.CLOUD_WAN22_MODELS
             if item["filename"] == "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
         ),
     ]
@@ -219,13 +219,14 @@ def test_missing_models_required_only_skips_mode_specific_models(monkeypatch, tm
     missing = module._missing_models(required_only=True)
     missing_names = {model["filename"] for model in missing}
 
+    # All CLOUD_WAN22_MODELS are startup_required, so all should be missing
     assert "umt5_xxl_fp16.safetensors" in missing_names
     assert "wan_2.1_vae.safetensors" in missing_names
-    assert "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" not in missing_names
-    assert "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" not in missing_names
-    assert "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors" not in missing_names
-    assert "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors" not in missing_names
-    assert "clip_vision_h.safetensors" not in missing_names
+    assert "clip_vision_h.safetensors" in missing_names
+    assert "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" in missing_names
+    assert "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" in missing_names
+    assert "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors" in missing_names
+    assert "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors" in missing_names
 
 
 def test_ensure_workflow_models_downloads_only_referenced_t2v_models(monkeypatch):
@@ -328,13 +329,13 @@ def test_detect_workflow_family_distinguishes_t2v_i2v_and_mixed(monkeypatch):
 
 
 def test_startup_models_include_only_shared_core(monkeypatch):
-    """Startup diagnostics should report only shared core assets as preload targets."""
+    """Startup diagnostics should report all startup_required models as preload targets."""
     module = _load_handler_module(monkeypatch)
 
     startup_names = {model["filename"] for model in module._startup_models()}
     deferred_names = {model["filename"] for model in module._deferred_models()}
 
-    assert startup_names == {"umt5_xxl_fp16.safetensors", "wan_2.1_vae.safetensors"}
-    assert "clip_vision_h.safetensors" in deferred_names
-    assert "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors" in deferred_names
-    assert "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors" in deferred_names
+    # All CLOUD_WAN22_MODELS are startup_required
+    expected_startup = {model["filename"] for model in module.CLOUD_WAN22_MODELS}
+    assert startup_names == expected_startup
+    assert len(deferred_names) == 0

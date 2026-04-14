@@ -130,5 +130,5 @@ media/
 supabase/.temp/
 
 # RunPod SSH keys
-oelala-cloud-max_*_ssh.key*
+oelala-cloud-wan22_*_ssh.key*
 scratch/
