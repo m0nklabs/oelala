@@ -1,7 +1,7 @@
 # ============================================================
 # Oelala ComfyUI Worker for RunPod Serverless
 # ============================================================
-# Lightweight ComfyUI container for Cloud Max Wan 2.2 video gen.
+# Lightweight ComfyUI container for Wan 2.2 video generation.
 # Public models come from RunPod cached-model storage or container-disk
 # Hugging Face downloads.
 # Optional RunPod Network Volume is reserved for LoRAs/private assets only.

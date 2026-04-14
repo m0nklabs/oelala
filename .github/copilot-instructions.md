@@ -536,6 +536,21 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - **Attachment policy**: Keep the LoRA volume detached by default. Attaching it to a serverless endpoint constrains scheduling to `EU-CZ-1`.
 - **Account**: `mark.op.mobiel@gmail.com`, spend limit $80
 
+## RunPod Serverless (Qwen Image Edit 2511)
+
+- **Endpoint**: `8djiexluyybooj` ("oelala-qwen")
+- **Template**: `ed2614hd8k` ("oelala-qwen-worker"), containerDisk=100GB
+- **Image**: `ghcr.io/m0nklabs/oelala-qwen-worker` (dated tags)
+- **GPU Tiers**: `AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180` (48GB+ — fp8mixed UNET is 19.1GB, total ~28GB)
+- **Deploy**: `deploy/runpod-qwen/deploy.sh` (same pattern as Wan/LTX workers)
+- **Env vars**: `RUNPOD_QWEN_ENDPOINT_ID=8djiexluyybooj`, `RUNPOD_QWEN_TEMPLATE_ID=ed2614hd8k` in `.env`
+- **Models** (fp8mixed, best quality, downloaded at runtime):
+  - UNET: `qwen_image_edit_2511_fp8mixed.safetensors` (19.1 GB)
+  - CLIP: `qwen_2.5_vl_7b_fp8_scaled.safetensors` (8.8 GB)
+  - VAE: `qwen_image_vae.safetensors` (243 MB)
+  - Lightning LoRA: `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` (850 MB)
+- **Config**: `workersMin=0`, `workersMax=1`, `idleTimeout=120`
+
 ## Node Architecture Updates (2026-03-06)
 - **oelala-storage architecture**:
   - `storage-main.oelala.xyz` = Coordinator (`oelala-storage.service` on 7990) -> Data: `/home/flip/oelala-main-data`

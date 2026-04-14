@@ -12803,6 +12803,7 @@ async def generate_qwen_edit(
             lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
             prompt_full=instruction,
             input_image_path=str(upload_path),
+            endpoint_id=os.getenv("RUNPOD_QWEN_ENDPOINT_ID"),
         )
 
         # Deduct credits after successful submission
