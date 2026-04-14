@@ -861,22 +861,40 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         return prev.trim() ? `${prev.trim()}, ${addition}` : addition
       })
     }
-    // Add LoRAs
+    // Add LoRAs — use noise_level from AI suggest to correctly slot high/low/single
     if (changes.lorasToAdd?.length) {
       setLoraConfigs(prev => {
         const newEntries = changes.lorasToAdd.map(l => {
-          // Determine if it's a high-noise or low-noise LoRA
-          // /loras endpoint returns "path" field, ai-suggest returns "filename" — match on both
-          const isHigh = availableLoras.high_noise?.some(h => h.path === l.filename || h.filename === l.filename)
-          const isLow = availableLoras.low_noise?.some(lo => lo.path === l.filename || lo.filename === l.filename)
+          // Use noise_level from suggestion if available, otherwise detect from available lists
+          let noise = l.noise_level || ''
+          if (!noise) {
+            const inHigh = availableLoras.high_noise?.some(h => h.path === l.filename || h.filename === l.filename)
+            const inLow = availableLoras.low_noise?.some(lo => lo.path === l.filename || lo.filename === l.filename)
+            noise = inHigh ? 'high' : inLow ? 'low' : 'single'
+          }
+          // Skip if already active (prevent duplicates)
+          const alreadyActive = prev.some(lc => lc.high === l.filename || lc.low === l.filename)
+          if (alreadyActive) return null
           return {
-            high: isHigh ? l.filename : '',
-            low: isLow ? l.filename : '',
+            high: (noise === 'high' || noise === 'single') ? l.filename : '',
+            low: noise === 'low' ? l.filename : '',
             strength: l.strength ?? 1.0,
           }
-        })
+        }).filter(Boolean)
         return [...prev, ...newEntries]
       })
+      // Auto-inject trigger words for newly added LoRAs
+      const triggerTexts = changes.lorasToAdd
+        .filter(l => l.trigger_words?.length)
+        .flatMap(l => l.trigger_words)
+      if (triggerTexts.length) {
+        setPrompt(prev => {
+          // Only add trigger words not already in the prompt
+          const missing = triggerTexts.filter(tw => !prev.toLowerCase().includes(tw.toLowerCase()))
+          if (!missing.length) return prev
+          return prev.trim() ? `${prev.trim()}, ${missing.join(', ')}` : missing.join(', ')
+        })
+      }
     }
     // Adjust LoRA strengths
     if (changes.loraStrengthChanges && Object.keys(changes.loraStrengthChanges).length) {

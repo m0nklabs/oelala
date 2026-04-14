@@ -2031,18 +2031,36 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
     required_base = BASE_MODEL_MAP.get(model_mode, "")
 
     # Build compact LoRA catalog for LLM context — minimal fields to keep prompt small
+    # STRICT filtering: only include LoRAs confirmed compatible with current tool+model
     lora_catalog = []
     for lora in all_loras:
-        if lora.registry and lora.registry.modes:
-            if tool not in lora.registry.modes:
-                continue
-        # Filter by base model compatibility
         lora_base = lora.base_model or (lora.registry.base_model if lora.registry else "")
+
+        # Skip LoRAs with unknown base model — they're unverified and can't be applied
+        if required_base and not lora_base:
+            continue
+        # Skip LoRAs that don't match the required base model
         if required_base and lora_base and lora_base != required_base:
             continue
+        # Skip LoRAs whose registry modes don't include this tool
+        if lora.registry and lora.registry.modes and tool not in lora.registry.modes:
+            continue
+
+        # Determine noise_level for frontend apply logic
+        noise = lora.noise_level
+        if not noise:
+            # Infer from filename if scanner missed it
+            lower_name = lora.filename.lower()
+            lower_path = lora.path.lower()
+            if any(k in lower_name or k in lower_path for k in ("high", "_h_", "-h-", "_hn", "-hn")):
+                noise = "high"
+            elif any(k in lower_name or k in lower_path for k in ("low", "_l_", "-l-", "_ln", "-ln")):
+                noise = "low"
+
         entry = {
             "filename": lora.path,
             "name": lora.registry.display_name if lora.registry else lora.name,
+            "noise_level": noise or "single",  # "high", "low", or "single" (non-paired)
         }
         if lora.registry:
             if lora.registry.trigger_words:
@@ -2102,15 +2120,22 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
     system_prompt = f"""You are an AI video generation settings optimizer. Analyze user settings and suggest concrete improvements. Max 6 suggestions. Output ONLY a valid JSON array.
 {constraints_text}
 
+CRITICAL RULES:
+- ONLY suggest LoRAs from the "Available LoRAs" list. Do NOT invent LoRA filenames.
+- Each LoRA has a noise_level: "high", "low", or "single". Include it in lora_add suggestions.
+- For Wan2.2: LoRAs are dual-noise pairs (high+low). If suggesting a high-noise LoRA, also check if a matching low-noise LoRA exists and suggest both.
+- Do NOT suggest lora_trigger separately when lora_add already includes trigger_words — the frontend handles trigger word injection automatically.
+- Only suggest lora_trigger for LoRAs that are ALREADY active but missing trigger words in the prompt.
+
 Each suggestion: {{"id":"s1","type":"TYPE","title":"Short title","description":"Why","priority":"high|medium|low","apply":{{...}}}}
 
 Types and apply shapes:
 - prompt_add: {{"text":"append this"}}
 - prompt_replace: {{"find":"old","replace":"new"}}
 - negative_add: {{"text":"append this"}}
-- lora_add: {{"filename":"path.safetensors","strength":1.0,"trigger_words":["w"]}}
-- lora_strength: {{"filename":"path.safetensors","new_strength":0.8}}
-- lora_trigger: {{"text":"trigger words to add","lora_filename":"path.safetensors"}}
+- lora_add: {{"filename":"exact_path.safetensors","strength":1.0,"noise_level":"high|low|single","trigger_words":["word"]}}
+- lora_strength: {{"filename":"exact_path.safetensors","new_strength":0.8}}
+- lora_trigger: {{"text":"trigger words to add","lora_filename":"exact_path.safetensors"}}
 - setting_change: {{"setting":"steps|cfg|fps|resolution","value":6}}"""
 
     user_prompt = f"""Analyze these {tool.upper()} settings and suggest improvements.

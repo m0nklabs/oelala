@@ -119,8 +119,19 @@ export default function AISuggestPanel({
       const a = s.apply
       switch (s.type) {
         case 'prompt_add':
-        case 'lora_trigger':
           if (a.text) changes.promptAppend.push(a.text)
+          break
+        case 'lora_trigger':
+          // Only add trigger words for LoRAs that are already active (not being added in same batch)
+          if (a.text) {
+            const loraBeingAdded = selected.some(
+              other => other.type === 'lora_add' && other.apply?.filename === a.lora_filename
+            )
+            if (!loraBeingAdded) {
+              changes.promptAppend.push(a.text)
+            }
+            // If the LoRA is being added, trigger words are included in lora_add.trigger_words
+          }
           break
         case 'prompt_replace':
           if (a.find && a.replace !== undefined) {
@@ -135,6 +146,7 @@ export default function AISuggestPanel({
             changes.lorasToAdd.push({
               filename: a.filename,
               strength: a.strength ?? 1.0,
+              noise_level: a.noise_level || '',
               trigger_words: a.trigger_words || [],
             })
           }
