@@ -240,11 +240,10 @@ class StorageClient:
         Returns:
             True if moved successfully
         """
-        url = f"{self.api_url}/{src_bucket}/{src_key}?action=move"
+        url = f"/{src_bucket}/{src_key}?action=move"
         payload = {"dest_bucket": dest_bucket, "dest_key": dest_key}
 
-        headers = self._get_auth_headers(is_write=True)
-        resp = self.client.post(url, json=payload, headers=headers)
+        resp = self.client.post(url, json=payload)
 
         if resp.status_code == 200:
             return True
