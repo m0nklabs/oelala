@@ -83,10 +83,11 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 # Authentication
 from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with_jwks
 
-# Storage client for user media (legacy sync client)
+# Storage client for user media (MinIO-backed)
 from storage_client import get_client as get_storage_client
+from minio.error import S3Error
 
-# MediaService for oelala-storage + Supabase integration (new async client)
+# MediaService for MinIO + Supabase integration (async client)
 from media_service import MediaService, MediaRecord
 
 # Generation artifact storage (workflow, settings, logs per generation)
@@ -623,14 +624,12 @@ async def request_metrics_middleware(request: Request, call_next):
 
 # API v1 router (programmatic access)
 from api_v1 import router as api_v1_router
-from storage_nodes_api import router as storage_nodes_router
 
 # API keys management router
 from api_keys_management import router as api_keys_router
 
 # Include API routers
 app.include_router(api_v1_router)  # REST API v1 at /api/v1/*
-app.include_router(storage_nodes_router)
 app.include_router(api_keys_router)  # API key management at /api/keys/*
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
@@ -681,14 +680,14 @@ async def _save_upload(file: UploadFile, dest: Path) -> bytes:
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 # NOTE: /comfyui-output and /avatars StaticFiles mounts removed.
-# These are now served via oelala-storage proxy endpoints:
+# These are now served via MinIO-backed storage proxy endpoints:
 #   /comfyui/output/{filename}  → storage bucket "comfyui-local"
 #   /avatars/{filename}         → storage bucket "avatars" (endpoint below)
 
 
 @app.get("/avatars/{filename}")
 async def get_avatar(filename: str, request: Request):
-    """Serve avatar images via oelala-storage proxy."""
+    """Serve avatar images via MinIO storage proxy."""
     return _storage_proxy_response(
         "avatars",
         filename,
@@ -709,7 +708,7 @@ def _storage_proxy_response(
     cache_control: str = "public, max-age=3600, must-revalidate",
 ) -> Response:
     """
-    Fetch a file from oelala-storage and return it as a FastAPI Response.
+    Fetch a file from MinIO storage and return it as a FastAPI Response.
 
     Adds CORS headers compatible with Cloudflare caching and proper
     Content-Type from the storage service.
@@ -717,11 +716,11 @@ def _storage_proxy_response(
     storage = get_storage_client()
     try:
         content, content_type, content_length = storage.get_with_metadata(bucket, key)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
+    except S3Error as exc:
+        if exc.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
         raise HTTPException(status_code=502, detail="Storage service error")
-    except httpx.ConnectError:
+    except Exception:
         raise HTTPException(status_code=503, detail="Storage service unavailable")
 
     headers = {

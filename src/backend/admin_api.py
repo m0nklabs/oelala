@@ -1042,16 +1042,17 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
     except Exception:
         health["services"]["comfyui"] = {"status": "offline", "port": 8188}
 
-    # Check oelala-storage
+    # Check MinIO storage
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:7990/health", timeout=3.0)
-            health["services"]["storage"] = {
-                "status": "online" if response.status_code == 200 else "error",
-                "port": 7990,
-            }
+        storage = get_storage_client()
+        storage_health = storage.health()
+        health["services"]["storage"] = {
+            "status": "online" if storage_health.get("status") == "healthy" else "error",
+            "port": 9000,
+            "backend": "minio",
+        }
     except Exception:
-        health["services"]["storage"] = {"status": "offline", "port": 7990}
+        health["services"]["storage"] = {"status": "offline", "port": 9000, "backend": "minio"}
 
     # Disk usage
     for name, path in [
@@ -1081,14 +1082,14 @@ async def get_recent_logs(
 ):
     """
     Get recent logs from systemd services.
-    Supported services: oelala-backend, comfyui, oelala-storage
+    Supported services: oelala-backend, comfyui, minio
     """
     import subprocess
 
     allowed_services = [
         "oelala-backend",
         "comfyui",
-        "oelala-storage",
+        "minio",
         "oelala-frontend",
     ]
 

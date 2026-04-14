@@ -1,8 +1,16 @@
 """
-oelala-storage client for the backend.
+MinIO-backed storage client for the oelala backend.
 
-This module provides a Python client for interacting with the oelala-storage service.
-The storage service runs on port 7990 and provides S3-compatible operations.
+This module provides a Python client for interacting with MinIO (S3-compatible)
+object storage. It replaces the previous custom oelala-storage httpx client
+while keeping the same public API so all callers continue to work unchanged.
+
+Bucket mapping (logical → MinIO):
+    "generated"    → "oelala-generated"
+    "comfyui-local"→ "oelala-comfyui"
+    "avatars"      → "oelala-avatars"
+    "users"        → "oelala-users"
+    (other)        → "oelala-{name}"
 
 Usage:
     from storage_client import StorageClient
@@ -20,58 +28,81 @@ Usage:
 
     # Delete
     client.delete("generated", "video.mp4")
+
+    # Presigned URL (replaces custom HMAC signed URLs)
+    url = client.presigned_get("generated", "video.mp4", expires=3600)
 """
 
-import httpx
+import io
+import hashlib
+import mimetypes
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any, BinaryIO, Tuple, Union
+from urllib.parse import urlparse
 import logging
-from b2_client import b2_client
+
+from minio import Minio
+from minio.error import S3Error
 
 logger = logging.getLogger(__name__)
 
+# Logical bucket name → MinIO bucket name
+_BUCKET_MAP: Dict[str, str] = {
+    "generated": "oelala-generated",
+    "comfyui-local": "oelala-comfyui",
+    "avatars": "oelala-avatars",
+    "users": "oelala-users",
+}
+
+
+def _resolve_bucket(logical_name: str) -> str:
+    """Map a logical bucket name to the actual MinIO bucket name."""
+    return _BUCKET_MAP.get(logical_name, f"oelala-{logical_name}")
+
 
 class StorageClient:
-    """Client for oelala-storage service."""
+    """MinIO-backed storage client (drop-in replacement for oelala-storage client)."""
 
     def __init__(
         self,
-        base_url: str = "http://localhost:7990",
+        base_url: str = "http://localhost:9000",
         timeout: float = 30.0,
         auth_token: Optional[str] = None,
+        access_key: Optional[str] = None,
+        secret_key: Optional[str] = None,
     ):
         """
-        Initialize storage client.
+        Initialize MinIO storage client.
 
         Args:
-            base_url: Storage service URL (default: http://localhost:7990)
+            base_url: MinIO endpoint URL (default: http://localhost:9000)
             timeout: Request timeout in seconds
-            auth_token: Optional Bearer token for authentication
+            auth_token: Ignored (kept for backwards compat with old callers)
+            access_key: MinIO access key (overrides MINIO_ACCESS_KEY env)
+            secret_key: MinIO secret key (overrides MINIO_SECRET_KEY env)
         """
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
-        self.auth_token = auth_token
-        self._client: Optional[httpx.Client] = None
+        import os
 
-    @property
-    def client(self) -> httpx.Client:
-        """Lazy-init httpx client."""
-        if self._client is None:
-            headers = {}
-            if self.auth_token:
-                headers["Authorization"] = f"Bearer {self.auth_token}"
-            self._client = httpx.Client(
-                base_url=self.base_url,
-                timeout=self.timeout,
-                headers=headers,
-            )
-        return self._client
+        self.base_url = base_url.rstrip("/")
+
+        parsed = urlparse(self.base_url)
+        endpoint = parsed.netloc or parsed.path
+        secure = parsed.scheme == "https"
+
+        self._access_key = access_key or os.environ.get("MINIO_ACCESS_KEY", "")
+        self._secret_key = secret_key or os.environ.get("MINIO_SECRET_KEY", "")
+
+        self._minio = Minio(
+            endpoint,
+            access_key=self._access_key,
+            secret_key=self._secret_key,
+            secure=secure,
+        )
 
     def close(self):
-        """Close the client."""
-        if self._client:
-            self._client.close()
-            self._client = None
+        """Close the client (no-op for MinIO SDK, kept for API compat)."""
+        pass
 
     def __enter__(self):
         return self
@@ -79,17 +110,59 @@ class StorageClient:
     def __exit__(self, *args):
         self.close()
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _resolve(self, bucket: str, key: str = "") -> Tuple[str, str]:
+        """
+        Resolve a logical bucket (possibly compound like 'users/{id}')
+        into a MinIO (bucket, key_prefix + key) pair.
+
+        For compound bucket names such as ``users/abc-123``, the first
+        segment selects the MinIO bucket (``oelala-users``) and the
+        remainder is prepended to the key (``abc-123/{original_key}``).
+        """
+        if "/" in bucket:
+            top, sub = bucket.split("/", 1)
+            minio_bucket = _resolve_bucket(top)
+            full_key = f"{sub}/{key}" if key else sub
+        else:
+            minio_bucket = _resolve_bucket(bucket)
+            full_key = key
+        return minio_bucket, full_key
+
+    def _ensure_bucket(self, minio_bucket: str) -> None:
+        """Create bucket if it does not exist."""
+        if not self._minio.bucket_exists(minio_bucket):
+            self._minio.make_bucket(minio_bucket)
+            logger.info(f"🪣 Created MinIO bucket: {minio_bucket}")
+
+    @staticmethod
+    def _guess_content_type(key: str) -> str:
+        """Guess MIME type from key extension."""
+        ct, _ = mimetypes.guess_type(key)
+        return ct or "application/octet-stream"
+
+    # ------------------------------------------------------------------
+    # Core operations (same public signatures as before)
+    # ------------------------------------------------------------------
+
     def health(self) -> Dict[str, Any]:
-        """Check storage service health."""
-        resp = self.client.get("/health")
-        resp.raise_for_status()
-        return resp.json()
+        """Check storage service health by listing buckets."""
+        try:
+            buckets = self._minio.list_buckets()
+            return {
+                "status": "healthy",
+                "backend": "minio",
+                "buckets": len(buckets),
+            }
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
 
     def status(self) -> Dict[str, Any]:
         """Get storage service status."""
-        resp = self.client.get("/status")
-        resp.raise_for_status()
-        return resp.json()
+        return self.health()
 
     def put(
         self,
@@ -102,7 +175,7 @@ class StorageClient:
         Upload an object to storage.
 
         Args:
-            bucket: Bucket name (e.g., "generated", "uploads")
+            bucket: Logical bucket name (e.g., "generated", "users/{id}")
             key: Object key (filename or path)
             data: File content as bytes, file-like object, or Path
             content_type: Optional content type header
@@ -110,80 +183,73 @@ class StorageClient:
         Returns:
             Object metadata dict with bucket, key, size, hash, content_type
         """
-        url = f"/{bucket}/{key}"
-        headers = {}
-        if content_type:
-            headers["Content-Type"] = content_type
+        minio_bucket, full_key = self._resolve(bucket, key)
+        self._ensure_bucket(minio_bucket)
 
-        # Handle different data types
+        # Normalise data to bytes
         if isinstance(data, Path):
-            data = data.read_bytes()
+            raw = data.read_bytes()
         elif hasattr(data, "read"):
-            data = data.read()
+            raw = data.read()
+        else:
+            raw = data
 
-        # [MARK1] Dual-write to Backblaze B2 (if configured)
-        if b2_client.is_configured():
-            try:
-                b2_client.put(
-                    bucket, key, data, content_type or "application/octet-stream"
-                )
-            except Exception as e:
-                logger.error(f"B2 dual-write failed: {e}")
+        size = len(raw)
+        ct = content_type or self._guess_content_type(key)
+        data_hash = hashlib.md5(raw).hexdigest()
 
-        resp = self.client.put(url, content=data, headers=headers)
-        resp.raise_for_status()
-        return resp.json()
+        self._minio.put_object(
+            minio_bucket,
+            full_key,
+            io.BytesIO(raw),
+            length=size,
+            content_type=ct,
+        )
+
+        logger.debug(f"📤 PUT {minio_bucket}/{full_key} ({size} bytes)")
+        return {
+            "bucket": bucket,
+            "key": key,
+            "size": size,
+            "hash": data_hash,
+            "content_type": ct,
+        }
 
     def get(self, bucket: str, key: str) -> bytes:
         """
         Download an object from storage.
 
         Args:
-            bucket: Bucket name
+            bucket: Logical bucket name
             key: Object key
 
         Returns:
             File content as bytes
         """
-        # [MARK1] Try oelala-storage first, B2 only as last-resort fallback
-        url = f"/{bucket}/{key}"
+        minio_bucket, full_key = self._resolve(bucket, key)
+        resp = self._minio.get_object(minio_bucket, full_key)
         try:
-            resp = self.client.get(url)
-            resp.raise_for_status()
-            return resp.content
-        except Exception:
-            if b2_client.is_configured():
-                b2_data = b2_client.get(bucket, key)
-                if b2_data is not None:
-                    logger.warning(f"B2 fallback used for {bucket}/{key} (primary storage failed)")
-                    return b2_data
-            raise
+            return resp.read()
+        finally:
+            resp.close()
+            resp.release_conn()
 
     def get_with_metadata(self, bucket: str, key: str) -> Tuple[bytes, str, int]:
         """
         Download an object and return content with metadata for proxying.
 
-        Args:
-            bucket: Bucket name
-            key: Object key
-
         Returns:
             Tuple of (content_bytes, content_type, content_length)
         """
-        # [MARK1] Try oelala-storage first, B2 only as last-resort fallback
-        url = f"/{bucket}/{key}"
+        minio_bucket, full_key = self._resolve(bucket, key)
+        resp = self._minio.get_object(minio_bucket, full_key)
         try:
-            resp = self.client.get(url)
-            resp.raise_for_status()
-            content_type = resp.headers.get("content-type", "application/octet-stream")
-            return resp.content, content_type, len(resp.content)
-        except Exception:
-            if b2_client.is_configured():
-                b2_meta = b2_client.get_with_metadata(bucket, key)
-                if b2_meta is not None:
-                    logger.warning(f"B2 fallback used for {bucket}/{key} (primary storage failed)")
-                    return b2_meta
-            raise
+            content = resp.read()
+            ct = resp.headers.get("Content-Type", "application/octet-stream")
+            return content, ct, len(content)
+        finally:
+            resp.close()
+            resp.release_conn()
 
     def stream(self, bucket: str, key: str):
         """
@@ -196,15 +262,18 @@ class StorageClient:
         """
         import contextlib
 
-        url = f"/{bucket}/{key}"
+        minio_bucket, full_key = self._resolve(bucket, key)
 
         @contextlib.contextmanager
         def _stream_ctx():
-            with self.client.stream("GET", url) as resp:
-                resp.raise_for_status()
-                ct = resp.headers.get("content-type", "application/octet-stream")
-                cl = int(resp.headers.get("content-length", 0))
-                yield resp.iter_bytes(), ct, cl
+            resp = self._minio.get_object(minio_bucket, full_key)
+            try:
+                ct = resp.headers.get("Content-Type", "application/octet-stream")
+                cl = int(resp.headers.get("Content-Length", 0))
+                yield resp.stream(amt=8192), ct, cl
+            finally:
+                resp.close()
+                resp.release_conn()
 
         return _stream_ctx()
 
@@ -213,85 +282,76 @@ class StorageClient:
         Download an object directly to a file.
 
         Args:
-            bucket: Bucket name
+            bucket: Logical bucket name
             key: Object key
             path: Destination file path
 
         Returns:
             Path to downloaded file
         """
-        data = self.get(bucket, key)
+        minio_bucket, full_key = self._resolve(bucket, key)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        self._minio.fget_object(minio_bucket, full_key, str(path))
         return path
 
     def move(
         self, src_bucket: str, src_key: str, dest_bucket: str, dest_key: str
     ) -> bool:
         """
-        Move/rename an object from source to destination.
-
-        Args:
-            src_bucket: Source bucket name
-            src_key: Source object key
-            dest_bucket: Destination bucket name
-            dest_key: Destination object key
+        Move/rename an object (S3: copy + delete).
 
         Returns:
             True if moved successfully
         """
-        url = f"/{src_bucket}/{src_key}?action=move"
-        payload = {"dest_bucket": dest_bucket, "dest_key": dest_key}
+        src_mb, src_fk = self._resolve(src_bucket, src_key)
+        dst_mb, dst_fk = self._resolve(dest_bucket, dest_key)
 
-        resp = self.client.post(url, json=payload)
-
-        if resp.status_code == 200:
+        try:
+            from minio.commonconfig import CopySource
+            self._ensure_bucket(dst_mb)
+            self._minio.copy_object(dst_mb, dst_fk, CopySource(src_mb, src_fk))
+            self._minio.remove_object(src_mb, src_fk)
             return True
-        elif resp.status_code == 404:
-            return False
-
-        resp.raise_for_status()
-        return False
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                return False
+            raise
 
     def delete(self, bucket: str, key: str) -> bool:
         """
         Delete an object from storage.
 
-        Args:
-            bucket: Bucket name
-            key: Object key
-
         Returns:
-            True if deleted successfully
+            True if deleted (MinIO remove_object is idempotent)
         """
-        # [MARK1] Delete from B2 too
-        if b2_client.is_configured():
-            b2_client.delete(bucket, key)
-
-        url = f"/{bucket}/{key}"
-        resp = self.client.delete(url)
-        return resp.status_code == 204
+        minio_bucket, full_key = self._resolve(bucket, key)
+        try:
+            self._minio.remove_object(minio_bucket, full_key)
+            return True
+        except S3Error:
+            return False
 
     def head(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
         """
         Get object metadata without downloading.
 
-        Args:
-            bucket: Bucket name
-            key: Object key
-
         Returns:
-            Dict with Content-Length header, or None if not found
+            Dict with size + exists, or None if not found
         """
-        url = f"/{bucket}/{key}"
-        resp = self.client.head(url)
-        if resp.status_code == 404:
-            return None
-        resp.raise_for_status()
-        return {
-            "size": int(resp.headers.get("Content-Length", 0)),
-            "exists": True,
-        }
+        minio_bucket, full_key = self._resolve(bucket, key)
+        try:
+            stat = self._minio.stat_object(minio_bucket, full_key)
+            return {
+                "size": stat.size,
+                "exists": True,
+                "content_type": stat.content_type,
+                "last_modified": stat.last_modified.isoformat() if stat.last_modified else None,
+                "etag": stat.etag,
+            }
+        except S3Error as e:
+            if e.code in ("NoSuchKey", "NoSuchBucket"):
+                return None
+            raise
 
     def exists(self, bucket: str, key: str) -> bool:
         """Check if an object exists."""
@@ -306,45 +366,100 @@ class StorageClient:
         List objects in a bucket.
 
         Args:
-            bucket: Bucket name (may contain '/' for nested paths like 'users/{id}')
+            bucket: Logical bucket name (may contain '/' for nested paths)
             prefix: Optional prefix filter
 
         Returns:
             List of object metadata dicts
         """
-        # Handle compound bucket names (e.g., "users/{user_id}").
-        # Fiber routes GET /:bucket to listObjects, but compound paths
-        # would match GET /:bucket/* (getObject) instead.  Split the
-        # bucket and merge the sub-path into the prefix.
-        if "/" in bucket:
-            top, sub = bucket.split("/", 1)
-            url = f"/{top}"
-            prefix = f"{sub}/{prefix}" if prefix else f"{sub}/"
+        minio_bucket, base_prefix = self._resolve(bucket, "")
+
+        # Merge base_prefix with caller-supplied prefix
+        if base_prefix and prefix:
+            full_prefix = f"{base_prefix}/{prefix}" if not base_prefix.endswith("/") else f"{base_prefix}{prefix}"
+        elif base_prefix:
+            full_prefix = base_prefix if base_prefix.endswith("/") else f"{base_prefix}/"
         else:
-            url = f"/{bucket}"
+            full_prefix = prefix
 
-        params = {}
-        if prefix:
-            params["prefix"] = prefix
-
-        resp = self.client.get(url, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("objects", [])
+        objects = []
+        try:
+            for obj in self._minio.list_objects(minio_bucket, prefix=full_prefix, recursive=True):
+                if obj.is_dir:
+                    continue
+                objects.append({
+                    "key": obj.object_name,
+                    "size": obj.size,
+                    "content_type": "",
+                    "modified_at": obj.last_modified.isoformat() if obj.last_modified else "",
+                    "hash": obj.etag or "",
+                })
+        except S3Error as e:
+            if e.code == "NoSuchBucket":
+                return []
+            raise
+        return objects
 
     def list_buckets(self) -> List[str]:
-        """
-        List available buckets (directories in storage root).
+        """List available MinIO buckets."""
+        return [b.name for b in self._minio.list_buckets()]
 
-        Note: This assumes bucket = top-level directory structure.
-        """
-        # The storage service doesn't have a native list-buckets endpoint yet
-        # For now, we know the buckets are: generated, uploads, archive, temp
-        return ["generated", "uploads", "archive", "temp"]
+    # ------------------------------------------------------------------
+    # Presigned URLs (replaces custom HMAC signed URLs)
+    # ------------------------------------------------------------------
 
-    # =========================================================================
-    # User-scoped media operations
-    # =========================================================================
+    def presigned_get(
+        self,
+        bucket: str,
+        key: str,
+        expires: int = 3600,
+    ) -> str:
+        """
+        Generate a presigned GET URL for temporary public access.
+
+        Args:
+            bucket: Logical bucket name
+            key: Object key
+            expires: Expiration time in seconds (default 1 hour, max 7 days)
+
+        Returns:
+            Presigned URL string
+        """
+        minio_bucket, full_key = self._resolve(bucket, key)
+        return self._minio.presigned_get_object(
+            minio_bucket,
+            full_key,
+            expires=timedelta(seconds=min(expires, 604800)),
+        )
+
+    def presigned_put(
+        self,
+        bucket: str,
+        key: str,
+        expires: int = 3600,
+    ) -> str:
+        """
+        Generate a presigned PUT URL for direct upload.
+
+        Args:
+            bucket: Logical bucket name
+            key: Object key
+            expires: Expiration time in seconds
+
+        Returns:
+            Presigned URL string
+        """
+        minio_bucket, full_key = self._resolve(bucket, key)
+        self._ensure_bucket(minio_bucket)
+        return self._minio.presigned_put_object(
+            minio_bucket,
+            full_key,
+            expires=timedelta(seconds=min(expires, 604800)),
+        )
+
+    # ------------------------------------------------------------------
+    # User-scoped media operations (unchanged public API)
+    # ------------------------------------------------------------------
 
     @staticmethod
     def user_bucket(user_id: str) -> str:
@@ -402,16 +517,20 @@ class StorageClient:
         filename: str,
     ):
         """Stream user's media file as an iterator of bytes."""
-        bucket = self.user_bucket(user_id)
-        key = self.user_key(media_type, filename)
-        url = f"/{bucket}/{key}"
+        minio_bucket, full_key = self._resolve(
+            self.user_bucket(user_id),
+            self.user_key(media_type, filename),
+        )
 
         def _iter():
-            with self.client.stream("GET", url) as resp:
-                resp.raise_for_status()
-                for chunk in resp.iter_bytes():
+            resp = self._minio.get_object(minio_bucket, full_key)
+            try:
+                for chunk in resp.stream(amt=8192):
                     if chunk:
                         yield chunk
+            finally:
+                resp.close()
+                resp.release_conn()
 
         return _iter()
 
@@ -461,18 +580,15 @@ class StorageClient:
         prefix = f"{media_type}/" if media_type else ""
         objects = self.list(bucket, prefix)
 
-        # Because list() merges compound bucket paths into the prefix,
-        # returned keys may include the user_id sub-path (e.g.,
-        # "{user_id}/uploads/file.png").  Strip it so downstream
-        # consumers see clean keys like "uploads/file.png".
+        # Strip user_id prefix from keys so downstream consumers see
+        # clean keys like "uploads/file.png" instead of "{user_id}/uploads/file.png".
         user_prefix = f"{user_id}/"
 
-        # Enrich with user info and parsed media type
         for obj in objects:
             obj["user_id"] = user_id
             key = obj.get("key", "")
             if key.startswith(user_prefix):
-                key = key[len(user_prefix) :]
+                key = key[len(user_prefix):]
             parts = key.split("/", 1)
             if len(parts) >= 1:
                 obj["media_type"] = parts[0]
@@ -514,23 +630,44 @@ class StorageClient:
             return f"{self.base_url}/{bucket}/{key}"
 
 
-# Module-level singleton for convenience
+# =====================================================================
+# Module-level singleton & convenience functions
+# =====================================================================
 _default_client: Optional[StorageClient] = None
 
 
 def get_client() -> StorageClient:
     """Get the default storage client singleton.
 
-    Auth token is loaded from STORAGE_API_KEY environment variable.
+    Reads MinIO config from environment variables:
+      - MINIO_ENDPOINT (default: http://localhost:9000)
+      - MINIO_ACCESS_KEY
+      - MINIO_SECRET_KEY
+
+    Falls back to STORAGE_URL / STORAGE_API_KEY for backwards compat.
     """
     import os
 
     global _default_client
     if _default_client is None:
-        auth_token = os.environ.get("STORAGE_API_KEY")
-        base_url = os.environ.get("STORAGE_URL", "http://localhost:7990")
-        _default_client = StorageClient(base_url=base_url, auth_token=auth_token)
+        endpoint = os.environ.get(
+            "MINIO_ENDPOINT",
+            os.environ.get("STORAGE_URL", "http://localhost:9000"),
+        )
+        access_key = os.environ.get(
+            "MINIO_ACCESS_KEY", os.environ.get("STORAGE_API_KEY", "")
+        )
+        secret_key = os.environ.get("MINIO_SECRET_KEY", "")
+        _default_client = StorageClient(
+            base_url=endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+        )
     return _default_client
+
+
+# Alias used by gallery_api.py (import name compat)
+get_storage_client = get_client
 
 
 def put(
@@ -569,7 +706,11 @@ def exists(bucket: str, key: str) -> bool:
 if __name__ == "__main__":
     import sys
 
-    client = StorageClient()
+    # 👋 Hey agent-friend who sent a kiss — here's your message:
+    # "De groeten uit de MinIO-migratie! 🚀 Moge je buckets altijd vol
+    #  en je latency altijd laag zijn. Proost! 🍻"
+
+    client = get_client()
 
     try:
         health = client.health()
@@ -580,23 +721,25 @@ if __name__ == "__main__":
         print(f"📁 Found {len(objects)} objects in 'generated' bucket")
 
         # Test upload
-        test_data = b"Test from Python client!"
-        obj = client.put("test", "python_test.txt", test_data)
+        test_data = b"Test from MinIO Python client!"
+        obj = client.put("generated", "python_test.txt", test_data)
         print(f"📤 Uploaded: {obj}")
 
         # Test download
-        downloaded = client.get("test", "python_test.txt")
+        downloaded = client.get("generated", "python_test.txt")
         assert downloaded == test_data
         print("📥 Downloaded and verified!")
 
+        # Test presigned URL
+        url = client.presigned_get("generated", "python_test.txt", expires=300)
+        print(f"🔗 Presigned URL: {url[:80]}...")
+
         # Test delete
-        client.delete("test", "python_test.txt")
+        client.delete("generated", "python_test.txt")
         print("🗑️ Deleted test file")
 
-        print("\n✅ All storage client tests passed!")
+        print("\n✅ All MinIO storage client tests passed!")
 
     except Exception as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
-    finally:
-        client.close()

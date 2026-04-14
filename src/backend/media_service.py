@@ -1,9 +1,9 @@
 """
-Media Service - Unified interface for oelala-storage + Supabase metadata.
+Media Service - Unified interface for MinIO storage + Supabase metadata.
 
 This module provides a high-level API for:
-- Uploading files to oelala-storage with automatic Supabase metadata sync
-- Generating signed URLs for temporary public access
+- Uploading files to MinIO with automatic Supabase metadata sync
+- Generating presigned URLs for temporary public access (via MinIO S3)
 - Managing user media (list, delete, update metadata)
 - Tracking storage usage per user
 
@@ -25,7 +25,7 @@ Usage:
         prompt="A cat dancing"
     )
 
-    # Get signed URL for sharing
+    # Get presigned URL for sharing
     url = service.generate_signed_url(media.storage_path, expires_in=3600)
 
     # List user's media
@@ -35,8 +35,6 @@ Usage:
 import os
 import logging
 import hashlib
-import hmac
-import time
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
@@ -95,7 +93,7 @@ class MediaRecord:
 
     @property
     def storage_url(self) -> str:
-        """URL path to access via oelala-storage."""
+        """URL path to access via storage backend."""
         return f"/{self.storage_path}"
 
     # Convenience accessors for metadata
@@ -154,7 +152,7 @@ class MediaRecord:
 
 class MediaService:
     """
-    Unified media service that syncs oelala-storage with Supabase metadata.
+    Unified media service that syncs MinIO storage with Supabase metadata.
     """
 
     def __init__(
@@ -169,27 +167,36 @@ class MediaService:
         Initialize media service.
 
         Args:
-            storage_url: oelala-storage base URL (default: env STORAGE_URL or localhost:7990)
-            storage_token: oelala-storage API token (default: env STORAGE_API_KEY)
+            storage_url: MinIO endpoint URL (default: env MINIO_ENDPOINT or localhost:9000)
+            storage_token: Ignored (kept for backwards compat)
             supabase_url: Supabase project URL (default: env SUPABASE_URL)
             supabase_key: Supabase service key (default: env SUPABASE_SERVICE_KEY)
-            signing_secret: Secret for generating signed URLs (default: env MEDIA_SIGNING_SECRET)
+            signing_secret: Ignored (MinIO presigned URLs replace custom HMAC)
         """
         self.storage_url = (
-            storage_url or os.getenv("STORAGE_URL", "http://localhost:7990")
+            storage_url
+            or os.getenv("MINIO_ENDPOINT")
+            or os.getenv("STORAGE_URL", "http://localhost:9000")
         ).rstrip("/")
-        self.storage_token = storage_token or os.getenv("STORAGE_API_KEY")
         self.supabase_url = (supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
         self.supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
-        self.signing_secret = signing_secret or os.getenv(
-            "MEDIA_SIGNING_SECRET", "change-me-in-production"
-        )
 
         self._http_client: Optional[httpx.AsyncClient] = None
 
+        # Lazy-init storage client for presigned URLs and uploads
+        self._storage_client = None
+
+    @property
+    def storage_client(self):
+        """Lazy-init MinIO storage client."""
+        if self._storage_client is None:
+            from storage_client import get_client
+            self._storage_client = get_client()
+        return self._storage_client
+
     @property
     def http_client(self) -> httpx.AsyncClient:
-        """Lazy-init async HTTP client."""
+        """Lazy-init async HTTP client (for Supabase REST calls)."""
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=60.0)
         return self._http_client
@@ -205,13 +212,6 @@ class MediaService:
 
     async def __aexit__(self, *args):
         await self.close()
-
-    def _storage_headers(self) -> Dict[str, str]:
-        """Headers for oelala-storage requests."""
-        headers: Dict[str, str] = {}
-        if self.storage_token:
-            headers["Authorization"] = f"Bearer {self.storage_token}"
-        return headers
 
     def _supabase_headers(self) -> Dict[str, str]:
         """Headers for Supabase requests."""
@@ -354,20 +354,24 @@ class MediaService:
         expires_at = self.calculate_expires_at(user_tier)
         retention_days = TIER_RETENTION_DAYS.get(user_tier, DEFAULT_RETENTION_DAYS)
 
-        # 1. Upload to oelala-storage with retention header
+        # 1. Upload to MinIO via storage client
+        # storage_path = "users/{user_id}/{type}s/{timestamp}_{filename}"
+        # Split into bucket (first two segments) and key (rest)
         logger.info(
             f"📤 Uploading {filename} to {storage_path} (tier={user_tier}, expires={expires_at.date()})"
         )
 
-        upload_url = f"{self.storage_url}/{storage_path}"
-        headers = self._storage_headers()
-        headers["Content-Type"] = mime_type
-        headers["X-Expires-At"] = expires_at.isoformat() + "Z"  # RFC3339 format
+        path_parts = storage_path.split("/", 2)
+        if len(path_parts) >= 3:
+            bucket_path = f"{path_parts[0]}/{path_parts[1]}"
+            key_path = path_parts[2]
+        else:
+            bucket_path = path_parts[0]
+            key_path = path_parts[1] if len(path_parts) > 1 else ""
 
-        resp = await self.http_client.put(upload_url, content=data, headers=headers)
-        resp.raise_for_status()
-
-        storage_result = resp.json()
+        storage_result = self.storage_client.put(
+            bucket_path, key_path, data, content_type=mime_type,
+        )
         storage_hash = storage_result.get("hash")
 
         logger.info(f"✅ Uploaded to storage: {storage_hash}")
@@ -532,12 +536,16 @@ class MediaService:
             return False
 
         if hard_delete:
-            # Delete from storage
-            delete_url = f"{self.storage_url}/{record.storage_path}"
+            # Delete from MinIO storage
             try:
-                await self.http_client.delete(
-                    delete_url, headers=self._storage_headers()
-                )
+                path_parts = record.storage_path.split("/", 2)
+                if len(path_parts) >= 3:
+                    bucket_path = f"{path_parts[0]}/{path_parts[1]}"
+                    key_path = path_parts[2]
+                else:
+                    bucket_path = path_parts[0]
+                    key_path = path_parts[1] if len(path_parts) > 1 else ""
+                self.storage_client.delete(bucket_path, key_path)
             except Exception as e:
                 logger.warning(f"Failed to delete from storage: {e}")
 
@@ -557,28 +565,30 @@ class MediaService:
         expires_in: int = 3600,
     ) -> str:
         """
-        Generate a signed URL for temporary public access.
+        Generate a presigned URL for temporary public access via MinIO.
 
-        The signature is HMAC-SHA256(path:expires, secret) encoded as hex.
-        This matches the server-side verification in oelala-storage.
+        Uses MinIO's native S3 presigned URL mechanism (SigV4) which is
+        much stronger than the previous custom HMAC-SHA256 scheme.
 
         Args:
             storage_path: Full storage path (e.g., users/{user_id}/videos/file.mp4)
             expires_in: Expiration time in seconds (default 1 hour)
 
         Returns:
-            Signed URL that can be used without authentication
+            Presigned URL that can be used without authentication
         """
-        expires_at = int(time.time()) + expires_in
-        path = f"/{storage_path}"
+        # Split storage_path into bucket + key for the storage client
+        path_parts = storage_path.split("/", 2)
+        if len(path_parts) >= 3:
+            bucket_path = f"{path_parts[0]}/{path_parts[1]}"
+            key_path = path_parts[2]
+        else:
+            bucket_path = path_parts[0]
+            key_path = path_parts[1] if len(path_parts) > 1 else ""
 
-        # Create signature: HMAC-SHA256(path:expires, secret) as hex
-        message = f"{path}:{expires_at}"
-        signature = hmac.new(
-            self.signing_secret.encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
-
-        return f"{self.storage_url}{path}?expires={expires_at}&sig={signature}"
+        return self.storage_client.presigned_get(
+            bucket_path, key_path, expires=expires_in
+        )
 
     async def get_signed_url(
         self, media_id: str, expires_in: int = 3600
@@ -600,58 +610,62 @@ class MediaService:
 
     async def get_user_quota(self, user_id: str) -> Dict[str, Any]:
         """
-        Get storage quota information for a user from oelala-storage.
+        Get storage quota information for a user.
+
+        Calculates usage from Supabase user_media table instead of relying
+        on a custom storage endpoint (MinIO has no per-prefix quota API).
 
         Args:
             user_id: User's UUID
 
         Returns:
-            Dict with quota info:
-            - used_bytes: Current storage used
-            - quota_bytes: Total quota limit
-            - file_count: Number of files stored
-            - tier: User's storage tier
-            - used_percent: Percentage of quota used (0-100)
-            - warning: True if usage > 80%
-            - upgrade_needed: True if usage > 95%
+            Dict with quota info
         """
+        # Tier-based quota limits
+        tier_quotas = {
+            "free": 5 * 1024 * 1024 * 1024,     # 5 GB
+            "pro": 50 * 1024 * 1024 * 1024,      # 50 GB
+            "vip": 200 * 1024 * 1024 * 1024,     # 200 GB
+        }
+
         try:
-            resp = await self.http_client.get(
-                f"{self.storage_url}/buckets/{user_id}",
-                headers=self._storage_headers(),
-            )
+            # Get user tier
+            tier = await self.get_user_tier(user_id)
+            quota_bytes = tier_quotas.get(tier, tier_quotas["free"])
 
-            if resp.status_code == 404:
-                # No bucket exists yet - return zeros
-                return {
-                    "used_bytes": 0,
-                    "quota_bytes": 10 * 1024 * 1024 * 1024,  # Default 10GB
-                    "file_count": 0,
-                    "tier": "free",
-                    "used_percent": 0,
-                    "warning": False,
-                    "upgrade_needed": False,
-                    "human_used": "0 B",
-                    "human_limit": "10 GB",
-                }
+            # Calculate usage from Supabase user_media table
+            used_bytes = 0
+            file_count = 0
 
-            resp.raise_for_status()
-            data = resp.json()
+            if self.supabase_url and self.supabase_key:
+                resp = await self.http_client.get(
+                    f"{self.supabase_url}/rest/v1/user_media",
+                    params={
+                        "user_id": f"eq.{user_id}",
+                        "select": "metadata",
+                    },
+                    headers=self._supabase_headers(),
+                )
 
-            used = data.get("used_bytes", 0)
-            quota = data.get("quota_bytes", 1)
-            percent = round((used / quota) * 100, 1) if quota > 0 else 0
+                if resp.status_code == 200:
+                    records = resp.json()
+                    file_count = len(records)
+                    for record in records:
+                        meta = record.get("metadata") or {}
+                        used_bytes += meta.get("size_bytes", 0)
+
+            percent = round((used_bytes / quota_bytes) * 100, 1) if quota_bytes > 0 else 0
 
             return {
-                "used_bytes": used,
-                "quota_bytes": quota,
-                "file_count": data.get("file_count", 0),
-                "tier": data.get("tier", "free"),
+                "used_bytes": used_bytes,
+                "quota_bytes": quota_bytes,
+                "file_count": file_count,
+                "tier": tier,
                 "used_percent": percent,
                 "warning": percent > 80,
                 "upgrade_needed": percent > 95,
-                "human_used": self._human_size(used),
-                "human_limit": self._human_size(quota),
+                "human_used": self._human_size(used_bytes),
+                "human_limit": self._human_size(quota_bytes),
             }
 
         except Exception as e:
