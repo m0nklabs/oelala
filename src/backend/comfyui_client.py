@@ -4448,7 +4448,7 @@ class ComfyUIClient:
             try:
                 local_path = Path(output_path)
                 if local_path.exists() and str(local_path.parent) != str(
-                    Path("/home/flip/oelala-storage")
+                    Path("/home/flip/minio-data")
                 ):
                     local_path.unlink()
                     logger.info(f"🗑️ Cleaned up auto-uploaded local file: {local_path}")
@@ -4721,7 +4721,7 @@ class ComfyUIClient:
                                 f.write(resp.content)
                             logger.info(f"📥 Video downloaded: {output_path}")
 
-                            # Upload to generated bucket in oelala-storage
+                            # Upload to generated bucket in MinIO
                             try:
                                 storage_client = get_storage_client()
                                 storage_client.put("generated", filename, resp.content)
@@ -4792,7 +4792,7 @@ class ComfyUIClient:
                                 f.write(resp.content)
                             logger.info(f"📥 Image downloaded: {output_path}")
 
-                            # Upload to generated bucket in oelala-storage
+                            # Upload to generated bucket in MinIO
                             try:
                                 storage_client = get_storage_client()
                                 storage_client.put("generated", filename, resp.content)

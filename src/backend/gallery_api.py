@@ -18,7 +18,7 @@ from auth import get_current_user, get_optional_user, User
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
-# Note: thumbnails served from oelala-storage, no local dir needed
+# Note: thumbnails served from MinIO, no local dir needed
 
 
 def debug_log(msg: str):
@@ -807,7 +807,7 @@ async def get_published_media_file(media_id: str):
     This is PUBLIC - no authentication required for published content.
 
     Media source priority:
-    1. oelala-storage (user's cloud storage)
+    1. MinIO storage (user's cloud storage)
     2. Local directories (media/generated/, ComfyUI/output/) for dev/testing
     """
     from fastapi.responses import StreamingResponse
@@ -860,7 +860,7 @@ async def get_published_media_file(media_id: str):
         }
         content_type = content_types.get(ext, "application/octet-stream")
 
-        # Try oelala-storage first (check existence eagerly — iter is lazy)
+        # Try MinIO storage first (check existence eagerly — iter is lazy)
         try:
             storage = get_storage_client()
             bucket = storage.user_bucket(user_id)
@@ -869,7 +869,7 @@ async def get_published_media_file(media_id: str):
                 raise FileNotFoundError(f"Not in storage: {filename}")
             stream = storage.iter_user_media(user_id, media_type_dir, filename)
             debug_log(
-                f"Streaming from oelala-storage: {media_type_dir}/{filename} for user {user_id}"
+                f"Streaming from MinIO: {media_type_dir}/{filename} for user {user_id}"
             )
 
             return StreamingResponse(
@@ -882,7 +882,7 @@ async def get_published_media_file(media_id: str):
             )
         except Exception as storage_err:
             debug_log(
-                f"oelala-storage user media failed: {storage_err}, trying storage buckets"
+                f"MinIO user media failed: {storage_err}, trying storage buckets"
             )
 
         # Fallback: try generated and comfyui-local storage buckets

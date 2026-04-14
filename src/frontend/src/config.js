@@ -7,10 +7,10 @@ const BACKEND_BASE = isProduction
   ? 'https://api.oelala.xyz'
   : 'http://192.168.1.2:7998'
 
-// Storage service URL (oelala-storage Go service)
+// Storage service URL (MinIO — serves presigned URLs directly)
 const STORAGE_BASE = isProduction
   ? 'https://storage-main.oelala.xyz'
-  : 'http://192.168.1.2:7990'
+  : 'http://192.168.1.2:9000'
 
 // Global debug flag for UI logging
 const DEBUG = import.meta.env?.DEV ?? false
@@ -24,7 +24,7 @@ const EXTERNAL_SERVICES = {
 
 /**
  * Utility to get full media URL - handles both signed URLs and relative paths
- * Signed URLs from oelala-storage come as full URLs (http://...)
+ * Presigned URLs from MinIO come as full URLs (http://...)
  * Legacy backend paths are relative (/files/video.mp4)
  * @param {string} url - URL or relative path
  * @param {string} [signedUrl] - Optional signed URL (preferred if available)

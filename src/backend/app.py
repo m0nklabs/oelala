@@ -857,7 +857,7 @@ async def upload_generated_media(
     extra_metadata: Optional[dict] = None,
 ) -> Optional[MediaRecord]:
     """
-    Upload a generated media file to oelala-storage and sync metadata to Supabase.
+    Upload a generated media file to MinIO and sync metadata to Supabase.
 
     Args:
         user_id: User ID who owns the media
@@ -1717,7 +1717,7 @@ class DeleteMediaRequest(BaseModel):
 
 @app.delete("/delete-comfyui-media")
 async def delete_comfyui_media(request: DeleteMediaRequest):
-    """Delete media files via oelala-storage with local fallback."""
+    """Delete media files via MinIO with local fallback."""
     storage = get_storage_client()
     deleted = []
     errors = []
@@ -3013,7 +3013,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     When the job completes, this function:
     1. Decodes the base64 video output from RunPod
     2. Saves it locally to media/generated/cloud-wan22/
-    3. Uploads to oelala-storage via MediaService
+    3. Uploads to MinIO via MediaService
     4. Returns the same response format as local jobs
     5. Saves raw ComfyUI logs to logs/cloud/
     """
@@ -3236,7 +3236,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         try:
             file_bytes = base64.b64decode(b64_data)
 
-            # Save to oelala-storage instead of local disk
+            # Save to MinIO instead of local disk
             storage = get_storage_client()
             storage.put("generated", f"cloud-wan22/{save_name}", file_bytes)
             logger.info(
@@ -3268,7 +3268,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         _persist_cloud_jobs()
         return result
 
-    # Upload to oelala-storage via MediaService
+    # Upload to MinIO via MediaService
     storage_path = None
     signed_url = None
     upload_ok = False
@@ -3833,13 +3833,13 @@ async def get_job_status(prompt_id: str):
 
 @app.get("/comfyui/output/{filename}")
 async def get_comfyui_output(filename: str, request: Request):
-    """Serve ComfyUI output files via oelala-storage proxy."""
+    """Serve ComfyUI output files via MinIO proxy."""
     return _storage_proxy_response("comfyui-local", filename, request)
 
 
 @app.get("/media/generated/cloud-wan22/{filename}")
 async def get_cloud_wan22_media(filename: str, request: Request):
-    """Serve Cloud Wan22 output files via oelala-storage proxy."""
+    """Serve Cloud Wan22 output files via MinIO proxy."""
     return _storage_proxy_response("generated", f"cloud-wan22/{filename}", request)
 
 
@@ -3886,7 +3886,7 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
 async def get_generated_media(
     filename: str, request: Request, user: User = Depends(get_current_user)
 ):
-    """Serve files from generated bucket via oelala-storage (authenticated users)."""
+    """Serve files from generated bucket via MinIO (authenticated users)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -3909,7 +3909,7 @@ ALLOWED_STORAGE_BUCKETS = {"generated", "comfyui-local", "avatars"}
 async def unified_storage_proxy(bucket: str, key: str, request: Request):
     """
     Unified storage proxy endpoint.
-    Serves content from oelala-storage buckets via a single route pattern.
+    Serves content from MinIO buckets via a single route pattern.
     Only whitelisted public buckets are accessible without auth.
     """
     if bucket not in ALLOWED_STORAGE_BUCKETS:
@@ -4390,15 +4390,13 @@ async def deep_health_check():
     except Exception as e:
         checks["comfyui"] = {"ok": False, "error": str(e)}
 
-    # oelala-storage
+    # MinIO storage
     try:
-        import httpx as _hx
+        from storage_client import get_client as _get_sc
 
-        async with _hx.AsyncClient(timeout=3) as hc:
-            r = await hc.get(
-                f"{os.getenv('STORAGE_URL', 'http://localhost:7990')}/health"
-            )
-            checks["storage"] = {"ok": r.status_code == 200}
+        _sc = _get_sc()
+        _sh = _sc.health()
+        checks["storage"] = {"ok": _sh.get("status") == "healthy", "backend": "minio"}
     except Exception as e:
         checks["storage"] = {"ok": False, "error": str(e)}
 
@@ -4996,7 +4994,7 @@ async def list_unified_media(
 @app.get("/user/media")
 async def list_user_media(type: str = "all", user: User = Depends(get_current_user)):
     """
-    List media files for the authenticated user from oelala-storage.
+    List media files for the authenticated user from MinIO.
 
     Args:
         type: Filter by media type ('all', 'images', 'videos', 'audio')
@@ -5584,7 +5582,7 @@ async def restart_backend():
 
 @app.get("/files/{filename}")
 async def get_file(filename: str, request: Request):
-    """Serve generated files via oelala-storage proxy, with local fallback."""
+    """Serve generated files via MinIO proxy, with local fallback."""
     # Try storage first (new path)
     try:
         return _storage_proxy_response("generated", filename, request)
@@ -6993,7 +6991,7 @@ async def generate_wan22_comfyui(
             await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
             logger.info(f"🎬 Wan2.2 video generated (💰 -{credits_required} credits)")
 
-            # Upload to oelala-storage and sync metadata to Supabase
+            # Upload to MinIO and sync metadata to Supabase
             media_record = await upload_generated_media(
                 user_id=user.id,
                 file_path=final_output,
@@ -13828,7 +13826,7 @@ async def generate_v2v(
 
 @app.get("/videos/{filename}")
 async def get_video(filename: str, request: Request):
-    """Download generated video file via oelala-storage proxy."""
+    """Download generated video file via MinIO proxy."""
     try:
         return _storage_proxy_response("generated", filename, request)
     except HTTPException:
@@ -13853,7 +13851,7 @@ async def get_image(filename: str):
 
 @app.get("/list-videos")
 async def list_videos(user: User = Depends(get_current_user)):
-    """List all generated videos from oelala-storage (admin only)."""
+    """List all generated videos from MinIO (admin only)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 

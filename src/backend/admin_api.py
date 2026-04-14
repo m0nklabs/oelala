@@ -712,7 +712,7 @@ async def list_generated_media(
     limit: int = Query(100, ge=1, le=500),
 ):
     """
-    List all media files from oelala-storage buckets (admin only).
+    List all media files from MinIO storage buckets (admin only).
     Reads from 'generated' and 'comfyui-local' buckets.
     """
     media = []
