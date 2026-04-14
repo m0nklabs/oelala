@@ -4398,7 +4398,7 @@ async def deep_health_check():
         _sh = _sc.health()
         checks["storage"] = {"ok": _sh.get("status") == "healthy", "backend": "minio"}
     except Exception as e:
-        checks["storage"] = {"ok": False, "error": str(e)}
+        checks["storage"] = {"ok": False, "error": f"MinIO health check failed: {e}"}
 
     # Supabase
     try:

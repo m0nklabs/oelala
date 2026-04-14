@@ -6,7 +6,6 @@ import { HardDrive, RefreshCw, AlertCircle, CheckCircle2, Database } from 'lucid
 export default function AdminStorageNodesTab() {
   const { isAdmin } = useAuth()
   const [storageHealth, setStorageHealth] = useState(null)
-  const [buckets, setBuckets] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
@@ -19,11 +18,6 @@ export default function AdminStorageNodesTab() {
         const data = await response.json()
         const storage = data.services?.storage || null
         setStorageHealth(storage)
-
-        // Extract bucket info if available
-        if (storage?.buckets) {
-          setBuckets(storage.buckets)
-        }
         setError(null)
       } else {
         setError('Failed to fetch storage health')
