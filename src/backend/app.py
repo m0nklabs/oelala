@@ -12709,7 +12709,7 @@ async def generate_qwen_edit(
 
     # Sanitize to single-stage format and filter for Qwen Edit compatibility
     parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
-    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "qwen_edit")
+    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "qwen_image_edit")
 
     logger.info(
         f"🎨 Qwen Edit request: '{instruction[:60]}...' "
