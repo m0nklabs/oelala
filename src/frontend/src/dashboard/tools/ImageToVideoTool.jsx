@@ -1666,7 +1666,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               )}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
             <select
               value={enhanceModel}
               onChange={(e) => setEnhanceModel(e.target.value)}

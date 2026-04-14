@@ -558,6 +558,7 @@ body {
   border-radius: 12px;
   padding: 14px;
   margin-bottom: 14px;
+  overflow: hidden;
 }
 
 .grok-card-header {
@@ -565,6 +566,8 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .grok-card-title {

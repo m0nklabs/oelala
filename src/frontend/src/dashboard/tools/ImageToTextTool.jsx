@@ -3,6 +3,7 @@ import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil, Chevron
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
+import { storeImage, getImage, removeImage } from '../../utils/imageStore'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 
@@ -61,7 +62,10 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
   }, [])
 
   const [file, setFile] = useState(null)
-  const [preview, setPreview] = useState(savedSession?.preview?.startsWith('data:') ? savedSession.preview : (savedSession?.preview || null))
+  const [preview, setPreview] = useState(
+    savedSession?.preview && savedSession.preview !== '__idb__' && !savedSession.preview.startsWith('blob:')
+      ? savedSession.preview : null
+  )
   const [model, setModel] = useState(initial.model)
   const [mode, setMode] = useState(initial.mode)
   const [caption, setCaption] = useState(savedSession?.caption || '')
@@ -92,24 +96,17 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
   const [refiningNotes, setRefiningNotes] = useState(false)      // loading state for notes refine
   const [restoringFile, setRestoringFile] = useState(!!savedSession?.preview) // true while restoring file from session
 
-  // ── Persist file as data URL for session restore ────────────────
-  const [fileDataUrl, setFileDataUrl] = useState(null)
-  useEffect(() => {
-    if (!file) { setFileDataUrl(null); return }
-    const reader = new FileReader()
-    reader.onload = () => setFileDataUrl(reader.result)
-    reader.onerror = () => setFileDataUrl(null)
-    reader.readAsDataURL(file)
-  }, [file])
-
-  // ── Restore file from session (data URL or server URL) ──────────
+  // ── Restore file from session (IndexedDB for blobs, server URL fallback) ──
   useEffect(() => {
     if (!savedSession?.preview) { setRestoringFile(false); return }
     const restoreFile = async () => {
       try {
         let blob = null
-        if (savedSession.preview.startsWith('data:')) {
-          // Fast path: data URL → blob directly
+        if (savedSession.preview === '__idb__') {
+          // Restore from IndexedDB (reliable, no size limit)
+          blob = await getImage('i2t_preview')
+        } else if (savedSession.preview.startsWith('data:')) {
+          // Legacy: data URL in sessionStorage (kept for backward compat)
           const resp = await fetch(savedSession.preview)
           blob = await resp.blob()
         } else if (savedSession.preview.startsWith('/')) {
@@ -118,17 +115,15 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
           if (resp.ok) blob = await resp.blob()
         }
         if (blob) {
-          const f = new File([blob], savedSession.previewFilename || 'restored.png', { type: blob.type || 'image/png' })
+          const f = blob instanceof File ? blob : new File([blob], savedSession.previewFilename || 'restored.png', { type: blob.type || 'image/png' })
           setFile(f)
-          // Use a blob URL for display instead of the data URL
-          if (savedSession.preview.startsWith('data:')) {
-            setPreview(URL.createObjectURL(f))
-          }
+          setPreview(URL.createObjectURL(f))
         }
       } catch (e) {
         console.warn('Failed to restore I2T file from session:', e)
       } finally {
         setRestoringFile(false)
+        removeImage('i2t_preview').catch(() => {})
       }
     }
     restoreFile()
@@ -484,12 +479,14 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
     if (caption && onSendToTool) {
       // Save I2T state to sessionStorage so user can navigate back
       try {
-        // Use fileDataUrl for blob: previews so we can restore the image later
-        const persistPreview = preview?.startsWith('blob:') ? fileDataUrl : preview
+        // Store image blob in IndexedDB (no 5MB sessionStorage limit)
+        if (file) {
+          storeImage('i2t_preview', file).catch(() => {})
+        }
         sessionStorage.setItem('i2t_session', JSON.stringify({
           caption,
           negativePrompt,
-          preview: persistPreview || null,
+          preview: preview && !preview.startsWith('blob:') ? preview : (file ? '__idb__' : null),
           previewFilename: file?.name || null,
           audioPrompt: audioPrompt || null,
           concept: concept || null,
@@ -644,17 +641,6 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
             </>
           )}
         </button>
-      )}
-
-      {/* ── File restore notice — concept exists but file lost ────── */}
-      {concept && !file && !restoringFile && (
-        <div style={{
-          padding: '10px 14px', margin: '0 0 8px',
-          background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.25)',
-          borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary, #ccc)',
-        }}>
-          ⚠️ Re-upload your image to use Refine and Generate Prompt — your concept and notes are preserved.
-        </div>
       )}
 
       {/* ── Concept Card — shows after analysis ───────────────────── */}

@@ -12399,6 +12399,25 @@ async def generate_i2i(
         if not prompt_id:
             raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
 
+        # Register job metadata so on_job_complete_async uploads to user storage
+        client.register_job(
+            prompt_id,
+            user_id=user.id,
+            prompt=prompt,
+            settings={
+                "job_type": "i2i",
+                "checkpoint": checkpoint,
+                "denoise": denoise,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+                "preset": preset,
+                "face_id": face_id,
+                "face_detailer": face_detailer,
+                "face_restore": face_restore,
+            },
+        )
+
         # Deduct credits after successful queue
         await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
         logger.info(
@@ -12428,6 +12447,360 @@ async def generate_i2i(
 
     except Exception as e:
         logger.error(f"❌ I2I error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Qwen Image Edit (Instruction-Based Image Editing) — RunPod Only
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_qwen_edit_workflow(
+    image_filename: str,
+    instruction: str,
+    negative_prompt: str = "",
+    steps: int = 40,
+    cfg: float = 4.0,
+    seed: int = 42,
+    lightning: bool = False,
+    lora_configs: list | None = None,
+) -> dict:
+    """
+    Build a Qwen-Image-Edit-2511 ComfyUI API workflow.
+
+    Uses instruction-based editing: describe what to change, the model understands
+    and applies it while maintaining coherence.
+
+    Args:
+        image_filename: ComfyUI-uploaded filename of source image
+        instruction: Natural language edit instruction (e.g. "remove the background")
+        negative_prompt: What to avoid
+        steps: Sampling steps (40 normal, 4 with lightning)
+        cfg: CFG scale (4.0 normal, 1.0 with lightning)
+        seed: Random seed
+        lightning: Use Lightning LoRA for 4-step fast generation
+    """
+    # Adjust for lightning mode
+    if lightning:
+        steps = 4
+        cfg = 1.0
+
+    workflow = {
+        # Load UNET (diffusion model)
+        "1": {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": "qwen_image_edit_2511_fp8mixed.safetensors",
+                "weight_dtype": "default",
+            },
+        },
+        # Load CLIP (Qwen VL text encoder)
+        "2": {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+                "type": "qwen_image",
+            },
+        },
+        # Load VAE
+        "3": {
+            "class_type": "VAELoader",
+            "inputs": {
+                "vae_name": "qwen_image_vae.safetensors",
+            },
+        },
+        # Load source image
+        "4": {
+            "class_type": "LoadImage",
+            "inputs": {
+                "image": image_filename,
+            },
+        },
+        # Scale source image for Qwen processing
+        "5": {
+            "class_type": "FluxKontextImageScale",
+            "inputs": {
+                "image": ["4", 0],
+            },
+        },
+        # Encode source image to latent
+        "6": {
+            "class_type": "VAEEncode",
+            "inputs": {
+                "pixels": ["5", 0],
+                "vae": ["3", 0],
+            },
+        },
+        # Multi-reference latent method
+        "7": {
+            "class_type": "FluxKontextMultiReferenceLatentMethod",
+            "inputs": {
+                "method": "index_timestep_zero",
+                "latent": ["6", 0],
+            },
+        },
+        # Text encode with Qwen Image Edit Plus (supports image context)
+        "8": {
+            "class_type": "TextEncodeQwenImageEditPlus",
+            "inputs": {
+                "positive": instruction,
+                "negative": negative_prompt,
+                "clip": ["2", 0],
+                "image1": ["5", 0],
+            },
+        },
+        # ModelSamplingAuraFlow (shift)
+        "9": {
+            "class_type": "ModelSamplingAuraFlow",
+            "inputs": {
+                "shift": 3.1,
+                "model": ["1", 0],
+            },
+        },
+        # CFGNorm
+        "10": {
+            "class_type": "CFGNorm",
+            "inputs": {
+                "weight": 1,
+                "model": ["9", 0],
+            },
+        },
+        # KSampler
+        "11": {
+            "class_type": "KSampler",
+            "inputs": {
+                "seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": "euler",
+                "scheduler": "simple",
+                "denoise": 1.0,
+                "model": ["10", 0],
+                "positive": ["8", 0],
+                "negative": ["8", 1],
+                "latent_image": ["7", 0],
+            },
+        },
+        # VAE Decode
+        "12": {
+            "class_type": "VAEDecode",
+            "inputs": {
+                "samples": ["11", 0],
+                "vae": ["3", 0],
+            },
+        },
+        # Save Image
+        "13": {
+            "class_type": "SaveImage",
+            "inputs": {
+                "filename_prefix": "oelala_qwen_edit",
+                "images": ["12", 0],
+            },
+        },
+    }
+
+    # ── LoRA chain ──────────────────────────────────────────────────
+    # Build a chain: UNET → (custom LoRAs) → (Lightning LoRA) → ModelSamplingAuraFlow
+    # Each LoraLoaderModelOnly takes input from the previous and feeds the next.
+    last_model_ref = ["1", 0]  # Start from UNET output
+    lora_node_id = 20  # Starting node ID for LoRA nodes
+
+    # Add custom LoRAs (single-stage format: {name, strength})
+    if lora_configs:
+        for lora_cfg in lora_configs:
+            lora_name = lora_cfg.get("name", "")
+            if not lora_name:
+                continue
+            strength = lora_cfg.get("strength", 1.0)
+            workflow[str(lora_node_id)] = {
+                "class_type": "LoraLoaderModelOnly",
+                "inputs": {
+                    "lora_name": lora_name,
+                    "strength_model": strength,
+                    "model": last_model_ref,
+                },
+            }
+            last_model_ref = [str(lora_node_id), 0]
+            lora_node_id += 1
+
+    # Add Lightning LoRA if enabled (always last in chain)
+    if lightning:
+        workflow[str(lora_node_id)] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {
+                "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+                "strength_model": 1.0,
+                "model": last_model_ref,
+            },
+        }
+        last_model_ref = [str(lora_node_id), 0]
+
+    # Rewire ModelSamplingAuraFlow to take from last LoRA (or UNET if no LoRAs)
+    workflow["9"]["inputs"]["model"] = last_model_ref
+
+    return workflow
+
+
+@app.post("/generate-qwen-edit")
+async def generate_qwen_edit(
+    file: UploadFile = File(...),
+    instruction: str = Form(..., description="Edit instruction (e.g. 'remove the background')"),
+    negative_prompt: str = Form("", description="What to avoid"),
+    steps: int = Form(40, description="Sampling steps (40 normal, 4 lightning)"),
+    cfg: float = Form(4.0, description="CFG guidance (4.0 normal, 1.0 lightning)"),
+    seed: int = Form(-1, description="Random seed (-1 for random)"),
+    lightning: bool = Form(False, description="Use Lightning LoRA for fast 4-step generation"),
+    lora_configs: str = Form("[]", description="JSON array of {name, strength} LoRA configs"),
+    user: User = Depends(get_current_user),
+):
+    """
+    Qwen Image Edit 2511 — instruction-based image editing via RunPod.
+
+    Unlike I2I which denoises the source image, Qwen Edit **understands** natural
+    language instructions and applies them coherently. Examples:
+    - "Remove the background"
+    - "Make it anime style"
+    - "Change hair color to blonde"
+    - "Add sunglasses"
+    - "Turn this into a watercolor painting"
+
+    RunPod-only (requires 48GB+ GPU for fp8mixed model).
+    """
+    import random
+    import base64 as _b64
+
+    if not _runpod or not _runpod.has_endpoint():
+        raise HTTPException(
+            status_code=503,
+            detail="Qwen Edit requires a RunPod endpoint (48GB+ GPU). No endpoint configured.",
+        )
+
+    # Parse LoRA configs
+    try:
+        parsed_lora_configs = json.loads(lora_configs) if lora_configs else []
+    except json.JSONDecodeError:
+        parsed_lora_configs = []
+
+    # Sanitize to single-stage format and filter for Qwen Edit compatibility
+    parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
+    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "qwen_edit")
+
+    logger.info(
+        f"🎨 Qwen Edit request: '{instruction[:60]}...' "
+        f"(steps={steps}, cfg={cfg}, lightning={lightning}, loras={len(parsed_lora_configs)}) [user={user.id}]"
+    )
+
+    # Credit calculation — Qwen Edit is a premium feature
+    credits_required = 15  # Base cost for instruction editing
+    if not lightning:
+        credits_required += 5  # Full quality costs more
+    credits_required += len(parsed_lora_configs) * 2  # Extra credits per LoRA
+    logger.info(
+        f"💰 Qwen Edit costs {credits_required} credits [user={user.id}]"
+    )
+    await check_credits(user, credits_required)
+
+    # Generate seed
+    if seed == -1:
+        seed = random.randint(0, 2**32 - 1)
+
+    # Save uploaded image
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    upload_filename = f"qwen_edit_input_{uuid.uuid4().hex[:8]}.png"
+    upload_path = UPLOAD_DIR / upload_filename
+
+    try:
+        content = await file.read()
+        with open(upload_path, "wb") as f:
+            f.write(content)
+
+        logger.info(
+            f"📤 Qwen Edit source: {file.filename} → {upload_filename} "
+            f"({len(content)} bytes)"
+        )
+
+        # Encode image as base64 for RunPod
+        input_images_b64 = {
+            upload_filename: _b64.b64encode(content).decode(),
+        }
+
+        # Build LoRA download URLs for cloud worker
+        cloud_lora_downloads = (
+            _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+        )
+
+        # Build workflow
+        workflow = _build_qwen_edit_workflow(
+            image_filename=upload_filename,
+            instruction=instruction,
+            negative_prompt=negative_prompt,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            lightning=lightning,
+            lora_configs=parsed_lora_configs,
+        )
+
+        # Generate a prompt_id for tracking
+        prompt_id = str(uuid.uuid4())
+
+        # Submit to RunPod
+        job_info = {
+            "user_id": user.id,
+            "prompt": instruction,
+            "job_type": "qwen_edit",
+            "input_image": upload_filename,
+            "settings": {
+                "instruction": instruction,
+                "negative_prompt": negative_prompt,
+                "steps": steps,
+                "cfg": cfg,
+                "seed": seed,
+                "lightning": lightning,
+                "lora_count": len(parsed_lora_configs),
+            },
+            "credits_used": credits_required,
+            "started_at": datetime.now().isoformat(),
+        }
+
+        result = await _submit_to_runpod(
+            workflow=workflow,
+            user_id=user.id,
+            prompt_id=prompt_id,
+            job_info=job_info,
+            images=input_images_b64,
+            lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
+            prompt_full=instruction,
+            input_image_path=str(upload_path),
+        )
+
+        # Deduct credits after successful submission
+        await deduct_credits(user, credits_required, prompt_id, "Qwen Image Edit")
+
+        logger.info(
+            f"🎨 Qwen Edit queued: {prompt_id} "
+            f"(💰 -{credits_required} credits, lightning={lightning})"
+        )
+
+        return {
+            "status": "queued_cloud",
+            "prompt_id": prompt_id,
+            "runpod_job_id": result.get("runpod_job_id"),
+            "credits_used": credits_required,
+            "compute_target": "cloud",
+            "meta": {
+                "instruction": instruction,
+                "seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "lightning": lightning,
+                "lora_count": len(parsed_lora_configs),
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Qwen Edit error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

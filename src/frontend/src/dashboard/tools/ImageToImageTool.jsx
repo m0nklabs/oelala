@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles } from 'lucide-react'
+import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles, Palette } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
@@ -29,11 +29,33 @@ const PRESETS = [
 ]
 
 const I2I_DEFAULTS = {
-  prompt: '', negativePrompt: 'ugly, deformed, blurry, low quality, bad anatomy, watermark',
+  mode: 'transform',
+  // Shared
+  negativePrompt: 'ugly, deformed, blurry, low quality, bad anatomy, watermark',
+  steps: 25, cfg: 7.0, seed: -1,
+  // Transform mode
+  prompt: '',
   denoise: 0.6, checkpoint: 'CyberRealistic_Pony_v14.1_FP16.safetensors', preset: 'balanced',
   faceId: false, faceDetailer: true, faceRestore: true, faceIdWeight: 0.85,
-  steps: 25, cfg: 7.0, seed: -1, sampler: 'dpmpp_2m', scheduler: 'karras',
+  sampler: 'dpmpp_2m', scheduler: 'karras',
+  // Edit mode
+  instruction: '',
+  lightning: false,
+  loraConfigs: [],
 }
+
+const EXAMPLE_INSTRUCTIONS = [
+  'Remove the background',
+  'Make it anime style',
+  'Change hair color to blonde',
+  'Add sunglasses',
+  'Turn this into a watercolor painting',
+  'Make it look like a pencil sketch',
+  'Remove the person on the left',
+  'Change the sky to sunset',
+  'Make their outfit red',
+  'Add a hat',
+]
 
 export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
@@ -45,21 +67,19 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const fileRef = useRef(null)  // Authoritative file reference (bypasses React state batching)
   const [importModal, setImportModal] = useState(null)
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
+  // ── Mode ─────────────────────────────────────────────────────────
+  const [mode, setMode] = useState(initial.mode || 'transform')
+
+  // ── Transform mode state ────────────────────────────────────────
   const [prompt, setPrompt] = useState(initial.prompt)
   const [negativePrompt, setNegativePrompt] = useState(initial.negativePrompt)
   const [denoise, setDenoise] = useState(initial.denoise)
   const [checkpoint, setCheckpoint] = useState(initial.checkpoint)
-
-  // Preset
   const [preset, setPreset] = useState(initial.preset)
-
-  // Face processing
   const [faceId, setFaceId] = useState(initial.faceId)
   const [faceDetailer, setFaceDetailer] = useState(initial.faceDetailer)
   const [faceRestore, setFaceRestore] = useState(initial.faceRestore)
   const [faceIdWeight, setFaceIdWeight] = useState(initial.faceIdWeight)
-
-  // Advanced
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [steps, setSteps] = useState(initial.steps)
   const [cfg, setCfg] = useState(initial.cfg)
@@ -67,24 +87,74 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const [sampler, setSampler] = useState(initial.sampler)
   const [scheduler, setScheduler] = useState(initial.scheduler)
 
+  // ── Edit mode state ─────────────────────────────────────────────
+  const [instruction, setInstruction] = useState(initial.instruction || '')
+  const [lightning, setLightning] = useState(initial.lightning || false)
+  const [availableLoras, setAvailableLoras] = useState({ by_category: {} })
+  const [loraConfigs, setLoraConfigs] = useState(initial.loraConfigs || [])
+  const [showLoraPanel, setShowLoraPanel] = useState(false)
+
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
-    prompt, negativePrompt, denoise, checkpoint, preset,
+    mode, prompt, negativePrompt, denoise, checkpoint, preset,
     faceId, faceDetailer, faceRestore, faceIdWeight,
     steps, cfg, seed, sampler, scheduler,
-  }), [prompt, negativePrompt, denoise, checkpoint, preset,
+    instruction, lightning, loraConfigs,
+  }), [mode, prompt, negativePrompt, denoise, checkpoint, preset,
     faceId, faceDetailer, faceRestore, faceIdWeight,
-    steps, cfg, seed, sampler, scheduler])
+    steps, cfg, seed, sampler, scheduler,
+    instruction, lightning, loraConfigs])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
+    setMode(d.mode || 'transform')
     setPrompt(d.prompt); setNegativePrompt(d.negativePrompt); setDenoise(d.denoise)
     setCheckpoint(d.checkpoint); setPreset(d.preset)
     setFaceId(d.faceId); setFaceDetailer(d.faceDetailer); setFaceRestore(d.faceRestore)
     setFaceIdWeight(d.faceIdWeight)
     setSteps(d.steps); setCfg(d.cfg); setSeed(d.seed); setSampler(d.sampler); setScheduler(d.scheduler)
+    setInstruction(d.instruction || ''); setLightning(d.lightning || false)
+    setLoraConfigs(d.loraConfigs || [])
   }, [resetDefaults])
+
+  // ── Fetch LoRAs for edit mode ───────────────────────────────────
+  useEffect(() => {
+    const fetchLoras = async () => {
+      try {
+        const res = await apiFetch('/loras')
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableLoras(data)
+          if (DEBUG) console.debug('🎨 I2I loaded LoRAs:', data.count)
+        }
+      } catch (e) {
+        console.error('Failed to fetch LoRAs:', e)
+      }
+    }
+    fetchLoras()
+  }, [])
+
+  const filteredLoras = useMemo(() => {
+    const result = {}
+    if (availableLoras.by_category) {
+      Object.keys(availableLoras.by_category).sort().forEach(cat => {
+        const items = availableLoras.by_category[cat] || []
+        if (items.length > 0) result[cat] = items
+      })
+    }
+    return result
+  }, [availableLoras])
+
+  // ── Lightning mode auto-adjusts steps/cfg ───────────────────────
+  useEffect(() => {
+    if (mode !== 'edit') return
+    if (lightning) {
+      setSteps(4); setCfg(1.0)
+    } else {
+      setSteps(40); setCfg(4.0)
+    }
+  }, [lightning, mode])
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -215,20 +285,21 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   }, [updateFile])
 
   const handleGenerate = async () => {
-    // Check if user is logged in
     if (!user) {
       requestLogin('Log in om te genereren')
       return
     }
-
     if (!file) return
+    if (mode === 'edit' && !instruction.trim()) {
+      setError('Please describe what you want to change')
+      return
+    }
 
     setSubmitting(true)
     setError(null)
     setLastQueued(null)
 
     try {
-      // Use ref for the file — guaranteed fresh, not subject to React state batching
       const currentFile = fileRef.current
       if (!currentFile) {
         setError('No file selected')
@@ -236,13 +307,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         return
       }
 
-      // ALWAYS compute and log hash for debugging
       const buf = await currentFile.arrayBuffer()
       const hashBuf = await crypto.subtle.digest('SHA-256', buf)
       const hashHex = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16)
       console.warn(`🔐 I2I SENDING: hash=${hashHex} | name=${currentFile.name} | size=${currentFile.size} | type=${currentFile.type}`)
 
-      // Re-create File from the arrayBuffer we just read (guarantees fresh copy)
       const freshBlob = new Blob([buf], { type: currentFile.type || 'image/png' })
       const freshFile = new File([freshBlob], currentFile.name, {
         type: currentFile.type || 'image/png',
@@ -251,54 +320,55 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
       const formData = new FormData()
       formData.append('file', freshFile)
-      formData.append('prompt', prompt || 'high quality, detailed')
-      formData.append('negative_prompt', negativePrompt)
-      formData.append('denoise', String(denoise))
-      formData.append('checkpoint', checkpoint)
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      formData.append('sampler_name', sampler)
-      formData.append('scheduler', scheduler)
-      formData.append('preset', preset)
-      formData.append('face_id', String(faceId))
-      formData.append('face_detailer', String(faceDetailer))
-      formData.append('face_restore', String(faceRestore))
-      formData.append('face_id_weight', String(faceIdWeight))
 
-      if (DEBUG) console.debug('🖼️ I2I request:', {
-        fileName: file?.name,
-        fileSize: file?.size,
-        fileType: file?.type,
-        fileLastModified: file?.lastModified,
-        denoise, checkpoint, steps,
-        previewUrl: preview?.substring?.(0, 80)
-      })
+      if (mode === 'transform') {
+        // ── Transform mode → local ComfyUI ──
+        formData.append('prompt', prompt || 'high quality, detailed')
+        formData.append('negative_prompt', negativePrompt)
+        formData.append('denoise', String(denoise))
+        formData.append('checkpoint', checkpoint)
+        formData.append('steps', String(steps))
+        formData.append('cfg', String(cfg))
+        formData.append('seed', String(seed))
+        formData.append('sampler_name', sampler)
+        formData.append('scheduler', scheduler)
+        formData.append('preset', preset)
+        formData.append('face_id', String(faceId))
+        formData.append('face_detailer', String(faceDetailer))
+        formData.append('face_restore', String(faceRestore))
+        formData.append('face_id_weight', String(faceIdWeight))
 
-      const res = await postForm(`${BACKEND_BASE}/generate-i2i`, formData)
+        if (DEBUG) console.debug('🖼️ I2I transform:', { denoise, checkpoint, steps })
 
-      if (!res.ok) {
-        throw new Error(res.data?.detail || 'Generation failed')
+        const res = await postForm(`${BACKEND_BASE}/generate-i2i`, formData)
+        if (!res.ok) throw new Error(res.data?.detail || 'Generation failed')
+        const promptId = res.data?.prompt_id
+        if (!promptId) throw new Error('No prompt_id returned')
+
+        setLastQueued({ promptId, mode: 'transform', checkpoint: CHECKPOINTS.find(c => c.value === checkpoint)?.label || checkpoint })
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+      } else {
+        // ── Edit mode → RunPod cloud ──
+        formData.append('instruction', instruction)
+        formData.append('negative_prompt', negativePrompt)
+        formData.append('steps', String(steps))
+        formData.append('cfg', String(cfg))
+        formData.append('seed', String(seed))
+        formData.append('lightning', String(lightning))
+        if (loraConfigs.length > 0) {
+          formData.append('lora_configs', JSON.stringify(loraConfigs.filter(c => c.name)))
+        }
+
+        if (DEBUG) console.debug('✏️ I2I edit:', { instruction, steps, cfg, lightning, loras: loraConfigs.length })
+
+        const res = await postForm(`${BACKEND_BASE}/generate-qwen-edit`, formData)
+        if (!res.ok) throw new Error(res.data?.detail || 'Edit failed')
+        const promptId = res.data?.prompt_id
+        if (!promptId) throw new Error('No prompt_id returned')
+
+        setLastQueued({ promptId, mode: 'edit', lightning, runpodJobId: res.data?.runpod_job_id })
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
       }
-
-      const promptId = res.data?.prompt_id
-      if (!promptId) {
-        throw new Error('No prompt_id returned')
-      }
-
-      // Show queued confirmation
-      setLastQueued({
-        promptId,
-        checkpoint: CHECKPOINTS.find(c => c.value === checkpoint)?.label || checkpoint
-      })
-
-      // Notify queue indicator
-      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-
-      if (DEBUG) console.debug('📋 I2I queued:', promptId)
-
-      // Don't wait for completion - job will appear in queue/history when done
-
     } catch (err) {
       console.error('I2I error:', err)
       setError(err.message)
@@ -372,6 +442,31 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           title="Select Image from My Creations"
         />
       </div>
+
+      {/* Mode Selector */}
+      <div className="grok-card" style={{ padding: '4px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button
+            onClick={() => setMode('transform')}
+            className={`mode-btn ${mode === 'transform' ? 'active' : ''}`}
+          >
+            <Wand2 size={14} />
+            Transform
+            <span className="mode-hint">Local · SDXL</span>
+          </button>
+          <button
+            onClick={() => setMode('edit')}
+            className={`mode-btn ${mode === 'edit' ? 'active' : ''}`}
+          >
+            <Sparkles size={14} />
+            AI Edit
+            <span className="mode-hint">Cloud · Qwen</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ════════ TRANSFORM MODE ════════ */}
+      {mode === 'transform' && (<>
 
       {/* Transformation Card */}
       <div className="grok-card">
@@ -615,11 +710,235 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         )}
       </div>
 
+      </>)}
+
+      {/* ════════ EDIT MODE ════════ */}
+      {mode === 'edit' && (<>
+
+      {/* Edit Instruction Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Wand2 size={16} />
+            Edit Instruction
+            <InfoTooltip text="Describe what you want to change in natural language. Unlike Transform which 'repaints' the image, AI Edit actually understands your instruction and applies it precisely." />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="grok-section-label">What should change?</label>
+          <textarea
+            className="form-textarea"
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            rows={3}
+            placeholder="Describe the edit... (e.g. 'Remove the background and replace with a beach sunset')"
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+          {EXAMPLE_INSTRUCTIONS.slice(0, 5).map((ex) => (
+            <button
+              key={ex}
+              onClick={() => setInstruction(ex)}
+              style={{
+                padding: '4px 10px', fontSize: '0.75rem',
+                background: 'rgba(139, 92, 246, 0.08)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '12px', color: 'var(--accent-color, #a78bfa)',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+
+        <div className="form-group" style={{ marginTop: '14px' }}>
+          <label className="grok-section-label">
+            Negative Prompt (optional)
+            <InfoTooltip text="Describe what to avoid in the output. Usually not needed for Qwen Edit, but can help prevent unwanted artifacts." />
+          </label>
+          <textarea
+            className="form-textarea"
+            value={negativePrompt}
+            onChange={(e) => setNegativePrompt(e.target.value)}
+            rows={2}
+            placeholder="Optional: what to avoid..."
+          />
+        </div>
+      </div>
+
+      {/* Speed & Quality Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Zap size={16} />
+            Speed & Quality
+          </div>
+        </div>
+
+        <label className="toggle-row">
+          <div className="toggle-info">
+            <span className="toggle-label">
+              ⚡ Lightning Mode
+              <InfoTooltip text="Uses a Lightning LoRA for 4-step generation instead of 40. Much faster but may sacrifice some quality. Great for quick iterations." size={12} />
+            </span>
+            <span className="toggle-desc">4-step fast generation (vs 40 normal)</span>
+          </div>
+          <input
+            type="checkbox"
+            checked={lightning}
+            onChange={(e) => setLightning(e.target.checked)}
+          />
+          <span className="toggle-slider" />
+        </label>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '14px' }}>
+          <div style={{ flex: 1 }}>
+            <label className="grok-section-label">
+              Steps <InfoTooltip text="Number of sampling steps. 40 for normal quality, 4 for lightning mode." />
+            </label>
+            <input className="form-input" type="number" value={steps}
+              onChange={(e) => setSteps(parseInt(e.target.value) || 40)} min="1" max="50" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="grok-section-label">
+              CFG Scale <InfoTooltip text="How strictly the model follows the instruction. 4.0 for normal, 1.0 for lightning." />
+            </label>
+            <input className="form-input" type="number" value={cfg}
+              onChange={(e) => setCfg(parseFloat(e.target.value) || 4.0)} min="1" max="10" step="0.5" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="grok-section-label">
+              Seed <InfoTooltip text="Random seed for reproducible results. Use -1 for random." />
+            </label>
+            <input className="form-input" type="number" value={seed}
+              onChange={(e) => setSeed(parseInt(e.target.value) || -1)} />
+          </div>
+        </div>
+      </div>
+
+      {/* LoRA Stack Card */}
+      <div className="grok-card">
+        <div className="grok-card-header" style={{ cursor: 'pointer' }} onClick={() => setShowLoraPanel(!showLoraPanel)}>
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Palette size={16} />
+            LoRA Stack
+            <InfoTooltip text="Add custom LoRAs to influence the editing style. Each LoRA adds 2 credits." />
+            {loraConfigs.length > 0 && (
+              <span style={{
+                fontSize: '0.7rem', padding: '2px 8px',
+                backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                borderRadius: '10px', color: 'var(--accent-color, #a78bfa)', fontWeight: 600,
+              }}>
+                {loraConfigs.length} active
+              </span>
+            )}
+          </div>
+          <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
+        </div>
+
+        {showLoraPanel && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 0 4px' }}>
+            {loraConfigs.map((config, idx) => (
+              <div key={idx} style={{
+                padding: '10px', backgroundColor: 'var(--bg-tertiary, rgba(0,0,0,0.1))',
+                borderRadius: '6px', border: '1px solid var(--border-color)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>LoRA #{idx + 1}</span>
+                  <button
+                    onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
+                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem' }}
+                  >✕ Remove</button>
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>LoRA</label>
+                  <select
+                    value={config.name || ''}
+                    onChange={(e) => {
+                      const nc = [...loraConfigs]
+                      nc[idx] = { ...config, name: e.target.value }
+                      setLoraConfigs(nc)
+                    }}
+                    style={{
+                      width: '100%', padding: '6px 10px',
+                      backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                      borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem',
+                    }}
+                  >
+                    <option value="">None</option>
+                    {Object.keys(filteredLoras).map((category) => (
+                      <optgroup key={category} label={category === 'root' ? 'General' : category}>
+                        {filteredLoras[category].map((lora) => (
+                          <option key={lora.path} value={lora.path}>{lora.name} ({lora.size_mb}MB)</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
+                  </div>
+                  <input type="range" min="0" max="2" step="0.05"
+                    value={config.strength || 1.0}
+                    onChange={(e) => {
+                      const nc = [...loraConfigs]
+                      nc[idx] = { ...config, strength: parseFloat(e.target.value) }
+                      setLoraConfigs(nc)
+                    }}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={() => setLoraConfigs([...loraConfigs, { name: '', strength: 1.0 }])}
+              style={{
+                padding: '8px 12px', backgroundColor: 'transparent',
+                border: '1px dashed var(--border-color)', borderRadius: '6px',
+                color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              }}
+            >
+              + Add LoRA
+            </button>
+
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              💡 Stack multiple LoRAs for combined style effects. Each LoRA adds 2 credits.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Cloud info banner */}
+      <div style={{
+        padding: '12px 16px',
+        background: 'rgba(139, 92, 246, 0.06)',
+        border: '1px solid rgba(139, 92, 246, 0.15)',
+        borderRadius: '10px', fontSize: '0.8rem',
+        color: 'var(--text-muted)', lineHeight: 1.5,
+      }}>
+        <strong>☁️ Cloud-powered</strong> — Runs on RunPod cloud GPUs (48GB+).
+        {lightning ? ' ⚡ Lightning: ~30s.' : ' 🎨 Normal: ~2-3 min.'}
+      </div>
+
+      </>)}
+
       {/* Queued notification */}
       {lastQueued && (
         <div className="queued-notice">
           ✅ Job queued! Check the Queue panel for progress.
-          <span className="queued-mode">{lastQueued.checkpoint}</span>
+          {lastQueued.mode === 'edit'
+            ? <span className="queued-mode">{lastQueued.lightning ? '⚡ Lightning' : '🎨 Full quality'} (Cloud)</span>
+            : <span className="queued-mode">{lastQueued.checkpoint}</span>
+          }
         </div>
       )}
 
@@ -628,12 +947,17 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       <button
         className="btn-primary btn-large"
         onClick={handleGenerate}
-        disabled={!file || submitting}
+        disabled={!file || submitting || (mode === 'edit' && !instruction.trim())}
       >
         {submitting ? (
           <>
             <Loader2 size={18} className="spin" />
-            Queueing...
+            {mode === 'edit' ? 'Submitting to Cloud...' : 'Queueing...'}
+          </>
+        ) : mode === 'edit' ? (
+          <>
+            <Sparkles size={18} />
+            Edit Image
           </>
         ) : (
           <>
@@ -1005,6 +1329,39 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+
+        /* Mode Selector */
+        .mode-btn {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          padding: 10px 12px;
+          border: 2px solid transparent;
+          border-radius: 10px;
+          background: var(--bg-secondary, #1a1a1a);
+          color: var(--text-muted, #888);
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.85rem;
+          font-weight: 600;
+        }
+        .mode-btn:hover {
+          border-color: var(--border-color, #444);
+          color: var(--text-secondary, #aaa);
+        }
+        .mode-btn.active {
+          border-color: var(--accent-color, #7c3aed);
+          background: rgba(124, 58, 237, 0.08);
+          color: var(--text-color, #fff);
+          box-shadow: 0 0 12px rgba(124, 58, 237, 0.15);
+        }
+        .mode-hint {
+          font-size: 0.65rem;
+          font-weight: 400;
+          opacity: 0.6;
         }
       `}</style>
     </div>
