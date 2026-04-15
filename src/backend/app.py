@@ -743,6 +743,7 @@ def _storage_proxy_response(
         headers["ETag"] = f'"{etag}"'
     if last_modified:
         from email.utils import format_datetime
+
         headers["Last-Modified"] = format_datetime(last_modified, usegmt=True)
 
     origin = request.headers.get("origin")
@@ -774,9 +775,7 @@ def _storage_proxy_response(
                 bucket, key, offset=range_start, length=content_length
             )
 
-            headers["Content-Range"] = (
-                f"bytes {range_start}-{range_end}/{total_size}"
-            )
+            headers["Content-Range"] = f"bytes {range_start}-{range_end}/{total_size}"
             headers["Content-Length"] = str(content_length)
             return Response(
                 content=content,
@@ -5140,7 +5139,10 @@ async def list_user_media(type: str = "all", user: User = Depends(get_current_us
 
 @app.get("/user/media/{media_type}/{filename:path}")
 async def get_user_media(
-    media_type: str, filename: str, request: Request, user: User = Depends(get_current_user)
+    media_type: str,
+    filename: str,
+    request: Request,
+    user: User = Depends(get_current_user),
 ):
     """
     Serve a user's media file from storage.
@@ -5181,6 +5183,7 @@ async def get_user_media(
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
                 from email.utils import format_datetime
+
                 headers["Last-Modified"] = format_datetime(
                     meta["last_modified"], usegmt=True
                 )

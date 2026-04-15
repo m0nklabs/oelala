@@ -885,6 +885,7 @@ async def get_published_media_file(media_id: str, request: Request):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
                 from email.utils import format_datetime
+
                 headers["Last-Modified"] = format_datetime(
                     meta["last_modified"], usegmt=True
                 )
@@ -898,9 +899,7 @@ async def get_published_media_file(media_id: str, request: Request):
                     range_spec = range_header[6:]
                     parts_r = range_spec.split("-")
                     range_start = int(parts_r[0]) if parts_r[0] else 0
-                    range_end = (
-                        int(parts_r[1]) if parts_r[1] else total_size - 1
-                    )
+                    range_end = int(parts_r[1]) if parts_r[1] else total_size - 1
                     range_end = min(range_end, total_size - 1)
 
                     if range_start > range_end or range_start >= total_size:
@@ -940,9 +939,7 @@ async def get_published_media_file(media_id: str, request: Request):
                 headers=headers,
             )
         except Exception as storage_err:
-            debug_log(
-                f"MinIO user media failed: {storage_err}, trying storage buckets"
-            )
+            debug_log(f"MinIO user media failed: {storage_err}, trying storage buckets")
 
         # Fallback: try generated and comfyui-local storage buckets
         try:
