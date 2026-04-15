@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from generation.adapter import GenerationAdapter, ProgressCallback
 from generation.types import (
@@ -173,6 +174,17 @@ class QwenEditCloudAdapter(GenerationAdapter):
     compute = ComputeTarget.CLOUD
     lora_format = LoraFormat.SINGLE_STAGE
 
+    def __init__(self, submit_to_runpod_fn: Any = None) -> None:
+        """
+        Args:
+            submit_to_runpod_fn: Async function for RunPod submission.
+                Signature: async (workflow, user_id, prompt_id, job_info,
+                                  images, lora_downloads, prompt_full,
+                                  endpoint_id) -> dict
+                If None, will attempt lazy import from app module.
+        """
+        self._submit_to_runpod = submit_to_runpod_fn
+
     def constraints(self) -> AdapterConstraints:
         return AdapterConstraints(
             min_width=512,
@@ -194,10 +206,9 @@ class QwenEditCloudAdapter(GenerationAdapter):
 
     def build_workflow(self, req: GenerationRequest) -> dict:
         lora_dicts = [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else None
-        image_filename = req.meta.get("upload_filename", "input.png") if hasattr(req, "meta") else "input.png"
 
         return build_qwen_edit_workflow(
-            image_filename=image_filename,
+            image_filename="input.png",
             instruction=req.instruction or req.prompt,
             negative_prompt=req.negative_prompt,
             width=req.width or 1024,
@@ -295,21 +306,18 @@ class QwenEditCloudAdapter(GenerationAdapter):
             },
         }
 
-        # Call _submit_to_runpod from app.py
-        # This is imported at call time to avoid circular imports
-        try:
-            import sys
+        # Get submit function (injected or lazy import)
+        submit_fn = self._submit_to_runpod
+        if submit_fn is None:
+            try:
+                from app import _submit_to_runpod
+                submit_fn = _submit_to_runpod
+            except ImportError:
+                raise RuntimeError(
+                    "_submit_to_runpod not available — pass it via constructor"
+                )
 
-            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            if backend_dir not in sys.path:
-                sys.path.insert(0, backend_dir)
-            from app import _submit_to_runpod
-        except ImportError:
-            raise RuntimeError(
-                "_submit_to_runpod not available — is app.py on the path?"
-            )
-
-        result = await _submit_to_runpod(
+        result = await submit_fn(
             workflow=workflow,
             user_id=job_info["user_id"],
             prompt_id=prompt_id,

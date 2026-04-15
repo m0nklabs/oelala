@@ -23,6 +23,7 @@ from generation.types import (
     GenerationRequest,
     GenerationResult,
     LoraFormat,
+    MediaType,
 )
 from generation import lora_utils
 
@@ -60,22 +61,13 @@ class GenerationRouter:
 
         # 2. Auto-match
         # Determine input type from request content
-        input_type = None
         if req.input_images:
-            from generation.types import MediaType
-
             input_type = MediaType.IMAGE
         elif req.input_video:
-            from generation.types import MediaType
-
             input_type = MediaType.VIDEO
         elif req.input_audio:
-            from generation.types import MediaType
-
             input_type = MediaType.AUDIO
         else:
-            from generation.types import MediaType
-
             input_type = MediaType.TEXT
 
         candidates = self.registry.find(
