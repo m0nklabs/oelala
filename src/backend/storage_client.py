@@ -239,19 +239,24 @@ class StorageClient:
             resp.close()
             resp.release_conn()
 
-    def get_with_metadata(self, bucket: str, key: str) -> Tuple[bytes, str, int]:
+    def get_with_metadata(
+        self, bucket: str, key: str
+    ) -> Tuple[bytes, str, int, Optional[str], Optional[str]]:
         """
         Download an object and return content with metadata for proxying.
 
         Returns:
-            Tuple of (content_bytes, content_type, content_length)
+            Tuple of (content_bytes, content_type, content_length, etag, last_modified)
+            where etag and last_modified are raw header values (or None).
         """
         minio_bucket, full_key = self._resolve(bucket, key)
         resp = self._minio.get_object(minio_bucket, full_key)
         try:
             content = resp.read()
             ct = resp.headers.get("Content-Type", "application/octet-stream")
-            return content, ct, len(content)
+            etag = resp.headers.get("ETag")
+            last_modified = resp.headers.get("Last-Modified")
+            return content, ct, len(content), etag, last_modified
         finally:
             resp.close()
             resp.release_conn()

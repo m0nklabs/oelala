@@ -792,7 +792,9 @@ def _storage_proxy_response(
 
     # Full response (no Range, malformed Range, or fallback)
     try:
-        content, content_type, total_size = storage.get_with_metadata(bucket, key)
+        content, content_type, total_size, etag, last_modified = (
+            storage.get_with_metadata(bucket, key)
+        )
     except S3Error as exc:
         if exc.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
@@ -808,6 +810,10 @@ def _storage_proxy_response(
         "Vary": "Origin",
         "Content-Length": str(total_size),
     }
+    if etag:
+        headers["ETag"] = etag
+    if last_modified:
+        headers["Last-Modified"] = last_modified
 
     origin = request.headers.get("origin")
     if origin and origin in ALLOWED_ORIGINS:

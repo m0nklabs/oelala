@@ -21,6 +21,16 @@ logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
 # Note: thumbnails served from MinIO, no local dir needed
 
+# CORS — must match app.py ALLOWED_ORIGINS for cross-origin media embedding
+ALLOWED_ORIGINS = [
+    "https://oelala.xyz",
+    "http://oelala.xyz",
+    "http://localhost:5174",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://192.168.1.26:5174",
+]
+
 
 def debug_log(msg: str):
     if DEBUG:
@@ -812,7 +822,6 @@ async def get_published_media_file(media_id: str, request: Request):
     1. MinIO storage (user's cloud storage)
     2. Local directories (media/generated/, ComfyUI/output/) for dev/testing
     """
-    from fastapi.responses import StreamingResponse
     from storage_client import get_storage_client
 
     debug_log(f"Serving media file for {media_id}")
@@ -867,31 +876,41 @@ async def get_published_media_file(media_id: str, request: Request):
             storage = get_storage_client()
             bucket = storage.user_bucket(user_id)
             key = storage.user_key(media_type_dir, filename)
-
-            # Get metadata for Range / ETag / Last-Modified support
-            meta = storage.stat(bucket, f"{media_type_dir}/{filename}")
-            if meta is None:
-                raise FileNotFoundError(f"Not in storage: {filename}")
+            storage_key = f"{media_type_dir}/{filename}"
 
             debug_log(
                 f"Serving from MinIO: {media_type_dir}/{filename} for user {user_id}"
             )
 
+            # CORS headers — needed because gallery media is public and
+            # may be embedded cross-origin through Cloudflare.
+            origin = request.headers.get("origin")
             headers = {
                 "Content-Disposition": f'inline; filename="{filename}"',
                 "Cache-Control": "public, max-age=86400",
                 "Accept-Ranges": "bytes",
+                "Vary": "Origin",
             }
-            if meta.get("etag"):
-                headers["ETag"] = f'"{meta["etag"]}"'
-            if meta.get("last_modified"):
-                headers["Last-Modified"] = format_last_modified(meta["last_modified"])
-
-            total_size = meta["size"]
+            if origin and origin in ALLOWED_ORIGINS:
+                headers["Access-Control-Allow-Origin"] = origin
+                headers["Access-Control-Allow-Credentials"] = "true"
 
             # Handle Range request for video/audio seeking
             range_header = request.headers.get("range")
             if range_header and range_header.startswith("bytes="):
+                # Range requests need stat() to know total_size
+                meta = storage.stat(bucket, storage_key)
+                if meta is None:
+                    raise FileNotFoundError(f"Not in storage: {filename}")
+
+                total_size = meta["size"]
+                if meta.get("etag"):
+                    headers["ETag"] = f'"{meta["etag"]}"'
+                if meta.get("last_modified"):
+                    headers["Last-Modified"] = format_last_modified(
+                        meta["last_modified"]
+                    )
+
                 try:
                     parsed = parse_range_header(range_header, total_size)
                     if parsed is not None:
@@ -899,7 +918,7 @@ async def get_published_media_file(media_id: str, request: Request):
                         content_length = range_end - range_start + 1
                         content = storage.get_object_range(
                             bucket,
-                            f"{media_type_dir}/{filename}",
+                            storage_key,
                             offset=range_start,
                             length=content_length,
                         )
@@ -922,11 +941,17 @@ async def get_published_media_file(media_id: str, request: Request):
                         media_type=content_type,
                     )
 
-            # Full response — stream the object
-            stream = storage.iter_user_media(user_id, media_type_dir, filename)
+            # Full response — single round-trip (skip stat)
+            content, resp_ct, total_size, etag, last_modified = (
+                storage.get_with_metadata(bucket, storage_key)
+            )
+            if etag:
+                headers["ETag"] = etag
+            if last_modified:
+                headers["Last-Modified"] = last_modified
             headers["Content-Length"] = str(total_size)
-            return StreamingResponse(
-                stream,
+            return Response(
+                content=content,
                 media_type=content_type,
                 headers=headers,
             )

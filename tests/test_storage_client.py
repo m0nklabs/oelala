@@ -173,15 +173,41 @@ class TestGet:
         mock_minio = MagicMock()
         mock_resp = MagicMock()
         mock_resp.read.return_value = b"file content"
-        mock_resp.headers = {"Content-Type": "text/plain"}
+        mock_resp.headers = {
+            "Content-Type": "text/plain",
+            "ETag": '"abc123"',
+            "Last-Modified": "Tue, 15 Apr 2025 12:00:00 GMT",
+        }
         mock_minio.get_object.return_value = mock_resp
         self.client._minio = mock_minio
 
-        content, ct, cl = self.client.get_with_metadata("generated", "test.txt")
+        content, ct, cl, etag, last_modified = self.client.get_with_metadata(
+            "generated", "test.txt"
+        )
 
         assert content == b"file content"
         assert ct == "text/plain"
         assert cl == 12
+        assert etag == '"abc123"'
+        assert last_modified == "Tue, 15 Apr 2025 12:00:00 GMT"
+
+    def test_get_with_metadata_missing_headers(self):
+        mock_minio = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"data"
+        mock_resp.headers = {"Content-Type": "application/octet-stream"}
+        mock_minio.get_object.return_value = mock_resp
+        self.client._minio = mock_minio
+
+        content, ct, cl, etag, last_modified = self.client.get_with_metadata(
+            "generated", "test.bin"
+        )
+
+        assert content == b"data"
+        assert ct == "application/octet-stream"
+        assert cl == 4
+        assert etag is None
+        assert last_modified is None
 
     def test_get_user_media(self):
         mock_minio = MagicMock()
