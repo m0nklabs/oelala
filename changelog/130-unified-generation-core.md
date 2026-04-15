@@ -38,3 +38,6 @@
   - `caption_video.py` — Video captioning via frame extraction + VLM
 - Extended `GenerationRequest` with fields for all adapter types (inpainting, face swap, audio, V2V, upscale, interpolation, captioning)
 - 228 unit tests across 6 test files (28 adapters total: 23 local + 5 cloud)
+- Frontend hooks (`src/frontend/src/hooks/`):
+  - `useGeneration.js` — Unified generation hook: POST to `/v2/generate`, credit estimation via `/v2/estimate`, abort support, insufficient-credits event dispatch
+  - `useAdapterInfo.js` — Fetch + cache `/v2/adapters` with session-storage TTL, per-adapter lookup, filtering by operation/output_type/compute/model_family, constraints access
