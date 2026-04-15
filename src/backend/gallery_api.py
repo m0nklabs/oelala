@@ -11,7 +11,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User

@@ -11,6 +11,8 @@ paths = [
     '''docs/.*\.md$''',
     '''\.example$''',
     '''examples/.*''',
+    # SDK README contains placeholder API keys in examples
+    '''sdk/README\.md$''',
     # Ignore ComfyUI submodule/vendor directory
     '''ComfyUI/.*''',
     # Ignore external dependencies
@@ -27,7 +29,7 @@ regexes = [
     '''<YOUR_.*>''',
     '''\$\{[A-Z_]+\}''',
     # Ignore oelala placeholder/test keys
-    '''oelala_(invalid|test|your)_key_\w+''',
+    '''oelala_(invalid|test|your)_key\w*''',
 ]
 
 # Ignore these specific strings (case-insensitive)
