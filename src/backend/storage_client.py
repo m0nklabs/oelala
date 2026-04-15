@@ -312,7 +312,7 @@ class StorageClient:
         Stream an object from storage. Returns a context manager yielding chunks.
 
         Usage:
-            with storage.stream("generated", "video.mp4") as (chunks, content_type, size):
+            with storage.stream("generated", "video.mp4") as (chunks, content_type, size, etag, last_modified):
                 for chunk in chunks:
                     yield chunk
         """
@@ -326,7 +326,9 @@ class StorageClient:
             try:
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
                 cl = int(resp.headers.get("Content-Length", 0))
-                yield resp.stream(amt=8192), ct, cl
+                etag = resp.headers.get("ETag")
+                last_mod = resp.headers.get("Last-Modified")
+                yield resp.stream(amt=8192), ct, cl, etag, last_mod
             finally:
                 resp.close()
                 resp.release_conn()

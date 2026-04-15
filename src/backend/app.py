@@ -91,7 +91,7 @@ from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with
 
 # Storage client for user media (MinIO-backed)
 from storage_client import get_client as get_storage_client
-from storage_utils import parse_range_header, format_last_modified
+from storage_utils import parse_range_header, format_last_modified, ALLOWED_ORIGINS
 from minio.error import S3Error
 
 # MediaService for MinIO + Supabase integration (async client)
@@ -523,14 +523,7 @@ app = FastAPI(
 # Starlette returns 'Access-Control-Allow-Origin: *' on non-preflight requests,
 # which browsers reject when credentials/Authorization headers are sent.
 # Must list specific origins for credentialed requests to work.
-ALLOWED_ORIGINS = [
-    "https://oelala.xyz",
-    "http://oelala.xyz",
-    "http://localhost:5174",
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://192.168.1.26:5174",
-]
+# ALLOWED_ORIGINS is imported from storage_utils (single source of truth).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -5194,64 +5187,80 @@ async def get_user_media(
         }
         content_type = content_types.get(ext, "application/octet-stream")
 
-        # Get object metadata for Range / ETag / Last-Modified support
-        meta = storage.stat(f"users/{user.id}", f"{media_type}/{filename}")
+        bucket = f"users/{user.id}"
+        storage_key = f"{media_type}/{filename}"
 
         headers = {
             "Content-Disposition": f'inline; filename="{filename}"',
             "Accept-Ranges": "bytes",
+            "Vary": "Origin",
         }
 
-        if meta:
+        origin = request.headers.get("origin")
+        if origin and origin in ALLOWED_ORIGINS:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+
+        # Handle Range request — needs stat() for total size
+        range_header = request.headers.get("range")
+        if range_header and range_header.startswith("bytes="):
+            meta = storage.stat(bucket, storage_key)
+            if meta is None:
+                raise HTTPException(status_code=404, detail="Media not found")
+
+            total_size = meta["size"]
             if meta.get("etag"):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
-                headers["Last-Modified"] = format_last_modified(meta["last_modified"])
+                headers["Last-Modified"] = format_last_modified(
+                    meta["last_modified"]
+                )
 
-            total_size = meta["size"]
-
-            # Handle Range request
-            range_header = request.headers.get("range")
-            if range_header and range_header.startswith("bytes="):
-                try:
-                    parsed = parse_range_header(range_header, total_size)
-                    if parsed is not None:
-                        range_start, range_end = parsed
-                        content_length = range_end - range_start + 1
-                        content = storage.get_object_range(
-                            f"users/{user.id}",
-                            f"{media_type}/{filename}",
-                            offset=range_start,
-                            length=content_length,
-                        )
-                        headers["Content-Range"] = (
-                            f"bytes {range_start}-{range_end}/{total_size}"
-                        )
-                        headers["Content-Length"] = str(content_length)
-                        return Response(
-                            content=content,
-                            status_code=206,
-                            media_type=content_type,
-                            headers=headers,
-                        )
-                except ValueError:
-                    # Unsatisfiable range → 416
-                    headers["Content-Range"] = f"bytes */{total_size}"
-                    return Response(
-                        status_code=416,
-                        headers=headers,
-                        media_type=content_type,
+            try:
+                parsed = parse_range_header(range_header, total_size)
+                if parsed is not None:
+                    range_start, range_end = parsed
+                    content_length = range_end - range_start + 1
+                    content = storage.get_object_range(
+                        bucket,
+                        storage_key,
+                        offset=range_start,
+                        length=content_length,
                     )
+                    headers["Content-Range"] = (
+                        f"bytes {range_start}-{range_end}/{total_size}"
+                    )
+                    headers["Content-Length"] = str(content_length)
+                    return Response(
+                        content=content,
+                        status_code=206,
+                        media_type=content_type,
+                        headers=headers,
+                    )
+            except ValueError:
+                # Unsatisfiable range → 416
+                headers["Content-Range"] = f"bytes */{total_size}"
+                return Response(
+                    status_code=416,
+                    headers=headers,
+                    media_type=content_type,
+                )
 
-        # Full response — stream the object
-        stream = storage.iter_user_media(user.id, media_type, filename)
-        if meta:
-            headers["Content-Length"] = str(meta["size"])
-        return StreamingResponse(
-            stream,
-            media_type=content_type,
-            headers=headers,
-        )
+        # Full response — stream without buffering (skip stat)
+        with storage.stream(bucket, storage_key) as (
+            chunks, _ct, total_size, etag, last_modified
+        ):
+            if etag:
+                headers["ETag"] = etag
+            if last_modified:
+                headers["Last-Modified"] = last_modified
+            if total_size:
+                headers["Content-Length"] = str(total_size)
+            return StreamingResponse(
+                chunks,
+                media_type=content_type,
+                headers=headers,
+            )
 
     except Exception as e:
         logger.error(f"Failed to get user media: {e}")

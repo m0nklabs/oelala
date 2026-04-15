@@ -8,7 +8,19 @@ duplicating ~40 lines of Range request parsing logic.
 
 from datetime import datetime
 from email.utils import format_datetime
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
+
+# Single source of truth for CORS allowed origins.
+# Imported by app.py (CORSMiddleware + _storage_proxy_response) and
+# gallery_api.py (public media endpoint).
+ALLOWED_ORIGINS: List[str] = [
+    "https://oelala.xyz",
+    "http://oelala.xyz",
+    "http://localhost:5174",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://192.168.1.26:5174",
+]
 
 
 def parse_range_header(

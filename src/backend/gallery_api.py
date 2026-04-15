@@ -12,24 +12,14 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
-from storage_utils import parse_range_header, format_last_modified
+from storage_utils import parse_range_header, format_last_modified, ALLOWED_ORIGINS
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
 # Note: thumbnails served from MinIO, no local dir needed
-
-# CORS — must match app.py ALLOWED_ORIGINS for cross-origin media embedding
-ALLOWED_ORIGINS = [
-    "https://oelala.xyz",
-    "http://oelala.xyz",
-    "http://localhost:5174",
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://192.168.1.26:5174",
-]
 
 
 def debug_log(msg: str):
@@ -941,20 +931,21 @@ async def get_published_media_file(media_id: str, request: Request):
                         media_type=content_type,
                     )
 
-            # Full response — single round-trip (skip stat)
-            content, _ct, total_size, etag, last_modified = storage.get_with_metadata(
-                bucket, storage_key
-            )
-            if etag:
-                headers["ETag"] = etag
-            if last_modified:
-                headers["Last-Modified"] = last_modified
-            headers["Content-Length"] = str(total_size)
-            return Response(
-                content=content,
-                media_type=content_type,
-                headers=headers,
-            )
+            # Full response — stream without buffering (skip stat)
+            with storage.stream(bucket, storage_key) as (
+                chunks, _ct, total_size, etag, last_modified
+            ):
+                if etag:
+                    headers["ETag"] = etag
+                if last_modified:
+                    headers["Last-Modified"] = last_modified
+                if total_size:
+                    headers["Content-Length"] = str(total_size)
+                return StreamingResponse(
+                    chunks,
+                    media_type=content_type,
+                    headers=headers,
+                )
         except Exception as storage_err:
             debug_log(f"MinIO user media failed: {storage_err}, trying storage buckets")
 
