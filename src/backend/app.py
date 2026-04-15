@@ -83,10 +83,11 @@ sys.path.append("/home/flip/oelala")  # Add oelala root directory
 # Authentication
 from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with_jwks
 
-# Storage client for user media (legacy sync client)
+# Storage client for user media (MinIO-backed)
 from storage_client import get_client as get_storage_client
+from minio.error import S3Error
 
-# MediaService for oelala-storage + Supabase integration (new async client)
+# MediaService for MinIO + Supabase integration (async client)
 from media_service import MediaService, MediaRecord
 
 # Generation artifact storage (workflow, settings, logs per generation)
@@ -623,14 +624,12 @@ async def request_metrics_middleware(request: Request, call_next):
 
 # API v1 router (programmatic access)
 from api_v1 import router as api_v1_router
-from storage_nodes_api import router as storage_nodes_router
 
 # API keys management router
 from api_keys_management import router as api_keys_router
 
 # Include API routers
 app.include_router(api_v1_router)  # REST API v1 at /api/v1/*
-app.include_router(storage_nodes_router)
 app.include_router(api_keys_router)  # API key management at /api/keys/*
 app.include_router(credits_router)
 app.include_router(stripe_router)  # Stripe webhook at /api/stripe/webhook
@@ -681,14 +680,14 @@ async def _save_upload(file: UploadFile, dest: Path) -> bytes:
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 # NOTE: /comfyui-output and /avatars StaticFiles mounts removed.
-# These are now served via oelala-storage proxy endpoints:
+# These are now served via MinIO-backed storage proxy endpoints:
 #   /comfyui/output/{filename}  → storage bucket "comfyui-local"
 #   /avatars/{filename}         → storage bucket "avatars" (endpoint below)
 
 
 @app.get("/avatars/{filename}")
 async def get_avatar(filename: str, request: Request):
-    """Serve avatar images via oelala-storage proxy."""
+    """Serve avatar images via MinIO storage proxy."""
     return _storage_proxy_response(
         "avatars",
         filename,
@@ -709,32 +708,95 @@ def _storage_proxy_response(
     cache_control: str = "public, max-age=3600, must-revalidate",
 ) -> Response:
     """
-    Fetch a file from oelala-storage and return it as a FastAPI Response.
+    Fetch a file from MinIO storage and return it as a FastAPI Response.
 
-    Adds CORS headers compatible with Cloudflare caching and proper
-    Content-Type from the storage service.
+    Supports HTTP Range requests (partial content) for video seeking,
+    ETag / Last-Modified for caching, and CORS headers compatible with
+    Cloudflare caching.
     """
     storage = get_storage_client()
+
+    # Stat object first to get metadata (size, content_type, etag, last_modified)
     try:
-        content, content_type, content_length = storage.get_with_metadata(bucket, key)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
+        meta = storage.stat(bucket, key)
+        if meta is None:
+            raise HTTPException(status_code=404, detail="File not found")
+    except S3Error as exc:
+        if exc.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
         raise HTTPException(status_code=502, detail="Storage service error")
-    except httpx.ConnectError:
+    except Exception:
         raise HTTPException(status_code=503, detail="Storage service unavailable")
 
+    total_size = meta["size"]
+    content_type = meta["content_type"]
+    etag = meta.get("etag")
+    last_modified = meta.get("last_modified")
+
+    # Build base headers (always present)
     headers = {
         "Cache-Control": cache_control,
-        "Content-Length": str(content_length),
+        "Accept-Ranges": "bytes",
         "Vary": "Origin",
     }
+    if etag:
+        headers["ETag"] = f'"{etag}"'
+    if last_modified:
+        from email.utils import format_datetime
+
+        headers["Last-Modified"] = format_datetime(last_modified, usegmt=True)
 
     origin = request.headers.get("origin")
     if origin and origin in ALLOWED_ORIGINS:
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
 
+    # Handle Range request
+    range_header = request.headers.get("range")
+    if range_header and range_header.startswith("bytes="):
+        try:
+            range_spec = range_header[6:]  # strip "bytes="
+            parts = range_spec.split("-")
+            range_start = int(parts[0]) if parts[0] else 0
+            range_end = int(parts[1]) if parts[1] else total_size - 1
+
+            # Clamp to valid range
+            range_end = min(range_end, total_size - 1)
+            if range_start > range_end or range_start >= total_size:
+                headers["Content-Range"] = f"bytes */{total_size}"
+                return Response(
+                    status_code=416,
+                    headers=headers,
+                    media_type=content_type,
+                )
+
+            content_length = range_end - range_start + 1
+            content = storage.get_object_range(
+                bucket, key, offset=range_start, length=content_length
+            )
+
+            headers["Content-Range"] = f"bytes {range_start}-{range_end}/{total_size}"
+            headers["Content-Length"] = str(content_length)
+            return Response(
+                content=content,
+                status_code=206,
+                media_type=content_type,
+                headers=headers,
+            )
+        except (ValueError, IndexError):
+            pass  # Malformed Range header — fall through to full response
+
+    # Full response (no Range or malformed Range)
+    try:
+        content, _, _ = storage.get_with_metadata(bucket, key)
+    except S3Error as exc:
+        if exc.code in ("NoSuchKey", "NoSuchBucket"):
+            raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=502, detail="Storage service error")
+    except Exception:
+        raise HTTPException(status_code=503, detail="Storage service unavailable")
+
+    headers["Content-Length"] = str(total_size)
     return Response(content=content, media_type=content_type, headers=headers)
 
 
@@ -858,7 +920,7 @@ async def upload_generated_media(
     extra_metadata: Optional[dict] = None,
 ) -> Optional[MediaRecord]:
     """
-    Upload a generated media file to oelala-storage and sync metadata to Supabase.
+    Upload a generated media file to MinIO and sync metadata to Supabase.
 
     Args:
         user_id: User ID who owns the media
@@ -1718,7 +1780,7 @@ class DeleteMediaRequest(BaseModel):
 
 @app.delete("/delete-comfyui-media")
 async def delete_comfyui_media(request: DeleteMediaRequest):
-    """Delete media files via oelala-storage with local fallback."""
+    """Delete media files via MinIO with local fallback."""
     storage = get_storage_client()
     deleted = []
     errors = []
@@ -1997,7 +2059,6 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
         "model": str | null  # LLM model override
     }
     """
-    import httpx
 
     body = await request.json()
     prompt = body.get("prompt", "").strip()
@@ -2013,10 +2074,13 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
     model_override = body.get("model")
 
     if not prompt:
-        raise HTTPException(status_code=400, detail="Prompt is required for suggestions")
+        raise HTTPException(
+            status_code=400, detail="Prompt is required for suggestions"
+        )
 
     # Load LoRA registry for context
     from lora_scanner import lora_cache
+
     all_loras = lora_cache.get_all()
 
     # Map model_mode to base_model for LoRA filtering
@@ -2034,7 +2098,9 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
     # STRICT filtering: only include LoRAs confirmed compatible with current tool+model
     lora_catalog = []
     for lora in all_loras:
-        lora_base = lora.base_model or (lora.registry.base_model if lora.registry else "")
+        lora_base = lora.base_model or (
+            lora.registry.base_model if lora.registry else ""
+        )
 
         # Skip LoRAs with unknown base model — they're unverified and can't be applied
         if required_base and not lora_base:
@@ -2052,9 +2118,15 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
             # Infer from filename if scanner missed it
             lower_name = lora.filename.lower()
             lower_path = lora.path.lower()
-            if any(k in lower_name or k in lower_path for k in ("high", "_h_", "-h-", "_hn", "-hn")):
+            if any(
+                k in lower_name or k in lower_path
+                for k in ("high", "_h_", "-h-", "_hn", "-hn")
+            ):
                 noise = "high"
-            elif any(k in lower_name or k in lower_path for k in ("low", "_l_", "-l-", "_ln", "-ln")):
+            elif any(
+                k in lower_name or k in lower_path
+                for k in ("low", "_l_", "-l-", "_ln", "-ln")
+            ):
                 noise = "low"
 
         entry = {
@@ -2076,7 +2148,9 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
         fn = lc.get("filename", "")
         strength = lc.get("strength", 1.0)
         # Find registry info
-        reg_info = next((l for l in all_loras if l.path == fn or l.filename == fn), None)
+        reg_info = next(
+            (l for l in all_loras if l.path == fn or l.filename == fn), None
+        )
         info = {"filename": fn, "strength": strength}
         if reg_info and reg_info.registry:
             info["trigger_words"] = reg_info.registry.trigger_words
@@ -2145,26 +2219,24 @@ Steps: {steps}, CFG: {cfg}, FPS: {fps}, Duration: {duration}s
 Prompt: "{prompt}"
 Negative: "{negative_prompt[:200]}"
 
-Active LoRAs: {json.dumps(current_lora_info, separators=(',',':')) if current_lora_info else "None"}
+Active LoRAs: {json.dumps(current_lora_info, separators=(",", ":")) if current_lora_info else "None"}
 
 Available LoRAs (suggest from these only):
-{json.dumps(lora_catalog, separators=(',',':'))}
+{json.dumps(lora_catalog, separators=(",", ":"))}
 
 Focus on: missing trigger words, strength adjustments, matching LoRAs not yet active, prompt improvements. Return JSON array."""
 
     # Determine LLM model — prefer Gemma 4 (fast MoE, good at structured JSON)
     AI_SUGGEST_MODEL = "Huihui-gemma-4-26B-A4B-it-abliterated"
     ai_settings = load_ai_settings()
-    model = (
-        model_override
-        or AI_SUGGEST_MODEL
-    )
+    model = model_override or AI_SUGGEST_MODEL
 
     # Gemma 4 26B needs ~14GB VRAM — free ComfyUI first
     from guardian_client import (
         wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
     )
+
     await wait_for_comfyui_idle()
     await _free_comfy_vram()
 
@@ -2175,7 +2247,9 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
 
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=300.0, headers=_guardian_headers()) as client:
+            async with httpx.AsyncClient(
+                timeout=300.0, headers=_guardian_headers()
+            ) as client:
                 resp = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
                     json={
@@ -2190,7 +2264,9 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
                 )
 
                 if resp.status_code == 503 and attempt < max_retries - 1:
-                    logger.info(f"⏳ Guardian 503 (model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                    logger.info(
+                        f"⏳ Guardian 503 (model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s..."
+                    )
                     await asyncio.sleep(retry_delay)
                     continue
 
@@ -2200,34 +2276,52 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
 
         except httpx.ReadTimeout:
             if attempt < max_retries - 1:
-                logger.warning(f"⏳ AI suggest timeout, retry {attempt + 1}/{max_retries}...")
+                logger.warning(
+                    f"⏳ AI suggest timeout, retry {attempt + 1}/{max_retries}..."
+                )
                 continue
             logger.error("AI suggest error: LLM request timed out after retries")
-            raise HTTPException(status_code=504, detail="LLM took too long to respond. Try again or use a shorter prompt.")
+            raise HTTPException(
+                status_code=504,
+                detail="LLM took too long to respond. Try again or use a shorter prompt.",
+            )
         except httpx.ConnectError:
             raise HTTPException(status_code=503, detail="Guardian LLM not available")
         except Exception as e:
             if "503" in str(e) and attempt < max_retries - 1:
-                logger.info(f"⏳ Guardian 503, retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+                logger.info(
+                    f"⏳ Guardian 503, retry {attempt + 1}/{max_retries} in {retry_delay}s..."
+                )
                 await asyncio.sleep(retry_delay)
                 continue
             raise
 
     if data is None:
-        raise HTTPException(status_code=503, detail="Guardian still loading model after retries — try again")
+        raise HTTPException(
+            status_code=503,
+            detail="Guardian still loading model after retries — try again",
+        )
 
     try:
         finish_reason = data.get("choices", [{}])[0].get("finish_reason", "unknown")
-        logger.info(f"🐛 AI suggest LLM responded: finish_reason={finish_reason}, model={data.get('model','?')}")
+        logger.info(
+            f"🐛 AI suggest LLM responded: finish_reason={finish_reason}, model={data.get('model', '?')}"
+        )
 
         msg = data["choices"][0]["message"]
         content = (msg.get("content") or msg.get("reasoning_content", "")).strip()
         content = _strip_think_tags(content)
-        logger.info(f"🐛 AI suggest LLM response ({len(content)} chars, finish={finish_reason}): {content[:300]}")
+        logger.info(
+            f"🐛 AI suggest LLM response ({len(content)} chars, finish={finish_reason}): {content[:300]}"
+        )
 
         # Parse JSON from response (handle markdown code blocks)
         if not content:
-            detail = "LLM returned empty response" + (" (hit token limit)" if finish_reason == "length" else "") + ". Try again."
+            detail = (
+                "LLM returned empty response"
+                + (" (hit token limit)" if finish_reason == "length" else "")
+                + ". Try again."
+            )
             logger.warning(f"AI suggest: {detail}")
             return JSONResponse(status_code=502, content={"detail": detail})
         if content.startswith("```"):
@@ -2241,27 +2335,39 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
             start = content.find("[")
             end = content.rfind("]")
             if start != -1 and end != -1:
-                content = content[start:end + 1]
+                content = content[start : end + 1]
 
         suggestions = json.loads(content)
         if not isinstance(suggestions, list):
             suggestions = []
 
         # Validate and sanitize suggestions
-        valid_types = {"prompt_add", "prompt_replace", "negative_add", "lora_add", "lora_strength", "lora_trigger", "setting_change"}
+        valid_types = {
+            "prompt_add",
+            "prompt_replace",
+            "negative_add",
+            "lora_add",
+            "lora_strength",
+            "lora_trigger",
+            "setting_change",
+        }
         sanitized = []
         for s in suggestions:
             if isinstance(s, dict) and s.get("type") in valid_types and "apply" in s:
-                sanitized.append({
-                    "id": s.get("id", f"s{len(sanitized)}"),
-                    "type": s["type"],
-                    "title": s.get("title", "Suggestion"),
-                    "description": s.get("description", ""),
-                    "priority": s.get("priority", "medium"),
-                    "apply": s["apply"],
-                    "checked": True,
-                })
-        sanitized.sort(key=lambda x: {"high": 0, "medium": 1, "low": 2}.get(x["priority"], 1))
+                sanitized.append(
+                    {
+                        "id": s.get("id", f"s{len(sanitized)}"),
+                        "type": s["type"],
+                        "title": s.get("title", "Suggestion"),
+                        "description": s.get("description", ""),
+                        "priority": s.get("priority", "medium"),
+                        "apply": s["apply"],
+                        "checked": True,
+                    }
+                )
+        sanitized.sort(
+            key=lambda x: {"high": 0, "medium": 1, "low": 2}.get(x["priority"], 1)
+        )
 
         return {
             "suggestions": sanitized,
@@ -2276,7 +2382,9 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse LLM suggestions JSON: {e}")
-        raise HTTPException(status_code=502, detail="LLM returned invalid suggestion format")
+        raise HTTPException(
+            status_code=502, detail="LLM returned invalid suggestion format"
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -2745,7 +2853,7 @@ def _sanitize_lora_configs_for_single_stage(lora_configs: list) -> list:
     """
     Convert Wan2.2 dual-stage LoRA configs ({high, low, strength}) to
     single-stage format ({name, strength}) for LTX-2.3 workflows.
-    
+
     Wan LoRAs use separate high/low noise models, LTX uses a single model.
     If a Wan-format config is detected, only the 'high' key is kept as 'name'.
     Already-correct single-stage configs ({name, strength}) pass through unchanged.
@@ -2761,10 +2869,12 @@ def _sanitize_lora_configs_for_single_stage(lora_configs: list) -> list:
                 f"⚠️ Converting Wan2.2 dual-stage LoRA to single-stage for LTX: "
                 f"high={config.get('high')} (low={config.get('low')} dropped)"
             )
-            sanitized.append({
-                "name": config["high"],
-                "strength": config.get("strength", 1.0),
-            })
+            sanitized.append(
+                {
+                    "name": config["high"],
+                    "strength": config.get("strength", 1.0),
+                }
+            )
         else:
             logger.warning(f"⚠️ Skipping LoRA config with no name/high key: {config}")
     return sanitized
@@ -2966,7 +3076,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
     When the job completes, this function:
     1. Decodes the base64 video output from RunPod
     2. Saves it locally to media/generated/cloud-wan22/
-    3. Uploads to oelala-storage via MediaService
+    3. Uploads to MinIO via MediaService
     4. Returns the same response format as local jobs
     5. Saves raw ComfyUI logs to logs/cloud/
     """
@@ -2984,7 +3094,9 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         }
 
     try:
-        rp_job = await _runpod.get_job_status(runpod_job_id, endpoint_id=job_info.get("runpod_endpoint_id"))
+        rp_job = await _runpod.get_job_status(
+            runpod_job_id, endpoint_id=job_info.get("runpod_endpoint_id")
+        )
     except Exception as e:
         error_str = str(e)
         # 404 = RunPod purged the job — it's gone forever
@@ -3187,7 +3299,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         try:
             file_bytes = base64.b64decode(b64_data)
 
-            # Save to oelala-storage instead of local disk
+            # Save to MinIO instead of local disk
             storage = get_storage_client()
             storage.put("generated", f"cloud-wan22/{save_name}", file_bytes)
             logger.info(
@@ -3219,7 +3331,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         _persist_cloud_jobs()
         return result
 
-    # Upload to oelala-storage via MediaService
+    # Upload to MinIO via MediaService
     storage_path = None
     signed_url = None
     upload_ok = False
@@ -3257,7 +3369,9 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
                         storage.delete(parts[0], parts[1])
                         logger.info(f"🗑️ Removed staging copy: {saved_path}")
                 except Exception as cleanup_err:
-                    logger.warning(f"⚠️ Failed to remove staging copy {saved_path}: {cleanup_err}")
+                    logger.warning(
+                        f"⚠️ Failed to remove staging copy {saved_path}: {cleanup_err}"
+                    )
     except Exception as e:
         logger.warning(f"☁️ Storage upload failed — will retry next poll cycle: {e}")
 
@@ -3782,13 +3896,13 @@ async def get_job_status(prompt_id: str):
 
 @app.get("/comfyui/output/{filename}")
 async def get_comfyui_output(filename: str, request: Request):
-    """Serve ComfyUI output files via oelala-storage proxy."""
+    """Serve ComfyUI output files via MinIO proxy."""
     return _storage_proxy_response("comfyui-local", filename, request)
 
 
 @app.get("/media/generated/cloud-wan22/{filename}")
 async def get_cloud_wan22_media(filename: str, request: Request):
-    """Serve Cloud Wan22 output files via oelala-storage proxy."""
+    """Serve Cloud Wan22 output files via MinIO proxy."""
     return _storage_proxy_response("generated", f"cloud-wan22/{filename}", request)
 
 
@@ -3835,7 +3949,7 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
 async def get_generated_media(
     filename: str, request: Request, user: User = Depends(get_current_user)
 ):
-    """Serve files from generated bucket via oelala-storage (authenticated users)."""
+    """Serve files from generated bucket via MinIO (authenticated users)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -3858,7 +3972,7 @@ ALLOWED_STORAGE_BUCKETS = {"generated", "comfyui-local", "avatars"}
 async def unified_storage_proxy(bucket: str, key: str, request: Request):
     """
     Unified storage proxy endpoint.
-    Serves content from oelala-storage buckets via a single route pattern.
+    Serves content from MinIO buckets via a single route pattern.
     Only whitelisted public buckets are accessible without auth.
     """
     if bucket not in ALLOWED_STORAGE_BUCKETS:
@@ -4177,7 +4291,6 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
     Supports ComfyUI output URLs and local backend URLs.
     """
     import tempfile
-    import httpx
 
     image_url = request.image_url
     metadata = {}
@@ -4340,17 +4453,15 @@ async def deep_health_check():
     except Exception as e:
         checks["comfyui"] = {"ok": False, "error": str(e)}
 
-    # oelala-storage
+    # MinIO storage
     try:
-        import httpx as _hx
+        from storage_client import get_client as _get_sc
 
-        async with _hx.AsyncClient(timeout=3) as hc:
-            r = await hc.get(
-                f"{os.getenv('STORAGE_URL', 'http://localhost:7990')}/health"
-            )
-            checks["storage"] = {"ok": r.status_code == 200}
+        _sc = _get_sc()
+        _sh = _sc.health()
+        checks["storage"] = {"ok": _sh.get("status") == "healthy", "backend": "minio"}
     except Exception as e:
-        checks["storage"] = {"ok": False, "error": str(e)}
+        checks["storage"] = {"ok": False, "error": f"MinIO health check failed: {e}"}
 
     # Supabase
     try:
@@ -4883,7 +4994,11 @@ async def list_unified_media(
             user_files = set()
             for m in all_media:
                 if m.get("source") == "user":
-                    basename = m.get("filename", "").split("/")[-1] if "/" in m.get("filename", "") else m.get("filename", "")
+                    basename = (
+                        m.get("filename", "").split("/")[-1]
+                        if "/" in m.get("filename", "")
+                        else m.get("filename", "")
+                    )
                     # Strip timestamp prefix (e.g. "20260408_151521_cloud_max..." -> "cloud_max...")
                     # User storage prepends "YYYYMMDD_HHMMSS_" prefix
                     user_files.add((basename, m.get("size", 0)))
@@ -4895,13 +5010,22 @@ async def list_unified_media(
             # Filter out generated items that exist in user storage (same base name + size)
             before_count = len(all_media)
             all_media = [
-                m for m in all_media
+                m
+                for m in all_media
                 if m.get("source") != "generated"
-                or (m.get("filename", "").split("/")[-1] if "/" in m.get("filename", "") else m.get("filename", ""), m.get("size", 0)) not in user_files
+                or (
+                    m.get("filename", "").split("/")[-1]
+                    if "/" in m.get("filename", "")
+                    else m.get("filename", ""),
+                    m.get("size", 0),
+                )
+                not in user_files
             ]
             deduped = before_count - len(all_media)
             if deduped:
-                logger.debug(f"🔄 Deduped {deduped} generated items already in user storage")
+                logger.debug(
+                    f"🔄 Deduped {deduped} generated items already in user storage"
+                )
 
         # Count stats by source for admin
         stats = {
@@ -4933,7 +5057,7 @@ async def list_unified_media(
 @app.get("/user/media")
 async def list_user_media(type: str = "all", user: User = Depends(get_current_user)):
     """
-    List media files for the authenticated user from oelala-storage.
+    List media files for the authenticated user from MinIO.
 
     Args:
         type: Filter by media type ('all', 'images', 'videos', 'audio')
@@ -5002,28 +5126,32 @@ async def list_user_media(type: str = "all", user: User = Depends(get_current_us
 
         return {"media": media, "stats": stats}
 
-    except Exception as e:
-        # 404 means user has no storage yet - return empty list
-        import httpx
-
-        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            logger.info(f"User {user.id} has no storage bucket yet (404)")
+    except S3Error as e:
+        # NoSuchBucket means user has no storage yet — return empty list
+        if e.code in ("NoSuchKey", "NoSuchBucket"):
+            logger.info(f"User {user.id} has no storage bucket yet")
             return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
         logger.error(f"Failed to list user media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve user media")
+    except Exception as e:
+        logger.error(f"Failed to list user media: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve user media")
 
 
 @app.get("/user/media/{media_type}/{filename:path}")
 async def get_user_media(
-    media_type: str, filename: str, user: User = Depends(get_current_user)
+    media_type: str,
+    filename: str,
+    request: Request,
+    user: User = Depends(get_current_user),
 ):
     """
     Serve a user's media file from storage.
+    Supports HTTP Range requests for video/audio seeking.
     """
     try:
         storage = get_storage_client()
-        stream = storage.iter_user_media(user.id, media_type, filename)
-        debug_log(f"🔍 streaming media {media_type}/{filename} for user {user.id}")
+        debug_log(f"🔍 serving media {media_type}/{filename} for user {user.id}")
 
         # Determine content type
         ext = Path(filename).suffix.lower()
@@ -5043,10 +5171,72 @@ async def get_user_media(
         }
         content_type = content_types.get(ext, "application/octet-stream")
 
+        # Get object metadata for Range / ETag / Last-Modified support
+        meta = storage.stat(f"users/{user.id}", f"{media_type}/{filename}")
+
+        headers = {
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Accept-Ranges": "bytes",
+        }
+
+        if meta:
+            if meta.get("etag"):
+                headers["ETag"] = f'"{meta["etag"]}"'
+            if meta.get("last_modified"):
+                from email.utils import format_datetime
+
+                headers["Last-Modified"] = format_datetime(
+                    meta["last_modified"], usegmt=True
+                )
+
+            total_size = meta["size"]
+
+            # Handle Range request
+            range_header = request.headers.get("range")
+            if range_header and range_header.startswith("bytes="):
+                try:
+                    range_spec = range_header[6:]
+                    parts = range_spec.split("-")
+                    range_start = int(parts[0]) if parts[0] else 0
+                    range_end = int(parts[1]) if parts[1] else total_size - 1
+                    range_end = min(range_end, total_size - 1)
+
+                    if range_start > range_end or range_start >= total_size:
+                        headers["Content-Range"] = f"bytes */{total_size}"
+                        return Response(
+                            status_code=416,
+                            headers=headers,
+                            media_type=content_type,
+                        )
+
+                    content_length = range_end - range_start + 1
+                    content = storage.get_object_range(
+                        f"users/{user.id}",
+                        f"{media_type}/{filename}",
+                        offset=range_start,
+                        length=content_length,
+                    )
+                    headers["Content-Range"] = (
+                        f"bytes {range_start}-{range_end}/{total_size}"
+                    )
+                    headers["Content-Length"] = str(content_length)
+                    return Response(
+                        content=content,
+                        status_code=206,
+                        media_type=content_type,
+                        headers=headers,
+                    )
+                except (ValueError, IndexError):
+                    pass  # Fall through to full response
+
+        # Full response — stream the object
+        stream = storage.iter_user_media(user.id, media_type, filename)
+        if meta:
+            headers["Content-Length"] = str(meta["size"])
         return StreamingResponse(
             stream,
             media_type=content_type,
-            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+            headers=headers,
         )
 
     except Exception as e:
@@ -5521,7 +5711,7 @@ async def restart_backend():
 
 @app.get("/files/{filename}")
 async def get_file(filename: str, request: Request):
-    """Serve generated files via oelala-storage proxy, with local fallback."""
+    """Serve generated files via MinIO proxy, with local fallback."""
     # Try storage first (new path)
     try:
         return _storage_proxy_response("generated", filename, request)
@@ -6930,7 +7120,7 @@ async def generate_wan22_comfyui(
             await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
             logger.info(f"🎬 Wan2.2 video generated (💰 -{credits_required} credits)")
 
-            # Upload to oelala-storage and sync metadata to Supabase
+            # Upload to MinIO and sync metadata to Supabase
             media_record = await upload_generated_media(
                 user_id=user.id,
                 file_path=final_output,
@@ -7036,10 +7226,14 @@ async def _submit_to_runpod(
         _inp = _node.get("inputs", {})
         if _ct == "KSamplerAdvanced":
             _lbl = "pass1" if _inp.get("add_noise") == "enable" else "pass2"
-            _wf_settings.append(f"{_lbl}: steps={_inp.get('steps')}, cfg={_inp.get('cfg')}, "
-                                f"sampler={_inp.get('sampler_name')}, range={_inp.get('start_at_step')}-{_inp.get('end_at_step')}")
+            _wf_settings.append(
+                f"{_lbl}: steps={_inp.get('steps')}, cfg={_inp.get('cfg')}, "
+                f"sampler={_inp.get('sampler_name')}, range={_inp.get('start_at_step')}-{_inp.get('end_at_step')}"
+            )
         elif _ct in ("WanImageToVideo", "EmptyWanLatentVideo"):
-            _wf_settings.append(f"video: {_inp.get('width')}x{_inp.get('height')}, {_inp.get('length')}f")
+            _wf_settings.append(
+                f"video: {_inp.get('width')}x{_inp.get('height')}, {_inp.get('length')}f"
+            )
     if _wf_settings:
         logger.info(f"☁️ RunPod workflow settings: {' | '.join(_wf_settings)}")
 
@@ -8460,8 +8654,12 @@ async def generate_ltx2_i2v_async(
     steps: int = Form(20, description="Sampling steps (LTX-2 needs ~20)"),
     cfg: float = Form(3.0, description="CFG guidance scale"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    lora_configs: str = Form("", description="JSON array of LoRA configs [{high, strength}, ...]"),
-    audio_prompt: str = Form("", description="Audio description prompt for AV generation (LTX-2.3)"),
+    lora_configs: str = Form(
+        "", description="JSON array of LoRA configs [{high, strength}, ...]"
+    ),
+    audio_prompt: str = Form(
+        "", description="Audio description prompt for AV generation (LTX-2.3)"
+    ),
     post_processing: str = Form(
         "", description="JSON array of post-processing steps [{type, ...}, ...]"
     ),
@@ -8527,6 +8725,7 @@ async def generate_ltx2_i2v_async(
 
     # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
     import base64 as _b64
+
     input_images_b64 = {}
     input_images_b64[input_filename] = _b64.b64encode(content).decode()
 
@@ -9000,12 +9199,12 @@ async def generate_text_video(
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     lora_configs: str = Form("", description="JSON array of LoRA configs"),
     shift: float = Form(8.0, description="Shift value for cloud sampler"),
-    high_noise_steps: int = Form(
-        8, description="High noise steps for cloud dual-pass"
-    ),
+    high_noise_steps: int = Form(8, description="High noise steps for cloud dual-pass"),
     sampler_name: str = Form("dpmpp_2m", description="Sampler name for cloud"),
     scheduler: str = Form("beta", description="Scheduler for cloud"),
-    audio_prompt: str = Form("", description="Audio description prompt for AV generation (LTX-2.3)"),
+    audio_prompt: str = Form(
+        "", description="Audio description prompt for AV generation (LTX-2.3)"
+    ),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
@@ -9115,7 +9314,9 @@ async def generate_text_video(
 
         if model_type == "wan22":
             # Filter out LoRAs incompatible with Wan2.2 architecture
-            parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "wan2.2")
+            parsed_lora_configs = _filter_loras_by_model_compat(
+                parsed_lora_configs, "wan2.2"
+            )
             workflow = comfyui.build_cloud_wan22_t2v_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -9163,9 +9364,13 @@ async def generate_text_video(
         else:
             # LTX-2.3 22B cloud workflow (80 GB+ GPU)
             # Sanitize Wan2.2 dual-stage LoRA configs to single-stage for LTX
-            parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
+            parsed_lora_configs = _sanitize_lora_configs_for_single_stage(
+                parsed_lora_configs
+            )
             # Filter out LoRAs incompatible with LTX architecture
-            parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "ltx")
+            parsed_lora_configs = _filter_loras_by_model_compat(
+                parsed_lora_configs, "ltx"
+            )
             workflow = comfyui.build_cloud_ltx23_t2v_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -9218,7 +9423,9 @@ async def generate_text_video(
             job_info=cloud_job_info,
             lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
             prompt_full=prompt,
-            endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID") if model_type != "wan22" else None,
+            endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID")
+            if model_type != "wan22"
+            else None,
         )
         cloud_label = (
             "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2.3 T2V (cloud)"
@@ -9540,26 +9747,29 @@ async def caption_image(
     detail_level: Optional[int] = Form(
         3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"
     ),
-    include_negative: bool = Form(
-        False, description="Also generate a negative prompt"
-    ),
+    include_negative: bool = Form(False, description="Also generate a negative prompt"),
     include_motion: bool = Form(
         False, description="Also generate a motion/continuation prompt for video"
     ),
     motion_hint: Optional[str] = Form(
-        None, description="User hint for desired motion/action (e.g., 'walking towards camera, hair blowing')"
+        None,
+        description="User hint for desired motion/action (e.g., 'walking towards camera, hair blowing')",
     ),
     audio_context: Optional[str] = Form(
-        None, description="JSON string with director's audio context: {ambient, dialogue: [{subject, line}]}"
+        None,
+        description="JSON string with director's audio context: {ambient, dialogue: [{subject, line}]}",
     ),
     concept_context: Optional[str] = Form(
-        None, description="JSON string with concept analysis to enrich prompt generation"
+        None,
+        description="JSON string with concept analysis to enrich prompt generation",
     ),
     refinement_prompt: Optional[str] = Form(
-        None, description="User instruction to refine concept analysis or director's notes (e.g., 'make it more dramatic')"
+        None,
+        description="User instruction to refine concept analysis or director's notes (e.g., 'make it more dramatic')",
     ),
     refinement_target: Optional[str] = Form(
-        None, description="What to refine: 'concept' (scene/subjects/mood) or 'notes' (motion/audio/dialogue/camera)"
+        None,
+        description="What to refine: 'concept' (scene/subjects/mood) or 'notes' (motion/audio/dialogue/camera)",
     ),
 ):
     """
@@ -9648,17 +9858,17 @@ async def caption_image(
 
             target = refinement_target or "concept"
             # Compact JSON to save tokens — no indentation
-            current_json = json.dumps(current_concept, separators=(',', ':'))
+            current_json = json.dumps(current_concept, separators=(",", ":"))
 
             if target == "notes":
                 concept_prompt = (
                     "Update ONLY the director's notes in this JSON.\n"
                     f"Current analysis: {current_json}\n\n"
-                    f"Instruction: \"{refinement_prompt}\"\n\n"
+                    f'Instruction: "{refinement_prompt}"\n\n'
                     "RULES:\n"
                     "1. Copy scene, subjects, and mood EXACTLY — do NOT change them.\n"
                     "2. Update ONLY: suggested_motion, suggested_audio, suggested_dialogue, suggested_camera.\n"
-                    "3. For suggested_dialogue: [{\"subject\":\"name\",\"line\":\"speech\"}]\n"
+                    '3. For suggested_dialogue: [{"subject":"name","line":"speech"}]\n'
                     "4. For suggested_camera: describe the complete camera direction as a cinematic sentence — "
                     "shot type, movement, speed, composition changes, and how it serves the story.\n"
                     "5. All notes should work together as a coherent director's cut.\n"
@@ -9668,7 +9878,10 @@ async def caption_image(
 
                 # Notes refinement: text-only call (no image needed, avoids LLM reinterpreting visual)
                 import httpx
-                from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+                from guardian_client import (
+                    wait_for_comfyui_idle,
+                    free_comfyui_vram as _free_comfy_vram,
+                )
 
                 await wait_for_comfyui_idle()
                 await _free_comfy_vram()
@@ -9677,16 +9890,23 @@ async def caption_image(
                 text_body = {
                     "model": vision_model,
                     "messages": [
-                        {"role": "system", "content": "Output ONLY raw JSON. No markdown, no explanation."},
+                        {
+                            "role": "system",
+                            "content": "Output ONLY raw JSON. No markdown, no explanation.",
+                        },
                         {"role": "user", "content": concept_prompt},
                     ],
                     "max_tokens": 2048,
                     "temperature": 0.3,
                 }
 
-                logger.info(f"🔮 Notes refinement (text-only): {refinement_prompt[:100]}")
+                logger.info(
+                    f"🔮 Notes refinement (text-only): {refinement_prompt[:100]}"
+                )
 
-                async with httpx.AsyncClient(timeout=480.0, headers=_guardian_headers()) as client:
+                async with httpx.AsyncClient(
+                    timeout=480.0, headers=_guardian_headers()
+                ) as client:
                     response = await client.post(
                         f"{GUARDIAN_BASE}/v1/chat/completions",
                         json=text_body,
@@ -9696,7 +9916,9 @@ async def caption_image(
                     choice = resp_data["choices"][0]
                     raw = choice["message"]["content"] or ""
                     finish_reason = choice.get("finish_reason", "unknown")
-                    logger.info(f"🔮 Notes refine: finish_reason={finish_reason}, len={len(raw)}")
+                    logger.info(
+                        f"🔮 Notes refine: finish_reason={finish_reason}, len={len(raw)}"
+                    )
 
                 raw = _strip_think_tags(raw)
                 logger.info(f"🔮 Notes refine raw: {raw[:500] if raw else '(empty)'}")
@@ -9711,7 +9933,9 @@ async def caption_image(
                             parsed["scene"] = current_concept.get("scene", "")
                             parsed["subjects"] = current_concept.get("subjects", [])
                             parsed["mood"] = current_concept.get("mood", "")
-                            logger.info(f"🔮 Notes refined: {len(parsed.get('suggested_dialogue', []))} dialogue lines")
+                            logger.info(
+                                f"🔮 Notes refined: {len(parsed.get('suggested_dialogue', []))} dialogue lines"
+                            )
                             return {
                                 "concept": parsed,
                                 "model": vision_model,
@@ -9722,24 +9946,32 @@ async def caption_image(
                         continue
 
                 # No silent fallback — raise error so frontend sees it
-                logger.error(f"❌ Notes refinement JSON parse failed. Raw LLM output:\n{raw}")
-                raise HTTPException(status_code=500, detail=f"Notes refinement failed: LLM returned invalid JSON. Raw: {raw[:300]}")
+                logger.error(
+                    f"❌ Notes refinement JSON parse failed. Raw LLM output:\n{raw}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Notes refinement failed: LLM returned invalid JSON. Raw: {raw[:300]}",
+                )
             else:
                 # Concept refinement: text-only call (no image) — sending image confuses the model
                 # into describing what it sees instead of refining the JSON
                 concept_refine_prompt = (
                     "Update the JSON based on the instruction.\n"
                     f"Current analysis: {current_json}\n\n"
-                    f"Instruction: \"{refinement_prompt}\"\n\n"
+                    f'Instruction: "{refinement_prompt}"\n\n'
                     "RULES:\n"
                     "1. Update scene, subjects, mood, suggested_motion, suggested_audio, suggested_dialogue, suggested_camera.\n"
-                    "2. For suggested_dialogue: [{\"subject\":\"name\",\"line\":\"speech\"}]\n"
+                    '2. For suggested_dialogue: [{"subject":"name","line":"speech"}]\n'
                     "3. Output ONLY compact JSON on a single line. No markdown, no explanation.\n"
                     "4. Same keys as the input."
                 )
 
                 import httpx
-                from guardian_client import wait_for_comfyui_idle, free_comfyui_vram as _free_comfy_vram
+                from guardian_client import (
+                    wait_for_comfyui_idle,
+                    free_comfyui_vram as _free_comfy_vram,
+                )
 
                 await wait_for_comfyui_idle()
                 await _free_comfy_vram()
@@ -9748,16 +9980,23 @@ async def caption_image(
                 text_body = {
                     "model": vision_model,
                     "messages": [
-                        {"role": "system", "content": "Output ONLY raw JSON. No markdown, no explanation."},
+                        {
+                            "role": "system",
+                            "content": "Output ONLY raw JSON. No markdown, no explanation.",
+                        },
                         {"role": "user", "content": concept_refine_prompt},
                     ],
                     "max_tokens": 2048,
                     "temperature": 0.3,
                 }
 
-                logger.info(f"🔮 Concept refinement (text-only, {target}): {refinement_prompt[:100]}")
+                logger.info(
+                    f"🔮 Concept refinement (text-only, {target}): {refinement_prompt[:100]}"
+                )
 
-                async with httpx.AsyncClient(timeout=480.0, headers=_guardian_headers()) as client:
+                async with httpx.AsyncClient(
+                    timeout=480.0, headers=_guardian_headers()
+                ) as client:
                     response = await client.post(
                         f"{GUARDIAN_BASE}/v1/chat/completions",
                         json=text_body,
@@ -9765,8 +10004,12 @@ async def caption_image(
                     response.raise_for_status()
                     resp_json = response.json()
                     raw = resp_json["choices"][0]["message"]["content"] or ""
-                    finish_reason = resp_json["choices"][0].get("finish_reason", "unknown")
-                    logger.info(f"🔮 Concept refine: finish_reason={finish_reason}, len={len(raw)}")
+                    finish_reason = resp_json["choices"][0].get(
+                        "finish_reason", "unknown"
+                    )
+                    logger.info(
+                        f"🔮 Concept refine: finish_reason={finish_reason}, len={len(raw)}"
+                    )
 
                 raw = _strip_think_tags(raw)
 
@@ -9776,18 +10019,27 @@ async def caption_image(
                     try:
                         parsed = json.loads(match.group())
                         if "scene" in parsed or "subjects" in parsed:
-                            logger.info(f"🔮 Concept refined: {len(parsed.get('subjects', []))} subjects")
+                            logger.info(
+                                f"🔮 Concept refined: {len(parsed.get('subjects', []))} subjects"
+                            )
                             return {
                                 "concept": parsed,
                                 "model": vision_model,
                                 "mode": "concept",
                             }
                     except json.JSONDecodeError as e:
-                        logger.warning(f"⚠️ Concept refine JSON parse attempt failed: {e}")
+                        logger.warning(
+                            f"⚠️ Concept refine JSON parse attempt failed: {e}"
+                        )
                         continue
 
-                logger.error(f"❌ Concept refinement JSON parse failed. Raw LLM output:\n{raw}")
-                raise HTTPException(status_code=500, detail=f"Concept refinement failed: LLM returned invalid JSON. Raw: {raw[:300]}")
+                logger.error(
+                    f"❌ Concept refinement JSON parse failed. Raw LLM output:\n{raw}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Concept refinement failed: LLM returned invalid JSON. Raw: {raw[:300]}",
+                )
 
         else:
             concept_prompt = (
@@ -9801,9 +10053,9 @@ async def caption_image(
                 '"suggested_audio": "ambient sounds, music mood, environmental audio that fits this scene", '
                 '"suggested_dialogue": [{"subject": "label matching subjects array", "line": "suggested speech, narration, or vocal expression"}], '
                 '"suggested_camera": "complete camera direction as a single cinematic sentence: shot type (wide/medium/close-up/extreme close-up), '
-                'movement (pan, tilt, dolly, crane, orbit, tracking, handheld, steadicam), speed and rhythm, '
-                'composition changes, and how it serves the scene emotionally. '
-                'Example: slow dolly-in from wide establishing shot to medium close-up on subject, '
+                "movement (pan, tilt, dolly, crane, orbit, tracking, handheld, steadicam), speed and rhythm, "
+                "composition changes, and how it serves the scene emotionally. "
+                "Example: slow dolly-in from wide establishing shot to medium close-up on subject, "
                 'slight upward tilt revealing the sky as music swells"}'
                 "\nBe cinematic, creative, and specific. If people are visible, ALWAYS suggest dialogue for each person. "
                 "For audio, consider environmental sounds, implied sounds, and mood-appropriate music or ambience. "
@@ -9814,7 +10066,9 @@ async def caption_image(
                 concept_prompt = detail_prefix + concept_prompt
 
         raw = await analyze_image_with_vision(
-            image_b64, custom_prompt=concept_prompt, model_override=model,
+            image_b64,
+            custom_prompt=concept_prompt,
+            model_override=model,
             max_tokens=concept_max_tokens,
         )
         raw = _strip_think_tags(raw)
@@ -9826,7 +10080,9 @@ async def caption_image(
             try:
                 parsed = json.loads(match.group())
                 if "scene" in parsed or "subjects" in parsed:
-                    logger.info(f"🔮 Concept parsed: {len(parsed.get('subjects', []))} subjects detected")
+                    logger.info(
+                        f"🔮 Concept parsed: {len(parsed.get('subjects', []))} subjects detected"
+                    )
                     return {
                         "concept": parsed,
                         "model": model or VISION_MODEL,
@@ -9838,7 +10094,10 @@ async def caption_image(
 
         # No silent fallback — raise error so we can debug
         logger.error(f"❌ Concept JSON parse failed. Raw LLM output:\n{raw}")
-        raise HTTPException(status_code=500, detail=f"Concept analysis failed: LLM returned invalid JSON. Raw: {raw[:300]}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Concept analysis failed: LLM returned invalid JSON. Raw: {raw[:300]}",
+        )
 
     # ── Multi-output mode: positive + negative in prompt modes ──
     # In prompt mode, always generate both positive and negative prompts.
@@ -9849,7 +10108,7 @@ async def caption_image(
     if is_prompt:
         parts = []
         parts.append(
-            'Analyze this image and respond with ONLY valid JSON (no markdown, no ``` fences, no explanation).'
+            "Analyze this image and respond with ONLY valid JSON (no markdown, no ``` fences, no explanation)."
         )
 
         # Inject concept context if provided (from the Analyze step)
@@ -9864,10 +10123,15 @@ async def caption_image(
                 if cc.get("mood"):
                     concept_parts.append(f"Mood: {cc['mood']}")
                 if cc.get("subjects"):
-                    subj_descs = [f"{s.get('label', 'subject')}: {s.get('description', '')}" for s in cc["subjects"]]
+                    subj_descs = [
+                        f"{s.get('label', 'subject')}: {s.get('description', '')}"
+                        for s in cc["subjects"]
+                    ]
                     concept_parts.append(f"Subjects: {'; '.join(subj_descs)}")
                 if concept_parts:
-                    concept_text = " Director's concept: " + ". ".join(concept_parts) + "."
+                    concept_text = (
+                        " Director's concept: " + ". ".join(concept_parts) + "."
+                    )
 
                 # Build mandatory director's notes for the VISUAL prompt (motion + camera only)
                 notes = []
@@ -9878,7 +10142,8 @@ async def caption_image(
                 if notes:
                     director_notes_text = (
                         " MANDATORY director's notes that MUST be woven into the prompt: "
-                        + ". ".join(notes) + "."
+                        + ". ".join(notes)
+                        + "."
                     )
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -9893,7 +10158,9 @@ async def caption_image(
                     audio_parts.append(f"ambient sounds: {ac['ambient']}")
                 if ac.get("dialogue"):
                     for d in ac["dialogue"]:
-                        audio_parts.append(f"{d.get('subject', 'person')} says: \"{d.get('line', '')}\"")
+                        audio_parts.append(
+                            f'{d.get("subject", "person")} says: "{d.get("line", "")}"'
+                        )
                 if audio_parts:
                     audio_text = " Audio direction: " + "; ".join(audio_parts) + "."
             except (json.JSONDecodeError, TypeError):
@@ -9925,7 +10192,9 @@ async def caption_image(
             )
         elif is_nsfw:
             nsfw_base = _build_nsfw_prompt(nsfw_intensity or 3)
-            parts.append(f'"positive": {nsfw_base}{director_notes_text}{motion_hint_text}')
+            parts.append(
+                f'"positive": {nsfw_base}{director_notes_text}{motion_hint_text}'
+            )
         else:
             parts.append(
                 f'"positive": {caption_prompts.get(mode, caption_prompts["detailed"])}'
@@ -9950,8 +10219,13 @@ async def caption_image(
             try:
                 cc_audio = json.loads(concept_context)
                 concept_has_audio = bool(cc_audio.get("suggested_audio")) or bool(
-                    cc_audio.get("suggested_dialogue") and any(
-                        (d.get("line", "").strip() if isinstance(d, dict) else str(d).strip())
+                    cc_audio.get("suggested_dialogue")
+                    and any(
+                        (
+                            d.get("line", "").strip()
+                            if isinstance(d, dict)
+                            else str(d).strip()
+                        )
                         for d in cc_audio["suggested_dialogue"]
                     )
                 )
@@ -9979,12 +10253,18 @@ async def caption_image(
             if concept_context:
                 try:
                     cc_audio = json.loads(concept_context)
-                    if cc_audio.get("suggested_audio") and not any("Ambient:" in p for p in audio_ref_parts):
-                        audio_ref_parts.append(f"Ambient: {cc_audio['suggested_audio']}")
+                    if cc_audio.get("suggested_audio") and not any(
+                        "Ambient:" in p for p in audio_ref_parts
+                    ):
+                        audio_ref_parts.append(
+                            f"Ambient: {cc_audio['suggested_audio']}"
+                        )
                     if cc_audio.get("suggested_dialogue"):
                         for d in cc_audio["suggested_dialogue"]:
                             if isinstance(d, dict) and d.get("line", "").strip():
-                                ref = f'{d.get("subject", "person")} says: "{d["line"]}"'
+                                ref = (
+                                    f'{d.get("subject", "person")} says: "{d["line"]}"'
+                                )
                                 if ref not in audio_ref_parts:
                                     audio_ref_parts.append(ref)
                 except (json.JSONDecodeError, TypeError):
@@ -9993,7 +10273,8 @@ async def caption_image(
             if audio_ref_parts:
                 audio_ref = (
                     " The user provided these audio/dialogue notes that MUST be included: "
-                    + "; ".join(audio_ref_parts) + "."
+                    + "; ".join(audio_ref_parts)
+                    + "."
                 )
             parts.append(
                 '"audio": a detailed audio description for AI video with audio generation. '
@@ -10007,14 +10288,16 @@ async def caption_image(
         expected_fields = '{"positive": "...", "negative": "..."'
         if has_audio:
             expected_fields += ', "audio": "..."'
-        expected_fields += '}'
-        combined_prompt = " ".join(parts) + f'\n\nRespond with exactly: {expected_fields}'
-
-        logger.info(
-            f"🔮 Multi-output caption: model={model}, mode={mode}"
+        expected_fields += "}"
+        combined_prompt = (
+            " ".join(parts) + f"\n\nRespond with exactly: {expected_fields}"
         )
+
+        logger.info(f"🔮 Multi-output caption: model={model}, mode={mode}")
         raw = await analyze_image_with_vision(
-            image_b64, custom_prompt=combined_prompt, model_override=model,
+            image_b64,
+            custom_prompt=combined_prompt,
+            model_override=model,
         )
 
         # Strip think tags before parsing
@@ -10033,8 +10316,14 @@ async def caption_image(
                 if "positive" in parsed:
                     caption_text = _strip_think_tags(parsed.get("positive", raw))
                     neg_text = _strip_think_tags(parsed.get("negative", ""))
-                    audio_text_out = _strip_think_tags(parsed.get("audio", "")) if has_audio else None
-                    logger.info(f"🔮 Parsed pos={len(caption_text)}c neg={len(neg_text)}c audio={'yes' if audio_text_out else 'no'}")
+                    audio_text_out = (
+                        _strip_think_tags(parsed.get("audio", ""))
+                        if has_audio
+                        else None
+                    )
+                    logger.info(
+                        f"🔮 Parsed pos={len(caption_text)}c neg={len(neg_text)}c audio={'yes' if audio_text_out else 'no'}"
+                    )
                     result = {
                         "caption": caption_text,
                         "negative_prompt": neg_text,
@@ -10057,11 +10346,18 @@ async def caption_image(
         }
 
     # ── Single-output mode (original behavior) ──
-    description = _strip_think_tags(await analyze_image_with_vision(
-        image_b64, custom_prompt=custom_prompt, model_override=model
-    ))
+    description = _strip_think_tags(
+        await analyze_image_with_vision(
+            image_b64, custom_prompt=custom_prompt, model_override=model
+        )
+    )
 
-    return {"caption": description, "negative_prompt": None, "model": model or VISION_MODEL, "mode": mode}
+    return {
+        "caption": description,
+        "negative_prompt": None,
+        "model": model or VISION_MODEL,
+        "mode": mode,
+    }
 
 
 class RefineCaptionRequest(BaseModel):
@@ -10086,7 +10382,9 @@ async def refine_caption(
         raise HTTPException(status_code=400, detail="suggestion is required")
 
     t2t_model = req.model or "GLM-4.7-Flash-Claude-Opus-Reasoning"
-    logger.info(f"✏️ Refining caption with suggestion: '{req.suggestion[:80]}...' model={t2t_model}")
+    logger.info(
+        f"✏️ Refining caption with suggestion: '{req.suggestion[:80]}...' model={t2t_model}"
+    )
 
     # Build the refinement prompt
     current = f"Current positive prompt:\n{req.positive}"
@@ -10112,7 +10410,6 @@ async def refine_caption(
         f"Apply the refinement and return the improved prompts as JSON."
     )
 
-    import httpx
     from guardian_client import (
         wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
@@ -10143,12 +10440,15 @@ async def refine_caption(
                 )
                 if response.status_code == 503 and attempt < max_retries - 1:
                     import asyncio
+
                     await asyncio.sleep(15)
                     continue
                 response.raise_for_status()
                 result = response.json()
                 msg = result["choices"][0]["message"]
-                llm_output = (msg.get("content") or msg.get("reasoning_content", "")).strip()
+                llm_output = (
+                    msg.get("content") or msg.get("reasoning_content", "")
+                ).strip()
                 llm_output = _strip_think_tags(llm_output)
 
                 # Parse JSON
@@ -10166,6 +10466,7 @@ async def refine_caption(
         except Exception as e:
             if attempt < max_retries - 1:
                 import asyncio
+
                 await asyncio.sleep(10)
                 continue
             logger.error(f"Refine caption failed: {e}")
@@ -10452,7 +10753,6 @@ async def generate_prompt_with_llm(
     nsfw_intensity: Optional[int] = None,
 ) -> dict:
     """Use Guardian LLM proxy to generate enhanced prompts."""
-    import httpx
     import random
 
     # Load admin-configurable settings
@@ -10812,8 +11112,11 @@ VISION_MODEL = os.getenv("VISION_MODEL", "Huihui-gemma-4-26B-A4B-it-abliterated"
 
 
 async def analyze_image_with_vision(
-    image_base64: str, custom_prompt: str = None, model_override: Optional[str] = None,
-    max_tokens: int = 1024, system_message: Optional[str] = None,
+    image_base64: str,
+    custom_prompt: str = None,
+    model_override: Optional[str] = None,
+    max_tokens: int = 1024,
+    system_message: Optional[str] = None,
     temperature: Optional[float] = None,
 ) -> str:
     """
@@ -10829,7 +11132,6 @@ async def analyze_image_with_vision(
     Returns:
         Text description of the image
     """
-    import httpx
 
     analysis_prompt = (
         custom_prompt
@@ -10982,7 +11284,6 @@ async def generate_i2v_prompt_from_description(
     Returns:
         Dict with prompt, negative_prompt, motion_prompt
     """
-    import httpx
     import random
 
     ai_settings = load_ai_settings()
@@ -11203,7 +11504,6 @@ async def analyze_and_generate(
 @app.get("/guardian/status")
 async def guardian_status():
     """Check Guardian proxy availability and available models"""
-    import httpx
 
     try:
         async with httpx.AsyncClient(
@@ -12484,6 +12784,7 @@ async def generate_i2i(
 # Qwen Image Edit (Instruction-Based Image Editing) — RunPod Only
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _build_qwen_edit_workflow(
     image_filename: str,
     instruction: str,
@@ -12666,15 +12967,21 @@ def _build_qwen_edit_workflow(
 @app.post("/generate-qwen-edit")
 async def generate_qwen_edit(
     file: UploadFile = File(...),
-    instruction: str = Form(..., description="Edit instruction (e.g. 'remove the background')"),
+    instruction: str = Form(
+        ..., description="Edit instruction (e.g. 'remove the background')"
+    ),
     negative_prompt: str = Form("", description="What to avoid"),
     width: int = Form(1024, description="Output width (multiple of 16, 512-2048)"),
     height: int = Form(1024, description="Output height (multiple of 16, 512-2048)"),
     steps: int = Form(40, description="Sampling steps (40 normal, 4 lightning)"),
     cfg: float = Form(4.0, description="CFG guidance (4.0 normal, 1.0 lightning)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
-    lightning: bool = Form(False, description="Use Lightning LoRA for fast 4-step generation"),
-    lora_configs: str = Form("[]", description="JSON array of {name, strength} LoRA configs"),
+    lightning: bool = Form(
+        False, description="Use Lightning LoRA for fast 4-step generation"
+    ),
+    lora_configs: str = Form(
+        "[]", description="JSON array of {name, strength} LoRA configs"
+    ),
     user: User = Depends(get_current_user),
 ):
     """
@@ -12707,7 +13014,9 @@ async def generate_qwen_edit(
 
     # Sanitize to single-stage format and filter for Qwen Edit compatibility
     parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
-    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "qwen_image_edit")
+    parsed_lora_configs = _filter_loras_by_model_compat(
+        parsed_lora_configs, "qwen_image_edit"
+    )
 
     logger.info(
         f"🎨 Qwen Edit request: '{instruction[:60]}...' "
@@ -12719,9 +13028,7 @@ async def generate_qwen_edit(
     if not lightning:
         credits_required += 5  # Full quality costs more
     credits_required += len(parsed_lora_configs) * 2  # Extra credits per LoRA
-    logger.info(
-        f"💰 Qwen Edit costs {credits_required} credits [user={user.id}]"
-    )
+    logger.info(f"💰 Qwen Edit costs {credits_required} credits [user={user.id}]")
     await check_credits(user, credits_required)
 
     # Generate seed
@@ -12750,7 +13057,9 @@ async def generate_qwen_edit(
 
         # Build LoRA download URLs for cloud worker
         cloud_lora_downloads = (
-            _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+            _build_lora_download_list(parsed_lora_configs)
+            if parsed_lora_configs
+            else []
         )
 
         # Clamp and round resolution to multiples of 16
@@ -13644,7 +13953,7 @@ async def generate_v2v(
 
 @app.get("/videos/{filename}")
 async def get_video(filename: str, request: Request):
-    """Download generated video file via oelala-storage proxy."""
+    """Download generated video file via MinIO proxy."""
     try:
         return _storage_proxy_response("generated", filename, request)
     except HTTPException:
@@ -13669,7 +13978,7 @@ async def get_image(filename: str):
 
 @app.get("/list-videos")
 async def list_videos(user: User = Depends(get_current_user)):
-    """List all generated videos from oelala-storage (admin only)."""
+    """List all generated videos from MinIO (admin only)."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
