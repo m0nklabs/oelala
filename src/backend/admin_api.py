@@ -834,8 +834,12 @@ async def get_generated_file(
     except S3Error as e:
         if e.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
-        raise HTTPException(status_code=502, detail="Storage error")
-    except Exception:
+        logger.error(f"Storage error serving generated/{filename}: {e}")
+        raise HTTPException(
+            status_code=502, detail="Failed to retrieve file from storage"
+        )
+    except Exception as e:
+        logger.error(f"Storage unavailable serving generated/{filename}: {e}")
         raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
@@ -859,8 +863,12 @@ async def get_comfyui_file(
     except S3Error as e:
         if e.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
-        raise HTTPException(status_code=502, detail="Storage error")
-    except Exception:
+        logger.error(f"Storage error serving comfyui-local/{filename}: {e}")
+        raise HTTPException(
+            status_code=502, detail="Failed to retrieve file from storage"
+        )
+    except Exception as e:
+        logger.error(f"Storage unavailable serving comfyui-local/{filename}: {e}")
         raise HTTPException(status_code=503, detail="Storage unavailable")
 
 

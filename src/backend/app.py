@@ -5132,10 +5132,10 @@ async def list_user_media(type: str = "all", user: User = Depends(get_current_us
             logger.info(f"User {user.id} has no storage bucket yet")
             return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
         logger.error(f"Failed to list user media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve user media")
     except Exception as e:
         logger.error(f"Failed to list user media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve user media")
 
 
 @app.get("/user/media/{media_type}/{filename:path}")
