@@ -60,7 +60,13 @@ from fastapi import (
     Request,
     Query,
 )
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, HTMLResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    StreamingResponse,
+    HTMLResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
