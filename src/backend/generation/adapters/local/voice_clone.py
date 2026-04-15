@@ -59,9 +59,7 @@ class VoiceCloneAdapter(GenerationAdapter):
 
     def build_workflow(self, req: GenerationRequest) -> dict:
         """Build F5-TTS workflow."""
-        model_type = F5_MODEL_MAP.get(
-            req.checkpoint or "F5v1", "F5v1"
-        )
+        model_type = F5_MODEL_MAP.get(req.checkpoint or "F5v1", "F5v1")
 
         workflow = {
             "1": {

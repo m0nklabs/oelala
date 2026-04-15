@@ -75,8 +75,12 @@ class SD15LocalT2IAdapter(GenerationAdapter):
     def build_workflow(self, req: GenerationRequest) -> dict:
         seed = req.seed if req.seed >= 0 else random.randint(0, 2**32 - 1)
         checkpoint = req.checkpoint or "Realistic_Vision_V5.1.safetensors"
-        width = req.width or SD15_RESOLUTIONS.get(req.aspect_ratio or "1:1", (512, 512))[0]
-        height = req.height or SD15_RESOLUTIONS.get(req.aspect_ratio or "1:1", (512, 512))[1]
+        width = (
+            req.width or SD15_RESOLUTIONS.get(req.aspect_ratio or "1:1", (512, 512))[0]
+        )
+        height = (
+            req.height or SD15_RESOLUTIONS.get(req.aspect_ratio or "1:1", (512, 512))[1]
+        )
 
         workflow = {
             "1": {
@@ -85,7 +89,9 @@ class SD15LocalT2IAdapter(GenerationAdapter):
             },
             "2": {
                 "inputs": {
-                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "PowerLoraLoaderHeaderWidget": {
+                        "type": "PowerLoraLoaderHeaderWidget"
+                    },
                     "lora_1": {"on": False, "lora": "None", "strength": 1},
                     "lora_2": {"on": False, "lora": "None", "strength": 1},
                     "lora_3": {"on": False, "lora": "None", "strength": 1},

@@ -24,9 +24,7 @@ class AdapterRegistry:
     def register(self, adapter: GenerationAdapter) -> None:
         """Register an adapter. Raises ValueError on duplicate name."""
         if adapter.name in self._adapters:
-            raise ValueError(
-                f"Adapter '{adapter.name}' already registered"
-            )
+            raise ValueError(f"Adapter '{adapter.name}' already registered")
         self._adapters[adapter.name] = adapter
         logger.info(f"📦 Registered adapter: {adapter.name}")
 

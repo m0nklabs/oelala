@@ -60,7 +60,17 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
             max_frames=257,
             resolution_step=32,  # LTX requires divisible by 32
             resolution_presets=["480p", "576p", "720p"],
-            aspect_ratios=["9:16", "16:9", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"],
+            aspect_ratios=[
+                "9:16",
+                "16:9",
+                "1:1",
+                "4:3",
+                "3:4",
+                "3:2",
+                "2:3",
+                "21:9",
+                "9:21",
+            ],
             min_steps=8,
             max_steps=50,
             default_steps=20,
@@ -126,6 +136,7 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
         if submit_fn is None:
             try:
                 from app import _submit_to_runpod
+
                 submit_fn = _submit_to_runpod
             except ImportError:
                 raise RuntimeError(
@@ -140,9 +151,7 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
             raise RuntimeError("Failed to build LTX-2.3 I2V cloud workflow")
 
         lora_dicts = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras]
-            if req.loras
-            else []
+            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
 
         from generation import lora_utils
@@ -154,9 +163,11 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
         )
 
-        input_images_b64 = {
-            req.input_images[0]: req.input_images[0]
-        } if len(req.input_images) > 0 else None
+        input_images_b64 = (
+            {req.input_images[0]: req.input_images[0]}
+            if len(req.input_images) > 0
+            else None
+        )
 
         job_info = {
             "user_id": "adapter",

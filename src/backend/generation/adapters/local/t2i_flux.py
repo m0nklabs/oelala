@@ -73,8 +73,14 @@ class FluxLocalT2IAdapter(GenerationAdapter):
     def build_workflow(self, req: GenerationRequest) -> dict:
         seed = req.seed if req.seed >= 0 else random.randint(0, 2**63 - 1)
         checkpoint = req.checkpoint or "flux1-dev-fp8.safetensors"
-        width = req.width or FLUX_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[0]
-        height = req.height or FLUX_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[1]
+        width = (
+            req.width
+            or FLUX_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[0]
+        )
+        height = (
+            req.height
+            or FLUX_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[1]
+        )
         guidance = req.cfg or 3.5
 
         workflow = {
@@ -84,7 +90,9 @@ class FluxLocalT2IAdapter(GenerationAdapter):
             },
             "2": {
                 "inputs": {
-                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "PowerLoraLoaderHeaderWidget": {
+                        "type": "PowerLoraLoaderHeaderWidget"
+                    },
                     "lora_1": {"on": False, "lora": "None", "strength": 1},
                     "lora_2": {"on": False, "lora": "None", "strength": 1},
                     "lora_3": {"on": False, "lora": "None", "strength": 1},

@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 # ── Paths ──────────────────────────────────────────────────────────
 # These match the paths used in app.py
-LORA_DIR = Path(
-    os.getenv("LORA_DIR", "/home/flip/oelala/ComfyUI/models/loras")
-)
+LORA_DIR = Path(os.getenv("LORA_DIR", "/home/flip/oelala/ComfyUI/models/loras"))
 LORA_SSD_DIR = Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras"))
 
 
@@ -166,6 +164,9 @@ def build_lora_download_list(
                 downloads.append(entry)
             else:
                 downloads.append(
-                    {"filename": resolved_name, "url": f"{base_url}/loras/download/{resolved_name}"}
+                    {
+                        "filename": resolved_name,
+                        "url": f"{base_url}/loras/download/{resolved_name}",
+                    }
                 )
     return downloads

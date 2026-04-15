@@ -42,7 +42,12 @@ def init_v2_api(
 
     Called once at startup after all adapters are registered.
     """
-    global _registry, _router, _check_credits_fn, _deduct_credits_fn, _get_current_user_fn
+    global \
+        _registry, \
+        _router, \
+        _check_credits_fn, \
+        _deduct_credits_fn, \
+        _get_current_user_fn
     _registry = registry
     _router = gen_router
     _check_credits_fn = check_credits

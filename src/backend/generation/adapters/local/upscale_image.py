@@ -56,7 +56,9 @@ class ImageUpscaleAdapter(GenerationAdapter):
 
         workflow = {
             "1": {
-                "inputs": {"image": req.input_images[0] if req.input_images else "input.png"},
+                "inputs": {
+                    "image": req.input_images[0] if req.input_images else "input.png"
+                },
                 "class_type": "LoadImage",
             },
             "2": {

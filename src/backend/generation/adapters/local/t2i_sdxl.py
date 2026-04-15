@@ -77,8 +77,14 @@ class SDXLLocalT2IAdapter(GenerationAdapter):
     def build_workflow(self, req: GenerationRequest) -> dict:
         seed = req.seed if req.seed >= 0 else random.randint(0, 2**32 - 1)
         checkpoint = req.checkpoint or "CyberRealistic_Pony_v14.1_FP16.safetensors"
-        width = req.width or SDXL_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[0]
-        height = req.height or SDXL_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[1]
+        width = (
+            req.width
+            or SDXL_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[0]
+        )
+        height = (
+            req.height
+            or SDXL_RESOLUTIONS.get(req.aspect_ratio or "1:1", (1024, 1024))[1]
+        )
 
         workflow = {
             "1": {
@@ -122,7 +128,9 @@ class SDXLLocalT2IAdapter(GenerationAdapter):
             },
             "9": {
                 "inputs": {
-                    "PowerLoraLoaderHeaderWidget": {"type": "PowerLoraLoaderHeaderWidget"},
+                    "PowerLoraLoaderHeaderWidget": {
+                        "type": "PowerLoraLoaderHeaderWidget"
+                    },
                     "lora_1": {"on": False, "lora": "None", "strength": 1},
                     "lora_2": {"on": False, "lora": "None", "strength": 1},
                     "lora_3": {"on": False, "lora": "None", "strength": 1},
@@ -177,7 +185,8 @@ class SDXLLocalT2IAdapter(GenerationAdapter):
             credits_used=credits_used,
             adapter_name=self.name,
             meta={
-                "checkpoint": req.checkpoint or "CyberRealistic_Pony_v14.1_FP16.safetensors",
+                "checkpoint": req.checkpoint
+                or "CyberRealistic_Pony_v14.1_FP16.safetensors",
                 "width": req.width or 1024,
                 "height": req.height or 1024,
             },

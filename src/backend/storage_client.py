@@ -110,7 +110,9 @@ class StorageClient:
         self._storage_nodes: List[str] = [
             n.strip().rstrip("/") for n in nodes_str.split(",") if n.strip()
         ]
-        self._node_cycle = itertools.cycle(self._storage_nodes) if self._storage_nodes else None
+        self._node_cycle = (
+            itertools.cycle(self._storage_nodes) if self._storage_nodes else None
+        )
 
     def close(self):
         """Close the client (no-op for MinIO SDK, kept for API compat)."""

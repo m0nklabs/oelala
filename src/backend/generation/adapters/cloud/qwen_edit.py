@@ -205,7 +205,11 @@ class QwenEditCloudAdapter(GenerationAdapter):
         )
 
     def build_workflow(self, req: GenerationRequest) -> dict:
-        lora_dicts = [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else None
+        lora_dicts = (
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
+        )
 
         return build_qwen_edit_workflow(
             image_filename="input.png",
@@ -262,7 +266,9 @@ class QwenEditCloudAdapter(GenerationAdapter):
         image_b64 = req.input_images[0]
 
         # Build LoRA download URLs for cloud worker
-        lora_dicts = [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
+        lora_dicts = (
+            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
+        )
 
         from generation import lora_utils
 
@@ -311,6 +317,7 @@ class QwenEditCloudAdapter(GenerationAdapter):
         if submit_fn is None:
             try:
                 from app import _submit_to_runpod
+
                 submit_fn = _submit_to_runpod
             except ImportError:
                 raise RuntimeError(

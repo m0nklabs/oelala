@@ -84,7 +84,11 @@ class InpaintAdapter(GenerationAdapter):
                 "class_type": "ImageToMask",
             },
             "5": {
-                "inputs": {"expand": feathering, "tapered_corners": True, "mask": ["4", 0]},
+                "inputs": {
+                    "expand": feathering,
+                    "tapered_corners": True,
+                    "mask": ["4", 0],
+                },
                 "class_type": "GrowMask",
             },
             "6": {
@@ -159,5 +163,8 @@ class InpaintAdapter(GenerationAdapter):
             compute_target=ComputeTarget.LOCAL,
             credits_used=self.cost(req),
             adapter_name=self.name,
-            meta={"checkpoint": req.checkpoint or "dreamshaperXL_lightningDPMSDE.safetensors"},
+            meta={
+                "checkpoint": req.checkpoint
+                or "dreamshaperXL_lightningDPMSDE.safetensors"
+            },
         )

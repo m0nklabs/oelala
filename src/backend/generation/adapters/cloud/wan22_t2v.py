@@ -122,6 +122,7 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
         if submit_fn is None:
             try:
                 from app import _submit_to_runpod
+
                 submit_fn = _submit_to_runpod
             except ImportError:
                 raise RuntimeError(
@@ -145,11 +146,10 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
             raise RuntimeError("Failed to build Cloud Wan22 T2V workflow")
 
         lora_dicts = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras]
-            if req.loras
-            else []
+            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
         from generation import lora_utils
+
         cloud_lora_downloads = (
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
         )
