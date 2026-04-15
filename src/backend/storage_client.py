@@ -38,7 +38,7 @@ import hashlib
 import mimetypes
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, List, Dict, Any, BinaryIO, Tuple, Union
+from typing import Optional, List, Dict, Any, BinaryIO, Iterator, Tuple, Union
 from urllib.parse import urlparse
 import logging
 
@@ -337,7 +337,7 @@ class StorageClient:
 
     def stream_with_metadata(
         self, bucket: str, key: str
-    ) -> Tuple:
+    ) -> Tuple[Iterator[bytes], str, int, Optional[str], Optional[str]]:
         """
         Stream an object and return metadata for proxy responses.
 
@@ -357,9 +357,7 @@ class StorageClient:
 
         def _iter():
             try:
-                for chunk in resp.stream(amt=8192):
-                    if chunk:
-                        yield chunk
+                yield from resp.stream(amt=8192)
             finally:
                 resp.close()
                 resp.release_conn()
