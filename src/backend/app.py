@@ -761,13 +761,28 @@ def _storage_proxy_response(
     range_header = request.headers.get("range")
     if range_header and range_header.startswith("bytes="):
         try:
-            range_spec = range_header[6:]  # strip "bytes="
-            parts = range_spec.split("-")
-            range_start = int(parts[0]) if parts[0] else 0
-            range_end = int(parts[1]) if parts[1] else total_size - 1
+            range_spec = range_header[6:].strip()  # strip "bytes="
+            if "," in range_spec:
+                raise ValueError("Multiple byte ranges are not supported")
 
-            # Clamp to valid range
-            range_end = min(range_end, total_size - 1)
+            range_start_str, range_end_str = range_spec.split("-", 1)
+
+            if range_start_str == "":
+                # Suffix byte range: bytes=-N means the last N bytes
+                suffix_length = int(range_end_str)
+                if suffix_length <= 0:
+                    raise ValueError("Suffix byte range must be greater than zero")
+                suffix_length = min(suffix_length, total_size)
+                range_start = max(total_size - suffix_length, 0)
+                range_end = total_size - 1
+            else:
+                range_start = int(range_start_str)
+                if range_start < 0:
+                    raise ValueError("Range start must not be negative")
+                range_end = int(range_end_str) if range_end_str else total_size - 1
+                if range_end < 0:
+                    raise ValueError("Range end must not be negative")
+                range_end = min(range_end, total_size - 1)
             if range_start > range_end or range_start >= total_size:
                 headers["Content-Range"] = f"bytes */{total_size}"
                 return Response(
@@ -5201,11 +5216,19 @@ async def get_user_media(
             range_header = request.headers.get("range")
             if range_header and range_header.startswith("bytes="):
                 try:
-                    range_spec = range_header[6:]
-                    parts = range_spec.split("-")
-                    range_start = int(parts[0]) if parts[0] else 0
-                    range_end = int(parts[1]) if parts[1] else total_size - 1
-                    range_end = min(range_end, total_size - 1)
+                    range_spec = range_header[6:].strip()
+                    parts = range_spec.split("-", 1)
+                    if len(parts) != 2:
+                        raise ValueError("Invalid Range header")
+
+                    if parts[0] == "":
+                        suffix_length = int(parts[1])
+                        range_start = max(total_size - suffix_length, 0)
+                        range_end = total_size - 1
+                    else:
+                        range_start = int(parts[0])
+                        range_end = int(parts[1]) if parts[1] else total_size - 1
+                        range_end = min(range_end, total_size - 1)
 
                     if range_start > range_end or range_start >= total_size:
                         headers["Content-Range"] = f"bytes */{total_size}"

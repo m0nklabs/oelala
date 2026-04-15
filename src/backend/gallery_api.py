@@ -896,11 +896,25 @@ async def get_published_media_file(media_id: str, request: Request):
             range_header = request.headers.get("range")
             if range_header and range_header.startswith("bytes="):
                 try:
-                    range_spec = range_header[6:]
-                    parts_r = range_spec.split("-")
-                    range_start = int(parts_r[0]) if parts_r[0] else 0
-                    range_end = int(parts_r[1]) if parts_r[1] else total_size - 1
-                    range_end = min(range_end, total_size - 1)
+                    range_spec = range_header[6:].strip()
+                    parts_r = range_spec.split("-", 1)
+                    if len(parts_r) != 2:
+                        raise ValueError("Invalid Range header")
+
+                    start_str, end_str = parts_r[0].strip(), parts_r[1].strip()
+
+                    if not start_str:
+                        # Suffix byte range: bytes=-N means the last N bytes
+                        suffix_length = int(end_str)
+                        if suffix_length <= 0:
+                            raise ValueError("Invalid suffix byte range")
+                        suffix_length = min(suffix_length, total_size)
+                        range_start = max(total_size - suffix_length, 0)
+                        range_end = total_size - 1
+                    else:
+                        range_start = int(start_str)
+                        range_end = int(end_str) if end_str else total_size - 1
+                        range_end = min(range_end, total_size - 1)
 
                     if range_start > range_end or range_start >= total_size:
                         headers["Content-Range"] = f"bytes */{total_size}"

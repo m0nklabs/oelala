@@ -109,14 +109,15 @@ class TestMediaServiceQuota:
         tier_resp.status_code = 200
         tier_resp.json.return_value = [{"tier": "free"}]
 
-        # Mock media list fetch
+        # Mock media list fetch (PostgREST returns flat objects with select=metadata->size_bytes)
         media_resp = MagicMock()
         media_resp.status_code = 200
         media_resp.json.return_value = [
-            {"metadata": {"size_bytes": 1000}},
-            {"metadata": {"size_bytes": 2000}},
-            {"metadata": {"size_bytes": 500}},
+            {"size_bytes": 1000},
+            {"size_bytes": 2000},
+            {"size_bytes": 500},
         ]
+        media_resp.headers = {"content-range": "0-2/3"}
 
         mock_http.get = AsyncMock(side_effect=[tier_resp, media_resp])
         service._http_client = mock_http

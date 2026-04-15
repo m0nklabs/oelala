@@ -642,21 +642,36 @@ class MediaService:
             file_count = 0
 
             if self.supabase_url and self.supabase_key:
+                headers = self._supabase_headers()
+                # Request exact count via PostgREST header (avoids fetching all rows for count)
+                headers["Prefer"] = "count=exact"
+
                 resp = await self.http_client.get(
                     f"{self.supabase_url}/rest/v1/user_media",
                     params={
                         "user_id": f"eq.{user_id}",
-                        "select": "metadata",
+                        # Select only the JSONB field we need to minimize payload
+                        "select": "metadata->size_bytes",
                     },
-                    headers=self._supabase_headers(),
+                    headers=headers,
                 )
 
                 if resp.status_code == 200:
-                    records = resp.json()
-                    file_count = len(records)
-                    for record in records:
-                        meta = record.get("metadata") or {}
-                        used_bytes += meta.get("size_bytes", 0)
+                    # File count from Content-Range header (server-side count)
+                    content_range = resp.headers.get("content-range", "")
+                    if "/" in content_range:
+                        try:
+                            file_count = int(content_range.split("/")[1])
+                        except (ValueError, IndexError):
+                            file_count = len(resp.json())
+                    else:
+                        file_count = len(resp.json())
+
+                    # Sum size_bytes from the minimal response
+                    for record in resp.json():
+                        size = record.get("size_bytes")
+                        if size is not None:
+                            used_bytes += int(size)
 
             percent = (
                 round((used_bytes / quota_bytes) * 100, 1) if quota_bytes > 0 else 0
