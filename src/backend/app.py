@@ -5212,9 +5212,7 @@ async def get_user_media(
             if meta.get("etag"):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
-                headers["Last-Modified"] = format_last_modified(
-                    meta["last_modified"]
-                )
+                headers["Last-Modified"] = format_last_modified(meta["last_modified"])
 
             try:
                 parsed = parse_range_header(range_header, total_size)
@@ -5247,8 +5245,8 @@ async def get_user_media(
                 )
 
         # Full response — stream without buffering (skip stat)
-        chunks, _ct, total_size, etag, last_modified = (
-            storage.stream_with_metadata(bucket, storage_key)
+        chunks, _ct, total_size, etag, last_modified = storage.stream_with_metadata(
+            bucket, storage_key
         )
         if etag:
             headers["ETag"] = etag
