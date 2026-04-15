@@ -1,6 +1,6 @@
 # Oelala Product Roadmap
 
-> **Last Updated**: 2026-03-06
+> **Last Updated**: 2026-07-14
 > **Version**: 0.11.x (Alpha)
 
 ## Vision
@@ -27,7 +27,7 @@ Oelala is an AI media platform for creators who want one place for prompt genera
 | Area | Current Focus | Why It Matters |
 |------|---------------|----------------|
 | Cloud reliability | RunPod worker provisioning, queue timeout behavior, clearer cloud failure states | Cloud generation must fail honestly instead of looking alive forever |
-| Storage cluster | Coordinator + node rollout, public URLs, node heartbeats | Multi-node storage is the base for resilience and future scale |
+| Storage cluster | MinIO lifecycle/retention, quota surfacing, presigned URL strategy | MinIO replaces the custom oelala-storage Go service |
 | Media UX | Move/organize media, quota/retention visibility, polished gallery sorting | Users need sane lifecycle management, not just generation buttons |
 | Legacy cleanup | Remove remaining fallback/local-path assumptions | Prevent split-brain between backend disk and storage service |
 
@@ -80,14 +80,14 @@ Oelala is an AI media platform for creators who want one place for prompt genera
 | Finish EU-centric storage access for cloud workers | 🔄 In progress | High |
 | Reduce cold-start friction for LoRA/model downloads | 🔄 In progress | High |
 
-### 2. Storage as the Real Source of Truth
+### 2. MinIO as the Real Source of Truth
 
 | Task | Status | Priority |
 |------|--------|----------|
-| Roll out coordinator + additional local node configs | 🔄 In progress | Critical |
-| Remove more legacy direct-disk fallback code | 🔄 In progress | High |
+| MinIO service running and integrated via `minio` Python SDK | ✅ Done | Critical |
+| Remove remaining legacy oelala-storage / direct-disk fallback code | 🔄 In progress | High |
 | Expose quota, retention, and expiration to users | ⏳ Planned | High |
-| Decide when backend proxy routes can be retired in favor of direct storage hostnames | ⏳ Planned | Medium |
+| Decide when backend proxy routes can be retired in favor of presigned URLs | ⏳ Planned | Medium |
 
 ### 3. Media Management Polish
 
@@ -109,14 +109,15 @@ Oelala is an AI media platform for creators who want one place for prompt genera
 
 ## Mid-Term Roadmap
 
-### Distributed Storage Network
+### MinIO Storage Maturity
 
 | Milestone | Status | Notes |
 |-----------|--------|-------|
-| Coordinator node | 🔄 In progress | Main storage entrypoint and node registry |
-| Local node 01 | 🔄 In progress | Secondary local node on distinct ports |
-| Remote node 02 | 🔄 In progress | Autonomous tunnel, independent host |
-| Replication and observability | ⏳ Planned | Node health, lag, placement, metrics |
+| MinIO service deployed, `minio.service` running | ✅ Done | Replaces oelala-storage Go service |
+| Backend uses `minio` Python SDK (`storage_client.py`) | ✅ Done | S3-compatible API |
+| Presigned URL generation for media access | ✅ Done | Time-limited secure URLs |
+| Bucket lifecycle rules for retention | 🔄 In progress | Auto-expire old media |
+| MinIO cluster mode (multi-node) | ⏳ Planned | For resilience and scale |
 
 ### Advanced Creation Workflows
 
@@ -149,7 +150,7 @@ Oelala is an AI media platform for creators who want one place for prompt genera
 
 ## Technical Debt to Keep Burning Down
 
-- Remove stale docs and code that still describe local media folders as canonical storage
+- Remove stale docs and code that still reference oelala-storage or local media folders as canonical storage
 - Keep frontend/backend/storage hostnames aligned across config and docs
 - Keep cloud queue behavior honest: pending is pending, not fake running
 - Keep auth behavior consistent across REST, media URLs, and WebSocket-style flows

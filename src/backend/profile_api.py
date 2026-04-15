@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, validator
 from PIL import Image
 from auth import get_current_user, get_optional_user, User
 
-# Note: avatars stored in oelala-storage 'avatars' bucket
+# Note: avatars stored in MinIO 'oelala-avatars' bucket
 AVATAR_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 AVATAR_SIZE = 256  # square px
 
@@ -511,7 +511,7 @@ async def upload_avatar(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not process image: {exc}")
 
-    # Save to oelala-storage instead of local disk
+    # Save to MinIO instead of local disk
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=85, optimize=True)
     avatar_bytes = buf.getvalue()

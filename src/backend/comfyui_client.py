@@ -5,6 +5,7 @@ Enables integration with ComfyUI for Wan2.2 Q5 GGUF workflows
 """
 
 import json
+import os
 import uuid
 import time
 import requests
@@ -3366,9 +3367,15 @@ class ComfyUIClient:
 
         # Calculate dimensions from aspect ratio
         aspect_ratios = {
-            "1:1": (1, 1), "9:16": (9, 16), "16:9": (16, 9),
-            "4:3": (4, 3), "3:4": (3, 4), "3:2": (3, 2),
-            "2:3": (2, 3), "21:9": (21, 9), "9:21": (9, 21),
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
         }
         ar_w, ar_h = aspect_ratios.get(aspect_ratio, (9, 16))
 
@@ -3501,7 +3508,7 @@ class ComfyUIClient:
             workflow["22"] = {
                 "class_type": "LTXVConcatAVLatent",
                 "inputs": {
-                    "video_latent": ["6", 0],   # empty video latent
+                    "video_latent": ["6", 0],  # empty video latent
                     "audio_latent": ["21", 0],  # empty audio latent
                 },
             }
@@ -3593,7 +3600,7 @@ class ComfyUIClient:
             workflow["27"] = {
                 "class_type": "LTXVAudioVAEDecode",
                 "inputs": {
-                    "samples": ["26", 1],    # audio_latent from separator
+                    "samples": ["26", 1],  # audio_latent from separator
                     "audio_vae": ["20", 0],  # audio VAE from loader
                 },
             }
@@ -3667,9 +3674,7 @@ class ComfyUIClient:
                     },
                 }
                 current_model = [node_id, 0]
-                logger.info(
-                    f"🎨 LTX-2.3 T2V LoRA #{i + 1}: {lora_name} @ {strength}"
-                )
+                logger.info(f"🎨 LTX-2.3 T2V LoRA #{i + 1}: {lora_name} @ {strength}")
             # Wire final LoRA output to guider (CFGGuider or MultimodalGuider)
             guider_node = "25" if audio_prompt else "7"
             workflow[guider_node]["inputs"]["model"] = current_model
@@ -3809,9 +3814,9 @@ class ComfyUIClient:
         workflow["9"] = {
             "class_type": "LTXVImgToVideoConditionOnly",
             "inputs": {
-                "vae": ["1", 2],       # VAE from checkpoint
-                "image": ["4", 0],     # preprocessed image
-                "latent": ["8", 0],    # empty latent
+                "vae": ["1", 2],  # VAE from checkpoint
+                "image": ["4", 0],  # preprocessed image
+                "latent": ["8", 0],  # empty latent
                 "strength": strength,
             },
         }
@@ -3878,7 +3883,7 @@ class ComfyUIClient:
             workflow["22"] = {
                 "class_type": "LTXVConcatAVLatent",
                 "inputs": {
-                    "video_latent": ["9", 0],   # image-conditioned video latent
+                    "video_latent": ["9", 0],  # image-conditioned video latent
                     "audio_latent": ["21", 0],  # empty audio latent
                 },
             }
@@ -3970,7 +3975,7 @@ class ComfyUIClient:
             workflow["27"] = {
                 "class_type": "LTXVAudioVAEDecode",
                 "inputs": {
-                    "samples": ["26", 1],    # audio_latent from separator
+                    "samples": ["26", 1],  # audio_latent from separator
                     "audio_vae": ["20", 0],  # audio VAE from loader
                 },
             }
@@ -4443,8 +4448,11 @@ class ComfyUIClient:
             # Cleanup local file to keep media dirs empty
             try:
                 local_path = Path(output_path)
+                minio_data_dir = Path(
+                    os.environ.get("MINIO_DATA_DIR", "/home/flip/minio-data")
+                )
                 if local_path.exists() and str(local_path.parent) != str(
-                    Path("/home/flip/oelala-storage")
+                    minio_data_dir
                 ):
                     local_path.unlink()
                     logger.info(f"🗑️ Cleaned up auto-uploaded local file: {local_path}")
@@ -4717,7 +4725,7 @@ class ComfyUIClient:
                                 f.write(resp.content)
                             logger.info(f"📥 Video downloaded: {output_path}")
 
-                            # Upload to generated bucket in oelala-storage
+                            # Upload to generated bucket in MinIO
                             try:
                                 storage_client = get_storage_client()
                                 storage_client.put("generated", filename, resp.content)
@@ -4788,7 +4796,7 @@ class ComfyUIClient:
                                 f.write(resp.content)
                             logger.info(f"📥 Image downloaded: {output_path}")
 
-                            # Upload to generated bucket in oelala-storage
+                            # Upload to generated bucket in MinIO
                             try:
                                 storage_client = get_storage_client()
                                 storage_client.put("generated", filename, resp.content)

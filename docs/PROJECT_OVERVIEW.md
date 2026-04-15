@@ -1,6 +1,6 @@
 # Oelala Project Overview
 
-> **Last Updated**: 2026-03-06
+> **Last Updated**: 2026-07-14
 > **Version**: 0.11.x (Alpha)
 
 ---
@@ -22,7 +22,7 @@
 | **Audio** | Text-to-Speech, voice cloning, lip sync, audio generation modes |
 | **Face Workflows** | IP-Adapter FaceID, FaceDetailer, GFPGAN, face swap, face LoRA training queue integration |
 | **User System** | Supabase auth, credits, Stripe, profile system, gallery publishing, likes, NSFW gating |
-| **Storage** | Full migration to oelala-storage completed, storage proxy routes, signed/public URL support, admin node visibility |
+| **Storage** | MinIO-backed object storage (S3 API), storage proxy routes, presigned URL support, admin MinIO health dashboard |
 | **Cloud Compute** | RunPod Cloud Max integration for Wan 2.2 T2V/I2V workloads with queue polling and persistence |
 | **Operations** | systemd services, Cloudflare tunnels, WebSocket progress, admin storage cluster dashboard |
 
@@ -51,21 +51,11 @@
 │         │                  ├───────────────┐        │              │
 │         ▼                  ▼               ▼        ▼              │
 │  ┌─────────────┐    ┌──────────────┐  ┌────────┐  ┌─────────────┐  │
-│  │  Supabase   │    │ oelala-      │  │RunPod  │  │ Cloudflare  │  │
-│  │ Auth / DB   │    │ storage      │  │Cloud   │  │ tunnels/DNS │  │
-│  └─────────────┘    │ coordinator  │  │ Max    │  └─────────────┘  │
-│                     │ :7990        │  └────────┘                    │
-│                     └──────┬───────┘                                │
-│                            │                                        │
-│                    ┌───────▼────────┐                               │
-│                    │ storage-node-01 │                               │
-│                    │      :7993      │                               │
-│                    └───────┬────────┘                               │
-│                            │                                        │
-│                    ┌───────▼────────┐                               │
-│                    │  storage-node-02│                              │
-│                    │  remote tunnel  │                              │
-│                    └─────────────────┘                              │
+│  │  Supabase   │    │    MinIO    │  │RunPod  │  │ Cloudflare  │  │
+│  │ Auth / DB   │    │ S3-compat  │  │Cloud   │  │ tunnels/DNS │  │
+│  └─────────────┘    │ storage    │  │ Max    │  └─────────────┘  │
+│                     │ :9000      │  └────────┘                    │
+│                     └────────────┘                                │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -77,7 +67,7 @@
 | Backend | FastAPI, Python, Supabase integration |
 | AI Engine | ComfyUI, DisTorch2, Wan 2.2, Flux, SDXL |
 | Cloud GPU | RunPod serverless endpoint + custom worker image |
-| Storage | oelala-storage (Go/Fiber), signed URLs, dedup, GC |
+| Storage | MinIO (S3-compatible object storage), presigned URLs, bucket lifecycle |
 | Auth | Supabase Auth (Google/GitHub OAuth + JWT) |
 | Payments | Stripe credits |
 | Edge/Delivery | Cloudflare tunnels, cache and CORS controls |
@@ -125,20 +115,19 @@ This ordering is intentional: putting the 3060 first keeps the 5060 Ti freer for
 | Frontend | 5174 | systemd | `oelala-frontend.service` |
 | Backend API | 7998 | systemd | `oelala-backend.service` |
 | ComfyUI | 8188 | systemd | `comfyui.service` |
-| Storage coordinator | 7990 | systemd | `oelala-storage.service` |
-| Storage node 01 | 7993 | systemd | `oelala-node-01.service` |
+| MinIO S3 API | 9000 | systemd | `minio.service` |
+| MinIO Console | 9001 | systemd | `minio.service` |
 
 ---
 
 ## Storage Model
 
 - Local permanent media directories are no longer the source of truth.
-- Generated/uploaded content is pushed into **oelala-storage** buckets and served via storage routes or Cloudflare-facing storage hostnames.
+- Generated/uploaded content is pushed into **MinIO** buckets (S3 API) and served via storage proxy routes or presigned URLs.
 - Temporary backend processing now uses `/tmp/oelala_uploads` and `/tmp/oelala_generated`, then unlinks files after successful upload.
 - Storage nodes currently exposed in docs and config:
-	- `storage-main.oelala.xyz` → coordinator / primary node
-	- `storage-node-01.oelala.xyz` → additional local node
-	- `storage2.oelala.xyz` → remote node 2
+	- MinIO S3 API at `:9000`
+	- MinIO Console at `:9001`
 
 ---
 
@@ -170,7 +159,7 @@ This ordering is intentional: putting the 3060 first keeps the 5060 Ti freer for
 ## Links
 
 - **Repository**: [github.com/m0nklabs/oelala](https://github.com/m0nklabs/oelala)
-- **Storage Service**: [github.com/m0nklabs/oelala-storage](https://github.com/m0nklabs/oelala-storage)
+- **Storage Service**: MinIO (S3-compatible, local service on port 9000)
 
 ---
 

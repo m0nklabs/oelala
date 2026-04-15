@@ -11,14 +11,15 @@ import tempfile
 import subprocess
 from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
+from storage_utils import parse_range_header, format_last_modified, ALLOWED_ORIGINS
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
-# Note: thumbnails served from oelala-storage, no local dir needed
+# Note: thumbnails served from MinIO, no local dir needed
 
 
 def debug_log(msg: str):
@@ -801,16 +802,16 @@ async def toggle_like(media_id: str, user: User = Depends(get_current_user)):
 # Endpoint: Serve published media file (PUBLIC - no auth required)
 # ============================================================================
 @router.get("/{media_id}/file")
-async def get_published_media_file(media_id: str):
+async def get_published_media_file(media_id: str, request: Request):
     """
     Serve the actual media file for a published gallery item.
     This is PUBLIC - no authentication required for published content.
+    Supports HTTP Range requests for video/audio seeking.
 
     Media source priority:
-    1. oelala-storage (user's cloud storage)
+    1. MinIO storage (user's cloud storage)
     2. Local directories (media/generated/, ComfyUI/output/) for dev/testing
     """
-    from fastapi.responses import StreamingResponse
     from storage_client import get_storage_client
 
     debug_log(f"Serving media file for {media_id}")
@@ -860,30 +861,93 @@ async def get_published_media_file(media_id: str):
         }
         content_type = content_types.get(ext, "application/octet-stream")
 
-        # Try oelala-storage first (check existence eagerly — iter is lazy)
+        # Try MinIO storage first (check existence eagerly — iter is lazy)
         try:
             storage = get_storage_client()
             bucket = storage.user_bucket(user_id)
             key = storage.user_key(media_type_dir, filename)
-            if not storage.exists(bucket, key):
-                raise FileNotFoundError(f"Not in storage: {filename}")
-            stream = storage.iter_user_media(user_id, media_type_dir, filename)
+            storage_key = f"{media_type_dir}/{filename}"
+
             debug_log(
-                f"Streaming from oelala-storage: {media_type_dir}/{filename} for user {user_id}"
+                f"Serving from MinIO: {media_type_dir}/{filename} for user {user_id}"
             )
 
+            # CORS headers — needed because gallery media is public and
+            # may be embedded cross-origin through Cloudflare.
+            origin = request.headers.get("origin")
+            headers = {
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Cache-Control": "public, max-age=86400",
+                "Accept-Ranges": "bytes",
+                "Vary": "Origin",
+            }
+            if origin and origin in ALLOWED_ORIGINS:
+                headers["Access-Control-Allow-Origin"] = origin
+                headers["Access-Control-Allow-Credentials"] = "true"
+
+            # Handle Range request for video/audio seeking
+            range_header = request.headers.get("range")
+            if range_header and range_header.startswith("bytes="):
+                # Range requests need stat() to know total_size
+                meta = storage.stat(bucket, storage_key)
+                if meta is None:
+                    raise FileNotFoundError(f"Not in storage: {filename}")
+
+                total_size = meta["size"]
+                if meta.get("etag"):
+                    headers["ETag"] = f'"{meta["etag"]}"'
+                if meta.get("last_modified"):
+                    headers["Last-Modified"] = format_last_modified(
+                        meta["last_modified"]
+                    )
+
+                try:
+                    parsed = parse_range_header(range_header, total_size)
+                    if parsed is not None:
+                        range_start, range_end = parsed
+                        content_length = range_end - range_start + 1
+                        content = storage.get_object_range(
+                            bucket,
+                            storage_key,
+                            offset=range_start,
+                            length=content_length,
+                        )
+                        headers["Content-Range"] = (
+                            f"bytes {range_start}-{range_end}/{total_size}"
+                        )
+                        headers["Content-Length"] = str(content_length)
+                        return Response(
+                            content=content,
+                            status_code=206,
+                            media_type=content_type,
+                            headers=headers,
+                        )
+                except ValueError:
+                    # Unsatisfiable range → 416
+                    headers["Content-Range"] = f"bytes */{total_size}"
+                    return Response(
+                        status_code=416,
+                        headers=headers,
+                        media_type=content_type,
+                    )
+
+            # Full response — stream without buffering (skip stat)
+            chunks, _ct, total_size, etag, last_modified = storage.stream_with_metadata(
+                bucket, storage_key
+            )
+            if etag:
+                headers["ETag"] = etag
+            if last_modified:
+                headers["Last-Modified"] = last_modified
+            if total_size:
+                headers["Content-Length"] = str(total_size)
             return StreamingResponse(
-                stream,
+                chunks,
                 media_type=content_type,
-                headers={
-                    "Content-Disposition": f'inline; filename="{filename}"',
-                    "Cache-Control": "public, max-age=86400",
-                },
+                headers=headers,
             )
         except Exception as storage_err:
-            debug_log(
-                f"oelala-storage user media failed: {storage_err}, trying storage buckets"
-            )
+            debug_log(f"MinIO user media failed: {storage_err}, trying storage buckets")
 
         # Fallback: try generated and comfyui-local storage buckets
         try:

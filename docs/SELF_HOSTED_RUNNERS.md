@@ -9,7 +9,8 @@ This server hosts self-hosted GitHub Actions runners for oelala projects.
 - **Labels**: `self-hosted`, `Linux`, `X64`, `gpu`, `comfyui`, `ci`
 - **Service**: `actions.runner.m0nklabs-oelala.oelala-gpu.service`
 
-### oelala-storage-runner (for m0nklabs/oelala-storage)
+### oelala-storage-runner (for m0nklabs/oelala-storage) — DEPRECATED
+> **Note**: oelala-storage has been replaced by MinIO. This runner may be decommissioned.
 - **Location**: `/home/flip/actions-runner-storage/`
 - **Labels**: `self-hosted`, `Linux`, `X64`, `ci`, `go`
 - **Service**: `actions.runner.m0nklabs-oelala-storage.oelala-storage-runner.service`

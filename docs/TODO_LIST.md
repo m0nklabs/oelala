@@ -60,17 +60,21 @@ The main functionality is complete! All MEGA issues for core features are done:
 
 ---
 
-## 📊 oelala-storage Status
+## 📊 Storage Status — MinIO Migration
 
-| Issue | Title | Priority | Status |
-|-------|-------|----------|--------|
-| #12 | Prometheus metrics | done | ✅ Closed |
-| #13 | Admin CLI | done | ✅ Closed (stats command added) |
-| #24 | MEGA: Distributed Storage Network | high | 🔄 Open |
-| #19 | MEGA: Operations & Observability | done | ✅ Closed (all sub-issues resolved) |
-| #10 | Webhook notifications | done | ✅ Closed (implemented 2026-03-05) |
-| #20 | MEGA: Platform & Deployment | done | ✅ Closed |
-| #7 | Windows installer | low | 🔄 Open |
+> oelala-storage (Go) is being replaced by MinIO. See issue #127 and `docs/MINIO_MIGRATION_PLAN.md`.
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Install MinIO, create buckets, systemd | ⏳ Infra (not in PR) |
+| 2 | Data migration (`mc mirror`) | ⏳ Infra (not in PR) |
+| 3 | Rewrite `storage_client.py` → MinIO SDK | ✅ Done (PR #128) |
+| 4 | Replace signed URLs → MinIO presigned | ✅ Done (PR #128) |
+| 5 | Replace quota → Supabase-based | ✅ Done (PR #128) |
+| 6 | Remove `b2_client.py`, B2 dual-write | ✅ Done (PR #128) |
+| 7 | Frontend config, admin panel, Cloudflare | 🔄 Partial (PR #128, Cloudflare is infra) |
+| 8 | Cleanup: dead code, docs | 🔄 In progress (PR #128) |
+| 9 | Verify zero data loss | ⏳ Infra (requires live systems) |
 
 ---
 
@@ -140,34 +144,34 @@ Based on project priorities:
 
 1. **Face system testing** - All code is built, needs end-to-end validation
 2. **UI polish** - Continue CSS class migration for remaining inline styles
-3. **oelala-storage #24** - Distributed storage network (MEGA)
+3. **MinIO migration** - Complete remaining infra phases (1, 2, 7-CF, 9)
 
 ---
 
 ## 🔮 v2 Backlog
 
 ### Unified Tool Parameter Components
-> **When**: v2, or when adding new tools becomes copy-paste heavy  
-> **Why**: All 11 tools reuse the same UI patterns (prompt fields, model selectors, CFG sliders, seed inputs, file uploaders, advanced toggles) but each implements them inline. Duplicated code across ~22,000 lines.  
-> **What**: Extract shared components: `<PromptField>`, `<ModelSelector>`, `<ResolutionPicker>`, `<AdvancedToggle>`, `<FileUploader>`, `<CFGSlider>`, `<SeedInput>`. Each tool declares a config object; a `<ToolParamsRenderer>` renders the right components in order.  
-> **Risk**: High — touches all 11 tool files. Do after feature-freeze, not during active development.  
+> **When**: v2, or when adding new tools becomes copy-paste heavy
+> **Why**: All 11 tools reuse the same UI patterns (prompt fields, model selectors, CFG sliders, seed inputs, file uploaders, advanced toggles) but each implements them inline. Duplicated code across ~22,000 lines.
+> **What**: Extract shared components: `<PromptField>`, `<ModelSelector>`, `<ResolutionPicker>`, `<AdvancedToggle>`, `<FileUploader>`, `<CFGSlider>`, `<SeedInput>`. Each tool declares a config object; a `<ToolParamsRenderer>` renders the right components in order.
+> **Risk**: High — touches all 11 tool files. Do after feature-freeze, not during active development.
 > **Current mitigation**: CSS-level uniformity via `.grok-card`, `.form-group`, `.form-select` classes in App.css. Visual consistency is already there; this is a code-quality improvement.
 
 ---
 
 ## 🔮 Future: RunPod Multi-Endpoint Architecture
 
-> **When**: When traffic volume justifies it (multiple concurrent users)  
-> **Why**: Current single endpoint downloads ALL models (~70GB) at startup even though each job only needs ~30GB  
+> **When**: When traffic volume justifies it (multiple concurrent users)
+> **Why**: Current single endpoint downloads ALL models (~70GB) at startup even though each job only needs ~30GB
 
-**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models  
-**Future** (higher traffic): Split into dedicated endpoints per workflow family  
+**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models
+**Future** (higher traffic): Split into dedicated endpoints per workflow family
 
 | Endpoint | Models | Startup Download |
 |----------|--------|-----------------|
 | `oelala-cloud-i2v` | I2V high/low noise + CLIP Vision + shared core | ~42GB |
 | `oelala-cloud-t2v` | T2V high/low noise + shared core | ~40GB |
 
-**Benefits**: Faster cold starts (30GB less per endpoint), each endpoint only loads what it needs  
-**Trade-off**: 2x cold start probability at low traffic (each endpoint idles independently)  
+**Benefits**: Faster cold starts (30GB less per endpoint), each endpoint only loads what it needs
+**Trade-off**: 2x cold start probability at low traffic (each endpoint idles independently)
 **Trigger**: Split when avg >5 jobs/hour sustained, or when cold start cost becomes a user complaint

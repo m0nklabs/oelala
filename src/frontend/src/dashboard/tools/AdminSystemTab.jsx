@@ -604,7 +604,7 @@ function JobCard({ job, status }) {
 // =============================================================================
 
 function LogsTab({ logsData, selectedService, onServiceChange, onRefresh }) {
-  const services = ['oelala-backend', 'comfyui', 'oelala-storage', 'oelala-frontend']
+  const services = ['oelala-backend', 'comfyui', 'minio', 'oelala-frontend']
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

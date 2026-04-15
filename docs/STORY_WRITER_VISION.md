@@ -1,18 +1,18 @@
 # Story Writer — Vision & Architecture
 
-> **Status**: Vision / Design Phase  
-> **Author**: Flip + MARK1  
-> **Created**: 2026-04-12  
+> **Status**: Vision / Design Phase
+> **Author**: Flip + MARK1
+> **Created**: 2026-04-12
 > **Last Updated**: 2026-04-12
 
 ## TL;DR
 
 A tool that turns reference images + a story idea into a complete AI-generated movie.
 
-Upload reference images → LLM writes a screenplay with per-scene director instructions → 
+Upload reference images → LLM writes a screenplay with per-scene director instructions →
 AI generates 15-second video clips per scene → stitch into a cohesive movie.
 
-**Goal**: Make movie creation accessible through scripting and LLM assistance. 
+**Goal**: Make movie creation accessible through scripting and LLM assistance.
 No camera, no actors, no budget — just vision.
 
 ---
@@ -83,7 +83,7 @@ No camera, no actors, no budget — just vision.
 │  - Add audio track (ambient + music + dialogue)                     │
 │  - Optional: title card, credits                                    │
 │  - Export as single MP4                                              │
-│  - Store in oelala-storage                                          │
+│  - Store in MinIO storage                                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -109,7 +109,7 @@ No camera, no actors, no budget — just vision.
 | Scene-based generation queue | ❌ Not built | Need batch orchestration |
 | Storyboard UI | ❌ Not built | New frontend component |
 
-**Bottom line**: ~60% of the infrastructure exists. The missing pieces are orchestration, 
+**Bottom line**: ~60% of the infrastructure exists. The missing pieces are orchestration,
 multi-image aggregation, story writing, and the storyboard UI.
 
 ---
@@ -269,7 +269,7 @@ multi-image aggregation, story writing, and the storyboard UI.
 - ffmpeg-based clip stitching with transitions
 - Audio track assembly (ambient + dialogue placeholders)
 - Title cards, credits
-- Export to MP4, store in oelala-storage
+- Export to MP4, store in MinIO storage
 - **Depends on**: Phase 3
 
 ### Phase 5: Polish & Advanced Features
@@ -287,7 +287,7 @@ multi-image aggregation, story writing, and the storyboard UI.
 1. **Story length limit**: How many scenes max? (suggestion: 20 scenes = 5 min movie)
 2. **Resolution strategy**: Generate all at same res, or allow per-scene?
 3. **Audio handling**: TTS for dialogue? Music generation? Or placeholder slots?
-4. **Storage**: Stories stored in DB? Or as JSON files? (suggestion: DB with oelala-storage for media)
+4. **Storage**: Stories stored in DB? Or as JSON files? (suggestion: DB with MinIO for media)
 5. **Collaboration**: Single user or multi-user story editing?
 6. **Credits cost**: How to price per-scene generation in the credits system?
 

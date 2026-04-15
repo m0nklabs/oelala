@@ -1,6 +1,6 @@
 # Oelala Architecture
 
-> Last Updated: 2026-03-06
+> Last Updated: 2026-07-14
 
 ## Overview
 
@@ -11,7 +11,7 @@ At runtime it is composed of:
 1. **Frontend product surface**: React/Vite dashboard organized by tool families
 2. **Backend control plane**: FastAPI APIs for auth, credits, generation, media, gallery, moderation, and admin
 3. **Execution engines**: local ComfyUI plus RunPod Cloud Max for burst workloads
-4. **Storage layer**: `oelala-storage` for object storage, retention, signed access, and node rollout
+4. **Storage layer**: MinIO (S3-compatible object storage) for buckets, retention, presigned URLs, and media persistence
 5. **Platform dependencies**: Supabase, Stripe, Cloudflare, and selected LLM/media services
 
 ## Capability Map
@@ -49,14 +49,13 @@ Backend API (FastAPI, :7998)
           │
           ├─ Local execution → ComfyUI
           ├─ Cloud execution → RunPod worker
-          ├─ Media persistence → oelala-storage
+          ├─ Media persistence → MinIO (S3 API)
           ├─ Auth/data → Supabase
           └─ Payments/credits → Stripe
 
-oelala-storage
-    ├─ primary/coordinator (:7990)
-    ├─ local node-01 (:7993)
-    └─ remote node-02
+MinIO Object Storage
+    ├─ S3 API (:9000)
+    └─ Console (:9001)
 ```
 
 ## Frontend Layer
@@ -93,7 +92,7 @@ The backend is the product control plane. Policy, orchestration, and user-facing
 | Moderation | `moderation_api.py`, `/api/report/*`, `/api/admin/moderation/*` |
 | API keys | `api_keys_management.py`, `/api/keys/*`, `/api/v1/*` |
 | Admin | `admin_api.py`, `/api/admin/*`, `/api/admin/metrics` |
-| Storage integration | `storage_client.py`, `storage_nodes_api.py`, `/storage/*`, `/api/storage-nodes/*` |
+| Storage integration | `storage_client.py`, `/storage/*` |
 | LoRA surfaces | `lora_api.py`, `lora_scanner.py`, `/api/loras/*`, `/train-lora` |
 | Face systems | `face_service.py`, `face_train_service.py`, `/face-swap*`, `/api/face-train*`, `/api/face-profiles*` |
 | Generation core | `comfyui_client.py`, `runpod_client.py`, `workflow_loader.py`, `job_queue.py` |
@@ -106,7 +105,7 @@ The backend is the product control plane. Policy, orchestration, and user-facing
 - tool endpoint validation and workflow assembly
 - ComfyUI prompt submission, polling, queue inspection, and cancellation
 - RunPod Cloud Max submission, queue-state persistence, timeout handling, and recovery behavior
-- storage uploads, proxying, workflow metadata lookup, and unified media APIs
+- storage uploads via MinIO S3 API, presigned URLs, workflow metadata lookup, and unified media APIs
 - admin and reporting endpoints for users, storage, moderation, and platform operations
 
 ### Design Rules
@@ -165,23 +164,21 @@ cuda:0,10gb;cuda:1,15gb;cpu,*
 
 ## Storage Layer
 
-Persistent media storage is delegated to `oelala-storage`.
+Persistent media storage is delegated to **MinIO**, an S3-compatible object storage service.
 
 ### Storage Principles
 
-- storage buckets are the source of truth
+- MinIO buckets are the source of truth
 - backend-local paths are temporary processing locations only
-- retention is defined by backend metadata and executed by storage
-- signed/public access is a storage concern, but policy still belongs to the backend
-- node rollout and visibility are part of the product-admin surface
+- retention is defined by backend metadata and lifecycle rules
+- presigned URLs provide time-limited access; policy still belongs to the backend
 
-### Current Nodes
+### MinIO Configuration
 
-| Node | Role | Hostname |
-|------|------|----------|
-| primary | coordinator / main entrypoint | `storage-main.oelala.xyz`, `storage.oelala.xyz` |
-| node-01 | additional local node | `storage-node-01.oelala.xyz` |
-| node-02 | remote node | `storage2.oelala.xyz` |
+| Service | Port | Purpose |
+|---------|------|---------|
+| MinIO S3 API | 9000 | S3-compatible object storage API |
+| MinIO Console | 9001 | Web-based admin console |
 
 ## Platform Dependencies
 
@@ -191,7 +188,7 @@ Persistent media storage is delegated to `oelala-storage`.
 | Stripe | credits and payments |
 | Cloudflare | tunnels, DNS, proxy/cache behavior |
 | RunPod | burst cloud GPU execution |
-| oelala-storage | media storage, retention, signed access, node rollout |
+| MinIO | S3-compatible object storage, presigned URLs, bucket lifecycle |
 | Guardian / local LLM stack | prompt and analysis support paths |
 
 ## Delivery and Edge
@@ -220,8 +217,8 @@ Cloudflare is used for public routing and tunnel-based connectivity.
 | frontend | 5174 | `oelala-frontend.service` |
 | backend | 7998 | `oelala-backend.service` |
 | ComfyUI | 8188 | `comfyui.service` |
-| storage primary | 7990 | `oelala-storage.service` |
-| storage node-01 | 7993 | `oelala-node-01.service` |
+| MinIO S3 API | 9000 | `minio.service` |
+| MinIO Console | 9001 | `minio.service` |
 
 ## Representative Flows
 

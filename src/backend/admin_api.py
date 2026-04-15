@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 import httpx
+from minio.error import S3Error
 
 from auth import get_current_user, User
 from storage_client import get_client as get_storage_client
@@ -712,7 +713,7 @@ async def list_generated_media(
     limit: int = Query(100, ge=1, le=500),
 ):
     """
-    List all media files from oelala-storage buckets (admin only).
+    List all media files from MinIO storage buckets (admin only).
     Reads from 'generated' and 'comfyui-local' buckets.
     """
     media = []
@@ -830,11 +831,15 @@ async def get_generated_file(
                 "Cache-Control": "public, max-age=3600",
             },
         )
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except S3Error as e:
+        if e.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
-        raise HTTPException(status_code=502, detail="Storage error")
-    except httpx.ConnectError:
+        logger.error(f"Storage error serving generated/{filename}: {e}")
+        raise HTTPException(
+            status_code=502, detail="Failed to retrieve file from storage"
+        )
+    except Exception as e:
+        logger.error(f"Storage unavailable serving generated/{filename}: {e}")
         raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
@@ -855,11 +860,15 @@ async def get_comfyui_file(
                 "Cache-Control": "public, max-age=3600",
             },
         )
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except S3Error as e:
+        if e.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
-        raise HTTPException(status_code=502, detail="Storage error")
-    except httpx.ConnectError:
+        logger.error(f"Storage error serving comfyui-local/{filename}: {e}")
+        raise HTTPException(
+            status_code=502, detail="Failed to retrieve file from storage"
+        )
+    except Exception as e:
+        logger.error(f"Storage unavailable serving comfyui-local/{filename}: {e}")
         raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
@@ -1042,16 +1051,23 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
     except Exception:
         health["services"]["comfyui"] = {"status": "offline", "port": 8188}
 
-    # Check oelala-storage
+    # Check MinIO storage
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:7990/health", timeout=3.0)
-            health["services"]["storage"] = {
-                "status": "online" if response.status_code == 200 else "error",
-                "port": 7990,
-            }
+        storage = get_storage_client()
+        storage_health = storage.health()
+        health["services"]["storage"] = {
+            "status": "online"
+            if storage_health.get("status") == "healthy"
+            else "error",
+            "port": 9000,
+            "backend": "minio",
+        }
     except Exception:
-        health["services"]["storage"] = {"status": "offline", "port": 7990}
+        health["services"]["storage"] = {
+            "status": "offline",
+            "port": 9000,
+            "backend": "minio",
+        }
 
     # Disk usage
     for name, path in [
@@ -1081,14 +1097,14 @@ async def get_recent_logs(
 ):
     """
     Get recent logs from systemd services.
-    Supported services: oelala-backend, comfyui, oelala-storage
+    Supported services: oelala-backend, comfyui, minio
     """
     import subprocess
 
     allowed_services = [
         "oelala-backend",
         "comfyui",
-        "oelala-storage",
+        "minio",
         "oelala-frontend",
     ]
 

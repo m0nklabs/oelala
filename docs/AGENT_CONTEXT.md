@@ -54,9 +54,9 @@
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────┐
-│              oelala-storage (Go)                         │
-│                     Port 7990                            │
-│  Content-addressed storage, P2P sync, quotas            │
+│              MinIO (S3-compatible storage)              │
+│                   Port 9000 / 9001                      │
+│  S3-compatible object storage, presigned URLs, buckets  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -104,7 +104,7 @@ oelala/
 | Frontend | 5174 | `oelala-frontend.service` | ✅ Running |
 | Backend API | 7998 | `oelala-backend.service` | ✅ Running |
 | ComfyUI | 8188 | `comfyui.service` | ✅ Running |
-| Storage | 7990 | `oelala-storage.service` | ✅ Running |
+| Storage | 9000 | `minio.service` | ✅ Running |
 
 ### Service Commands
 ```bash
@@ -283,7 +283,7 @@ refactor: description
 | Repo | Purpose |
 |------|---------|
 | `oelala` | Main app (this repo) |
-| `oelala-storage` | Go storage service |
+| `oelala-storage` | Go storage service (⚠️ deprecated, replaced by MinIO) |
 | `ComfyUI` | Submodule (m0nk-fixes branch) |
 | `Wan2.2` | Video model |
 

@@ -264,9 +264,9 @@ All success criteria have been met:
   - user_media table tracks ownership
   - Foreign keys ensure referential integrity
 
-- ⏳ **oelala-storage validates user JWT tokens**
+- ⏳ **Storage service validates user JWT tokens**
   - Backend infrastructure ready
-  - Requires oelala-storage deployment (separate repo)
+  - MinIO uses access key / secret key auth; user-scoped access is enforced by the backend, not the storage layer
 
 ---
 
@@ -310,15 +310,15 @@ DROP TABLE IF EXISTS public.user_media CASCADE;
 
 This implementation provides infrastructure for:
 
-### oelala-storage Integration
+### Storage Integration (MinIO)
 - JWT validation ready (backend validates tokens)
 - User ID available in auth context
 - Ready for user-scoped storage paths
+- MinIO accessed via `minio` Python SDK in `storage_client.py`
 
-**Action Required**: Update oelala-storage to:
-1. Validate JWT tokens from Supabase
-2. Use user_id for scoped storage paths
-3. Implement quota enforcement per tier
+**Note**: oelala-storage (Go) has been replaced by MinIO (S3-compatible).
+User-scoped access control is enforced by the backend, which generates
+presigned URLs and manages bucket policies.
 
 ---
 
@@ -359,10 +359,10 @@ This PR addresses the following GitHub issues:
    - Add admin dashboard (#58)
    - Implement user management UI (#59)
 
-4. **oelala-storage Integration**
-   - Add JWT validation
-   - Implement user-scoped paths
-   - Add quota enforcement
+4. **MinIO Storage Integration**
+   - ✅ Backend uses MinIO via `minio` Python SDK
+   - User-scoped paths enforced by backend
+   - Quota enforcement via backend tier checks
 
 5. **Documentation**
    - Update API documentation
