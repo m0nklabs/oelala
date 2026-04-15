@@ -5,6 +5,7 @@ Enables integration with ComfyUI for Wan2.2 Q5 GGUF workflows
 """
 
 import json
+import os
 import uuid
 import time
 import requests
@@ -4447,8 +4448,11 @@ class ComfyUIClient:
             # Cleanup local file to keep media dirs empty
             try:
                 local_path = Path(output_path)
+                minio_data_dir = Path(
+                    os.environ.get("MINIO_DATA_DIR", "/home/flip/minio-data")
+                )
                 if local_path.exists() and str(local_path.parent) != str(
-                    Path("/home/flip/minio-data")
+                    minio_data_dir
                 ):
                     local_path.unlink()
                     logger.info(f"🗑️ Cleaned up auto-uploaded local file: {local_path}")

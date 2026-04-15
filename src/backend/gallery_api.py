@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 from auth import get_current_user, get_optional_user, User
+from storage_utils import parse_range_header, format_last_modified
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -884,10 +885,8 @@ async def get_published_media_file(media_id: str, request: Request):
             if meta.get("etag"):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
-                from email.utils import format_datetime
-
-                headers["Last-Modified"] = format_datetime(
-                    meta["last_modified"], usegmt=True
+                headers["Last-Modified"] = format_last_modified(
+                    meta["last_modified"]
                 )
 
             total_size = meta["size"]
@@ -896,53 +895,34 @@ async def get_published_media_file(media_id: str, request: Request):
             range_header = request.headers.get("range")
             if range_header and range_header.startswith("bytes="):
                 try:
-                    range_spec = range_header[6:].strip()
-                    parts_r = range_spec.split("-", 1)
-                    if len(parts_r) != 2:
-                        raise ValueError("Invalid Range header")
-
-                    start_str, end_str = parts_r[0].strip(), parts_r[1].strip()
-
-                    if not start_str:
-                        # Suffix byte range: bytes=-N means the last N bytes
-                        suffix_length = int(end_str)
-                        if suffix_length <= 0:
-                            raise ValueError("Invalid suffix byte range")
-                        suffix_length = min(suffix_length, total_size)
-                        range_start = max(total_size - suffix_length, 0)
-                        range_end = total_size - 1
-                    else:
-                        range_start = int(start_str)
-                        range_end = int(end_str) if end_str else total_size - 1
-                        range_end = min(range_end, total_size - 1)
-
-                    if range_start > range_end or range_start >= total_size:
-                        headers["Content-Range"] = f"bytes */{total_size}"
-                        return Response(
-                            status_code=416,
-                            headers=headers,
-                            media_type=content_type,
+                    parsed = parse_range_header(range_header, total_size)
+                    if parsed is not None:
+                        range_start, range_end = parsed
+                        content_length = range_end - range_start + 1
+                        content = storage.get_object_range(
+                            bucket,
+                            f"{media_type_dir}/{filename}",
+                            offset=range_start,
+                            length=content_length,
                         )
-
-                    content_length = range_end - range_start + 1
-                    content = storage.get_object_range(
-                        bucket,
-                        f"{media_type_dir}/{filename}",
-                        offset=range_start,
-                        length=content_length,
-                    )
-                    headers["Content-Range"] = (
-                        f"bytes {range_start}-{range_end}/{total_size}"
-                    )
-                    headers["Content-Length"] = str(content_length)
+                        headers["Content-Range"] = (
+                            f"bytes {range_start}-{range_end}/{total_size}"
+                        )
+                        headers["Content-Length"] = str(content_length)
+                        return Response(
+                            content=content,
+                            status_code=206,
+                            media_type=content_type,
+                            headers=headers,
+                        )
+                except ValueError:
+                    # Unsatisfiable range → 416
+                    headers["Content-Range"] = f"bytes */{total_size}"
                     return Response(
-                        content=content,
-                        status_code=206,
-                        media_type=content_type,
+                        status_code=416,
                         headers=headers,
+                        media_type=content_type,
                     )
-                except (ValueError, IndexError):
-                    pass  # Fall through to full response
 
             # Full response — stream the object
             stream = storage.iter_user_media(user_id, media_type_dir, filename)

@@ -91,6 +91,7 @@ from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with
 
 # Storage client for user media (MinIO-backed)
 from storage_client import get_client as get_storage_client
+from storage_utils import parse_range_header, format_last_modified
 from minio.error import S3Error
 
 # MediaService for MinIO + Supabase integration (async client)
@@ -722,102 +723,97 @@ def _storage_proxy_response(
     """
     storage = get_storage_client()
 
-    # Stat object first to get metadata (size, content_type, etag, last_modified)
+    range_header = request.headers.get("range")
+
+    # For Range requests we need metadata first; for full responses we can
+    # skip the stat and use get_with_metadata directly (single round-trip).
+    if range_header and range_header.startswith("bytes="):
+        try:
+            meta = storage.stat(bucket, key)
+            if meta is None:
+                raise HTTPException(status_code=404, detail="File not found")
+        except S3Error as exc:
+            if exc.code in ("NoSuchKey", "NoSuchBucket"):
+                raise HTTPException(status_code=404, detail="File not found")
+            logger.error(f"Storage S3 error during stat({bucket}, {key}): {exc}")
+            raise HTTPException(status_code=502, detail="Storage service error")
+        except Exception as exc:
+            logger.error(f"Storage error during stat({bucket}, {key}): {exc}")
+            raise HTTPException(status_code=503, detail="Storage service unavailable")
+
+        total_size = meta["size"]
+        content_type = meta["content_type"]
+        etag = meta.get("etag")
+        last_modified = meta.get("last_modified")
+
+        headers = {
+            "Cache-Control": cache_control,
+            "Accept-Ranges": "bytes",
+            "Vary": "Origin",
+        }
+        if etag:
+            headers["ETag"] = f'"{etag}"'
+        if last_modified:
+            headers["Last-Modified"] = format_last_modified(last_modified)
+
+        origin = request.headers.get("origin")
+        if origin and origin in ALLOWED_ORIGINS:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+
+        try:
+            parsed = parse_range_header(range_header, total_size)
+            if parsed is None:
+                pass  # malformed — fall through to full response below
+            else:
+                range_start, range_end = parsed
+                content_length = range_end - range_start + 1
+                content = storage.get_object_range(
+                    bucket, key, offset=range_start, length=content_length
+                )
+                headers["Content-Range"] = (
+                    f"bytes {range_start}-{range_end}/{total_size}"
+                )
+                headers["Content-Length"] = str(content_length)
+                return Response(
+                    content=content,
+                    status_code=206,
+                    media_type=content_type,
+                    headers=headers,
+                )
+        except ValueError:
+            # Unsatisfiable range → 416
+            headers["Content-Range"] = f"bytes */{total_size}"
+            return Response(
+                status_code=416,
+                headers=headers,
+                media_type=content_type,
+            )
+
+    # Full response (no Range, malformed Range, or fallback)
     try:
-        meta = storage.stat(bucket, key)
-        if meta is None:
-            raise HTTPException(status_code=404, detail="File not found")
+        content, content_type, total_size = storage.get_with_metadata(bucket, key)
     except S3Error as exc:
         if exc.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
+        logger.error(f"Storage S3 error during get({bucket}, {key}): {exc}")
         raise HTTPException(status_code=502, detail="Storage service error")
-    except Exception:
+    except Exception as exc:
+        logger.error(f"Storage error during get({bucket}, {key}): {exc}")
         raise HTTPException(status_code=503, detail="Storage service unavailable")
 
-    total_size = meta["size"]
-    content_type = meta["content_type"]
-    etag = meta.get("etag")
-    last_modified = meta.get("last_modified")
-
-    # Build base headers (always present)
     headers = {
         "Cache-Control": cache_control,
         "Accept-Ranges": "bytes",
         "Vary": "Origin",
+        "Content-Length": str(total_size),
     }
-    if etag:
-        headers["ETag"] = f'"{etag}"'
-    if last_modified:
-        from email.utils import format_datetime
-
-        headers["Last-Modified"] = format_datetime(last_modified, usegmt=True)
 
     origin = request.headers.get("origin")
     if origin and origin in ALLOWED_ORIGINS:
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
 
-    # Handle Range request
-    range_header = request.headers.get("range")
-    if range_header and range_header.startswith("bytes="):
-        try:
-            range_spec = range_header[6:].strip()  # strip "bytes="
-            if "," in range_spec:
-                raise ValueError("Multiple byte ranges are not supported")
-
-            range_start_str, range_end_str = range_spec.split("-", 1)
-
-            if range_start_str == "":
-                # Suffix byte range: bytes=-N means the last N bytes
-                suffix_length = int(range_end_str)
-                if suffix_length <= 0:
-                    raise ValueError("Suffix byte range must be greater than zero")
-                suffix_length = min(suffix_length, total_size)
-                range_start = max(total_size - suffix_length, 0)
-                range_end = total_size - 1
-            else:
-                range_start = int(range_start_str)
-                if range_start < 0:
-                    raise ValueError("Range start must not be negative")
-                range_end = int(range_end_str) if range_end_str else total_size - 1
-                if range_end < 0:
-                    raise ValueError("Range end must not be negative")
-                range_end = min(range_end, total_size - 1)
-            if range_start > range_end or range_start >= total_size:
-                headers["Content-Range"] = f"bytes */{total_size}"
-                return Response(
-                    status_code=416,
-                    headers=headers,
-                    media_type=content_type,
-                )
-
-            content_length = range_end - range_start + 1
-            content = storage.get_object_range(
-                bucket, key, offset=range_start, length=content_length
-            )
-
-            headers["Content-Range"] = f"bytes {range_start}-{range_end}/{total_size}"
-            headers["Content-Length"] = str(content_length)
-            return Response(
-                content=content,
-                status_code=206,
-                media_type=content_type,
-                headers=headers,
-            )
-        except (ValueError, IndexError):
-            pass  # Malformed Range header — fall through to full response
-
-    # Full response (no Range or malformed Range)
-    try:
-        content, _, _ = storage.get_with_metadata(bucket, key)
-    except S3Error as exc:
-        if exc.code in ("NoSuchKey", "NoSuchBucket"):
-            raise HTTPException(status_code=404, detail="File not found")
-        raise HTTPException(status_code=502, detail="Storage service error")
-    except Exception:
-        raise HTTPException(status_code=503, detail="Storage service unavailable")
-
-    headers["Content-Length"] = str(total_size)
     return Response(content=content, media_type=content_type, headers=headers)
 
 
@@ -5204,10 +5200,8 @@ async def get_user_media(
             if meta.get("etag"):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
-                from email.utils import format_datetime
-
-                headers["Last-Modified"] = format_datetime(
-                    meta["last_modified"], usegmt=True
+                headers["Last-Modified"] = format_last_modified(
+                    meta["last_modified"]
                 )
 
             total_size = meta["size"]
@@ -5216,52 +5210,34 @@ async def get_user_media(
             range_header = request.headers.get("range")
             if range_header and range_header.startswith("bytes="):
                 try:
-                    range_spec = range_header[6:].strip()
-                    parts = range_spec.split("-", 1)
-                    if len(parts) != 2:
-                        raise ValueError("Invalid Range header")
-
-                    if parts[0] == "":
-                        suffix_length = int(parts[1])
-                        if suffix_length <= 0:
-                            raise ValueError(
-                                "Suffix byte range must be greater than zero"
-                            )
-                        suffix_length = min(suffix_length, total_size)
-                        range_start = max(total_size - suffix_length, 0)
-                        range_end = total_size - 1
-                    else:
-                        range_start = int(parts[0])
-                        range_end = int(parts[1]) if parts[1] else total_size - 1
-                        range_end = min(range_end, total_size - 1)
-
-                    if range_start > range_end or range_start >= total_size:
-                        headers["Content-Range"] = f"bytes */{total_size}"
-                        return Response(
-                            status_code=416,
-                            headers=headers,
-                            media_type=content_type,
+                    parsed = parse_range_header(range_header, total_size)
+                    if parsed is not None:
+                        range_start, range_end = parsed
+                        content_length = range_end - range_start + 1
+                        content = storage.get_object_range(
+                            f"users/{user.id}",
+                            f"{media_type}/{filename}",
+                            offset=range_start,
+                            length=content_length,
                         )
-
-                    content_length = range_end - range_start + 1
-                    content = storage.get_object_range(
-                        f"users/{user.id}",
-                        f"{media_type}/{filename}",
-                        offset=range_start,
-                        length=content_length,
-                    )
-                    headers["Content-Range"] = (
-                        f"bytes {range_start}-{range_end}/{total_size}"
-                    )
-                    headers["Content-Length"] = str(content_length)
+                        headers["Content-Range"] = (
+                            f"bytes {range_start}-{range_end}/{total_size}"
+                        )
+                        headers["Content-Length"] = str(content_length)
+                        return Response(
+                            content=content,
+                            status_code=206,
+                            media_type=content_type,
+                            headers=headers,
+                        )
+                except ValueError:
+                    # Unsatisfiable range → 416
+                    headers["Content-Range"] = f"bytes */{total_size}"
                     return Response(
-                        content=content,
-                        status_code=206,
-                        media_type=content_type,
+                        status_code=416,
                         headers=headers,
+                        media_type=content_type,
                     )
-                except (ValueError, IndexError):
-                    pass  # Fall through to full response
 
         # Full response — stream the object
         stream = storage.iter_user_media(user.id, media_type, filename)

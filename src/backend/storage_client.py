@@ -43,6 +43,7 @@ from urllib.parse import urlparse
 import logging
 
 from minio import Minio
+from minio.commonconfig import CopySource
 from minio.error import S3Error
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ class StorageClient:
             secret_key=self._secret_key,
             secure=secure,
         )
+        self._known_buckets: set[str] = set()
 
     def close(self):
         """Close the client (no-op for MinIO SDK, kept for API compat)."""
@@ -133,10 +135,13 @@ class StorageClient:
         return minio_bucket, full_key
 
     def _ensure_bucket(self, minio_bucket: str) -> None:
-        """Create bucket if it does not exist."""
+        """Create bucket if it does not exist (cached after first check)."""
+        if minio_bucket in self._known_buckets:
+            return
         if not self._minio.bucket_exists(minio_bucket):
             self._minio.make_bucket(minio_bucket)
             logger.info(f"🪣 Created MinIO bucket: {minio_bucket}")
+        self._known_buckets.add(minio_bucket)
 
     @staticmethod
     def _guess_content_type(key: str) -> str:
@@ -353,8 +358,6 @@ class StorageClient:
         dst_mb, dst_fk = self._resolve(dest_bucket, dest_key)
 
         try:
-            from minio.commonconfig import CopySource
-
             self._ensure_bucket(dst_mb)
             self._minio.copy_object(dst_mb, dst_fk, CopySource(src_mb, src_fk))
             self._minio.remove_object(src_mb, src_fk)
@@ -675,18 +678,20 @@ class StorageClient:
         media_type: str,
         filename: str,
         external: bool = False,
+        expires: int = 3600,
     ) -> str:
         """
         Get URL for user's media file.
 
         Args:
-            external: If True, return production URL (storage-main.oelala.xyz)
+            external: If True, return a presigned URL (accessible without auth)
+            expires: Presigned URL expiry in seconds (only used when external=True)
         """
         bucket = self.user_bucket(user_id)
         key = self.user_key(media_type, filename)
 
         if external:
-            return f"https://storage-main.oelala.xyz/{bucket}/{key}"
+            return self.presigned_get(bucket, key, expires=expires)
         else:
             return f"{self.base_url}/{bucket}/{key}"
 

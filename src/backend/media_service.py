@@ -57,6 +57,19 @@ TIER_RETENTION_DAYS: Dict[str, int] = {
 DEFAULT_RETENTION_DAYS = 30  # Fallback for unknown tiers
 
 
+def _parse_storage_path(storage_path: str) -> tuple[str, str]:
+    """Split a storage path into (bucket_path, key_path).
+
+    Examples:
+        'users/uid/videos/file.mp4' → ('users/uid', 'videos/file.mp4')
+        'generated/file.mp4'        → ('generated', 'file.mp4')
+    """
+    parts = storage_path.split("/", 2)
+    if len(parts) >= 3:
+        return f"{parts[0]}/{parts[1]}", parts[2]
+    return parts[0], parts[1] if len(parts) > 1 else ""
+
+
 @dataclass
 class MediaRecord:
     """Represents a media file record (matches 006_user_media.sql schema)."""
@@ -362,13 +375,7 @@ class MediaService:
             f"📤 Uploading {filename} to {storage_path} (tier={user_tier}, expires={expires_at.date()})"
         )
 
-        path_parts = storage_path.split("/", 2)
-        if len(path_parts) >= 3:
-            bucket_path = f"{path_parts[0]}/{path_parts[1]}"
-            key_path = path_parts[2]
-        else:
-            bucket_path = path_parts[0]
-            key_path = path_parts[1] if len(path_parts) > 1 else ""
+        bucket_path, key_path = _parse_storage_path(storage_path)
 
         storage_result = self.storage_client.put(
             bucket_path,
@@ -542,13 +549,7 @@ class MediaService:
         if hard_delete:
             # Delete from MinIO storage
             try:
-                path_parts = record.storage_path.split("/", 2)
-                if len(path_parts) >= 3:
-                    bucket_path = f"{path_parts[0]}/{path_parts[1]}"
-                    key_path = path_parts[2]
-                else:
-                    bucket_path = path_parts[0]
-                    key_path = path_parts[1] if len(path_parts) > 1 else ""
+                bucket_path, key_path = _parse_storage_path(record.storage_path)
                 self.storage_client.delete(bucket_path, key_path)
             except Exception as e:
                 logger.warning(f"Failed to delete from storage: {e}")
@@ -582,13 +583,7 @@ class MediaService:
             Presigned URL that can be used without authentication
         """
         # Split storage_path into bucket + key for the storage client
-        path_parts = storage_path.split("/", 2)
-        if len(path_parts) >= 3:
-            bucket_path = f"{path_parts[0]}/{path_parts[1]}"
-            key_path = path_parts[2]
-        else:
-            bucket_path = path_parts[0]
-            key_path = path_parts[1] if len(path_parts) > 1 else ""
+        bucket_path, key_path = _parse_storage_path(storage_path)
 
         return self.storage_client.presigned_get(
             bucket_path, key_path, expires=expires_in
