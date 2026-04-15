@@ -942,8 +942,8 @@ async def get_published_media_file(media_id: str, request: Request):
                     )
 
             # Full response — single round-trip (skip stat)
-            content, _ct, total_size, etag, last_modified = (
-                storage.get_with_metadata(bucket, storage_key)
+            content, _ct, total_size, etag, last_modified = storage.get_with_metadata(
+                bucket, storage_key
             )
             if etag:
                 headers["ETag"] = etag
