@@ -570,21 +570,27 @@ class MediaService:
         expires_in: int = 3600,
     ) -> str:
         """
-        Generate a presigned URL for temporary public access via MinIO.
+        Generate a public or presigned URL for media access.
 
-        Uses MinIO's native S3 presigned URL mechanism (SigV4) which is
-        much stronger than the previous custom HMAC-SHA256 scheme.
+        For public buckets (generated, comfyui) with CDN nodes configured,
+        returns a direct public URL distributed across storage nodes.
+        For private buckets (users, avatars), uses MinIO presigned URLs.
 
         Args:
             storage_path: Full storage path (e.g., users/{user_id}/videos/file.mp4)
             expires_in: Expiration time in seconds (default 1 hour)
 
         Returns:
-            Presigned URL that can be used without authentication
+            URL for media access
         """
-        # Split storage_path into bucket + key for the storage client
         bucket_path, key_path = _parse_storage_path(storage_path)
 
+        # Try direct public CDN URL first (round-robin across storage nodes)
+        public = self.storage_client.public_url(bucket_path, key_path)
+        if public:
+            return public
+
+        # Fallback to presigned URL for private buckets
         return self.storage_client.presigned_get(
             bucket_path, key_path, expires=expires_in
         )

@@ -35,7 +35,9 @@ Usage:
 
 import io
 import hashlib
+import itertools
 import mimetypes
+import os
 from datetime import timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any, BinaryIO, Iterator, Tuple, Union
@@ -55,6 +57,9 @@ _BUCKET_MAP: Dict[str, str] = {
     "avatars": "oelala-avatars",
     "users": "oelala-users",
 }
+
+# Buckets with anonymous public read access (served directly via CDN)
+_PUBLIC_BUCKETS: set[str] = {"oelala-generated", "oelala-comfyui"}
 
 
 def _resolve_bucket(logical_name: str) -> str:
@@ -101,6 +106,13 @@ class StorageClient:
             secure=secure,
         )
         self._known_buckets: set[str] = set()
+
+        # Public storage nodes for CDN-served content (round-robin)
+        nodes_str = os.environ.get("STORAGE_PUBLIC_NODES", "")
+        self._storage_nodes: List[str] = [
+            n.strip().rstrip("/") for n in nodes_str.split(",") if n.strip()
+        ]
+        self._node_cycle = itertools.cycle(self._storage_nodes) if self._storage_nodes else None
 
     def close(self):
         """Close the client (no-op for MinIO SDK, kept for API compat)."""
@@ -556,6 +568,33 @@ class StorageClient:
             full_key,
             expires=timedelta(seconds=min(expires, 604800)),
         )
+
+    def public_url(
+        self,
+        bucket: str,
+        key: str,
+    ) -> Optional[str]:
+        """
+        Generate a direct public CDN URL for a public bucket object.
+
+        Uses round-robin distribution across configured STORAGE_PUBLIC_NODES.
+        Only works for buckets with anonymous read access (generated, comfyui).
+        Returns None if no public nodes configured or bucket is private.
+
+        Args:
+            bucket: Logical bucket name
+            key: Object key
+
+        Returns:
+            Public URL string, or None if not applicable
+        """
+        if not self._node_cycle:
+            return None
+        minio_bucket, full_key = self._resolve(bucket, key)
+        if minio_bucket not in _PUBLIC_BUCKETS:
+            return None
+        base = next(self._node_cycle)
+        return f"{base}/{minio_bucket}/{full_key}"
 
     # ------------------------------------------------------------------
     # User-scoped media operations (unchanged public API)
