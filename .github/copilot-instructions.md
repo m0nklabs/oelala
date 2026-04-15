@@ -82,50 +82,36 @@ These instructions apply to GitHub Copilot in the context of this repository.
 - **Cross-platform code**: When writing cross-platform code, only consider Windows and Linux. Use appropriate platform checks.
 - **Go builds**: Cross-compile for `GOOS=windows` and `GOOS=linux` only.
 
-## Related Repositories
+## Storage: MinIO (replaced oelala-storage as of 2026-04-15)
 
-- **oelala-storage**: Separate Go-based storage service at `/home/flip/oelala-storage/`.
-  - **Canonical Docs**: `/home/flip/oelala-storage/docs/VISION.md` (architecture)
-  - **Standalone product** - not just an oelala microservice, can be used by any project
-  - **Ports**: HTTP API (7990), gRPC Sync (7991), Metrics (7992)
-  - **S3-compatible API**: PUT/GET/DELETE/HEAD/LIST objects
-  - **Config**: `oelala-storage.yaml`
-  - **Build**: `go build -o bin/oelala-storage ./cmd/oelala-storage`
-  - **Run**: `./bin/oelala-storage serve`
-- When implementing storage features, defer to oelala-storage rather than building in Python.
+### Node 1 — ai-kvm2 (192.168.1.35)
+- **MinIO S3 API**: `http://localhost:9000` (systemd: `minio.service`)
+- **MinIO Console**: `http://localhost:9001`
+- **Data directory**: `/home/flip/minio-data`
+- **Cloudflare**: `storage.oelala.xyz` → `:9000`, `storage-main.oelala.xyz` → `:9001`
+- **mc alias**: `mc alias set oelala http://localhost:9000 $ACCESS $SECRET`
 
-### oelala-storage Architecture (CLIENT/SERVER/CDN)
+### Node 2 — ubuntu-oelalastorage2 (192.168.1.62)
+- **MinIO S3 API**: `http://localhost:9000` (systemd: `minio.service`)
+- **Cloudflare**: `storage2.oelala.xyz` → `:9000`
+- **mc binary**: `mcli` (not `mc`), alias `local`
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│ oelala-backend (Python/FastAPI) - THE BRAIN                       │
-│ • User auth, access control, retention policies, tier logic       │
-│ • Sends X-Expires-At header for retention                        │
-│ • Decides who can see what                                        │
-└───────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌───────────────────────────────────────────────────────────────────┐
-│ oelala-storage Coordinator - CDN ENTRY POINT                      │
-│ • Routes requests to correct node                                 │
-│ • Manages replication and deduplication                           │
-│ • Database-based blob references (NO SYMLINKS)                    │
-└───────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-        ┌──────────┐    ┌──────────┐    ┌──────────┐
-        │  Node 1  │    │  Node 2  │    │  Node 3  │
-        │  Linux   │    │  Windows │    │  Linux   │
-        │  500GB   │    │  200GB   │    │  1TB     │
-        └──────────┘    └──────────┘    └──────────┘
-```
+### Common
+- **Buckets**: `oelala-generated`, `oelala-comfyui` (public read), `oelala-avatars`, `oelala-users` (private)
+- **Backend access**: via `minio` Python SDK in `src/backend/storage_client.py`
+- **CDN distribution**: `STORAGE_PUBLIC_NODES=https://storage.oelala.xyz,https://storage2.oelala.xyz` in `.env` — public buckets served via round-robin across both nodes
+- **Env file**: `/etc/default/minio` (credentials + data dir, both nodes)
+- **Override**: `/etc/systemd/system/minio.service.d/override.conf` (runs as `flip`, both nodes)
 
-**Key Principles:**
-1. **Storage is "dumb"** - backend tells storage what to do
-2. **Deduplication via database** - hash → node locations, NOT symlinks
-3. **Retention via headers** - backend sends `X-Expires-At`, storage executes
-4. **EU retention** - 6 months minimum (GDPR)
+### Backup
+- **Node 2 mirror**: `scripts/minio-backup-mirror.sh` runs every 15 min via cron (`mc mirror`)
+- **B2 offsite backup**: Same script mirrors all 4 buckets to Backblaze B2 `oelala-media-eu`
+- **mc alias**: `mc alias set b2 https://s3.eu-central-003.backblazeb2.com $KEY_ID $APP_KEY`
+
+### Legacy (DEPRECATED — DO NOT USE)
+- `oelala-storage` Go service: stopped + disabled (`oelala-storage.service`, `oelala-node-01.service`)
+- The Go-based storage service and its multi-node CDN architecture is no longer in use
+- Data was migrated to MinIO on 2026-04-15 (1.1 GiB, 1,059 objects)
 
 ## Media Storage Locations (CRITICAL)
 
@@ -218,10 +204,6 @@ leaving 5060 Ti with 15GB free for activations. 5060 Ti runs at 100% utilization
     - Frontend dev server: 5174
     - Backend API: 7998
     - ComfyUI: 8188
-- oelala-storage:
-    - HTTP API: 7990
-    - gRPC Sync: 7991
-    - Metrics: 7992
 
 ## Services
 
@@ -235,36 +217,29 @@ All oelala services run as **systemd services**. NEVER start/stop manually with 
 | Frontend | `oelala-frontend.service` | 5174 | `sudo systemctl restart oelala-frontend` |
 | ComfyUI | `comfyui.service` | 8188 | `sudo systemctl restart comfyui` |
 
-### Oelala-Storage Services
-
-| Service | systemd unit | Port | Restart Command |
-|---------|--------------|------|-----------------|
-| Storage API | `oelala-storage.service` | 7990 | `sudo systemctl restart oelala-storage` |
-
 ### Service Commands Reference
 
 ```bash
 # Status check
-sudo systemctl status oelala-backend oelala-frontend comfyui oelala-storage
+sudo systemctl status oelala-backend oelala-frontend comfyui minio
 
 # View logs (follow mode)
 journalctl -u oelala-backend -f
 journalctl -u oelala-frontend -f
 journalctl -u comfyui -f
-journalctl -u oelala-storage -f
+journalctl -u minio -f
 
 # Restart all oelala services
 sudo systemctl restart oelala-backend oelala-frontend
 
 # Check if services are enabled at boot
-systemctl is-enabled oelala-backend oelala-frontend comfyui oelala-storage
+systemctl is-enabled oelala-backend oelala-frontend comfyui minio
 ```
 
 ### CRITICAL Rules
 - **NEVER run `npm run dev` manually** - use `sudo systemctl restart oelala-frontend`
 - **NEVER run `uvicorn` manually** - use `sudo systemctl restart oelala-backend`
 - **NEVER run `python main.py` for ComfyUI** - use `sudo systemctl restart comfyui`
-- **Dev mode exception**: Only for oelala-storage during active development: `cd /home/flip/oelala-storage && ./bin/oelala-storage serve`
 ## Cloudflare & CORS Configuration (CRITICAL)
 
 ### Tunnel Inventory
@@ -280,9 +255,10 @@ systemctl is-enabled oelala-backend oelala-frontend comfyui oelala-storage
 |----------|--------|----------------|
 | `oelala.xyz` | oelala-main | `http://localhost:5174` (frontend) |
 | `api.oelala.xyz` | oelala-main | `http://localhost:7998` (backend) |
-| `storage.oelala.xyz` | oelala-main | `http://localhost:7990` (storage node 1) |
+| `storage.oelala.xyz` | oelala-main | `http://localhost:9000` (MinIO S3 API) |
+| `storage-main.oelala.xyz` | oelala-main | `http://localhost:9001` (MinIO Console) |
+| `storage2.oelala.xyz` | oelala-storage-node2 | `http://localhost:9000` (MinIO S3 API) |
 | `pgdb.oelala.xyz` | oelala-main | `tcp://localhost:5432` (PostgreSQL) |
-| `storage2.oelala.xyz` | oelala-storage-node2 | `http://localhost:7990` (storage node 2) |
 
 ### Tunnel Management
 

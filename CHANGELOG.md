@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-04-15
+
+### Changed
+- **Storage Migration: oelala-storage → MinIO** (PR #128)
+  - Replaced custom Go-based oelala-storage service with MinIO S3-compatible object storage
+  - `storage_client.py` now uses `minio` Python SDK directly (no REST wrapper)
+  - Media, user files, and ComfyUI output served via MinIO with streaming + range requests
+  - Bucket mapping: `oelala-generated`, `oelala-comfyui`, `oelala-avatars`, `oelala-users`
+  - Cloudflare tunnel updated: `storage.oelala.xyz` → MinIO S3 API, `storage-main.oelala.xyz` → MinIO Console
+  - 1.1 GiB / 1,059 objects migrated from oelala-storage to MinIO
+  - Old oelala-storage + node-01 systemd services stopped and disabled
+
+### Added
+- **Dual-node CDN distribution**: Public media (generated, comfyui) served via round-robin across `storage.oelala.xyz` (node 1) + `storage2.oelala.xyz` (node 2)
+  - `StorageClient.public_url()` generates direct CDN URLs with round-robin distribution
+  - `STORAGE_PUBLIC_NODES` env var configures public CDN endpoints
+  - Private buckets (users, avatars) still use presigned URLs via backend proxy
+- **Backblaze B2 offsite backup**: All 4 MinIO buckets mirrored to B2 `oelala-media-eu` via `mc mirror`
+  - Backup script `scripts/minio-backup-mirror.sh` syncs to both node 2 and B2 every 15 min
+
+### Removed
+- **Backblaze B2 as primary storage**: B2 env vars removed from `.env` (B2 now backup-only)
+- **oelala-storage dependency**: Go storage service no longer required; replaced by MinIO
+- **`storage-node-01.oelala.xyz`** tunnel route (defunct)
+
+---
+
 ## [0.11.0] - 2026-04-14
 
 ### Added

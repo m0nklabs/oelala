@@ -34,8 +34,9 @@ RUNPOD_API_KEY = os.environ["RUNPOD_API_KEY"]
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
-STORAGE_API_KEY = os.environ["STORAGE_API_KEY"]
-STORAGE_BASE_URL = "http://localhost:7990"
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "http://localhost:9000")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "")
 
 
 async def fetch_runpod_result(runpod_job_id: str) -> dict:
@@ -74,19 +75,24 @@ def decode_video_from_result(job_data: dict) -> tuple[bytes, str]:
 
 
 async def upload_to_storage(file_bytes: bytes, filename: str) -> str:
-    """Upload the video bytes to oelala-storage. Returns the storage path."""
-    bucket = "generated"
+    """Upload the video bytes to MinIO. Returns the storage path."""
+    from minio import Minio
+    from urllib.parse import urlparse
+    import io
+
+    parsed = urlparse(MINIO_ENDPOINT)
+    endpoint = parsed.netloc or parsed.path
+    secure = parsed.scheme == "https"
+    client = Minio(endpoint, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=secure)
+
+    bucket = "oelala-generated"
     object_path = f"cloud-wan22/{filename}"
-    url = f"{STORAGE_BASE_URL}/{bucket}/{object_path}"
-    headers = {
-        "Authorization": f"Bearer {STORAGE_API_KEY}",
-        "Content-Type": "video/mp4",
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.put(url, content=file_bytes, headers=headers)
-        resp.raise_for_status()
-    storage_path = f"{bucket}/{object_path}"
-    print(f"✅ Uploaded to storage: {storage_path} ({len(file_bytes)} bytes)")
+    client.put_object(
+        bucket, object_path, io.BytesIO(file_bytes), len(file_bytes),
+        content_type="video/mp4",
+    )
+    storage_path = f"generated/{object_path}"
+    print(f"✅ Uploaded to MinIO: {storage_path} ({len(file_bytes)} bytes)")
     return storage_path
 
 
