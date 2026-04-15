@@ -69,10 +69,8 @@ class TestSDXLLocalT2I:
             width=1344,
             height=768,
         )
-        # 1344*768 = 1_032_192 > 1_048_576 — but close
-        # Actually 1344*768 = 1032192 which is > 1024*1024 (1048576)? No, 1032192 < 1048576
-        # So this is standard
-        assert a.cost(req) in (1, 2)
+        # 1344*768 = 1,032,192 < 1,048,576 (1024*1024) → standard cost
+        assert a.cost(req) == 1
 
     def test_build_workflow_basic(self):
         a = SDXLLocalT2IAdapter()

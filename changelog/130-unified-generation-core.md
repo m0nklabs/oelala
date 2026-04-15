@@ -5,5 +5,20 @@
   - `registry.py`: `AdapterRegistry` for registering, finding, and listing adapters
   - `router.py`: `GenerationRouter` for dispatching requests with credit checking, LoRA filtering, and control validation
   - `lora_utils.py`: Extracted LoRA helpers (resolve, sanitize, filter, download list)
-- Qwen Edit cloud adapter (`adapters/cloud/qwen_edit.py`) — first adapter implementation
-- 54 unit tests covering types, registry, router, LoRA utils, and Qwen Edit adapter
+  - `v2_api.py`: V2 API endpoints (`POST /v2/generate`, `GET /v2/adapters`, `POST /v2/estimate`)
+- Cloud adapters (`adapters/cloud/`):
+  - `qwen_edit.py` — Qwen Image Edit 2511 via RunPod
+  - `wan22_i2v.py` — Wan2.2 I2V via RunPod (dual-pass fp8_scaled)
+  - `wan22_t2v.py` — Wan2.2 T2V via RunPod (with pixel-frame budget check)
+  - `ltx23_i2v.py` — LTX-2.3 22B I2V via RunPod (audio-video support)
+  - `ltx23_t2v.py` — LTX-2.3 22B T2V via RunPod (audio-video support)
+- Local T2I adapters (`adapters/local/`):
+  - `t2i_sdxl.py` — SDXL with Power LoRA Loader ×3
+  - `t2i_flux.py` — Flux Dev (guidance scale, no negative prompt)
+  - `t2i_sd15.py` — SD 1.5 with Power LoRA Loader ×6
+  - `t2i_wan22.py` — Wan2.2 T2I via DisTorch2 multi-GPU
+- Local video adapters (`adapters/local/`):
+  - `i2v_wan22_base.py` — Base class with QuantConfig pattern
+  - `i2v_wan22.py` — Q6, DisTorch2, BlockSwap, Ultra I2V variants
+  - `t2v_wan22.py` — Wan2.2 T2V Q6 via DisTorch2
+- 151 unit tests across 5 test files
