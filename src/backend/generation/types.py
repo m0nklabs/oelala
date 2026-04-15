@@ -108,6 +108,10 @@ class GenerationRequest(BaseModel):
     loras: list[LoraStackItem] = Field(default_factory=list)
     lightning: bool = False
     denoise: Optional[float] = None
+    strength: Optional[float] = None  # I2V conditioning strength
+    # Wan2.2 cloud-specific
+    high_noise_steps: Optional[int] = None  # Steps for high noise pass
+    shift: Optional[float] = None  # ModelSamplingSD3 shift
     # Input media
     input_images: list[str] = Field(default_factory=list)  # base64 encoded
     input_video: Optional[str] = None  # base64 encoded
