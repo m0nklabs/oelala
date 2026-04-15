@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 import httpx
+from minio.error import S3Error
 
 from auth import get_current_user, User
 from storage_client import get_client as get_storage_client
@@ -830,11 +831,11 @@ async def get_generated_file(
                 "Cache-Control": "public, max-age=3600",
             },
         )
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except S3Error as e:
+        if e.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
         raise HTTPException(status_code=502, detail="Storage error")
-    except httpx.ConnectError:
+    except Exception:
         raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
@@ -855,11 +856,11 @@ async def get_comfyui_file(
                 "Cache-Control": "public, max-age=3600",
             },
         )
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except S3Error as e:
+        if e.code in ("NoSuchKey", "NoSuchBucket"):
             raise HTTPException(status_code=404, detail="File not found")
         raise HTTPException(status_code=502, detail="Storage error")
-    except httpx.ConnectError:
+    except Exception:
         raise HTTPException(status_code=503, detail="Storage unavailable")
 
 
