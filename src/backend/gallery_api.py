@@ -885,9 +885,7 @@ async def get_published_media_file(media_id: str, request: Request):
             if meta.get("etag"):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
-                headers["Last-Modified"] = format_last_modified(
-                    meta["last_modified"]
-                )
+                headers["Last-Modified"] = format_last_modified(meta["last_modified"])
 
             total_size = meta["size"]
 

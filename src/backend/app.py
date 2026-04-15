@@ -5200,9 +5200,7 @@ async def get_user_media(
             if meta.get("etag"):
                 headers["ETag"] = f'"{meta["etag"]}"'
             if meta.get("last_modified"):
-                headers["Last-Modified"] = format_last_modified(
-                    meta["last_modified"]
-                )
+                headers["Last-Modified"] = format_last_modified(meta["last_modified"])
 
             total_size = meta["size"]
 
