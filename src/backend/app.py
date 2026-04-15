@@ -5223,6 +5223,9 @@ async def get_user_media(
 
                     if parts[0] == "":
                         suffix_length = int(parts[1])
+                        if suffix_length <= 0:
+                            raise ValueError("Suffix byte range must be greater than zero")
+                        suffix_length = min(suffix_length, total_size)
                         range_start = max(total_size - suffix_length, 0)
                         range_end = total_size - 1
                     else:

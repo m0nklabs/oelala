@@ -657,18 +657,20 @@ class MediaService:
                 )
 
                 if resp.status_code == 200:
+                    records = resp.json()
+
                     # File count from Content-Range header (server-side count)
                     content_range = resp.headers.get("content-range", "")
                     if "/" in content_range:
                         try:
                             file_count = int(content_range.split("/")[1])
                         except (ValueError, IndexError):
-                            file_count = len(resp.json())
+                            file_count = len(records)
                     else:
-                        file_count = len(resp.json())
+                        file_count = len(records)
 
                     # Sum size_bytes from the minimal response
-                    for record in resp.json():
+                    for record in records:
                         size = record.get("size_bytes")
                         if size is not None:
                             used_bytes += int(size)
