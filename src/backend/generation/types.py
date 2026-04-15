@@ -127,6 +127,42 @@ class GenerationRequest(BaseModel):
     face_detailer: bool = False
     face_restore: bool = False
     face_id_weight: float = 0.8
+    # Inpainting
+    input_mask: Optional[str] = None  # base64-encoded mask (white=regen)
+    feathering: int = 16
+    # Face swap
+    face_indices: str = "0"  # "0", "0,1", or "-1" for all
+    # Audio / TTS / Music
+    audio_mode: Optional[str] = None  # "tts", "music", "sfx"
+    voice: Optional[str] = None  # TTS voice name
+    audio_style: Optional[str] = None  # Music style
+    duration: Optional[float] = None  # Audio duration seconds
+    speed: Optional[float] = None  # TTS speed
+    pitch: Optional[float] = None  # TTS pitch
+    # Voice clone
+    voice_sample_path: Optional[str] = None
+    # Lip sync
+    lips_expression: float = 1.5
+    inference_steps: Optional[int] = None
+    # V2V
+    v2v_mode: Optional[str] = None  # "style_transfer", "anime", "enhance"
+    preserve_motion: bool = True
+    # Upscale
+    upscale_model: Optional[str] = None
+    upscale_scale: float = 4.0
+    face_enhance: bool = False
+    upscale_preset: Optional[str] = None  # "fast", "balanced", "quality"
+    # Interpolation
+    interpolation_mode: Optional[str] = None  # "fps", "slowmo"
+    target_fps: Optional[int] = None
+    multiplier: Optional[float] = None
+    # Captioning
+    caption_mode: Optional[str] = None  # "brief", "detailed", "tags", etc.
+    detail_level: int = 3
+    include_negative: bool = False
+    include_motion: bool = False
+    frame_interval: Optional[float] = None  # Video caption frame interval
+    max_frames: Optional[int] = None  # Video caption max frames
 
 
 class GenerationResult(BaseModel):

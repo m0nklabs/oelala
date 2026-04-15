@@ -20,5 +20,21 @@
 - Local video adapters (`adapters/local/`):
   - `i2v_wan22_base.py` — Base class with QuantConfig pattern
   - `i2v_wan22.py` — Q6, DisTorch2, BlockSwap, Ultra I2V variants
+  - `i2v_wan22_lightning.py` — Lightning Q4KM fast 4-step I2V
   - `t2v_wan22.py` — Wan2.2 T2V Q6 via DisTorch2
-- 151 unit tests across 5 test files
+- Remaining local adapters (`adapters/local/`):
+  - `i2i_transform.py` — I2I with face features (IP-Adapter FaceID, FaceDetailer, GFPGAN)
+  - `v2v.py` — Video-to-video style transfer via first-frame I2V
+  - `upscale_image.py` — RealESRGAN/SwinIR image upscale
+  - `upscale_video.py` — SeedVR2/RealESRGAN/Lanczos video upscale (preset modes)
+  - `interpolate.py` — RIFE/FILM frame interpolation (fps/slowmo modes)
+  - `face_swap.py` — InsightFace image face swap (non-ComfyUI)
+  - `face_swap_video.py` — InsightFace video face swap (frame-by-frame)
+  - `audio_mmaudio.py` — MMAudio text-to-audio (TTS/music/SFX)
+  - `voice_clone.py` — F5-TTS voice cloning
+  - `lipsync.py` — LatentSync lip sync (forced 25fps)
+  - `inpaint.py` — Masked region inpainting
+  - `caption_image.py` — Image captioning via Guardian vision LLM
+  - `caption_video.py` — Video captioning via frame extraction + VLM
+- Extended `GenerationRequest` with fields for all adapter types (inpainting, face swap, audio, V2V, upscale, interpolation, captioning)
+- 228 unit tests across 6 test files (28 adapters total: 23 local + 5 cloud)
