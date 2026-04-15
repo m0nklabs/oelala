@@ -335,6 +335,37 @@ class StorageClient:
 
         return _stream_ctx()
 
+    def stream_with_metadata(
+        self, bucket: str, key: str
+    ) -> Tuple:
+        """
+        Stream an object and return metadata for proxy responses.
+
+        Unlike ``stream()`` (context manager), this returns a tuple with a
+        self-closing generator suitable for ``StreamingResponse``.
+        The generator closes the MinIO connection when exhausted or GC'd.
+
+        Returns:
+            Tuple of (chunks_iterator, content_type, size, etag, last_modified)
+        """
+        minio_bucket, full_key = self._resolve(bucket, key)
+        resp = self._minio.get_object(minio_bucket, full_key)
+        ct = resp.headers.get("Content-Type", "application/octet-stream")
+        cl = int(resp.headers.get("Content-Length", 0))
+        etag = resp.headers.get("ETag")
+        last_mod = resp.headers.get("Last-Modified")
+
+        def _iter():
+            try:
+                for chunk in resp.stream(amt=8192):
+                    if chunk:
+                        yield chunk
+            finally:
+                resp.close()
+                resp.release_conn()
+
+        return _iter(), ct, cl, etag, last_mod
+
     def get_to_file(self, bucket: str, key: str, path: Path) -> Path:
         """
         Download an object directly to a file.

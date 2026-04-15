@@ -5247,20 +5247,20 @@ async def get_user_media(
                 )
 
         # Full response — stream without buffering (skip stat)
-        with storage.stream(bucket, storage_key) as (
-            chunks, _ct, total_size, etag, last_modified
-        ):
-            if etag:
-                headers["ETag"] = etag
-            if last_modified:
-                headers["Last-Modified"] = last_modified
-            if total_size:
-                headers["Content-Length"] = str(total_size)
-            return StreamingResponse(
-                chunks,
-                media_type=content_type,
-                headers=headers,
-            )
+        chunks, _ct, total_size, etag, last_modified = (
+            storage.stream_with_metadata(bucket, storage_key)
+        )
+        if etag:
+            headers["ETag"] = etag
+        if last_modified:
+            headers["Last-Modified"] = last_modified
+        if total_size:
+            headers["Content-Length"] = str(total_size)
+        return StreamingResponse(
+            chunks,
+            media_type=content_type,
+            headers=headers,
+        )
 
     except Exception as e:
         logger.error(f"Failed to get user media: {e}")

@@ -932,20 +932,20 @@ async def get_published_media_file(media_id: str, request: Request):
                     )
 
             # Full response — stream without buffering (skip stat)
-            with storage.stream(bucket, storage_key) as (
-                chunks, _ct, total_size, etag, last_modified
-            ):
-                if etag:
-                    headers["ETag"] = etag
-                if last_modified:
-                    headers["Last-Modified"] = last_modified
-                if total_size:
-                    headers["Content-Length"] = str(total_size)
-                return StreamingResponse(
-                    chunks,
-                    media_type=content_type,
-                    headers=headers,
-                )
+            chunks, _ct, total_size, etag, last_modified = (
+                storage.stream_with_metadata(bucket, storage_key)
+            )
+            if etag:
+                headers["ETag"] = etag
+            if last_modified:
+                headers["Last-Modified"] = last_modified
+            if total_size:
+                headers["Content-Length"] = str(total_size)
+            return StreamingResponse(
+                chunks,
+                media_type=content_type,
+                headers=headers,
+            )
         except Exception as storage_err:
             debug_log(f"MinIO user media failed: {storage_err}, trying storage buckets")
 
