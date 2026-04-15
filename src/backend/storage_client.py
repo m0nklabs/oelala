@@ -88,8 +88,6 @@ class StorageClient:
             access_key: MinIO access key (overrides MINIO_ACCESS_KEY env)
             secret_key: MinIO secret key (overrides MINIO_SECRET_KEY env)
         """
-        import os
-
         self.base_url = base_url.rstrip("/")
 
         parsed = urlparse(self.base_url)
@@ -787,8 +785,6 @@ def get_client() -> StorageClient:
 
     Falls back to STORAGE_URL / STORAGE_API_KEY for backwards compat.
     """
-    import os
-
     global _default_client
     if _default_client is None:
         endpoint = os.environ.get(
