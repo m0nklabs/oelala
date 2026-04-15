@@ -6,6 +6,7 @@ Used by app.py (_storage_proxy_response) and gallery_api.py to avoid
 duplicating ~40 lines of Range request parsing logic.
 """
 
+from datetime import datetime
 from email.utils import format_datetime
 from typing import Optional, Tuple
 
@@ -71,6 +72,6 @@ def parse_range_header(
     return range_start, range_end
 
 
-def format_last_modified(dt) -> str:
+def format_last_modified(dt: datetime) -> str:
     """Format a datetime for the HTTP Last-Modified header."""
     return format_datetime(dt, usegmt=True)
