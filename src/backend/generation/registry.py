@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from generation.adapter import GenerationAdapter
-from generation.types import ComputeTarget, MediaType, Operation
+from .adapter import GenerationAdapter
+from .types import ComputeTarget, MediaType, Operation
 
 logger = logging.getLogger(__name__)
 

@@ -13,8 +13,8 @@ import os
 import uuid
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -149,8 +149,8 @@ class LTX23CloudT2VAdapter(GenerationAdapter):
             [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
 
-        from generation import lora_utils
-        from generation.lora_utils import sanitize_lora_configs_for_single_stage
+        from ... import lora_utils
+        from ...lora_utils import sanitize_lora_configs_for_single_stage
 
         lora_dicts = sanitize_lora_configs_for_single_stage(lora_dicts)
         cloud_lora_downloads = (
@@ -168,7 +168,6 @@ class LTX23CloudT2VAdapter(GenerationAdapter):
             "compute_target": "cloud",
         }
 
-        credits_used = self.cost(req)
 
         result = await submit_fn(
             workflow=workflow,
@@ -184,7 +183,7 @@ class LTX23CloudT2VAdapter(GenerationAdapter):
             prompt_id=result.get("prompt_id", prompt_id),
             status="queued_cloud",
             compute_target=ComputeTarget.CLOUD,
-            credits_used=credits_used,
+            credits_used=0,  # Router fills this in
             runpod_job_id=result.get("runpod_job_id"),
             adapter_name=self.name,
             meta=result,

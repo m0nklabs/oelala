@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -52,19 +52,14 @@ class InterpolateAdapter(GenerationAdapter):
             allowed_fps=[24, 30, 48, 60, 120],
         )
 
-    def build_workflow(
-        self,
-        req: GenerationRequest,
-        video_name: str = "",
-    ) -> dict:
+    def build_workflow(self, req: GenerationRequest) -> dict:
         """Build RIFE interpolation ComfyUI workflow.
 
-        Args:
-            req: Generation request.
-            video_name: Filename in ComfyUI's input folder (uploaded beforehand).
+        Uses self._uploaded_video_name (set by execute() after upload).
         """
         mode = req.interpolation_mode or "fps"
         multiplier = req.multiplier or 2.0
+        video_name = getattr(self, "_uploaded_video_name", "")
 
         workflow = {
             "1": {
@@ -129,7 +124,8 @@ class InterpolateAdapter(GenerationAdapter):
                 "assuming input_video is already a filename"
             )
 
-        prompt_id = client.queue_prompt(self.build_workflow(req, video_name=video_name))
+        self._uploaded_video_name = video_name
+        prompt_id = client.queue_prompt(self.build_workflow(req))
 
         if not prompt_id:
             raise RuntimeError("Failed to queue interpolation workflow")
@@ -138,7 +134,7 @@ class InterpolateAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={
                 "mode": req.interpolation_mode or "fps",

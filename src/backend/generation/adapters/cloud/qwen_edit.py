@@ -11,8 +11,8 @@ import logging
 import os
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -270,7 +270,7 @@ class QwenEditCloudAdapter(GenerationAdapter):
             [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
 
-        from generation import lora_utils
+        from ... import lora_utils
 
         cloud_lora_downloads = (
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []

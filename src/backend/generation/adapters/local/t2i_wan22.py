@@ -8,10 +8,11 @@ Optimal at 512×512 to 768×768. Very fast with 8 steps.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -101,10 +102,10 @@ class Wan22LocalT2IAdapter(GenerationAdapter):
             raise RuntimeError("Failed to generate Wan22 T2I image")
 
         return GenerationResult(
-            prompt_id=result_path,
+            prompt_id=str(uuid.uuid4()),
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
-            meta={"width": req.width or 512, "height": req.height or 512},
+            meta={"width": req.width or 512, "height": req.height or 512, "result_path": result_path},
         )

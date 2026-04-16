@@ -8,10 +8,11 @@ via InsightFace and remuxes audio with ffmpeg.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -82,10 +83,10 @@ class FaceSwapVideoAdapter(GenerationAdapter):
             raise RuntimeError("Video face swap failed")
 
         return GenerationResult(
-            prompt_id="faceswap-video-sync",
+            prompt_id=str(uuid.uuid4()),
             status="completed",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={"face_indices": req.face_indices},
         )

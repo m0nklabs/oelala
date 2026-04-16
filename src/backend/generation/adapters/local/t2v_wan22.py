@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -122,7 +122,7 @@ class Wan22LocalT2VQ6Adapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={
                 "frames": req.frames or 81,

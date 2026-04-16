@@ -11,8 +11,8 @@ import logging
 import random
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -134,7 +134,7 @@ class FluxLocalT2IAdapter(GenerationAdapter):
                 "class_type": "RandomNoise",
             },
             "9": {
-                "inputs": {"model": ["2", 0], "conditioning": ["3", 0]},
+                "inputs": {"model": ["2", 0], "conditioning": ["12", 0]},
                 "class_type": "BasicGuider",
             },
             "10": {
@@ -189,7 +189,7 @@ class FluxLocalT2IAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={"checkpoint": req.checkpoint or "flux1-dev-fp8.safetensors"},
         )

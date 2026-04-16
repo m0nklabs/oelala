@@ -14,9 +14,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from generation.types import GenerationRequest, GenerationResult
-from generation.registry import AdapterRegistry
-from generation.router import GenerationRouter
+from .types import GenerationRequest, GenerationResult
+from .registry import AdapterRegistry
+from .router import GenerationRouter
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +57,14 @@ def init_v2_api(
 
 
 async def _resolve_user():
-    """Resolve the current user via the injected auth dependency."""
+    """Resolve the current user via the injected auth dependency.
+
+    Auth errors propagate as-is (→ 401) so unauthenticated requests
+    cannot bypass credit checks.  Returns None only when auth is
+    intentionally disabled (_get_current_user_fn is not configured).
+    """
     if _get_current_user_fn is not None:
-        try:
-            return await _get_current_user_fn()
-        except Exception:
-            return None
+        return await _get_current_user_fn()
     return None
 
 
@@ -93,8 +95,8 @@ async def v2_generate(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ V2 generate error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ V2 generate error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal generation error")
 
 
 @router.get("/adapters")

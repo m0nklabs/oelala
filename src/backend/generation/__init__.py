@@ -10,7 +10,7 @@ This package provides:
 - lora_utils: LoRA resolution, filtering, sanitization helpers
 """
 
-from generation.types import (
+from .types import (
     MediaType,
     Operation,
     ComputeTarget,
@@ -20,9 +20,9 @@ from generation.types import (
     GenerationResult,
     LoraStackItem,
 )
-from generation.adapter import GenerationAdapter
-from generation.registry import AdapterRegistry
-from generation.router import GenerationRouter
+from .adapter import GenerationAdapter
+from .registry import AdapterRegistry
+from .router import GenerationRouter
 
 __all__ = [
     "MediaType",

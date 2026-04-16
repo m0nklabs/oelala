@@ -11,8 +11,8 @@ import logging
 import random
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -175,7 +175,7 @@ class SD15LocalT2IAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={"checkpoint": req.checkpoint or "Realistic_Vision_V5.1.safetensors"},
         )

@@ -8,11 +8,12 @@ Supports dual-stage LoRAs (high/low noise models).
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -45,9 +46,11 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
         self,
         submit_to_runpod_fn: Any = None,
         comfyui_client_fn: Any = None,
+        endpoint_id: str | None = None,
     ) -> None:
         self._submit_to_runpod = submit_to_runpod_fn
         self._get_comfyui = comfyui_client_fn
+        self._endpoint_id = endpoint_id
 
     def constraints(self) -> AdapterConstraints:
         return AdapterConstraints(
@@ -117,6 +120,7 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
         progress_callback: ProgressCallback = None,
     ) -> GenerationResult:
         prompt_id = str(uuid.uuid4())
+        endpoint_id = self._endpoint_id or os.getenv("RUNPOD_WAN22_ENDPOINT_ID")
 
         submit_fn = self._submit_to_runpod
         if submit_fn is None:
@@ -148,7 +152,7 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
         lora_dicts = (
             [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
-        from generation import lora_utils
+        from ... import lora_utils
 
         cloud_lora_downloads = (
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
@@ -165,7 +169,6 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
             "compute_target": "cloud",
         }
 
-        credits_used = self.cost(req)
 
         result = await submit_fn(
             workflow=workflow,
@@ -174,13 +177,14 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
             job_info=job_info,
             lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
             prompt_full=req.prompt,
+            endpoint_id=endpoint_id,
         )
 
         return GenerationResult(
             prompt_id=result.get("prompt_id", prompt_id),
             status="queued_cloud",
             compute_target=ComputeTarget.CLOUD,
-            credits_used=credits_used,
+            credits_used=0,  # Router fills this in
             runpod_job_id=result.get("runpod_job_id"),
             adapter_name=self.name,
             meta=result,

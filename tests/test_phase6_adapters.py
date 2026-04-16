@@ -200,7 +200,8 @@ class TestImageUpscale(unittest.TestCase):
             operation=Operation.UPSCALE,
             input_images=["test.png"],
         )
-        wf = a.build_workflow(req, image_name="test.png")
+        a._uploaded_image_name = "test.png"
+        wf = a.build_workflow(req)
         assert wf["2"]["inputs"]["model_name"] == "RealESRGAN_x4plus.pth"
         assert wf["1"]["inputs"]["image"] == "test.png"
 
@@ -211,7 +212,8 @@ class TestImageUpscale(unittest.TestCase):
             input_images=["test.png"],
             upscale_model="SwinIR_x4.pth",
         )
-        wf = a.build_workflow(req, image_name="test.png")
+        a._uploaded_image_name = "test.png"
+        wf = a.build_workflow(req)
         assert wf["2"]["inputs"]["model_name"] == "SwinIR_x4.pth"
 
 
@@ -269,7 +271,8 @@ class TestInterpolate(unittest.TestCase):
             target_type=MediaType.VIDEO,
             input_video="vid.mp4",
         )
-        wf = a.build_workflow(req, video_name="vid.mp4")
+        a._uploaded_video_name = "vid.mp4"
+        wf = a.build_workflow(req)
         # All top-level keys should be numeric string IDs
         assert all(k.isdigit() for k in wf.keys())
         assert wf["1"]["class_type"] == "VHS_LoadVideo"

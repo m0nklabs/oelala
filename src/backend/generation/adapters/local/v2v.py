@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -110,7 +110,7 @@ class V2VStyleTransferAdapter(GenerationAdapter):
             prompt_id=result if isinstance(result, str) else str(result),
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={"v2v_mode": req.v2v_mode or "style_transfer"},
         )

@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -50,15 +50,12 @@ class ImageUpscaleAdapter(GenerationAdapter):
             max_input_images=1,
         )
 
-    def build_workflow(
-        self, req: GenerationRequest, image_name: str = "input.png"
-    ) -> dict:
+    def build_workflow(self, req: GenerationRequest) -> dict:
         """Build ComfyUI upscale workflow.
 
-        Args:
-            req: Generation request.
-            image_name: Filename in ComfyUI's input folder (uploaded beforehand).
+        Uses self._uploaded_image_name (set by execute() after upload).
         """
+        image_name = getattr(self, "_uploaded_image_name", "input.png")
         model = req.upscale_model or "RealESRGAN_x4plus.pth"
 
         workflow = {
@@ -110,7 +107,8 @@ class ImageUpscaleAdapter(GenerationAdapter):
                 "assuming input_images[0] is already a filename"
             )
 
-        workflow = self.build_workflow(req, image_name=image_name)
+        self._uploaded_image_name = image_name
+        workflow = self.build_workflow(req)
         prompt_id = client.queue_prompt(workflow)
 
         if not prompt_id:
@@ -120,7 +118,7 @@ class ImageUpscaleAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={"model": req.upscale_model or "RealESRGAN_x4plus.pth"},
         )

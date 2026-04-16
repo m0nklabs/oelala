@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -56,19 +56,14 @@ class LipSyncAdapter(GenerationAdapter):
             supports_negative_prompt=False,
         )
 
-    def build_workflow(
-        self,
-        req: GenerationRequest,
-        video_name: str = "",
-        audio_name: str = "",
-    ) -> dict:
+    def build_workflow(self, req: GenerationRequest) -> dict:
         """Build LatentSync workflow.
 
-        Args:
-            req: Generation request.
-            video_name: Filename in ComfyUI's input folder (uploaded beforehand).
-            audio_name: Filename in ComfyUI's input folder (uploaded beforehand).
+        Uses self._uploaded_video_name and self._uploaded_audio_name
+        (set by execute() after upload).
         """
+        video_name = getattr(self, "_uploaded_video_name", "")
+        audio_name = getattr(self, "_uploaded_audio_name", "")
         workflow = {
             "1": {
                 "inputs": {
@@ -144,9 +139,9 @@ class LipSyncAdapter(GenerationAdapter):
                 "assuming input_audio is already a filename"
             )
 
-        workflow = self.build_workflow(
-            req, video_name=video_name, audio_name=audio_name
-        )
+        self._uploaded_video_name = video_name
+        self._uploaded_audio_name = audio_name
+        workflow = self.build_workflow(req)
         prompt_id = client.queue_prompt(workflow)
 
         if not prompt_id:
@@ -156,7 +151,7 @@ class LipSyncAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={"lips_expression": req.lips_expression},
         )

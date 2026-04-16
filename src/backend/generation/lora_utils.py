@@ -32,6 +32,11 @@ def resolve_lora_path(name: str) -> tuple[Optional[Path], Optional[str]]:
 
     Returns (full_path, filename) or (None, None) if not found.
     """
+    # Prevent directory traversal from user-supplied names
+    if ".." in name or name.startswith("/"):
+        logger.warning(f"⚠️ Rejected suspicious LoRA name: {name}")
+        return None, None
+
     for base_dir in [LORA_DIR, LORA_SSD_DIR]:
         if not base_dir.exists():
             continue

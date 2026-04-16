@@ -16,16 +16,16 @@ import logging
 import random
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.registry import AdapterRegistry
-from generation.types import (
+from .adapter import GenerationAdapter, ProgressCallback
+from .registry import AdapterRegistry
+from .types import (
     ComputeTarget,
     GenerationRequest,
     GenerationResult,
     LoraFormat,
     MediaType,
 )
-from generation import lora_utils
+from . import lora_utils
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +84,16 @@ class GenerationRouter:
             )
 
         # If multiple candidates, prefer local over cloud (unless cloud requested)
+        # Sort by name for deterministic behaviour regardless of registration order
         if len(candidates) > 1:
-            local = [a for a in candidates if a.compute == ComputeTarget.LOCAL]
-            cloud = [a for a in candidates if a.compute == ComputeTarget.CLOUD]
-            # Return first match (local preferred)
+            local = sorted(
+                [a for a in candidates if a.compute == ComputeTarget.LOCAL],
+                key=lambda a: a.name,
+            )
+            cloud = sorted(
+                [a for a in candidates if a.compute == ComputeTarget.CLOUD],
+                key=lambda a: a.name,
+            )
             return local[0] if local else cloud[0]
 
         return candidates[0]
@@ -101,36 +107,32 @@ class GenerationRouter:
         Returns a (possibly modified) request with defaults applied.
         """
         c = adapter.constraints()
+        updates: dict[str, Any] = {}
 
         # Apply default steps/cfg if not specified
         if req.steps is None:
-            req = req.model_copy(update={"steps": c.default_steps})
+            updates["steps"] = c.default_steps
         if req.cfg is None:
-            req = req.model_copy(update={"cfg": c.default_cfg})
+            updates["cfg"] = c.default_cfg
 
         # Clamp resolution to adapter limits and step
-        updates: dict[str, Any] = {}
         if req.width is not None:
             w = max(c.min_width, min(c.max_width, req.width))
-            w = (w // c.resolution_step) * c.resolution_step
-            updates["width"] = w
+            updates["width"] = (w // c.resolution_step) * c.resolution_step
         if req.height is not None:
             h = max(c.min_height, min(c.max_height, req.height))
-            h = (h // c.resolution_step) * c.resolution_step
-            updates["height"] = h
+            updates["height"] = (h // c.resolution_step) * c.resolution_step
 
-        # Clamp steps
-        if req.steps is not None:
-            updates["steps"] = max(c.min_steps, min(c.max_steps, req.steps))
+        # Clamp steps (use the default we just applied if steps was None)
+        steps = updates.get("steps", req.steps)
+        if steps is not None:
+            updates["steps"] = max(c.min_steps, min(c.max_steps, steps))
 
         # Generate random seed if -1
         if req.seed == -1:
             updates["seed"] = random.randint(0, 2**32 - 1)
 
-        if updates:
-            req = req.model_copy(update=updates)
-
-        return req
+        return req.model_copy(update=updates) if updates else req
 
     def filter_loras(
         self, req: GenerationRequest, adapter: GenerationAdapter
@@ -164,7 +166,7 @@ class GenerationRouter:
             lora_dicts = lora_dicts[: c.max_loras]
 
         # Convert back to LoraStackItem
-        from generation.types import LoraStackItem
+        from .types import LoraStackItem
 
         filtered_loras = [LoraStackItem(**d) for d in lora_dicts]
         return req.model_copy(update={"loras": filtered_loras})

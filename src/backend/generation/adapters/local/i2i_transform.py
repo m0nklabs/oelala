@@ -2,7 +2,7 @@
 I2I Transform adapter — image-to-image with optional face features.
 
 Supports: IP-Adapter FaceID, FaceDetailer, GFPGAN face restore.
-Delegates workflow to ComfyUIClient._build_i2i_workflow().
+Delegates workflow to ComfyUIClient.build_i2i_workflow().
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from generation.adapter import GenerationAdapter, ProgressCallback
-from generation.types import (
+from ...adapter import GenerationAdapter, ProgressCallback
+from ...types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
@@ -61,7 +61,7 @@ class I2ITransformAdapter(GenerationAdapter):
         )
 
     def build_workflow(self, req: GenerationRequest) -> dict:
-        """Stub — I2I workflow built by ComfyUIClient._build_i2i_workflow()."""
+        """Stub — I2I workflow built by ComfyUIClient.build_i2i_workflow()."""
         return {
             "_adapter": self.name,
             "_note": "I2I uses ComfyUIClient._build_i2i_workflow()",
@@ -90,8 +90,8 @@ class I2ITransformAdapter(GenerationAdapter):
 
         client = self._get_comfyui()
 
-        # Delegate to ComfyUI's internal I2I builder
-        workflow = client._build_i2i_workflow(
+        # Delegate to ComfyUI's I2I builder (public API)
+        workflow = client.build_i2i_workflow(
             image_name=req.input_images[0],
             prompt=req.prompt,
             negative_prompt=req.negative_prompt,
@@ -116,7 +116,7 @@ class I2ITransformAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             status="queued_local",
             compute_target=ComputeTarget.LOCAL,
-            credits_used=self.cost(req),
+            credits_used=0,  # Router fills this in
             adapter_name=self.name,
             meta={
                 "face_id": req.face_id,

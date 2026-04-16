@@ -9,7 +9,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, Callable, Awaitable
 
-from generation.types import (
+from .types import (
     AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
