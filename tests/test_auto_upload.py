@@ -5,15 +5,12 @@ Tests job tracking and upload completion hooks.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock
 from pathlib import Path
 import sys
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "backend"))
-
-# Mock storage_client before importing comfyui_client
-sys.modules["storage_client"] = Mock()
 
 from comfyui_client import ComfyUIClient
 

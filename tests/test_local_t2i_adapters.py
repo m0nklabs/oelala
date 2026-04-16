@@ -278,7 +278,7 @@ class TestWan22LocalT2I:
             prompt="test",
         )
         result = await a.execute(req)
-        assert result.status == "queued_local"
+        assert result.status == "completed"
         assert result.adapter_name == "wan22-local-t2i"
         mock.generate_wan22_t2i.assert_called_once()
 

@@ -68,6 +68,7 @@ class TestMediaServiceSignedUrl:
     def test_generate_signed_url_uses_storage_client(self):
         service = MediaService()
         mock_client = MagicMock()
+        mock_client.public_url.return_value = None
         mock_client.presigned_get.return_value = "http://minio:9000/oelala-users/user-abc/videos/test.mp4?X-Amz-Signature=xyz"
         service._storage_client = mock_client
 
@@ -76,6 +77,7 @@ class TestMediaServiceSignedUrl:
         )
 
         assert "X-Amz-Signature" in url
+        mock_client.public_url.assert_called_once_with("users/user-abc", "videos/test.mp4")
         mock_client.presigned_get.assert_called_once_with(
             "users/user-abc", "videos/test.mp4", expires=3600
         )
@@ -83,14 +85,14 @@ class TestMediaServiceSignedUrl:
     def test_generate_signed_url_simple_path(self):
         service = MediaService()
         mock_client = MagicMock()
-        mock_client.presigned_get.return_value = "http://minio:9000/oelala-generated/video.mp4?sig=abc"
+        mock_client.public_url.return_value = "https://storage.oelala.xyz/generated/video.mp4"
         service._storage_client = mock_client
 
         url = service.generate_signed_url("generated/video.mp4", expires_in=7200)
 
-        mock_client.presigned_get.assert_called_once_with(
-            "generated", "video.mp4", expires=7200
-        )
+        assert url == "https://storage.oelala.xyz/generated/video.mp4"
+        mock_client.public_url.assert_called_once_with("generated", "video.mp4")
+        mock_client.presigned_get.assert_not_called()
 
 
 class TestMediaServiceQuota:

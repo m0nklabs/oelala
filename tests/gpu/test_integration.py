@@ -161,8 +161,9 @@ class TestAdvancedVideoEndpoints:
         )
 
         # Should either accept or reject gracefully, not crash
-        # Endpoint exists if we get any of these status codes
-        assert resp.status_code in [200, 400, 422, 500, 503]
+        # Endpoint exists if we get any of these status codes.
+        # 401 is valid when auth is required on the backend.
+        assert resp.status_code in [200, 400, 401, 422, 500, 503]
 
         # If successful, check response structure
         if resp.status_code == 200:
@@ -198,8 +199,9 @@ class TestAdvancedVideoEndpoints:
             timeout=10
         )
 
-        # Should either accept or reject gracefully
-        assert resp.status_code in [200, 400, 422, 500, 503]
+        # Should either accept or reject gracefully.
+        # 401 is valid when auth is required on the backend.
+        assert resp.status_code in [200, 400, 401, 422, 500, 503]
 
         # If successful, check response structure
         if resp.status_code == 200:
@@ -220,8 +222,9 @@ class TestAdvancedVideoEndpoints:
             timeout=10
         )
 
-        # Should at least parse the request
-        assert resp.status_code in [200, 400, 422, 500, 503]
+        # Should at least parse the request.
+        # 401 is valid when auth is required on the backend.
+        assert resp.status_code in [200, 400, 401, 422, 500, 503]
 
     def test_interpolate_video_validates_model_param(self):
         """Interpolate endpoint should validate model parameter."""
@@ -240,5 +243,6 @@ class TestAdvancedVideoEndpoints:
             timeout=10
         )
 
-        # Should at least parse the request
-        assert resp.status_code in [200, 400, 422, 500, 503]
+        # Should at least parse the request.
+        # 401 is valid when auth is required on the backend.
+        assert resp.status_code in [200, 400, 401, 422, 500, 503]

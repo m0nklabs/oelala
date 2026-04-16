@@ -45,7 +45,8 @@ class TestWebSocketManager:
         manager = WebSocketManager()
 
         manager.register_job("job123", user_id="user1")
-        assert manager.job_ownership["job123"] == "user1"
+        assert manager.job_ownership["job123"]["user_id"] == "user1"
+        assert manager.job_ownership["job123"]["job_type"] == "generation"
 
         manager.unregister_job("job123")
         assert "job123" not in manager.job_ownership
