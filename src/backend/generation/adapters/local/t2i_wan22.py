@@ -107,5 +107,9 @@ class Wan22LocalT2IAdapter(GenerationAdapter):
             compute_target=ComputeTarget.LOCAL,
             credits_used=0,  # Router fills this in
             adapter_name=self.name,
-            meta={"width": req.width or 512, "height": req.height or 512, "result_path": result_path},
+            meta={
+                "width": req.width or 512,
+                "height": req.height or 512,
+                "result_path": result_path,
+            },
         )

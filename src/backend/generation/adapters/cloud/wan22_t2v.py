@@ -169,7 +169,6 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
             "compute_target": "cloud",
         }
 
-
         result = await submit_fn(
             workflow=workflow,
             user_id="adapter",
