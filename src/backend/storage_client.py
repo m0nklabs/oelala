@@ -88,8 +88,6 @@ class StorageClient:
             access_key: MinIO access key (overrides MINIO_ACCESS_KEY env)
             secret_key: MinIO secret key (overrides MINIO_SECRET_KEY env)
         """
-        import os
-
         self.base_url = base_url.rstrip("/")
 
         parsed = urlparse(self.base_url)
@@ -112,7 +110,9 @@ class StorageClient:
         self._storage_nodes: List[str] = [
             n.strip().rstrip("/") for n in nodes_str.split(",") if n.strip()
         ]
-        self._node_cycle = itertools.cycle(self._storage_nodes) if self._storage_nodes else None
+        self._node_cycle = (
+            itertools.cycle(self._storage_nodes) if self._storage_nodes else None
+        )
 
     def close(self):
         """Close the client (no-op for MinIO SDK, kept for API compat)."""
@@ -787,8 +787,6 @@ def get_client() -> StorageClient:
 
     Falls back to STORAGE_URL / STORAGE_API_KEY for backwards compat.
     """
-    import os
-
     global _default_client
     if _default_client is None:
         endpoint = os.environ.get(

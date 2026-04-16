@@ -1,0 +1,43 @@
+### Added
+- Unified Generation Core foundation (`src/backend/generation/` package)
+  - `types.py`: `MediaType`, `Operation`, `ComputeTarget`, `LoraFormat`, `AdapterConstraints`, `GenerationRequest`, `GenerationResult`, `LoraStackItem` data models
+  - `adapter.py`: `GenerationAdapter` abstract base class for all generation adapters
+  - `registry.py`: `AdapterRegistry` for registering, finding, and listing adapters
+  - `router.py`: `GenerationRouter` for dispatching requests with credit checking, LoRA filtering, and control validation
+  - `lora_utils.py`: Extracted LoRA helpers (resolve, sanitize, filter, download list)
+  - `v2_api.py`: V2 API endpoints (`POST /v2/generate`, `GET /v2/adapters`, `POST /v2/estimate`)
+- Cloud adapters (`adapters/cloud/`):
+  - `qwen_edit.py` — Qwen Image Edit 2511 via RunPod
+  - `wan22_i2v.py` — Wan2.2 I2V via RunPod (dual-pass fp8_scaled)
+  - `wan22_t2v.py` — Wan2.2 T2V via RunPod (with pixel-frame budget check)
+  - `ltx23_i2v.py` — LTX-2.3 22B I2V via RunPod (audio-video support)
+  - `ltx23_t2v.py` — LTX-2.3 22B T2V via RunPod (audio-video support)
+- Local T2I adapters (`adapters/local/`):
+  - `t2i_sdxl.py` — SDXL with Power LoRA Loader ×3
+  - `t2i_flux.py` — Flux Dev (guidance scale, no negative prompt)
+  - `t2i_sd15.py` — SD 1.5 with Power LoRA Loader ×6
+  - `t2i_wan22.py` — Wan2.2 T2I via DisTorch2 multi-GPU
+- Local video adapters (`adapters/local/`):
+  - `i2v_wan22_base.py` — Base class with QuantConfig pattern
+  - `i2v_wan22.py` — Q6, DisTorch2, BlockSwap, Ultra I2V variants
+  - `i2v_wan22_lightning.py` — Lightning Q4KM fast 4-step I2V
+  - `t2v_wan22.py` — Wan2.2 T2V Q6 via DisTorch2
+- Remaining local adapters (`adapters/local/`):
+  - `i2i_transform.py` — I2I with face features (IP-Adapter FaceID, FaceDetailer, GFPGAN)
+  - `v2v.py` — Video-to-video style transfer via first-frame I2V
+  - `upscale_image.py` — RealESRGAN/SwinIR image upscale
+  - `upscale_video.py` — SeedVR2/RealESRGAN/Lanczos video upscale (preset modes)
+  - `interpolate.py` — RIFE/FILM frame interpolation (fps/slowmo modes)
+  - `face_swap.py` — InsightFace image face swap (non-ComfyUI)
+  - `face_swap_video.py` — InsightFace video face swap (frame-by-frame)
+  - `audio_mmaudio.py` — MMAudio text-to-audio (TTS/music/SFX)
+  - `voice_clone.py` — F5-TTS voice cloning
+  - `lipsync.py` — LatentSync lip sync (forced 25fps)
+  - `inpaint.py` — Masked region inpainting
+  - `caption_image.py` — Image captioning via Guardian vision LLM
+  - `caption_video.py` — Video captioning via frame extraction + VLM
+- Extended `GenerationRequest` with fields for all adapter types (inpainting, face swap, audio, V2V, upscale, interpolation, captioning)
+- 228 unit tests across 6 test files (28 adapters total: 23 local + 5 cloud)
+- Frontend hooks (`src/frontend/src/hooks/`):
+  - `useGeneration.js` — Unified generation hook: POST to `/v2/generate`, credit estimation via `/v2/estimate`, abort support, insufficient-credits event dispatch
+  - `useAdapterInfo.js` — Fetch + cache `/v2/adapters` with session-storage TTL, per-adapter lookup, filtering by operation/output_type/compute/model_family, constraints access
