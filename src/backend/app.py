@@ -648,6 +648,11 @@ from tool_profiles_api import router as tool_profiles_router
 
 app.include_router(tool_profiles_router)  # Tool settings at /api/settings/*
 
+# V2 Unified Generation API
+from src.backend.generation.v2_api import router as v2_generation_router
+
+app.include_router(v2_generation_router)  # V2 generation at /v2/*
+
 # Create directories
 UPLOAD_DIR = Path("/tmp/oelala_uploads")
 OUTPUT_DIR = Path("/tmp/oelala_generated")
@@ -1183,6 +1188,32 @@ async def startup_event():
         logger.info("☁️ Background cloud job poller started")
     else:
         logger.info("☁️ Cloud job poller skipped (RunPod not available)")
+
+    # ── V2 Unified Generation Core ──────────────────────────────
+    try:
+        from src.backend.generation.factory import create_registry
+        from src.backend.generation.router import GenerationRouter
+        from src.backend.generation.v2_api import init_v2_api
+
+        v2_registry = create_registry(
+            comfyui_client_fn=get_comfyui_client,
+            submit_to_runpod_fn=_submit_to_runpod if _runpod else None,
+            face_service_mod=face_service,
+            runpod_endpoint_wan22=os.getenv("RUNPOD_ENDPOINT_ID"),
+            runpod_endpoint_ltx23=os.getenv("RUNPOD_LTX23_ENDPOINT_ID"),
+            runpod_endpoint_qwen=os.getenv("RUNPOD_QWEN_ENDPOINT_ID"),
+        )
+        v2_gen_router = GenerationRouter(v2_registry)
+        init_v2_api(
+            registry=v2_registry,
+            gen_router=v2_gen_router,
+            get_current_user=get_current_user,
+            check_credits=check_credits,
+            deduct_credits=deduct_credits,
+        )
+        logger.info(f"🚀 V2 Generation API ready ({len(v2_registry)} adapters)")
+    except Exception as e:
+        logger.error(f"❌ V2 Generation API failed to initialize: {e}", exc_info=True)
 
 
 @app.on_event("shutdown")

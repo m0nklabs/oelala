@@ -23,6 +23,7 @@ from .types import (
 from .adapter import GenerationAdapter
 from .registry import AdapterRegistry
 from .router import GenerationRouter
+from .factory import create_registry
 
 __all__ = [
     "MediaType",
@@ -36,4 +37,5 @@ __all__ = [
     "GenerationAdapter",
     "AdapterRegistry",
     "GenerationRouter",
+    "create_registry",
 ]

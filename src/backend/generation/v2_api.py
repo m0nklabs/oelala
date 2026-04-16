@@ -10,9 +10,10 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .types import GenerationRequest, GenerationResult
 from .registry import AdapterRegistry
@@ -28,6 +29,7 @@ _router: GenerationRouter | None = None
 _check_credits_fn: Any = None
 _deduct_credits_fn: Any = None
 _get_current_user_fn: Any = None
+_security = HTTPBearer(auto_error=False)
 
 
 def init_v2_api(
@@ -56,15 +58,18 @@ def init_v2_api(
     logger.info(f"🚀 V2 Generation API initialized ({len(registry)} adapters)")
 
 
-async def _resolve_user():
+async def _resolve_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+):
     """Resolve the current user via the injected auth dependency.
 
-    Auth errors propagate as-is (→ 401) so unauthenticated requests
-    cannot bypass credit checks.  Returns None only when auth is
-    intentionally disabled (_get_current_user_fn is not configured).
+    Manually resolves the HTTPBearer sub-dependency and delegates
+    to the stored get_current_user function from auth.py.
+    Auth errors propagate as-is (→ 401).
     """
     if _get_current_user_fn is not None:
-        return await _get_current_user_fn()
+        return await _get_current_user_fn(request, credentials)
     return None
 
 
