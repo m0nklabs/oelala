@@ -56,19 +56,30 @@ class LipSyncAdapter(GenerationAdapter):
             supports_negative_prompt=False,
         )
 
-    def build_workflow(self, req: GenerationRequest) -> dict:
-        """Build LatentSync workflow."""
+    def build_workflow(
+        self,
+        req: GenerationRequest,
+        video_name: str = "",
+        audio_name: str = "",
+    ) -> dict:
+        """Build LatentSync workflow.
+
+        Args:
+            req: Generation request.
+            video_name: Filename in ComfyUI's input folder (uploaded beforehand).
+            audio_name: Filename in ComfyUI's input folder (uploaded beforehand).
+        """
         workflow = {
             "1": {
                 "inputs": {
-                    "video": req.input_video or "",
+                    "video": video_name,
                     "force_rate": 25,
                     "force_size": "Disabled",
                 },
                 "class_type": "VHS_LoadVideo",
             },
             "2": {
-                "inputs": {"audio": req.input_audio or ""},
+                "inputs": {"audio": audio_name},
                 "class_type": "LoadAudio",
             },
             "3": {
@@ -111,7 +122,29 @@ class LipSyncAdapter(GenerationAdapter):
             raise ValueError("Lip sync requires input audio")
 
         client = self._get_comfyui()
-        workflow = self.build_workflow(req)
+
+        # Upload video/audio to ComfyUI input folder and get filenames back.
+        # Falls back to raw value if upload methods are not available
+        # (e.g. when the inputs are already filenames on disk).
+        video_name = req.input_video
+        if hasattr(client, "upload_video_from_b64"):
+            video_name = client.upload_video_from_b64(req.input_video)
+        else:
+            logger.warning(
+                "⚠️ ComfyUI client has no upload_video_from_b64 — "
+                "assuming input_video is already a filename"
+            )
+
+        audio_name = req.input_audio
+        if hasattr(client, "upload_audio_from_b64"):
+            audio_name = client.upload_audio_from_b64(req.input_audio)
+        else:
+            logger.warning(
+                "⚠️ ComfyUI client has no upload_audio_from_b64 — "
+                "assuming input_audio is already a filename"
+            )
+
+        workflow = self.build_workflow(req, video_name=video_name, audio_name=audio_name)
         prompt_id = client.queue_prompt(workflow)
 
         if not prompt_id:

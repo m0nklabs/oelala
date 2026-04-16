@@ -200,8 +200,9 @@ class TestImageUpscale(unittest.TestCase):
             operation=Operation.UPSCALE,
             input_images=["test.png"],
         )
-        wf = a.build_workflow(req)
+        wf = a.build_workflow(req, image_name="test.png")
         assert wf["2"]["inputs"]["model_name"] == "RealESRGAN_x4plus.pth"
+        assert wf["1"]["inputs"]["image"] == "test.png"
 
     def test_build_workflow_custom_model(self):
         a = ImageUpscaleAdapter()
@@ -210,7 +211,7 @@ class TestImageUpscale(unittest.TestCase):
             input_images=["test.png"],
             upscale_model="SwinIR_x4.pth",
         )
-        wf = a.build_workflow(req)
+        wf = a.build_workflow(req, image_name="test.png")
         assert wf["2"]["inputs"]["model_name"] == "SwinIR_x4.pth"
 
 
@@ -260,6 +261,20 @@ class TestInterpolate(unittest.TestCase):
         c = InterpolateAdapter().constraints()
         assert 60 in c.allowed_fps
         assert 120 in c.allowed_fps
+
+    def test_build_workflow_has_numeric_keys(self):
+        a = InterpolateAdapter()
+        req = _make_req(
+            operation=Operation.INTERPOLATE,
+            target_type=MediaType.VIDEO,
+            input_video="vid.mp4",
+        )
+        wf = a.build_workflow(req, video_name="vid.mp4")
+        # All top-level keys should be numeric string IDs
+        assert all(k.isdigit() for k in wf.keys())
+        assert wf["1"]["class_type"] == "VHS_LoadVideo"
+        assert wf["2"]["class_type"] == "RIFE VFI"
+        assert wf["3"]["class_type"] == "VHS_VideoCombine"
 
 
 # ── Face Swap Image ──────────────────────────────────────────

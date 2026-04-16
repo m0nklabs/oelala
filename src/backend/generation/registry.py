@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class AdapterRegistry:
-    """Thread-safe registry for generation adapters."""
+    """Registry for generation adapters. Populated at startup, read-only after."""
 
     def __init__(self) -> None:
         self._adapters: dict[str, GenerationAdapter] = {}

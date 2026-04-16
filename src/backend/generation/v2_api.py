@@ -56,10 +56,20 @@ def init_v2_api(
     logger.info(f"🚀 V2 Generation API initialized ({len(registry)} adapters)")
 
 
+async def _resolve_user():
+    """Resolve the current user via the injected auth dependency."""
+    if _get_current_user_fn is not None:
+        try:
+            return await _get_current_user_fn()
+        except Exception:
+            return None
+    return None
+
+
 @router.post("/generate", response_model=GenerationResult)
 async def v2_generate(
     req: GenerationRequest,
-    user: Any = Depends(lambda: None),
+    user: Any = Depends(_resolve_user),
 ):
     """
     Unified generation endpoint.

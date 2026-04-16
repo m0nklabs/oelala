@@ -114,6 +114,12 @@ class TestWan22CloudI2V:
         assert result.adapter_name == "wan22-cloud-i2v"
         assert result.runpod_job_id == "rp-123"
         mock_submit.assert_called_once()
+        # Verify images dict uses a proper filename key, not base64 data
+        call_kwargs = mock_submit.call_args
+        images = call_kwargs.kwargs.get("images") or call_kwargs[1].get("images")
+        assert images is not None
+        for key in images:
+            assert key == "input.png", f"Expected filename key, got base64 data: {key[:20]}..."
 
     @pytest.mark.asyncio
     async def test_execute_no_image_raises(self):
@@ -303,6 +309,12 @@ class TestLTX23CloudI2V:
             result = await adapter.execute(req)
             assert result.status == "queued_cloud"
             assert result.adapter_name == "ltx23-cloud-i2v"
+            # Verify images dict uses a proper filename key, not base64 data
+            call_kwargs = mock_submit.call_args
+            images = call_kwargs.kwargs.get("images") or call_kwargs[1].get("images")
+            assert images is not None
+            for key in images:
+                assert key == "input.png", f"Expected filename key, got: {key[:20]}..."
 
     @pytest.mark.asyncio
     async def test_execute_no_endpoint_raises(self):

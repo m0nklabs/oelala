@@ -164,7 +164,7 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
         )
 
         input_images_b64 = (
-            {req.input_images[0]: req.input_images[0]}
+            {"input.png": req.input_images[0]}
             if len(req.input_images) > 0
             else None
         )

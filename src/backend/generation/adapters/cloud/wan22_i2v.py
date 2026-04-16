@@ -157,9 +157,9 @@ class Wan22CloudI2VAdapter(GenerationAdapter):
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
         )
 
-        # Images dict for RunPod (first entry is the input image as b64)
+        # Images dict for RunPod (filename -> base64 image content)
         input_images_b64 = (
-            {req.input_images[0]: req.input_images[0]}
+            {"input.png": req.input_images[0]}
             if len(req.input_images) > 0
             else None
         )

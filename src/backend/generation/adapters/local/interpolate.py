@@ -52,13 +52,54 @@ class InterpolateAdapter(GenerationAdapter):
             allowed_fps=[24, 30, 48, 60, 120],
         )
 
-    def build_workflow(self, req: GenerationRequest) -> dict:
-        """Build RIFE interpolation ComfyUI workflow."""
-        return {
-            "_adapter": self.name,
-            "_mode": req.interpolation_mode or "fps",
-            "_target_fps": req.target_fps or 60,
+    def build_workflow(
+        self,
+        req: GenerationRequest,
+        video_name: str = "",
+    ) -> dict:
+        """Build RIFE interpolation ComfyUI workflow.
+
+        Args:
+            req: Generation request.
+            video_name: Filename in ComfyUI's input folder (uploaded beforehand).
+        """
+        mode = req.interpolation_mode or "fps"
+        multiplier = req.multiplier or 2.0
+
+        workflow = {
+            "1": {
+                "inputs": {
+                    "video": video_name,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                },
+                "class_type": "VHS_LoadVideo",
+            },
+            "2": {
+                "inputs": {
+                    "ckpt_name": "rife49.pth",
+                    "clear_cache_after_n_frames": 10,
+                    "multiplier": int(multiplier),
+                    "fast_mode": True,
+                    "ensemble": True,
+                    "scale_factor": 1.0,
+                    "frames": ["1", 0],
+                },
+                "class_type": "RIFE VFI",
+            },
+            "3": {
+                "inputs": {
+                    "frame_rate": req.target_fps or 60 if mode == "fps" else 30,
+                    "loop_count": 0,
+                    "filename_prefix": "oelala_interpolated",
+                    "format": "video/h264-mp4",
+                    "images": ["2", 0],
+                },
+                "class_type": "VHS_VideoCombine",
+            },
         }
+
+        return workflow
 
     def cost(self, req: GenerationRequest) -> int:
         return 3
@@ -75,7 +116,20 @@ class InterpolateAdapter(GenerationAdapter):
             raise ValueError("Interpolation requires an input video")
 
         client = self._get_comfyui()
-        prompt_id = client.queue_prompt(self.build_workflow(req))
+
+        # Upload video to ComfyUI input folder and get filename back.
+        # Falls back to raw value if upload method is not available
+        # (e.g. when the input is already a filename on disk).
+        video_name = req.input_video
+        if hasattr(client, "upload_video_from_b64"):
+            video_name = client.upload_video_from_b64(req.input_video)
+        else:
+            logger.warning(
+                "⚠️ ComfyUI client has no upload_video_from_b64 — "
+                "assuming input_video is already a filename"
+            )
+
+        prompt_id = client.queue_prompt(self.build_workflow(req, video_name=video_name))
 
         if not prompt_id:
             raise RuntimeError("Failed to queue interpolation workflow")

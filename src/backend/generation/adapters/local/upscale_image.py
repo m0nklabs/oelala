@@ -50,14 +50,19 @@ class ImageUpscaleAdapter(GenerationAdapter):
             max_input_images=1,
         )
 
-    def build_workflow(self, req: GenerationRequest) -> dict:
-        """Build ComfyUI upscale workflow."""
+    def build_workflow(self, req: GenerationRequest, image_name: str = "input.png") -> dict:
+        """Build ComfyUI upscale workflow.
+
+        Args:
+            req: Generation request.
+            image_name: Filename in ComfyUI's input folder (uploaded beforehand).
+        """
         model = req.upscale_model or "RealESRGAN_x4plus.pth"
 
         workflow = {
             "1": {
                 "inputs": {
-                    "image": req.input_images[0] if req.input_images else "input.png"
+                    "image": image_name
                 },
                 "class_type": "LoadImage",
             },
@@ -91,8 +96,21 @@ class ImageUpscaleAdapter(GenerationAdapter):
         if not req.input_images:
             raise ValueError("Image upscale requires an input image")
 
-        workflow = self.build_workflow(req)
         client = self._get_comfyui()
+
+        # Upload the input image to ComfyUI and get a filename back.
+        # Falls back to raw value if upload method is not available
+        # (e.g. when the image is already a filename on disk).
+        image_name = req.input_images[0]
+        if hasattr(client, "upload_image_from_b64"):
+            image_name = client.upload_image_from_b64(req.input_images[0])
+        else:
+            logger.warning(
+                "⚠️ ComfyUI client has no upload_image_from_b64 — "
+                "assuming input_images[0] is already a filename"
+            )
+
+        workflow = self.build_workflow(req, image_name=image_name)
         prompt_id = client.queue_prompt(workflow)
 
         if not prompt_id:
