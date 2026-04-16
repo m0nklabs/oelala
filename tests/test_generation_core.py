@@ -1047,3 +1047,235 @@ class TestRouterUploadLocalImages:
         assert result.input_images == ["result.png"]
         # The data URI prefix should be stripped
         assert not captured_calls[0].startswith("data:")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# V1 → V2 Compatibility Layer Tests
+# ═══════════════════════════════════════════════════════════════════
+
+
+from generation.v1_compat import (
+    form_to_generation_request,
+    generation_result_to_v1_response,
+    _parse_loras,
+)
+
+
+class TestParseLoras:
+    """Test LoRA config parsing from V1 JSON string format."""
+
+    def test_parse_json_string(self):
+        result = _parse_loras('[{"name": "my_lora.safetensors", "strength": 0.8}]')
+        assert len(result) == 1
+        assert result[0].name == "my_lora.safetensors"
+        assert result[0].strength == 0.8
+
+    def test_parse_list_of_dicts(self):
+        result = _parse_loras([{"name": "a.safetensors"}, {"name": "b.safetensors", "strength": 0.5}])
+        assert len(result) == 2
+        assert result[1].strength == 0.5
+
+    def test_parse_empty_string(self):
+        assert _parse_loras("") == []
+        assert _parse_loras("[]") == []
+
+    def test_parse_none(self):
+        assert _parse_loras(None) == []
+
+    def test_parse_invalid_json(self):
+        assert _parse_loras("not-json{") == []
+
+    def test_skip_entries_without_name(self):
+        result = _parse_loras('[{"name": ""}, {"name": "valid.safetensors"}]')
+        assert len(result) == 1
+        assert result[0].name == "valid.safetensors"
+
+    def test_dual_stage_fields(self):
+        result = _parse_loras('[{"name": "wan_lora", "strength": 0.7, "high": "high.safetensors", "low": "low.safetensors"}]')
+        assert result[0].high == "high.safetensors"
+        assert result[0].low == "low.safetensors"
+
+
+class TestFormToGenerationRequest:
+    """Test V1 form → V2 GenerationRequest conversion."""
+
+    @pytest.mark.asyncio
+    async def test_basic_t2i_form(self):
+        req = await form_to_generation_request(
+            form={
+                "prompt": "a sunset over mountains",
+                "negative_prompt": "ugly, blurry",
+                "steps": 30,
+                "cfg": 7.5,
+                "seed": 42,
+                "aspect_ratio": "1:1",
+                "checkpoint": "model.safetensors",
+            },
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            adapter_hint="sdxl-local-t2i",
+        )
+        assert req.operation == Operation.GENERATE
+        assert req.target_type == MediaType.IMAGE
+        assert req.adapter_hint == "sdxl-local-t2i"
+        assert req.prompt == "a sunset over mountains"
+        assert req.negative_prompt == "ugly, blurry"
+        assert req.steps == 30
+        assert req.cfg == 7.5
+        assert req.seed == 42
+        assert req.checkpoint == "model.safetensors"
+
+    @pytest.mark.asyncio
+    async def test_field_aliases(self):
+        """V1 field names like num_frames, sampler_name get mapped to V2 names."""
+        req = await form_to_generation_request(
+            form={
+                "prompt": "test",
+                "num_frames": 81,
+                "sampler_name": "euler",
+                "guidance_scale": 4.5,
+            },
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+        )
+        assert req.frames == 81
+        assert req.sampler == "euler"
+        assert req.cfg == 4.5
+
+    @pytest.mark.asyncio
+    async def test_lora_configs_json_string(self):
+        req = await form_to_generation_request(
+            form={
+                "prompt": "test",
+                "lora_configs": '[{"name": "style.safetensors", "strength": 0.6}]',
+            },
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+        )
+        assert len(req.loras) == 1
+        assert req.loras[0].name == "style.safetensors"
+        assert req.loras[0].strength == 0.6
+
+    @pytest.mark.asyncio
+    async def test_audio_form(self):
+        req = await form_to_generation_request(
+            form={
+                "text": "Hello world",
+                "mode": "tts",
+                "voice": "nova",
+                "duration": 10,
+            },
+            operation=Operation.GENERATE,
+            target_type=MediaType.AUDIO,
+            adapter_hint="local-mmaudio",
+        )
+        assert req.prompt == "Hello world"
+        assert req.audio_mode == "tts"
+        assert req.voice == "nova"
+        assert req.duration == 10
+
+    @pytest.mark.asyncio
+    async def test_none_values_skipped(self):
+        req = await form_to_generation_request(
+            form={"prompt": "test", "steps": None, "cfg": None},
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+        )
+        assert req.steps is None
+        assert req.cfg is None
+
+    @pytest.mark.asyncio
+    async def test_unknown_fields_ignored(self):
+        req = await form_to_generation_request(
+            form={"prompt": "test", "unknown_field_xyz": "value"},
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+        )
+        assert req.prompt == "test"
+
+    @pytest.mark.asyncio
+    async def test_file_upload_to_input_images(self):
+        """Uploaded image files become base64 input_images."""
+        mock_file = AsyncMock(spec=UploadFile)
+        mock_file.read.return_value = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+        req = await form_to_generation_request(
+            form={"prompt": "test"},
+            files={"image": mock_file},
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+        )
+        assert len(req.input_images) == 1
+        assert len(req.input_images[0]) > 10  # base64 string
+
+    @pytest.mark.asyncio
+    async def test_video_upload(self):
+        mock_file = AsyncMock(spec=UploadFile)
+        mock_file.read.return_value = b"\x00" * 50
+        req = await form_to_generation_request(
+            form={"prompt": "test"},
+            files={"video": mock_file},
+            operation=Operation.TRANSFORM,
+            target_type=MediaType.VIDEO,
+        )
+        assert req.input_video is not None
+        assert len(req.input_video) > 5
+
+
+class TestGenerationResultToV1Response:
+    """Test V2 GenerationResult → V1 response dict conversion."""
+
+    def test_standard_queued_response(self):
+        result = GenerationResult(
+            prompt_id="abc123",
+            status="queued_local",
+            compute_target=ComputeTarget.LOCAL,
+            credits_used=5,
+            adapter_name="sdxl-local-t2i",
+            meta={"width": 1024, "height": 1024},
+        )
+        resp = generation_result_to_v1_response(result)
+        assert resp["status"] == "queued"
+        assert resp["prompt_id"] == "abc123"
+        assert resp["job_id"] == "abc123"
+        assert resp["credits_used"] == 5
+        assert resp["meta"]["width"] == 1024
+
+    def test_cloud_response_includes_runpod_id(self):
+        result = GenerationResult(
+            prompt_id="xyz789",
+            status="queued_cloud",
+            compute_target=ComputeTarget.CLOUD,
+            credits_used=10,
+            runpod_job_id="rp-abc-123",
+            adapter_name="wan22-cloud-i2v",
+            meta={},
+        )
+        resp = generation_result_to_v1_response(result, v1_format="cloud")
+        assert resp["status"] == "queued_cloud"
+        assert resp["runpod_job_id"] == "rp-abc-123"
+
+    def test_completed_status_mapping(self):
+        result = GenerationResult(
+            prompt_id="done1",
+            status="completed",
+            compute_target=ComputeTarget.LOCAL,
+            credits_used=3,
+            adapter_name="local-mmaudio",
+        )
+        resp = generation_result_to_v1_response(result)
+        assert resp["status"] == "completed"
+
+    def test_no_meta(self):
+        result = GenerationResult(
+            prompt_id="p1",
+            status="queued_local",
+            compute_target=ComputeTarget.LOCAL,
+            credits_used=2,
+            adapter_name="test",
+        )
+        resp = generation_result_to_v1_response(result)
+        # Empty meta dict still present
+        assert "meta" not in resp or resp["meta"] == {}
+
+
+from fastapi import UploadFile

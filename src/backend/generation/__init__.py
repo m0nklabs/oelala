@@ -24,6 +24,7 @@ from .adapter import GenerationAdapter
 from .registry import AdapterRegistry
 from .router import GenerationRouter, resolve_resolution, normalize_frame_count
 from .factory import create_registry
+from .v1_compat import form_to_generation_request, generation_result_to_v1_response
 
 __all__ = [
     "MediaType",
@@ -40,4 +41,6 @@ __all__ = [
     "resolve_resolution",
     "normalize_frame_count",
     "create_registry",
+    "form_to_generation_request",
+    "generation_result_to_v1_response",
 ]
