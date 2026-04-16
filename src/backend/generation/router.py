@@ -3,18 +3,22 @@ GenerationRouter — dispatches GenerationRequests to the correct adapter.
 
 Handles:
 1. Adapter resolution (by hint or auto-match)
-2. Control validation against adapter.constraints()
-3. LoRA filtering by model compatibility
-4. Credit check + deduction
-5. Adapter execution
-6. Job tracking
+2. Resolution string → pixel mapping
+3. Frame count normalization (4k+1 for Wan2.2)
+4. ComfyUI image pre-upload for local adapters
+5. Control validation against adapter.constraints()
+6. LoRA filtering by model compatibility
+7. Credit check + deduction
+8. Adapter execution
+9. Job tracking
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 import random
-from typing import Any
+from typing import Any, Callable, Optional
 
 from .adapter import GenerationAdapter, ProgressCallback
 from .registry import AdapterRegistry
@@ -30,6 +34,74 @@ from . import lora_utils
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Standalone resolution helpers (no ComfyUI client dependency)
+# ---------------------------------------------------------------------------
+
+# Base heights for named resolution presets
+_RESOLUTION_HEIGHTS = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
+
+# Aspect ratio numeric pairs
+_ASPECT_RATIOS = {
+    "16:9": (16, 9),
+    "9:16": (9, 16),
+    "1:1": (1, 1),
+    "4:3": (4, 3),
+    "3:4": (3, 4),
+    "21:9": (21, 9),
+    "auto": (1, 1),
+}
+
+
+def resolve_resolution(
+    resolution: Optional[str],
+    aspect_ratio: Optional[str],
+    step: int = 8,
+) -> tuple[int, int] | None:
+    """
+    Convert a named resolution + aspect ratio to (width, height) in pixels.
+
+    Returns *None* if *resolution* is not provided (caller should keep
+    whatever width/height is already on the request).
+    """
+    if not resolution:
+        return None
+
+    height = _RESOLUTION_HEIGHTS.get(resolution, 480)
+    ar_w, ar_h = _ASPECT_RATIOS.get(aspect_ratio or "1:1", (1, 1))
+
+    if ar_w >= ar_h:
+        width = int(height * ar_w / ar_h)
+    else:
+        width = height
+        height = int(width * ar_h / ar_w)
+
+    # Snap to VAE-friendly multiples
+    width = (width // step) * step
+    height = (height // step) * step
+    return width, height
+
+
+def normalize_frame_count(frames: int) -> int:
+    """
+    Snap *frames* to the nearest Wan2.2 valid count (4k+1).
+
+    Wan2.2 requires frame counts of 5, 9, 13, … , 321.
+    """
+    k = round((frames - 1) / 4)
+    k = max(1, k)  # minimum 5 frames
+    return 4 * k + 1
+
+
+def _is_base64_image(data: str) -> bool:
+    """Heuristic: is *data* a base64-encoded image (not a ComfyUI filename)?"""
+    if len(data) > 260:
+        return True
+    if data.startswith(("data:image/", "/9j/", "iVBOR")):
+        return True
+    return False
+
+
 class GenerationRouter:
     """
     Central dispatch point for all generation requests.
@@ -38,8 +110,15 @@ class GenerationRouter:
     the credit system, and the job queue.
     """
 
-    def __init__(self, registry: AdapterRegistry) -> None:
+    def __init__(
+        self,
+        registry: AdapterRegistry,
+        *,
+        comfyui_upload_fn: Optional[Callable] = None,
+    ) -> None:
         self.registry = registry
+        # Callable: async (b64_data: str, filename: str) -> str (ComfyUI filename)
+        self._comfyui_upload_fn = comfyui_upload_fn
 
     def resolve_adapter(self, req: GenerationRequest) -> GenerationAdapter:
         """
@@ -97,6 +176,81 @@ class GenerationRouter:
             return local[0] if local else cloud[0]
 
         return candidates[0]
+
+    def resolve_resolution_fields(
+        self, req: GenerationRequest
+    ) -> GenerationRequest:
+        """
+        If *resolution* and/or *aspect_ratio* are set but width/height are
+        not, compute pixel dimensions from the named preset.
+        """
+        if req.width is not None and req.height is not None:
+            return req  # already explicit
+
+        result = resolve_resolution(req.resolution, req.aspect_ratio)
+        if result is None:
+            return req  # no resolution string to resolve
+
+        w, h = result
+        updates: dict[str, Any] = {}
+        if req.width is None:
+            updates["width"] = w
+        if req.height is None:
+            updates["height"] = h
+        return req.model_copy(update=updates) if updates else req
+
+    def normalize_frames(
+        self, req: GenerationRequest, adapter: GenerationAdapter
+    ) -> GenerationRequest:
+        """
+        Snap frame count to 4k+1 for Wan2.2 adapters.
+        """
+        if req.frames is None:
+            return req
+        if "wan2" not in adapter.model_family.lower():
+            return req
+
+        normalised = normalize_frame_count(req.frames)
+        if normalised != req.frames:
+            logger.debug(
+                f"🎞️ Frame count normalised: {req.frames} → {normalised} (4k+1)"
+            )
+            return req.model_copy(update={"frames": normalised})
+        return req
+
+    async def upload_local_images(
+        self, req: GenerationRequest, adapter: GenerationAdapter
+    ) -> GenerationRequest:
+        """
+        For local adapters, if input_images contain base64 data,
+        upload them to ComfyUI and replace with the returned filename.
+        """
+        if adapter.compute != ComputeTarget.LOCAL:
+            return req
+        if not req.input_images:
+            return req
+        if self._comfyui_upload_fn is None:
+            return req
+
+        new_images: list[str] = []
+        for idx, img in enumerate(req.input_images):
+            if _is_base64_image(img):
+                # Strip data-URI prefix if present
+                raw = img
+                if raw.startswith("data:"):
+                    raw = raw.split(",", 1)[-1]
+                try:
+                    filename = f"v2_input_{random.randint(10000, 99999)}_{idx}.png"
+                    result_name = await self._comfyui_upload_fn(raw, filename)
+                    new_images.append(result_name)
+                    logger.debug(f"📤 Uploaded image {idx} → {result_name}")
+                except Exception:
+                    logger.exception(f"❌ Failed to upload image {idx} to ComfyUI")
+                    new_images.append(img)  # fall through with original
+            else:
+                new_images.append(img)  # already a ComfyUI filename
+
+        return req.model_copy(update={"input_images": new_images})
 
     def validate_controls(
         self, req: GenerationRequest, adapter: GenerationAdapter
@@ -201,24 +355,33 @@ class GenerationRouter:
         adapter = self.resolve_adapter(req)
         logger.info(f"🎯 Resolved adapter: {adapter.name}")
 
-        # 2. Validate controls
+        # 2. Resolve resolution string → width/height
+        req = self.resolve_resolution_fields(req)
+
+        # 3. Validate controls (clamp, defaults)
         req = self.validate_controls(req, adapter)
 
-        # 3. Filter LoRAs
+        # 4. Normalize frames (4k+1 for Wan2.2)
+        req = self.normalize_frames(req, adapter)
+
+        # 5. Filter LoRAs
         req = self.filter_loras(req, adapter)
 
-        # 4. Calculate + check credits
+        # 6. Upload images to ComfyUI for local adapters
+        req = await self.upload_local_images(req, adapter)
+
+        # 7. Calculate + check credits
         credits_required = adapter.cost(req)
         if check_credits_fn:
             await check_credits_fn(user, credits_required)
 
-        # 5. Execute
+        # 8. Execute
         result = await adapter.execute(req, progress_callback=progress_callback)
         result = result.model_copy(
             update={"credits_used": credits_required, "adapter_name": adapter.name}
         )
 
-        # 6. Deduct credits
+        # 9. Deduct credits
         if deduct_credits_fn:
             await deduct_credits_fn(
                 user, credits_required, result.prompt_id, adapter.name

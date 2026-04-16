@@ -746,3 +746,304 @@ class TestQwenEditAdapter:
         assert d["lora_format"] == "single"
         assert "edit" in d["supported_ops"]
         assert "constraints" in d
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Router Enhancements (#132)
+# ═══════════════════════════════════════════════════════════════════
+
+
+from generation.router import resolve_resolution, normalize_frame_count, _is_base64_image
+
+
+class FakeWanAdapter(GenerationAdapter):
+    """Adapter with model_family='wan2.2' for frame normalization tests."""
+
+    name = "fake-wan-adapter"
+    model_family = "wan2.2"
+    supported_ops = {Operation.GENERATE}
+    input_types = {MediaType.TEXT}
+    output_type = MediaType.VIDEO
+    compute = ComputeTarget.LOCAL
+    lora_format = LoraFormat.SINGLE_STAGE
+
+    def constraints(self) -> AdapterConstraints:
+        return AdapterConstraints(max_width=1280, max_height=720)
+
+    def build_workflow(self, req):
+        return {}
+
+    def cost(self, req):
+        return 10
+
+    async def execute(self, req, progress_callback=None):
+        return GenerationResult(
+            prompt_id="wan-id",
+            status="queued_local",
+            compute_target=ComputeTarget.LOCAL,
+            credits_used=10,
+            adapter_name=self.name,
+        )
+
+
+class TestResolveResolution:
+    """Tests for standalone resolve_resolution() helper."""
+
+    def test_none_resolution_returns_none(self):
+        assert resolve_resolution(None, None) is None
+
+    def test_480p_16_9(self):
+        w, h = resolve_resolution("480p", "16:9")
+        assert (w, h) == (848, 480)
+        assert w % 8 == 0
+        assert h % 8 == 0
+
+    def test_480p_9_16_portrait(self):
+        w, h = resolve_resolution("480p", "9:16")
+        assert w < h  # portrait
+        assert w % 8 == 0
+        assert h % 8 == 0
+
+    def test_720p_1_1_square(self):
+        w, h = resolve_resolution("720p", "1:1")
+        assert w == h == 720
+
+    def test_1080p_16_9(self):
+        w, h = resolve_resolution("1080p", "16:9")
+        assert h == 1080
+        assert w > h  # landscape
+        assert w % 8 == 0
+
+    def test_default_aspect_is_square(self):
+        w, h = resolve_resolution("480p", None)
+        assert w == h
+
+    def test_unknown_resolution_defaults_480(self):
+        w, h = resolve_resolution("unknown", "16:9")
+        assert h == 480
+
+    def test_unknown_aspect_defaults_square(self):
+        w, h = resolve_resolution("720p", "weird:ratio")
+        assert w == h == 720
+
+    def test_all_resolutions_are_multiples_of_8(self):
+        for res in ("480p", "576p", "720p", "1080p"):
+            for ar in ("16:9", "9:16", "1:1", "4:3", "3:4", "21:9"):
+                w, h = resolve_resolution(res, ar)
+                assert w % 8 == 0, f"{res} {ar}: width {w} not multiple of 8"
+                assert h % 8 == 0, f"{res} {ar}: height {h} not multiple of 8"
+
+
+class TestNormalizeFrameCount:
+    """Tests for normalize_frame_count() — 4k+1 snapping."""
+
+    @pytest.mark.parametrize(
+        "input_frames,expected",
+        [
+            (5, 5),      # already valid (k=1)
+            (9, 9),      # already valid (k=2)
+            (81, 81),    # already valid (k=20)
+            (321, 321),  # already valid (k=80)
+            (80, 81),    # round up
+            (82, 81),    # round down
+            (83, 81),    # round to nearest (k=20.5 → 20 via banker's rounding)
+            (1, 5),      # clamp to minimum
+            (2, 5),      # clamp to minimum
+            (3, 5),      # clamp to minimum (k=0.5 rounds to 1)
+            (4, 5),      # clamp to minimum
+            (6, 5),      # round down (k=1.25 rounds to 1)
+            (7, 9),      # round up (k=1.5 rounds to 2)
+            (100, 101),  # (99/4=24.75, rounds to 25, 4*25+1=101)
+        ],
+    )
+    def test_normalize(self, input_frames, expected):
+        assert normalize_frame_count(input_frames) == expected
+
+    def test_result_is_always_4k_plus_1(self):
+        for f in range(1, 400):
+            result = normalize_frame_count(f)
+            assert (result - 1) % 4 == 0, f"normalize({f})={result} not 4k+1"
+            assert result >= 5, f"normalize({f})={result} below minimum"
+
+
+class TestIsBase64Image:
+    """Tests for _is_base64_image() heuristic."""
+
+    def test_short_filename_is_not_base64(self):
+        assert _is_base64_image("input_image_00001.png") is False
+
+    def test_long_string_is_base64(self):
+        assert _is_base64_image("x" * 300) is True
+
+    def test_data_uri_prefix(self):
+        assert _is_base64_image("data:image/png;base64,iVBOR...") is True
+
+    def test_jpeg_magic(self):
+        assert _is_base64_image("/9j/4AAQSkZJRg==") is True
+
+    def test_png_magic(self):
+        assert _is_base64_image("iVBORw0KGgoAAAANSUhE") is True
+
+
+class TestRouterResolveResolutionFields:
+    """Tests for router.resolve_resolution_fields()."""
+
+    def test_explicit_dimensions_not_overwritten(self, router):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            width=512, height=768,
+            resolution="1080p", aspect_ratio="16:9",
+        )
+        result = router.resolve_resolution_fields(req)
+        assert result.width == 512
+        assert result.height == 768
+
+    def test_resolution_populates_dimensions(self, router):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            resolution="480p", aspect_ratio="16:9",
+        )
+        result = router.resolve_resolution_fields(req)
+        assert result.width == 848
+        assert result.height == 480
+
+    def test_no_resolution_leaves_none(self, router):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+        )
+        result = router.resolve_resolution_fields(req)
+        assert result.width is None
+        assert result.height is None
+
+
+class TestRouterNormalizeFrames:
+    """Tests for router.normalize_frames() with Wan2.2 adapters."""
+
+    @pytest.fixture
+    def wan_adapter(self):
+        return FakeWanAdapter()
+
+    def test_wan_adapter_normalizes(self, router, wan_adapter):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            frames=80,
+        )
+        result = router.normalize_frames(req, wan_adapter)
+        assert result.frames == 81
+
+    def test_non_wan_adapter_skips(self, router, fake_adapter):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            frames=80,
+        )
+        result = router.normalize_frames(req, fake_adapter)
+        assert result.frames == 80  # unchanged — model_family is "test"
+
+    def test_none_frames_skips(self, router, wan_adapter):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+        )
+        result = router.normalize_frames(req, wan_adapter)
+        assert result.frames is None
+
+
+class TestRouterUploadLocalImages:
+    """Tests for router.upload_local_images()."""
+
+    @pytest.mark.asyncio
+    async def test_uploads_base64_for_local_adapter(self):
+        mock_upload = AsyncMock(return_value="uploaded_image.png")
+        registry = AdapterRegistry()
+        registry.register(FakeAdapter())
+        r = GenerationRouter(registry, comfyui_upload_fn=mock_upload)
+
+        adapter = registry.get("fake-adapter")
+        b64_data = "iVBORw0KGgoAAAANSUhEUgAA" + "A" * 300  # long enough
+
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            input_images=[b64_data],
+        )
+        result = await r.upload_local_images(req, adapter)
+        assert result.input_images == ["uploaded_image.png"]
+        mock_upload.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_cloud_adapter(self):
+        mock_upload = AsyncMock(return_value="should_not_be_called.png")
+        registry = AdapterRegistry()
+        registry.register(FakeCloudAdapter())
+        r = GenerationRouter(registry, comfyui_upload_fn=mock_upload)
+
+        adapter = registry.get("fake-cloud-adapter")
+        req = GenerationRequest(
+            operation=Operation.EDIT,
+            target_type=MediaType.IMAGE,
+            input_images=["data:image/png;base64,big_data" + "A" * 300],
+        )
+        result = await r.upload_local_images(req, adapter)
+        # Cloud adapter — no upload, images passed through
+        mock_upload.assert_not_called()
+        assert result.input_images == req.input_images
+
+    @pytest.mark.asyncio
+    async def test_preserves_comfyui_filenames(self):
+        mock_upload = AsyncMock()
+        registry = AdapterRegistry()
+        registry.register(FakeAdapter())
+        r = GenerationRouter(registry, comfyui_upload_fn=mock_upload)
+
+        adapter = registry.get("fake-adapter")
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            input_images=["input_image_00001.png"],
+        )
+        result = await r.upload_local_images(req, adapter)
+        assert result.input_images == ["input_image_00001.png"]
+        mock_upload.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_upload_fn_passthrough(self):
+        registry = AdapterRegistry()
+        registry.register(FakeAdapter())
+        r = GenerationRouter(registry)  # no comfyui_upload_fn
+
+        adapter = registry.get("fake-adapter")
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            input_images=["data:image/png;base64," + "A" * 500],
+        )
+        result = await r.upload_local_images(req, adapter)
+        assert result.input_images == req.input_images  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_strips_data_uri_prefix(self):
+        captured_calls = []
+
+        async def capture_upload(b64_data: str, filename: str) -> str:
+            captured_calls.append(b64_data)
+            return "result.png"
+
+        registry = AdapterRegistry()
+        registry.register(FakeAdapter())
+        r = GenerationRouter(registry, comfyui_upload_fn=capture_upload)
+
+        adapter = registry.get("fake-adapter")
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            input_images=["data:image/png;base64,AAAA" + "B" * 300],
+        )
+        result = await r.upload_local_images(req, adapter)
+        assert result.input_images == ["result.png"]
+        # The data URI prefix should be stripped
+        assert not captured_calls[0].startswith("data:")

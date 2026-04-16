@@ -22,7 +22,7 @@ from .types import (
 )
 from .adapter import GenerationAdapter
 from .registry import AdapterRegistry
-from .router import GenerationRouter
+from .router import GenerationRouter, resolve_resolution, normalize_frame_count
 from .factory import create_registry
 
 __all__ = [
@@ -37,5 +37,7 @@ __all__ = [
     "GenerationAdapter",
     "AdapterRegistry",
     "GenerationRouter",
+    "resolve_resolution",
+    "normalize_frame_count",
     "create_registry",
 ]

@@ -1203,7 +1203,21 @@ async def startup_event():
             runpod_endpoint_ltx23=os.getenv("RUNPOD_LTX23_ENDPOINT_ID"),
             runpod_endpoint_qwen=os.getenv("RUNPOD_QWEN_ENDPOINT_ID"),
         )
-        v2_gen_router = GenerationRouter(v2_registry)
+
+        # Async wrapper for ComfyUI b64 image upload (used by router)
+        async def _comfyui_upload_b64(b64_data: str, filename: str) -> str:
+            import base64 as _b64
+            img_bytes = _b64.b64decode(b64_data)
+            client = get_comfyui_client()
+            result = client.upload_image_from_bytes(img_bytes, filename)
+            if result is None:
+                raise RuntimeError(f"ComfyUI image upload failed for {filename}")
+            return result
+
+        v2_gen_router = GenerationRouter(
+            v2_registry,
+            comfyui_upload_fn=_comfyui_upload_b64,
+        )
         init_v2_api(
             registry=v2_registry,
             gen_router=v2_gen_router,
