@@ -50,7 +50,9 @@ class ImageUpscaleAdapter(GenerationAdapter):
             max_input_images=1,
         )
 
-    def build_workflow(self, req: GenerationRequest, image_name: str = "input.png") -> dict:
+    def build_workflow(
+        self, req: GenerationRequest, image_name: str = "input.png"
+    ) -> dict:
         """Build ComfyUI upscale workflow.
 
         Args:
@@ -61,9 +63,7 @@ class ImageUpscaleAdapter(GenerationAdapter):
 
         workflow = {
             "1": {
-                "inputs": {
-                    "image": image_name
-                },
+                "inputs": {"image": image_name},
                 "class_type": "LoadImage",
             },
             "2": {

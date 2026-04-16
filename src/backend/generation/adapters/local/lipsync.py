@@ -144,7 +144,9 @@ class LipSyncAdapter(GenerationAdapter):
                 "assuming input_audio is already a filename"
             )
 
-        workflow = self.build_workflow(req, video_name=video_name, audio_name=audio_name)
+        workflow = self.build_workflow(
+            req, video_name=video_name, audio_name=audio_name
+        )
         prompt_id = client.queue_prompt(workflow)
 
         if not prompt_id:

@@ -159,9 +159,7 @@ class Wan22CloudI2VAdapter(GenerationAdapter):
 
         # Images dict for RunPod (filename -> base64 image content)
         input_images_b64 = (
-            {"input.png": req.input_images[0]}
-            if len(req.input_images) > 0
-            else None
+            {"input.png": req.input_images[0]} if len(req.input_images) > 0 else None
         )
 
         job_info = {
