@@ -1278,4 +1278,132 @@ class TestGenerationResultToV1Response:
         assert "meta" not in resp or resp["meta"] == {}
 
 
+class TestDispatchV1:
+    """Test the all-in-one dispatch_v1 helper."""
+
+    @pytest.mark.asyncio
+    async def test_dispatch_v1_calls_router(self):
+        """dispatch_v1 should convert form, dispatch, and return V1 response."""
+        from generation.v1_compat import dispatch_v1, init_v1_compat
+
+        mock_router = AsyncMock()
+        mock_router.dispatch.return_value = GenerationResult(
+            prompt_id="test-123",
+            status="queued_local",
+            compute_target=ComputeTarget.LOCAL,
+            credits_used=5,
+            adapter_name="sdxl-local-t2i",
+            meta={"width": 1024, "height": 1024},
+        )
+        mock_check = AsyncMock()
+        mock_deduct = AsyncMock()
+
+        init_v1_compat(
+            router=mock_router,
+            check_credits=mock_check,
+            deduct_credits=mock_deduct,
+        )
+
+        mock_user = MagicMock()
+        mock_user.id = "user-1"
+
+        result = await dispatch_v1(
+            form={"prompt": "test", "steps": 30},
+            files={},
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            adapter_hint="sdxl-local-t2i",
+            user=mock_user,
+        )
+
+        # Should call router.dispatch with a GenerationRequest
+        assert mock_router.dispatch.called
+        call_args = mock_router.dispatch.call_args
+        gen_req = call_args[0][0]
+        assert gen_req.prompt == "test"
+        assert gen_req.steps == 30
+        assert gen_req.adapter_hint == "sdxl-local-t2i"
+
+        # Should return V1 response format
+        assert result["status"] == "queued"
+        assert result["prompt_id"] == "test-123"
+        assert result["credits_used"] == 5
+
+    @pytest.mark.asyncio
+    async def test_dispatch_v1_registers_job(self):
+        """dispatch_v1 should call register_job when settings provided."""
+        from generation.v1_compat import dispatch_v1, init_v1_compat
+
+        mock_router = AsyncMock()
+        mock_router.dispatch.return_value = GenerationResult(
+            prompt_id="job-456",
+            status="queued_local",
+            compute_target=ComputeTarget.LOCAL,
+            credits_used=3,
+            adapter_name="test",
+        )
+        mock_client = MagicMock()
+        mock_get_client = MagicMock(return_value=mock_client)
+
+        init_v1_compat(
+            router=mock_router,
+            check_credits=AsyncMock(),
+            deduct_credits=AsyncMock(),
+            get_comfyui_client=mock_get_client,
+        )
+
+        mock_user = MagicMock()
+        mock_user.id = "user-2"
+
+        await dispatch_v1(
+            form={"prompt": "register test"},
+            files={},
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            adapter_hint="test",
+            user=mock_user,
+            register_job_settings={"job_type": "t2i"},
+        )
+
+        # Should register the job
+        mock_client.register_job.assert_called_once()
+        call_kwargs = mock_client.register_job.call_args
+        assert call_kwargs[1]["prompt_id"] == "job-456"
+        assert call_kwargs[1]["user_id"] == "user-2"
+
+    @pytest.mark.asyncio
+    async def test_dispatch_v1_cloud_format(self):
+        """Cloud dispatch should include runpod_job_id in response."""
+        from generation.v1_compat import dispatch_v1, init_v1_compat
+
+        mock_router = AsyncMock()
+        mock_router.dispatch.return_value = GenerationResult(
+            prompt_id="cloud-789",
+            status="queued_cloud",
+            compute_target=ComputeTarget.CLOUD,
+            credits_used=15,
+            runpod_job_id="rp-test-id",
+            adapter_name="wan22-cloud-i2v",
+        )
+
+        init_v1_compat(
+            router=mock_router,
+            check_credits=AsyncMock(),
+            deduct_credits=AsyncMock(),
+        )
+
+        result = await dispatch_v1(
+            form={"prompt": "cloud test"},
+            files={},
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            adapter_hint="wan22-cloud-i2v",
+            user=MagicMock(id="user-3"),
+            v1_format="cloud",
+        )
+
+        assert result["status"] == "queued_cloud"
+        assert result["runpod_job_id"] == "rp-test-id"
+
+
 from fastapi import UploadFile

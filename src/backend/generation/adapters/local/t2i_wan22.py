@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
 from typing import Any
 
 from ...adapter import GenerationAdapter, ProgressCallback
@@ -87,11 +88,12 @@ class Wan22LocalT2IAdapter(GenerationAdapter):
             raise RuntimeError("ComfyUI client not available")
         client = self._get_comfyui()
 
-        # Wan22 T2I uses the ComfyUI client's built-in method
-        # which handles DisTorch2 multi-GPU workflow construction.
+        # generate_wan22_t2i() is synchronous — blocks until image is done.
         result_path = client.generate_wan22_t2i(
             prompt=req.prompt,
-            output_dir="/tmp/oelala_generated",
+            output_dir=str(
+                Path(__file__).resolve().parents[5] / "media" / "generated"
+            ),
             width=req.width or 512,
             height=req.height or 512,
             steps=req.steps or 8,
@@ -99,11 +101,11 @@ class Wan22LocalT2IAdapter(GenerationAdapter):
         )
 
         if not result_path:
-            raise RuntimeError("Failed to generate Wan22 T2I image")
+            raise RuntimeError("Wan2.2 T2I generation failed — no output")
 
         return GenerationResult(
             prompt_id=str(uuid.uuid4()),
-            status="queued_local",
+            status="completed",
             compute_target=ComputeTarget.LOCAL,
             credits_used=0,  # Router fills this in
             adapter_name=self.name,

@@ -4,28 +4,33 @@ V1 → V2 compatibility layer.
 Converts V1 form-based endpoint parameters to V2 GenerationRequest
 and V2 GenerationResult back to V1 response dicts.
 
+Provides ``dispatch_v1()`` as a single-call helper that:
+    1. Converts V1 form params → GenerationRequest
+    2. Dispatches through V2 router
+    3. Registers the job for auto-upload (V1 behaviour)
+    4. Returns V1-compatible response dict
+
 Usage in endpoint wrappers::
 
     @app.post("/generate-sdxl")
     async def generate_sdxl_image(
         prompt: str = Form(...), ..., user = Depends(get_current_user),
     ):
-        gen_req = form_to_generation_request(
+        return await dispatch_v1(
             form=dict(prompt=prompt, ...),
             files={},
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
             adapter_hint="sdxl-local-t2i",
+            user=user,
         )
-        result = await v2_router.dispatch(gen_req, user, ...)
-        return generation_result_to_v1_response(result)
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import UploadFile
 
@@ -39,24 +44,48 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
+# ── Module-level state (set by init_v1_compat) ──────────────────────
+_router: Any = None
+_check_credits_fn: Any = None
+_deduct_credits_fn: Any = None
+_get_comfyui_client_fn: Callable | None = None
+
+
+def init_v1_compat(
+    router: Any,
+    check_credits: Any,
+    deduct_credits: Any,
+    get_comfyui_client: Callable | None = None,
+) -> None:
+    """
+    Initialize the V1 compat layer with dependencies from app.py.
+
+    Called once at startup after the V2 router is ready.
+    """
+    global _router, _check_credits_fn, _deduct_credits_fn, _get_comfyui_client_fn
+    _router = router
+    _check_credits_fn = check_credits
+    _deduct_credits_fn = deduct_credits
+    _get_comfyui_client_fn = get_comfyui_client
+    logger.info("🔌 V1 compat layer initialized")
+
+
 # ── V1 field name → V2 field name mapping ────────────────────────────
-# Only list names that DIFFER between V1 and V2.
 _FIELD_ALIASES = {
     "num_frames": "frames",
     "guidance_scale": "cfg",
     "guidance": "cfg",
     "sampler_name": "sampler",
     "text": "prompt",
-    "lora_configs": "_lora_json",  # handled specially
-    "compute_target": "_compute_target",  # handled specially
-    "model_type": "_model_type",  # handled specially
-    "post_processing": "_post_processing",  # handled specially
+    "lora_configs": "_lora_json",
+    "compute_target": "_compute_target",
+    "model_type": "_model_type",
+    "post_processing": "_post_processing",
     "mode": "audio_mode",
     "style": "audio_style",
     "output_filename": "_ignored",
 }
 
-# Fields that should be passed through directly (same name in V1 and V2)
 _PASSTHROUGH_FIELDS = {
     "prompt",
     "negative_prompt",
@@ -101,6 +130,11 @@ _PASSTHROUGH_FIELDS = {
     "interpolation_mode",
     "target_fps",
     "multiplier",
+    "generation_mode",
+    "extend_mode",
+    "clip_count",
+    "unet_high_noise",
+    "unet_low_noise",
 }
 
 
@@ -258,3 +292,80 @@ def generation_result_to_v1_response(
         response["meta"] = result.meta
 
     return response
+
+
+# ── High-level dispatch helper ──────────────────────────────────────
+
+
+async def dispatch_v1(
+    form: dict[str, Any],
+    files: dict[str, UploadFile | list[UploadFile]] | None,
+    operation: Operation,
+    target_type: MediaType,
+    adapter_hint: str,
+    user: Any,
+    *,
+    v1_format: str = "standard",
+    register_job_settings: dict[str, Any] | None = None,
+    progress_callback: Any = None,
+) -> dict[str, Any]:
+    """
+    All-in-one V1→V2 dispatch: convert, route, register job, return V1 response.
+
+    This is the single function each V1 endpoint thin wrapper should call.
+
+    Args:
+        form: V1 form field values.
+        files: Uploaded files (UploadFile instances).
+        operation: V2 operation.
+        target_type: V2 target media type.
+        adapter_hint: Which adapter to use.
+        user: Authenticated user object.
+        v1_format: Response format ("standard" or "cloud").
+        register_job_settings: If provided, register the job with ComfyUI
+            for auto-upload. Dict with keys like job_type, model_name, etc.
+        progress_callback: Optional WebSocket progress callback.
+
+    Returns:
+        V1-compatible response dict.
+    """
+    if _router is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503, detail="V2 generation engine not initialized"
+        )
+
+    # 1. Convert V1 form → V2 GenerationRequest
+    gen_req = await form_to_generation_request(
+        form=form,
+        files=files,
+        operation=operation,
+        target_type=target_type,
+        adapter_hint=adapter_hint,
+    )
+
+    # 2. Dispatch through V2 router (handles credits, validation, execution)
+    result = await _router.dispatch(
+        gen_req,
+        user,
+        check_credits_fn=_check_credits_fn,
+        deduct_credits_fn=_deduct_credits_fn,
+        progress_callback=progress_callback,
+    )
+
+    # 3. Register job for auto-upload (V1 behaviour)
+    if register_job_settings and result.prompt_id and _get_comfyui_client_fn:
+        try:
+            client = _get_comfyui_client_fn()
+            client.register_job(
+                prompt_id=result.prompt_id,
+                user_id=user.id,
+                prompt=gen_req.prompt or "",
+                settings=register_job_settings,
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to register job: {e}")
+
+    # 4. Convert V2 result → V1 response
+    return generation_result_to_v1_response(result, v1_format)

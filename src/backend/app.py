@@ -5837,115 +5837,28 @@ async def generate_image_legacy(
     model: str = Form("sdxl"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Legacy endpoint - redirects to SDXL via ComfyUI.
-    Use /generate-sdxl for direct SDXL generation.
-    Requires authentication and credits.
-    """
-    logger.info(
-        f"🔄 Legacy generate-image request redirected to SDXL: {prompt[:50]}..."
+    """Legacy endpoint - redirects to SDXL via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
+
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            aspect_ratio=aspect_ratio,
+            mode=mode,
+            output_filename=output_filename,
+            job_id=job_id,
+            model=model,
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.IMAGE,
+        adapter_hint="sdxl-local-t2i",
+        user=user,
+        register_job_settings={
+            "job_type": "t2i",
+        },
     )
-
-    # Build response using SDXL workflow
-    client = get_comfyui_client()
-    if not client or not client.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-
-    import random
-
-    seed = random.randint(0, 2**32 - 1)
-
-    # Map aspect ratios to SDXL-optimal resolutions (1MP)
-    resolutions = {
-        "1:1": (1024, 1024),
-        "16:9": (1344, 768),
-        "9:16": (768, 1344),
-        "4:3": (1152, 864),
-        "3:4": (864, 1152),
-        "2:3": (832, 1216),
-        "3:2": (1216, 832),
-        "21:9": (1536, 640),
-        "9:21": (640, 1536),
-    }
-    width, height = resolutions.get(aspect_ratio, (1024, 1024))
-
-    # Calculate and check credits
-    credits_required = calculate_credits("generate_sdxl", width=width, height=height)
-    logger.info(
-        f"💰 Legacy T2I generation costs {credits_required} credits ({width}x{height}) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    if not job_id:
-        job_id = str(uuid.uuid4())
-
-    # Build simple SDXL workflow
-    workflow = {
-        "1": {
-            "inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"},
-            "class_type": "CheckpointLoaderSimple",
-        },
-        "2": {
-            "inputs": {"text": prompt, "clip": ["1", 1]},
-            "class_type": "CLIPTextEncode",
-        },
-        "3": {
-            "inputs": {"text": "ugly, blurry, low quality", "clip": ["1", 1]},
-            "class_type": "CLIPTextEncode",
-        },
-        "4": {
-            "inputs": {"width": width, "height": height, "batch_size": 1},
-            "class_type": "EmptyLatentImage",
-        },
-        "5": {
-            "inputs": {
-                "seed": seed,
-                "steps": 25,
-                "cfg": 7.5,
-                "sampler_name": "dpmpp_2m",
-                "scheduler": "karras",
-                "denoise": 1,
-                "model": ["1", 0],
-                "positive": ["2", 0],
-                "negative": ["3", 0],
-                "latent_image": ["4", 0],
-            },
-            "class_type": "KSampler",
-        },
-        "6": {
-            "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
-            "class_type": "VAEDecode",
-        },
-        "7": {
-            "inputs": {"filename_prefix": "oelala_t2i", "images": ["6", 0]},
-            "class_type": "SaveImage",
-        },
-    }
-
-    prompt_id = client.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    # Register job for auto-upload on completion
-    client.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={"job_type": "t2i", "width": width, "height": height, "seed": seed},
-    )
-
-    # Deduct credits after successful queue
-    await deduct_credits(user, credits_required, prompt_id, "SDXL T2I (legacy)")
-    logger.info(f"📋 Legacy T2I queued: {prompt_id} (💰 -{credits_required} credits)")
-
-    return {
-        "status": "queued",
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "credits_used": credits_required,
-        "meta": {"prompt": prompt, "width": width, "height": height, "seed": seed},
-    }
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # SDXL Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -6167,116 +6080,28 @@ async def generate_flux_image(
     lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate image using Flux Dev via ComfyUI.
-    Flux doesn't use negative prompts - uses guidance instead.
-    Requires authentication and credits.
-    """
-    import json as json_lib
+    """Generate image using Flux Dev via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    logger.info(f"⚡ Flux T2I request: {prompt[:50]}... [user={user.id}]")
-
-    # Parse LoRA configs
-    try:
-        loras = json_lib.loads(lora_configs) if lora_configs else []
-    except json_lib.JSONDecodeError:
-        loras = []
-
-    # Map aspect ratios to Flux-optimal resolutions
-    resolutions = {
-        "1:1": (1024, 1024),
-        "16:9": (1344, 768),
-        "9:16": (768, 1344),
-        "4:3": (1152, 864),
-        "3:4": (864, 1152),
-        "2:3": (832, 1216),
-        "3:2": (1216, 832),
-        "21:9": (1536, 640),
-        "9:21": (640, 1536),
-    }
-    width, height = resolutions.get(aspect_ratio, (1024, 1024))
-
-    # Calculate and check credits
-    credits_required = calculate_credits("generate_flux", width=width, height=height)
-    logger.info(f"💰 Flux generation costs {credits_required} credits")
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    try:
-        client = get_comfyui_client()
-
-        output_path = client.generate_flux_image(
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
-            width=width,
-            height=height,
+            aspect_ratio=aspect_ratio,
             steps=steps,
             guidance=guidance,
             seed=seed,
-            lora_configs=loras,
-        )
-
-        if not output_path:
-            raise HTTPException(status_code=500, detail="Flux generation failed")
-
-        # Deduct credits after successful generation
-        await deduct_credits(user, credits_required, job_id, "Flux T2I")
-        logger.info(f"⚡ Flux generated successfully (💰 -{credits_required} credits)")
-
-        filename = Path(output_path).name
-
-        # Upload to storage with metadata sync
-        media_record = await upload_generated_media(
-            user_id=user.id,
-            file_path=Path(output_path),
-            generation_type="t2i",
-            prompt=prompt,
-            workflow_id=job_id,
-            extra_metadata={
-                "model_name": "flux1-dev-fp8",
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "guidance": guidance,
-                "seed": seed,
-            },
-        )
-
-        # Generate signed URL if upload succeeded
-        url = f"/files/{filename}"
-        signed_url = None
-        if media_record:
-            signed_url = get_signed_media_url(
-                media_record.storage_path, expires_in=86400
-            )
-            url = signed_url
-
-        return {
-            "status": "success",
-            "url": url,
-            "signed_url": signed_url,
-            "storage_path": media_record.storage_path if media_record else None,
-            "filename": filename,
-            "job_id": job_id,
-            "credits_used": credits_required,
-            "meta": {
-                "prompt": prompt,
-                "model": "flux1-dev-fp8",
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "guidance": guidance,
-                "seed": seed,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Flux generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+            lora_configs=lora_configs,
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.IMAGE,
+        adapter_hint="flux-local-t2i",
+        user=user,
+        register_job_settings={
+            "job_type": "t2i",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # SD 1.5 Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -6297,124 +6122,31 @@ async def generate_sd15_image(
     lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI.
-    Requires authentication and credits.
-    """
-    import json as json_lib
+    """Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    logger.info(f"🖼️ SD1.5 T2I request: {prompt[:50]}...")
-
-    # Parse LoRA configs
-    try:
-        loras = json_lib.loads(lora_configs) if lora_configs else []
-    except json_lib.JSONDecodeError:
-        loras = []
-
-    # Map aspect ratios to SD1.5-optimal resolutions (512-768 range)
-    resolutions = {
-        "1:1": (512, 512),
-        "16:9": (768, 432),
-        "9:16": (432, 768),
-        "4:3": (640, 480),
-        "3:4": (480, 640),
-        "2:3": (512, 768),
-        "3:2": (768, 512),
-    }
-    width, height = resolutions.get(aspect_ratio, (512, 768))
-
-    # Calculate and check credits
-    credits_required = calculate_credits(
-        "sd15", width=width, height=height, steps=steps
-    )
-    logger.info(
-        f"💰 SD1.5 generation costs {credits_required} credits ({width}x{height}) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    try:
-        client = get_comfyui_client()
-
-        output_path = client.generate_sd15_image(
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
             negative_prompt=negative_prompt,
-            width=width,
-            height=height,
+            aspect_ratio=aspect_ratio,
             steps=steps,
             cfg=cfg,
             seed=seed,
             sampler_name=sampler_name,
             scheduler=scheduler,
-            lora_configs=loras,
-        )
-
-        if not output_path:
-            raise HTTPException(status_code=500, detail="SD1.5 generation failed")
-
-        filename = Path(output_path).name
-
-        # Deduct credits after successful generation
-        await deduct_credits(user, credits_required, job_id, "SD1.5 T2I")
-        logger.info(f"🎨 SD1.5 image generated (💰 -{credits_required} credits)")
-
-        # Upload to storage with metadata sync
-        media_record = await upload_generated_media(
-            user_id=user.id,
-            file_path=Path(output_path),
-            generation_type="t2i",
-            prompt=prompt,
-            workflow_id=job_id,
-            extra_metadata={
-                "model_name": "Realistic_Vision_V5.1",
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "negative_prompt": negative_prompt,
-            },
-        )
-
-        # Generate signed URL if upload succeeded
-        url = f"/files/{filename}"
-        signed_url = None
-        if media_record:
-            signed_url = get_signed_media_url(
-                media_record.storage_path, expires_in=86400
-            )
-            url = signed_url
-
-        return {
-            "status": "success",
-            "url": url,
-            "signed_url": signed_url,
-            "storage_path": media_record.storage_path if media_record else None,
-            "filename": filename,
-            "job_id": job_id,
-            "credits_used": credits_required,
-            "meta": {
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "model": "Realistic_Vision_V5.1",
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "sampler_name": sampler_name,
-                "scheduler": scheduler,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"SD1.5 generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+            lora_configs=lora_configs,
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.IMAGE,
+        adapter_hint="sd15-local-t2i",
+        user=user,
+        register_job_settings={
+            "job_type": "t2i",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Wan2.2 Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -6428,106 +6160,26 @@ async def generate_wan22_t2i(
     seed: int = Form(-1),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
-    Uses DisTorch2 multi-GPU setup with high/low noise models.
-    Very high quality but slower than other T2I models.
-    Requires authentication and credits.
-    """
+    """Generate image using Wan2.2 T2V model in T2I mode via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    logger.info(f"🎬 Wan2.2 T2I request: {prompt[:50]}...")
-
-    # Map aspect ratios to Wan2.2-compatible resolutions
-    resolutions = {
-        "1:1": (512, 512),
-        "16:9": (832, 480),
-        "9:16": (480, 832),
-        "4:3": (640, 480),
-        "3:4": (480, 640),
-        "2:3": (512, 768),
-        "3:2": (768, 512),
-    }
-    width, height = resolutions.get(aspect_ratio, (512, 512))
-
-    # Calculate and check credits
-    credits_required = calculate_credits("wan22_t2i", width=width, height=height)
-    logger.info(
-        f"💰 Wan2.2 T2I generation costs {credits_required} credits ({width}x{height}) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    try:
-        client = get_comfyui_client()
-
-        output_path = client.generate_wan22_t2i(
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
-            output_dir=str(OUTPUT_DIR),
-            width=width,
-            height=height,
+            aspect_ratio=aspect_ratio,
             steps=steps,
             seed=seed,
-        )
-
-        if not output_path:
-            raise HTTPException(status_code=500, detail="Wan2.2 T2I generation failed")
-
-        filename = Path(output_path).name
-
-        # Deduct credits after successful generation
-        await deduct_credits(user, credits_required, job_id, "Wan2.2 T2I")
-        logger.info(f"🎨 Wan2.2 T2I image generated (💰 -{credits_required} credits)")
-
-        # Upload to storage with metadata sync
-        media_record = await upload_generated_media(
-            user_id=user.id,
-            file_path=Path(output_path),
-            generation_type="t2i",
-            prompt=prompt,
-            workflow_id=job_id,
-            extra_metadata={
-                "model_name": "wan2.2-t2i-distorch2",
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "seed": seed,
-            },
-        )
-
-        # Generate signed URL if upload succeeded
-        url = f"/files/{filename}"
-        signed_url = None
-        if media_record:
-            signed_url = get_signed_media_url(
-                media_record.storage_path, expires_in=86400
-            )
-            url = signed_url
-
-        return {
-            "status": "success",
-            "url": url,
-            "signed_url": signed_url,
-            "storage_path": media_record.storage_path if media_record else None,
-            "filename": filename,
-            "job_id": job_id,
-            "credits_used": credits_required,
-            "meta": {
-                "prompt": prompt,
-                "model": "wan2.2-t2i-distorch2",
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "seed": seed,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Wan2.2 T2I generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.IMAGE,
+        adapter_hint="wan22-local-t2i",
+        user=user,
+        register_job_settings={
+            "job_type": "t2i",
+        },
+    )
 @app.post("/generate")
 async def generate_video(
     file: UploadFile = File(...),
@@ -6539,107 +6191,28 @@ async def generate_video(
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate video from uploaded image via ComfyUI.
-    This endpoint wraps the ComfyUI Wan2.2 I2V workflow.
-    Requires authentication and credits.
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    """Generate video from uploaded image via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Calculate duration for credit calculation
-    duration_seconds = num_frames / fps if fps > 0 else 3
-    # Get resolution dimensions for credit calculation
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-
-    # Calculate and check credits
-    credits_required = calculate_credits(
-        "wan22_i2v",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 I2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Save uploaded file
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"i2v_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
-
-    # Upload to ComfyUI
-    comfyui_image_name = comfyui.upload_image(str(input_path))
-    if not comfyui_image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-
-    # Get resolution dimensions
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-
-    # Build I2V workflow
-    import random
-
-    seed = random.randint(0, 2**32 - 1)
-
-    # Adjust num_frames to Wan2.2 format (4k+1)
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    workflow = comfyui.build_api_workflow(
-        image_name=comfyui_image_name,
-        prompt=prompt or "smooth motion, cinematic",
-        width=width,
-        height=height,
-        num_frames=num_frames,
-        fps=fps,
-        steps=6,
-        cfg=1.0,
-        seed=seed,
-        output_prefix=f"oelala_i2v_{timestamp}",
-    )
-
-    # Queue workflow
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    # Deduct credits after successful queue
-    await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V")
-    logger.info(f"📋 I2V queued: {prompt_id} (💰 -{credits_required} credits)")
-
-    return {
-        "status": "queued",
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "input_image": input_filename,
-        "credits_used": credits_required,
-        "meta": {
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "num_frames": num_frames,
-            "fps": fps,
-            "seed": seed,
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            num_frames=num_frames,
+            output_filename=output_filename,
+            resolution=resolution,
+            fps=fps,
+            aspect_ratio=aspect_ratio,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-local-i2v-q6",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
         },
-    }
-
-
+    )
 @app.get("/api/i2v-modes")
 async def get_i2v_generation_modes():
     """
@@ -6728,227 +6301,31 @@ async def generate_video_to_video(
     generation_mode: str = Form("standard", description="I2V generation mode to use"),
     user: User = Depends(get_current_user),
 ):
-    """
-    Video-to-Video style transfer using AI.
+    """Video-to-Video style transfer using AI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Process:
-    1. Extract first frame from input video
-    2. Apply style via I2V workflow
-    3. Generate new video with transferred style
-
-    Use cases:
-    - Turn real footage into anime style
-    - Apply artistic filters
-    - AI enhancement of video quality
-
-    Note: This uses I2V pipeline under the hood with the first frame as input.
-    For best results, use short clips (2-5 seconds) with clear subjects.
-    """
-    import cv2
-
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Validate strength
-    strength = max(0.0, min(1.0, strength))
-
-    # Wan2.2 requires num_frames in format 4k+1
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    # Get resolution dimensions
-    width, height = comfyui.get_resolution_dimensions(
-        resolution, "16:9"
-    )  # Default to 16:9 for video
-
-    # Calculate credits (V2V costs same as I2V)
-    duration_seconds = num_frames / fps if fps > 0 else 3
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=duration_seconds,
-    )
-
-    logger.info(
-        f"💰 V2V generation costs {credits_required} credits ({width}x{height}, {num_frames} frames)"
-    )
-    await check_credits(user, credits_required)
-
-    job_id = str(uuid.uuid4())
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # Save uploaded video
-    input_filename = f"v2v_input_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-
-    with open(input_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-
-    logger.info(f"📥 V2V input saved: {input_path}")
-
-    try:
-        # Extract first frame using OpenCV
-        cap = cv2.VideoCapture(str(input_path))
-        if not cap.isOpened():
-            raise HTTPException(status_code=400, detail="Could not open video file")
-
-        # Get video info
-        original_fps = cap.get(cv2.CAP_PROP_FPS) or 24
-        original_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        original_duration = original_frames / original_fps
-        original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        logger.info(
-            f"🎬 Input video: {original_width}x{original_height}, {original_fps}fps, {original_duration:.1f}s"
-        )
-
-        # Read first frame
-        ret, first_frame = cap.read()
-        cap.release()
-
-        if not ret or first_frame is None:
-            raise HTTPException(
-                status_code=400, detail="Could not extract first frame from video"
-            )
-
-        # Save first frame as input image for I2V
-        frame_filename = f"v2v_frame_{timestamp}.png"
-        frame_path = UPLOAD_DIR / frame_filename
-
-        # Resize to target resolution if needed
-        if first_frame.shape[1] != width or first_frame.shape[0] != height:
-            first_frame = cv2.resize(
-                first_frame, (width, height), interpolation=cv2.INTER_LANCZOS4
-            )
-
-        cv2.imwrite(str(frame_path), first_frame)
-        logger.info(f"📸 First frame extracted: {frame_path} ({width}x{height})")
-
-        # Build the style-enhanced prompt
-        base_prompt = style_prompt.strip()
-
-        # Add motion preservation hints based on mode
-        if preserve_motion:
-            if mode == "anime":
-                full_prompt = f"{base_prompt}, anime style, smooth animation, consistent character design, fluid motion"
-            elif mode == "enhance":
-                full_prompt = f"{base_prompt}, high quality, sharp details, natural movement, enhanced clarity"
-            else:  # style_transfer
-                full_prompt = f"{base_prompt}, artistic style transfer, preserve motion, consistent style throughout"
-        else:
-            full_prompt = base_prompt
-
-        logger.info(f"🎨 V2V prompt: {full_prompt}")
-
-        # Generate video using DisTorch2 I2V workflow with the extracted frame
-        output_prefix = f"oelala_v2v_{timestamp}"
-
-        # Call the DisTorch2 generation method from comfyui_client
-        output_path = comfyui.generate_distorch2_video(
-            image_path=str(frame_path),
-            prompt=full_prompt,
-            output_dir=str(OUTPUT_DIR),
-            output_prefix=output_prefix,
-            resolution=resolution,
-            aspect_ratio="16:9",  # Default for video
+    return await dispatch_v1(
+        form=dict(
+            style_prompt=style_prompt,
+            mode=mode,
+            strength=strength,
             num_frames=num_frames,
+            resolution=resolution,
             fps=fps,
-            steps=6,  # Default for DisTorch2
-            cfg=1.0,  # Default for DisTorch2
-            seed=seed if seed >= 0 else -1,
-        )
-
-        if not output_path:
-            raise HTTPException(
-                status_code=500, detail="V2V generation failed - no output"
-            )
-
-        output_filename = Path(output_path).name
-
-        # Deduct credits
-        await deduct_credits(user, credits_required, job_id, f"V2V {mode}")
-        logger.info(
-            f"🎬 V2V generated: {output_filename} (💰 -{credits_required} credits)"
-        )
-
-        # Upload to storage
-        media_record = await upload_generated_media(
-            user_id=user.id,
-            file_path=Path(output_path),
-            generation_type="v2v",
-            prompt=full_prompt,
-            workflow_id=job_id,
-            extra_metadata={
-                "model_name": "wan2.2-v2v-distorch2",
-                "mode": mode,
-                "strength": strength,
-                "width": width,
-                "height": height,
-                "num_frames": num_frames,
-                "fps": fps,
-                "seed": seed,
-                "original_video": input_filename,
-                "original_duration": original_duration,
-            },
-        )
-
-        # Get signed URL
-        url = f"/files/{output_filename}"
-        signed_url = None
-        if media_record:
-            signed_url = get_signed_media_url(
-                media_record.storage_path, expires_in=86400
-            )
-
-        return {
-            "status": "success",
-            "job_id": job_id,
-            "url": url,
-            "signed_url": signed_url,
-            "filename": output_filename,
-            "credits_used": credits_required,
-            "meta": {
-                "mode": mode,
-                "style_prompt": style_prompt,
-                "strength": strength,
-                "width": width,
-                "height": height,
-                "num_frames": num_frames,
-                "fps": fps,
-                "seed": seed,
-                "original_video": {
-                    "filename": file.filename,
-                    "duration": original_duration,
-                    "resolution": f"{original_width}x{original_height}",
-                },
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ V2V generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"V2V generation failed: {str(e)}")
-    finally:
-        # Cleanup input video (keep extracted frame for debugging)
-        if input_path.exists():
-            try:
-                input_path.unlink()
-            except Exception:
-                pass
-
-
+            preserve_motion=preserve_motion,
+            seed=seed,
+            generation_mode=generation_mode,
+        ),
+        files={"file": file},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.VIDEO,
+        adapter_hint="local-v2v",
+        user=user,
+        register_job_settings={
+            "job_type": "v2v",
+        },
+    )
 @app.post("/generate-wan22-comfyui")
 async def generate_wan22_comfyui(
     file: UploadFile = File(...),
@@ -6979,284 +6356,37 @@ async def generate_wan22_comfyui(
     clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow.
-    Requires authentication and credits.
+    """Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    This endpoint uses ComfyUI with:
-    - Dual-Pass: High Noise model (steps 0-3) → Low Noise model (steps 3+)
-    - DisTorch2 expert_mode_allocations for optimal memory scaling
-    - CONVERTED T5: umt5-xxl-enc-bf16-uncensored-CONVERTED.safetensors
-    - SageAttention (sageattn_qk_int8_pv_fp16_triton)
-
-    Note: num_frames will be adjusted to nearest valid Wan2.2 value (4k+1)
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Wan2.2 requires num_frames in format 4k+1 (5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, ...)
-    # Round to nearest valid value
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)  # Minimum k=1 gives 5 frames
-    num_frames = 4 * k + 1
-    logger.info(f"🎞️ Adjusted num_frames to Wan2.2 format: {num_frames} (4*{k}+1)")
-
-    # Calculate duration for credit calculation
-    duration_seconds = num_frames / fps if fps > 0 else 3
-    # Get resolution dimensions for credit calculation
-    _comfyui_temp = get_comfyui_client()
-    width, height = _comfyui_temp.get_resolution_dimensions(resolution, aspect_ratio)
-
-    # Calculate and check credits
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            num_frames=num_frames,
+            output_filename=output_filename,
+            resolution=resolution,
+            fps=fps,
+            aspect_ratio=aspect_ratio,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            generation_mode=generation_mode,
+            unet_high_noise=unet_high_noise,
+            unet_low_noise=unet_low_noise,
+            lora_configs=lora_configs,
+            extend_mode=extend_mode,
+            clip_count=clip_count,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-local-i2v-q6",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
+        },
     )
-    logger.info(
-        f"💰 Wan2.2 I2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"comfyui_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
-
-    # Generate output filename
-    if not output_filename:
-        output_filename = f"wan22_comfyui_{timestamp}.mp4"
-    elif not output_filename.endswith(".mp4"):
-        output_filename += ".mp4"
-
-    output_prefix = f"oelala_{timestamp}"
-
-    # Build workflow and inject metadata into input image
-    comfyui = get_comfyui_client()
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-
-    # Build the workflow that will be used
-    workflow = comfyui.build_workflow(
-        image_name=input_filename,
-        prompt=prompt,
-        width=width,
-        height=height,
-        num_frames=num_frames,
-        fps=fps,
-        steps=steps,
-        cfg=cfg,
-        seed=seed if seed >= 0 else 42,
-        output_prefix=output_prefix,
-    )
-
-    # Inject workflow metadata into the input PNG
-    # Parse lora_configs JSON
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
-
-    prompt_params = {
-        "prompt": prompt,
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": steps,
-        "cfg": cfg,
-        "seed": seed,
-        "timestamp": timestamp,
-        "unet_high_noise": unet_high_noise,
-        "unet_low_noise": unet_low_noise,
-        "lora_configs": parsed_lora_configs,
-    }
-    inject_png_workflow_metadata(str(input_path), workflow, prompt_params)
-
-    # Check if sequential/extend mode is enabled
-    is_extend_mode = extend_mode.lower() in ("true", "1", "yes")
-    actual_clip_count = max(1, min(5, clip_count)) if is_extend_mode else 1
-
-    try:
-        if is_extend_mode and actual_clip_count > 1:
-            # Sequential generation mode
-            total_frames = num_frames * actual_clip_count
-            logger.info(
-                f"🎬 Starting Sequential Wan2.2 generation ({actual_clip_count} clips)"
-            )
-            logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-            logger.info(
-                f"   🎞️ Frames per clip: {num_frames}, Total: {total_frames}, FPS: {fps}"
-            )
-            logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
-            logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
-            if parsed_lora_configs:
-                logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
-            logger.info(f"   📝 Prompt: {prompt[:100]}...")
-
-            # Generate sequential video via ComfyUI
-            loop = asyncio.get_event_loop()
-            result_path = await loop.run_in_executor(
-                None,
-                lambda: comfyui.generate_sequential_video(
-                    image_path=str(input_path),
-                    prompt=prompt,
-                    output_dir=str(OUTPUT_DIR),
-                    clip_count=actual_clip_count,
-                    resolution=resolution,
-                    aspect_ratio=aspect_ratio,
-                    num_frames=num_frames,
-                    fps=fps,
-                    steps=steps,
-                    cfg=cfg,
-                    seed=seed,
-                    output_prefix=output_prefix,
-                    unet_high_noise=unet_high_noise,
-                    unet_low_noise=unet_low_noise,
-                    lora_configs=parsed_lora_configs,
-                ),
-            )
-        else:
-            # Standard single-clip generation
-            logger.info("🎬 Starting Wan2.2 ComfyUI generation")
-            logger.info(f"   📐 Resolution: {resolution}, Aspect: {aspect_ratio}")
-            logger.info(f"   🎞️ Frames: {num_frames}, FPS: {fps}")
-            logger.info(f"   ⚙️ Steps: {steps}, CFG: {cfg}, Seed: {seed}")
-            logger.info(f"   🔧 Unet: H={unet_high_noise}, L={unet_low_noise}")
-            logger.info(f"   🎯 Mode: {generation_mode}")
-            if parsed_lora_configs:
-                logger.info(f"   🎨 LoRAs: {len(parsed_lora_configs)} configured")
-                for i, lc in enumerate(parsed_lora_configs):
-                    logger.info(
-                        f"      [{i + 1}] H={lc.get('high') or 'none'}, L={lc.get('low') or 'none'} @ {lc.get('strength', 1.0)}"
-                    )
-            logger.info(f"   📝 Prompt: {prompt[:100]}...")
-
-            # Generate video via ComfyUI in threadpool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
-            result_path = await loop.run_in_executor(
-                None,  # Default threadpool
-                lambda: comfyui.generate_video(
-                    image_path=str(input_path),
-                    prompt=prompt,
-                    output_dir=str(OUTPUT_DIR),
-                    resolution=resolution,
-                    aspect_ratio=aspect_ratio,
-                    num_frames=num_frames,
-                    fps=fps,
-                    steps=steps,
-                    cfg=cfg,
-                    seed=seed,
-                    output_prefix=output_prefix,
-                    unet_high_noise=unet_high_noise,
-                    unet_low_noise=unet_low_noise,
-                    lora_configs=parsed_lora_configs,
-                    generation_mode=generation_mode,
-                ),
-            )
-
-        if result_path and Path(result_path).exists():
-            # Copy to expected output path if different
-            final_output = OUTPUT_DIR / output_filename
-            if str(result_path) != str(final_output):
-                shutil.copy(result_path, final_output)
-                result_path = str(final_output)
-
-            total_frames = (
-                num_frames * actual_clip_count if is_extend_mode else num_frames
-            )
-
-            # Deduct credits after successful generation
-            await deduct_credits(user, credits_required, job_id, "Wan2.2 I2V")
-            logger.info(f"🎬 Wan2.2 video generated (💰 -{credits_required} credits)")
-
-            # Upload to MinIO and sync metadata to Supabase
-            media_record = await upload_generated_media(
-                user_id=user.id,
-                file_path=final_output,
-                generation_type="i2v",
-                prompt=prompt,
-                workflow_id=job_id,
-                extra_metadata={
-                    "model_name": "wan2.2_i2v_14B_Q6",
-                    "resolution": resolution,
-                    "aspect_ratio": aspect_ratio,
-                    "num_frames": total_frames,
-                    "fps": fps,
-                    "steps": steps,
-                    "cfg": cfg,
-                    "seed": seed,
-                    "input_image": input_filename,
-                    "extend_mode": is_extend_mode,
-                    "clip_count": actual_clip_count,
-                },
-            )
-
-            # Generate signed URL if upload succeeded
-            video_url = f"/files/{output_filename}"  # Fallback to local
-            signed_url = None
-            if media_record:
-                signed_url = get_signed_media_url(
-                    media_record.storage_path, expires_in=86400
-                )  # 24h
-                video_url = signed_url
-
-            return {
-                "success": True,
-                "message": f"Wan2.2 video generated via ComfyUI{' (sequential)' if actual_clip_count > 1 else ''}",
-                "input_image": input_filename,
-                "output_video": output_filename,
-                "video_url": video_url,
-                "signed_url": signed_url,
-                "storage_path": media_record.storage_path if media_record else None,
-                "video_path": result_path,
-                "prompt": prompt,
-                "num_frames": total_frames,
-                "frames_per_clip": num_frames,
-                "clip_count": actual_clip_count,
-                "extend_mode": is_extend_mode,
-                "fps": fps,
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "timestamp": timestamp,
-                "backend": "comfyui",
-                "model": "wan2.2_i2v_14B_Q6",
-                "job_id": job_id,
-                "credits_used": credits_required,
-            }
-        else:
-            raise HTTPException(
-                status_code=500, detail="ComfyUI video generation returned no output"
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ ComfyUI generation error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Wan2.2 ComfyUI generation failed: {str(e)}"
-        )
-
-
 # -----------------------------------------------------------------------------
 # Helper: Submit workflow to RunPod cloud GPU
 # -----------------------------------------------------------------------------
@@ -7386,302 +6516,38 @@ async def generate_wan22_async(
     ),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Queue Wan2.2 I2V video generation and return immediately.
-    Requires authentication and credits.
+    """Queue Wan2.2 I2V video generation and return immediately (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Unlike /generate-wan22-comfyui, this endpoint returns immediately with a prompt_id.
-    Use /comfyui/job/{prompt_id} to poll for completion status.
-
-    This allows queueing multiple jobs without waiting.
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Wan2.2 requires num_frames in format 4k+1
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    # Calculate and check credits
-    _comfyui_temp = get_comfyui_client()
-    width, height = _comfyui_temp.get_resolution_dimensions(resolution, aspect_ratio)
-    duration_seconds = num_frames / fps if fps > 0 else 3
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 Wan2.2 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"comfyui_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
-
-    # Upload to ComfyUI
-    image_name = comfyui.upload_image(str(input_path))
-    if not image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-
-    # Parse lora_configs
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
-
-    # Parse post_processing chain
-    parsed_post_processing = []
-    if post_processing:
-        try:
-            parsed_post_processing = json.loads(post_processing)
-            logger.info(f"🔄 Post-processing chain: {parsed_post_processing}")
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse post_processing JSON: {post_processing}")
-
-    # Save audio file for post-processing if provided
-    post_audio_path = None
-    if post_audio_file and post_audio_file.filename:
-        audio_filename = f"post_audio_{timestamp}_{post_audio_file.filename}"
-        post_audio_path = str(UPLOAD_DIR / audio_filename)
-        try:
-            await _save_upload(post_audio_file, Path(post_audio_path))
-        except Exception as e:
-            logger.warning(f"Failed to save post audio file: {e}")
-            post_audio_path = None
-
-    # Generate output prefix
-    if not output_filename:
-        output_filename = f"wan22_async_{timestamp}.mp4"
-    output_prefix = f"oelala_{timestamp}"
-
-    # Get actual seed
-    actual_seed = (
-        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    )
-
-    # Map resolution to long_edge
-    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
-    long_edge = resolution_map.get(resolution, 480)
-
-    # Check if sequential/extend mode is enabled
-    is_extend_mode = extend_mode.lower() in ("true", "1", "yes")
-    actual_clip_count = max(1, min(5, clip_count)) if is_extend_mode else 1
-
-    # Build workflow
-    if is_extend_mode and actual_clip_count > 1:
-        # Build sequential workflow for multiple clips
-        logger.info(
-            f"🎬 Building sequential workflow: {actual_clip_count} clips × {num_frames} frames"
-        )
-        comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-        workflow = comfyui._build_sequential_workflow(
-            image_name=image_name,
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
-            clip_count=actual_clip_count,
+            num_frames=num_frames,
+            output_filename=output_filename,
             resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            num_frames=num_frames,
             fps=fps,
+            aspect_ratio=aspect_ratio,
             steps=steps,
             cfg=cfg,
-            seed=actual_seed,
-            output_prefix=output_prefix,
+            seed=seed,
             unet_high_noise=unet_high_noise,
             unet_low_noise=unet_low_noise,
-            lora_configs=parsed_lora_configs,
-        )
-    else:
-        # Build standard single-clip workflow
-        workflow = comfyui.build_q6_workflow(
-            image_name=image_name,
-            prompt=prompt,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=actual_seed,
-            output_prefix=output_prefix,
-            aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-            unet_high_noise=unet_high_noise,
-            unet_low_noise=unet_low_noise,
-            lora_configs=parsed_lora_configs,
-        )
-
-    # Route to cloud if requested
-    if compute_target == "cloud":
-        cloud_job_info = {
-            "prompt": prompt[:100],
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames * actual_clip_count
-            if is_extend_mode
-            else num_frames,
-            "frames_per_clip": num_frames,
-            "clip_count": actual_clip_count,
-            "extend_mode": is_extend_mode,
-            "fps": fps,
-            "steps": steps,
-            "seed": actual_seed,
-            "output_prefix": output_prefix,
-            "output_filename": output_filename,
-            "input_image": input_filename,
-            "created_at": timestamp,
-            "lora_count": len(parsed_lora_configs),
-            "post_processing": parsed_post_processing,
-            "post_audio_path": post_audio_path,
-            "job_type": "wan22_i2v",
-            "cfg": cfg,
-            "model_mode": "wan2.2",
-            "user_id": user.id,
-            "credits_required": credits_required,
-        }
-        cloud_lora_dl = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
-        result = await _submit_to_runpod(
-            workflow=workflow,
-            user_id=user.id,
-            prompt_id=str(uuid.uuid4()),
-            job_info=cloud_job_info,
-            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
-            prompt_full=prompt,
-        )
-        await deduct_credits(
-            user, credits_required, result["prompt_id"], "Wan2.2 I2V (cloud)"
-        )
-        return result
-
-    # Queue the workflow (non-blocking)
-    prompt_id = comfyui.queue_prompt(workflow)
-
-    if not prompt_id:
-        raise HTTPException(
-            status_code=500, detail="Failed to queue workflow to ComfyUI"
-        )
-
-    # Calculate total frames for tracking
-    total_frames = num_frames * actual_clip_count if is_extend_mode else num_frames
-
-    # Register job with ComfyUI client for auto-upload on completion
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "extend_mode": is_extend_mode,
-            "clip_count": actual_clip_count if is_extend_mode else 1,
+            lora_configs=lora_configs,
+            extend_mode=extend_mode,
+            clip_count=clip_count,
+            post_processing=post_processing,
+            compute_target=compute_target,
+        ),
+        files={"file": file, "post_audio_file": post_audio_file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-local-i2v-q6",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
         },
     )
-
-    # Register job with WebSocket manager for progress tracking
-    if ws_manager and job_queue_manager:
-        ws_manager.register_job(prompt_id, user_id=user.id)
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type="wan22_i2v",
-            metadata={
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": total_frames,
-                "fps": fps,
-            },
-        )
-
-        # Register progress callback to broadcast real-time progress
-        if progress_monitor:
-            progress_monitor.register_callback(
-                prompt_id, create_progress_callback(prompt_id)
-            )
-
-    # Store job info for tracking
-    job_info = {
-        "user_id": user.id,
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": total_frames,
-        "frames_per_clip": num_frames,
-        "clip_count": actual_clip_count,
-        "extend_mode": is_extend_mode,
-        "fps": fps,
-        "steps": steps,
-        "seed": actual_seed,
-        "output_prefix": output_prefix,
-        "output_filename": output_filename,
-        "input_image": input_filename,
-        "created_at": timestamp,
-        "lora_count": len(parsed_lora_configs),
-        "post_processing": parsed_post_processing,
-        "post_audio_path": post_audio_path,
-        "job_type": "wan22_i2v",
-        "cfg": cfg,
-        "model_mode": "wan2.2",
-    }
-    active_jobs[prompt_id] = job_info
-    record_generation_start(prompt_id, job_info)
-    save_gen_start_artifacts(
-        user_id=user.id,
-        prompt_id=prompt_id,
-        workflow=workflow,
-        prompt=prompt,
-        job_info=job_info,
-        input_image_path=str(input_path),
-    )
-
-    if is_extend_mode and actual_clip_count > 1:
-        logger.info(
-            f"🚀 Queued sequential job: {prompt_id} ({actual_clip_count} clips)"
-        )
-    else:
-        logger.info(f"🚀 Queued async job: {prompt_id}")
-    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
-    logger.info(f"   📝 {prompt[:50]}...")
-
-    # Deduct credits after successful queue
-    await deduct_credits(user, credits_required, prompt_id, "Wan2.2 I2V (async)")
-    logger.info(f"   💰 -{credits_required} credits")
-
-    return {
-        "success": True,
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "status": "queued",
-        "credits_used": credits_required,
-        "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
-        **job_info,
-    }
-
-
 # =============================================================================
 # BlockSwap Q8 Experimental I2V Async Endpoint
 # =============================================================================
@@ -7718,238 +6584,39 @@ async def generate_blockswap_q8_async(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Queue BlockSwap Q8 experimental I2V video generation.
+    """Queue BlockSwap Q8 experimental I2V video generation (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Uses Q8_0 GGUF models with BlockSwap VRAM optimization, Lightning LoRA,
-    NAG guidance, TorchCompile, and optional Florence2 auto-captioning.
-    Higher quality than standard Q6 mode with experimental optimizations.
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running",
-        )
-
-    # Wan2.2 requires num_frames in format 4k+1
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    # Calculate dimensions for credit check
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    duration_seconds = num_frames / fps if fps > 0 else 5
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 BlockSwap Q8 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Save + upload image
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"comfyui_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
-
-    image_name = comfyui.upload_image(str(input_path))
-    if not image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-
-    # Parse LoRA configs
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
-
-    # Map resolution to long_edge
-    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
-    long_edge = resolution_map.get(resolution, 720)
-
-    # Generate output prefix
-    output_prefix = f"oelala_bsq8_{timestamp}"
-    actual_seed = (
-        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    )
-
-    # Build workflow
-    workflow = comfyui.build_blockswap_q8_workflow(
-        image_name=image_name,
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        num_frames=num_frames,
-        fps=fps,
-        steps=steps,
-        cfg=cfg,
-        seed=actual_seed,
-        output_prefix=output_prefix,
-        high_noise_steps=high_noise_steps,
-        shift=shift,
-        nag_scale=nag_scale,
-        enhance_weight=1.0,
-        enable_upscale=enable_upscale,
-        enable_interpolation=enable_interpolation,
-        enable_florence2=enable_florence2,
-        lora_configs=parsed_lora_configs,
-        aspect_ratio=aspect_ratio,
-        long_edge=long_edge,
-    )
-
-    if not workflow:
-        raise HTTPException(
-            status_code=500, detail="Failed to build BlockSwap Q8 workflow"
-        )
-
-    # Route to cloud if requested
-    if compute_target == "cloud":
-        cloud_job_info = {
-            "prompt": prompt[:100],
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "steps": steps,
-            "seed": actual_seed,
-            "output_prefix": output_prefix,
-            "input_image": input_filename,
-            "created_at": timestamp,
-            "lora_count": len(parsed_lora_configs),
-            "job_type": "blockswap_q8_i2v",
-            "cfg": cfg,
-            "shift": shift,
-            "nag_scale": nag_scale,
-            "model_mode": "blockswap_q8",
-            "enable_florence2": enable_florence2,
-            "enable_upscale": enable_upscale,
-            "enable_interpolation": enable_interpolation,
-            "user_id": user.id,
-            "credits_required": credits_required,
-        }
-        cloud_lora_dl = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
-        result = await _submit_to_runpod(
-            workflow=workflow,
-            user_id=user.id,
-            prompt_id=str(uuid.uuid4()),
-            job_info=cloud_job_info,
-            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
-            prompt_full=prompt,
-        )
-        await deduct_credits(
-            user, credits_required, result["prompt_id"], "BlockSwap Q8 I2V (cloud)"
-        )
-        return result
-
-    # Queue workflow
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(
-            status_code=500, detail="Failed to queue workflow to ComfyUI"
-        )
-
-    job_id = str(uuid.uuid4())
-
-    # Register job
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            resolution=resolution,
+            fps=fps,
+            aspect_ratio=aspect_ratio,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            high_noise_steps=high_noise_steps,
+            shift=shift,
+            nag_scale=nag_scale,
+            enable_upscale=enable_upscale,
+            enable_interpolation=enable_interpolation,
+            enable_florence2=enable_florence2,
+            lora_configs=lora_configs,
+            compute_target=compute_target,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-local-i2v-blockswap",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
         },
     )
-
-    if ws_manager and job_queue_manager:
-        ws_manager.register_job(prompt_id, user_id=user.id)
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type="blockswap_q8_i2v",
-            metadata={
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-                "steps": steps,
-                "model_mode": "blockswap_q8",
-            },
-        )
-
-    # Track job
-    job_info = {
-        "prompt_id": prompt_id,
-        "user_id": user.id,
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": steps,
-        "seed": actual_seed,
-        "output_prefix": output_prefix,
-        "input_image": input_filename,
-        "created_at": timestamp,
-        "lora_count": len(parsed_lora_configs),
-        "job_type": "blockswap_q8_i2v",
-        "cfg": cfg,
-        "shift": shift,
-        "nag_scale": nag_scale,
-        "model_mode": "blockswap_q8",
-        "enable_florence2": enable_florence2,
-        "enable_upscale": enable_upscale,
-        "enable_interpolation": enable_interpolation,
-    }
-    active_jobs[prompt_id] = job_info
-    record_generation_start(prompt_id, job_info)
-    save_gen_start_artifacts(
-        user_id=user.id,
-        prompt_id=prompt_id,
-        workflow=workflow,
-        prompt=prompt,
-        job_info=job_info,
-        input_image_path=str(input_path),
-    )
-
-    logger.info(f"🧪 Queued BlockSwap Q8 job: {prompt_id}")
-    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
-    logger.info(f"   🧪 shift={shift}, NAG={nag_scale}, florence2={enable_florence2}")
-    logger.info(f"   📝 {prompt[:50]}...")
-
-    await deduct_credits(user, credits_required, prompt_id, "BlockSwap Q8 I2V (async)")
-    logger.info(f"   💰 -{credits_required} credits")
-
-    return {
-        "success": True,
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "status": "queued",
-        "credits_used": credits_required,
-        "message": "BlockSwap Q8 job queued. Poll /comfyui/job/{prompt_id} for status.",
-        **job_info,
-    }
-
-
 # =============================================================================
 # DisTorch2 Q8 Experimental I2V Async Endpoint
 # =============================================================================
@@ -7988,226 +6655,39 @@ async def generate_distorch2_q8_async(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Queue DisTorch2 Q8 experimental I2V video generation.
+    """Queue DisTorch2 Q8 experimental I2V video generation (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Same processing chain as BlockSwap Q8 (NAG, EnhanceAVideo, CFGZeroStar,
-    TorchCompile, Florence2) but uses DisTorch2 multi-GPU distribution.
-    No forced Lightning LoRA — all LoRAs are user-selectable.
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-    if not comfyui.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI not running")
-
-    # Wan2.2 requires num_frames in format 4k+1
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    duration_seconds = num_frames / fps if fps > 0 else 5
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 DisTorch2 Q8 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"comfyui_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
-
-    image_name = comfyui.upload_image(str(input_path))
-    if not image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
-
-    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
-    long_edge = resolution_map.get(resolution, 720)
-
-    output_prefix = f"oelala_dt2q8_{timestamp}"
-    actual_seed = (
-        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    )
-
-    workflow = comfyui.build_distorch2_q8_workflow(
-        image_name=image_name,
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        num_frames=num_frames,
-        fps=fps,
-        steps=steps,
-        cfg=cfg,
-        seed=actual_seed,
-        output_prefix=output_prefix,
-        high_noise_steps=high_noise_steps,
-        shift=shift,
-        nag_scale=nag_scale,
-        enhance_weight=1.0,
-        enable_upscale=enable_upscale,
-        enable_interpolation=enable_interpolation,
-        enable_florence2=enable_florence2,
-        lora_configs=parsed_lora_configs,
-        aspect_ratio=aspect_ratio,
-        long_edge=long_edge,
-    )
-
-    if not workflow:
-        raise HTTPException(
-            status_code=500, detail="Failed to build DisTorch2 Q8 workflow"
-        )
-
-    # Route to cloud if requested
-    if compute_target == "cloud":
-        cloud_job_info = {
-            "prompt": prompt[:100],
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "steps": steps,
-            "seed": actual_seed,
-            "output_prefix": output_prefix,
-            "input_image": input_filename,
-            "created_at": timestamp,
-            "lora_count": len(parsed_lora_configs),
-            "job_type": "distorch2_q8_i2v",
-            "cfg": cfg,
-            "shift": shift,
-            "nag_scale": nag_scale,
-            "model_mode": "distorch2_q8",
-            "enable_florence2": enable_florence2,
-            "enable_upscale": enable_upscale,
-            "enable_interpolation": enable_interpolation,
-            "user_id": user.id,
-            "credits_required": credits_required,
-        }
-        cloud_lora_dl = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
-        result = await _submit_to_runpod(
-            workflow=workflow,
-            user_id=user.id,
-            prompt_id=str(uuid.uuid4()),
-            job_info=cloud_job_info,
-            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
-            prompt_full=prompt,
-        )
-        await deduct_credits(
-            user, credits_required, result["prompt_id"], "DisTorch2 Q8 I2V (cloud)"
-        )
-        return result
-
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(
-            status_code=500, detail="Failed to queue workflow to ComfyUI"
-        )
-
-    job_id = str(uuid.uuid4())
-
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            resolution=resolution,
+            fps=fps,
+            aspect_ratio=aspect_ratio,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            high_noise_steps=high_noise_steps,
+            shift=shift,
+            nag_scale=nag_scale,
+            enable_upscale=enable_upscale,
+            enable_interpolation=enable_interpolation,
+            enable_florence2=enable_florence2,
+            lora_configs=lora_configs,
+            compute_target=compute_target,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-local-i2v-distorch2",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
         },
     )
-
-    if ws_manager and job_queue_manager:
-        ws_manager.register_job(prompt_id, user_id=user.id)
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type="distorch2_q8_i2v",
-            metadata={
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-                "steps": steps,
-                "model_mode": "distorch2_q8",
-            },
-        )
-
-    job_info = {
-        "prompt_id": prompt_id,
-        "user_id": user.id,
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": steps,
-        "seed": actual_seed,
-        "output_prefix": output_prefix,
-        "input_image": input_filename,
-        "created_at": timestamp,
-        "lora_count": len(parsed_lora_configs),
-        "job_type": "distorch2_q8_i2v",
-        "cfg": cfg,
-        "shift": shift,
-        "nag_scale": nag_scale,
-        "model_mode": "distorch2_q8",
-        "enable_florence2": enable_florence2,
-        "enable_upscale": enable_upscale,
-        "enable_interpolation": enable_interpolation,
-    }
-    active_jobs[prompt_id] = job_info
-    record_generation_start(prompt_id, job_info)
-    save_gen_start_artifacts(
-        user_id=user.id,
-        prompt_id=prompt_id,
-        workflow=workflow,
-        prompt=prompt,
-        job_info=job_info,
-        input_image_path=str(input_path),
-    )
-
-    logger.info(f"🧪 Queued DisTorch2 Q8 job: {prompt_id}")
-    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
-    logger.info(f"   🧪 shift={shift}, NAG={nag_scale}, florence2={enable_florence2}")
-    logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs selected")
-    logger.info(f"   📝 {prompt[:50]}...")
-
-    await deduct_credits(user, credits_required, prompt_id, "DisTorch2 Q8 I2V (async)")
-    logger.info(f"   💰 -{credits_required} credits")
-
-    return {
-        "success": True,
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "status": "queued",
-        "credits_used": credits_required,
-        "message": "DisTorch2 Q8 job queued. Poll /comfyui/job/{prompt_id} for status.",
-        **job_info,
-    }
-
-
 # =============================================================================
 # Ultra Q8 I2V Async Endpoint — Max VRAM + Unlimited CPU RAM
 # =============================================================================
@@ -8244,227 +6724,39 @@ async def generate_ultra_q8_async(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Queue Ultra Q8 I2V video generation — max VRAM + unlimited CPU RAM.
+    """Queue Ultra Q8 I2V video generation — max VRAM + unlimited CPU RAM (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Uses DisTorch2 with optimized allocation: 3060 as model cache (11GB),
-    5060 Ti fully free for compute (~15.5GB), CPU for overflow.
-    Higher resolution/frames possible due to maximum compute VRAM.
-
-    Same processing chain: NAG, EnhanceAVideo, CFGZeroStar, TorchCompile,
-    Florence2 auto-captioning, Lightning LoRA.
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-    if not comfyui.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI not running")
-
-    # Wan2.2 requires num_frames in format 4k+1
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    duration_seconds = num_frames / fps if fps > 0 else 5
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 Ultra Q8 async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"comfyui_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    await _save_upload(file, input_path)
-
-    image_name = comfyui.upload_image(str(input_path))
-    if not image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
-
-    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
-    long_edge = resolution_map.get(resolution, 576)
-
-    output_prefix = f"oelala_ultra_q8_{timestamp}"
-    actual_seed = (
-        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    )
-
-    workflow = comfyui.build_ultra_q8_workflow(
-        image_name=image_name,
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        num_frames=num_frames,
-        fps=fps,
-        steps=steps,
-        cfg=cfg,
-        seed=actual_seed,
-        output_prefix=output_prefix,
-        high_noise_steps=high_noise_steps,
-        shift=shift,
-        nag_scale=nag_scale,
-        enhance_weight=1.0,
-        enable_upscale=enable_upscale,
-        enable_interpolation=enable_interpolation,
-        enable_florence2=enable_florence2,
-        lora_configs=parsed_lora_configs,
-        aspect_ratio=aspect_ratio,
-        long_edge=long_edge,
-    )
-
-    if not workflow:
-        raise HTTPException(status_code=500, detail="Failed to build Ultra Q8 workflow")
-
-    # Route to cloud if requested
-    if compute_target == "cloud":
-        cloud_job_info = {
-            "prompt": prompt[:100],
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "steps": steps,
-            "seed": actual_seed,
-            "output_prefix": output_prefix,
-            "input_image": input_filename,
-            "created_at": timestamp,
-            "lora_count": len(parsed_lora_configs),
-            "job_type": "ultra_q8_i2v",
-            "cfg": cfg,
-            "shift": shift,
-            "nag_scale": nag_scale,
-            "model_mode": "ultra_q8",
-            "enable_florence2": enable_florence2,
-            "enable_upscale": enable_upscale,
-            "enable_interpolation": enable_interpolation,
-            "user_id": user.id,
-            "credits_required": credits_required,
-        }
-        cloud_lora_dl = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
-        result = await _submit_to_runpod(
-            workflow=workflow,
-            user_id=user.id,
-            prompt_id=str(uuid.uuid4()),
-            job_info=cloud_job_info,
-            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
-            prompt_full=prompt,
-        )
-        await deduct_credits(
-            user, credits_required, result["prompt_id"], "Ultra Q8 I2V (cloud)"
-        )
-        return result
-
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(
-            status_code=500, detail="Failed to queue workflow to ComfyUI"
-        )
-
-    job_id = str(uuid.uuid4())
-
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            resolution=resolution,
+            fps=fps,
+            aspect_ratio=aspect_ratio,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            high_noise_steps=high_noise_steps,
+            shift=shift,
+            nag_scale=nag_scale,
+            enable_upscale=enable_upscale,
+            enable_interpolation=enable_interpolation,
+            enable_florence2=enable_florence2,
+            lora_configs=lora_configs,
+            compute_target=compute_target,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-local-i2v-ultra",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
         },
     )
-
-    if ws_manager and job_queue_manager:
-        ws_manager.register_job(prompt_id, user_id=user.id)
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type="ultra_q8_i2v",
-            metadata={
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-                "steps": steps,
-                "model_mode": "ultra_q8",
-            },
-        )
-
-    job_info = {
-        "prompt_id": prompt_id,
-        "user_id": user.id,
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": steps,
-        "seed": actual_seed,
-        "output_prefix": output_prefix,
-        "input_image": input_filename,
-        "created_at": timestamp,
-        "lora_count": len(parsed_lora_configs),
-        "job_type": "ultra_q8_i2v",
-        "cfg": cfg,
-        "shift": shift,
-        "nag_scale": nag_scale,
-        "model_mode": "ultra_q8",
-        "enable_florence2": enable_florence2,
-        "enable_upscale": enable_upscale,
-        "enable_interpolation": enable_interpolation,
-    }
-    active_jobs[prompt_id] = job_info
-    record_generation_start(prompt_id, job_info)
-    save_gen_start_artifacts(
-        user_id=user.id,
-        prompt_id=prompt_id,
-        workflow=workflow,
-        prompt=prompt,
-        job_info=job_info,
-        input_image_path=str(input_path),
-    )
-
-    logger.info(f"⚡ Queued Ultra Q8 job: {prompt_id}")
-    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
-    logger.info(f"   ⚡ shift={shift}, NAG={nag_scale}, florence2={enable_florence2}")
-    logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs selected")
-    logger.info(f"   📝 {prompt[:50]}...")
-
-    await deduct_credits(user, credits_required, prompt_id, "Ultra Q8 I2V (async)")
-    logger.info(f"   💰 -{credits_required} credits")
-
-    return {
-        "success": True,
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "status": "queued",
-        "credits_used": credits_required,
-        "message": "Ultra Q8 job queued. Poll /comfyui/job/{prompt_id} for status.",
-        **job_info,
-    }
-
-
 # =============================================================================
 # Cloud Wan22 Async Endpoint (RunPod bf16 — cloud-only)
 # =============================================================================
@@ -8499,210 +6791,38 @@ async def generate_cloud_wan22_async(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Queue Cloud Wan22 video generation on RunPod — bf16 full precision.
+    """Queue Cloud Wan22 video generation on RunPod — bf16 full precision (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    CLOUD-ONLY endpoint. Uses native ComfyUI UNETLoader with bf16 safetensors
-    on 48GB+ GPUs (A6000/A40/L40S). No quantization, no multi-GPU tricks.
-    Supports both I2V and T2V modes. Dual-pass sampling for high/low LoRA
-    compatibility.
-
-    Recommended GPU tier: A6000/A40 ($1.22/hr) or L40S ($1.91/hr).
-    """
-    if not _runpod or not _runpod.has_endpoint():
-        raise HTTPException(
-            status_code=503,
-            detail="Cloud Wan22 requires a RunPod endpoint. Deploy one first.",
-        )
-
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    # Validate mode
-    if mode not in ("i2v", "t2v"):
-        raise HTTPException(status_code=400, detail="mode must be 'i2v' or 't2v'")
-
-    # I2V requires an image
-    if mode == "i2v" and not file:
-        raise HTTPException(status_code=400, detail="I2V mode requires an image file")
-
-    # Wan2.2 requires num_frames in format 4k+1
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    resolution_map = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
-    long_edge = resolution_map.get(resolution, 720)
-
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    duration_seconds = num_frames / fps if fps > 0 else 5
-    if mode == "t2v":
-        pixel_frame_budget = width * height * num_frames
-        max_pixel_frame_budget = 100_000_000
-        if pixel_frame_budget > max_pixel_frame_budget:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Cloud Wan22 T2V exceeds the current serverless safety budget. "
-                    "Lower duration or resolution and stay under roughly 100M pixel-frames "
-                    f"(received {pixel_frame_budget:,})."
-                ),
-            )
-
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    # Cloud Wan22 costs 2x credits (premium quality)
-    credits_required = int(credits_required * 2)
-    logger.info(
-        f"☁️ Cloud Wan22 {mode.upper()} costs {credits_required} credits "
-        f"({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs: {lora_configs}")
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    actual_seed = (
-        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    )
-    output_prefix = f"oelala_cloud_wan22_{mode}_{timestamp}"
-
-    # Handle image upload for I2V
-    image_name = None
-    input_filename = None
-    input_images_b64 = {}
-    if mode == "i2v" and file:
-        if not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="File must be an image")
-
-        input_filename = f"comfyui_{timestamp}_{file.filename}"
-        input_path = UPLOAD_DIR / input_filename
-        content = await _save_upload(file, input_path)
-
-        # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
-        import base64 as _b64
-
-        input_images_b64[input_filename] = _b64.b64encode(content).decode()
-
-        image_name = comfyui.upload_image(str(input_path))
-        if not image_name:
-            raise HTTPException(
-                status_code=500, detail="Failed to upload image to ComfyUI"
-            )
-        # Use the ComfyUI-assigned name as key so RunPod handler saves it with matching filename
-        if image_name != input_filename:
-            input_images_b64[image_name] = input_images_b64.pop(input_filename)
-
-    # Build workflow
-    # Cloud-wan22 is Wan2.2 only — filter out incompatible LoRAs
-    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "wan2.2")
-    if mode == "i2v":
-        workflow = comfyui.build_cloud_wan22_i2v_workflow(
-            image_name=image_name,
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
             negative_prompt=negative_prompt,
+            mode=mode,
             num_frames=num_frames,
+            resolution=resolution,
             fps=fps,
+            aspect_ratio=aspect_ratio,
             steps=steps,
             cfg=cfg,
-            seed=actual_seed,
-            output_prefix=output_prefix,
+            seed=seed,
             high_noise_steps=high_noise_steps,
             shift=shift,
             sampler_name=sampler_name,
             scheduler=scheduler,
-            lora_configs=parsed_lora_configs,
-            aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-        )
-    else:
-        workflow = comfyui.build_cloud_wan22_t2v_workflow(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            fps=fps,
-            steps=steps,
-            cfg=cfg,
-            seed=actual_seed,
-            output_prefix=output_prefix,
-            high_noise_steps=high_noise_steps,
-            shift=shift,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            lora_configs=parsed_lora_configs,
-            aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-        )
-
-    if not workflow:
-        raise HTTPException(
-            status_code=500, detail="Failed to build Cloud Wan22 workflow"
-        )
-
-    # Build LoRA download URLs for cloud worker (on-demand upload)
-    cloud_lora_downloads = (
-        _build_lora_download_list(parsed_lora_configs) if parsed_lora_configs else []
+            lora_configs=lora_configs,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="wan22-cloud-i2v",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
+        },
+        v1_format="cloud",
     )
-
-    # Always route to RunPod (cloud-only endpoint)
-    cloud_job_info = {
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": steps,
-        "seed": actual_seed,
-        "output_prefix": output_prefix,
-        "input_image": input_filename,
-        "created_at": timestamp,
-        "lora_count": len(parsed_lora_configs),
-        "job_type": f"cloud_wan22_{mode}",
-        "cfg": cfg,
-        "shift": shift,
-        "sampler": sampler_name,
-        "scheduler": scheduler,
-        "model_mode": "cloud_wan22",
-        "compute_target": "cloud",
-        "user_id": user.id,
-        "credits_required": credits_required,
-    }
-
-    result = await _submit_to_runpod(
-        workflow=workflow,
-        user_id=user.id,
-        prompt_id=str(uuid.uuid4()),
-        job_info=cloud_job_info,
-        images=input_images_b64 if input_images_b64 else None,
-        lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
-        prompt_full=prompt,
-    )
-    await deduct_credits(
-        user,
-        credits_required,
-        result["prompt_id"],
-        f"Cloud Wan22 {mode.upper()} (RunPod bf16)",
-    )
-
-    logger.info(f"☁️ Cloud Wan22 {mode.upper()} job submitted to RunPod")
-    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
-    logger.info(f"   🎛️ {steps} steps, cfg={cfg}, {sampler_name}/{scheduler}")
-    logger.info(f"   🎨 {len(parsed_lora_configs)} LoRAs")
-
-    return result
-
-
 # =============================================================================
 # LTX-2 Image-to-Video Async Endpoint
 # =============================================================================
@@ -8737,292 +6857,36 @@ async def generate_ltx2_i2v_async(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Queue LTX-2 I2V video generation and return immediately.
+    """Queue LTX-2 I2V video generation and return immediately (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    LTX-2 19B uses a single model (no high/low noise dual-pass like Wan2.2).
-    Uses Gemma 3 text encoder. Faster inference, good for shorter clips.
-    """
-    from comfyui_client import build_ltx2_i2v_workflow
-
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
-
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # LTX-2 frame count: should be multiple of 8 + 1 (e.g., 9, 17, 25, 33, 41, 49, 57, 65, 73, 81, 89, 97)
-    # Round to nearest valid value
-    k = round((num_frames - 1) / 8)
-    k = max(1, k)  # Minimum k=1 gives 9 frames
-    num_frames = 8 * k + 1
-
-    # Get resolution dimensions
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-    duration_seconds = num_frames / fps if fps > 0 else 3
-
-    # Calculate credits (use same formula as Wan2.2 for now)
-    credits_required = calculate_credits(
-        "generate_wan22_comfyui",  # Reuse same credit calculation
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 LTX-2 I2V async costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"ltx2_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
-    content = await _save_upload(file, input_path)
-
-    # Encode image as base64 for RunPod (remote ComfyUI needs the image data)
-    import base64 as _b64
-
-    input_images_b64 = {}
-    input_images_b64[input_filename] = _b64.b64encode(content).decode()
-
-    # Upload to ComfyUI
-    image_name = comfyui.upload_image(str(input_path))
-    if not image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-    # Use ComfyUI-assigned name as key so RunPod handler saves it with matching filename
-    if image_name != input_filename:
-        input_images_b64[image_name] = input_images_b64.pop(input_filename)
-
-    # Parse post_processing chain
-    parsed_post_processing = []
-    if post_processing:
-        try:
-            parsed_post_processing = json.loads(post_processing)
-            logger.info(f"🔄 Post-processing chain: {parsed_post_processing}")
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse post_processing JSON: {post_processing}")
-
-    # Save audio file for post-processing if provided
-    post_audio_path = None
-    if post_audio_file and post_audio_file.filename:
-        audio_filename = f"post_audio_{timestamp}_{post_audio_file.filename}"
-        post_audio_path = str(UPLOAD_DIR / audio_filename)
-        try:
-            await _save_upload(post_audio_file, Path(post_audio_path))
-        except Exception as e:
-            logger.warning(f"Failed to save post audio file: {e}")
-            post_audio_path = None
-
-    # Generate output prefix
-    output_prefix = f"oelala_ltx2_i2v_{timestamp}"
-
-    # Get actual seed
-    actual_seed = (
-        seed if seed >= 0 else int(datetime.now().timestamp() * 1000) % 2147483647
-    )
-
-    # Parse LoRA configs
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
-    # LTX-2.3 uses single-stage LoRAs — sanitize any Wan2.2 dual-stage configs
-    parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
-    # Filter out LoRAs incompatible with LTX architecture
-    parsed_lora_configs = _filter_loras_by_model_compat(parsed_lora_configs, "ltx")
-
-    # Build LTX-2 I2V workflow
-    workflow = build_ltx2_i2v_workflow(
-        image_name=image_name,
-        prompt=prompt,
-        width=width,
-        height=height,
-        num_frames=num_frames,
-        steps=steps,
-        cfg=cfg,
-        seed=actual_seed,
-        filename_prefix=output_prefix,
-        fps=fps,
-    )
-
-    if not workflow:
-        raise HTTPException(
-            status_code=500, detail="Failed to build LTX-2 I2V workflow"
-        )
-
-    # LTX-2.3 22B always routes to cloud (needs 80GB+ GPU)
-    if compute_target != "cloud":
-        compute_target = "cloud"
-        logger.info("🔄 LTX-2.3 I2V forced to cloud (80GB+ GPU required)")
-
-    # Route to cloud if requested
-    if compute_target == "cloud":
-        # Cloud uses LTX-2.3 22B (80 GB+ GPU) instead of LTX-2.0 19B
-        cloud_workflow = comfyui.build_cloud_ltx23_i2v_workflow(
-            image_name=image_name,
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
-            negative_prompt="low quality, blurry, distorted, artifacts, watermark",
-            width=width,
-            height=height,
             num_frames=num_frames,
+            output_filename=output_filename,
+            resolution=resolution,
             fps=fps,
-            seed=actual_seed,
-            strength=1.0,
-            output_prefix=output_prefix,
-            lora_configs=parsed_lora_configs,
-            audio_prompt=audio_prompt if audio_prompt else None,
-        )
-        if not cloud_workflow:
-            raise HTTPException(
-                status_code=500, detail="Failed to build LTX-2.3 I2V cloud workflow"
-            )
-        cloud_job_info = {
-            "prompt": prompt[:100],
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "steps": steps,
-            "seed": actual_seed,
-            "output_prefix": output_prefix,
-            "input_image": input_filename,
-            "created_at": timestamp,
-            "model": "ltx23",
-            "post_processing": parsed_post_processing,
-            "post_audio_path": post_audio_path,
-            "job_type": "ltx23_i2v",
-            "cfg": cfg,
-            "model_mode": "ltx2",
-            "lora_count": len(parsed_lora_configs),
-            "user_id": user.id,
-            "credits_required": credits_required,
-        }
-        cloud_lora_dl = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
-        result = await _submit_to_runpod(
-            workflow=cloud_workflow,
-            user_id=user.id,
-            prompt_id=str(uuid.uuid4()),
-            job_info=cloud_job_info,
-            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
-            images=input_images_b64 if input_images_b64 else None,
-            prompt_full=prompt,
-            endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID"),
-        )
-        await deduct_credits(
-            user, credits_required, result["prompt_id"], "LTX-2.3 I2V (cloud)"
-        )
-        return result
-
-    # Queue the workflow (non-blocking)
-    prompt_id = comfyui.queue_prompt(workflow)
-
-    if not prompt_id:
-        raise HTTPException(
-            status_code=500, detail="Failed to queue workflow to ComfyUI"
-        )
-
-    # Register job with ComfyUI client for auto-upload on completion
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "model": "ltx2",
+            aspect_ratio=aspect_ratio,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            lora_configs=lora_configs,
+            audio_prompt=audio_prompt,
+            post_processing=post_processing,
+            compute_target=compute_target,
+        ),
+        files={"file": file, "post_audio_file": post_audio_file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="ltx23-cloud-i2v",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
         },
+        v1_format="cloud",
     )
-
-    # Register job with WebSocket manager for progress tracking
-    if ws_manager and job_queue_manager:
-        ws_manager.register_job(prompt_id, user_id=user.id)
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type="ltx2_i2v",
-            metadata={
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-            },
-        )
-
-        # Register progress callback
-        if progress_monitor:
-            progress_monitor.register_callback(
-                prompt_id, create_progress_callback(prompt_id)
-            )
-
-    # Store job info for tracking
-    job_info = {
-        "user_id": user.id,
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": steps,
-        "seed": actual_seed,
-        "output_prefix": output_prefix,
-        "input_image": input_filename,
-        "created_at": timestamp,
-        "model": "ltx2",
-        "post_processing": parsed_post_processing,
-        "post_audio_path": post_audio_path,
-        "job_type": "ltx2_i2v",
-        "cfg": cfg,
-        "model_mode": "ltx2",
-    }
-    active_jobs[prompt_id] = job_info
-    record_generation_start(prompt_id, job_info)
-    save_gen_start_artifacts(
-        user_id=user.id,
-        prompt_id=prompt_id,
-        workflow=workflow,
-        prompt=prompt,
-        job_info=job_info,
-        input_image_path=str(input_path),
-    )
-
-    logger.info(f"🚀 Queued LTX-2 I2V async job: {prompt_id}")
-    logger.info(f"   📐 {resolution} {aspect_ratio}, {num_frames}f @ {fps}fps")
-    logger.info(f"   📝 {prompt[:50]}...")
-
-    # Deduct credits after successful queue
-    await deduct_credits(user, credits_required, prompt_id, "LTX-2 I2V (async)")
-    logger.info(f"   💰 -{credits_required} credits")
-
-    return {
-        "success": True,
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "status": "queued",
-        "credits_used": credits_required,
-        "message": "Job queued successfully. Poll /comfyui/job/{prompt_id} for status.",
-        **job_info,
-    }
-
-
 # =============================================================================
 # POST-PROCESSING ENDPOINT (Standalone for existing media)
 # =============================================================================
@@ -9273,376 +7137,51 @@ async def generate_text_video(
     ),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate video from text prompt via ComfyUI T2V workflow.
-    Supports multiple models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
-    Supports cloud routing via compute_target='cloud' (RunPod).
-    When audio_prompt is provided with ltx2, generates audio-video.
-    Requires authentication and credits.
-    """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    """Generate video from text prompt via ComfyUI T2V workflow (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    comfyui = get_comfyui_client()
+    # Map model_type + compute_target to adapter_hint
+    hint_map = {
+        "wan22": "wan22-local-t2v-q6",
+        "ltx23": "ltx23-cloud-t2v",
+        "ltx2": "ltx23-cloud-t2v",
+    }
+    hint = hint_map.get(model_type, "wan22-local-t2v-q6")
+    if compute_target == "cloud" and model_type == "wan22":
+        hint = "wan22-cloud-t2v"
 
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    if not prompt or len(prompt.strip()) == 0:
-        raise HTTPException(status_code=400, detail="Prompt is required")
-
-    # Validate model_type
-    from comfyui_client import T2V_GENERATION_MODES, build_ltx2_t2v_workflow
-
-    if model_type not in T2V_GENERATION_MODES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid model_type. Available: {list(T2V_GENERATION_MODES.keys())}",
-        )
-
-    mode_config = T2V_GENERATION_MODES[model_type]
-    logger.info(f"🎬 T2V generation with model: {mode_config['name']}")
-
-    # Get resolution dimensions
-    width, height = comfyui.get_resolution_dimensions(resolution, aspect_ratio)
-
-    # Calculate duration for credit calculation
-    duration_seconds = num_frames / fps if fps > 0 else 3
-
-    # Calculate and check credits (using model_type for pricing)
-    credit_type = f"{model_type}_t2v"
-    credits_required = calculate_credits(
-        credit_type,
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
-    )
-    logger.info(
-        f"💰 T2V generation costs {credits_required} credits ({resolution}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    # Cloud T2V uses 2x credit multiplier (same as cloud_max)
-    if compute_target == "cloud":
-        credits_required = int(credits_required * 2)
-        logger.info(f"☁️ Cloud T2V: {credits_required} credits (2x cloud multiplier)")
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    # Generate unique timestamp
-    import random
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # Resolve seed: -1 means random
-    actual_seed = seed if seed >= 0 else random.randint(0, 2**32 - 1)
-
-    # Resolve steps/cfg: -1 means use model defaults
-    actual_steps = steps if steps > 0 else mode_config["default_steps"]
-    actual_cfg = cfg if cfg >= 0 else mode_config["default_cfg"]
-
-    # Parse LoRA configs
-    parsed_lora_configs = []
-    if lora_configs:
-        try:
-            parsed_lora_configs = json.loads(lora_configs)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse lora_configs JSON: {lora_configs}")
-
-    # Parse post-processing steps
-    post_processing_steps = []
-    if post_processing:
-        try:
-            post_processing_steps = json.loads(post_processing)
-            if not isinstance(post_processing_steps, list):
-                post_processing_steps = []
-        except json.JSONDecodeError:
-            post_processing_steps = []
-
-    # Map resolution to long_edge
-    long_edge = 480 if resolution == "480p" else 720
-
-    # LTX-2.3 22B always routes to cloud (needs 80GB+ GPU)
-    if model_type == "ltx2" and compute_target != "cloud":
-        compute_target = "cloud"
-        logger.info("🔄 LTX-2.3 T2V forced to cloud (80GB+ GPU required)")
-
-    # ── Cloud routing ────────────────────────────────────────────────
-    if compute_target == "cloud":
-        if not _runpod or not _runpod.has_endpoint():
-            raise HTTPException(
-                status_code=503,
-                detail="RunPod cloud GPU not available. Deploy an endpoint first.",
-            )
-
-        output_prefix = f"oelala_t2v_cloud_{timestamp}"
-
-        if model_type == "wan22":
-            # Filter out LoRAs incompatible with Wan2.2 architecture
-            parsed_lora_configs = _filter_loras_by_model_compat(
-                parsed_lora_configs, "wan2.2"
-            )
-            workflow = comfyui.build_cloud_wan22_t2v_workflow(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_frames=num_frames,
-                fps=fps,
-                steps=actual_steps,
-                cfg=actual_cfg,
-                seed=actual_seed,
-                output_prefix=output_prefix,
-                high_noise_steps=high_noise_steps,
-                shift=shift,
-                sampler_name=sampler_name,
-                scheduler=scheduler,
-                lora_configs=parsed_lora_configs,
-                aspect_ratio=aspect_ratio,
-                long_edge=long_edge,
-            )
-            cloud_job_info = {
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-                "steps": actual_steps,
-                "seed": actual_seed,
-                "output_prefix": output_prefix,
-                "created_at": timestamp,
-                "lora_count": len(parsed_lora_configs),
-                "post_processing": post_processing_steps,
-                "job_type": "wan22_t2v",
-                "cfg": actual_cfg,
-                "shift": shift,
-                "sampler": sampler_name,
-                "scheduler": scheduler,
-                "model_mode": "wan2.2",
-                "compute_target": "cloud",
-                "user_id": user.id,
-                "credits_required": credits_required,
-            }
-            cloud_lora_dl = (
-                _build_lora_download_list(parsed_lora_configs)
-                if parsed_lora_configs
-                else []
-            )
-        else:
-            # LTX-2.3 22B cloud workflow (80 GB+ GPU)
-            # Sanitize Wan2.2 dual-stage LoRA configs to single-stage for LTX
-            parsed_lora_configs = _sanitize_lora_configs_for_single_stage(
-                parsed_lora_configs
-            )
-            # Filter out LoRAs incompatible with LTX architecture
-            parsed_lora_configs = _filter_loras_by_model_compat(
-                parsed_lora_configs, "ltx"
-            )
-            workflow = comfyui.build_cloud_ltx23_t2v_workflow(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                width=width,
-                height=height,
-                num_frames=num_frames,
-                fps=fps,
-                seed=actual_seed,
-                output_prefix=output_prefix,
-                aspect_ratio=aspect_ratio,
-                long_edge=long_edge,
-                lora_configs=parsed_lora_configs,
-                audio_prompt=audio_prompt if audio_prompt else None,
-            )
-            cloud_job_info = {
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-                "steps": actual_steps,
-                "seed": actual_seed,
-                "output_prefix": output_prefix,
-                "created_at": timestamp,
-                "lora_count": len(parsed_lora_configs),
-                "post_processing": post_processing_steps,
-                "job_type": "ltx23_t2v",
-                "cfg": actual_cfg,
-                "model_mode": "ltx23",
-                "compute_target": "cloud",
-                "user_id": user.id,
-                "credits_required": credits_required,
-            }
-            cloud_lora_dl = (
-                _build_lora_download_list(parsed_lora_configs)
-                if parsed_lora_configs
-                else []
-            )
-
-        if not workflow:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to build cloud {model_type} T2V workflow",
-            )
-
-        result = await _submit_to_runpod(
-            workflow=workflow,
-            user_id=user.id,
-            prompt_id=str(uuid.uuid4()),
-            job_info=cloud_job_info,
-            lora_downloads=cloud_lora_dl if cloud_lora_dl else None,
-            prompt_full=prompt,
-            endpoint_id=os.environ.get("RUNPOD_LTX23_ENDPOINT_ID")
-            if model_type != "wan22"
-            else None,
-        )
-        cloud_label = (
-            "Wan2.2 T2V (cloud)" if model_type == "wan22" else "LTX-2.3 T2V (cloud)"
-        )
-        await deduct_credits(user, credits_required, result["prompt_id"], cloud_label)
-        logger.info(
-            f"☁️ T2V cloud job submitted ({model_type}): {result.get('runpod_job_id')}"
-        )
-        return result
-
-    # ── Local routing ────────────────────────────────────────────────
-    # Build workflow based on model type
-    if model_type == "ltx2":
-        # LTX-2 doesn't need frame adjustment
-        workflow = build_ltx2_t2v_workflow(
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
-            width=width,
-            height=height,
             num_frames=num_frames,
-            steps=actual_steps,
-            cfg=actual_cfg,
-            seed=actual_seed,
-            filename_prefix=f"oelala_ltx2_t2v_{timestamp}",
-        )
-        if not workflow:
-            raise HTTPException(
-                status_code=500, detail="Failed to build LTX-2 workflow"
-            )
-    else:
-        # Wan2.2: Native T2V with DisTorch2 dual-pass Q6_K
-        workflow = comfyui.build_t2v_q6_workflow(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            width=width,
-            height=height,
-            num_frames=num_frames,
+            model_type=model_type,
+            output_filename=output_filename,
+            resolution=resolution,
             fps=fps,
-            steps=actual_steps,
-            cfg=actual_cfg,
-            seed=actual_seed,
-            output_prefix=f"oelala_t2v_{timestamp}",
             aspect_ratio=aspect_ratio,
-            long_edge=long_edge,
-            lora_configs=parsed_lora_configs if parsed_lora_configs else None,
-        )
-
-    # Queue workflow
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    # Register in active_jobs for stats tracking and gen log upload
-    _t2v_job_info = {
-        "user_id": user.id,
-        "prompt": prompt[:100],
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-        "num_frames": num_frames,
-        "fps": fps,
-        "steps": actual_steps,
-        "seed": actual_seed,
-        "cfg": actual_cfg,
-        "model_mode": model_type,
-        "job_type": f"{model_type}_t2v",
-        "created_at": timestamp,
-        "lora_count": len(parsed_lora_configs),
-    }
-    active_jobs[prompt_id] = _t2v_job_info
-    record_generation_start(prompt_id, _t2v_job_info)
-    save_gen_start_artifacts(
-        user_id=user.id,
-        prompt_id=prompt_id,
-        workflow=workflow,
-        prompt=prompt,
-        job_info=_t2v_job_info,
-    )
-
-    # Register pending post-processing if any steps specified
-    if post_processing_steps:
-        pending_post_processing[prompt_id] = post_processing_steps
-        logger.info(
-            f"   📦 Registered {len(post_processing_steps)} post-processing step(s)"
-        )
-
-    # Register job with ComfyUI client for auto-upload on completion
-    comfyui.register_job(
-        prompt_id=prompt_id,
-        user_id=user.id,
-        prompt=prompt,
-        settings={
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "num_frames": num_frames,
-            "fps": fps,
-            "width": width,
-            "height": height,
-            "model_type": model_type,
-            "post_processing": post_processing_steps,
+            post_processing=post_processing,
+            compute_target=compute_target,
+            negative_prompt=negative_prompt,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+            lora_configs=lora_configs,
+            shift=shift,
+            high_noise_steps=high_noise_steps,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            audio_prompt=audio_prompt,
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint=hint,
+        user=user,
+        register_job_settings={
+            "job_type": "t2v",
         },
     )
-
-    # Register job with WebSocket manager for progress tracking
-    job_type = f"{model_type}_t2v"
-    if ws_manager and job_queue_manager:
-        ws_manager.register_job(prompt_id, user_id=user.id)
-        job_queue_manager.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            job_type=job_type,
-            metadata={
-                "prompt": prompt[:100],
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-                "num_frames": num_frames,
-                "fps": fps,
-                "model_type": model_type,
-            },
-        )
-
-        # Register progress callback to broadcast real-time progress
-        if progress_monitor:
-            progress_monitor.register_callback(
-                prompt_id, create_progress_callback(prompt_id)
-            )
-
-    # Deduct credits after successful queue
-    model_display = mode_config["name"]
-    await deduct_credits(user, credits_required, prompt_id, f"{model_display} T2V")
-    logger.info(
-        f"📋 T2V ({model_type}) queued: {prompt_id} (💰 -{credits_required} credits)"
-    )
-
-    return {
-        "status": "queued",
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "credits_used": credits_required,
-        "meta": {
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "num_frames": num_frames,
-            "fps": fps,
-            "seed": actual_seed,
-            "type": "text-to-video",
-            "model_type": model_type,
-            "model_name": mode_config["name"],
-        },
-    }
-
-
 @app.post("/generate-pose")
 async def generate_pose_video(
     file: UploadFile = File(...),
@@ -11944,250 +9483,29 @@ async def generate_audio(
     pitch: float = Form(1.0),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Generate audio from text (TTS, music, or SFX) via ComfyUI.
-    Requires authentication and credits.
+    """Generate audio from text (TTS, music, or SFX) via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Args:
-        text: Input text (speech text or music/sfx prompt)
-        mode: tts, music, sfx
-        voice: TTS voice preset (alloy, echo, fable, onyx, nova, shimmer)
-        style: Music style (ambient, cinematic, electronic, etc.)
-        duration: Duration in seconds (for music/sfx)
-        speed: TTS speed multiplier (not used with ChatterBox)
-        pitch: TTS pitch multiplier (not used with ChatterBox)
-    """
-    logger.info(f"🎵 Audio request: mode={mode}, text={text[:50]}...")
-
-    # Calculate and check credits based on mode
-    if mode == "tts":
-        # TTS is cheaper, just text length matters
-        credits_required = calculate_credits(
-            "mmaudio_short", duration_seconds=min(10, duration)
-        )
-    elif mode == "music":
-        credits_required = calculate_credits(
-            "mmaudio_long" if duration > 10 else "mmaudio_short",
-            duration_seconds=duration,
-        )
-    elif mode == "sfx":
-        credits_required = calculate_credits(
-            "mmaudio_short", duration_seconds=min(10, duration)
-        )
-    else:
-        credits_required = 3  # Default
-
-    logger.info(
-        f"💰 Audio generation costs {credits_required} credits (mode={mode}, duration={duration}s) [user={user.id}]"
+    return await dispatch_v1(
+        form=dict(
+            text=text,
+            mode=mode,
+            voice=voice,
+            style=style,
+            duration=duration,
+            speed=speed,
+            pitch=pitch,
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.AUDIO,
+        adapter_hint="local-mmaudio",
+        user=user,
+        register_job_settings={
+            "job_type": "audio",
+        },
     )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    import random
-
-    client = get_comfyui_client()
-    output_id = uuid.uuid4().hex[:8]
-
-    try:
-        if mode == "tts":
-            # Use ChatterBox TTS via ComfyUI
-            voice_settings = VOICE_PRESETS.get(voice, VOICE_PRESETS["nova"])
-
-            workflow = {
-                "1": {
-                    "class_type": "ChatterBoxEngineNode",
-                    "inputs": {
-                        "language": voice_settings["language"],
-                        "device": "auto",
-                        "exaggeration": voice_settings["exaggeration"],
-                        "temperature": voice_settings["temperature"],
-                        "cfg_weight": 0.5,
-                        "crash_protection_template": "hmm ,, {seg} hmm ,,",
-                    },
-                },
-                "2": {
-                    "class_type": "UnifiedTTSTextNode",
-                    "inputs": {
-                        "TTS_engine": ["1", 0],
-                        "text": text,
-                        "narrator_voice": "none",
-                        "seed": random.randint(0, 2**32 - 1),
-                        "enable_chunking": True,
-                        "max_chars_per_chunk": 400,
-                        "chunk_combination_method": "auto",
-                        "silence_between_chunks_ms": 100,
-                        "enable_audio_cache": True,
-                        "batch_size": 0,
-                    },
-                },
-                "3": {
-                    "class_type": "SaveAudio",
-                    "inputs": {
-                        "audio": ["2", 0],
-                        "filename_prefix": f"tts_{output_id}",
-                    },
-                },
-            }
-
-            logger.info(f"🎤 TTS workflow: voice={voice}, text_len={len(text)}")
-            prompt_id = client.queue_prompt(workflow)
-
-            # Deduct credits after successful queue
-            await deduct_credits(user, credits_required, prompt_id, "TTS Audio")
-            logger.info(f"🎤 TTS queued: {prompt_id} (💰 -{credits_required} credits)")
-
-            return {
-                "status": "queued",
-                "prompt_id": prompt_id,
-                "job_id": job_id,
-                "credits_used": credits_required,
-                "mode": "tts",
-                "voice": voice,
-                "text_preview": text[:100] + ("..." if len(text) > 100 else ""),
-            }
-
-        elif mode == "music":
-            # Use MMAudio for text-to-audio music generation
-            # Build prompt with style prefix
-            music_prompt = f"{style} music, {text}"
-
-            # NOTE: MMAudio requires specific models to be downloaded
-            # Models needed from: https://huggingface.co/Kijai/MMAudio_safetensors
-            # These go in: ComfyUI/models/mmaudio/
-            workflow = {
-                "1": {
-                    "class_type": "MMAudioModelLoader",
-                    "inputs": {
-                        "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
-                        "base_precision": "fp16",
-                    },
-                },
-                "2": {
-                    "class_type": "MMAudioFeatureUtilsLoader",
-                    "inputs": {
-                        "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
-                        "vae_model": "mmaudio_vae_44k_fp16.safetensors",
-                        "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
-                        "mode": "44k",
-                        "precision": "fp16",
-                    },
-                },
-                "3": {
-                    "class_type": "MMAudioSampler",
-                    "inputs": {
-                        "mmaudio_model": ["1", 0],
-                        "feature_utils": ["2", 0],
-                        "prompt": music_prompt,
-                        "negative_prompt": "noise, distortion, glitch, silence",
-                        "duration": float(duration),
-                        "steps": 25,
-                        "cfg": 4.5,
-                        "seed": random.randint(0, 2**32 - 1),
-                        "mask_away_clip": False,
-                        "force_offload": True,
-                    },
-                },
-                "4": {
-                    "class_type": "SaveAudio",
-                    "inputs": {
-                        "audio": ["3", 0],
-                        "filename_prefix": f"music_{output_id}",
-                    },
-                },
-            }
-
-            logger.info(f"🎵 Music workflow: style={style}, duration={duration}s")
-            prompt_id = client.queue_prompt(workflow)
-
-            # Deduct credits after successful queue
-            await deduct_credits(user, credits_required, prompt_id, "Music Generation")
-            logger.info(
-                f"🎵 Music queued: {prompt_id} (💰 -{credits_required} credits)"
-            )
-
-            return {
-                "status": "queued",
-                "prompt_id": prompt_id,
-                "job_id": job_id,
-                "credits_used": credits_required,
-                "mode": "music",
-                "style": style,
-                "duration": duration,
-                "prompt": music_prompt,
-            }
-
-        elif mode == "sfx":
-            # Use MMAudio for sound effects (shorter duration)
-            sfx_duration = min(duration, 10)
-
-            workflow = {
-                "1": {
-                    "class_type": "MMAudioModelLoader",
-                    "inputs": {
-                        "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
-                        "base_precision": "fp16",
-                    },
-                },
-                "2": {
-                    "class_type": "MMAudioFeatureUtilsLoader",
-                    "inputs": {
-                        "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
-                        "vae_model": "mmaudio_vae_44k_fp16.safetensors",
-                        "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
-                        "mode": "44k",
-                        "precision": "fp16",
-                    },
-                },
-                "3": {
-                    "class_type": "MMAudioSampler",
-                    "inputs": {
-                        "mmaudio_model": ["1", 0],
-                        "feature_utils": ["2", 0],
-                        "prompt": text,
-                        "negative_prompt": "music, speech, voice, singing",
-                        "duration": float(sfx_duration),
-                        "steps": 25,
-                        "cfg": 4.5,
-                        "seed": random.randint(0, 2**32 - 1),
-                        "mask_away_clip": False,
-                        "force_offload": True,
-                    },
-                },
-                "4": {
-                    "class_type": "SaveAudio",
-                    "inputs": {
-                        "audio": ["3", 0],
-                        "filename_prefix": f"sfx_{output_id}",
-                    },
-                },
-            }
-
-            logger.info(
-                f"🔊 SFX workflow: prompt={text[:50]}, duration={sfx_duration}s"
-            )
-            prompt_id = client.queue_prompt(workflow)
-
-            # Deduct credits after successful queue
-            await deduct_credits(user, credits_required, prompt_id, "SFX Generation")
-            logger.info(f"🔊 SFX queued: {prompt_id} (💰 -{credits_required} credits)")
-
-            return {
-                "status": "queued",
-                "prompt_id": prompt_id,
-                "job_id": job_id,
-                "credits_used": credits_required,
-                "mode": "sfx",
-                "duration": sfx_duration,
-                "prompt": text,
-            }
-
-    except Exception as e:
-        logger.error(f"❌ Audio error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return {"error": "Unknown audio mode"}
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice Cloning (F5-TTS) via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -12678,174 +9996,36 @@ async def generate_i2i(
     face_id_weight: float = Form(0.85),
     user: User = Depends(get_current_user),
 ):
-    """
-    Enhanced Image-to-Image generation via ComfyUI.
+    """Enhanced Image-to-Image generation via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Features:
-        - IP-Adapter FaceID: Preserves face identity from source image
-        - FaceDetailer: Auto-detects and refines faces after generation
-        - Face Restore (GFPGAN): Final polish on face quality
-
-    Args:
-        file: Source image file
-        prompt: What to generate / how to modify
-        negative_prompt: What to avoid
-        denoise: 0.0 = keep source, 1.0 = ignore source (typical: 0.4-0.7)
-        checkpoint: SDXL checkpoint to use
-        preset: Quality preset (fast/balanced/face_preserve/custom)
-        face_id: Enable IP-Adapter FaceID identity preservation
-        face_detailer: Enable automatic face detection + refinement
-        face_restore: Enable GFPGAN face restoration
-        face_id_weight: IP-Adapter FaceID strength (0.0-1.0)
-    """
-    import random
-
-    # Apply preset settings (override individual params unless preset=custom)
-    if preset != "custom" and preset in I2I_PRESETS:
-        p = I2I_PRESETS[preset]
-        steps = p.get("steps", steps)
-        cfg = p.get("cfg", cfg)
-        sampler_name = p.get("sampler", sampler_name)
-        scheduler = p.get("scheduler", scheduler)
-        face_id = p.get("face_id", face_id)
-        face_detailer = p.get("face_detailer", face_detailer)
-        face_restore = p.get("face_restore", face_restore)
-
-    features = []
-    if face_id:
-        features.append("FaceID")
-    if face_detailer:
-        features.append("FaceDetailer")
-    if face_restore:
-        features.append("GFPGAN")
-    feature_str = f" [{'+'.join(features)}]" if features else ""
-
-    logger.info(
-        f"🎨 I2I request: {prompt[:50]}... "
-        f"(denoise={denoise}, checkpoint={checkpoint}, preset={preset}{feature_str})"
-    )
-
-    # Calculate credits — face processing adds extra cost
-    base_credits = calculate_credits("sdxl", width=1024, height=1024, steps=steps)
-    face_credits = (
-        (3 if face_id else 0) + (2 if face_detailer else 0) + (1 if face_restore else 0)
-    )
-    credits_required = base_credits + face_credits
-    logger.info(
-        f"💰 I2I costs {credits_required} credits "
-        f"(base={base_credits}, face={face_credits}) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    client = get_comfyui_client()
-    if not client or not client.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-
-    # Generate seed
-    if seed == -1:
-        seed = random.randint(0, 2**32 - 1)
-
-    # Save uploaded file to temp location
-    upload_filename = f"i2i_input_{uuid.uuid4().hex[:8]}.png"
-    upload_path = UPLOAD_DIR / upload_filename
-
-    try:
-        content = await file.read()
-        with open(upload_path, "wb") as f:
-            f.write(content)
-
-        # Log file identity for debugging (detect duplicate uploads)
-        import hashlib
-
-        file_hash = hashlib.md5(content).hexdigest()[:12]
-        logger.info(
-            f"🔍 I2I source: {file.filename} → {upload_filename} "
-            f"({len(content)} bytes, md5={file_hash})"
-        )
-
-        # Upload to ComfyUI
-        comfyui_filename = client.upload_image(str(upload_path))
-        if not comfyui_filename:
-            raise HTTPException(
-                status_code=500, detail="Failed to upload image to ComfyUI"
-            )
-
-        logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
-
-        # Build enhanced I2I workflow
-        workflow = _build_i2i_workflow(
-            comfyui_filename=comfyui_filename,
+    return await dispatch_v1(
+        form=dict(
             prompt=prompt,
             negative_prompt=negative_prompt,
-            checkpoint=checkpoint,
             denoise=denoise,
+            checkpoint=checkpoint,
             steps=steps,
             cfg=cfg,
             seed=seed,
             sampler_name=sampler_name,
             scheduler=scheduler,
+            preset=preset,
             face_id=face_id,
             face_detailer=face_detailer,
             face_restore=face_restore,
             face_id_weight=face_id_weight,
-        )
-
-        prompt_id = client.queue_prompt(workflow)
-        if not prompt_id:
-            raise HTTPException(status_code=500, detail="Failed to queue I2I workflow")
-
-        # Register job metadata so on_job_complete_async uploads to user storage
-        client.register_job(
-            prompt_id,
-            user_id=user.id,
-            prompt=prompt,
-            settings={
-                "job_type": "i2i",
-                "checkpoint": checkpoint,
-                "denoise": denoise,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "preset": preset,
-                "face_id": face_id,
-                "face_detailer": face_detailer,
-                "face_restore": face_restore,
-            },
-        )
-
-        # Deduct credits after successful queue
-        await deduct_credits(user, credits_required, prompt_id, "I2I Generation")
-        logger.info(
-            f"🎨 I2I queued: {prompt_id} (💰 -{credits_required} credits){feature_str}"
-        )
-
-        return {
-            "status": "queued",
-            "prompt_id": prompt_id,
-            "job_id": job_id,
-            "credits_used": credits_required,
-            "meta": {
-                "prompt": prompt,
-                "denoise": denoise,
-                "checkpoint": checkpoint,
-                "seed": seed,
-                "preset": preset,
-                "source_image": comfyui_filename,
-                "features": {
-                    "face_id": face_id,
-                    "face_detailer": face_detailer,
-                    "face_restore": face_restore,
-                    "face_id_weight": face_id_weight if face_id else None,
-                },
-            },
-        }
-
-    except Exception as e:
-        logger.error(f"❌ I2I error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+        ),
+        files={"file": file},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.IMAGE,
+        adapter_hint="local-i2i-transform",
+        user=user,
+        register_job_settings={
+            "job_type": "i2i",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Qwen Image Edit (Instruction-Based Image Editing) — RunPod Only
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13050,91 +10230,12 @@ async def generate_qwen_edit(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Qwen Image Edit 2511 — instruction-based image editing via RunPod.
+    """Qwen Image Edit 2511 — instruction-based image editing via RunPod (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Unlike I2I which denoises the source image, Qwen Edit **understands** natural
-    language instructions and applies them coherently. Examples:
-    - "Remove the background"
-    - "Make it anime style"
-    - "Change hair color to blonde"
-    - "Add sunglasses"
-    - "Turn this into a watercolor painting"
-
-    RunPod-only (requires 48GB+ GPU for fp8mixed model).
-    """
-    import random
-    import base64 as _b64
-
-    if not _runpod or not _runpod.has_endpoint():
-        raise HTTPException(
-            status_code=503,
-            detail="Qwen Edit requires a RunPod endpoint (48GB+ GPU). No endpoint configured.",
-        )
-
-    # Parse LoRA configs
-    try:
-        parsed_lora_configs = json.loads(lora_configs) if lora_configs else []
-    except json.JSONDecodeError:
-        parsed_lora_configs = []
-
-    # Sanitize to single-stage format and filter for Qwen Edit compatibility
-    parsed_lora_configs = _sanitize_lora_configs_for_single_stage(parsed_lora_configs)
-    parsed_lora_configs = _filter_loras_by_model_compat(
-        parsed_lora_configs, "qwen_image_edit"
-    )
-
-    logger.info(
-        f"🎨 Qwen Edit request: '{instruction[:60]}...' "
-        f"({width}x{height}, steps={steps}, cfg={cfg}, lightning={lightning}, loras={len(parsed_lora_configs)}) [user={user.id}]"
-    )
-
-    # Credit calculation — Qwen Edit is a premium feature
-    credits_required = 15  # Base cost for instruction editing
-    if not lightning:
-        credits_required += 5  # Full quality costs more
-    credits_required += len(parsed_lora_configs) * 2  # Extra credits per LoRA
-    logger.info(f"💰 Qwen Edit costs {credits_required} credits [user={user.id}]")
-    await check_credits(user, credits_required)
-
-    # Generate seed
-    if seed == -1:
-        seed = random.randint(0, 2**32 - 1)
-
-    # Save uploaded image
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    upload_filename = f"qwen_edit_input_{uuid.uuid4().hex[:8]}.png"
-    upload_path = UPLOAD_DIR / upload_filename
-
-    try:
-        content = await file.read()
-        with open(upload_path, "wb") as f:
-            f.write(content)
-
-        logger.info(
-            f"📤 Qwen Edit source: {file.filename} → {upload_filename} "
-            f"({len(content)} bytes)"
-        )
-
-        # Encode image as base64 for RunPod
-        input_images_b64 = {
-            upload_filename: _b64.b64encode(content).decode(),
-        }
-
-        # Build LoRA download URLs for cloud worker
-        cloud_lora_downloads = (
-            _build_lora_download_list(parsed_lora_configs)
-            if parsed_lora_configs
-            else []
-        )
-
-        # Clamp and round resolution to multiples of 16
-        width = max(512, min(2048, (width // 16) * 16))
-        height = max(512, min(2048, (height // 16) * 16))
-
-        # Build workflow
-        workflow = _build_qwen_edit_workflow(
-            image_filename=upload_filename,
+    return await dispatch_v1(
+        form=dict(
             instruction=instruction,
             negative_prompt=negative_prompt,
             width=width,
@@ -13143,78 +10244,18 @@ async def generate_qwen_edit(
             cfg=cfg,
             seed=seed,
             lightning=lightning,
-            lora_configs=parsed_lora_configs,
-        )
-
-        # Generate a prompt_id for tracking
-        prompt_id = str(uuid.uuid4())
-
-        # Submit to RunPod
-        job_info = {
-            "user_id": user.id,
-            "prompt": instruction,
+            lora_configs=lora_configs,
+        ),
+        files={"file": file},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.IMAGE,
+        adapter_hint="qwen-cloud-edit",
+        user=user,
+        register_job_settings={
             "job_type": "qwen_edit",
-            "input_image": upload_filename,
-            "settings": {
-                "instruction": instruction,
-                "negative_prompt": negative_prompt,
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "cfg": cfg,
-                "seed": seed,
-                "lightning": lightning,
-                "lora_count": len(parsed_lora_configs),
-            },
-            "credits_used": credits_required,
-            "started_at": datetime.now().isoformat(),
-        }
-
-        result = await _submit_to_runpod(
-            workflow=workflow,
-            user_id=user.id,
-            prompt_id=prompt_id,
-            job_info=job_info,
-            images=input_images_b64,
-            lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
-            prompt_full=instruction,
-            input_image_path=str(upload_path),
-            endpoint_id=os.getenv("RUNPOD_QWEN_ENDPOINT_ID"),
-        )
-
-        # Deduct credits after successful submission
-        await deduct_credits(user, credits_required, prompt_id, "Qwen Image Edit")
-
-        logger.info(
-            f"🎨 Qwen Edit queued: {prompt_id} "
-            f"(💰 -{credits_required} credits, lightning={lightning})"
-        )
-
-        return {
-            "status": "queued_cloud",
-            "prompt_id": prompt_id,
-            "runpod_job_id": result.get("runpod_job_id"),
-            "credits_used": credits_required,
-            "compute_target": "cloud",
-            "meta": {
-                "instruction": instruction,
-                "seed": seed,
-                "width": width,
-                "height": height,
-                "steps": steps,
-                "cfg": cfg,
-                "lightning": lightning,
-                "lora_count": len(parsed_lora_configs),
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Qwen Edit error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+        },
+        v1_format="cloud",
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Image Upscaling via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13269,130 +10310,25 @@ async def upscale_image(
     face_enhance: bool = Form(False),
     user: User = Depends(get_current_user),
 ):
-    """
-    Upscale image using Real-ESRGAN via ComfyUI.
+    """Upscale image using Real-ESRGAN via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Args:
-        file: Source image
-        model: Upscale model (RealESRGAN variants)
-        scale: Scale factor (2x or 4x)
-        face_enhance: Apply GFPGAN face enhancement
-    """
-    logger.info(
-        f"🔍 Upscale request: model={model}, scale={scale}x, face_enhance={face_enhance}, user={user.id}"
+    return await dispatch_v1(
+        form=dict(
+            model=model,
+            scale=scale,
+            face_enhance=face_enhance,
+        ),
+        files={"file": file},
+        operation=Operation.UPSCALE,
+        target_type=MediaType.IMAGE,
+        adapter_hint="local-upscale-image",
+        user=user,
+        register_job_settings={
+            "job_type": "upscale_image",
+        },
     )
-
-    # Check credits
-    credits_required = UPSCALE_CREDITS["image_esrgan"]
-    await check_credits(user, credits_required)
-
-    client = get_comfyui_client()
-    if not client or not client.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-
-    # Save uploaded file
-    upload_filename = f"upscale_input_{uuid.uuid4().hex[:8]}.png"
-    upload_path = UPLOAD_DIR / upload_filename
-
-    try:
-        with open(upload_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-
-        # Upload to ComfyUI
-        comfyui_filename = client.upload_image(str(upload_path))
-        if not comfyui_filename:
-            raise HTTPException(
-                status_code=500, detail="Failed to upload image to ComfyUI"
-            )
-
-        logger.info(f"📤 Uploaded to ComfyUI: {comfyui_filename}")
-
-        # Build upscale workflow
-        # Uses UpscaleModelLoader + ImageUpscaleWithModel nodes
-        workflow = {
-            "1": {
-                "inputs": {"image": comfyui_filename, "upload": "image"},
-                "class_type": "LoadImage",
-            },
-            "2": {"inputs": {"model_name": model}, "class_type": "UpscaleModelLoader"},
-            "3": {
-                "inputs": {"upscale_model": ["2", 0], "image": ["1", 0]},
-                "class_type": "ImageUpscaleWithModel",
-            },
-        }
-
-        # Add face enhancement if requested (requires ComfyUI-GFPGAN extension)
-        if face_enhance:
-            workflow["4"] = {
-                "inputs": {
-                    "image": ["3", 0],
-                    "model_name": "GFPGANv1.4.pth",
-                    "strength": 0.8,
-                },
-                "class_type": "GFPGANFaceRestoration",
-            }
-            workflow["5"] = {
-                "inputs": {"filename_prefix": "oelala_upscale", "images": ["4", 0]},
-                "class_type": "SaveImage",
-            }
-        else:
-            workflow["4"] = {
-                "inputs": {"filename_prefix": "oelala_upscale", "images": ["3", 0]},
-                "class_type": "SaveImage",
-            }
-
-        prompt_id = client.queue_prompt(workflow)
-        if not prompt_id:
-            raise HTTPException(
-                status_code=500, detail="Failed to queue upscale workflow"
-            )
-
-        # Register job for progress tracking
-        client.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            prompt=f"Upscale image ({model}, {scale}x)",
-            settings={"model": model, "scale": scale, "face_enhance": face_enhance},
-        )
-        if ws_manager and job_queue_manager:
-            ws_manager.register_job(prompt_id, user_id=user.id)
-            job_queue_manager.register_job(
-                prompt_id=prompt_id,
-                user_id=user.id,
-                job_type="upscale_image",
-                metadata={"model": model, "scale": scale},
-            )
-            if progress_monitor:
-                progress_monitor.register_callback(
-                    prompt_id, create_progress_callback(prompt_id)
-                )
-
-        # Deduct credits
-        await deduct_credits(
-            user, credits_required, prompt_id, f"Image upscale ({model})"
-        )
-        logger.info(f"   💰 -{credits_required} credits")
-
-        return {
-            "status": "queued",
-            "prompt_id": prompt_id,
-            "credits_used": credits_required,
-            "meta": {
-                "model": model,
-                "scale": scale,
-                "face_enhance": face_enhance,
-                "source_image": comfyui_filename,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Upscale error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Video Upscaling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13408,295 +10344,25 @@ async def upscale_video(
     ),
     user: User = Depends(get_current_user),
 ):
-    """
-    Upscale video using various methods.
+    """Upscale video using various methods (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Args:
-        file: Source video
-        preset: Quality preset (fast/balanced/quality) — overrides model param
-        model: Upscale method (lanczos, bicubic, seedvr2, realesrgan)
-        scale: Upscale factor (2.0 = double resolution)
-
-    Presets:
-        - fast: Lanczos interpolation (instant, no GPU)
-        - balanced: RealESRGAN 4x per-frame AI upscale
-        - quality: SeedVR2 3B AI video upscaler (slow, best quality)
-    """
-    # Apply preset overrides
-    if preset == "fast":
-        model = "lanczos"
-    elif preset == "balanced":
-        model = "realesrgan"
-    elif preset == "quality":
-        model = "seedvr2"
-
-    logger.info(
-        f"🎬 Video upscale request: model={model}, scale={scale}x, preset={preset}, user={user.id}"
+    return await dispatch_v1(
+        form=dict(
+            model=model,
+            scale=scale,
+            preset=preset,
+        ),
+        files={"file": file},
+        operation=Operation.UPSCALE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="local-upscale-video",
+        user=user,
+        register_job_settings={
+            "job_type": "upscale_video",
+        },
     )
-
-    # Determine credit cost
-    if model == "seedvr2":
-        credits_required = UPSCALE_CREDITS["video_seedvr2"]
-    elif model == "realesrgan":
-        credits_required = UPSCALE_CREDITS["video_esrgan"]
-    else:
-        credits_required = UPSCALE_CREDITS["video_lanczos"]
-
-    # Check credits
-    balance = await check_credits(user, credits_required)
-
-    # Validate model
-    valid_models = [
-        "lanczos",
-        "bicubic",
-        "bilinear",
-        "nearest-exact",
-        "area",
-        "realesrgan",
-    ]
-    if model not in valid_models and model != "seedvr2":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid model '{model}'. Available: {valid_models + ['seedvr2']}",
-        )
-
-    client = get_comfyui_client()
-    if not client or not client.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-
-    # Save uploaded video
-    upload_filename = f"upscale_video_input_{uuid.uuid4().hex[:8]}.mp4"
-    upload_path = UPLOAD_DIR / upload_filename
-
-    try:
-        with open(upload_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-
-        # Upload to ComfyUI
-        comfyui_filename = client.upload_video(str(upload_path))
-        if not comfyui_filename:
-            raise HTTPException(
-                status_code=500, detail="Failed to upload video to ComfyUI"
-            )
-
-        logger.info(f"📤 Uploaded video to ComfyUI: {comfyui_filename}")
-
-        if model == "seedvr2":
-            # SeedVR2 AI video upscaler workflow
-            # Requires: SeedVR2LoadDiTModel, SeedVR2LoadVAEModel, SeedVR2VideoUpscaler
-            # DiT on cuda:1 (5060 Ti 16GB), VAE on cuda:0 (3060 12GB)
-            # BlockSwap 28 blocks + swap_io to cuda:0 for VRAM savings
-            # Tiled VAE required to avoid OOM on 12GB card
-            workflow = {
-                "1": {
-                    "inputs": {
-                        "video": comfyui_filename,
-                        "force_rate": 0,
-                        "force_size": "Disabled",
-                        "custom_width": 512,
-                        "custom_height": 512,
-                        "frame_load_cap": 0,
-                        "skip_first_frames": 0,
-                        "select_every_nth": 1,
-                    },
-                    "class_type": "VHS_LoadVideo",
-                },
-                "2": {
-                    "inputs": {
-                        "model": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
-                        "device": "cuda:1",
-                        "blocks_to_swap": 28,
-                        "swap_io_components": True,
-                        "offload_device": "cuda:0",
-                    },
-                    "class_type": "SeedVR2LoadDiTModel",
-                },
-                "3": {
-                    "inputs": {
-                        "model": "ema_vae_fp16.safetensors",
-                        "device": "cuda:0",
-                        "encode_tiled": True,
-                        "encode_tile_size": 512,
-                        "encode_tile_overlap": 64,
-                        "decode_tiled": True,
-                        "decode_tile_size": 512,
-                        "decode_tile_overlap": 64,
-                    },
-                    "class_type": "SeedVR2LoadVAEModel",
-                },
-                "4": {
-                    "inputs": {
-                        "image": ["1", 0],
-                        "dit": ["2", 0],
-                        "vae": ["3", 0],
-                        "seed": 42,
-                        "resolution": min(int(1080 * scale / 2), 720),
-                        "max_resolution": 1280,
-                        "batch_size": 5,
-                        "uniform_batch_size": False,
-                        "color_correction": "lab",
-                    },
-                    "class_type": "SeedVR2VideoUpscaler",
-                },
-                "5": {
-                    "inputs": {
-                        "frame_rate": 30,
-                        "loop_count": 0,
-                        "filename_prefix": "oelala_upscale_seedvr2",
-                        "format": "video/h264-mp4",
-                        "pix_fmt": "yuv420p",
-                        "crf": 19,
-                        "save_metadata": True,
-                        "pingpong": False,
-                        "save_output": True,
-                        "images": ["4", 0],
-                    },
-                    "class_type": "VHS_VideoCombine",
-                },
-            }
-        elif model == "realesrgan":
-            # RealESRGAN AI per-frame upscale
-            # Load video → upscale each frame with ESRGAN → re-encode
-            workflow = {
-                "1": {
-                    "inputs": {
-                        "video": comfyui_filename,
-                        "force_rate": 0,
-                        "force_size": "Disabled",
-                        "custom_width": 512,
-                        "custom_height": 512,
-                        "frame_load_cap": 0,
-                        "skip_first_frames": 0,
-                        "select_every_nth": 1,
-                    },
-                    "class_type": "VHS_LoadVideo",
-                },
-                "2": {
-                    "inputs": {"model_name": "RealESRGAN_x4plus.pth"},
-                    "class_type": "UpscaleModelLoader",
-                },
-                "3": {
-                    "inputs": {"upscale_model": ["2", 0], "image": ["1", 0]},
-                    "class_type": "ImageUpscaleWithModel",
-                },
-                "4": {
-                    "inputs": {
-                        "frame_rate": 30,
-                        "loop_count": 0,
-                        "filename_prefix": "oelala_upscale_esrgan",
-                        "format": "video/h264-mp4",
-                        "pix_fmt": "yuv420p",
-                        "crf": 19,
-                        "save_metadata": True,
-                        "pingpong": False,
-                        "save_output": True,
-                        "images": ["3", 0],
-                    },
-                    "class_type": "VHS_VideoCombine",
-                },
-            }
-        else:
-            # Basic upscaling with ImageScale (lanczos, bicubic, etc.)
-            # Note: ImageScale requires explicit width/height, not scale factor
-            # We'll use a reasonable output size based on scale
-            # Default input assumed ~480p, so 2x = ~960p
-            target_width = int(1920 * scale / 2)  # Scale from 960 base
-            target_height = int(1080 * scale / 2)  # Scale from 540 base
-
-            workflow = {
-                "1": {
-                    "inputs": {
-                        "video": comfyui_filename,
-                        "force_rate": 0,
-                        "force_size": "Disabled",
-                        "custom_width": 512,
-                        "custom_height": 512,
-                        "frame_load_cap": 0,
-                        "skip_first_frames": 0,
-                        "select_every_nth": 1,
-                    },
-                    "class_type": "VHS_LoadVideo",
-                },
-                "2": {
-                    "inputs": {
-                        "image": ["1", 0],
-                        "upscale_method": model,
-                        "width": target_width,
-                        "height": target_height,
-                        "crop": "disabled",
-                    },
-                    "class_type": "ImageScale",
-                },
-                "3": {
-                    "inputs": {
-                        "frame_rate": 30,
-                        "loop_count": 0,
-                        "filename_prefix": f"oelala_upscale_{model}",
-                        "format": "video/h264-mp4",
-                        "pix_fmt": "yuv420p",
-                        "crf": 19,
-                        "save_metadata": True,
-                        "pingpong": False,
-                        "save_output": True,
-                        "images": ["2", 0],
-                    },
-                    "class_type": "VHS_VideoCombine",
-                },
-            }
-
-        prompt_id = client.queue_prompt(workflow)
-        if not prompt_id:
-            raise HTTPException(
-                status_code=500, detail="Failed to queue video upscale workflow"
-            )
-
-        # Register job for progress tracking
-        job_type = f"upscale_video_{model}"
-        client.register_job(
-            prompt_id=prompt_id,
-            user_id=user.id,
-            prompt=f"Video upscale ({model}, {scale}x)",
-            settings={"model": model, "scale": scale, "preset": preset},
-        )
-        if ws_manager and job_queue_manager:
-            ws_manager.register_job(prompt_id, user_id=user.id)
-            job_queue_manager.register_job(
-                prompt_id=prompt_id,
-                user_id=user.id,
-                job_type=job_type,
-                metadata={"model": model, "scale": scale},
-            )
-            if progress_monitor:
-                progress_monitor.register_callback(
-                    prompt_id, create_progress_callback(prompt_id)
-                )
-
-        # Deduct credits
-        await deduct_credits(
-            user, credits_required, prompt_id, f"Video upscale ({model})"
-        )
-        logger.info(f"   💰 -{credits_required} credits")
-
-        return {
-            "status": "queued",
-            "prompt_id": prompt_id,
-            "credits_used": credits_required,
-            "meta": {
-                "model": model,
-                "scale": scale,
-                "preset": preset or model,
-                "source_video": comfyui_filename,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Video upscale error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Frame Interpolation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13852,171 +10518,30 @@ async def generate_v2v(
     seed: int = Form(-1),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """
-    Video-to-Video style transfer via ComfyUI.
-    Extracts frames, applies img2img to each, reassembles video.
-    Requires authentication and credits.
+    """Video-to-Video style transfer via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Args:
-        file: Source video file
-        prompt: Style/transformation prompt
-        denoise: 0.0 = keep original, 1.0 = ignore original (0.3-0.6 recommended)
-        fps: Output FPS
-        max_frames: Maximum frames to process
-    """
-    import random
-
-    logger.info(
-        f"🎬 V2V request: {prompt[:50]}... (denoise={denoise}, fps={fps}, max_frames={max_frames})"
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            denoise=denoise,
+            fps=fps,
+            max_frames=max_frames,
+            steps=steps,
+            cfg=cfg,
+            seed=seed,
+        ),
+        files={"file": file},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.VIDEO,
+        adapter_hint="local-v2v",
+        user=user,
+        register_job_settings={
+            "job_type": "v2v",
+        },
     )
-
-    # Calculate duration and credits (V2V is expensive - frame by frame processing)
-    duration_seconds = max_frames / fps
-
-    # V2V multiplier for frame-by-frame processing overhead
-    V2V_COST_MULTIPLIER = 1.5
-
-    credits_required = calculate_credits(
-        "wan22_i2v",  # Similar cost to video generation
-        width=512,
-        height=512,
-        duration_seconds=int(duration_seconds),
-        steps=steps,
-    )
-    # V2V is more expensive due to frame processing overhead
-    credits_required = int(credits_required * V2V_COST_MULTIPLIER)
-
-    logger.info(
-        f"💰 V2V generation costs {credits_required} credits ({max_frames} frames, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    client = get_comfyui_client()
-    if not client or not client.is_available():
-        raise HTTPException(status_code=503, detail="ComfyUI backend not available")
-
-    # Generate seed
-    if seed == -1:
-        seed = random.randint(0, 2**32 - 1)
-
-    # Save uploaded video
-    upload_filename = f"v2v_input_{uuid.uuid4().hex[:8]}.mp4"
-    upload_path = UPLOAD_DIR / upload_filename
-
-    try:
-        with open(upload_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-
-        # Upload video to ComfyUI input folder
-        comfyui_input = Path("/home/flip/oelala/ComfyUI/input")
-        video_dest = comfyui_input / upload_filename
-        shutil.copy(str(upload_path), str(video_dest))
-
-        logger.info(f"📤 Video copied to ComfyUI: {upload_filename}")
-
-        # Build V2V workflow using AnimateDiff or frame-by-frame approach
-        # Using VideoToFrames + img2img batch + FramesToVideo pattern
-        workflow = {
-            # Load video and extract frames
-            "1": {
-                "inputs": {
-                    "video": upload_filename,
-                    "force_rate": fps,
-                    "force_size": "Disabled",
-                    "custom_width": 512,
-                    "custom_height": 512,
-                    "frame_load_cap": max_frames,
-                    "skip_first_frames": 0,
-                    "select_every_nth": 1,
-                },
-                "class_type": "VHS_LoadVideo",
-            },
-            # Load checkpoint for img2img
-            "2": {
-                "inputs": {"ckpt_name": "CyberRealistic_Pony_v14.1_FP16.safetensors"},
-                "class_type": "CheckpointLoaderSimple",
-            },
-            # Positive prompt
-            "3": {
-                "inputs": {"text": prompt, "clip": ["2", 1]},
-                "class_type": "CLIPTextEncode",
-            },
-            # Negative prompt
-            "4": {
-                "inputs": {"text": negative_prompt, "clip": ["2", 1]},
-                "class_type": "CLIPTextEncode",
-            },
-            # VAE encode frames
-            "5": {
-                "inputs": {"pixels": ["1", 0], "vae": ["2", 2]},
-                "class_type": "VAEEncode",
-            },
-            # KSampler batch - applies style to all frames
-            "6": {
-                "inputs": {
-                    "seed": seed,
-                    "steps": steps,
-                    "cfg": cfg,
-                    "sampler_name": "dpmpp_2m",
-                    "scheduler": "karras",
-                    "denoise": denoise,
-                    "model": ["2", 0],
-                    "positive": ["3", 0],
-                    "negative": ["4", 0],
-                    "latent_image": ["5", 0],
-                },
-                "class_type": "KSampler",
-            },
-            # VAE decode
-            "7": {
-                "inputs": {"samples": ["6", 0], "vae": ["2", 2]},
-                "class_type": "VAEDecode",
-            },
-            # Combine frames back to video
-            "8": {
-                "inputs": {
-                    "frame_rate": fps,
-                    "loop_count": 0,
-                    "filename_prefix": "oelala_v2v",
-                    "format": "video/h264-mp4",
-                    "pingpong": False,
-                    "save_output": True,
-                    "images": ["7", 0],
-                },
-                "class_type": "VHS_VideoCombine",
-            },
-        }
-
-        prompt_id = client.queue_prompt(workflow)
-        if not prompt_id:
-            raise HTTPException(status_code=500, detail="Failed to queue V2V workflow")
-
-        # Deduct credits after successful queue
-        await deduct_credits(user, credits_required, prompt_id, "V2V Style Transfer")
-        logger.info(f"🎬 V2V queued: {prompt_id} (💰 -{credits_required} credits)")
-
-        return {
-            "status": "queued",
-            "prompt_id": prompt_id,
-            "job_id": job_id,
-            "credits_used": credits_required,
-            "meta": {
-                "prompt": prompt,
-                "denoise": denoise,
-                "fps": fps,
-                "max_frames": max_frames,
-                "seed": seed,
-                "source_video": upload_filename,
-            },
-        }
-
-    except Exception as e:
-        logger.error(f"❌ V2V error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/videos/{filename}")
 async def get_video(filename: str, request: Request):
     """Download generated video file via MinIO proxy."""
@@ -14730,62 +11255,24 @@ async def face_swap(
     face_indices: str = Form("0"),  # comma-separated e.g. "0,1" or "-1" for all
     enhance: str = Form("none"),  # none (gfpgan requires extra package)
 ):
-    """
-    Face swap: replace face(s) in target image with face from source image.
+    """Face swap: replace face(s) in target image with face from source image (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Uses insightface inswapper_128.onnx directly (synchronous, no ComfyUI queue).
-    Returns swapped image as PNG bytes.
-
-    Args:
-        target: Image with face(s) to replace
-        source: Reference image with source face
-        face_indices: Comma-separated face indices in target ("0", "0,1", "-1"=all)
-        enhance: Post-processing enhancement (none supported currently)
-    """
-    logger.info(f"👤 Face swap: face_indices={face_indices}, enhance={enhance}")
-
-    if not face_service:
-        raise HTTPException(
-            status_code=503,
-            detail="face_service unavailable (insightface not installed)",
-        )
-
-    try:
-        # Parse face indices
-        if face_indices.strip() == "-1":
-            indices = list(range(10))  # try up to 10 faces
-        else:
-            indices = [
-                int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()
-            ]
-            if not indices:
-                indices = [0]
-
-        source_bytes = await source.read()
-        target_bytes = await target.read()
-
-        # Run in thread pool (CPU-bound)
-        result_bytes = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: face_service.swap_faces_to_bytes(
-                source_bytes, target_bytes, indices
-            ),
-        )
-
-        logger.info("✅ Face swap complete")
-        return StreamingResponse(
-            io.BytesIO(result_bytes),
-            media_type="image/png",
-            headers={"Content-Disposition": "inline; filename=faceswap_result.png"},
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"❌ Face swap error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+    return await dispatch_v1(
+        form=dict(
+            face_indices=face_indices,
+            enhance=enhance,
+        ),
+        files={"target": target, "source": source},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.IMAGE,
+        adapter_hint="local-faceswap",
+        user=user,
+        register_job_settings={
+            "job_type": "face_swap",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Face Profiles API
 # ─────────────────────────────────────────────────────────────────────────────
@@ -14877,55 +11364,24 @@ async def face_swap_with_profile(
     profile_id: str = Form(...),
     face_indices: str = Form("0"),
 ):
-    """
-    Face swap using a saved face profile as source.
+    """Face swap using a saved face profile as source (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Same as /face-swap but uses a pre-saved profile instead of uploading
-    a source image each time.
-
-    Args:
-        target: Image with face(s) to replace
-        profile_id: ID of the saved face profile to use as source
-        face_indices: Comma-separated face indices in target
-    """
-    if not face_service:
-        raise HTTPException(status_code=503, detail="face_service unavailable")
-
-    try:
-        if face_indices.strip() == "-1":
-            indices = list(range(10))
-        else:
-            indices = [
-                int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()
-            ]
-            if not indices:
-                indices = [0]
-
-        target_bytes = await target.read()
-
-        result_img = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: face_service.swap_with_profile(target_bytes, profile_id, indices),
-        )
-
-        buf = io.BytesIO()
-        result_img.save(buf, format="PNG")
-        buf.seek(0)
-
-        logger.info(f"✅ Face swap with profile {profile_id} complete")
-        return StreamingResponse(
-            buf,
-            media_type="image/png",
-            headers={"Content-Disposition": "inline; filename=faceswap_result.png"},
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"❌ Face swap with profile error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+    return await dispatch_v1(
+        form=dict(
+            profile_id=profile_id,
+            face_indices=face_indices,
+        ),
+        files={"target": target},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.IMAGE,
+        adapter_hint="local-faceswap",
+        user=user,
+        register_job_settings={
+            "job_type": "face_swap",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Video face swap endpoints
 # ─────────────────────────────────────────────────────────────────────────────
@@ -14940,65 +11396,23 @@ async def face_swap_video(
         "0", description="Comma-separated face indices or '-1' for all"
     ),
 ):
-    """
-    Apply face swap to every frame of a video.
+    """Apply face swap to every frame of a video (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Frame-by-frame insightface swap using inswapper_128.onnx.
-    Audio is preserved via ffmpeg remux.
-
-    Args:
-        video: Input video (mp4/mov/webm/mkv)
-        source: Reference image with the donor face
-        face_indices: Which face indices in each frame to replace ("0", "0,1", "-1"=all)
-
-    Returns:
-        MP4 video bytes with swapped faces.
-    """
-    logger.info(
-        f"🎬 Video face swap: {video.filename}, source={source.filename}, indices={face_indices}"
+    return await dispatch_v1(
+        form=dict(
+            face_indices=face_indices,
+        ),
+        files={"video": video, "source": source},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.VIDEO,
+        adapter_hint="local-faceswap-video",
+        user=user,
+        register_job_settings={
+            "job_type": "face_swap_video",
+        },
     )
-
-    if not face_service:
-        raise HTTPException(
-            status_code=503,
-            detail="face_service unavailable (insightface not installed)",
-        )
-
-    try:
-        if face_indices.strip() == "-1":
-            indices = list(range(10))
-        else:
-            indices = [
-                int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()
-            ]
-        if not indices:
-            indices = [0]
-
-        source_bytes = await source.read()
-        video_bytes = await video.read()
-
-        result_bytes = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: face_service.swap_faces_in_video(
-                source_bytes, video_bytes, indices
-            ),
-        )
-
-        filename = f"faceswap_{Path(video.filename).stem}.mp4"
-        logger.info(f"✅ Video face swap complete → {len(result_bytes) // 1024}KB")
-        return StreamingResponse(
-            io.BytesIO(result_bytes),
-            media_type="video/mp4",
-            headers={"Content-Disposition": f"inline; filename={filename}"},
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"❌ Video face swap error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/face-swap-video/profile")
 async def face_swap_video_with_profile(
     user: User = Depends(get_current_user),
@@ -15008,60 +11422,24 @@ async def face_swap_video_with_profile(
         "0", description="Comma-separated face indices or '-1' for all"
     ),
 ):
-    """
-    Apply face swap to every frame of a video using a saved face profile.
+    """Apply face swap to every frame of a video using a saved face profile (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    Same as /face-swap-video but uses a pre-saved identity profile.
-
-    Args:
-        video: Input video (mp4/mov/webm/mkv)
-        profile_id: ID of the saved face profile
-        face_indices: Which face indices in each frame to replace
-
-    Returns:
-        MP4 video bytes with swapped faces, audio preserved.
-    """
-    logger.info(f"🎬 Video face swap (profile): {video.filename}, profile={profile_id}")
-
-    if not face_service:
-        raise HTTPException(status_code=503, detail="face_service unavailable")
-
-    try:
-        if face_indices.strip() == "-1":
-            indices = list(range(10))
-        else:
-            indices = [
-                int(x.strip()) for x in face_indices.split(",") if x.strip().isdigit()
-            ]
-        if not indices:
-            indices = [0]
-
-        video_bytes = await video.read()
-
-        result_bytes = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: face_service.swap_faces_in_video_with_profile(
-                profile_id, video_bytes, indices
-            ),
-        )
-
-        filename = f"faceswap_{Path(video.filename).stem}.mp4"
-        logger.info(
-            f"✅ Video face swap (profile {profile_id}) complete → {len(result_bytes) // 1024}KB"
-        )
-        return StreamingResponse(
-            io.BytesIO(result_bytes),
-            media_type="video/mp4",
-            headers={"Content-Disposition": f"inline; filename={filename}"},
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"❌ Video face swap with profile error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+    return await dispatch_v1(
+        form=dict(
+            profile_id=profile_id,
+            face_indices=face_indices,
+        ),
+        files={"video": video},
+        operation=Operation.TRANSFORM,
+        target_type=MediaType.VIDEO,
+        adapter_hint="local-faceswap-video",
+        user=user,
+        register_job_settings={
+            "job_type": "face_swap_video",
+        },
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # Face LoRA Training endpoints
 # ─────────────────────────────────────────────────────────────────────────────
