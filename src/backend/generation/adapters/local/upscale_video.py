@@ -7,6 +7,7 @@ Multiple preset modes: fast (lanczos), balanced (RealESRGAN), quality (SeedVR2).
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 from ...adapter import GenerationAdapter, ProgressCallback
@@ -28,6 +29,12 @@ UPSCALE_CREDITS = {
     "realesrgan": 5,
     "lanczos": 2,
     "bicubic": 2,
+}
+
+# Model file mapping for UpscaleModelLoader
+UPSCALE_MODELS = {
+    "realesrgan": "realesrgan-x4plus.pth",
+    "seedvr2": "seedvr2.pth",
 }
 
 
@@ -72,10 +79,60 @@ class VideoUpscaleAdapter(GenerationAdapter):
         return req.upscale_model or "lanczos"
 
     def build_workflow(self, req: GenerationRequest) -> dict:
-        """Stub — video upscale uses ComfyUI client methods directly."""
+        """
+        Build a real ComfyUI video upscale workflow.
+
+        Pipeline: VHS_LoadVideo → UpscaleModelLoader → ImageUpscaleWithModel → VHS_VideoCombine
+        """
+        model = self._resolve_model(req)
+        model_file = UPSCALE_MODELS.get(model, "realesrgan-x4plus.pth")
+
+        # video_name should already be a ComfyUI filename (uploaded by router)
+        video_name = req.input_video or ""
+
+        prefix = f"upscaled_{uuid.uuid4().hex[:8]}"
+
         return {
-            "_adapter": self.name,
-            "_model": self._resolve_model(req),
+            "1": {
+                "inputs": {
+                    "video": video_name,
+                    "force_rate": 0,
+                    "force_size": "Disabled",
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                },
+                "class_type": "VHS_LoadVideo",
+            },
+            "2": {
+                "inputs": {
+                    "model_name": model_file,
+                },
+                "class_type": "UpscaleModelLoader",
+            },
+            "3": {
+                "inputs": {
+                    "upscale_model": ["2", 0],
+                    "image": ["1", 0],
+                },
+                "class_type": "ImageUpscaleWithModel",
+            },
+            "4": {
+                "inputs": {
+                    "frame_rate": ["1", 2],
+                    "loop_count": 0,
+                    "filename_prefix": prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": True,
+                    "images": ["3", 0],
+                    "audio": ["1", 1],
+                },
+                "class_type": "VHS_VideoCombine",
+            },
         }
 
     def cost(self, req: GenerationRequest) -> int:
@@ -95,10 +152,9 @@ class VideoUpscaleAdapter(GenerationAdapter):
 
         client = self._get_comfyui()
         model = self._resolve_model(req)
-        scale = req.upscale_scale
 
-        # Delegate to ComfyUI — specific builder method depends on model
-        prompt_id = client.queue_prompt(self.build_workflow(req))
+        workflow = self.build_workflow(req)
+        prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
             raise RuntimeError("Failed to queue video upscale workflow")
 
@@ -108,5 +164,5 @@ class VideoUpscaleAdapter(GenerationAdapter):
             compute_target=ComputeTarget.LOCAL,
             credits_used=0,  # Router fills this in
             adapter_name=self.name,
-            meta={"model": model, "scale": scale},
+            meta={"model": model, "scale": req.upscale_scale},
         )
