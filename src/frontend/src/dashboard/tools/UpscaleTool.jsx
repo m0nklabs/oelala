@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, ZoomIn, X, Loader2, Image as ImageIcon, Video, Sparkles } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
-import { BACKEND_BASE, DEBUG } from '../../config'
-import { postForm } from '../../api'
+import { DEBUG } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
+import useGeneration from '../../hooks/useGeneration'
 
 // ─── Image upscale models ───────────────────────────────────────────────────
 const IMAGE_MODELS = [
@@ -57,9 +57,22 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
   }, [resetDefaults])
 
   // Processing
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
+
+  const { generate, loading: submitting } = useGeneration({
+    onSuccess: (data) => {
+      setLastQueued({
+        promptId: data.prompt_id || data.id,
+        credits: data.credits_used,
+        type: mediaType,
+      })
+
+      if (onJobSubmitted) onJobSubmitted()
+      if (onOutput) onOutput({ kind: 'upscale', ...data })
+    },
+    onError: (err) => setError(err)
+  })
 
   // Detect media type from file
   const processFile = useCallback((f) => {
@@ -144,46 +157,41 @@ export default function UpscaleTool({ onOutput, onJobSubmitted }) {
     }
     if (!file) return
 
-    setSubmitting(true)
     setError(null)
+    setLastQueued(null)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64Data = reader.result.split(',')[1]
 
-      let endpoint
-      if (mediaType === 'image') {
-        endpoint = '/upscale'
-        formData.append('model', imageModel)
-        formData.append('scale', String(scale))
-        formData.append('face_enhance', String(faceEnhance))
-      } else {
-        endpoint = '/upscale-video'
-        formData.append('preset', videoPreset)
-        formData.append('scale', String(scale))
+        const reqPayload = {
+          operation: 'upscale',
+          target_type: mediaType,
+          upscale_scale: scale
+        }
+
+        if (mediaType === 'image') {
+          reqPayload.adapter_hint = 'local-upscale-image'
+          reqPayload.input_images = [base64Data]
+          reqPayload.upscale_model = imageModel
+          reqPayload.face_enhance = faceEnhance
+        } else {
+          reqPayload.adapter_hint = 'local-upscale-video'
+          reqPayload.input_video = base64Data
+          reqPayload.upscale_preset = videoPreset
+        }
+
+        if (DEBUG) console.debug('🔍 Upscale submit:', { mediaType, scale })
+        await generate(reqPayload)
       }
-
-      if (DEBUG) console.debug('🔍 Upscale submit:', { endpoint, mediaType, scale })
-
-      const result = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
-
-      if (!result.ok) {
-        setError(result.data?.detail || `Upscale failed (${result.status})`)
-        return
+      reader.onerror = () => {
+        setError('Failed to read file')
       }
+      reader.readAsDataURL(file)
 
-      setLastQueued({
-        promptId: result.data.prompt_id,
-        credits: result.data.credits_used,
-        type: mediaType,
-      })
-
-      if (onJobSubmitted) onJobSubmitted()
-      if (onOutput) onOutput({ kind: 'upscale', ...result.data })
     } catch (e) {
       setError(e.message || 'Failed to start upscale')
-    } finally {
-      setSubmitting(false)
     }
   }
 

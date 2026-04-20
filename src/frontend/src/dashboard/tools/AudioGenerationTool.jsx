@@ -4,6 +4,7 @@ import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
+import useGeneration from '../../hooks/useGeneration'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const TTS_VOICES = [
@@ -54,11 +55,29 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
   const [speed, setSpeed] = useState(initial.speed)
   const [pitch, setPitch] = useState(initial.pitch)
 
-  const [submitting, setSubmitting] = useState(false)  // Brief state while submitting
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
   const [result, setResult] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
+
+  const { generate, loading: submitting } = useGeneration({
+    onSuccess: (data) => {
+      if (data.detail) {
+        setError(data.detail)
+        return
+      }
+
+      const promptId = data.id || data.prompt_id
+      if (promptId) {
+        setLastQueued({
+          promptId,
+          text: text.substring(0, 40) + (text.length > 40 ? '...' : '')
+        })
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+      }
+    },
+    onError: (err) => setError(err)
+  })
 
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
@@ -83,76 +102,44 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
 
     if (!text.trim()) return
 
-    setSubmitting(true)
     setError(null)
     setLastQueued(null)
 
     try {
-      let endpoint = '/generate-audio'
-
-      // Build FormData - backend expects Form parameters
-      const formData = new FormData()
-      formData.append('text', text.trim())
-      formData.append('mode', mode)
+      const durationVal = mode === 'sfx' ? Math.min(duration, 10) : duration
+      
+      const reqPayload = {
+        operation: 'generate',
+        target_type: 'audio',
+        adapter_hint: 'local-mmaudio',
+        compute_target: 'local',
+        prompts: {
+          positive: text.trim()
+        },
+        temporal: {
+           num_frames: 0,
+           fps: 0
+        },
+        settings: {
+          audio_mode: mode,
+          duration: parseFloat(durationVal)
+        }
+      }
 
       if (mode === 'tts') {
-        formData.append('voice', voice)
-        formData.append('speed', speed.toString())
-        formData.append('pitch', pitch.toString())
+        reqPayload.settings.voice = voice
+        reqPayload.settings.speed = parseFloat(speed)
+        reqPayload.settings.pitch = parseFloat(pitch)
       } else if (mode === 'music') {
-        formData.append('style', musicStyle)
-        formData.append('duration', duration.toString())
-      } else if (mode === 'sfx') {
-        formData.append('duration', Math.min(duration, 10).toString()) // SFX max 10s
+        reqPayload.settings.audio_style = musicStyle
       }
+      
+      if (DEBUG) console.debug('🎵 V2 Audio req:', typeof reqPayload, reqPayload)
 
-      if (DEBUG) console.debug('🎵 Audio request:', { text: text.trim(), mode, voice, musicStyle, duration })
-
-      const res = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
-
-      if (!res.ok) {
-        // Better error extraction
-        const errMsg = typeof res.data === 'object'
-          ? (res.data?.detail || JSON.stringify(res.data))
-          : (res.data || 'Audio generation failed')
-        throw new Error(errMsg)
-      }
-
-      // Job was queued - notify parent and show confirmation
-      if (res.data?.prompt_id) {
-        setLastQueued({
-          promptId: res.data.prompt_id,
-          mode,
-          text: text.substring(0, 50) + (text.length > 50 ? '...' : '')
-        })
-
-        // Notify parent to refresh queue panel
-        if (onJobSubmitted) {
-          onJobSubmitted(res.data)
-        }
-
-        // Output will appear in queue/history when done - don't wait
-        if (DEBUG) console.debug('🎵 Job queued:', res.data.prompt_id)
-      } else if (res.data?.url) {
-        // Sync result - show immediately
-        const audioUrl = res.data.url
-        const fullUrl = audioUrl.startsWith('http') ? audioUrl : `${BACKEND_BASE}${audioUrl}`
-        setResult({ url: fullUrl, filename: audioUrl.split('/').pop() })
-
-        if (onOutput) {
-          onOutput({
-            kind: 'audio',
-            url: fullUrl,
-            filename: audioUrl.split('/').pop(),
-          })
-        }
-      }
-
+      await generate(reqPayload)
     } catch (err) {
       console.error('Audio error:', err)
       setError(err.message)
-    } finally {
-      setSubmitting(false)
     }
   }
 

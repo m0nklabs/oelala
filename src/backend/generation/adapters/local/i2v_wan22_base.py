@@ -129,6 +129,9 @@ class Wan22LocalI2VBase(GenerationAdapter):
             "aspect_ratio": req.aspect_ratio or "9:16",
             "lora_configs": lora_dicts,
         }
+        
+        if qc.supports_extra_params and req.model_extra:
+            kwargs.update(req.model_extra)
 
         # Some builders have extra params like sampler/scheduler
         if qc.default_sampler:

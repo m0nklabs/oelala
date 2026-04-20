@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import CameraPositionSelector, { getCameraPositionPrefix } from '../../components/CameraPositionSelector'
 import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
+import useGeneration from '../../hooks/useGeneration'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 import { useToolSettings } from '../../hooks/useToolSettings'
@@ -230,6 +231,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
     })
   }
 
+  const { generate } = useGeneration()
+
   const handleGenerate = async () => {
     // Check if user is logged in
     if (!user) {
@@ -250,82 +253,60 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
       const finalPrompt = positionPrefix + prompt
 
       for (let i = 0; i < batchCount; i++) {
-        const jobId = `t2i-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        const formData = new FormData()
-        formData.append('prompt', finalPrompt)
-        formData.append('aspect_ratio', aspectRatio)
-
-        // Determine endpoint based on model type
+        // Determine adapter based on model type
         const modelType = getModelType(model)
-        let endpoint = '/generate-image'
+        
+        let adapterHint = 'sdxl-local-t2i'
+        if (modelType === 'wan22') adapterHint = 'wan22-local-t2i'
+        else if (modelType === 'ernie') adapterHint = 'ernie-local-t2i'
+        else if (modelType === 'flux') adapterHint = 'flux-local-t2i'
+        else if (modelType === 'sd15') adapterHint = 'sd15-local-t2i'
 
-        if (modelType === 'wan22') {
-          endpoint = '/generate-wan22-t2i'
-          formData.append('steps', steps)
-          formData.append('seed', seed)
-        } else if (modelType === 'ernie') {
-          endpoint = '/generate-ernie'
-          formData.append('steps', steps)
-          formData.append('guidance', guidance)
-          formData.append('seed', seed)
-        } else if (modelType === 'flux') {
-          endpoint = '/generate-flux'
-          formData.append('steps', steps)
-          formData.append('guidance', guidance)
-          formData.append('seed', seed)
-        } else if (modelType === 'sdxl') {
-          endpoint = '/generate-sdxl'
-          formData.append('checkpoint', model)
-          formData.append('negative_prompt', negativePrompt)
-          formData.append('steps', steps)
-          formData.append('cfg', cfg)
-          formData.append('seed', seed)
-          formData.append('sampler_name', sampler)
-          formData.append('scheduler', scheduler)
-          // Add LoRA configs
-          const activeLoras = selectedLoras.filter(l => l.name && l.name !== 'None')
-          if (activeLoras.length > 0) {
-            formData.append('lora_configs', JSON.stringify(activeLoras))
-          }
-        } else if (modelType === 'sd15') {
-          endpoint = '/generate-sd15'
-          formData.append('negative_prompt', negativePrompt)
-          formData.append('steps', steps)
-          formData.append('cfg', cfg)
-          formData.append('seed', seed)
-          formData.append('sampler_name', sampler)
-          formData.append('scheduler', scheduler)
-        } else {
-          // Diffusers (legacy)
-          formData.append('mode', mode)
-          formData.append('model', model)
-          formData.append('job_id', jobId)
+        if (DEBUG) console.debug('🎨 T2I V2 request:', { adapterHint, modelType, model })
+
+        const requestPayload = {
+          operation: 'generate',
+          target_type: 'image',
+          adapter_hint: adapterHint,
+          prompt: finalPrompt,
+          negative_prompt: negativePrompt || undefined,
+          seed: parseInt(seed, 10),
+          steps: parseInt(steps, 10),
+          cfg: parseFloat(cfg),
+          aspect_ratio: aspectRatio,
+          checkpoint: model, // Some adapters use this, some ignore it securely
+          sampler: sampler,
+          scheduler: scheduler,
+          loras: selectedLoras.filter(l => l.name && l.name !== 'None').map(l => ({ name: l.name, strength: l.strength }))
         }
 
-        if (DEBUG) console.debug('🎨 T2I request:', { endpoint, model, modelType })
-
-        const result = await postForm(`${BACKEND_BASE}${endpoint}`, formData)
-        if (!result.ok) {
-          throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
+        const result = await generate(requestPayload)
+        
+        if (!result) {
+          // generate() returned null, meaning error occurred (handled inside hook or aborted).
+          // We can break early to not keep failing the batch
+          break
         }
 
-        if (DEBUG) console.log(`📋 Batch ${i+1}/${batchCount} queued:`, result.data)
+        if (DEBUG) console.log(`📋 Batch ${i+1}/${batchCount} queued:`, result)
 
         // Track queued job
-        if (result.data?.prompt_id) {
-          queuedJobs.push(result.data.prompt_id)
+        if (result.prompt_id) {
+          queuedJobs.push(result.prompt_id)
         }
 
         // Notify queue indicator
-        if (onJobSubmitted) onJobSubmitted({ prompt_id: result.data?.prompt_id })
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: result.prompt_id })
       }
 
-      // Show queued confirmation
-      setLastQueued({
-        count: batchCount,
-        model: getModelLabel(),
-        promptIds: queuedJobs
-      })
+      if (queuedJobs.length > 0) {
+        // Show queued confirmation
+        setLastQueued({
+          count: queuedJobs.length,
+          model: getModelLabel(),
+          promptIds: queuedJobs
+        })
+      }
 
     } catch (e) {
       console.error('Generation error:', e)

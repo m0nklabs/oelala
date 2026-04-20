@@ -4,6 +4,7 @@ import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
+import useGeneration from '../../hooks/useGeneration'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
@@ -58,10 +59,28 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
   const [cfg, setCfg] = useState(initial.cfg)
   const [seed, setSeed] = useState(initial.seed)
 
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
+
+  const { generate, loading: submitting } = useGeneration({
+    onSuccess: (data) => {
+      if (data.detail) {
+        setError(data.detail)
+        return
+      }
+
+      const promptId = data.id || data.prompt_id
+      if (promptId) {
+        setLastQueued({
+          promptId,
+          prompt: prompt.substring(0, 40) + (prompt.length > 40 ? '...' : '')
+        })
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+      }
+    },
+    onError: (err) => setError(err)
+  })
 
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
@@ -174,53 +193,43 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
       return
     }
 
-    setSubmitting(true)
     setError(null)
     setLastQueued(null)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('prompt', finalPrompt)
-      formData.append('negative_prompt', negativePrompt)
-      formData.append('denoise', String(denoise))
-      formData.append('fps', String(fps))
-      formData.append('max_frames', String(maxFrames))
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
+      const adapterHint = 'local-v2v'
+      
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64Data = reader.result.split(',')[1]
 
-      if (DEBUG) console.debug('🎬 V2V request:', { style, denoise, fps, maxFrames })
+        const reqPayload = {
+          operation: 'transform',
+          target_type: 'video',
+          adapter_hint: adapterHint,
+          compute_target: 'local',
+          prompt: finalPrompt,
+          negative_prompt: negativePrompt,
+          input_video: base64Data,
+          denoise: denoise,
+          frames: maxFrames,
+          fps: fps,
+          steps: steps,
+          cfg: cfg,
+          seed: seed > 0 ? seed : -1
+        }
 
-      const res = await postForm(`${BACKEND_BASE}/generate-v2v`, formData)
-
-      if (!res.ok) {
-        throw new Error(res.data?.detail || 'V2V transform failed')
+        if (DEBUG) console.debug('🎥 Triggering V2 V2V')
+        await generate(reqPayload)
       }
-
-      const promptId = res.data?.prompt_id
-      if (!promptId) {
-        throw new Error('No prompt_id returned')
+      reader.onerror = () => {
+        setError('Failed to read video file')
       }
-
-      // Show queued confirmation
-      setLastQueued({
-        promptId,
-        style: style !== 'none' ? style : 'custom'
-      })
-
-      // Notify queue indicator
-      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-
-      if (DEBUG) console.debug('📋 V2V queued:', promptId)
-
-      // Don't wait for completion - job will appear in queue/history when done
+      reader.readAsDataURL(file)
 
     } catch (err) {
-      console.error('V2V error:', err)
+      console.error('V2V err:', err)
       setError(err.message)
-    } finally {
-      setSubmitting(false)
     }
   }
 

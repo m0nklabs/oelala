@@ -2,7 +2,8 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, Shield, User as UserIcon, Sparkles, Palette } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, apiFetch } from '../../api'
+import { apiFetch } from '../../api'
+import useGeneration from '../../hooks/useGeneration'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
@@ -193,10 +194,27 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
     }
   }, [lightning, mode])
 
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)
   const [result, setResult] = useState(null)
+
+  const { generate, loading: submitting } = useGeneration({
+    onSuccess: (data, req) => {
+      const promptId = data.prompt_id || data.id
+      let qMode = req.adapter_hint === 'qwen-cloud-edit' ? 'edit' : 'transform'
+      setLastQueued({
+        promptId: promptId,
+        mode: qMode,
+        checkpoint: qMode === 'transform' ? (CHECKPOINTS.find(c => c.value === req.checkpoint)?.label || req.checkpoint) : undefined,
+        lightning: req.lightning,
+        runpodJobId: data.runpod_job_id,
+        credits: data.credits_used
+      })
+      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+      if (onOutput) onOutput(data)
+    },
+    onError: (err) => setError(err)
+  })
 
   // Update settings when preset changes
   useEffect(() => {
@@ -332,7 +350,6 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       return
     }
 
-    setSubmitting(true)
     setError(null)
     setLastQueued(null)
 
@@ -340,80 +357,67 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       const currentFile = fileRef.current
       if (!currentFile) {
         setError('No file selected')
-        setSubmitting(false)
         return
       }
 
-      const buf = await currentFile.arrayBuffer()
-      const hashBuf = await crypto.subtle.digest('SHA-256', buf)
-      const hashHex = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16)
-      console.warn(`🔐 I2I SENDING: hash=${hashHex} | name=${currentFile.name} | size=${currentFile.size} | type=${currentFile.type}`)
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64Data = reader.result.split(',')[1]
 
-      const freshBlob = new Blob([buf], { type: currentFile.type || 'image/png' })
-      const freshFile = new File([freshBlob], currentFile.name, {
-        type: currentFile.type || 'image/png',
-        lastModified: currentFile.lastModified
-      })
-
-      const formData = new FormData()
-      formData.append('file', freshFile)
-
-      if (mode === 'transform') {
-        // ── Transform mode → local ComfyUI ──
-        formData.append('prompt', prompt || 'high quality, detailed')
-        formData.append('negative_prompt', negativePrompt)
-        formData.append('denoise', String(denoise))
-        formData.append('checkpoint', checkpoint)
-        formData.append('steps', String(steps))
-        formData.append('cfg', String(cfg))
-        formData.append('seed', String(seed))
-        formData.append('sampler_name', sampler)
-        formData.append('scheduler', scheduler)
-        formData.append('preset', preset)
-        formData.append('face_id', String(faceId))
-        formData.append('face_detailer', String(faceDetailer))
-        formData.append('face_restore', String(faceRestore))
-        formData.append('face_id_weight', String(faceIdWeight))
-
-        if (DEBUG) console.debug('🖼️ I2I transform:', { denoise, checkpoint, steps })
-
-        const res = await postForm(`${BACKEND_BASE}/generate-i2i`, formData)
-        if (!res.ok) throw new Error(res.data?.detail || 'Generation failed')
-        const promptId = res.data?.prompt_id
-        if (!promptId) throw new Error('No prompt_id returned')
-
-        setLastQueued({ promptId, mode: 'transform', checkpoint: CHECKPOINTS.find(c => c.value === checkpoint)?.label || checkpoint })
-        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-      } else {
-        // ── Edit mode → RunPod cloud ──
-        formData.append('instruction', instruction)
-        formData.append('negative_prompt', negativePrompt)
-        formData.append('steps', String(steps))
-        formData.append('cfg', String(cfg))
-        formData.append('seed', String(seed))
-        formData.append('lightning', String(lightning))
-        const editDims = getEditDimensions(editResolution, editAspectRatio)
-        formData.append('width', String(editDims.width))
-        formData.append('height', String(editDims.height))
-        if (loraConfigs.length > 0) {
-          formData.append('lora_configs', JSON.stringify(loraConfigs.filter(c => c.name)))
+        const reqPayload = {
+          operation: 'transform',
+          target_type: 'image',
+          input_images: [base64Data],
+          seed: seed,
+          steps: steps,
+          cfg: cfg,
         }
 
-        if (DEBUG) console.debug('✏️ I2I edit:', { instruction, steps, cfg, lightning, loras: loraConfigs.length })
+        if (mode === 'transform') {
+          // ── Transform mode → local ComfyUI ──
+          reqPayload.adapter_hint = 'local-i2i-transform'
+          reqPayload.prompt = prompt || 'high quality, detailed'
+          reqPayload.negative_prompt = negativePrompt
+          reqPayload.denoise = denoise
+          reqPayload.checkpoint = checkpoint
+          reqPayload.sampler_name = sampler
+          reqPayload.scheduler = scheduler
+          reqPayload.preset = preset
+          reqPayload.face_id = faceId
+          reqPayload.face_detailer = faceDetailer
+          reqPayload.face_restore = faceRestore
+          reqPayload.face_id_weight = faceIdWeight
 
-        const res = await postForm(`${BACKEND_BASE}/generate-qwen-edit`, formData)
-        if (!res.ok) throw new Error(res.data?.detail || 'Edit failed')
-        const promptId = res.data?.prompt_id
-        if (!promptId) throw new Error('No prompt_id returned')
+          if (DEBUG) console.debug('🖼️ I2I transform:', { denoise, checkpoint, steps })
+          await generate(reqPayload)
 
-        setLastQueued({ promptId, mode: 'edit', lightning, runpodJobId: res.data?.runpod_job_id })
-        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+        } else {
+          // ── Edit mode → RunPod cloud ──
+          reqPayload.adapter_hint = 'qwen-cloud-edit'
+          reqPayload.instruction = instruction
+          reqPayload.negative_prompt = negativePrompt
+          reqPayload.lightning = lightning
+          
+          const editDims = getEditDimensions(editResolution, editAspectRatio)
+          reqPayload.width = editDims.width
+          reqPayload.height = editDims.height
+          
+          if (loraConfigs.length > 0) {
+            reqPayload.lora_configs = loraConfigs.filter(c => c.name)
+          }
+
+          if (DEBUG) console.debug('✏️ I2I edit:', { instruction, steps, cfg, lightning, loras: loraConfigs.length })
+          await generate(reqPayload)
+        }
       }
+      reader.onerror = () => {
+        setError('Failed to read file')
+      }
+      reader.readAsDataURL(currentFile)
+
     } catch (err) {
       console.error('I2I error:', err)
-      setError(err.message)
-    } finally {
-      setSubmitting(false)
+      setError(err.message || 'Failed to start generation')
     }
   }
 

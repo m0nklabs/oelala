@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, uploadUserMedia, apiFetch, getUserMediaUrl } from '../../api'
+import { apiFetch, getUserMediaUrl } from '../../api'
+import useGeneration from '../../hooks/useGeneration'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
@@ -338,377 +339,152 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [selectedPreset, setSelectedPreset] = useState(null)
   const [presetParameters, setPresetParameters] = useState({})
 
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const { generate, loading: busy } = useGeneration()
 
-  // Selected creation from MyMediaTool picker
-  const [selectedCreation, setSelectedCreation] = useState(null)
-
-  const canSubmit = useMemo(() => !!file && !busy, [file, busy])
-
-  // ── Restore source image from profile on load ─────────────────────────
-  useEffect(() => {
-    if (!pendingImageRestore.current || !profileLoaded) return
-    const imageName = pendingImageRestore.current
-    pendingImageRestore.current = null
-
-    async function restore() {
-      setRestoringImage(true)
-      try {
-        const resp = await apiFetch(`/user/media/uploads/${encodeURIComponent(imageName)}`)
-        if (!resp.ok) throw new Error('Image not found in storage')
-        const blob = await resp.blob()
-        const fileObj = new File([blob], imageName, { type: blob.type || 'image/png' })
-        setFile(fileObj)
-        setPreviewUrl(URL.createObjectURL(blob))
-        if (DEBUG) console.debug('📁 Restored source image from profile:', imageName)
-      } catch (err) {
-        if (DEBUG) console.debug('📁 Failed to restore source image:', imageName, err.message)
-        // Non-fatal: profile loads without image, user can re-upload
-      } finally {
-        setRestoringImage(false)
-      }
+  const handleSubmit = async () => {
+    // Check if user is logged in
+    if (!user) {
+      requestLogin('Log in om video\'s te genereren')
+      return
     }
-    restore()
-  }, [profileLoaded])
 
-  // ── Auto-save settings to profile on every change ─────────────────────
-  const settingsSnapshot = useMemo(() => ({
-    prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
-    aspectRatio, fps, steps, cfg, seed, cameraMotion,
-    bsShift, bsNagScale, bsEnableFlorence2, bsEnableUpscale,
-    bsEnableInterpolation, bsHighNoiseSteps,
-    loraConfigs, unetHighNoise, unetLowNoise,
-    extendMode, clipCount,
-    postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
-    enhanceModel,
-    sourceImageName: file?.name || null,
-  }), [
-    prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
-    aspectRatio, fps, steps, cfg, seed, cameraMotion,
-    bsShift, bsNagScale, bsEnableFlorence2, bsEnableUpscale,
-    bsEnableInterpolation, bsHighNoiseSteps,
-    loraConfigs, unetHighNoise, unetLowNoise,
-    extendMode, clipCount,
-    postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
-    enhanceModel, file,
-  ])
+    if (!file) {
+      setError('Image is required')
+      return
+    }
 
-  useEffect(() => {
-    if (!profileLoaded || !user) return
-    updateProfile(settingsSnapshot)
-  }, [settingsSnapshot, profileLoaded, user, updateProfile])
-
-  // LLM prompt enhancement queue
-  const llm = useLLMEnhance()
-
-  // Enhance prompt with LLM (via async queue)
-  const handleEnhancePrompt = async () => {
-    if (!prompt.trim() || isEnhancing) return
-    setIsEnhancing(true)
     setError('')
 
-    const result = await llm.enhance({
-      input: prompt.trim(),
-      mode: 'expand',
-      include_negative: true,
-      include_motion: true,
-      model: enhanceModel,
+    const numFrames = Math.floor(duration * fps)
+    const finalPrompt = usePose ? prompt : getCameraMotionPrefix(cameraMotion) + (prompt || 'Motion, subject moving naturally')
+
+    // Read image as base64
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
     })
 
-    if (result) {
-      setPrompt(result.prompt)
-      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
-    } else if (llm.error) {
-      setError(`Enhance failed: ${llm.error}`)
+    // Prepare V2 request payload
+    let reqPayload = {
+      operation: 'generate',
+      target_type: 'video',
+      prompt: finalPrompt,
+      negative_prompt: negativePrompt || 'low quality, blurry, distorted, artifacts',
+      frames: numFrames,
+      fps: fps,
+      resolution: resolution,
+      aspect_ratio: aspectRatio,
+      compute_target: computeTarget,
+      steps: steps,
+      cfg: cfg,
+      seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed,
+      input_images: [base64Data]
     }
-    setIsEnhancing(false)
-  }
 
-  // Refine/improve prompt with LLM — preserves original intent (via async queue)
-  const handleRefinePrompt = async () => {
-    if (!prompt.trim() || isRefining) return
-    setIsRefining(true)
-    setError('')
-
-    const result = await llm.enhance({
-      input: prompt.trim(),
-      mode: 'refine',
-      include_negative: true,
-      include_motion: true,
-      model: enhanceModel,
-      refine_instruction: refineInstruction.trim() || null,
-    })
-
-    if (result) {
-      setPrompt(result.prompt)
-      if (result.negative_prompt) setNegativePrompt(result.negative_prompt)
-      setRefineInstruction('')
-      setShowRefineInput(false)
-    } else if (llm.error) {
-      setError(`Refine failed: ${llm.error}`)
-    }
-    setIsRefining(false)
-  }
-
-  // Analyze image with vision model and generate creative video prompts
-  const handleAnalyzeAndGenerate = async (useNsfw = false) => {
-    if (!previewUrl || isAnalyzing) return
-    setIsAnalyzing(true)
-    setError('')
-
-    try {
-      // Get image as base64
-      let imageBase64 = ''
-
-      // If previewUrl is a blob or data URL, fetch it
-      if (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')) {
-        const response = await fetch(previewUrl)
-        const blob = await response.blob()
-        imageBase64 = await new Promise((resolve) => {
+    if (usePose) {
+      reqPayload.adapter_hint = 'pose-i2v'
+    } else if (modelMode === 'blockswap_q8') {
+      reqPayload.adapter_hint = 'wan22-local-i2v-blockswap'
+      reqPayload.shift = bsShift
+      reqPayload.nag_scale = bsNagScale
+      reqPayload.high_noise_steps = bsHighNoiseSteps
+      reqPayload.enable_florence2 = bsEnableFlorence2
+      reqPayload.enable_upscale = bsEnableUpscale
+      reqPayload.enable_interpolation = bsEnableInterpolation
+      if (loraConfigs.length > 0) reqPayload.loras = loraConfigs
+    } else if (modelMode === 'distorch2_q8') {
+      reqPayload.adapter_hint = 'wan22-local-i2v-distorch2'
+      reqPayload.shift = bsShift
+      reqPayload.nag_scale = bsNagScale
+      reqPayload.high_noise_steps = bsHighNoiseSteps
+      reqPayload.enable_florence2 = bsEnableFlorence2
+      reqPayload.enable_upscale = bsEnableUpscale
+      reqPayload.enable_interpolation = bsEnableInterpolation
+      if (loraConfigs.length > 0) reqPayload.loras = loraConfigs
+    } else if (modelMode === 'ultra_q8') {
+      reqPayload.adapter_hint = 'wan22-local-i2v-ultra'
+      reqPayload.shift = bsShift
+      reqPayload.nag_scale = bsNagScale
+      reqPayload.high_noise_steps = bsHighNoiseSteps
+      reqPayload.enable_florence2 = bsEnableFlorence2
+      reqPayload.enable_upscale = bsEnableUpscale
+      reqPayload.enable_interpolation = bsEnableInterpolation
+      if (loraConfigs.length > 0) reqPayload.loras = loraConfigs
+    } else if (modelMode === 'cloud_wan22') {
+      reqPayload.adapter_hint = 'wan22-cloud-i2v'
+      reqPayload.shift = bsShift
+      reqPayload.high_noise_steps = bsHighNoiseSteps
+      reqPayload.sampler = 'dpmpp_2m'
+      reqPayload.scheduler = 'beta'
+      if (loraConfigs.length > 0) reqPayload.loras = loraConfigs
+    } else if (modelMode === 'ltx2') {
+      reqPayload.adapter_hint = 'ltx23-cloud-i2v'
+      if (audioPromptImported && audioPromptImported.trim()) {
+        reqPayload.audio_prompt = audioPromptImported.trim()
+      }
+      if (loraConfigs.length > 0) reqPayload.loras = loraConfigs
+      
+      const postProcessing = []
+      if (postUpscale) postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
+      if (postInterpolate) postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
+      if (postAudio && postAudioFile) {
+        const audioData = await new Promise((resolve, reject) => {
           const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result)
-          reader.readAsDataURL(blob)
+          reader.onload = (e) => resolve(e.target.result)
+          reader.onerror = reject
+          reader.readAsDataURL(postAudioFile)
         })
-      } else {
-        // For remote URLs, fetch through backend or directly
-        const response = await fetch(previewUrl)
-        const blob = await response.blob()
-        imageBase64 = await new Promise((resolve) => {
+        reqPayload.input_audio = audioData
+        postProcessing.push({ type: 'add_audio' })
+      }
+      if (postProcessing.length > 0) reqPayload.post_processing = postProcessing
+    } else {
+      reqPayload.adapter_hint = 'wan22-local-i2v-q6'
+      if (extendMode && clipCount > 1) {
+        reqPayload.extend_mode = true
+        reqPayload.clip_count = clipCount
+      }
+      if (unetHighNoise) reqPayload.unet_high_noise = unetHighNoise
+      if (unetLowNoise) reqPayload.unet_low_noise = unetLowNoise
+      if (loraConfigs.length > 0) reqPayload.loras = loraConfigs
+      
+      const postProcessing = []
+      if (postUpscale) postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
+      if (postInterpolate) postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
+      if (postAudio && postAudioFile) {
+        const audioData = await new Promise((resolve, reject) => {
           const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result)
-          reader.readAsDataURL(blob)
+          reader.onload = (e) => resolve(e.target.result)
+          reader.onerror = reject
+          reader.readAsDataURL(postAudioFile)
         })
+        reqPayload.input_audio = audioData
+        postProcessing.push({ type: 'add_audio' })
       }
-
-      if (DEBUG) console.log('🔮 Analyzing image and generating prompts...')
-
-      const res = await apiFetch('/api/analyze-and-generate', {
-        method: 'POST',
-        body: JSON.stringify({
-          image_base64: imageBase64,
-          nsfw: useNsfw,
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Analysis failed')
-      }
-
-      const data = await res.json()
-      if (DEBUG) console.log('🎬 Generated prompts:', data)
-
-      // Store the image description for reference
-      setImageDescription(data.description)
-
-      // Update prompts
-      setPrompt(data.prompt)
-      if (data.negative_prompt) {
-        setNegativePrompt(data.negative_prompt)
-      }
-
-    } catch (err) {
-      console.error('Analyze error:', err)
-      setError(`Analysis failed: ${err.message}`)
-    } finally {
-      setIsAnalyzing(false)
+      if (postProcessing.length > 0) reqPayload.post_processing = postProcessing
     }
-  }
-
-  // Calculate max duration based on resolution and model mode
-  const maxDuration = useMemo(() => {
-    const preset = RESOLUTION_PRESETS[resolution]
-    if (!preset) return 30
-    if (modelMode === 'ltx2') {
-      return preset.max_duration_ltx2 || 30
-    }
-    if (modelMode === 'blockswap_q8') {
-      return preset.max_duration_blockswap_q8 || 30
-    }
-    if (modelMode === 'distorch2_q8') {
-      return preset.max_duration_distorch2_q8 || 30
-    }
-    if (modelMode === 'ultra_q8') {
-      return preset.max_duration_ultra_q8 || 30
-    }
-    if (modelMode === 'cloud_wan22') {
-      return preset.max_duration_cloud_wan22 || 30
-    }
-    return preset.max_duration_wan22 || 30
-  }, [resolution, modelMode])
-
-  // Clamp duration when max changes
-  useEffect(() => {
-    if (duration > maxDuration) {
-      setDuration(maxDuration)
-    }
-  }, [maxDuration, duration])
-
-  // Calculate estimated generation time
-  const timeEstimate = useMemo(() => {
-    return estimateI2VTime({ resolution, duration, steps })
-  }, [resolution, duration, steps])
-
-  // Fetch available LoRAs on mount
-  useEffect(() => {
-    const fetchLoras = async () => {
-      try {
-        const res = await apiFetch('/loras')
-        if (res.ok) {
-          const data = await res.json()
-          setAvailableLoras(data)
-          if (DEBUG) console.debug('🐛 loaded LoRAs:', data.count)
-        }
-      } catch (e) {
-        console.error('Failed to fetch LoRAs:', e)
-      }
-    }
-    fetchLoras()
-  }, [])
-
-  // Filter LoRAs based on NSFW setting and model type compatibility
-  const filteredLoras = useMemo(() => {
-    const filterList = (list) => {
-      let items = list || []
-      if (!nsfwEnabled) items = items.filter(l => !l.nsfw)
-      return items
-    }
-    // Model-type category filter: LTX only sees ltx/, Wan sees everything else
-    const isLtx = modelMode === 'ltx2'
-    const categoryFilter = (cat) => isLtx ? cat === 'ltx' : cat !== 'ltx'
-    const filteredByCategory = {}
-    if (availableLoras.by_category) {
-      Object.keys(availableLoras.by_category).forEach(cat => {
-        if (!categoryFilter(cat)) return
-        const filtered = filterList(availableLoras.by_category[cat])
-        if (filtered.length > 0) {
-          filteredByCategory[cat] = filtered
-        }
-      })
-    }
-    return {
-      high_noise: filterList(availableLoras.high_noise),
-      low_noise: filterList(availableLoras.low_noise),
-      general: filterList(availableLoras.general),
-      loras: filterList(availableLoras.loras),
-      by_category: filteredByCategory,
-    }
-  }, [availableLoras, nsfwEnabled, modelMode])
-
-  // Fetch available unet models on mount
-  useEffect(() => {
-    const fetchUnets = async () => {
-      try {
-        const res = await apiFetch('/unet-models')
-        if (res.ok) {
-          const data = await res.json()
-          setAvailableUnets(data)
-          if (DEBUG) console.debug('🐛 loaded Unet models:', data.count)
-        }
-      } catch (e) {
-        console.error('Failed to fetch Unet models:', e)
-      }
-    }
-    fetchUnets()
-  }, [])
-
-  // Persist prompt to localStorage on change
-  useEffect(() => {
-    if (prompt) {
-      try {
-        localStorage.setItem('oelala_last_prompt', prompt)
-      } catch { /* ignore storage errors */ }
-    }
-  }, [prompt])
-
-  // Persist audio prompt to localStorage on change
-  useEffect(() => {
-    try {
-      if (audioPromptImported) {
-        localStorage.setItem('oelala_i2v_audio_prompt', audioPromptImported)
-      } else {
-        localStorage.removeItem('oelala_i2v_audio_prompt')
-      }
-    } catch { /* ignore */ }
-  }, [audioPromptImported])
-
-  // Expose current params to parent for JSON download
-  useEffect(() => {
-    if (onParamsChange) {
-      onParamsChange({
-        tool: 'ImageToVideo',
-        prompt,
-        duration,
-        resolution,
-        modelMode,
-        modelVersion,
-        aspectRatio,
-        fps,
-        steps,
-        cfg,
-        seed,
-        usePose,
-        loraConfigs,
-        filename: file?.name || null,
-      })
-    }
-  }, [prompt, duration, resolution, modelMode, modelVersion, aspectRatio, fps, steps, cfg, seed, usePose, loraConfigs, file, onParamsChange])
-
-  // Select an image from My Creations (called by MyMediaTool in output panel)
-  const selectCreation = useCallback(async (item) => {
-    setSelectedCreation(item)
-    setError('')
 
     try {
-      // Fetch the image and convert to File object
-      // Use getMediaUrl to handle both signed URLs and relative paths
-      const imageUrl = getMediaUrl(item.url, item.signed_url)
-      const response = await apiFetch(imageUrl)
-      const blob = await response.blob()
-      const filename = item.filename || item.url.split('/').pop()
-      const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
+      if (DEBUG) console.debug('🐛 submit image-to-video v2:', reqPayload)
+      
+      const result = await generate(reqPayload)
 
-      setFile(fileObj)
-      setPreviewUrl(imageUrl)
-      setUploadTab('file') // Switch back to file tab to show the selection
-
-      // Show in output panel
-      onOutput({
-        kind: 'image',
-        url: imageUrl,
-        backendUrl: imageUrl,
-        filename: filename,
-        meta: { source: 'my-creations', originalItem: item },
-      })
-
-      if (DEBUG) console.debug('🐛 selected creation:', filename)
-
-      // Fetch metadata and show import modal so user can optionally reuse prompts
-      try {
-        const metaRes = await apiFetch(`/comfyui-metadata/${filename}`)
-        if (metaRes.ok) {
-          const metaJson = await metaRes.json()
-          const workflowData = parseComfyWorkflow(metaJson.metadata || {})
-          // Only show modal if there's something useful to import
-          if (workflowData.positive || workflowData.steps || workflowData.loras?.length) {
-            setImportModal({ item, workflow: workflowData })
-          }
+      if (result) {
+        const isCloud = result.compute_target === 'cloud'
+        if (DEBUG) console.debug(`🐛 Job queued (${isCloud ? 'cloud' : 'local'}):`, result.prompt_id || result.runpod_job_id)
+        if (onJobSubmitted) {
+          onJobSubmitted(result)
         }
-      } catch (_) { /* no metadata — silently skip */ }
+      }
     } catch (e) {
-      setError('Failed to load selected image')
-      console.error('Error selecting creation:', e)
+      const message = e?.message || 'Failed to generate video'
+      setError(message)
     }
-  }, [onOutput])
+  }
 
-  // Notify Dashboard when creations tab is active/inactive
-  useEffect(() => {
-    if (onCreationsModeChange) {
-      onCreationsModeChange(uploadTab === 'creations' && !file, selectCreation)
-    }
-    // Cleanup: disable creations mode when component unmounts
-    return () => {
+  return () => {
       if (onCreationsModeChange) {
         onCreationsModeChange(false, null)
       }

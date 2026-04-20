@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class MediaType(str, Enum):
@@ -89,6 +89,8 @@ class LoraStackItem(BaseModel):
 
 class GenerationRequest(BaseModel):
     """Unified request body for all generation operations."""
+
+    model_config = ConfigDict(extra="allow")
 
     operation: Operation
     target_type: MediaType

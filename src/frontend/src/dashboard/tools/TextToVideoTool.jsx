@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { BACKEND_BASE, DEBUG } from '../../config'
-import { postForm, apiFetch } from '../../api'
+import {  apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { sendClientLog } from '../../logging'
@@ -11,6 +11,7 @@ import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateT2VTime } from '../../utils/timeEstimates'
 import MediaImportModal from '../../components/MediaImportModal'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
+import useGeneration from '../../hooks/useGeneration'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 import { useToolProfile } from '../../hooks/useToolProfile'
@@ -204,9 +205,29 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
   const [computeTarget, setComputeTarget] = useState('local')
 
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)
+  
+  const { generate, loading: submitting } = useGeneration({
+    onSuccess: (data) => {
+      // Check for validation errors mixed in success wrapper (sometimes error format)
+      if (data.detail) {
+        setError(data.detail)
+        return
+      }
+      
+      const promptId = data.id || data.prompt_id
+      if (promptId) {
+        setLastQueued({
+          promptId,
+          prompt: prompt.substring(0, 40) + (prompt.length > 40 ? '...' : '')
+        })
+        if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
+      }
+    },
+    onError: (err) => setError(err)
+  })
+
   const [availableModels, setAvailableModels] = useState({})
 
   // LoRA state - multi-LoRA with individual strengths
@@ -515,26 +536,33 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       return
     }
 
-    setSubmitting(true)
-    setError('')
-    setLastQueued(null)
+    // Determine adapter based on modelType + computeTarget
+    let adapterHint = 'wan22-local-t2v-q6'
+    if (resolved.modelType === 'cloud_wan22') {
+      adapterHint = 'wan22-cloud-t2v'
+    } else if (resolved.modelType.includes('ltx23') && resolved.computeTarget === 'cloud') {
+      adapterHint = 'ltx23-cloud-t2v'
+    }
+
+    // Determine width and height from resolution selection
+    const resPreset = RESOLUTION_PRESETS[resolved.aspectRatio] && RESOLUTION_PRESETS[resolved.aspectRatio][resolved.resolution]
+    let targetWidth = 848
+    let targetHeight = 480
+    if (resPreset) {
+      targetWidth = resPreset.width
+      targetHeight = resPreset.height
+    } else {
+      // fallback parsing
+      const parts = resolved.resolution.split('x')
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+         targetWidth = parseInt(parts[0], 10)
+         targetHeight = parseInt(parts[1], 10)
+      }
+    }
 
     // Build prompt with camera motion prefix
     const motionPrefix = getCameraMotionPrefix(resolved.cameraMotion)
     const finalPrompt = motionPrefix + resolved.prompt
-
-    const calcNumFrames = resolved.duration * resolved.fps
-    const formData = new FormData()
-    formData.append('prompt', finalPrompt)
-    formData.append('num_frames', String(calcNumFrames))
-    formData.append('model_type', resolved.modelType)
-    formData.append('aspect_ratio', resolved.aspectRatio)
-    formData.append('resolution', resolved.resolution)
-    formData.append('fps', String(resolved.fps))
-    formData.append('compute_target', resolved.computeTarget)
-
-    // Add negative prompt
-    formData.append('negative_prompt', resolved.negativePrompt)
 
     // Add post-processing chain if any options selected
     const postProcessingSteps = []
@@ -545,104 +573,42 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       postProcessingSteps.push({ type: 'interpolate', target_fps: resolved.postInterpolateFps })
     }
     if (resolved.postAudio && resolved.postAudioFile) {
-      formData.append('post_audio_file', resolved.postAudioFile)
       postProcessingSteps.push({ type: 'add_audio' })
     }
+
+    // Lora configs correctly mapped
+    const lorasArray = resolved.loraConfigs.map(c => ({
+      lora_name: c.url || c.loraName,
+      strength: c.strength !== undefined ? c.strength : 1.0
+    }))
+
+    const reqPayload = {
+      operation: 'generate',
+      target_type: 'video',
+      adapter_hint: adapterHint,
+      compute_target: resolved.computeTarget,
+      prompt: finalPrompt,
+      negative_prompt: resolved.negativePrompt,
+      width: targetWidth,
+      height: targetHeight,
+      frames: resolved.duration * resolved.fps,
+      fps: resolved.fps,
+      steps: resolved.steps,
+      cfg: resolved.cfg,
+      seed: resolved.seed > 0 ? resolved.seed : -1
+    }
+    if (lorasArray.length > 0) reqPayload.loras = lorasArray
     if (postProcessingSteps.length > 0) {
-      formData.append('post_processing', JSON.stringify(postProcessingSteps))
+      reqPayload.post_processing = postProcessingSteps
+      reqPayload.post_audio_file = resolved.postAudioFile
     }
 
-    // LoRA parameters
-    if (resolved.loraConfigs.length > 0) {
-      formData.append('lora_configs', JSON.stringify(resolved.loraConfigs))
-    }
-
-    // Extend mode
-    if (resolved.extendMode && resolved.clipCount > 1) {
-      formData.append('extend_mode', 'true')
-      formData.append('clip_count', String(resolved.clipCount))
-    }
+    if (DEBUG) console.debug('🎥 Triggering V2 text-to-video:', typeof reqPayload, reqPayload)
 
     try {
-      if (DEBUG) console.debug('🎬 T2V request:', {
-        prompt: resolved.prompt,
-        modelType: resolved.modelType,
-        numFrames: calcNumFrames,
-        resolution: resolved.resolution,
-        fps: resolved.fps,
-        duration: resolved.duration,
-      })
-
-      let t2vEndpoint = `${BACKEND_BASE}/generate-text`
-
-      // Cloud Wan22 uses its own endpoint with mode=t2v
-      if (resolved.modelType === 'cloud_wan22') {
-        t2vEndpoint = `${BACKEND_BASE}/generate-cloud-wan22-async`
-        formData.append('mode', 't2v')
-        formData.append('steps', String(resolved.steps))
-        formData.append('cfg', String(resolved.cfg))
-        formData.append('seed', String(resolved.seed))
-        formData.append('shift', '8.0')
-        formData.append('high_noise_steps', '8')
-        formData.append('sampler_name', 'dpmpp_2m')
-        formData.append('scheduler', 'beta')
-      }
-
-      // Wan22 cloud routing — send extra cloud params via /generate-text
-      if (resolved.modelType === 'wan22' && resolved.computeTarget === 'cloud') {
-        formData.append('steps', String(resolved.steps))
-        formData.append('cfg', String(resolved.cfg))
-        formData.append('seed', String(resolved.seed))
-        formData.append('shift', '8.0')
-        formData.append('high_noise_steps', '8')
-        formData.append('sampler_name', 'dpmpp_2m')
-        formData.append('scheduler', 'beta')
-      }
-
-      if (resolved.modelType === 'ltx2') {
-        formData.append('steps', String(resolved.steps))
-        formData.append('cfg', String(resolved.cfg))
-        formData.append('seed', String(resolved.seed))
-        // Audio prompt (from Concept Studio import or direct entry)
-        if (audioPromptImported && audioPromptImported.trim()) {
-          formData.append('audio_prompt', audioPromptImported.trim())
-        }
-      }
-
-      const result = await postForm(t2vEndpoint, formData)
-
-      if (!result.ok) {
-        throw new Error(result.data?.detail || `Generation failed (status ${result.status})`)
-      }
-
-      const promptId = result.data?.prompt_id
-      if (!promptId) {
-        throw new Error('No prompt_id returned')
-      }
-
-      const isCloud = result.data?.compute_target === 'cloud'
-      if (DEBUG) console.debug(`🐛 Job queued (${isCloud ? 'cloud' : 'local'}):`, result.data?.prompt_id || result.data?.runpod_job_id)
-
-      // Show queued confirmation
-      setLastQueued({
-        promptId,
-        prompt: resolved.prompt.substring(0, 40) + (resolved.prompt.length > 40 ? '...' : '')
-      })
-
-      // Notify queue indicator - job will be tracked in queue panel
-      if (onJobSubmitted) onJobSubmitted({ prompt_id: promptId })
-
-    } catch (e) {
-      const message = e?.message || 'Failed to generate video'
-      setError(message)
-      await sendClientLog({
-        level: 'error',
-        message: 'Text-to-video failed',
-        timestamp: new Date().toISOString(),
-        meta: { message },
-      })
-    } finally {
-      setSubmitting(false)
+      await generate(reqPayload)
+    } catch (err) {
+      console.error('TextToVideoTool error:', err)
     }
   }
 
