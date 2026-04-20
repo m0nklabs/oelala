@@ -49,4 +49,4 @@ websocket-client==1.9.0
 minio==7.2.20
 
 # YAML parsing (LoRA registry)
-pyyaml==6.0.2
+pyyaml==6.0.3

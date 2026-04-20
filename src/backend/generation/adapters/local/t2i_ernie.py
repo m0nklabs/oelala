@@ -83,9 +83,7 @@ class ErnieLocalT2IAdapter(GenerationAdapter):
 
         result_path = client.generate_ernie_t2i(
             prompt=req.prompt,
-            output_dir=str(
-                Path(__file__).resolve().parents[5] / "media" / "generated"
-            ),
+            output_dir=str(Path(__file__).resolve().parents[5] / "media" / "generated"),
             width=req.width or 1024,
             height=req.height or 1024,
             steps=req.steps or 50,

@@ -15,7 +15,6 @@ Handles:
 
 from __future__ import annotations
 
-import base64
 import logging
 import random
 from typing import Any, Callable, Optional
@@ -177,9 +176,7 @@ class GenerationRouter:
 
         return candidates[0]
 
-    def resolve_resolution_fields(
-        self, req: GenerationRequest
-    ) -> GenerationRequest:
+    def resolve_resolution_fields(self, req: GenerationRequest) -> GenerationRequest:
         """
         If *resolution* and/or *aspect_ratio* are set but width/height are
         not, compute pixel dimensions from the named preset.
