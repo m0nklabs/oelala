@@ -50,10 +50,12 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 | T2I | SDXL Lightning | 1024x1024 | ~6GB |
 | T2I | SDXL (full) | 1024x1024 | ~8GB |
 | T2I | Flux FP8 | 1024x1024 | ~12GB |
+| T2I | ERNIE-Image (BF16) | 1024x1024-1536x1536 | ~22GB (dynamic VRAM offload) |
 | I2I | SDXL | 1536x1536 | ~10GB |
 | Upscale | 4x (ESRGAN) / AI (SeedVR2) | 720p-2048p | ~10-16GB |
 
 **Note**: Image gen fits on single GPU. Use `cuda:0` (16GB) for headroom.
+ERNIE-Image uses dynamic VRAM offloading across both GPUs (~170s/20 steps at 1024x1024). DisTorch2 NOT compatible (NaN).
 
 ### LTX-2 Video Generation (⚠️ Experimental)
 
@@ -120,6 +122,22 @@ With 28GB total VRAM, you can run:
 | `reapony_v90.safetensors` | Realistic/Pony | |
 | `ultraRealisticByStable_v20FP16.safetensors` | Realistic | FP16 |
 | `waiIllustriousSDXL_v160.safetensors` | Anime | Illustrious-based |
+
+---
+
+## 🖼️ ERNIE-Image (Flux2 Architecture)
+
+| Model | File | Size | Notes |
+|-------|------|------|-------|
+| UNET | `diffusion_models/ernie-image.safetensors` | 15.3GB BF16 | Flux2 latent (128ch, 16x), FlowMatch |
+| Text Encoder | `text_encoders/ministral-3-3b.safetensors` | 6.5GB | Ministral-3-3B, auto-detected |
+| Prompt Enhancer | `text_encoders/ernie-image-prompt-enhancer.safetensors` | 6.9GB | Not yet integrated |
+| VAE | `vae/flux2-vae.safetensors` | 336MB | AutoencoderKL |
+
+**Pipeline**: `UNETLoader` → `CLIPLoader(type=flux2)` → `VAELoader` → `SamplerCustomAdvanced` + `FluxGuidance` + `BasicGuider` + `Flux2Scheduler`
+**Performance**: ~170s for 20 steps at 1024x1024 (dynamic VRAM offload, tiled VAE decode)
+**⚠️ DisTorch2 NOT compatible** — produces NaN/inf. Use plain loaders only.
+**Storage**: Symlinked from `/mnt/ssd/ernie-image-dl/` into ComfyUI/models/
 
 ---
 
@@ -193,6 +211,7 @@ Available categories:
 | `wan_2.1_vae.safetensors` | Wan 2.1/2.2 video |
 | `Wan2.1_VAE.safetensors` | Wan 2.1/2.2 video |
 | `qwen_image_vae.safetensors` | QwenVL |
+| `flux2-vae.safetensors` | ERNIE-Image / Flux2 (336MB) |
 
 ---
 
@@ -203,6 +222,8 @@ Available categories:
 | `clip_l.safetensors` | CLIP-L (SDXL) |
 | `t5xxl_fp8_e4m3fn.safetensors` | T5-XXL FP8 (Wan/Flux) |
 | `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (Wan 2.2) |
+| `ministral-3-3b.safetensors` | Ministral-3-3B (ERNIE-Image, 6.5GB BF16) |
+| `ernie-image-prompt-enhancer.safetensors` | ERNIE prompt enhancer (6.9GB, not yet integrated) |
 
 ---
 

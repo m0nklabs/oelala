@@ -315,6 +315,20 @@ T2I Model Categories (Speed Tiers)
 │       └── Uses T2V models for T2I
 │           └── Best for: Images that will become video
 │
+├── 📦 ernie
+│   │   "ERNIE-Image (Flux2 architecture, Baidu)"
+│   │   1024×1024 @ 20 steps: ~170s | VRAM: ~22GB (dynamic offload)
+│   │   Status: ✅ PRODUCTION
+│   │
+│   └── ernie-image.safetensors (15.3GB BF16)          [dynamic offload]
+│       ├── Text encoder: Ministral-3-3B (6.5GB)
+│       ├── VAE: flux2-vae.safetensors (336MB, tiled decode)
+│       ├── Pipeline: SamplerCustomAdvanced + FluxGuidance + BasicGuider + Flux2Scheduler
+│       ├── Sampler: euler
+│       ├── Steps: 20 (default), Guidance: 4.0
+│       ├── ⚠️ DisTorch2 INCOMPATIBLE (NaN/inf)
+│       └── Best for: High quality artistic images
+│
 └── 📦 sd15
     │   "SD 1.5 (legacy, fast)"
     │   512×512 @ 25 steps: ~5s | VRAM: ~4GB
@@ -1052,6 +1066,23 @@ TTS Modes
 │   VRAM: ~8GB | Time: 28s @ 25 steps                                 │
 │   Best for: Anime style                                             │
 │   Tested: 2026-01-16 ✅                                              │
+│                                                                      │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🖼️ TEXT-TO-IMAGE (T2I) - ERNIE-Image (Tested 2026-04-20)            │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                      │
+│ ERNIE-Image BF16 - 1024×1024                                         │
+│ ─────────────────────────────────────────────────────────────────── │
+│   Model: ernie-image.safetensors [15.3GB BF16]                      │
+│   Text Encoder: ministral-3-3b.safetensors [6.5GB]                  │
+│   VAE: flux2-vae.safetensors [336MB] (tiled decode)                 │
+│   VRAM: ~22GB (dynamic offload) | Time: ~170s (20 steps)            │
+│   Steps: 20 | Guidance: 4.0 | Sampler: euler                        │
+│   Pipeline: SamplerCustomAdvanced + FluxGuidance + BasicGuider       │
+│             + Flux2Scheduler + EmptyFlux2LatentImage                 │
+│   ⚠️ DisTorch2 INCOMPATIBLE (NaN/inf) — plain loaders only          │
+│   Quality: EXCELLENT - artistic/detailed images                     │
+│   Tested: 2026-04-20 ✅                                              │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 🔬 EXPERIMENTAL / NEEDS MORE TESTING                                │
