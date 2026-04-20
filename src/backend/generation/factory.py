@@ -102,11 +102,13 @@ def create_registry(
         from .adapters.local.t2i_flux import FluxLocalT2IAdapter
         from .adapters.local.t2i_sd15 import SD15LocalT2IAdapter
         from .adapters.local.t2i_wan22 import Wan22LocalT2IAdapter
+        from .adapters.local.t2i_ernie import ErnieLocalT2IAdapter
 
         _register(SDXLLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
         _register(FluxLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
         _register(SD15LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
         _register(Wan22LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
+        _register(ErnieLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
 
         # ── Local I2V adapters ──────────────────────────────────
         from .adapters.local.i2v_wan22 import (

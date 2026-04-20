@@ -51,6 +51,13 @@ const MODEL_GROUPS = {
       { value: 'wan2.2-t2i', label: 'Wan2.2 T2I', desc: 'Multi-GPU video model' },
     ]
   },
+  ernie: {
+    label: '🖼️ ERNIE-Image',
+    desc: 'Baidu ERNIE',
+    models: [
+      { value: 'ernie-image', label: 'ERNIE-Image', desc: 'Flux2 latent, Ministral-3B' },
+    ]
+  },
   diffusers: {
     label: '🐍 Diffusers',
     desc: 'Python pipeline',
@@ -255,6 +262,11 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
         if (modelType === 'wan22') {
           endpoint = '/generate-wan22-t2i'
           formData.append('steps', steps)
+          formData.append('seed', seed)
+        } else if (modelType === 'ernie') {
+          endpoint = '/generate-ernie'
+          formData.append('steps', steps)
+          formData.append('guidance', guidance)
           formData.append('seed', seed)
         } else if (modelType === 'flux') {
           endpoint = '/generate-flux'

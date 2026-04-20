@@ -5921,6 +5921,43 @@ async def generate_wan22_t2i(
             "job_type": "t2i",
         },
     )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ERNIE-Image Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/generate-ernie")
+async def generate_ernie_t2i(
+    prompt: str = Form(...),
+    aspect_ratio: str = Form("1:1"),
+    steps: int = Form(20),
+    guidance: float = Form(4.0),
+    seed: int = Form(-1),
+    user: User = Depends(get_current_user),
+):
+    """Generate image using ERNIE-Image via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
+
+    return await dispatch_v1(
+        form=dict(
+            prompt=prompt,
+            aspect_ratio=aspect_ratio,
+            steps=steps,
+            cfg=guidance,
+            seed=seed,
+        ),
+        files={},
+        operation=Operation.GENERATE,
+        target_type=MediaType.IMAGE,
+        adapter_hint="ernie-local-t2i",
+        user=user,
+        register_job_settings={
+            "job_type": "t2i",
+        },
+    )
+
 @app.post("/generate")
 async def generate_video(
     file: UploadFile = File(...),

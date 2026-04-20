@@ -4623,6 +4623,196 @@ class ComfyUIClient:
         return self.get_output_image(history, output_dir, prompt_id)
 
     # ─────────────────────────────────────────────────────────────────────────
+    # ERNIE-Image Text-to-Image Generation (DisTorch2 Multi-GPU)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def generate_ernie_t2i(
+        self,
+        prompt: str,
+        output_dir: str,
+        width: int = 1024,
+        height: int = 1024,
+        steps: int = 20,
+        guidance: float = 4.0,
+        seed: int = -1,
+        user_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Generate image using ERNIE-Image via ComfyUI.
+        Uses Flux2 sampling pipeline with ComfyUI's dynamic VRAM offloading.
+        NOTE: DisTorch2 multi-GPU produces NaN with ERNIE — plain loaders only.
+
+        ERNIE-Image uses:
+        - Flux2 latent format (128 channels, 16x downscale)
+        - Ministral-3-3B text encoder (auto-detected from weights)
+        - FlowMatch sampling via SamplerCustomAdvanced + Flux2Scheduler
+        - FluxGuidance + BasicGuider (NOT KSampler)
+
+        Args:
+            prompt: Text prompt for image generation
+            output_dir: Directory to save output
+            width, height: Image dimensions (default 1024x1024)
+            steps: Sampling steps (default 20)
+            guidance: Flux guidance scale (default 4.0)
+            seed: Random seed (-1 for random)
+
+        Returns:
+            Path to generated image, or None on failure
+        """
+        import random
+
+        if seed == -1:
+            seed = random.randint(0, 2**63 - 1)
+
+        # Build ERNIE-Image workflow (Flux2 sampling pipeline)
+        # NOTE: DisTorch2 multi-GPU causes NaN/inf during ERNIE inference — produces
+        # garbage output. Use plain loaders with ComfyUI's built-in dynamic VRAM
+        # offloading instead. The 15.3GB UNET gets streamed in/out as needed.
+        # ERNIE uses Flux2 latent format (128ch, 16x downscale) and FlowMatch sampling.
+        # Requires: EmptyFlux2LatentImage, Flux2Scheduler, FluxGuidance, BasicGuider,
+        #           SamplerCustomAdvanced — NOT KSampler.
+        workflow = {
+            "10": {
+                "inputs": {
+                    "unet_name": "ernie-image.safetensors",
+                    "weight_dtype": "default",
+                },
+                "class_type": "UNETLoader",
+                "_meta": {"title": "Load ERNIE-Image UNET"},
+            },
+            "11": {
+                "inputs": {
+                    "clip_name": "ministral-3-3b.safetensors",
+                    "type": "flux2",
+                },
+                "class_type": "CLIPLoader",
+                "_meta": {"title": "Load Ministral-3-3B Text Encoder"},
+            },
+            "12": {
+                "inputs": {
+                    "vae_name": "flux2-vae.safetensors",
+                },
+                "class_type": "VAELoader",
+                "_meta": {"title": "Load Flux2 VAE"},
+            },
+            # Text encoding
+            "20": {
+                "inputs": {"text": prompt, "clip": ["11", 0]},
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Positive Prompt"},
+            },
+            # FluxGuidance — applies guidance embed for FlowMatch models
+            "21": {
+                "inputs": {
+                    "guidance": guidance,
+                    "conditioning": ["20", 0],
+                },
+                "class_type": "FluxGuidance",
+                "_meta": {"title": "Flux Guidance"},
+            },
+            # BasicGuider — wraps model + conditioning for SamplerCustomAdvanced
+            "22": {
+                "inputs": {
+                    "model": ["10", 0],
+                    "conditioning": ["21", 0],
+                },
+                "class_type": "BasicGuider",
+                "_meta": {"title": "Basic Guider"},
+            },
+            # Flux2Scheduler — generates sigmas based on resolution
+            "23": {
+                "inputs": {
+                    "steps": steps,
+                    "width": width,
+                    "height": height,
+                },
+                "class_type": "Flux2Scheduler",
+                "_meta": {"title": "Flux2 Scheduler"},
+            },
+            # KSamplerSelect — just selects the sampler algorithm
+            "24": {
+                "inputs": {"sampler_name": "euler"},
+                "class_type": "KSamplerSelect",
+                "_meta": {"title": "Sampler Select (euler)"},
+            },
+            # RandomNoise — generates noise with seed
+            "25": {
+                "inputs": {"noise_seed": seed},
+                "class_type": "RandomNoise",
+                "_meta": {"title": "Random Noise"},
+            },
+            # EmptyFlux2LatentImage — native 128-channel, 16x downscale
+            "30": {
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": 1,
+                },
+                "class_type": "EmptyFlux2LatentImage",
+                "_meta": {"title": "Empty Flux2 Latent (128ch)"},
+            },
+            # SamplerCustomAdvanced — the actual sampling
+            "40": {
+                "inputs": {
+                    "noise": ["25", 0],
+                    "guider": ["22", 0],
+                    "sampler": ["24", 0],
+                    "sigmas": ["23", 0],
+                    "latent_image": ["30", 0],
+                },
+                "class_type": "SamplerCustomAdvanced",
+                "_meta": {"title": "Sampler (FlowMatch)"},
+            },
+            # VAE Decode + Save
+            "50": {
+                "inputs": {"samples": ["40", 0], "vae": ["12", 0]},
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE Decode"},
+            },
+            "51": {
+                "inputs": {"filename_prefix": "Ernie_T2I", "images": ["50", 0]},
+                "class_type": "SaveImage",
+                "_meta": {"title": "Save Image"},
+            },
+        }
+
+        logger.info(
+            f"🎨 ERNIE-Image T2I: {prompt[:50]}... ({width}x{height}, {steps} steps, cfg={guidance})"
+        )
+
+        # Queue and wait for completion
+        prompt_id = self.queue_prompt(workflow)
+        if not prompt_id:
+            logger.error("Failed to queue ERNIE-Image T2I workflow")
+            return None
+
+        # Register job for auto-upload tracking
+        if user_id:
+            self.register_job(
+                prompt_id=prompt_id,
+                user_id=user_id,
+                prompt=prompt,
+                settings={
+                    "width": width,
+                    "height": height,
+                    "steps": steps,
+                    "guidance": guidance,
+                    "seed": seed,
+                    "model": "ernie-image",
+                },
+            )
+
+        # Wait for completion (ERNIE with 20 steps should be ~2-3 min)
+        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)
+
+        if output_path:
+            logger.info(f"✅ ERNIE-Image T2I generated: {output_path}")
+        else:
+            logger.error("ERNIE-Image T2I generation failed or timed out")
+
+        return output_path
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Wan2.2 Text-to-Image Generation (DisTorch2 Multi-GPU)
     # ─────────────────────────────────────────────────────────────────────────
 
