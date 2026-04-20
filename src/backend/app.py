@@ -1225,6 +1225,15 @@ async def startup_event():
             check_credits=check_credits,
             deduct_credits=deduct_credits,
         )
+
+        # Initialize V1 compat layer so dispatch_v1() endpoints work
+        from src.backend.generation.v1_compat import init_v1_compat
+        init_v1_compat(
+            router=v2_gen_router,
+            check_credits=check_credits,
+            deduct_credits=deduct_credits,
+            get_comfyui_client=get_comfyui_client,
+        )
         logger.info(f"🚀 V2 Generation API ready ({len(v2_registry)} adapters)")
     except Exception as e:
         logger.error(f"❌ V2 Generation API failed to initialize: {e}", exc_info=True)
