@@ -1207,6 +1207,7 @@ async def startup_event():
         # Async wrapper for ComfyUI b64 image upload (used by router)
         async def _comfyui_upload_b64(b64_data: str, filename: str) -> str:
             import base64 as _b64
+
             img_bytes = _b64.b64decode(b64_data)
             client = get_comfyui_client()
             result = client.upload_image_from_bytes(img_bytes, filename)
@@ -1228,6 +1229,7 @@ async def startup_event():
 
         # Initialize V1 compat layer so dispatch_v1() endpoints work
         from src.backend.generation.v1_compat import init_v1_compat
+
         init_v1_compat(
             router=v2_gen_router,
             check_credits=check_credits,
@@ -5748,6 +5750,8 @@ async def generate_image_legacy(
             "job_type": "t2i",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SDXL Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5815,6 +5819,7 @@ async def generate_sdxl_image(
         },
     )
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Flux Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5852,6 +5857,8 @@ async def generate_flux_image(
             "job_type": "t2i",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SD 1.5 Text-to-Image via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5897,6 +5904,8 @@ async def generate_sd15_image(
             "job_type": "t2i",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Wan2.2 Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5930,6 +5939,7 @@ async def generate_wan22_t2i(
             "job_type": "t2i",
         },
     )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ERNIE-Image Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
@@ -5967,6 +5977,7 @@ async def generate_ernie_t2i(
         },
     )
 
+
 @app.post("/generate")
 async def generate_video(
     file: UploadFile = File(...),
@@ -6000,6 +6011,8 @@ async def generate_video(
             "job_type": "i2v",
         },
     )
+
+
 @app.get("/api/i2v-modes")
 async def get_i2v_generation_modes():
     """
@@ -6113,6 +6126,8 @@ async def generate_video_to_video(
             "job_type": "v2v",
         },
     )
+
+
 @app.post("/generate-wan22-comfyui")
 async def generate_wan22_comfyui(
     file: UploadFile = File(...),
@@ -6174,6 +6189,8 @@ async def generate_wan22_comfyui(
             "job_type": "i2v",
         },
     )
+
+
 # -----------------------------------------------------------------------------
 # Helper: Submit workflow to RunPod cloud GPU
 # -----------------------------------------------------------------------------
@@ -6335,6 +6352,8 @@ async def generate_wan22_async(
             "job_type": "i2v",
         },
     )
+
+
 # =============================================================================
 # BlockSwap Q8 Experimental I2V Async Endpoint
 # =============================================================================
@@ -6404,6 +6423,8 @@ async def generate_blockswap_q8_async(
             "job_type": "i2v",
         },
     )
+
+
 # =============================================================================
 # DisTorch2 Q8 Experimental I2V Async Endpoint
 # =============================================================================
@@ -6475,6 +6496,8 @@ async def generate_distorch2_q8_async(
             "job_type": "i2v",
         },
     )
+
+
 # =============================================================================
 # Ultra Q8 I2V Async Endpoint — Max VRAM + Unlimited CPU RAM
 # =============================================================================
@@ -6544,6 +6567,8 @@ async def generate_ultra_q8_async(
             "job_type": "i2v",
         },
     )
+
+
 # =============================================================================
 # Cloud Wan22 Async Endpoint (RunPod bf16 — cloud-only)
 # =============================================================================
@@ -6610,6 +6635,8 @@ async def generate_cloud_wan22_async(
         },
         v1_format="cloud",
     )
+
+
 # =============================================================================
 # LTX-2 Image-to-Video Async Endpoint
 # =============================================================================
@@ -6674,6 +6701,8 @@ async def generate_ltx2_i2v_async(
         },
         v1_format="cloud",
     )
+
+
 # =============================================================================
 # POST-PROCESSING ENDPOINT (Standalone for existing media)
 # =============================================================================
@@ -6969,6 +6998,8 @@ async def generate_text_video(
             "job_type": "t2v",
         },
     )
+
+
 @app.post("/generate-pose")
 async def generate_pose_video(
     file: UploadFile = File(...),
@@ -9293,6 +9324,8 @@ async def generate_audio(
             "job_type": "audio",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice Cloning (F5-TTS) via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9584,6 +9617,8 @@ async def generate_i2i(
             "job_type": "i2i",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Qwen Image Edit (Instruction-Based Image Editing) — RunPod Only
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9635,6 +9670,8 @@ async def generate_qwen_edit(
         },
         v1_format="cloud",
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Image Upscaling via ComfyUI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9708,6 +9745,8 @@ async def upscale_image(
             "job_type": "upscale_image",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Video Upscaling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9742,6 +9781,8 @@ async def upscale_video(
             "job_type": "upscale_video",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Frame Interpolation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9921,6 +9962,8 @@ async def generate_v2v(
             "job_type": "v2v",
         },
     )
+
+
 @app.get("/videos/{filename}")
 async def get_video(filename: str, request: Request):
     """Download generated video file via MinIO proxy."""
@@ -10652,6 +10695,8 @@ async def face_swap(
             "job_type": "face_swap",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Face Profiles API
 # ─────────────────────────────────────────────────────────────────────────────
@@ -10761,6 +10806,8 @@ async def face_swap_with_profile(
             "job_type": "face_swap",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Video face swap endpoints
 # ─────────────────────────────────────────────────────────────────────────────
@@ -10792,6 +10839,8 @@ async def face_swap_video(
             "job_type": "face_swap_video",
         },
     )
+
+
 @app.post("/face-swap-video/profile")
 async def face_swap_video_with_profile(
     user: User = Depends(get_current_user),
@@ -10819,6 +10868,8 @@ async def face_swap_video_with_profile(
             "job_type": "face_swap_video",
         },
     )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Face LoRA Training endpoints
 # ─────────────────────────────────────────────────────────────────────────────

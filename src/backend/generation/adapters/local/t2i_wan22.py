@@ -91,9 +91,7 @@ class Wan22LocalT2IAdapter(GenerationAdapter):
         # generate_wan22_t2i() is synchronous — blocks until image is done.
         result_path = client.generate_wan22_t2i(
             prompt=req.prompt,
-            output_dir=str(
-                Path(__file__).resolve().parents[5] / "media" / "generated"
-            ),
+            output_dir=str(Path(__file__).resolve().parents[5] / "media" / "generated"),
             width=req.width or 512,
             height=req.height or 512,
             steps=req.steps or 8,
