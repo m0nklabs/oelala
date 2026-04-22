@@ -114,6 +114,23 @@ class StorageClient:
             itertools.cycle(self._storage_nodes) if self._storage_nodes else None
         )
 
+        # Initialize public Minio client for presigned URLs (uses Cloudflare tunnel)
+        self._minio_public = None
+        if self._storage_nodes:
+            try:
+                public_endpoint = urlparse(self._storage_nodes[0])
+                public_host = public_endpoint.netloc or public_endpoint.path
+                public_secure = public_endpoint.scheme == "https"
+                self._minio_public = Minio(
+                    public_host,
+                    access_key=self._access_key,
+                    secret_key=self._secret_key,
+                    secure=public_secure,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize public Minio client: {e}")
+                self._minio_public = None
+
     def close(self):
         """Close the client (no-op for MinIO SDK, kept for API compat)."""
         pass
@@ -529,16 +546,21 @@ class StorageClient:
         """
         Generate a presigned GET URL for temporary public access.
 
+        Uses the public endpoint (Cloudflare tunnel) if configured,
+        otherwise falls back to the internal endpoint.
+
         Args:
             bucket: Logical bucket name
             key: Object key
             expires: Expiration time in seconds (default 1 hour, max 7 days)
 
         Returns:
-            Presigned URL string
+            Presigned URL string with public endpoint
         """
         minio_bucket, full_key = self._resolve(bucket, key)
-        return self._minio.presigned_get_object(
+        # Use public Minio client if available, otherwise internal
+        minio_client = self._minio_public or self._minio
+        return minio_client.presigned_get_object(
             minio_bucket,
             full_key,
             expires=timedelta(seconds=min(expires, 604800)),
@@ -553,17 +575,20 @@ class StorageClient:
         """
         Generate a presigned PUT URL for direct upload.
 
+        Uses the public endpoint if configured, otherwise falls back to internal.
+
         Args:
             bucket: Logical bucket name
             key: Object key
             expires: Expiration time in seconds
 
         Returns:
-            Presigned URL string
+            Presigned URL string with public endpoint
         """
         minio_bucket, full_key = self._resolve(bucket, key)
         self._ensure_bucket(minio_bucket)
-        return self._minio.presigned_put_object(
+        minio_client = self._minio_public or self._minio
+        return minio_client.presigned_put_object(
             minio_bucket,
             full_key,
             expires=timedelta(seconds=min(expires, 604800)),

@@ -178,7 +178,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             <button
               onClick={() => handleNsfwToggle(!nsfwMode)}
               style={{
-                padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                padding: '6px 14px', borderRadius: '20px',   cursor: 'pointer',
                 fontSize: '12px', fontWeight: 600, transition: 'all 0.2s',
                 background: nsfwMode ? '#ef4444' : 'var(--bg-secondary, #1a1a1a)',
                 color: nsfwMode ? '#fff' : 'var(--text-muted, #888)',
