@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, uploadUserMedia, apiFetch, getUserMediaUrl } from '../../api'
+import { apiFetch, uploadUserMedia, getUserMediaUrl } from '../../api'
+import useGeneration from '../../hooks/useGeneration'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { sendClientLog } from '../../logging'
 import { useNSFW } from '../../contexts/NSFWContext'
@@ -340,6 +341,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const { generate, loading } = useGeneration()
 
   // Selected creation from MyMediaTool picker
   const [selectedCreation, setSelectedCreation] = useState(null)
