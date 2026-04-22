@@ -159,10 +159,10 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
         )
 
         job_info = {
-            "user_id": "adapter",
+            "user_id": req.user_id or "adapter",
             "prompt": req.prompt[:100],
             "job_type": "cloud_wan22_t2v",
-            "num_frames": frames,
+            "num_frames": req.frames or 81,
             "fps": req.fps or 16,
             "steps": req.steps or 15,
             "seed": req.seed,
@@ -171,7 +171,7 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
 
         result = await submit_fn(
             workflow=workflow,
-            user_id="adapter",
+            user_id=req.user_id or "adapter",d or "adapter",
             prompt_id=prompt_id,
             job_info=job_info,
             lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,

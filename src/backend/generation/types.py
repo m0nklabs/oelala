@@ -165,6 +165,8 @@ class GenerationRequest(BaseModel):
     include_motion: bool = False
     frame_interval: Optional[float] = None  # Video caption frame interval
     max_frames: Optional[int] = None  # Video caption max frames
+    # User context (set by router.dispatch, used by adapters for media storage)
+    user_id: Optional[str] = None  # Supabase user ID for result storage
 
 
 class GenerationResult(BaseModel):

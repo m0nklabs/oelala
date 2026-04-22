@@ -295,7 +295,7 @@ class QwenEditCloudAdapter(GenerationAdapter):
 
         # Job metadata
         job_info = {
-            "user_id": "adapter",
+            "user_id": req.user_id or "adapter",
             "prompt": req.instruction or req.prompt,
             "job_type": "qwen_edit",
             "input_image": upload_filename,

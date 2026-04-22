@@ -168,7 +168,7 @@ class Wan22CloudI2VAdapter(GenerationAdapter):
         )
 
         job_info = {
-            "user_id": "adapter",
+            "user_id": req.user_id or "adapter",
             "prompt": req.prompt[:100],
             "job_type": "cloud_wan22_i2v",
             "num_frames": req.frames or 81,
@@ -180,7 +180,7 @@ class Wan22CloudI2VAdapter(GenerationAdapter):
 
         result = await submit_fn(
             workflow=workflow,
-            user_id="adapter",
+            user_id=req.user_id or req.user_id or "adapter",
             prompt_id=prompt_id,
             job_info=job_info,
             images=input_images_b64,

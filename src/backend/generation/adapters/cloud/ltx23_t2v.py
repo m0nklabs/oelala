@@ -158,7 +158,7 @@ class LTX23CloudT2VAdapter(GenerationAdapter):
         )
 
         job_info = {
-            "user_id": "adapter",
+            "user_id": req.user_id or "adapter",
             "prompt": req.prompt[:100],
             "job_type": "ltx23_t2v",
             "model": "ltx23",
@@ -170,7 +170,7 @@ class LTX23CloudT2VAdapter(GenerationAdapter):
 
         result = await submit_fn(
             workflow=workflow,
-            user_id="adapter",
+            user_id=req.user_id or "adapter",
             prompt_id=prompt_id,
             job_info=job_info,
             lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,

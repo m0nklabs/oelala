@@ -348,6 +348,9 @@ class GenerationRouter:
             deduct_credits_fn: async fn(user, amount, job_id, description) -> bool
             progress_callback: Optional WebSocket progress callback
         """
+        # Set user_id on request for adapter to use in storage paths
+        req = req.model_copy(update={"user_id": user.id})
+        
         # 1. Resolve adapter
         adapter = self.resolve_adapter(req)
         logger.info(f"🎯 Resolved adapter: {adapter.name}")
