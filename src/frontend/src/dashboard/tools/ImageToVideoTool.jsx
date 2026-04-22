@@ -933,190 +933,134 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       return
     }
 
-    setBusy(true)
     setError('')
 
-    const numFrames = duration * fps
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('num_frames', String(numFrames))
-    formData.append('resolution', resolution)
-    formData.append('fps', String(fps))
-    formData.append('aspect_ratio', aspectRatio)
-    formData.append('compute_target', computeTarget)
-
-    // Build prompt with camera motion prefix
-    if (!usePose) {
-      const motionPrefix = getCameraMotionPrefix(cameraMotion)
-      const finalPrompt = motionPrefix + (prompt || 'Motion, subject moving naturally')
-      formData.append('prompt', finalPrompt)
-    }
-
-    // Choose endpoint
-    let endpoint
-    let useAsync = true  // Default to async mode for non-blocking generation
-
-    if (usePose) {
-      endpoint = `${BACKEND_BASE}/generate-pose`
-      useAsync = false  // Pose generation is not async yet
-    } else if (modelMode === 'blockswap_q8') {
-      // BlockSwap Q8 Experimental endpoint
-      endpoint = `${BACKEND_BASE}/generate-blockswap-q8-async`
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      formData.append('shift', String(bsShift))
-      formData.append('nag_scale', String(bsNagScale))
-      formData.append('high_noise_steps', String(bsHighNoiseSteps))
-      formData.append('enable_florence2', String(bsEnableFlorence2))
-      formData.append('enable_upscale', String(bsEnableUpscale))
-      formData.append('enable_interpolation', String(bsEnableInterpolation))
-      // LoRA parameters - send as JSON array
-      if (loraConfigs.length > 0) {
-        formData.append('lora_configs', JSON.stringify(loraConfigs))
-      }
-    } else if (modelMode === 'distorch2_q8') {
-      // DisTorch2 Q8 Experimental endpoint
-      endpoint = `${BACKEND_BASE}/generate-distorch2-q8-async`
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      formData.append('shift', String(bsShift))
-      formData.append('nag_scale', String(bsNagScale))
-      formData.append('high_noise_steps', String(bsHighNoiseSteps))
-      formData.append('enable_florence2', String(bsEnableFlorence2))
-      formData.append('enable_upscale', String(bsEnableUpscale))
-      formData.append('enable_interpolation', String(bsEnableInterpolation))
-      // LoRA parameters - send as JSON array
-      if (loraConfigs.length > 0) {
-        formData.append('lora_configs', JSON.stringify(loraConfigs))
-      }
-    } else if (modelMode === 'ultra_q8') {
-      // Ultra Q8 — Max VRAM + unlimited CPU RAM
-      endpoint = `${BACKEND_BASE}/generate-ultra-q8-async`
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      formData.append('shift', String(bsShift))
-      formData.append('nag_scale', String(bsNagScale))
-      formData.append('high_noise_steps', String(bsHighNoiseSteps))
-      formData.append('enable_florence2', String(bsEnableFlorence2))
-      formData.append('enable_upscale', String(bsEnableUpscale))
-      formData.append('enable_interpolation', String(bsEnableInterpolation))
-      if (loraConfigs.length > 0) {
-        formData.append('lora_configs', JSON.stringify(loraConfigs))
-      }
-    } else if (modelMode === 'cloud_wan22') {
-      // Cloud Wan22 — bf16 full precision on RunPod (cloud only)
-      endpoint = `${BACKEND_BASE}/generate-cloud-wan22-async`
-      formData.append('mode', 'i2v')
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      formData.append('shift', String(bsShift))
-      formData.append('high_noise_steps', String(bsHighNoiseSteps))
-      formData.append('sampler_name', 'dpmpp_2m')
-      formData.append('scheduler', 'beta')
-      formData.append('negative_prompt', negativePrompt)
-      if (loraConfigs.length > 0) {
-        formData.append('lora_configs', JSON.stringify(loraConfigs))
-      }
-    } else if (modelMode === 'ltx2') {
-      // LTX-2 endpoint
-      endpoint = `${BACKEND_BASE}/generate-ltx2-i2v-async`
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      // Audio prompt (from Concept Studio import or direct entry)
-      if (audioPromptImported && audioPromptImported.trim()) {
-        formData.append('audio_prompt', audioPromptImported.trim())
-      }
-      // LoRA parameters
-      if (loraConfigs.length > 0) {
-        formData.append('lora_configs', JSON.stringify(loraConfigs))
-      }
-      // Post-processing chain (LTX-2 supports the same post-processing)
-      const postProcessing = []
-      if (postUpscale) {
-        postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
-      }
-      if (postInterpolate) {
-        postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
-      }
-      if (postAudio && postAudioFile) {
-        formData.append('post_audio_file', postAudioFile)
-        postProcessing.push({ type: 'add_audio' })
-      }
-      if (postProcessing.length > 0) {
-        formData.append('post_processing', JSON.stringify(postProcessing))
-      }
-    } else {
-      // Use async ComfyUI endpoint for Wan2.2 Q6 - returns immediately with prompt_id
-      endpoint = `${BACKEND_BASE}/generate-wan22-async`
-      formData.append('steps', String(steps))
-      formData.append('cfg', String(cfg))
-      formData.append('seed', String(seed))
-      // Extend mode parameters
-      if (extendMode && clipCount > 1) {
-        formData.append('extend_mode', 'true')
-        formData.append('clip_count', String(clipCount))
-      }
-      // Unet parameters
-      if (unetHighNoise) formData.append('unet_high_noise', unetHighNoise)
-      if (unetLowNoise) formData.append('unet_low_noise', unetLowNoise)
-      // LoRA parameters - send as JSON array
-      if (loraConfigs.length > 0) {
-        formData.append('lora_configs', JSON.stringify(loraConfigs))
-      }
-      // Post-processing chain
-      const postProcessing = []
-      if (postUpscale) {
-        postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
-      }
-      if (postInterpolate) {
-        postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
-      }
-      if (postAudio && postAudioFile) {
-        formData.append('post_audio_file', postAudioFile)
-        postProcessing.push({ type: 'add_audio' })
-      }
-      if (postProcessing.length > 0) {
-        formData.append('post_processing', JSON.stringify(postProcessing))
-      }
-    }
-
     try {
-      if (DEBUG) console.debug('🐛 submit image-to-video', { duration, numFrames, usePose, resolution, fps, modelMode, useAsync })
-      const result = await postForm(endpoint, formData)
-      if (!result.ok) {
-        setError(result.data?.detail || `Generation failed (status ${result.status})`)
-        return
+      // Read image as base64 for V2 API
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const numFrames = Math.floor(duration * fps)
+
+      // Build prompt with camera motion prefix
+      let finalPrompt = prompt
+      if (!usePose && cameraMotion && cameraMotion !== 'none') {
+        const motionPrefix = getCameraMotionPrefix(cameraMotion)
+        finalPrompt = motionPrefix + (prompt || 'Motion, subject moving naturally')
       }
 
-      if (useAsync) {
-        // Async mode - job was queued, notify parent to refresh queue panel
-        const isCloud = result.data?.compute_target === 'cloud'
-        if (DEBUG) console.debug(`🐛 Job queued (${isCloud ? 'cloud' : 'local'}):`, result.data?.prompt_id || result.data?.runpod_job_id)
-        if (onJobSubmitted) {
-          onJobSubmitted(result.data)
-        }
-        // Don't wait - job will appear in queue and output when done
-        // Clear busy state immediately so user can queue more jobs
-      } else {
-        // Sync mode - result contains the video
-        // Use getMediaUrl helper for signed URL support
-        const videoUrl = result.data?.video_url || result.data?.url
-        const outputVideo = result.data?.output_video
-        const url = getMediaUrl(videoUrl, result.data?.signed_url)
+      // Determine adapter_hint based on modelMode
+      let adapterHint = 'wan22-local-i2v-q6'
+      if (usePose) {
+        adapterHint = 'pose-i2v'
+      } else if (modelMode === 'blockswap_q8') {
+        adapterHint = 'wan22-local-i2v-blockswap'
+      } else if (modelMode === 'distorch2_q8') {
+        adapterHint = 'wan22-local-i2v-distorch2'
+      } else if (modelMode === 'ultra_q8') {
+        adapterHint = 'wan22-local-i2v-ultra'
+      } else if (modelMode === 'cloud_wan22') {
+        adapterHint = 'wan22-cloud-i2v'
+      } else if (modelMode === 'ltx2') {
+        adapterHint = 'ltx23-cloud-i2v'
+      }
 
-        onOutput({
-          kind: 'video',
-          url,
-          backendUrl: url,
-          filename: outputVideo,
-          meta: result.data,
+      // Build V2 request payload
+      let reqPayload = {
+        operation: 'generate',
+        target_type: 'video',
+        prompt: finalPrompt || 'Motion, subject moving naturally',
+        negative_prompt: negativePrompt || 'low quality, blurry, distorted, artifacts',
+        frames: numFrames,
+        fps: fps,
+        resolution: resolution,
+        aspect_ratio: aspectRatio,
+        compute_target: computeTarget,
+        steps: steps,
+        cfg: cfg,
+        seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed,
+        input_images: [base64Data],
+        adapter_hint: adapterHint,
+      }
+
+      // Add model-specific parameters
+      if (!usePose && (modelMode === 'blockswap_q8' || modelMode === 'distorch2_q8' || modelMode === 'ultra_q8' || modelMode === 'wan22')) {
+        reqPayload.shift = bsShift
+        reqPayload.nag_scale = bsNagScale
+        reqPayload.high_noise_steps = bsHighNoiseSteps
+        reqPayload.enable_florence2 = bsEnableFlorence2
+        reqPayload.enable_upscale = bsEnableUpscale
+        reqPayload.enable_interpolation = bsEnableInterpolation
+      }
+
+      if (modelMode === 'cloud_wan22') {
+        reqPayload.sampler = 'dpmpp_2m'
+        reqPayload.scheduler = 'beta'
+      }
+
+      if (modelMode === 'ltx2') {
+        if (audioPromptImported && audioPromptImported.trim()) {
+          reqPayload.audio_prompt = audioPromptImported.trim()
+        }
+      }
+
+      // Add extend mode parameters for Wan2.2 Q6
+      if (!usePose && !modelMode && extendMode && clipCount > 1) {
+        reqPayload.extend_mode = true
+        reqPayload.clip_count = clipCount
+      }
+
+      // Add Unet parameters
+      if (!usePose && !modelMode) {
+        if (unetHighNoise) reqPayload.unet_high_noise = unetHighNoise
+        if (unetLowNoise) reqPayload.unet_low_noise = unetLowNoise
+      }
+
+      // Add LoRAs
+      if (loraConfigs.length > 0) {
+        reqPayload.loras = loraConfigs
+      }
+
+      // Add post-processing
+      const postProcessing = []
+      if (postUpscale) {
+        postProcessing.push({ type: 'upscale', scale: postUpscaleScale })
+      }
+      if (postInterpolate) {
+        postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
+      }
+      if (postAudio && postAudioFile) {
+        // Read audio file as base64
+        const audioBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (e) => resolve(e.target.result)
+          reader.onerror = reject
+          reader.readAsDataURL(postAudioFile)
         })
-        onRefreshHistory()
+        reqPayload.input_audio = audioBase64
+        postProcessing.push({ type: 'add_audio' })
+      }
+      if (postProcessing.length > 0) {
+        reqPayload.post_processing = postProcessing
+      }
+
+      if (DEBUG) console.debug('🐛 submit image-to-video v2:', reqPayload)
+
+      // Call V2 API via useGeneration hook
+      const result = await generate(reqPayload)
+
+      if (result) {
+        if (DEBUG) {
+          const isCloud = result.compute_target === 'cloud'
+          console.debug(`🐛 Job queued (${isCloud ? 'cloud' : 'local'}):`, result.prompt_id || result.runpod_job_id)
+        }
+        if (onJobSubmitted) {
+          onJobSubmitted(result)
+        }
       }
     } catch (e) {
       const message = e?.message || 'Failed to generate video'
@@ -1127,8 +1071,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         timestamp: new Date().toISOString(),
         meta: { message, modelMode },
       })
-    } finally {
-      setBusy(false)
     }
   }
 
