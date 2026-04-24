@@ -1,7 +1,7 @@
 # ============================================================
-# Oelala Qwen Image Edit 2511 Worker for RunPod Serverless
+# Oelala I2I Worker for RunPod Serverless
 # ============================================================
-# Lightweight ComfyUI container for Qwen instruction-based image editing.
+# Lightweight ComfyUI container for Image-to-Image editing (SDXL, Qwen).
 # Models are downloaded at runtime from HuggingFace Hub with
 # RunPod caching for fast cold starts.
 #
@@ -11,6 +11,7 @@
 #   - qwen_image_vae.safetensors                  (243 MB, vae)
 #
 # Optional (downloaded on-demand):
+#   - jib_mix_qwen_v6_fp8.safetensors             (19.0 GB, diffusion_models)
 #   - Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors (850 MB, loras)
 #
 # Image size: ~8 GB (no models baked in)

@@ -454,7 +454,7 @@ def queue_workflow(workflow: Dict[str, Any]) -> Optional[str]:
     payload = {"prompt": workflow, "client_id": client_id}
 
     try:
-        resp = requests.post(f"{COMFYUI_URL}/prompt", json=payload, timeout=30)
+        resp = requests.post(f"{COMFYUI_URL}/prompt", json=payload, timeout=120)
         if resp.status_code == 200:
             prompt_id = resp.json().get("prompt_id")
             logger.info(f"📋 Workflow queued: {prompt_id}")

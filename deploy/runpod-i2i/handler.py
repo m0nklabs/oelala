@@ -1,13 +1,14 @@
 """
-RunPod Serverless Handler — Qwen Image Edit 2511 Worker
+RunPod Serverless Handler — I2I Worker (SDXL/Pony/Qwen)
 ========================================================
-Downloads Qwen Image Edit models from HuggingFace Hub, starts ComfyUI,
-and processes instruction-based image editing workflows.
+Downloads models from HuggingFace Hub, starts ComfyUI,
+and processes instruction-based image editing and transformations.
 
 Target: 48 GB+ VRAM GPUs (A6000, A40, L40S, A100, H100)
 
 Models:
   - qwen_image_edit_2511_fp8mixed.safetensors  (19.1 GB, Comfy-Org/Qwen-Image-Edit_ComfyUI)
+    - jib_mix_qwen_v6_fp8.safetensors            (19.0 GB, optional JIB Mix Qwen V6 variant)
   - qwen_2.5_vl_7b_fp8_scaled.safetensors      (8.8 GB, Comfy-Org/Qwen-Image_ComfyUI)
   - qwen_image_vae.safetensors                  (243 MB, Comfy-Org/Qwen-Image_ComfyUI)
   - Lightning LoRA (optional, 850 MB, lightx2v/Qwen-Image-Edit-2511-Lightning)
@@ -36,7 +37,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("qwen-handler")
+logger = logging.getLogger("i2i-handler")
 
 # ---- Constants ----
 COMFYUI_PORT = 8188
@@ -45,7 +46,7 @@ COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "/comfyui")
 MODEL_VOLUME = os.environ.get("MODEL_VOLUME", "/runpod-volume")
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
-# Qwen Edit generates images, much faster than video — shorter timeouts
+# Qwen Edit & SDXL generate images, much faster than video — shorter timeouts
 COMFYUI_STARTUP_TIMEOUT = 180  # 3 minutes
 WORKFLOW_TIMEOUT = 300  # 5 minutes (image gen, not video)
 
@@ -65,7 +66,7 @@ class WorkflowModelPrepResult:
 
 # ---- Model Definitions ----
 
-QWEN_MODELS = [
+CLOUD_I2I_MODELS = [
     {
         "filename": "qwen_image_edit_2511_fp8mixed.safetensors",
         "repo": "Comfy-Org/Qwen-Image-Edit_ComfyUI",
@@ -102,9 +103,27 @@ QWEN_MODELS = [
         "description": "Lightning LoRA for 4-step fast generation",
         "startup_required": False,
     },
+
+    {
+        "filename": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+        "url": "https://civitai.red/api/download/models/290640?type=Model&format=SafeTensor&size=pruned&fp=fp16",
+        "target_dir": "checkpoints",
+        "size_gb": 6.8,
+        "description": "Pony Diffusion V6 XL",
+        "startup_required": False,
+    },
+    {
+        "filename": "juggernautXL_ragnarok.safetensors",
+        "url": "https://civitai.red/api/download/models/691060?type=Model&format=SafeTensor&size=pruned&fp=fp16",
+        "target_dir": "checkpoints",
+        "size_gb": 6.8,
+        "description": "Juggernaut XL Ragnarok",
+        "startup_required": False,
+    }
 ]
 
-PUBLIC_MODEL_FILENAMES = {model["filename"] for model in QWEN_MODELS}
+PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_I2I_MODELS}
+MODEL_CATALOG_BY_FILENAME = {model["filename"]: model for model in CLOUD_I2I_MODELS}
 
 # Directories where ComfyUI looks for models
 NODE_MANAGED_MODEL_DIRS = [
@@ -121,6 +140,25 @@ WORKFLOW_MODEL_INPUT_KEYS = (
     "vae_name",
     "lora_name",
 )
+
+
+def collect_required_model_filenames(workflow: Dict[str, Any]) -> set[str]:
+    """Infer which known model files are required by the submitted workflow."""
+    required: set[str] = set()
+
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs", {})
+        if not isinstance(inputs, dict):
+            continue
+
+        for key in WORKFLOW_MODEL_INPUT_KEYS:
+            value = inputs.get(key)
+            if isinstance(value, str) and value in MODEL_CATALOG_BY_FILENAME:
+                required.add(value)
+
+    return required
 
 
 # ---- Model Setup ----
@@ -208,8 +246,6 @@ def _find_cached_model(filename: str) -> Optional[Path]:
 def download_model(model: Dict[str, Any]) -> bool:
     """Download a single model file from HuggingFace Hub."""
     filename = model["filename"]
-    repo = model["repo"]
-    hf_path = model["hf_path"]
     target_dir = model["target_dir"]
     size_gb = model["size_gb"]
 
@@ -234,7 +270,39 @@ def download_model(model: Dict[str, Any]) -> bool:
         logger.error(f"❌ Not enough disk space for {filename} ({size_gb:.1f} GB)")
         return False
 
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if model.get("url"):
+        logger.info(f"⬇️  Downloading {filename} ({size_gb:.1f} GB) from direct URL...")
+        try:
+            tmp = target.with_suffix(".download")
+            with requests.get(
+                model["url"],
+                stream=True,
+                timeout=600,
+                headers={"User-Agent": "Mozilla/5.0"},
+                allow_redirects=True,
+            ) as resp:
+                resp.raise_for_status()
+                with open(tmp, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            tmp.rename(target)
+
+            if target.exists() and target.stat().st_size > 1_000_000:
+                logger.info(f"✅ Downloaded: {target_dir}/{filename}")
+                return True
+
+            logger.error(f"❌ Direct download produced no valid file: {target}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Failed to download {filename}: {e}")
+            return False
+
     # Download from HuggingFace
+    repo = model["repo"]
+    hf_path = model["hf_path"]
     logger.info(f"⬇️  Downloading {filename} ({size_gb:.1f} GB) from {repo}...")
     try:
         from huggingface_hub import hf_hub_download
@@ -270,15 +338,23 @@ def download_model(model: Dict[str, Any]) -> bool:
         return False
 
 
-def ensure_models() -> WorkflowModelPrepResult:
-    """Download all required models and return preparation result."""
+def ensure_models(workflow: Optional[Dict[str, Any]] = None) -> WorkflowModelPrepResult:
+    """Download startup models plus any optional model referenced by the workflow."""
     result = WorkflowModelPrepResult()
     start = time.time()
 
     ensure_model_directories()
     setup_model_links()
 
-    for model in QWEN_MODELS:
+    required_filenames = {
+        model["filename"] for model in CLOUD_I2I_MODELS if model.get("startup_required", False)
+    }
+    if workflow:
+        required_filenames.update(collect_required_model_filenames(workflow))
+
+    for model in CLOUD_I2I_MODELS:
+        if model["filename"] not in required_filenames:
+            continue
         if download_model(model):
             result.models_downloaded.append(model["filename"])
         elif model.get("startup_required", False):
@@ -457,7 +533,7 @@ def queue_workflow(workflow: Dict[str, Any]) -> Optional[str]:
     payload = {"prompt": workflow, "client_id": client_id}
 
     try:
-        resp = requests.post(f"{COMFYUI_URL}/prompt", json=payload, timeout=30)
+        resp = requests.post(f"{COMFYUI_URL}/prompt", json=payload, timeout=120)
         if resp.status_code == 200:
             prompt_id = resp.json().get("prompt_id")
             logger.info(f"📋 Workflow queued: {prompt_id}")
@@ -590,7 +666,7 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
         image_outputs = [o for o in outputs if o.get("type", "").startswith("image/")]
         if len(image_outputs) > 1:
             logger.info(
-                f"🔍 Qwen Edit produced {len(image_outputs)} images, "
+                f"🔍 I2I produced {len(image_outputs)} images, "
                 f"keeping only the last (edited result)"
             )
             outputs = [image_outputs[-1]]
@@ -602,7 +678,7 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
 
 def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     """
-    RunPod handler for Qwen Image Edit 2511.
+    RunPod handler for Image-to-Image workflows.
 
     Expected input:
     {
@@ -632,7 +708,7 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
             return {"error": "No CUDA device available"}
 
         # 3. Ensure models are downloaded
-        model_result = ensure_models()
+        model_result = ensure_models(workflow)
         if not model_result.models_ready:
             return {"error": f"Model setup failed: {model_result.error}"}
         log_lines.append(
@@ -692,7 +768,7 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
 
 # ---- Entrypoint ----
 if __name__ == "__main__":
-    logger.info("🎨 Qwen Image Edit 2511 RunPod Worker starting...")
+    logger.info("🎨 I2I RunPod Worker starting...")
     logger.info(f"   COMFYUI_PATH: {COMFYUI_PATH}")
     logger.info(f"   MODEL_VOLUME: {MODEL_VOLUME}")
 

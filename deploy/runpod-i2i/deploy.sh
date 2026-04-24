@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
-# RunPod Qwen Image Edit Worker Deploy Script
+# RunPod I2I Worker Deploy Script
 # ============================================================
 # Builds the Docker image, tags with a dated version, pushes to
 # GHCR, and updates the RunPod template — all in one shot.
 #
-# This is the Qwen Image Edit 2511 variant. Separate from Wan 2.2 and LTX-2.3.
+# This is the I2I variant. Separate from Wan 2.2 and LTX-2.3.
 # Target: 48 GB+ GPUs (A6000, A40, L40S, A100, H100)
 #
 # Usage:
@@ -22,9 +22,9 @@
 set -euo pipefail
 
 # ---- Config ----
-REGISTRY="ghcr.io/m0nklabs/oelala-qwen-worker"
-TEMPLATE_ID="${RUNPOD_QWEN_TEMPLATE_ID:-ed2614hd8k}"
-ENDPOINT_ID="${RUNPOD_QWEN_ENDPOINT_ID:-8djiexluyybooj}"
+REGISTRY="ghcr.io/m0nklabs/oelala-i2i-worker"
+TEMPLATE_ID="${RUNPOD_I2I_TEMPLATE_ID:-ed2614hd8k}"
+ENDPOINT_ID="${RUNPOD_I2I_ENDPOINT_ID:-8djiexluyybooj}"
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$DEPLOY_DIR/../.." && pwd)"
 ENV_FILE="$PROJECT_ROOT/.env"
@@ -62,7 +62,7 @@ fi
 
 # ---- Validate template/endpoint IDs ----
 if [[ "$TEMPLATE_ID" == "PLACEHOLDER" ]] && ! $DRY_RUN; then
-    echo "❌ TEMPLATE_ID is PLACEHOLDER. Set RUNPOD_QWEN_TEMPLATE_ID or update this script."
+    echo "❌ TEMPLATE_ID is PLACEHOLDER. Set RUNPOD_I2I_TEMPLATE_ID or update this script."
     echo "   Create a new template on RunPod first, then set the ID."
     exit 1
 fi
@@ -73,7 +73,7 @@ FULL_IMAGE="${REGISTRY}:${VERSION_TAG}"
 LATEST_IMAGE="${REGISTRY}:latest"
 
 echo "============================================"
-echo "🎨 RunPod Qwen Image Edit Worker Deploy"
+echo "🎨 RunPod I2I Worker Deploy"
 echo "============================================"
 echo "  Version:   ${VERSION_TAG}"
 echo "  Image:     ${FULL_IMAGE}"
@@ -143,7 +143,7 @@ resp = httpx.post(
             mutation {
                 saveTemplate(input: {
                     id: \"${TEMPLATE_ID}\"
-                    name: \"oelala-qwen-worker\"
+                    name: \"oelala-i2i-worker\"
                     imageName: \"${FULL_IMAGE}\"
                     containerDiskInGb: 100
                     volumeInGb: 0
