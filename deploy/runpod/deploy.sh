@@ -126,6 +126,13 @@ echo "✅ Pushed :latest"
 echo ""
 echo "🔄 Step 5/5: Updating RunPod template ${TEMPLATE_ID} → ${FULL_IMAGE}..."
 
+HF_LORA_TOKEN=$(grep -E '^HF_LORA_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
+if [[ -z "${HF_LORA_TOKEN:-}" ]]; then
+    HF_ENV_STR=""
+else
+    HF_ENV_STR="{ key: \"HF_TOKEN\", value: \"${HF_LORA_TOKEN}\" },"
+fi
+
 TEMPLATE_RESULT=$(python3 -c "
 import httpx, json, sys
 
@@ -141,7 +148,10 @@ resp = httpx.post(
                     containerDiskInGb: 100
                     volumeInGb: 0
                     dockerArgs: \"\"
-                    env: [{ key: \"COMFYUI_PATH\", value: \"/comfyui\" }]
+                    env: [
+                        ${HF_ENV_STR}
+                        { key: \"COMFYUI_PATH\", value: \"/comfyui\" }
+                    ]
                 }) {
                     id
                     imageName

@@ -27,7 +27,7 @@ class Operation(str, Enum):
 
     GENERATE = "generate"  # T2I, T2V — from scratch
     TRANSFORM = "transform"  # I2I denoise, V2V style transfer
-    EDIT = "edit"  # Qwen instruction-based editing
+    EDIT = "edit"  # I2I instruction-based editing
     UPSCALE = "upscale"
     INTERPOLATE = "interpolate"  # Frame interpolation
     SWAP = "swap"  # Face swap
@@ -123,6 +123,7 @@ class GenerationRequest(BaseModel):
     # Operation-specific
     instruction: Optional[str] = None  # Operation.EDIT
     checkpoint: Optional[str] = None  # Local T2I
+    edit_model: Optional[str] = None  # Qwen edit model variant
     audio_prompt: Optional[str] = None  # Audio/music generation
     # I2I face features
     face_id: bool = False

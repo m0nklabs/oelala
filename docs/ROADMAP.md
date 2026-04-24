@@ -21,6 +21,8 @@ Oelala is an AI media platform for creators who want one place for prompt genera
 - Prompt and image-to-text workflows expanded with camera motion and two-step motion prompting
 - Admin dashboard now has storage node/cluster visibility
 - Frontend API calls standardized on `apiFetch()` for auth/CORS correctness
+- Unified generation frontend migration completed for core tools (T2V, V2V, Audio, Upscale, T2I, I2I)
+- Cloud adapter user-scoped storage fix landed: generated outputs now persist under authenticated user paths
 
 ### 🔄 Active Focus
 
@@ -30,6 +32,7 @@ Oelala is an AI media platform for creators who want one place for prompt genera
 | Storage cluster | MinIO lifecycle/retention, quota surfacing, presigned URL strategy | MinIO replaces the custom oelala-storage Go service |
 | Media UX | Move/organize media, quota/retention visibility, polished gallery sorting | Users need sane lifecycle management, not just generation buttons |
 | Legacy cleanup | Remove remaining fallback/local-path assumptions | Prevent split-brain between backend disk and storage service |
+| V2 endpoint parity | Decide and implement strategy for inpaint/reframe/interpolate/caption endpoint unification | Reduces mixed API patterns and maintenance overhead |
 
 ---
 

@@ -237,14 +237,14 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   const [gridToolMenuItem, setGridToolMenuItem] = useState(null)
   const [gridToolMenuData, setGridToolMenuData] = useState(null)
   const SEND_TO_TOOLS = [
-    { id: 'image-to-video', label: '🎬 Image to Video', accepts: ['image'] },
-    { id: 'text-to-video',  label: '📝 Text to Video',  accepts: ['image'] },
-    { id: 'text-to-image',  label: '🖼️ Text to Image',  accepts: ['image'] },
-    { id: 'image-to-image', label: '🔄 Image to Image', accepts: ['image'] },
-    { id: 'image-to-text',  label: '📷 Image to Text',  accepts: ['image'] },
+    { id: 'image-to-video', label: '🎬 Image to Video', accepts: ['image', 'video'] },
+    { id: 'text-to-video',  label: '📝 Text to Video',  accepts: ['image', 'video'] },
+    { id: 'text-to-image',  label: '🖼️ Text to Image',  accepts: ['image', 'video'] },
+    { id: 'image-to-image', label: '🔄 Image to Image', accepts: ['image', 'video'] },
+    { id: 'image-to-text',  label: '📷 Image to Text',  accepts: ['image', 'video'] },
     { id: 'inpaint',        label: '🎨 Inpaint',        accepts: ['image'] },
     { id: 'reframe',        label: '📐 Reframe',        accepts: ['image', 'video'] },
-    { id: 'face-swap',      label: '👤 Face Swap',      accepts: ['image'] },
+    { id: 'face-swap',      label: '👤 Face Swap',      accepts: ['image', 'video'] },
     { id: 'upscale',         label: '🔍 Upscale',        accepts: ['image', 'video'] },
   ]
 

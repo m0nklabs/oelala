@@ -93,7 +93,7 @@ class Wan22CloudI2VAdapter(GenerationAdapter):
         )
 
         return comfyui.build_cloud_wan22_i2v_workflow(
-            image_name=req.input_images[0] if req.input_images else "input.png",
+            image_name="input.png" if req.input_images else "",
             prompt=req.prompt,
             negative_prompt=req.negative_prompt,
             num_frames=req.frames or 81,
@@ -180,7 +180,7 @@ class Wan22CloudI2VAdapter(GenerationAdapter):
 
         result = await submit_fn(
             workflow=workflow,
-            user_id=req.user_id or req.user_id or "adapter",
+            user_id=req.user_id or "adapter",
             prompt_id=prompt_id,
             job_info=job_info,
             images=input_images_b64,

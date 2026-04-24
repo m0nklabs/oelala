@@ -4,6 +4,30 @@
 
 ---
 
+## ⚙️ Unified Generation V2 Migration (Audit 2026-04-22)
+
+### Completed in frontend (useGeneration)
+- [x] TextToVideoTool migrated to unified generation hook
+- [x] VideoToVideoTool migrated to unified generation hook
+- [x] AudioGenerationTool migrated to unified generation hook
+- [x] UpscaleTool migrated to unified generation hook
+- [x] TextToImageTool migrated to unified generation hook
+- [x] ImageToImageTool migrated to unified generation hook
+- [x] ImageToImage edit mode now supports optional I2I Edit model selection (default + JIB Mix I2I Edit V6)
+
+### Completed in backend (storage and user scoping)
+- [x] Cloud adapters now use authenticated user context for media ownership
+- [x] Generated cloud outputs now store under real user folder (not adapter placeholder)
+- [x] RunPod I2I Edit worker now lazy-loads optional model variants based on workflow model references
+
+### Remaining migration tasks
+- [ ] Add V2-compatible inpaint request flow (mask + source image transport strategy)
+- [ ] Decide per-tool policy: keep dedicated FormData endpoints vs full V2 routing for reframe/interpolate/caption
+- [ ] Add end-to-end regression test for MyMedia visibility after cloud generation
+- [ ] Add frontend migration matrix doc for each tool endpoint and owner
+
+---
+
 ## 🎭 Face System (Active Sprint)
 
 See [docs/FACE_SYSTEM.md](FACE_SYSTEM.md) for full architecture.

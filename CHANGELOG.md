@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Qwen Image Edit 2511 RunPod Worker**: Full cloud infrastructure for instruction-based image editing
   - `deploy/runpod-qwen/` — handler, Dockerfile, deploy script
-  - RunPod serverless endpoint `oelala-qwen` (ID: `8djiexluyybooj`, template: `ed2614hd8k`)
+  - RunPod serverless endpoint `oelala-i2i` (ID: `8djiexluyybooj`, template: `ed2614hd8k`)
   - Backend endpoint `/generate-qwen-edit` with width/height/steps/cfg/seed/lightning/lora_configs params
   - ComfyUI workflow builder `_build_qwen_edit_workflow()` based on official v2509 reference
 - **I2I Edit Mode Resolution Controls**: Full resolution + aspect ratio picker

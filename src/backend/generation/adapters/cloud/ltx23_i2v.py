@@ -94,7 +94,7 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
         )
 
         return comfyui.build_cloud_ltx23_i2v_workflow(
-            image_name=req.input_images[0] if req.input_images else "input.png",
+            image_name="input.png" if req.input_images else "",
             prompt=req.prompt,
             negative_prompt=req.negative_prompt,
             width=req.width or 768,

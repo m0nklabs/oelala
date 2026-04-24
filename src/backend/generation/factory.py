@@ -25,7 +25,7 @@ def create_registry(
     guardian_base_url: Optional[str] = None,
     runpod_endpoint_wan22: Optional[str] = None,
     runpod_endpoint_ltx23: Optional[str] = None,
-    runpod_endpoint_qwen: Optional[str] = None,
+    runpod_endpoint_i2i: Optional[str] = None,
 ) -> AdapterRegistry:
     """
     Build an AdapterRegistry with all adapters wired to real dependencies.
@@ -40,7 +40,7 @@ def create_registry(
         guardian_base_url: Guardian LLM base URL for captioning.
         runpod_endpoint_wan22: RunPod endpoint ID for Wan2.2 jobs.
         runpod_endpoint_ltx23: RunPod endpoint ID for LTX-2.3 jobs.
-        runpod_endpoint_qwen: RunPod endpoint ID for Qwen edit jobs.
+        runpod_endpoint_i2i: RunPod endpoint ID for I2I edit jobs.
 
     Returns:
         Fully populated AdapterRegistry.
@@ -65,7 +65,7 @@ def create_registry(
         from .adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
         from .adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
         from .adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
-        from .adapters.cloud.qwen_edit import QwenEditCloudAdapter
+        from .adapters.cloud.cloud_i2i import I2IEditCloudAdapter, CloudI2ITransformAdapter
 
         _register(
             Wan22CloudI2VAdapter,
@@ -90,7 +90,11 @@ def create_registry(
             comfyui_client_fn=comfyui_client_fn,
         )
         _register(
-            QwenEditCloudAdapter,
+            I2IEditCloudAdapter,
+            submit_to_runpod_fn=submit_to_runpod_fn,
+        )
+        _register(
+            CloudI2ITransformAdapter,
             submit_to_runpod_fn=submit_to_runpod_fn,
         )
     else:

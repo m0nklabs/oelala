@@ -171,7 +171,7 @@ class Wan22CloudT2VAdapter(GenerationAdapter):
 
         result = await submit_fn(
             workflow=workflow,
-            user_id=req.user_id or "adapter",d or "adapter",
+            user_id=req.user_id or "adapter",
             prompt_id=prompt_id,
             job_info=job_info,
             lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,

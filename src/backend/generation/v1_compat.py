@@ -122,6 +122,7 @@ _PASSTHROUGH_FIELDS = {
     "upscale_preset",
     "face_enhance",
     "instruction",
+    "edit_model",
     "shift",
     "high_noise_steps",
     "audio_prompt",

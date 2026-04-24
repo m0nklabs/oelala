@@ -184,7 +184,7 @@ sudo systemctl restart oelala-backend
 |------|-------------|-------------|-------|-----------|
 | oelala-wan22 | `x2x496ymkidl3m` | `tkpy0pi8gt` | `ghcr.io/m0nklabs/oelala-comfyui-worker` | 48GB+ |
 | oelala-ltx23 | `ctpoa610dva4ww` | `c1fz26l07d` | `ghcr.io/m0nklabs/oelala-ltx23-worker` | 80GB+ |
-| oelala-qwen | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-qwen-worker` | 48GB+ |
+| oelala-i2i | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-i2i-worker` | 48GB+ |
 
 ## The Golden Rule
 

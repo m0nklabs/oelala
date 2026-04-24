@@ -58,20 +58,45 @@ export function parseComfyWorkflow(workflow) {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  //    Strategy C: Kijai WanVideoWrapper nodes
-  //    (WanVideoTextEncodeMultiGPU has positive_prompt / negative_prompt)
+  //    Strategy C: Kijai WanVideoWrapper & LTXV nodes
+  //    (WanVideoTextEncodeMultiGPU has positive_prompt / negative_prompt, 
+  //     LTXVCPUGemmaEncode has text)
   // ─────────────────────────────────────────────────────────────────
-  if (!result.positive || !result.negative) {
+  if (!result.positive || !result.negative || !result.audio) {
     for (const [, node] of Object.entries(nodes)) {
-      if (node.class_type !== 'WanVideoTextEncodeMultiGPU') continue
-      const inp = node.inputs || {}
-      if (!result.positive && typeof inp.positive_prompt === 'string') {
-        result.positive = inp.positive_prompt
+      // WanVideo
+      if (node.class_type === 'WanVideoTextEncodeMultiGPU') {
+        const inp = node.inputs || {}
+        if (!result.positive && typeof inp.positive_prompt === 'string') {
+          result.positive = inp.positive_prompt
+        }
+        if (!result.negative && typeof inp.negative_prompt === 'string') {
+          result.negative = inp.negative_prompt
+        }
       }
-      if (!result.negative && typeof inp.negative_prompt === 'string') {
-        result.negative = inp.negative_prompt
+      
+      // LTXV
+      if (node.class_type === 'LTXVCPUGemmaEncode') {
+        const inp = node.inputs || {}
+        if (typeof inp.text === 'string') {
+          if (!result.positive) result.positive = inp.text
+          if (!result.audio) result.audio = inp.text
+        }
       }
-      break
+      if (node.class_type === 'LTXVCPUGemmaNegativeEncode') {
+        const inp = node.inputs || {}
+        if (!result.negative && typeof inp.text === 'string') {
+          result.negative = inp.text
+        }
+      }
+      
+      // Vivid Audio Prompt
+      if (node.class_type === 'VividAudioPrompt') {
+        const inp = node.inputs || {}
+        if (!result.audio && typeof inp.prompt === 'string') {
+          result.audio = inp.prompt
+        }
+      }
     }
   }
 
@@ -79,9 +104,10 @@ export function parseComfyWorkflow(workflow) {
   //    Strategy D: Generic fallback — scan all nodes for prompt-like
   //    text input keys (works for unknown/future node types)
   // ─────────────────────────────────────────────────────────────────
-  if (!result.positive || !result.negative) {
-    const POS_KEYS = ['positive_prompt', 'text_positive', 'prompt']
-    const NEG_KEYS = ['negative_prompt', 'text_negative']
+  if (!result.positive || !result.negative || !result.audio) {
+    const POS_KEYS = ['positive_prompt', 'text_positive', 'prompt', 'text', 'text_g']
+    const NEG_KEYS = ['negative_prompt', 'text_negative', 'text_l']
+    const AUDIO_KEYS = ['audio_prompt', 'audio']
     for (const [, node] of Object.entries(nodes)) {
       const inp = node.inputs || {}
       for (const [key, value] of Object.entries(inp)) {
@@ -89,8 +115,9 @@ export function parseComfyWorkflow(workflow) {
         const k = key.toLowerCase()
         if (!result.positive && POS_KEYS.includes(k)) result.positive = value
         if (!result.negative && NEG_KEYS.includes(k)) result.negative = value
+        if (!result.audio && AUDIO_KEYS.includes(k)) result.audio = value
       }
-      if (result.positive && result.negative) break
+      if (result.positive && result.negative && result.audio) break
     }
   }
 

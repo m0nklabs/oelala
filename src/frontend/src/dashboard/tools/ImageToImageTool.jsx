@@ -31,6 +31,7 @@ const PRESETS = [
 
 const I2I_DEFAULTS = {
   mode: 'transform',
+  engine: 'local',
   // Shared
   negativePrompt: 'ugly, deformed, blurry, low quality, bad anatomy, watermark',
   steps: 25, cfg: 7.0, seed: -1,
@@ -42,6 +43,7 @@ const I2I_DEFAULTS = {
   // Edit mode
   instruction: '',
   lightning: false,
+  editModel: 'default',
   editAspectRatio: '1:1',
   editResolution: '1024',
   loraConfigs: [],
@@ -55,6 +57,14 @@ const EDIT_RESOLUTION_PRESETS = {
 }
 
 const EDIT_ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2']
+
+const EDIT_MODEL_OPTIONS = [
+  {
+    value: 'default',
+    label: 'I2I Edit 2511 Default',
+    desc: 'Official I2I Edit Image Edit fp8mixed model',
+  },
+]
 
 // Calculate width × height from base resolution + aspect ratio (clamped to multiples of 16)
 function getEditDimensions(baseRes, aspectRatio) {
@@ -103,6 +113,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const [showCreationsPicker, setShowCreationsPicker] = useState(false)
   // ── Mode ─────────────────────────────────────────────────────────
   const [mode, setMode] = useState(initial.mode || 'transform')
+  const [engine, setEngine] = useState(initial.engine || 'local')
 
   // ── Transform mode state ────────────────────────────────────────
   const [prompt, setPrompt] = useState(initial.prompt)
@@ -124,6 +135,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   // ── Edit mode state ─────────────────────────────────────────────
   const [instruction, setInstruction] = useState(initial.instruction || '')
   const [lightning, setLightning] = useState(initial.lightning || false)
+  const [editModel, setI2IModel] = useState(initial.editModel || 'default')
   const [editAspectRatio, setEditAspectRatio] = useState(initial.editAspectRatio || '1:1')
   const [editResolution, setEditResolution] = useState(initial.editResolution || '1024')
   const [availableLoras, setAvailableLoras] = useState({ by_category: {} })
@@ -132,25 +144,28 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
-    mode, prompt, negativePrompt, denoise, checkpoint, preset,
+    mode, engine, prompt, negativePrompt, denoise, checkpoint, preset,
     faceId, faceDetailer, faceRestore, faceIdWeight,
     steps, cfg, seed, sampler, scheduler,
-    instruction, lightning, editAspectRatio, editResolution, loraConfigs,
-  }), [mode, prompt, negativePrompt, denoise, checkpoint, preset,
+    instruction, lightning, editModel, editAspectRatio, editResolution, loraConfigs,
+  }), [mode, engine, prompt, negativePrompt, denoise, checkpoint, preset,
     faceId, faceDetailer, faceRestore, faceIdWeight,
     steps, cfg, seed, sampler, scheduler,
-    instruction, lightning, editAspectRatio, editResolution, loraConfigs])
+    instruction, lightning, editModel, editAspectRatio, editResolution, loraConfigs])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
     const d = resetDefaults()
     setMode(d.mode || 'transform')
+    setEngine(d.engine || 'local')
+    setEngine(d.engine || 'local')
     setPrompt(d.prompt); setNegativePrompt(d.negativePrompt); setDenoise(d.denoise)
     setCheckpoint(d.checkpoint); setPreset(d.preset)
     setFaceId(d.faceId); setFaceDetailer(d.faceDetailer); setFaceRestore(d.faceRestore)
     setFaceIdWeight(d.faceIdWeight)
     setSteps(d.steps); setCfg(d.cfg); setSeed(d.seed); setSampler(d.sampler); setScheduler(d.scheduler)
     setInstruction(d.instruction || ''); setLightning(d.lightning || false)
+    setI2IModel(d.editModel || 'default')
     setEditAspectRatio(d.editAspectRatio || '1:1')
     setEditResolution(d.editResolution || '1024')
     setLoraConfigs(d.loraConfigs || [])
@@ -201,11 +216,12 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const { generate, loading: submitting } = useGeneration({
     onSuccess: (data, req) => {
       const promptId = data.prompt_id || data.id
-      let qMode = req.adapter_hint === 'qwen-cloud-edit' ? 'edit' : 'transform'
+      let qMode = req.adapter_hint === 'cloud-i2i-edit' ? 'edit' : 'transform'
       setLastQueued({
         promptId: promptId,
         mode: qMode,
         checkpoint: qMode === 'transform' ? (CHECKPOINTS.find(c => c.value === req.checkpoint)?.label || req.checkpoint) : undefined,
+        editModel: qMode === 'edit' ? (EDIT_MODEL_OPTIONS.find(c => c.value === (req.edit_model || 'default'))?.label || req.edit_model || 'I2I Edit 2511 Default') : undefined,
         lightning: req.lightning,
         runpodJobId: data.runpod_job_id,
         credits: data.credits_used
@@ -374,8 +390,8 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         }
 
         if (mode === 'transform') {
-          // ── Transform mode → local ComfyUI ──
-          reqPayload.adapter_hint = 'local-i2i-transform'
+          // ── Transform mode ──
+          reqPayload.adapter_hint = engine === 'cloud' ? 'cloud-i2i-transform' : 'local-i2i-transform'
           reqPayload.prompt = prompt || 'high quality, detailed'
           reqPayload.negative_prompt = negativePrompt
           reqPayload.denoise = denoise
@@ -393,10 +409,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
         } else {
           // ── Edit mode → RunPod cloud ──
-          reqPayload.adapter_hint = 'qwen-cloud-edit'
+          reqPayload.adapter_hint = 'cloud-i2i-edit'
           reqPayload.instruction = instruction
           reqPayload.negative_prompt = negativePrompt
           reqPayload.lightning = lightning
+          reqPayload.edit_model = editModel
           
           const editDims = getEditDimensions(editResolution, editAspectRatio)
           reqPayload.width = editDims.width
@@ -406,7 +423,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
             reqPayload.lora_configs = loraConfigs.filter(c => c.name)
           }
 
-          if (DEBUG) console.debug('✏️ I2I edit:', { instruction, steps, cfg, lightning, loras: loraConfigs.length })
+          if (DEBUG) console.debug('✏️ I2I edit:', { instruction, steps, cfg, lightning, editModel, loras: loraConfigs.length })
           await generate(reqPayload)
         }
       }
@@ -496,7 +513,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           >
             <Wand2 size={14} />
             Transform
-            <span className="mode-hint">Local · SDXL</span>
+            
           </button>
           <button
             onClick={() => setMode('edit')}
@@ -504,10 +521,39 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           >
             <Sparkles size={14} />
             AI Edit
-            <span className="mode-hint">Cloud · Qwen</span>
+            <span className="mode-hint">Cloud · I2I</span>
           </button>
         </div>
       </div>
+
+      {/* Engine Selector for Transform Mode */}
+      {mode === 'transform' && (
+        <div className="grok-card" style={{ padding: '0.75rem', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setEngine('local')}
+              className={`mode-btn ${engine === 'local' ? 'active' : ''}`}
+            >
+              <Sliders size={14} />
+              Local Engine
+              <span className="mode-hint">SDXL with Face Preserve</span>
+            </button>
+            <button
+              onClick={() => setEngine('cloud')}
+              className={`mode-btn ${engine === 'cloud' ? 'active' : ''}`}
+            >
+              <Zap size={14} />
+              Cloud Engine
+              <span className="mode-hint">RunPod Transform (Fast)</span>
+            </button>
+          </div>
+          {engine === 'cloud' && (
+            <div className="text-xs text-blue-400 bg-blue-900/20 p-2 rounded-md border border-blue-800/50">
+              ⚡ Cloud engine runs on RunPod I2I worker. It skips face-detailer pipelines for faster generation.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ════════ TRANSFORM MODE ════════ */}
       {mode === 'transform' && (<>
@@ -592,14 +638,15 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         </div>
       </div>
 
-      {/* Face Processing Card */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <UserIcon size={16} />
-            Face Processing
+      {/* Face Processing Card - Only shown in Local Engine */}
+      {engine === 'local' && (
+        <div className="grok-card">
+          <div className="grok-card-header">
+            <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <UserIcon size={16} />
+              Face Processing
+            </div>
           </div>
-        </div>
 
         <div className="face-toggles">
           <label className="toggle-row">
@@ -663,6 +710,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           </label>
         </div>
       </div>
+      )}
 
       {/* Advanced Settings Card */}
       <div className="grok-card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -801,7 +849,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         <div className="form-group" style={{ marginTop: '14px' }}>
           <label className="grok-section-label">
             Negative Prompt (optional)
-            <InfoTooltip text="Describe what to avoid in the output. Usually not needed for Qwen Edit, but can help prevent unwanted artifacts." />
+            <InfoTooltip text="Describe what to avoid in the output. Usually not needed for I2I Edit Edit, but can help prevent unwanted artifacts." />
           </label>
           <textarea
             className="form-textarea"
@@ -871,6 +919,29 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
                 </button>
               )
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* Model Variant Card */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Palette size={16} />
+            I2I Edit Model
+            <InfoTooltip text="Choose which I2I Edit edit model variant runs on RunPod. The default model is the current official I2I Edit Image Edit setup. JIB Mix is an alternative merge with a different realism/style balance." />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="grok-section-label">Model Variant</label>
+          <select className="form-select" value={editModel} onChange={(e) => setI2IModel(e.target.value)}>
+            {EDIT_MODEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {EDIT_MODEL_OPTIONS.find((option) => option.value === editModel)?.desc}
           </div>
         </div>
       </div>
@@ -1033,6 +1104,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
       }}>
         <strong>☁️ Cloud-powered</strong> — Runs on RunPod cloud GPUs (48GB+).
         {lightning ? ' ⚡ Lightning: ~30s.' : ' 🎨 Normal: ~2-3 min.'}
+        {editModel === 'jib_mix_v6' ? ' 🧪 JIB Mix selected: first cold start can be slower.' : ''}
       </div>
 
       </>)}
@@ -1042,7 +1114,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
         <div className="queued-notice">
           ✅ Job queued! Check the Queue panel for progress.
           {lastQueued.mode === 'edit'
-            ? <span className="queued-mode">{lastQueued.lightning ? '⚡ Lightning' : '🎨 Full quality'} (Cloud)</span>
+            ? <span className="queued-mode">{lastQueued.editModel} · {lastQueued.lightning ? '⚡ Lightning' : '🎨 Full quality'} (Cloud)</span>
             : <span className="queued-mode">{lastQueued.checkpoint}</span>
           }
         </div>

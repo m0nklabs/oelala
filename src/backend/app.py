@@ -1201,12 +1201,17 @@ async def startup_event():
             face_service_mod=face_service,
             runpod_endpoint_wan22=os.getenv("RUNPOD_ENDPOINT_ID"),
             runpod_endpoint_ltx23=os.getenv("RUNPOD_LTX23_ENDPOINT_ID"),
-            runpod_endpoint_qwen=os.getenv("RUNPOD_QWEN_ENDPOINT_ID"),
+            runpod_endpoint_i2i=os.getenv("RUNPOD_I2I_ENDPOINT_ID"),
         )
 
         # Async wrapper for ComfyUI b64 image upload (used by router)
         async def _comfyui_upload_b64(b64_data: str, filename: str) -> str:
             import base64 as _b64
+
+            b64_data = "".join(b64_data.split())
+            missing = (-len(b64_data)) % 4
+            if missing:
+                b64_data = b64_data + ("=" * missing)
 
             img_bytes = _b64.b64decode(b64_data)
             client = get_comfyui_client()
@@ -9620,17 +9625,18 @@ async def generate_i2i(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Qwen Image Edit (Instruction-Based Image Editing) — RunPod Only
+# I2I Edit (Instruction-Based Image Editing) — RunPod Only
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@app.post("/generate-qwen-edit")
-async def generate_qwen_edit(
+@app.post("/generate-cloud-i2i-edit")
+async def generate_i2i_edit(
     file: UploadFile = File(...),
     instruction: str = Form(
         ..., description="Edit instruction (e.g. 'remove the background')"
     ),
     negative_prompt: str = Form("", description="What to avoid"),
+    edit_model: str = Form("default", description="Qwen model variant"),
     width: int = Form(1024, description="Output width (multiple of 16, 512-2048)"),
     height: int = Form(1024, description="Output height (multiple of 16, 512-2048)"),
     steps: int = Form(40, description="Sampling steps (40 normal, 4 lightning)"),
@@ -9644,7 +9650,7 @@ async def generate_qwen_edit(
     ),
     user: User = Depends(get_current_user),
 ):
-    """Qwen Image Edit 2511 — instruction-based image editing via RunPod (V2 thin wrapper)"""
+    """I2I Edit 2511 — instruction-based image editing via RunPod (V2 thin wrapper)"""
     from src.backend.generation.v1_compat import dispatch_v1
     from src.backend.generation.types import Operation, MediaType
 
@@ -9652,6 +9658,7 @@ async def generate_qwen_edit(
         form=dict(
             instruction=instruction,
             negative_prompt=negative_prompt,
+            edit_model=edit_model,
             width=width,
             height=height,
             steps=steps,
@@ -9663,10 +9670,10 @@ async def generate_qwen_edit(
         files={"file": file},
         operation=Operation.TRANSFORM,
         target_type=MediaType.IMAGE,
-        adapter_hint="qwen-cloud-edit",
+        adapter_hint="cloud-i2i-edit",
         user=user,
         register_job_settings={
-            "job_type": "qwen_edit",
+            "job_type": "i2i_edit",
         },
         v1_format="cloud",
     )
