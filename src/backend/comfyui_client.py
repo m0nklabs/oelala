@@ -1125,6 +1125,19 @@ class ComfyUIClient:
         except Exception:
             return False
 
+
+    def get_model_names(self, loader_type: str = "UnetLoaderGGUF") -> list[str]:
+        """Fetch available models dynamically from ComfyUI"""
+        try:
+            import requests
+            resp = requests.get(f"{self.base_url}/object_info/{loader_type}", timeout=5)
+            data = resp.json()
+            if loader_type in data:
+                return data[loader_type]["input"]["required"].get("unet_name", [[]])[0]
+        except Exception as e:
+            logger.error(f"Error fetching {loader_type} models: {e}")
+        return []
+
     def upload_image(self, image_path: str, subfolder: str = "") -> Optional[str]:
         """Upload image to ComfyUI input folder"""
         try:
@@ -1150,6 +1163,19 @@ class ComfyUIClient:
         except Exception as e:
             logger.error(f"Upload error: {e}")
             return None
+
+
+    def get_model_names(self, loader_type: str = "UnetLoaderGGUF") -> list[str]:
+        """Fetch available models dynamically from ComfyUI"""
+        try:
+            import requests
+            resp = requests.get(f"{self.base_url}/object_info/{loader_type}", timeout=5)
+            data = resp.json()
+            if loader_type in data:
+                return data[loader_type]["input"]["required"].get("unet_name", [[]])[0]
+        except Exception as e:
+            logger.error(f"Error fetching {loader_type} models: {e}")
+        return []
 
     def upload_image_from_bytes(
         self, image_bytes: bytes, filename: str = "input_image.png"
@@ -1616,6 +1642,7 @@ class ComfyUIClient:
         seed: int = -1,
         output_prefix: str = "oelala_wan22enh",
         model_variant: str = "HIGH",
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Build ComfyUI API-format workflow for WAN 2.2 Enhanced NSFW FAST MOVE V2 Q4KM.
@@ -1630,9 +1657,14 @@ class ComfyUIClient:
         num_frames = 4 * k + 1
 
         # Select model variant
+# Dynamically map HIGH and LOW noise models based on what's available
+        ggufs = self.get_model_names("UnetLoaderGGUF")
+        high_model = next((m for m in ggufs if "HIGH" in m.upper() and ("wan22EnhancedNSFW" in m or "wan2.2_i2v" in m)), "wan22EnhancedNSFW_V2_Q6K_HIGH.gguf")
+        low_model = next((m for m in ggufs if "LOW" in m.upper() and ("wan22EnhancedNSFW" in m or "wan2.2_i2v" in m)), "wan22EnhancedNSFW_V2_Q6K_LOW.gguf")
+        
         model_map = {
-            "HIGH": "wan22_nsfw_fastmove_v2_Q4KM_HIGH.gguf",
-            "LOW": "wan22_nsfw_fastmove_v2_Q4KM_LOW.gguf",
+            "HIGH": high_model,
+            "LOW": low_model,
         }
         workflow["8"]["inputs"]["model"] = model_map.get(
             model_variant.upper(), model_map["HIGH"]

@@ -3948,7 +3948,7 @@ async def unified_storage_proxy(bucket: str, key: str, request: Request):
 
 
 @app.get("/comfyui-metadata/{filename}")
-async def get_comfyui_metadata(filename: str):
+async def get_comfyui_metadata(filename: str, user: User = Depends(get_current_user)):
     """
     Extract and return the ComfyUI workflow/metadata from an output file.
     Works with videos (mp4, webm, mov) and images (png).
@@ -3966,17 +3966,28 @@ async def get_comfyui_metadata(filename: str):
     # Fall back to storage (download to temp file for ffprobe)
     tmp_file = None
     if not output_path:
-        try:
-            storage = get_storage_client()
-            data, _, _ = storage.get_with_metadata("generated", filename)
-            tmp_file = tempfile.NamedTemporaryFile(
-                suffix=Path(filename).suffix, delete=False
-            )
-            tmp_file.write(data)
-            tmp_file.close()
-            output_path = Path(tmp_file.name)
-        except Exception:
-            pass
+        storage = get_storage_client()
+        ext = Path(filename).suffix.lower()
+        subfolder = "videos" if ext in [".mp4", ".webm", ".mov"] else ("audio" if ext in [".wav", ".mp3", ".flac"] else "images")
+        
+        # Check user bucket first, then public generated bucket
+        sources = [
+            ("users", f"{user.id}/{subfolder}/{filename}"),
+            ("generated", filename)
+        ]
+        
+        for bucket, key in sources:
+            try:
+                data, _, _ = storage.get_with_metadata(bucket, key)
+                tmp_file = tempfile.NamedTemporaryFile(
+                    suffix=ext, delete=False
+                )
+                tmp_file.write(data)
+                tmp_file.close()
+                output_path = Path(tmp_file.name)
+                break
+            except Exception:
+                continue
 
     if not output_path:
         raise HTTPException(status_code=404, detail="Output file not found")
@@ -5762,23 +5773,32 @@ async def generate_image_legacy(
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Available SDXL checkpoints (auto-detected from ComfyUI models folder)
-SDXL_CHECKPOINTS = [
-    "CyberRealistic_Pony_v14.1_FP16.safetensors",
-    "dreamshaperXL_lightningDPMSDE.safetensors",
-    "illustriousRealismBy_v10VAE.safetensors",
-    "juggernautXL_ragnarok.safetensors",
-    "novaAnimeXL_ilV150.safetensors",
-    "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
-    "reapony_v90.safetensors",
-    "ultraRealisticByStable_v20FP16.safetensors",
-    "waiIllustriousSDXL_v160.safetensors",
-]
 
+@app.get("/api/models/checkpoints")
+def list_comfyui_checkpoints():
+    """List available checkpoints dynamically from ComfyUI"""
+    client = get_comfyui_client()
+    try:
+        resp = requests.get(f"{client.base_url}/object_info/CheckpointLoaderSimple", timeout=5)
+        data = resp.json()
+        models = data.get("CheckpointLoaderSimple", {}).get("input", {}).get("required", {}).get("ckpt_name", [[]])[0]
+        # Filter for safetensors to exclude unet/vae if needed, though CheckpointLoader usually filters by default
+        return {"checkpoints": [m for m in models if m.endswith('.safetensors')]}
+    except Exception as e:
+        logger.error(f"Error fetching checkpoints from ComfyUI: {e}")
+        return {"checkpoints": [
+            "CyberRealistic_Pony_v14.1_FP16.safetensors",
+            "dreamshaperXL_lightningDPMSDE.safetensors",
+            "illustriousRealismBy_v10VAE.safetensors",
+            "juggernautXL_ragnarok.safetensors",
+            "ponyDiffusionV6XL_v6StartWithThisOne.safetensors"
+        ]} # Fallback list
 
+# Backwards compatibility
 @app.get("/sdxl/checkpoints")
 def list_sdxl_checkpoints():
-    """List available SDXL checkpoints"""
-    return {"checkpoints": SDXL_CHECKPOINTS}
+    return list_comfyui_checkpoints()
+
 
 
 @app.post("/generate-sdxl")
@@ -5787,7 +5807,7 @@ async def generate_sdxl_image(
     negative_prompt: str = Form(
         "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text"
     ),
-    checkpoint: str = Form("CyberRealistic_Pony_v14.1_FP16.safetensors"),
+    checkpoint: str = Form(None),
     aspect_ratio: str = Form("1:1"),
     steps: int = Form(30),
     cfg: float = Form(7.5),
@@ -9579,7 +9599,7 @@ async def generate_i2i(
         "ugly, deformed, blurry, low quality, bad anatomy, watermark"
     ),
     denoise: float = Form(0.7),
-    checkpoint: str = Form("CyberRealistic_Pony_v14.1_FP16.safetensors"),
+    checkpoint: str = Form(None),
     steps: int = Form(25),
     cfg: float = Form(7.5),
     seed: int = Form(-1),
@@ -10210,7 +10230,7 @@ async def inpaint_image(
     mask: UploadFile = File(...),
     prompt: str = Form("high quality, detailed"),
     negative_prompt: str = Form("ugly, blurry, watermark, text, artifacts"),
-    model: str = Form("dreamshaperXL_lightningDPMSDE.safetensors"),
+    model: str = Form(None),
     steps: int = Form(20),
     cfg: float = Form(7.0),
     denoise: float = Form(0.85),
@@ -10422,7 +10442,7 @@ async def reframe_image(
     target_height: int = Form(720),
     position: str = Form("center"),
     prompt: str = Form("seamless natural extension, high quality"),
-    model: str = Form("CyberRealisticPony_v8.safetensors"),
+    model: str = Form(None),
     steps: int = Form(25),
     cfg: float = Form(7.0),
     denoise: float = Form(0.85),
