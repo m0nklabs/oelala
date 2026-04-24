@@ -1008,7 +1008,7 @@ def start_comfyui(max_retries: int = 2):
             [sys.executable, "main.py", "--listen", COMFYUI_HOST, "--port", str(COMFYUI_PORT),
              "--disable-auto-launch", "--disable-metadata"],
             cwd="/comfyui",
-            stdout=subprocess.PIPE,
+            stdout=sys.stdout,
             stderr=subprocess.STDOUT,
             env=env,
         )
@@ -1016,12 +1016,6 @@ def start_comfyui(max_retries: int = 2):
         _comfyui_recent_logs.clear()
 
         # Stream ComfyUI logs in background thread
-        def log_reader(proc=_comfyui_process):
-            for line in iter(proc.stdout.readline, b''):
-                decoded = line.decode(errors="replace").rstrip()
-                _comfyui_recent_logs.append(decoded)
-                logger.info(f"[ComfyUI] {decoded}")
-        threading.Thread(target=log_reader, daemon=True).start()
 
         # Wait for ComfyUI to be ready
         max_wait = 120  # seconds
@@ -1067,6 +1061,19 @@ def save_input_images(images: dict):
     saved = []
     for filename, b64_data in images.items():
         filepath = Path(INPUT_DIR) / filename
+        # Strip data URL prefix if present (e.g. "data:image/png;base64,...")
+        if isinstance(b64_data, str) and b64_data.startswith("data:"):
+            comma = b64_data.find(",")
+            if comma != -1:
+                b64_data = b64_data[comma + 1 :]
+        # Strip whitespace/newlines that some clients insert
+        if isinstance(b64_data, str):
+            b64_data = "".join(b64_data.split())
+        # Pad to multiple of 4 (fix "Incorrect padding" errors)
+        if isinstance(b64_data, str):
+            missing = (-len(b64_data)) % 4
+            if missing:
+                b64_data = b64_data + ("=" * missing)
         data = base64.b64decode(b64_data)
         filepath.write_bytes(data)
         saved.append(str(filepath))

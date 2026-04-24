@@ -314,7 +314,7 @@ def start_comfyui() -> bool:
     _comfyui_process = subprocess.Popen(
         cmd,
         cwd=COMFYUI_PATH,
-        stdout=subprocess.PIPE,
+        stdout=sys.stdout,
         stderr=subprocess.STDOUT,
         text=True,
     )
@@ -324,7 +324,7 @@ def start_comfyui() -> bool:
     while time.time() < deadline:
         if _comfyui_process.poll() is not None:
             # Process exited — read output
-            output = _comfyui_process.stdout.read() if _comfyui_process.stdout else ""
+            output = "Check RunPod logs for details."
             logger.error(f"❌ ComfyUI exited during startup:\n{output[-2000:]}")
             return False
 
@@ -374,6 +374,11 @@ def save_input_images(images: Dict[str, str]) -> Dict[str, str]:
             # Strip data URI prefix if present
             if "," in b64data:
                 b64data = b64data.split(",", 1)[1]
+            # Strip whitespace/newlines and fix padding (avoid "Incorrect padding")
+            b64data = "".join(b64data.split())
+            missing = (-len(b64data)) % 4
+            if missing:
+                b64data = b64data + ("=" * missing)
 
             img_bytes = base64.b64decode(b64data)
             ext = ".png"
