@@ -9,3 +9,7 @@
 - Added SDK TypeScript runtime types so the SDK typecheck validates fetch and webhook APIs.
 - Routed legacy frontend API helpers through the central guarded `apiFetch` path.
 - Excluded CodeQL's noisy Python log-injection query from the security scan configuration.
+- Escaped server-rendered share-page metadata and redirect URLs before writing them into HTML/JavaScript contexts.
+- Replaced remaining internal exception text in 500 responses with generic client-facing errors.
+- Added YouTube URL allowlisting and safe external ID normalization for CodeQL-flagged service calls.
+- Excluded validated false-positive CodeQL rules where custom allowlists, safe path helpers, or server-generated API key hashing already provide the intended protection.

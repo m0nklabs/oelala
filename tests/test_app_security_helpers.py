@@ -14,9 +14,11 @@ from app import (  # noqa: E402
     _find_existing_media_path,
     _normalize_storage_key,
     _safe_child_path,
+    _safe_external_id,
     _safe_filename,
     _safe_user_media_type,
     _validate_public_image_url,
+    _validate_youtube_url,
 )
 
 
@@ -103,3 +105,51 @@ def test_find_existing_media_path_rejects_absolute_escape():
     """Existing-media references cannot point outside known media roots."""
     with pytest.raises(HTTPException):
         _find_existing_media_path("/etc/passwd")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2f4f4e8a-9c6a-4af6-8b92-64a102e6a7b0",
+        "cloud_job-123",
+        "train:abc_123",
+    ],
+)
+def test_safe_external_id_accepts_path_segments(value):
+    """External service IDs are accepted only as compact path segments."""
+    assert _safe_external_id(value, "test ID") == value
+
+
+@pytest.mark.parametrize("value", ["", "../secret", "bad/id", "bad?query"])
+def test_safe_external_id_rejects_unsafe_segments(value):
+    """External service IDs reject traversal and nested path syntax."""
+    with pytest.raises(HTTPException):
+        _safe_external_id(value, "test ID")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://youtu.be/dQw4w9WgXcQ",
+        "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+    ],
+)
+def test_validate_youtube_url_accepts_known_hosts(url):
+    """YouTube imports accept only known YouTube hostnames."""
+    assert _validate_youtube_url(url) == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "file:///etc/passwd",
+        "http://localhost/watch?v=x",
+        "https://youtube.com.evil.example/watch?v=x",
+        "https://user:pass@youtube.com/watch?v=x",
+    ],
+)
+def test_validate_youtube_url_rejects_unsafe_hosts(url):
+    """YouTube imports reject non-YouTube and credentialed URLs."""
+    with pytest.raises(HTTPException):
+        _validate_youtube_url(url)

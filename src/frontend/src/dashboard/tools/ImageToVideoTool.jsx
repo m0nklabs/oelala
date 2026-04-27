@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
-import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
+import { BACKEND_BASE, DEBUG, STORAGE_BASE, getMediaUrl } from '../../config'
 import { apiFetch, uploadUserMedia, getUserMediaUrl } from '../../api'
 import useGeneration from '../../hooks/useGeneration'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
@@ -51,6 +51,28 @@ const sanitizeFilename = (value, fallback = 'image.png') => {
   const basename = raw.split(/[\\/]/).pop() || fallback
   const sanitized = basename.replace(/[<>:"|?*\u0000-\u001F]/g, '_').slice(0, 180)
   return sanitized || fallback
+}
+
+const getSafePreviewUrl = (value) => {
+  const preview = String(value || '')
+  if (!preview) return ''
+  if (preview.startsWith('blob:')) return preview
+  if (/^data:image\/(png|jpe?g|webp);base64,/i.test(preview)) return preview
+
+  try {
+    const url = new URL(preview, window.location.origin)
+    const allowedOrigins = new Set([
+      window.location.origin,
+      new URL(BACKEND_BASE).origin,
+      new URL(STORAGE_BASE).origin,
+    ])
+    return ['http:', 'https:'].includes(url.protocol) && allowedOrigins.has(url.origin)
+      ? url.href
+      : ''
+  } catch (err) {
+    if (DEBUG) console.warn('Invalid preview URL ignored', err)
+    return ''
+  }
 }
 
 // Resolution presets with dimensions per aspect ratio
@@ -208,6 +230,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
+  const safePreviewUrl = useMemo(() => getSafePreviewUrl(previewUrl), [previewUrl])
   const [uploadTab, setUploadTab] = useState('file') // 'file', 'url', 'creations', 'library'
   const [restoringImage, setRestoringImage] = useState(false)
   const [userUploads, setUserUploads] = useState([])
@@ -2268,10 +2291,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         )}
 
         {/* Preview when file is selected (any tab) */}
-        {file && (
+        {file && safePreviewUrl && (
           <div className="relative" style={{ position: 'relative' }}>
             <img
-              src={previewUrl}
+              src={safePreviewUrl}
               alt="Preview"
               style={{
                 width: '100%',

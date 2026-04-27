@@ -6,6 +6,7 @@ FastAPI endpoints for admin user management.
 import os
 import asyncio
 import logging
+import uuid
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
@@ -34,6 +35,14 @@ ADMIN_BYPASS = os.getenv("OELALA_ADMIN_BYPASS", "0") == "1"
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://nsbjwhxdkxnyggtuxjjp.supabase.co")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+
+def _safe_user_id(value: str) -> str:
+    """Validate and normalize a Supabase auth user ID."""
+    try:
+        return str(uuid.UUID(str(value)))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid user ID") from exc
 
 
 def debug_log(msg: str):
@@ -334,17 +343,18 @@ async def get_user(user_id: str, admin: User = Depends(get_admin_user)):
     Get detailed information about a specific user.
     Admin only.
     """
-    debug_log(f"Fetching user {user_id}")
+    safe_user_id = _safe_user_id(user_id)
+    debug_log(f"Fetching user {safe_user_id}")
 
     client = _get_admin_client()
 
     # Parallel fetch: user_credits + auth email
     credits_task = client.get(
         f"{SUPABASE_URL}/rest/v1/user_credits",
-        params={"user_id": f"eq.{user_id}", "select": "*"},
+        params={"user_id": f"eq.{safe_user_id}", "select": "*"},
     )
     auth_task = client.get(
-        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+        f"{SUPABASE_URL}/auth/v1/admin/users/{safe_user_id}",
     )
     response, auth_response = await asyncio.gather(credits_task, auth_task)
 
@@ -943,7 +953,7 @@ async def get_gpu_status(admin: User = Depends(get_admin_user)):
         raise HTTPException(status_code=500, detail="nvidia-smi not found")
     except Exception as e:
         logger.error(f"GPU status error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch GPU status")
 
 
 @router.get("/system/queue")
@@ -1147,7 +1157,7 @@ async def get_recent_logs(
         raise HTTPException(status_code=500, detail="Log fetch timed out")
     except Exception as e:
         logger.error(f"Log fetch error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch service logs")
 
 
 # =============================================================================

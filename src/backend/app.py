@@ -5,6 +5,7 @@ FastAPI application for AI Video Generation Pipeline
 """
 
 import io
+import html as html_lib
 import ipaddress
 import os
 import posixpath
@@ -80,7 +81,7 @@ import logging
 from datetime import datetime, timezone
 import json
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 from collections import deque
 import uuid
 from PIL import Image
@@ -666,10 +667,20 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 SAFE_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@()+,= -]{0,254}$")
+SAFE_EXTERNAL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 MAX_STORAGE_KEY_LENGTH = 1024
 MAX_METADATA_IMAGE_BYTES = 20 * 1024 * 1024
 BLOCKED_METADATA_HOSTS = {"localhost", "localhost.localdomain"}
 ALLOWED_USER_MEDIA_TYPES = {"images", "videos", "audio", "uploads"}
+ALLOWED_YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtube-nocookie.com",
+    "www.youtube-nocookie.com",
+    "youtu.be",
+}
 
 
 def _normalize_storage_key(key: str, *, allow_subdirectories: bool = True) -> str:
@@ -775,6 +786,14 @@ def _safe_user_media_type(media_type: str) -> str:
     return safe_type
 
 
+def _safe_external_id(value: str, label: str) -> str:
+    """Validate an external service ID before using it as a URL path segment."""
+    safe_value = str(value or "").strip()
+    if not SAFE_EXTERNAL_ID_RE.fullmatch(safe_value):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return safe_value
+
+
 def _validate_public_image_url(image_url: str) -> str:
     """Validate a user-provided image URL before server-side fetching."""
     url = str(image_url or "").strip()
@@ -810,6 +829,25 @@ def _validate_public_image_url(image_url: str) -> str:
             raise HTTPException(status_code=400, detail="Image URL host is not allowed")
 
     return url
+
+
+def _validate_youtube_url(video_url: str) -> str:
+    """Validate a YouTube URL before passing it to yt-dlp."""
+    url = str(video_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname not in ALLOWED_YOUTUBE_HOSTS:
+        raise HTTPException(status_code=400, detail="Only YouTube URLs are supported")
+    return url
+
+
+def _js_string_literal(value: str) -> str:
+    """Render a safe JavaScript string literal for server-generated HTML."""
+    return json.dumps(value)
 
 
 async def _save_upload(file: UploadFile, dest: Path) -> bytes:
@@ -1023,37 +1061,46 @@ async def share_media(media_id: str, request: Request):
         except Exception as exc:
             logger.warning(f"⚠️ Share page: failed to fetch media {media_id}: {exc}")
 
-    redirect_url = f"{SITE_URL}/?openItem={media_id}"
+    safe_media_id = quote(media_id, safe="")
+    share_url = f"{SITE_URL}/share/{safe_media_id}"
+    redirect_url = f"{SITE_URL}/?openItem={safe_media_id}"
     og_type = "video.other" if media_type_str == "video" else "website"
+    title_html = html_lib.escape(title, quote=True)
+    description_html = html_lib.escape(description, quote=True)
+    og_image_html = html_lib.escape(og_image, quote=True)
+    share_url_html = html_lib.escape(share_url, quote=True)
+    redirect_url_html = html_lib.escape(redirect_url, quote=True)
+    og_type_html = html_lib.escape(og_type, quote=True)
+    redirect_url_js = _js_string_literal(redirect_url)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title}</title>
+    <title>{title_html}</title>
 
   <!-- Open Graph -->
-  <meta property="og:title" content="{title}">
-  <meta property="og:description" content="{description}">
-  <meta property="og:image" content="{og_image}">
-  <meta property="og:url" content="{SITE_URL}/share/{media_id}">
-  <meta property="og:type" content="{og_type}">
+    <meta property="og:title" content="{title_html}">
+    <meta property="og:description" content="{description_html}">
+    <meta property="og:image" content="{og_image_html}">
+    <meta property="og:url" content="{share_url_html}">
+    <meta property="og:type" content="{og_type_html}">
   <meta property="og:site_name" content="Oelala">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="{title}">
-  <meta name="twitter:description" content="{description}">
-  <meta name="twitter:image" content="{og_image}">
+    <meta name="twitter:title" content="{title_html}">
+    <meta name="twitter:description" content="{description_html}">
+    <meta name="twitter:image" content="{og_image_html}">
 
   <!-- Redirect humans to the SPA -->
-  <meta http-equiv="refresh" content="0;url={redirect_url}">
-  <link rel="canonical" href="{SITE_URL}/share/{media_id}">
+    <meta http-equiv="refresh" content="0;url={redirect_url_html}">
+    <link rel="canonical" href="{share_url_html}">
 </head>
 <body>
-  <p>Redirecting… <a href="{redirect_url}">Click here if not redirected.</a></p>
-  <script>window.location.replace("{redirect_url}");</script>
+    <p>Redirecting… <a href="{redirect_url_html}">Click here if not redirected.</a></p>
+    <script>window.location.replace({redirect_url_js});</script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -3873,23 +3920,26 @@ async def get_job_status(prompt_id: str):
     """
     import requests
 
+    safe_prompt_id = _safe_external_id(prompt_id, "prompt ID")
+
     # Check in our active jobs store
-    job_info = active_jobs.get(prompt_id, {})
+    job_info = active_jobs.get(safe_prompt_id, {})
 
     # ── Cloud (RunPod) job handling ──────────────────────────────────────
     if job_info.get("compute_target") == "cloud" and _runpod:
-        return await _handle_cloud_job_status(prompt_id, job_info)
+        return await _handle_cloud_job_status(safe_prompt_id, job_info)
 
     # ── Local ComfyUI job handling ──────────────────────────────────────
     # Check ComfyUI history for completion status
     try:
         history_resp = requests.get(
-            f"http://localhost:8188/history/{prompt_id}", timeout=5
+            f"http://localhost:8188/history/{quote(safe_prompt_id, safe='')}",
+            timeout=5,
         )
         if history_resp.status_code == 200:
             history = history_resp.json()
-            if prompt_id in history:
-                job_data = history[prompt_id]
+            if safe_prompt_id in history:
+                job_data = history[safe_prompt_id]
                 outputs = job_data.get("outputs", {})
 
                 # Find video, image, or audio output
@@ -3941,13 +3991,13 @@ async def get_job_status(prompt_id: str):
                     output_path = _safe_child_path(COMFYUI_OUTPUT_DIR, output_filename)
 
                     # Check if this job has pending post-processing from a chain
-                    if prompt_id in pending_post_processing:
-                        chain_info = pending_post_processing.pop(prompt_id)
+                    if safe_prompt_id in pending_post_processing:
+                        chain_info = pending_post_processing.pop(safe_prompt_id)
                         logger.info(
-                            f"🔄 Continuing post-processing chain for {prompt_id}"
+                            f"🔄 Continuing post-processing chain for {safe_prompt_id}"
                         )
                         await trigger_post_processing_chain(
-                            prompt_id=prompt_id,
+                            prompt_id=safe_prompt_id,
                             video_path=str(output_path),
                             post_processing=chain_info["steps"],
                             user_id=chain_info["user_id"],
@@ -3957,10 +4007,10 @@ async def get_job_status(prompt_id: str):
                     # Check if this is a fresh job with post-processing requested
                     elif job_info.get("post_processing") and output_video:
                         logger.info(
-                            f"🔄 Starting post-processing chain for {prompt_id}"
+                            f"🔄 Starting post-processing chain for {safe_prompt_id}"
                         )
                         await trigger_post_processing_chain(
-                            prompt_id=prompt_id,
+                            prompt_id=safe_prompt_id,
                             video_path=str(output_path),
                             post_processing=job_info["post_processing"],
                             user_id=job_info.get("user_id", "unknown"),
@@ -3968,11 +4018,11 @@ async def get_job_status(prompt_id: str):
                         )
                     if output_path.exists():
                         storage_path = await comfyui.on_job_complete_async(
-                            prompt_id, str(output_path), output_type
+                            safe_prompt_id, str(output_path), output_type
                         )
                         if storage_path:
                             logger.info(
-                                f"✅ Auto-uploaded {output_type} for job {prompt_id}: {storage_path}"
+                                f"✅ Auto-uploaded {output_type} for job {safe_prompt_id}: {storage_path}"
                             )
                             # Generate signed URL for the uploaded content
                             signed_url = get_signed_media_url(
@@ -3980,11 +4030,13 @@ async def get_job_status(prompt_id: str):
                             )  # 24h
 
                 # Record generation completion for stats tracking
-                _local_log = format_comfyui_history_log(prompt_id, job_data)
-                record_generation_complete(prompt_id, success=True, log_text=_local_log)
+                _local_log = format_comfyui_history_log(safe_prompt_id, job_data)
+                record_generation_complete(
+                    safe_prompt_id, success=True, log_text=_local_log
+                )
 
                 return {
-                    "prompt_id": prompt_id,
+                    "prompt_id": safe_prompt_id,
                     "status": "completed",
                     "output_video": output_video,
                     "output_image": output_image,
@@ -3998,7 +4050,7 @@ async def get_job_status(prompt_id: str):
                     **job_info,
                 }
     except Exception as e:
-        logger.warning(f"Error checking history for {prompt_id}: {e}")
+        logger.warning(f"Error checking history for {safe_prompt_id}: {e}")
 
     # Check if it's in the queue
     try:
@@ -4008,23 +4060,27 @@ async def get_job_status(prompt_id: str):
 
             # Check running
             for item in queue_data.get("queue_running", []):
-                if len(item) >= 2 and item[1] == prompt_id:
-                    return {"prompt_id": prompt_id, "status": "running", **job_info}
+                if len(item) >= 2 and item[1] == safe_prompt_id:
+                    return {
+                        "prompt_id": safe_prompt_id,
+                        "status": "running",
+                        **job_info,
+                    }
 
             # Check pending
             for idx, item in enumerate(queue_data.get("queue_pending", [])):
-                if len(item) >= 2 and item[1] == prompt_id:
+                if len(item) >= 2 and item[1] == safe_prompt_id:
                     return {
-                        "prompt_id": prompt_id,
+                        "prompt_id": safe_prompt_id,
                         "status": "pending",
                         "queue_position": idx + 1,
                         **job_info,
                     }
     except Exception as e:
-        logger.warning(f"Error checking queue for {prompt_id}: {e}")
+        logger.warning(f"Error checking queue for {safe_prompt_id}: {e}")
 
     # Not found anywhere - might have failed or been cancelled
-    return {"prompt_id": prompt_id, "status": "unknown", **job_info}
+    return {"prompt_id": safe_prompt_id, "status": "unknown", **job_info}
 
 
 @app.get("/comfyui/output/{filename}")
@@ -4713,7 +4769,7 @@ async def runpod_status(user: User = Depends(get_current_user)):
         }
     except Exception as e:
         logger.error(f"RunPod status check failed: {e}")
-        return {"available": False, "reason": str(e)}
+        return {"available": False, "reason": "RunPod status check failed"}
 
 
 @app.get("/runpod/health")
@@ -7109,7 +7165,7 @@ async def comfyui_status():
                 "available": True,
                 "host": comfyui.host,
                 "port": comfyui.port,
-                "stats_error": str(e),
+                "stats_error": "Unable to fetch ComfyUI system stats",
             }
     else:
         return {
@@ -9183,7 +9239,7 @@ async def youtube_info(
     import subprocess
     import shutil
 
-    url = request.url.strip()
+    url = _validate_youtube_url(request.url)
     if not url:
         raise HTTPException(400, "URL is required")
 
@@ -9222,10 +9278,11 @@ async def youtube_info(
     except subprocess.TimeoutExpired:
         raise HTTPException(408, "Request timeout fetching video info")
     except json.JSONDecodeError as e:
-        raise HTTPException(500, f"Failed to parse yt-dlp output: {e}")
+        logger.error(f"YouTube info parse error: {e}")
+        raise HTTPException(500, "Failed to parse video metadata")
     except Exception as e:
         logger.error(f"YouTube info error: {e}")
-        raise HTTPException(500, f"Failed to fetch video info: {e}")
+        raise HTTPException(500, "Failed to fetch video info")
 
 
 @app.post("/youtube/download")
@@ -9239,7 +9296,7 @@ async def youtube_download(
     import subprocess
     import shutil
 
-    url = request.url.strip()
+    url = _validate_youtube_url(request.url)
     if not url:
         raise HTTPException(400, "URL is required")
 
@@ -9335,7 +9392,7 @@ async def youtube_download(
         raise
     except Exception as e:
         logger.error(f"YouTube download error: {e}")
-        raise HTTPException(500, f"Download failed: {e}")
+        raise HTTPException(500, "Download failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

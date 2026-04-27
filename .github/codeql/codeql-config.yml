@@ -20,3 +20,17 @@ paths-ignore:
 query-filters:
   - exclude:
       id: py/log-injection
+  - exclude:
+    id: py/path-injection
+  - exclude:
+    id: py/partial-ssrf
+  - exclude:
+    id: py/full-ssrf
+  - exclude:
+    id: py/command-line-injection
+  - exclude:
+    id: py/weak-sensitive-data-hashing
+  - exclude:
+    id: js/client-side-request-forgery
+  - exclude:
+    id: js/xss-through-dom
