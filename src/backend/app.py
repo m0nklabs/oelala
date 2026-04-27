@@ -5,7 +5,10 @@ FastAPI application for AI Video Generation Pipeline
 """
 
 import io
+import ipaddress
 import os
+import posixpath
+import socket
 import sys
 import time
 
@@ -77,6 +80,7 @@ import logging
 from datetime import datetime, timezone
 import json
 import re
+from urllib.parse import unquote, urlparse
 from collections import deque
 import uuid
 from PIL import Image
@@ -661,6 +665,152 @@ COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+SAFE_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@()+,= -]{0,254}$")
+MAX_STORAGE_KEY_LENGTH = 1024
+MAX_METADATA_IMAGE_BYTES = 20 * 1024 * 1024
+BLOCKED_METADATA_HOSTS = {"localhost", "localhost.localdomain"}
+ALLOWED_USER_MEDIA_TYPES = {"images", "videos", "audio", "uploads"}
+
+
+def _normalize_storage_key(key: str, *, allow_subdirectories: bool = True) -> str:
+    """Normalize a MinIO object key and reject traversal or unsafe path segments."""
+    raw_key = str(key or "")
+    if (
+        not raw_key
+        or len(raw_key) > MAX_STORAGE_KEY_LENGTH
+        or "\x00" in raw_key
+        or "\\" in raw_key
+        or raw_key.startswith("/")
+    ):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    normalized = posixpath.normpath(raw_key)
+    if normalized in ("", ".", "..") or normalized.startswith("../"):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not allow_subdirectories and "/" in normalized:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    segments = normalized.split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if any(not SAFE_PATH_SEGMENT_RE.fullmatch(segment) for segment in segments):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    return normalized
+
+
+def _safe_filename(filename: str, *, default: str = "file") -> str:
+    """Return a validated basename for user-facing file routes."""
+    raw_name = str(filename or default).replace("\\", "/")
+    basename = posixpath.basename(raw_name)
+    return _normalize_storage_key(basename, allow_subdirectories=False)
+
+
+def _safe_child_path(base_dir: Path, filename: str) -> Path:
+    """Resolve a validated filename under a fixed directory."""
+    safe_name = _safe_filename(filename)
+    base = base_dir.resolve()
+    candidate = (base / safe_name).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid file path") from exc
+    return candidate
+
+
+def _find_existing_media_path(media_ref: str) -> Optional[str]:
+    """Resolve an existing media reference under known local media roots."""
+    ref = str(media_ref or "").strip()
+    if not ref:
+        return None
+
+    parsed = urlparse(ref)
+    ref_path = unquote(parsed.path if parsed.scheme in {"http", "https"} else ref)
+    if ref_path.startswith(("/media/", "/generated/", "/uploads/", "/ComfyUI/output/")):
+        ref_path = ref_path.lstrip("/")
+    workspace_root = Path("/home/flip/oelala").resolve()
+    allowed_roots = (
+        OUTPUT_DIR.resolve(),
+        COMFYUI_OUTPUT_DIR.resolve(),
+        UPLOAD_DIR.resolve(),
+        (workspace_root / "media").resolve(),
+        (workspace_root / "generated").resolve(),
+    )
+
+    if Path(ref_path).is_absolute():
+        candidate = Path(ref_path).resolve()
+        for root in allowed_roots:
+            try:
+                candidate.relative_to(root)
+                return str(candidate) if candidate.exists() else None
+            except ValueError:
+                continue
+        raise HTTPException(status_code=400, detail="Invalid media path")
+
+    normalized = _normalize_storage_key(ref_path)
+    for prefix in ("media/", "generated/", "uploads/", "ComfyUI/output/"):
+        if normalized.startswith(prefix):
+            candidate = (workspace_root / normalized).resolve()
+            for root in allowed_roots:
+                try:
+                    candidate.relative_to(root)
+                    return str(candidate) if candidate.exists() else None
+                except ValueError:
+                    continue
+            raise HTTPException(status_code=400, detail="Invalid media path")
+
+    safe_filename = _safe_filename(normalized)
+    for search_dir in (OUTPUT_DIR, COMFYUI_OUTPUT_DIR, UPLOAD_DIR):
+        candidate = _safe_child_path(search_dir, safe_filename)
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def _safe_user_media_type(media_type: str) -> str:
+    """Validate a user media type path segment."""
+    safe_type = _normalize_storage_key(media_type, allow_subdirectories=False)
+    if safe_type not in ALLOWED_USER_MEDIA_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid media type")
+    return safe_type
+
+
+def _validate_public_image_url(image_url: str) -> str:
+    """Validate a user-provided image URL before server-side fetching."""
+    url = str(image_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname in BLOCKED_METADATA_HOSTS or hostname.endswith(".local"):
+        raise HTTPException(status_code=400, detail="Image URL host is not allowed")
+
+    try:
+        addresses = socket.getaddrinfo(
+            hostname,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except socket.gaierror as exc:
+        raise HTTPException(status_code=400, detail="Image URL host is invalid") from exc
+
+    for address in addresses:
+        ip = ipaddress.ip_address(address[4][0])
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            raise HTTPException(status_code=400, detail="Image URL host is not allowed")
+
+    return url
+
 
 async def _save_upload(file: UploadFile, dest: Path) -> bytes:
     """Save an UploadFile to disk, returning the raw bytes.
@@ -719,6 +869,7 @@ def _storage_proxy_response(
     ETag / Last-Modified for caching, and CORS headers compatible with
     Cloudflare caching.
     """
+    key = _normalize_storage_key(key)
     storage = get_storage_client()
 
     range_header = request.headers.get("range")
@@ -1611,7 +1762,8 @@ async def list_comfyui_media(
                 img.close()
                 item["metadata"] = metadata
             except Exception as e:
-                item["metadata"] = {"has_metadata": False, "error": str(e)}
+                logger.debug("Metadata extraction failed for %s: %s", file_path.name, e)
+                item["metadata"] = {"has_metadata": False, "error": "metadata unavailable"}
 
         # For videos, try to find associated PNG with same timestamp or base name
         if include_metadata and media_type == "video":
@@ -1865,15 +2017,16 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
     logger.info(f"🗑️ Delete request for {len(request.filenames)} files")
 
     for filename in request.filenames:
+        safe_filename = _safe_filename(filename)
         found = False
 
         # Try storage buckets first
         for bucket in ("comfyui-local", "generated"):
             try:
-                if storage.delete(bucket, filename):
-                    deleted.append(filename)
+                if storage.delete(bucket, safe_filename):
+                    deleted.append(safe_filename)
                     found = True
-                    logger.info(f"   ✅ Deleted from storage/{bucket}: {filename}")
+                    logger.info(f"   ✅ Deleted from storage/{bucket}: {safe_filename}")
                     break
             except Exception:
                 continue
@@ -1881,23 +2034,24 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
         # Fallback: try local ComfyUI output dir (ComfyUI may write here directly)
         if not found:
             comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
-            file_path = comfyui_output / filename
+            file_path = _safe_child_path(comfyui_output, safe_filename)
             if (
                 str(file_path.resolve()).startswith(str(comfyui_output.resolve()))
                 and file_path.exists()
             ):
                 try:
                     file_path.unlink()
-                    deleted.append(filename)
+                    deleted.append(safe_filename)
                     found = True
-                    logger.info(f"   ✅ Deleted from local ComfyUI: {filename}")
+                    logger.info(f"   ✅ Deleted from local ComfyUI: {safe_filename}")
                 except Exception as e:
-                    errors.append({"filename": filename, "error": str(e)})
+                    logger.warning(f"Failed to delete local ComfyUI media {safe_filename}: {e}")
+                    errors.append({"filename": safe_filename, "error": "delete failed"})
                     found = True
 
         if not found:
-            errors.append({"filename": filename, "error": "File not found"})
-            logger.warning(f"   ⚠️ Not found: {filename}")
+            errors.append({"filename": safe_filename, "error": "File not found"})
+            logger.warning(f"   ⚠️ Not found: {safe_filename}")
 
     logger.info(f"🗑️ Delete complete: {len(deleted)} deleted, {len(errors)} errors")
     return {"deleted": deleted, "errors": errors, "count": len(deleted)}
@@ -2466,7 +2620,7 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
         raise
     except Exception as e:
         logger.error(f"AI suggest error: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail=str(e) or type(e).__name__)
+        raise HTTPException(status_code=500, detail="AI suggestion failed")
 
 
 @app.get("/unet-models")
@@ -2903,25 +3057,41 @@ def _resolve_lora_path(name: str) -> tuple[Path, str] | tuple[None, None]:
 
     Returns (full_path, filename) or (None, None) if not found.
     """
+    try:
+        name = _normalize_storage_key(name)
+    except HTTPException:
+        return None, None
+
+    lora_root = LORA_DIR.resolve()
+
     # Try exact path first (may include extension and/or subdirectory)
-    exact = LORA_DIR / name
+    exact = (lora_root / name).resolve()
     if exact.is_file():
-        return exact, name
+        try:
+            return exact, str(exact.relative_to(lora_root))
+        except ValueError:
+            return None, None
 
     # Try adding .safetensors extension
-    with_ext = LORA_DIR / f"{name}.safetensors"
+    with_ext = (lora_root / f"{name}.safetensors").resolve()
     if with_ext.is_file():
-        return with_ext, f"{name}.safetensors"
+        try:
+            return with_ext, str(with_ext.relative_to(lora_root))
+        except ValueError:
+            return None, None
+
+    if "/" in name:
+        return None, None
 
     # Search subdirectories for exact filename match
-    for match in LORA_DIR.rglob(f"{name}"):
+    for match in lora_root.rglob(name):
         if match.is_file():
-            return match, str(match.relative_to(LORA_DIR))
+            return match, str(match.relative_to(lora_root))
 
     # Search subdirectories with extension added
-    for match in LORA_DIR.rglob(f"{name}.safetensors"):
+    for match in lora_root.rglob(f"{name}.safetensors"):
         if match.is_file():
-            return match, str(match.relative_to(LORA_DIR))
+            return match, str(match.relative_to(lora_root))
 
     return None, None
 
@@ -3249,7 +3419,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
         # Generate filename
         timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
-        orig_name = f.get("filename", f"output_{i:03d}.mp4")
+        orig_name = _safe_filename(f.get("filename", f"output_{i:03d}.mp4"))
         ext = Path(orig_name).suffix or ".mp4"
         save_name = f"cloud_wan22_{timestamp}_{i:03d}{ext}"
 
@@ -3731,19 +3901,25 @@ async def get_job_status(prompt_id: str):
                     if "gifs" in node_output:
                         for gif in node_output["gifs"]:
                             if gif.get("type") == "output":
-                                output_video = f"/comfyui/output/{gif['filename']}"
+                                output_video = (
+                                    f"/comfyui/output/{_safe_filename(gif.get('filename'))}"
+                                )
                                 break
                     # Image output (SaveImage)
                     if "images" in node_output:
                         for img in node_output["images"]:
                             if img.get("type") == "output":
-                                output_image = f"/comfyui/output/{img['filename']}"
+                                output_image = (
+                                    f"/comfyui/output/{_safe_filename(img.get('filename'))}"
+                                )
                                 break
                     # Audio output (SaveAudio, SaveAudioMP3, SaveAudioOpus)
                     if "audio" in node_output:
                         for audio in node_output["audio"]:
                             if audio.get("type") == "output":
-                                output_audio = f"/comfyui/output/{audio['filename']}"
+                                output_audio = (
+                                    f"/comfyui/output/{_safe_filename(audio.get('filename'))}"
+                                )
                                 break
 
                 # Auto-upload to user storage if this is a registered job
@@ -3762,7 +3938,7 @@ async def get_job_status(prompt_id: str):
                         output_type = "audio"
                         output_filename = output_audio.split("/")[-1]
 
-                    output_path = COMFYUI_OUTPUT_DIR / output_filename
+                    output_path = _safe_child_path(COMFYUI_OUTPUT_DIR, output_filename)
 
                     # Check if this job has pending post-processing from a chain
                     if prompt_id in pending_post_processing:
@@ -3854,20 +4030,23 @@ async def get_job_status(prompt_id: str):
 @app.get("/comfyui/output/{filename}")
 async def get_comfyui_output(filename: str, request: Request):
     """Serve ComfyUI output files via MinIO proxy."""
-    return _storage_proxy_response("comfyui-local", filename, request)
+    safe_filename = _safe_filename(filename)
+    return _storage_proxy_response("comfyui-local", safe_filename, request)
 
 
 @app.get("/media/generated/cloud-wan22/{filename}")
 async def get_cloud_wan22_media(filename: str, request: Request):
     """Serve Cloud Wan22 output files via MinIO proxy."""
-    return _storage_proxy_response("generated", f"cloud-wan22/{filename}", request)
+    safe_filename = _safe_filename(filename)
+    return _storage_proxy_response("generated", f"cloud-wan22/{safe_filename}", request)
 
 
 # Legacy alias — existing storage data is under cloud-max/
 @app.get("/media/generated/cloud-max/{filename}")
 async def get_cloud_max_media_legacy(filename: str, request: Request):
     """Backwards-compat: serve old cloud-max output files."""
-    return _storage_proxy_response("generated", f"cloud-max/{filename}", request)
+    safe_filename = _safe_filename(filename)
+    return _storage_proxy_response("generated", f"cloud-max/{safe_filename}", request)
 
 
 @app.get("/loras/download/{filename:path}")
@@ -3880,12 +4059,13 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
     """
     import hmac as _hmac_mod
 
-    expected = _lora_download_token(filename)
+    safe_filename = _normalize_storage_key(filename)
+    expected = _lora_download_token(safe_filename)
     if not _hmac_mod.compare_digest(token, expected):
-        logger.warning(f"⚠️ Invalid LoRA download token for: {filename}")
+        logger.warning(f"⚠️ Invalid LoRA download token for: {safe_filename}")
         raise HTTPException(status_code=403, detail="Invalid download token")
 
-    lora_path, resolved_name = _resolve_lora_path(filename)
+    lora_path, resolved_name = _resolve_lora_path(safe_filename)
     if not lora_path:
         raise HTTPException(status_code=404, detail="LoRA not found")
 
@@ -3910,9 +4090,10 @@ async def get_generated_media(
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
+    safe_filename = _normalize_storage_key(filename)
     return _storage_proxy_response(
         "generated",
-        filename,
+        safe_filename,
         request,
         cache_control="public, max-age=31536000, immutable",
     )
@@ -3935,13 +4116,11 @@ async def unified_storage_proxy(bucket: str, key: str, request: Request):
     if bucket not in ALLOWED_STORAGE_BUCKETS:
         raise HTTPException(status_code=404, detail="Bucket not found")
 
-    # Reject path traversal
-    if ".." in key:
-        raise HTTPException(status_code=400, detail="Invalid key")
+    safe_key = _normalize_storage_key(key)
 
     return _storage_proxy_response(
         bucket,
-        key,
+        safe_key,
         request,
         cache_control="public, max-age=3600, must-revalidate",
     )
@@ -3959,7 +4138,8 @@ async def get_comfyui_metadata(filename: str, user: User = Depends(get_current_u
 
     # Check local ComfyUI output directory first
     output_path = None
-    candidate = COMFYUI_OUTPUT_DIR / filename
+    safe_filename = _safe_filename(filename)
+    candidate = _safe_child_path(COMFYUI_OUTPUT_DIR, safe_filename)
     if candidate.exists():
         output_path = candidate
 
@@ -3967,7 +4147,7 @@ async def get_comfyui_metadata(filename: str, user: User = Depends(get_current_u
     tmp_file = None
     if not output_path:
         storage = get_storage_client()
-        ext = Path(filename).suffix.lower()
+        ext = Path(safe_filename).suffix.lower()
         subfolder = (
             "videos"
             if ext in [".mp4", ".webm", ".mov"]
@@ -3976,8 +4156,8 @@ async def get_comfyui_metadata(filename: str, user: User = Depends(get_current_u
 
         # Check user bucket first, then public generated bucket
         sources = [
-            ("users", f"{user.id}/{subfolder}/{filename}"),
-            ("generated", filename),
+            ("users", f"{user.id}/{subfolder}/{safe_filename}"),
+            ("generated", safe_filename),
         ]
 
         for bucket, key in sources:
@@ -4040,15 +4220,15 @@ async def get_comfyui_metadata(filename: str, user: User = Depends(get_current_u
                     metadata = json.loads(img.text["workflow"])
 
         if metadata:
-            return {"metadata": metadata, "filename": filename}
+            return {"metadata": metadata, "filename": safe_filename}
         else:
             raise HTTPException(status_code=404, detail="No metadata found in file")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to extract metadata from {filename}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to extract metadata from {safe_filename}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to extract metadata")
     finally:
         # Clean up temp file if we downloaded from storage
         if tmp_file:
@@ -4090,7 +4270,7 @@ async def cancel_job(prompt_id: str):
         return {"success": True, "prompt_id": prompt_id}
     except Exception as e:
         logger.error(f"Failed to cancel job {prompt_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to cancel job")
 
 
 @app.post("/extract-metadata")
@@ -4106,19 +4286,11 @@ async def extract_metadata(file: UploadFile = File(...)):
 
     Returns extracted metadata or empty dict if none found.
     """
-    import tempfile
-
-    # Save uploaded file temporarily
-    suffix = Path(file.filename).suffix if file.filename else ".png"
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-
+    content = await file.read()
     metadata = {}
     try:
         # Try to read PNG metadata
-        img = Image.open(tmp_path)
+        img = Image.open(io.BytesIO(content))
 
         # Check for various metadata formats
         if hasattr(img, "info"):
@@ -4236,16 +4408,6 @@ async def extract_metadata(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract metadata from {file.filename}: {e}")
-    finally:
-        # Cleanup temp file
-        try:
-            Path(tmp_path).unlink()
-        except FileNotFoundError:
-            logger.debug(
-                f"🐛 Temp file already removed or missing during cleanup: {tmp_path}"
-            )
-        except OSError as e:
-            logger.warning(f"⚠️ Failed to remove temp file {tmp_path}: {e}")
 
     return metadata
 
@@ -4260,26 +4422,23 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
     Extract workflow/prompt metadata from an image URL.
     Supports ComfyUI output URLs and local backend URLs.
     """
-    import tempfile
-
-    image_url = request.image_url
+    image_url = _validate_public_image_url(request.image_url)
     metadata = {}
-    tmp_path = None
 
     try:
         # Download image from URL
         async with httpx.AsyncClient() as client:
-            response = await client.get(image_url, timeout=30.0)
+            response = await client.get(image_url, timeout=30.0, follow_redirects=False)
             response.raise_for_status()
             content = response.content
-
-        # Save to temp file
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
+        content_type = response.headers.get("content-type", "").lower()
+        if "image/" not in content_type:
+            raise HTTPException(status_code=400, detail="URL did not return an image")
+        if len(content) > MAX_METADATA_IMAGE_BYTES:
+            raise HTTPException(status_code=400, detail="Image is too large")
 
         # Extract metadata (same logic as file upload)
-        img = Image.open(tmp_path)
+        img = Image.open(io.BytesIO(content))
 
         if hasattr(img, "info"):
             info = img.info
@@ -4368,16 +4527,11 @@ async def extract_metadata_from_url(request: ExtractMetadataURLRequest):
 
         logger.info(f"📋 Extracted metadata from URL: {list(metadata.keys())}")
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract metadata from URL: {e}")
-        metadata["error"] = str(e)
-    finally:
-        if tmp_path:
-            try:
-                Path(tmp_path).unlink()
-            except Exception:
-                # Failed to cleanup temp file, not critical
-                pass
+        metadata["error"] = "Failed to extract metadata from URL"
 
     return metadata
 
@@ -4421,7 +4575,8 @@ async def deep_health_check():
         else:
             checks["comfyui"] = {"ok": False, "error": "client not loaded"}
     except Exception as e:
-        checks["comfyui"] = {"ok": False, "error": str(e)}
+        logger.warning(f"ComfyUI health check failed: {e}")
+        checks["comfyui"] = {"ok": False, "error": "ComfyUI health check failed"}
 
     # MinIO storage
     try:
@@ -4431,7 +4586,8 @@ async def deep_health_check():
         _sh = _sc.health()
         checks["storage"] = {"ok": _sh.get("status") == "healthy", "backend": "minio"}
     except Exception as e:
-        checks["storage"] = {"ok": False, "error": f"MinIO health check failed: {e}"}
+        logger.warning(f"MinIO health check failed: {e}")
+        checks["storage"] = {"ok": False, "error": "MinIO health check failed"}
 
     # Supabase
     try:
@@ -4449,7 +4605,8 @@ async def deep_health_check():
         else:
             checks["supabase"] = {"ok": False, "error": "not configured"}
     except Exception as e:
-        checks["supabase"] = {"ok": False, "error": str(e)}
+        logger.warning(f"Supabase health check failed: {e}")
+        checks["supabase"] = {"ok": False, "error": "Supabase health check failed"}
 
     # Disk space
     try:
@@ -4461,7 +4618,8 @@ async def deep_health_check():
             "used_pct": round(disk.used / disk.total * 100, 1),
         }
     except Exception as e:
-        checks["disk"] = {"ok": False, "error": str(e)}
+        logger.warning(f"Disk health check failed: {e}")
+        checks["disk"] = {"ok": False, "error": "Disk health check failed"}
 
     all_ok = all(c.get("ok", False) for c in checks.values())
     return {
@@ -4568,7 +4726,8 @@ async def runpod_endpoint_health(user: User = Depends(get_current_user)):
         health = await _runpod.get_endpoint_health()
         return {"status": "ok", "endpoint_id": _runpod.default_endpoint_id, **health}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        logger.warning(f"RunPod health check failed: {e}")
+        return {"status": "error", "error": "RunPod health check failed"}
 
 
 @app.get("/runpod/job/{job_id}")
@@ -4589,7 +4748,8 @@ async def runpod_job_status(job_id: str, user: User = Depends(get_current_user))
             "completed_at": job.completed_at,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"RunPod job status failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get RunPod job status")
 
 
 @app.post("/runpod/cancel/{job_id}")
@@ -4637,7 +4797,7 @@ async def runpod_submit_workflow(
         }
     except Exception as e:
         logger.error(f"RunPod submit failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="RunPod submit failed")
 
 
 def _parse_mtime(val) -> float:
@@ -5021,7 +5181,7 @@ async def list_unified_media(
 
     except Exception as e:
         logger.error(f"Failed to list unified media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to list media")
 
 
 @app.get("/user/media")
@@ -5120,11 +5280,13 @@ async def get_user_media(
     Supports HTTP Range requests for video/audio seeking.
     """
     try:
+        safe_media_type = _safe_user_media_type(media_type)
+        safe_filename = _safe_filename(filename)
         storage = get_storage_client()
-        debug_log(f"🔍 serving media {media_type}/{filename} for user {user.id}")
+        debug_log(f"🔍 serving media {safe_media_type}/{safe_filename} for user {user.id}")
 
         # Determine content type
-        ext = Path(filename).suffix.lower()
+        ext = Path(safe_filename).suffix.lower()
         content_types = {
             ".png": "image/png",
             ".jpg": "image/jpeg",
@@ -5142,10 +5304,10 @@ async def get_user_media(
         content_type = content_types.get(ext, "application/octet-stream")
 
         bucket = f"users/{user.id}"
-        storage_key = f"{media_type}/{filename}"
+        storage_key = f"{safe_media_type}/{safe_filename}"
 
         headers = {
-            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Disposition": f'inline; filename="{safe_filename}"',
             "Accept-Ranges": "bytes",
             "Vary": "Origin",
         }
@@ -5232,10 +5394,12 @@ async def get_user_media_workflow(
     import tempfile
 
     try:
+        safe_media_type = _safe_user_media_type(media_type)
+        safe_filename = _safe_filename(filename)
         storage = get_storage_client()
-        data = storage.get_user_media(user.id, media_type, filename)
+        data = storage.get_user_media(user.id, safe_media_type, safe_filename)
 
-        ext = Path(filename).suffix.lower()
+        ext = Path(safe_filename).suffix.lower()
 
         # Write to temp file for ffprobe/exiftool analysis
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
@@ -5307,7 +5471,7 @@ async def get_user_media_workflow(
         raise
     except Exception as e:
         logger.error(f"Failed to extract workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to extract workflow")
 
 
 class MediaMoveRequest(BaseModel):
@@ -5322,7 +5486,10 @@ async def move_media(req: MediaMoveRequest, user: User = Depends(get_current_use
     try:
         storage = get_storage_client()
         success = storage.move_user_media(
-            user.id, req.media_type, req.src_filename, req.dest_filename
+            user.id,
+            _safe_user_media_type(req.media_type),
+            _safe_filename(req.src_filename),
+            _safe_filename(req.dest_filename),
         )
         if not success:
             raise HTTPException(
@@ -5331,7 +5498,7 @@ async def move_media(req: MediaMoveRequest, user: User = Depends(get_current_use
         return {"success": True, "message": "Moved successfully"}
     except Exception as e:
         logger.error(f"Error moving media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to move media")
 
 
 @app.post("/api/media/batch-download-zip")
@@ -5487,23 +5654,26 @@ async def upload_user_media(
         data = await file.read()
 
         # Generate unique filename if needed
-        filename = file.filename or f"{uuid.uuid4()}{Path(file.filename or '').suffix}"
+        filename = _safe_filename(
+            file.filename or f"{uuid.uuid4()}{Path(file.filename or '').suffix}"
+        )
+        safe_media_type = _safe_user_media_type(media_type)
 
         result = storage.put_user_media(
-            user.id, media_type, filename, data, file.content_type
+            user.id, safe_media_type, filename, data, file.content_type
         )
 
         return {
             "success": True,
             "filename": filename,
-            "url": f"/user/media/{media_type}/{filename}",
+            "url": f"/user/media/{safe_media_type}/{filename}",
             "size": len(data),
             **result,
         }
 
     except Exception as e:
         logger.error(f"Failed to upload user media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to upload media")
 
 
 @app.delete("/user/media/{media_type}/{filename:path}")
@@ -5514,19 +5684,21 @@ async def delete_user_media(
     Delete a user's media file.
     """
     try:
+        safe_media_type = _safe_user_media_type(media_type)
+        safe_filename = _safe_filename(filename)
         storage = get_storage_client()
-        success = storage.delete_user_media(user.id, media_type, filename)
+        success = storage.delete_user_media(user.id, safe_media_type, safe_filename)
 
         if not success:
             raise HTTPException(status_code=404, detail="Media not found")
 
-        return {"success": True, "deleted": filename}
+        return {"success": True, "deleted": safe_filename}
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to delete user media: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to delete media")
 
 
 @app.get("/user/profile")
@@ -5561,7 +5733,7 @@ async def get_user_storage_quota(user: User = Depends(get_current_user)):
         logger.error(f"❌ Failed to get storage quota: {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": "Failed to get storage quota",
             "data": {
                 "used_bytes": 0,
                 "quota_bytes": 0,
@@ -5624,10 +5796,10 @@ async def get_presets(category: str = None):
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse registry.json: {e}")
-        return {"presets": [], "error": f"Invalid JSON: {str(e)}"}
+        return {"presets": [], "error": "Invalid workflow registry"}
     except Exception as e:
         logger.error(f"Error loading presets: {e}")
-        return {"presets": [], "error": str(e)}
+        return {"presets": [], "error": "Failed to load presets"}
 
 
 @app.get("/api/presets/{preset_id}")
@@ -5661,7 +5833,7 @@ async def get_preset(preset_id: str):
         raise
     except Exception as e:
         logger.error(f"Error loading preset {preset_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to load preset")
 
 
 @app.post("/restart")
@@ -5687,14 +5859,15 @@ async def restart_backend():
 @app.get("/files/{filename}")
 async def get_file(filename: str, request: Request):
     """Serve generated files via MinIO proxy, with local fallback."""
+    safe_filename = _safe_filename(filename)
     # Try storage first (new path)
     try:
-        return _storage_proxy_response("generated", filename, request)
+        return _storage_proxy_response("generated", safe_filename, request)
     except HTTPException:
         pass
 
     # Fallback to local OUTPUT_DIR for legacy files
-    file_path = OUTPUT_DIR / filename
+    file_path = _safe_child_path(OUTPUT_DIR, safe_filename)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     ext = file_path.suffix.lower()
@@ -5707,7 +5880,7 @@ async def get_file(filename: str, request: Request):
         ".jpeg": "image/jpeg",
         ".webp": "image/webp",
     }.get(ext, "application/octet-stream")
-    return FileResponse(file_path, media_type=media_type, filename=filename)
+    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
 
 
 @app.post("/client-log")
@@ -6294,11 +6467,9 @@ async def _submit_to_runpod(
     # Save generation artifacts to user storage bucket
     _img_path = None
     if job_info.get("input_image"):
-        _candidate = UPLOAD_DIR / job_info["input_image"]
-        if _candidate.exists():
-            _img_path = str(_candidate)
+        _img_path = _find_existing_media_path(job_info["input_image"])
     elif input_image_path:
-        _img_path = input_image_path
+        _img_path = _find_existing_media_path(input_image_path)
     save_gen_start_artifacts(
         user_id=user_id,
         prompt_id=prompt_id,
@@ -6791,33 +6962,22 @@ async def post_process_media(
         for upload_file in files:
             if upload_file.filename:
                 # Save to temp location
-                temp_path = (
-                    UPLOAD_DIR / f"pp_{uuid.uuid4().hex[:8]}_{upload_file.filename}"
+                temp_filename = _safe_filename(
+                    f"pp_{uuid.uuid4().hex[:8]}_{upload_file.filename}"
                 )
+                temp_path = _safe_child_path(UPLOAD_DIR, temp_filename)
                 content = await upload_file.read()
                 temp_path.write_bytes(content)
                 input_paths.append(str(temp_path))
-                logger.info(f"   📤 Uploaded: {upload_file.filename}")
+                logger.info(f"   📤 Uploaded: {temp_filename}")
 
     # Handle existing media references
     for media_ref in existing_media:
-        # Could be a filename or full path
-        if media_ref.startswith("/"):
-            # Absolute path
-            input_paths.append(media_ref)
-        elif media_ref.startswith("generated/") or media_ref.startswith("media/"):
-            # Relative to workspace
-            full_path = Path("/home/flip/oelala") / media_ref
-            input_paths.append(str(full_path))
+        resolved_media = _find_existing_media_path(media_ref)
+        if resolved_media:
+            input_paths.append(resolved_media)
         else:
-            # Just filename - check common locations
-            for search_dir in [OUTPUT_DIR, COMFYUI_OUTPUT_DIR, UPLOAD_DIR]:
-                candidate = search_dir / media_ref
-                if candidate.exists():
-                    input_paths.append(str(candidate))
-                    break
-            else:
-                logger.warning(f"   ⚠️ Could not find media: {media_ref}")
+            logger.warning(f"   ⚠️ Could not find media: {media_ref}")
 
     if not input_paths:
         raise HTTPException(status_code=400, detail="No input media provided")
@@ -6884,7 +7044,7 @@ async def post_process_media(
         prompt_id = await comfyui.queue_prompt(workflow)
     except Exception as e:
         logger.error(f"❌ Failed to queue post-process workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to queue post-process workflow")
 
     # Store job info
     job_info = {
@@ -7090,8 +7250,8 @@ async def generate_pose_video(
 
     # Save uploaded file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"pose_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
+    input_filename = _safe_filename(f"pose_{timestamp}_{file.filename}")
+    input_path = _safe_child_path(UPLOAD_DIR, input_filename)
     await _save_upload(file, input_path)
 
     # Upload to ComfyUI
@@ -7243,8 +7403,8 @@ async def caption_image(
 
     # Save uploaded file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = f"caption_{timestamp}_{file.filename}"
-    input_path = UPLOAD_DIR / input_filename
+    input_filename = _safe_filename(f"caption_{timestamp}_{file.filename}")
+    input_path = _safe_child_path(UPLOAD_DIR, input_filename)
     await _save_upload(file, input_path)
 
     # Clamp detail_level
@@ -8986,7 +9146,7 @@ async def guardian_status():
             "available": False,
             "base_url": GUARDIAN_BASE,
             "configured_model": GUARDIAN_MODEL,
-            "error": str(e),
+            "error": "Guardian status check failed",
         }
 
 
@@ -9109,7 +9269,7 @@ async def youtube_download(
         format_selector = quality_map.get(request.quality, quality_map["720p"])
         format_args = ["-f", format_selector, "--merge-output-format", "mp4"]
 
-    output_path = UPLOAD_DIR / output_filename
+    output_path = _safe_child_path(UPLOAD_DIR, output_filename)
 
     try:
         # Download with yt-dlp
@@ -9220,7 +9380,7 @@ async def caption_video(
     elif file:
         # Save uploaded video
         upload_filename = f"v2t_input_{uuid.uuid4().hex[:8]}.mp4"
-        upload_path = UPLOAD_DIR / upload_filename
+        upload_path = _safe_child_path(UPLOAD_DIR, upload_filename)
 
         with open(upload_path, "wb") as f:
             content = await file.read()
@@ -9309,7 +9469,7 @@ This video appears to contain visual content that could be further analyzed with
 
     except Exception as e:
         logger.error(f"❌ V2T error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Video analysis failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9398,13 +9558,11 @@ async def voice_clone(
     output_id = uuid.uuid4().hex[:8]
 
     # Resolve voice sample path
-    voice_path = request.voice_sample_path
-    if not voice_path.startswith("/"):
-        voice_path = str(UPLOAD_DIR / voice_path)
+    voice_path = _find_existing_media_path(request.voice_sample_path)
 
     # Check if file exists
-    if not Path(voice_path).exists():
-        raise HTTPException(400, f"Voice sample not found: {voice_path}")
+    if not voice_path or not Path(voice_path).exists():
+        raise HTTPException(400, "Voice sample not found")
 
     try:
         # Map model to model_type
@@ -9453,7 +9611,7 @@ async def voice_clone(
 
     except Exception as e:
         logger.error(f"❌ Voice clone error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Voice clone failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9551,7 +9709,7 @@ async def generate_lip_sync(
 
     except Exception as e:
         logger.error(f"❌ Lip sync error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Lip sync failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9858,7 +10016,7 @@ async def interpolate_video(
 
     # Save uploaded video
     upload_filename = f"interpolate_input_{uuid.uuid4().hex[:8]}.mp4"
-    upload_path = UPLOAD_DIR / upload_filename
+    upload_path = _safe_child_path(UPLOAD_DIR, upload_filename)
 
     try:
         with open(upload_path, "wb") as f:
@@ -9956,7 +10114,7 @@ async def interpolate_video(
 
     except Exception as e:
         logger.error(f"❌ Interpolation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Interpolation failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -10006,26 +10164,28 @@ async def generate_v2v(
 @app.get("/videos/{filename}")
 async def get_video(filename: str, request: Request):
     """Download generated video file via MinIO proxy."""
+    safe_filename = _safe_filename(filename)
     try:
-        return _storage_proxy_response("generated", filename, request)
+        return _storage_proxy_response("generated", safe_filename, request)
     except HTTPException:
         pass
     # Fallback to local OUTPUT_DIR
-    file_path = OUTPUT_DIR / filename
+    file_path = _safe_child_path(OUTPUT_DIR, safe_filename)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
-    return FileResponse(path=file_path, media_type="video/mp4", filename=filename)
+    return FileResponse(path=file_path, media_type="video/mp4", filename=safe_filename)
 
 
 @app.get("/images/{filename}")
 async def get_image(filename: str):
     """Download uploaded image file"""
-    file_path = UPLOAD_DIR / filename
+    safe_filename = _safe_filename(filename)
+    file_path = _safe_child_path(UPLOAD_DIR, safe_filename)
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image file not found")
 
-    return FileResponse(path=file_path, media_type="image/jpeg", filename=filename)
+    return FileResponse(path=file_path, media_type="image/jpeg", filename=safe_filename)
 
 
 @app.get("/list-videos")
@@ -10113,14 +10273,14 @@ async def train_lora_model(
     training_id = f"lora_{timestamp}"
 
     # Create training directory
-    training_dir = UPLOAD_DIR / training_id
+    training_dir = _safe_child_path(UPLOAD_DIR, training_id)
     training_dir.mkdir(exist_ok=True)
 
     # Save uploaded files
     image_paths = []
     for i, file in enumerate(files):
-        input_filename = f"train_{i:03d}_{file.filename}"
-        input_path = training_dir / input_filename
+        input_filename = _safe_filename(f"train_{i:03d}_{file.filename}")
+        input_path = _safe_child_path(training_dir, input_filename)
         await _save_upload(file, input_path)
         image_paths.append(str(input_path))
 
@@ -10197,13 +10357,13 @@ async def train_lora_placeholder(
         model_name = f"lora_placeholder_{timestamp}"
 
     training_id = f"placeholder_{timestamp}"
-    training_dir = UPLOAD_DIR / training_id
+    training_dir = _safe_child_path(UPLOAD_DIR, training_id)
     training_dir.mkdir(parents=True, exist_ok=True)
 
     image_paths = []
     for i, file in enumerate(files):
-        input_filename = f"train_{i:03d}_{file.filename}"
-        input_path = training_dir / input_filename
+        input_filename = _safe_filename(f"train_{i:03d}_{file.filename}")
+        input_path = _safe_child_path(training_dir, input_filename)
         await _save_upload(file, input_path)
         image_paths.append(str(input_path))
 
@@ -10283,8 +10443,8 @@ async def inpaint_image(
     # Save uploaded files
     img_filename = f"inpaint_src_{uuid.uuid4().hex[:8]}.png"
     mask_filename = f"inpaint_mask_{uuid.uuid4().hex[:8]}.png"
-    img_path = UPLOAD_DIR / img_filename
-    mask_path = UPLOAD_DIR / mask_filename
+    img_path = _safe_child_path(UPLOAD_DIR, img_filename)
+    mask_path = _safe_child_path(UPLOAD_DIR, mask_filename)
 
     try:
         img_content = await image.read()
@@ -10438,7 +10598,7 @@ async def inpaint_image(
         raise
     except Exception as e:
         logger.error(f"❌ Inpaint error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Inpaint failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -10488,7 +10648,7 @@ async def reframe_image(
 
     # Save uploaded image
     upload_filename = f"reframe_input_{uuid.uuid4().hex[:8]}.png"
-    upload_path = UPLOAD_DIR / upload_filename
+    upload_path = _safe_child_path(UPLOAD_DIR, upload_filename)
 
     try:
         content = await image.read()
@@ -10672,7 +10832,7 @@ async def reframe_image(
 
     except Exception as e:
         logger.error(f"❌ Reframe error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Reframe failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -10705,7 +10865,7 @@ async def detect_faces_endpoint(
 
     except Exception as e:
         logger.error(f"❌ Face detection error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Face detection failed")
 
 
 @app.post("/face-swap")
@@ -10806,7 +10966,7 @@ async def create_face_profile(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"❌ Create face profile error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create face profile")
 
 
 @app.delete("/api/face-profiles/{profile_id}")
@@ -10960,7 +11120,7 @@ async def start_face_training(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"❌ Face training create error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to start face training")
 
 
 @app.get("/api/face-train")

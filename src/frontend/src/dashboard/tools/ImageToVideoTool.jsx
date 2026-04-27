@@ -46,6 +46,13 @@ const getI2VComputeTarget = (modelMode) => (
   I2V_CLOUD_ONLY_MODES.has(modelMode) ? 'cloud' : 'local'
 )
 
+const sanitizeFilename = (value, fallback = 'image.png') => {
+  const raw = String(value || fallback)
+  const basename = raw.split(/[\\/]/).pop() || fallback
+  const sanitized = basename.replace(/[<>:"|?*\u0000-\u001F]/g, '_').slice(0, 180)
+  return sanitized || fallback
+}
+
 // Resolution presets with dimensions per aspect ratio
 // Includes max_duration based on tested VRAM limits (28GB dual GPU)
 const RESOLUTION_PRESETS = {
@@ -293,7 +300,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               return r.blob()
             })
             .then(blob => {
-              const filename = imageFilename || imageUrl.split('/').pop()
+              const filename = sanitizeFilename(imageFilename || imageUrl.split('/').pop())
               const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
               setFile(fileObj)
               setPreviewUrl(imageUrl)
@@ -380,7 +387,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         const resp = await apiFetch(`/user/media/uploads/${encodeURIComponent(imageName)}`)
         if (!resp.ok) throw new Error('Image not found in storage')
         const blob = await resp.blob()
-        const fileObj = new File([blob], imageName, { type: blob.type || 'image/png' })
+        const fileObj = new File([blob], sanitizeFilename(imageName), { type: blob.type || 'image/png' })
         setFile(fileObj)
         setPreviewUrl(URL.createObjectURL(blob))
         if (DEBUG) console.debug('📁 Restored source image from profile:', imageName)
@@ -688,7 +695,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       const imageUrl = getMediaUrl(item.url, item.signed_url)
       const response = await apiFetch(imageUrl)
       const blob = await response.blob()
-      const filename = item.filename || item.url.split('/').pop()
+      const filename = sanitizeFilename(item.filename || item.url.split('/').pop())
       const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
 
       setFile(fileObj)
@@ -822,7 +829,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       const response = await apiFetch(imageUrl)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
-      const filename = item.name || item.url.split('/').pop()
+      const filename = sanitizeFilename(item.name || item.url.split('/').pop())
       const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
 
       setFile(fileObj)
@@ -841,7 +848,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     e.stopPropagation()
     if (!user) return
     try {
-      const filename = item.name || item.url.split('/').pop()
+      const filename = sanitizeFilename(item.name || item.url.split('/').pop())
       await apiFetch(`/user/media/uploads/${encodeURIComponent(filename)}`, { method: 'DELETE' })
       setUserUploads(prev => prev.filter(u => u.name !== item.name))
       if (DEBUG) console.debug('📁 Deleted from library:', filename)
@@ -2106,7 +2113,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   try {
                     const response = await fetch(e.target.value)
                     const blob = await response.blob()
-                    const filename = e.target.value.split('/').pop() || 'image.jpg'
+                    const filename = sanitizeFilename(e.target.value.split('/').pop(), 'image.jpg')
                     const file = new File([blob], filename, { type: blob.type })
                     onPickFile(file)
                   } catch {
