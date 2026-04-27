@@ -255,7 +255,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
       for (let i = 0; i < batchCount; i++) {
         // Determine adapter based on model type
         const modelType = getModelType(model)
-        
+
         let adapterHint = 'sdxl-local-t2i'
         if (modelType === 'wan22') adapterHint = 'wan22-local-t2i'
         else if (modelType === 'ernie') adapterHint = 'ernie-local-t2i'
@@ -281,7 +281,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
         }
 
         const result = await generate(requestPayload)
-        
+
         if (!result) {
           // generate() returned null, meaning error occurred (handled inside hook or aborted).
           // We can break early to not keep failing the batch

@@ -1125,11 +1125,11 @@ class ComfyUIClient:
         except Exception:
             return False
 
-
     def get_model_names(self, loader_type: str = "UnetLoaderGGUF") -> list[str]:
         """Fetch available models dynamically from ComfyUI"""
         try:
             import requests
+
             resp = requests.get(f"{self.base_url}/object_info/{loader_type}", timeout=5)
             data = resp.json()
             if loader_type in data:
@@ -1164,11 +1164,11 @@ class ComfyUIClient:
             logger.error(f"Upload error: {e}")
             return None
 
-
     def get_model_names(self, loader_type: str = "UnetLoaderGGUF") -> list[str]:
         """Fetch available models dynamically from ComfyUI"""
         try:
             import requests
+
             resp = requests.get(f"{self.base_url}/object_info/{loader_type}", timeout=5)
             data = resp.json()
             if loader_type in data:
@@ -1657,11 +1657,27 @@ class ComfyUIClient:
         num_frames = 4 * k + 1
 
         # Select model variant
-# Dynamically map HIGH and LOW noise models based on what's available
+        # Dynamically map HIGH and LOW noise models based on what's available
         ggufs = self.get_model_names("UnetLoaderGGUF")
-        high_model = next((m for m in ggufs if "HIGH" in m.upper() and ("wan22EnhancedNSFW" in m or "wan2.2_i2v" in m)), "wan22EnhancedNSFW_V2_Q6K_HIGH.gguf")
-        low_model = next((m for m in ggufs if "LOW" in m.upper() and ("wan22EnhancedNSFW" in m or "wan2.2_i2v" in m)), "wan22EnhancedNSFW_V2_Q6K_LOW.gguf")
-        
+        high_model = next(
+            (
+                m
+                for m in ggufs
+                if "HIGH" in m.upper()
+                and ("wan22EnhancedNSFW" in m or "wan2.2_i2v" in m)
+            ),
+            "wan22EnhancedNSFW_V2_Q6K_HIGH.gguf",
+        )
+        low_model = next(
+            (
+                m
+                for m in ggufs
+                if "LOW" in m.upper()
+                and ("wan22EnhancedNSFW" in m or "wan2.2_i2v" in m)
+            ),
+            "wan22EnhancedNSFW_V2_Q6K_LOW.gguf",
+        )
+
         model_map = {
             "HIGH": high_model,
             "LOW": low_model,

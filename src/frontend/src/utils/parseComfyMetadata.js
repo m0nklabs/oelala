@@ -59,7 +59,7 @@ export function parseComfyWorkflow(workflow) {
 
   // ─────────────────────────────────────────────────────────────────
   //    Strategy C: Kijai WanVideoWrapper & LTXV nodes
-  //    (WanVideoTextEncodeMultiGPU has positive_prompt / negative_prompt, 
+  //    (WanVideoTextEncodeMultiGPU has positive_prompt / negative_prompt,
   //     LTXVCPUGemmaEncode has text)
   // ─────────────────────────────────────────────────────────────────
   if (!result.positive || !result.negative || !result.audio) {
@@ -74,7 +74,7 @@ export function parseComfyWorkflow(workflow) {
           result.negative = inp.negative_prompt
         }
       }
-      
+
       // LTXV
       if (node.class_type === 'LTXVCPUGemmaEncode') {
         const inp = node.inputs || {}
@@ -89,7 +89,7 @@ export function parseComfyWorkflow(workflow) {
           result.negative = inp.text
         }
       }
-      
+
       // Vivid Audio Prompt
       if (node.class_type === 'VividAudioPrompt') {
         const inp = node.inputs || {}

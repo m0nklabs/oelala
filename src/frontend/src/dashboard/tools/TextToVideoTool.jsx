@@ -207,7 +207,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
 
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)
-  
+
   const { generate, loading: submitting } = useGeneration({
     onSuccess: (data) => {
       // Check for validation errors mixed in success wrapper (sometimes error format)
@@ -215,7 +215,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
         setError(data.detail)
         return
       }
-      
+
       const promptId = data.id || data.prompt_id
       if (promptId) {
         setLastQueued({
