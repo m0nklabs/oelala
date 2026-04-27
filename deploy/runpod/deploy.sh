@@ -124,7 +124,7 @@ echo "✅ Pushed :latest"
 
 # ---- Step 5: Update RunPod template ----
 echo ""
-echo "🔄 Step 5/5: Updating RunPod template ${TEMPLATE_ID} → ${FULL_IMAGE}..."
+echo "🔄 Step 5/6: Updating RunPod template ${TEMPLATE_ID} → ${FULL_IMAGE}..."
 
 HF_LORA_TOKEN=$(grep -E '^HF_LORA_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
 if [[ -z "${HF_LORA_TOKEN:-}" ]]; then
@@ -179,6 +179,12 @@ if [[ $? -ne 0 ]]; then
 fi
 
 echo "✅ ${TEMPLATE_RESULT}"
+
+# ---- Step 6: Apply endpoint defaults ----
+echo ""
+echo "🎛️  Step 6/6: Applying RunPod endpoint defaults..."
+python3 "$PROJECT_ROOT/scripts/apply_runpod_endpoint_defaults.py" --profile wan22
+echo "✅ Endpoint defaults applied"
 
 # ---- Done ----
 echo ""

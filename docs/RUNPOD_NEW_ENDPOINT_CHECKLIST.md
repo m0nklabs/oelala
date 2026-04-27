@@ -106,7 +106,7 @@ mutation {
     templateId: "{template-id-from-step-3}"
     gpuIds: "AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180"
     workersMin: 0
-    workersMax: 1
+    workersMax: 2
     idleTimeout: 120
     scalerType: "QUEUE_DELAY"
     scalerValue: 4
@@ -185,6 +185,8 @@ sudo systemctl restart oelala-backend
 | oelala-wan22 | `x2x496ymkidl3m` | `tkpy0pi8gt` | `ghcr.io/m0nklabs/oelala-comfyui-worker` | 48GB+ |
 | oelala-ltx23 | `ctpoa610dva4ww` | `c1fz26l07d` | `ghcr.io/m0nklabs/oelala-ltx23-worker` | 80GB+ |
 | oelala-i2i | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-i2i-worker` | 48GB+ |
+
+All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. Wan/I2I scale at `QUEUE_DELAY:4`; LTX-2.3 uses `QUEUE_DELAY:1` because the 80GB worker cold start is more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`.
 
 ## The Golden Rule
 

@@ -238,8 +238,8 @@ FACTORY_PRESETS: dict[str, list[dict]] = {
             },
         },
         {
-            "name": "LTX-2 — Quick Preview (576p, 5s)",
-            "description": "LTX-2 19B distilled. Fast previews, lower quality. ~18GB VRAM.",
+            "name": "LTX-2.3 — Distilled Preview (576p, 5s)",
+            "description": "LTX-2.3 22B distilled on RunPod 80GB+. 8-step sigma schedule, cfg=1.",
             "mode": "ltx2",
             "settings": {
                 "modelMode": "ltx2",
@@ -247,8 +247,8 @@ FACTORY_PRESETS: dict[str, list[dict]] = {
                 "aspectRatio": "9:16",
                 "duration": 5,
                 "fps": 25,
-                "steps": 20,
-                "cfg": 3.0,
+                "steps": 8,
+                "cfg": 1.0,
                 "seed": -1,
                 "cameraMotion": "",
                 "loraConfigs": [],

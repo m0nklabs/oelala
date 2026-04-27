@@ -207,6 +207,15 @@ async def form_to_generation_request(
         if value is None:
             continue
 
+        # Legacy endpoints use -1 / -1.0 as "use the model default" sentinels.
+        # Do not forward those into V2 requests or they override adapter defaults.
+        if key in {"steps", "cfg"}:
+            try:
+                if float(value) < 0:
+                    continue
+            except (TypeError, ValueError):
+                pass
+
         # Check for alias mapping
         mapped = _FIELD_ALIASES.get(key, key)
 

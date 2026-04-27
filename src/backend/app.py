@@ -6688,8 +6688,8 @@ async def generate_ltx2_i2v_async(
     resolution: str = Form("576p", description="Video resolution: 480p, 576p, 720p"),
     fps: int = Form(25, description="Frames per second (LTX-2 default: 25)"),
     aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
-    steps: int = Form(20, description="Sampling steps (LTX-2 needs ~20)"),
-    cfg: float = Form(3.0, description="CFG guidance scale"),
+    steps: int = Form(8, description="Sampling steps (LTX-2.3 distilled default: 8)"),
+    cfg: float = Form(1.0, description="CFG guidance scale (distilled default: 1.0)"),
     seed: int = Form(-1, description="Random seed (-1 for random)"),
     lora_configs: str = Form(
         "", description="JSON array of LoRA configs [{high, strength}, ...]"

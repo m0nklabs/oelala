@@ -24,6 +24,8 @@ from enum import Enum
 
 import httpx
 
+from runpod_defaults import get_runpod_job_policy
+
 logger = logging.getLogger(__name__)
 
 # Debug flag — controlled by env var
@@ -299,6 +301,7 @@ class RunPodClient:
         endpoint_id: Optional[str] = None,
         webhook_url: Optional[str] = None,
         extra_input: Optional[Dict[str, Any]] = None,
+        policy: Optional[Dict[str, Any]] = None,
     ) -> RunPodJob:
         """
         Submit a ComfyUI workflow to RunPod serverless.
@@ -308,6 +311,7 @@ class RunPodClient:
             endpoint_id: Specific endpoint (or uses default)
             webhook_url: Optional webhook for completion callback
             extra_input: Additional input fields (e.g. images as base64)
+            policy: Optional RunPod job policy override.
 
         Returns:
             RunPodJob with the job ID
@@ -322,6 +326,10 @@ class RunPodClient:
         }
         if webhook_url:
             payload["webhook"] = webhook_url
+        resolved_policy = policy if policy is not None else get_runpod_job_policy(ep_id)
+        if resolved_policy:
+            payload["policy"] = resolved_policy
+            debug_log(f"Using RunPod policy for {ep_id}: {resolved_policy}")
 
         url = f"{RUNPOD_API_BASE}/{ep_id}/run"
         debug_log(f"Submitting workflow to {url}")
@@ -344,6 +352,7 @@ class RunPodClient:
         workflow: Dict[str, Any],
         endpoint_id: Optional[str] = None,
         extra_input: Optional[Dict[str, Any]] = None,
+        policy: Optional[Dict[str, Any]] = None,
         timeout: int = 600,
     ) -> RunPodJob:
         """
@@ -355,6 +364,7 @@ class RunPodClient:
             workflow: ComfyUI API-format workflow
             endpoint_id: Specific endpoint
             extra_input: Additional input
+            policy: Optional RunPod job policy override.
             timeout: Max wait time in seconds
 
         Returns:
@@ -368,6 +378,9 @@ class RunPodClient:
                 **(extra_input or {}),
             }
         }
+        resolved_policy = policy if policy is not None else get_runpod_job_policy(ep_id)
+        if resolved_policy:
+            payload["policy"] = resolved_policy
 
         url = f"{RUNPOD_API_BASE}/{ep_id}/runsync"
         debug_log(f"Submitting sync workflow to {url} (timeout={timeout}s)")

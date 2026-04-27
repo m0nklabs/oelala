@@ -139,8 +139,8 @@ I2V Generation Modes
 | Feature | Wan2.2 | LTX-2 |
 |---------|--------|-------|
 | Pass Type | Dual (high/low noise) | Single |
-| Default Steps | 6 | 20 |
-| Default CFG | 1.0 | 3.0 |
+| Default Steps | 15 | 8 |
+| Default CFG | 3.0 | 1.0 |
 | Text Encoder | UMT5-XXL | Gemma 3 |
 | Best For | Quality, longer clips | Speed, shorter clips |
 | LoRA Support | ✅ Yes | ❌ No (native) |

@@ -41,14 +41,16 @@ RunPod's API `gpuIds` field expects **architecture-tier IDs**, NOT GPU model nam
 Currently configured with **48GB+ tiers only** on the active endpoint (for 20 sec / 321 frame WAN 2.2 video @ ~26GB VRAM):
 
 ```
-AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96
+AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180
 ```
 
-### Measured Startup Behavior
+### Current Production Defaults
 
-- **Cold start** after scale-to-zero: about `447s` queue delay + `12s` execution for the tiny Cloud Wan22 smoke workflow.
-- **Warm start** with an already-idle worker: about `39s` queue delay + `12s` execution for the same workflow.
-- The active endpoint currently uses `workersMin=0`, `workersMax=1`, `idleTimeout=10`.
+- `workersMin=0` keeps burst traffic cost-effective while allowing scale-to-zero.
+- `workersMax=2` allows one active job plus one burst/cold-start slot without runaway spend.
+- `idleTimeout=120` keeps a warm worker available briefly after a job.
+- `scalerType=QUEUE_DELAY`, `scalerValue=4` scales after a short queue delay.
+- Async video requests use an explicit per-job RunPod policy, because the RunPod default `executionTimeout` is only 10 minutes.
 
 ### Why 48GB minimum?
 - WAN 2.2 14B Q6_K at 480×848 @ 321 frames needs ~26GB VRAM

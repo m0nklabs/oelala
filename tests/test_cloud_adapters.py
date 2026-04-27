@@ -252,7 +252,8 @@ class TestLTX23CloudI2V:
         assert c.resolution_step == 32  # LTX requires /32
         assert c.max_frames == 257
         assert 25 in c.allowed_fps
-        assert c.default_steps == 20
+        assert c.default_steps == 8
+        assert c.default_cfg == 1.0
 
     @pytest.mark.parametrize("frames,expected_cost", [
         (97, 5),
