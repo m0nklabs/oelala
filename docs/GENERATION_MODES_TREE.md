@@ -136,6 +136,9 @@ I2V Generation Modes
 
 ### I2V Model Comparison
 
+Main UI modes are intentionally simplified. See `docs/LOCAL_GENERATION_DEFAULTS.md`
+for the product-facing local-vs-cloud mode policy.
+
 | Feature | Wan2.2 Local Q6 | Wan2.2 Cloud Max | LTX-2.3 Cloud |
 |---------|-----------------|------------------|---------------|
 | Pass Type | Dual (high/low noise) | Dual (high/low noise) | Single |
@@ -145,6 +148,11 @@ I2V Generation Modes
 | Best For | Local quality/control | Full-precision quality | Speed, shorter clips |
 | LoRA Support | ✅ Yes | ✅ Yes | ✅ Single-stage |
 | Default Worker | Local dual GPU | RunPod 48GB+ | RunPod 80GB+ |
+
+The promoted local I2V modes are **Stable Local — Wan2.2 Q6** and
+**Quality Local — Wan2.2 Q8**. BlockSwap and Ultra Q8 remain available for
+saved profiles/backward compatibility, but are no longer promoted as primary
+mode choices.
 
 ### I2V Alternative Models (Swappable - Wan2.2 only)
 

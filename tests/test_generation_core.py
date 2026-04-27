@@ -768,7 +768,12 @@ class FakeWanAdapter(GenerationAdapter):
     lora_format = LoraFormat.SINGLE_STAGE
 
     def constraints(self) -> AdapterConstraints:
-        return AdapterConstraints(max_width=1280, max_height=720)
+        return AdapterConstraints(
+            max_width=1280,
+            max_height=720,
+            max_frames=161,
+            allowed_fps=[8, 16, 24],
+        )
 
     def build_workflow(self, req):
         return {}
@@ -951,6 +956,17 @@ class TestRouterNormalizeFrames:
         )
         result = router.normalize_frames(req, wan_adapter)
         assert result.frames is None
+
+    def test_validate_clamps_frames_and_fps(self, router, wan_adapter):
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            frames=999,
+            fps=15,
+        )
+        result = router.validate_controls(req, wan_adapter)
+        assert result.frames == 161
+        assert result.fps == 16
 
 
 class TestRouterUploadLocalImages:

@@ -52,6 +52,20 @@ const MODEL_MODES = [
   { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
 
+const T2V_ADAPTER_BY_MODE = {
+  wan22: 'wan22-local-t2v-q6',
+  cloud_wan22: 'wan22-cloud-t2v',
+  ltx2: 'ltx23-cloud-t2v',
+}
+
+const T2V_CLOUD_ONLY_MODES = new Set(['cloud_wan22', 'ltx2'])
+
+const getT2VComputeTarget = (modelType) => (
+  T2V_CLOUD_ONLY_MODES.has(modelType) ? 'cloud' : 'local'
+)
+
+const getT2VAdapterHint = (modelType) => T2V_ADAPTER_BY_MODE[modelType] || T2V_ADAPTER_BY_MODE.wan22
+
 const T2V_DEFAULTS = {
   prompt: '',
   negativePrompt: 'blurry, low quality, distorted, ugly, artifacts, overexposed, underexposed, flickering, jitter',
@@ -204,6 +218,13 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [t2iCfg, setT2iCfg] = useState(6.0)
 
   const [computeTarget, setComputeTarget] = useState('local')
+
+  useEffect(() => {
+    const desiredComputeTarget = getT2VComputeTarget(modelType)
+    if (computeTarget !== desiredComputeTarget) {
+      setComputeTarget(desiredComputeTarget)
+    }
+  }, [modelType, computeTarget])
 
   const [error, setError] = useState('')
   const [lastQueued, setLastQueued] = useState(null)
@@ -536,13 +557,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       return
     }
 
-    // Determine adapter based on modelType + computeTarget
-    let adapterHint = 'wan22-local-t2v-q6'
-    if (resolved.modelType === 'cloud_wan22') {
-      adapterHint = 'wan22-cloud-t2v'
-    } else if (resolved.modelType.includes('ltx23') && resolved.computeTarget === 'cloud') {
-      adapterHint = 'ltx23-cloud-t2v'
-    }
+    const resolvedComputeTarget = getT2VComputeTarget(resolved.modelType)
+    const adapterHint = getT2VAdapterHint(resolved.modelType)
 
     // Determine width and height from resolution selection
     const resPreset = RESOLUTION_PRESETS[resolved.aspectRatio] && RESOLUTION_PRESETS[resolved.aspectRatio][resolved.resolution]
@@ -586,7 +602,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       operation: 'generate',
       target_type: 'video',
       adapter_hint: adapterHint,
-      compute_target: resolved.computeTarget,
+      compute_target: resolvedComputeTarget,
       prompt: finalPrompt,
       negative_prompt: resolved.negativePrompt,
       width: targetWidth,
@@ -937,6 +953,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   setDuration(5)
                   setSteps(6)
                   setCfg(1.0)
+                  setComputeTarget('local')
                 } else if (newMode === 'ltx2') {
                   setResolution('576p')
                   setAspectRatio('9:16')
@@ -988,8 +1005,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>LTX-2.3 22B</span> | <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod 80GB GPU' : 'Direct T2V'}</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>{computeTarget === 'cloud' ? 'On-demand cloud worker | Shared Docker image | Uses LTX nodes + GGUF loaders' : 'Faster inference | No T2I pass | Uses Gemma 3 text encoder'}</div>
+              <span style={{ fontWeight: 600 }}>LTX-2.3 22B</span> | <span style={{ color: '#86efac' }}>RunPod 80GB GPU</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>Cloud-only 80GB worker | 8-step distilled workflow | Uses Gemma 3 text encoder</div>
             </div>
           )}
 
@@ -999,15 +1016,15 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
-                onClick={() => { if (modelType !== 'cloud_wan22') setComputeTarget('local') }}
-                disabled={modelType === 'cloud_wan22'}
+                onClick={() => { if (!T2V_CLOUD_ONLY_MODES.has(modelType)) setComputeTarget('local') }}
+                disabled={T2V_CLOUD_ONLY_MODES.has(modelType)}
                 style={{
                   padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: '1px solid',
                   borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
                   background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
                   color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: modelType === 'cloud_wan22' ? 'not-allowed' : 'pointer',
-                  opacity: modelType === 'cloud_wan22' ? 0.4 : 1, transition: 'all 0.15s ease',
+                  cursor: T2V_CLOUD_ONLY_MODES.has(modelType) ? 'not-allowed' : 'pointer',
+                  opacity: T2V_CLOUD_ONLY_MODES.has(modelType) ? 0.4 : 1, transition: 'all 0.15s ease',
                 }}
               >
                 Local
@@ -1015,12 +1032,13 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               <button
                 type="button"
                 onClick={() => setComputeTarget('cloud')}
+                disabled={modelType === 'wan22'}
                 style={{
                   padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: '1px solid',
                   borderColor: computeTarget === 'cloud' ? '#10b981' : 'var(--border-color, #333)',
                   background: computeTarget === 'cloud' ? '#10b981' : 'transparent',
                   color: computeTarget === 'cloud' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: 'pointer', transition: 'all 0.15s ease',
+                  cursor: modelType === 'wan22' ? 'not-allowed' : 'pointer', opacity: modelType === 'wan22' ? 0.4 : 1, transition: 'all 0.15s ease',
                 }}
               >
                 Cloud

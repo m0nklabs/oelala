@@ -274,6 +274,22 @@ class GenerationRouter:
             h = max(c.min_height, min(c.max_height, req.height))
             updates["height"] = (h // c.resolution_step) * c.resolution_step
 
+        if req.fps is not None and c.allowed_fps:
+            updates["fps"] = min(
+                c.allowed_fps, key=lambda allowed: abs(allowed - req.fps)
+            )
+
+        if req.frames is not None:
+            frames = max(1, req.frames)
+            if c.max_frames is not None:
+                frames = min(frames, c.max_frames)
+
+            fps = updates.get("fps", req.fps)
+            if c.max_duration_seconds is not None and fps:
+                frames = min(frames, int(c.max_duration_seconds * fps))
+
+            updates["frames"] = frames
+
         # Clamp steps (use the default we just applied if steps was None)
         steps = updates.get("steps", req.steps)
         if steps is not None:

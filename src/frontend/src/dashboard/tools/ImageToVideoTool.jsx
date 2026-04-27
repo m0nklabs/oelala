@@ -26,12 +26,25 @@ const FPS_OPTIONS = [8, 12, 16, 24]
 // Model mode options for I2V
 const MODEL_MODES = [
   { value: 'cloud_wan22', label: '☁️ Cloud Wan22 — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
-  { value: 'wan2.2', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass via ComfyUI' },
-  { value: 'blockswap_q8', label: '🧪 BlockSwap Q8 Experimental', desc: 'Q8 quality • Single-GPU BlockSwap • Lightning LoRA + NAG + TorchCompile' },
-  { value: 'distorch2_q8', label: '🧪 DisTorch2 Q8 Experimental', desc: 'Q8 quality + DisTorch2 Multi-GPU + Selectable LoRAs' },
-  { value: 'ultra_q8', label: '⚡ Ultra Q8 — Max VRAM', desc: 'Q8 quality • 3060 model cache + 5060Ti full compute + CPU overflow' },
+  { value: 'wan2.2', label: '✅ Stable Local — Wan2.2 Q6', desc: 'Reliable local dual-pass via ComfyUI' },
+  { value: 'distorch2_q8', label: '🏆 Quality Local — Wan2.2 Q8', desc: 'Q8 quality + DisTorch2 multi-GPU' },
   { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
+
+const I2V_ADAPTER_BY_MODE = {
+  'wan2.2': 'wan22-local-i2v-q6',
+  blockswap_q8: 'wan22-local-i2v-blockswap',
+  distorch2_q8: 'wan22-local-i2v-distorch2',
+  ultra_q8: 'wan22-local-i2v-ultra',
+  cloud_wan22: 'wan22-cloud-i2v',
+  ltx2: 'ltx23-cloud-i2v',
+}
+
+const I2V_CLOUD_ONLY_MODES = new Set(['cloud_wan22', 'ltx2'])
+
+const getI2VComputeTarget = (modelMode) => (
+  I2V_CLOUD_ONLY_MODES.has(modelMode) ? 'cloud' : 'local'
+)
 
 // Resolution presets with dimensions per aspect ratio
 // Includes max_duration based on tested VRAM limits (28GB dual GPU)
@@ -209,9 +222,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [fps, setFps] = useState(16)
   const [steps, setSteps] = useState(6)
-  const [cfg, setCfg] = useState(3.0)  // Default to balanced prompt strength
+  const [cfg, setCfg] = useState(1.0)
   const [seed, setSeed] = useState(-1)
   const [showAdvanced, setShowAdvanced] = useState(false)  // Sampling settings collapsed by default
+
+  useEffect(() => {
+    const desiredComputeTarget = getI2VComputeTarget(modelMode)
+    if (computeTarget !== desiredComputeTarget) {
+      setComputeTarget(desiredComputeTarget)
+    }
+  }, [modelMode, computeTarget])
 
   // BlockSwap Q8 Experimental mode settings
   const [bsShift, setBsShift] = useState(9.0)
@@ -953,21 +973,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         finalPrompt = motionPrefix + (prompt || 'Motion, subject moving naturally')
       }
 
-      // Determine adapter_hint based on modelMode
-      let adapterHint = 'wan22-local-i2v-q6'
-      if (usePose) {
-        adapterHint = 'pose-i2v'
-      } else if (modelMode === 'blockswap_q8') {
-        adapterHint = 'wan22-local-i2v-blockswap'
-      } else if (modelMode === 'distorch2_q8') {
-        adapterHint = 'wan22-local-i2v-distorch2'
-      } else if (modelMode === 'ultra_q8') {
-        adapterHint = 'wan22-local-i2v-ultra'
-      } else if (modelMode === 'cloud_wan22') {
-        adapterHint = 'wan22-cloud-i2v'
-      } else if (modelMode === 'ltx2') {
-        adapterHint = 'ltx23-cloud-i2v'
-      }
+      const adapterHint = usePose ? 'pose-i2v' : (I2V_ADAPTER_BY_MODE[modelMode] || I2V_ADAPTER_BY_MODE['wan2.2'])
+      const resolvedComputeTarget = getI2VComputeTarget(modelMode)
 
       // Build V2 request payload
       let reqPayload = {
@@ -979,7 +986,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         fps: fps,
         resolution: resolution,
         aspect_ratio: aspectRatio,
-        compute_target: computeTarget,
+        compute_target: resolvedComputeTarget,
         steps: steps,
         cfg: cfg,
         seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed,
@@ -1009,13 +1016,13 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       }
 
       // Add extend mode parameters for Wan2.2 Q6
-      if (!usePose && !modelMode && extendMode && clipCount > 1) {
+      if (!usePose && modelMode === 'wan2.2' && extendMode && clipCount > 1) {
         reqPayload.extend_mode = true
         reqPayload.clip_count = clipCount
       }
 
       // Add Unet parameters
-      if (!usePose && !modelMode) {
+      if (!usePose && modelMode === 'wan2.2') {
         if (unetHighNoise) reqPayload.unet_high_noise = unetHighNoise
         if (unetLowNoise) reqPayload.unet_low_noise = unetLowNoise
       }
@@ -1283,6 +1290,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setDuration(8)
                   setSteps(6)
                   setCfg(1.0)
+                  setComputeTarget('local')
                 } else if (newMode === 'ltx2') {
                   setResolution('576p')  // LTX-2.3 distilled handles higher res efficiently on the 80GB worker
                   setAspectRatio('9:16')
@@ -1291,14 +1299,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setCfg(1.0)
                   setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
                 } else if (newMode === 'blockswap_q8' || newMode === 'distorch2_q8') {
-                  setResolution('720p')
+                  setResolution('480p')
                   setAspectRatio('9:16')
-                  setDuration(7)
+                  setDuration(10)
                   setSteps(8)
                   setCfg(1.0)
                   setBsShift(9.0)
                   setBsHighNoiseSteps(4)
                   setBsNagScale(11.0)
+                  setComputeTarget('local')
                 } else if (newMode === 'ultra_q8') {
                   setResolution('576p')
                   setAspectRatio('9:16')
@@ -1308,6 +1317,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setBsShift(9.0)
                   setBsHighNoiseSteps(4)
                   setBsNagScale(11.0)
+                  setComputeTarget('local')
                 } else if (newMode === 'cloud_wan22') {
                   setResolution('720p')
                   setAspectRatio('9:16')
@@ -1365,9 +1375,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           ) : modelMode === 'wan2.2' ? (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>🎬 Wan2.2 14B Q6</span> • <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
+              <span style={{ fontWeight: 600 }}>✅ Stable Local — Wan2.2 Q6</span> • <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Dual-pass (high/low noise) • All resolutions up to 30s
+                Reliable dual-pass default • 480p/576p first • 720p only for shorter clips
               </div>
             </div>
           ) : modelMode === 'blockswap_q8' ? (
@@ -1382,12 +1392,12 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           ) : modelMode === 'distorch2_q8' ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#a78bfa' }}>
-              <span style={{ fontWeight: 600 }}>🧪 DisTorch2 Q8 Experimental</span> • <span style={{ color: '#c4b5fd' }}>Q8_0 Multi-GPU</span>
+              <span style={{ fontWeight: 600 }}>🏆 Quality Local — Wan2.2 Q8</span> • <span style={{ color: '#c4b5fd' }}>Q8_0 Multi-GPU</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                DisTorch2 Dual-GPU • NAG + EnhanceAVideo • Selectable LoRAs • Florence2 captioning
+                Higher-quality local path • DisTorch2 Dual-GPU • NAG + EnhanceAVideo • Selectable LoRAs
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                All resolutions up to 30s
+                Safer default: 480p 10s; raise resolution only after a good seed
               </div>
             </div>
           ) : modelMode === 'ultra_q8' ? (
@@ -1402,14 +1412,12 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             </div>
           ) : (
             <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>⚡ LTX-2.3 22B</span> • <span style={{ color: '#86efac' }}>{computeTarget === 'cloud' ? 'RunPod 80GB GPU' : 'Single Model'}</span>
+              <span style={{ fontWeight: 600 }}>⚡ LTX-2.3 22B</span> • <span style={{ color: '#86efac' }}>RunPod 80GB GPU</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Faster inference • No high/low noise • Uses Gemma 3 text encoder
+                Cloud-only 8-step distilled workflow • No high/low noise • Uses Gemma 3 text encoder
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                {computeTarget === 'cloud'
-                  ? 'Shared RunPod worker with LTX nodes + GGUF loaders, prepared on demand'
-                  : 'Local ComfyUI path with direct LTX workflow'}
+                Shared RunPod worker with LTX nodes + GGUF loaders, prepared on demand
               </div>
             </div>
           )}
@@ -1420,8 +1428,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
-                onClick={() => { if (modelMode !== 'cloud_wan22') setComputeTarget('local') }}
-                disabled={modelMode === 'cloud_wan22'}
+                onClick={() => { if (!I2V_CLOUD_ONLY_MODES.has(modelMode)) setComputeTarget('local') }}
+                disabled={I2V_CLOUD_ONLY_MODES.has(modelMode)}
                 style={{
                   padding: '4px 10px',
                   fontSize: '11px',
@@ -1430,8 +1438,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   borderColor: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'var(--border-color, #333)',
                   background: computeTarget === 'local' ? 'var(--accent-color, #6366f1)' : 'transparent',
                   color: computeTarget === 'local' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: modelMode === 'cloud_wan22' ? 'not-allowed' : 'pointer',
-                  opacity: modelMode === 'cloud_wan22' ? 0.4 : 1,
+                  cursor: I2V_CLOUD_ONLY_MODES.has(modelMode) ? 'not-allowed' : 'pointer',
+                  opacity: I2V_CLOUD_ONLY_MODES.has(modelMode) ? 0.4 : 1,
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -1440,6 +1448,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               <button
                 type="button"
                 onClick={() => setComputeTarget('cloud')}
+                disabled={!I2V_CLOUD_ONLY_MODES.has(modelMode)}
                 style={{
                   padding: '4px 10px',
                   fontSize: '11px',
@@ -1448,7 +1457,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   borderColor: computeTarget === 'cloud' ? '#10b981' : 'var(--border-color, #333)',
                   background: computeTarget === 'cloud' ? '#10b981' : 'transparent',
                   color: computeTarget === 'cloud' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: 'pointer',
+                  cursor: I2V_CLOUD_ONLY_MODES.has(modelMode) ? 'pointer' : 'not-allowed',
+                  opacity: I2V_CLOUD_ONLY_MODES.has(modelMode) ? 1 : 0.4,
                   transition: 'all 0.15s ease',
                 }}
               >
