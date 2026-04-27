@@ -65,7 +65,10 @@ def create_registry(
         from .adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
         from .adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
         from .adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
-        from .adapters.cloud.cloud_i2i import I2IEditCloudAdapter, CloudI2ITransformAdapter
+        from .adapters.cloud.cloud_i2i import (
+            I2IEditCloudAdapter,
+            CloudI2ITransformAdapter,
+        )
 
         _register(
             Wan22CloudI2VAdapter,

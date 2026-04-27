@@ -22,10 +22,10 @@ async def main():
     if not users:
         print("No users found")
         return
-    
+
     u = dict(users[0])
     print(f"Using user: {u['email']}")
-    
+
     # Needs to match Pydantic schema for User
     user_obj = User(
         id=u["id"],
@@ -35,7 +35,7 @@ async def main():
         credits=int(u.get("credits", 999)),
         created_at=str(u.get("created_at", ""))
     )
-    
+
     file_path = "/home/flip/oelala/uploads/cat_ak.png"
     class DummyFile:
         def __init__(self):
@@ -45,7 +45,7 @@ async def main():
         async def read(self):
             self._file.seek(0)
             return self._file.read()
-    
+
     res = await dispatch_v1(
         form=dict(
             prompt="The camera intensely shakes as the enraged cat fires the golden AK-47 in full auto, bright muzzle flashes illuminating its fur, the massive fiery explosion expanding and billowing in the cinematic background, slow motion, hyperrealistic.",

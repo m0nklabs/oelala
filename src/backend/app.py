@@ -3968,20 +3968,22 @@ async def get_comfyui_metadata(filename: str, user: User = Depends(get_current_u
     if not output_path:
         storage = get_storage_client()
         ext = Path(filename).suffix.lower()
-        subfolder = "videos" if ext in [".mp4", ".webm", ".mov"] else ("audio" if ext in [".wav", ".mp3", ".flac"] else "images")
-        
+        subfolder = (
+            "videos"
+            if ext in [".mp4", ".webm", ".mov"]
+            else ("audio" if ext in [".wav", ".mp3", ".flac"] else "images")
+        )
+
         # Check user bucket first, then public generated bucket
         sources = [
             ("users", f"{user.id}/{subfolder}/{filename}"),
-            ("generated", filename)
+            ("generated", filename),
         ]
-        
+
         for bucket, key in sources:
             try:
                 data, _, _ = storage.get_with_metadata(bucket, key)
-                tmp_file = tempfile.NamedTemporaryFile(
-                    suffix=ext, delete=False
-                )
+                tmp_file = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
                 tmp_file.write(data)
                 tmp_file.close()
                 output_path = Path(tmp_file.name)
@@ -5774,31 +5776,41 @@ async def generate_image_legacy(
 
 # Available SDXL checkpoints (auto-detected from ComfyUI models folder)
 
+
 @app.get("/api/models/checkpoints")
 def list_comfyui_checkpoints():
     """List available checkpoints dynamically from ComfyUI"""
     client = get_comfyui_client()
     try:
-        resp = requests.get(f"{client.base_url}/object_info/CheckpointLoaderSimple", timeout=5)
+        resp = requests.get(
+            f"{client.base_url}/object_info/CheckpointLoaderSimple", timeout=5
+        )
         data = resp.json()
-        models = data.get("CheckpointLoaderSimple", {}).get("input", {}).get("required", {}).get("ckpt_name", [[]])[0]
+        models = (
+            data.get("CheckpointLoaderSimple", {})
+            .get("input", {})
+            .get("required", {})
+            .get("ckpt_name", [[]])[0]
+        )
         # Filter for safetensors to exclude unet/vae if needed, though CheckpointLoader usually filters by default
-        return {"checkpoints": [m for m in models if m.endswith('.safetensors')]}
+        return {"checkpoints": [m for m in models if m.endswith(".safetensors")]}
     except Exception as e:
         logger.error(f"Error fetching checkpoints from ComfyUI: {e}")
-        return {"checkpoints": [
-            "CyberRealistic_Pony_v14.1_FP16.safetensors",
-            "dreamshaperXL_lightningDPMSDE.safetensors",
-            "illustriousRealismBy_v10VAE.safetensors",
-            "juggernautXL_ragnarok.safetensors",
-            "ponyDiffusionV6XL_v6StartWithThisOne.safetensors"
-        ]} # Fallback list
+        return {
+            "checkpoints": [
+                "CyberRealistic_Pony_v14.1_FP16.safetensors",
+                "dreamshaperXL_lightningDPMSDE.safetensors",
+                "illustriousRealismBy_v10VAE.safetensors",
+                "juggernautXL_ragnarok.safetensors",
+                "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+            ]
+        }  # Fallback list
+
 
 # Backwards compatibility
 @app.get("/sdxl/checkpoints")
 def list_sdxl_checkpoints():
     return list_comfyui_checkpoints()
-
 
 
 @app.post("/generate-sdxl")

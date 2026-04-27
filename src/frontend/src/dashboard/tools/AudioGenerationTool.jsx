@@ -107,7 +107,7 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
 
     try {
       const durationVal = mode === 'sfx' ? Math.min(duration, 10) : duration
-      
+
       const reqPayload = {
         operation: 'generate',
         target_type: 'audio',
@@ -133,7 +133,7 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
       } else if (mode === 'music') {
         reqPayload.settings.audio_style = musicStyle
       }
-      
+
       if (DEBUG) console.debug('🎵 V2 Audio req:', typeof reqPayload, reqPayload)
 
       await generate(reqPayload)

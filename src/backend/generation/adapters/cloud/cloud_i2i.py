@@ -384,6 +384,7 @@ class I2IEditCloudAdapter(GenerationAdapter):
             },
         )
 
+
 class CloudI2ITransformAdapter(GenerationAdapter):
     """
     Cloud-based generic Image-to-Image transform via ComfyUI.
@@ -441,13 +442,15 @@ class CloudI2ITransformAdapter(GenerationAdapter):
             [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
         from ... import lora_utils
+
         cloud_lora_downloads = (
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
         )
 
         workflow = self._build_cloud_i2i_workflow(
             image_filename=upload_filename,
-            checkpoint=req.checkpoint or "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+            checkpoint=req.checkpoint
+            or "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
             prompt=req.prompt or "",
             negative_prompt=req.negative_prompt or "",
             denoise=req.denoise or 0.7,
@@ -456,7 +459,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
             seed=req.seed or -1,
             sampler_name=req.sampler or "dpmpp_2m",
             scheduler=req.scheduler or "karras",
-            loras=req.loras or []
+            loras=req.loras or [],
         )
 
         input_images_b64 = {upload_filename: image_b64}
@@ -468,12 +471,13 @@ class CloudI2ITransformAdapter(GenerationAdapter):
             "settings": {
                 "denoise": req.denoise,
                 "checkpoint": req.checkpoint,
-            }
+            },
         }
 
         submit_fn = self._submit_to_runpod
         if submit_fn is None:
             from ...app import submit_to_runpod_async
+
             submit_fn = submit_to_runpod_async
 
         result = await submit_fn(
@@ -514,7 +518,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
         """Builds a pure SDXL I2I prompt workflow for Cloud."""
         # We start with the absolute base SDXL I2I workflow nodes
         nodes = {}
-        
+
         nodes["10"] = {
             "class_type": "CheckpointLoaderSimple",
             "inputs": {"ckpt_name": checkpoint},
@@ -523,7 +527,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
         # Handling LoRAs (chaining them onto the model/clip)
         current_model_node = ["10", 0]
         current_clip_node = ["10", 1]
-        
+
         next_node_id = 100
         for lora in loras:
             nodes[str(next_node_id)] = {
@@ -534,7 +538,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
                     "strength_clip": lora.strength,
                     "model": current_model_node,
                     "clip": current_clip_node,
-                }
+                },
             }
             current_model_node = [str(next_node_id), 0]
             current_clip_node = [str(next_node_id), 1]
@@ -661,13 +665,15 @@ class CloudI2ITransformAdapter(GenerationAdapter):
             [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
         )
         from ... import lora_utils
+
         cloud_lora_downloads = (
             lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
         )
 
         workflow = self._build_cloud_i2i_workflow(
             image_filename=upload_filename,
-            checkpoint=req.checkpoint or "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+            checkpoint=req.checkpoint
+            or "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
             prompt=req.prompt or "",
             negative_prompt=req.negative_prompt or "",
             denoise=req.denoise or 0.7,
@@ -676,7 +682,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
             seed=req.seed or -1,
             sampler_name=req.sampler or "dpmpp_2m",
             scheduler=req.scheduler or "karras",
-            loras=req.loras or []
+            loras=req.loras or [],
         )
 
         input_images_b64 = {upload_filename: image_b64}
@@ -688,12 +694,13 @@ class CloudI2ITransformAdapter(GenerationAdapter):
             "settings": {
                 "denoise": req.denoise,
                 "checkpoint": req.checkpoint,
-            }
+            },
         }
 
         submit_fn = self._submit_to_runpod
         if submit_fn is None:
             from ...app import submit_to_runpod_async
+
             submit_fn = submit_to_runpod_async
 
         result = await submit_fn(
@@ -734,7 +741,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
         """Builds a pure SDXL I2I prompt workflow for Cloud."""
         # We start with the absolute base SDXL I2I workflow nodes
         nodes = {}
-        
+
         nodes["10"] = {
             "class_type": "CheckpointLoaderSimple",
             "inputs": {"ckpt_name": checkpoint},
@@ -743,7 +750,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
         # Handling LoRAs (chaining them onto the model/clip)
         current_model_node = ["10", 0]
         current_clip_node = ["10", 1]
-        
+
         next_node_id = 100
         for lora in loras:
             nodes[str(next_node_id)] = {
@@ -754,7 +761,7 @@ class CloudI2ITransformAdapter(GenerationAdapter):
                     "strength_clip": lora.strength,
                     "model": current_model_node,
                     "clip": current_clip_node,
-                }
+                },
             }
             current_model_node = [str(next_node_id), 0]
             current_clip_node = [str(next_node_id), 1]
@@ -822,4 +829,3 @@ class CloudI2ITransformAdapter(GenerationAdapter):
         }
 
         return nodes
-

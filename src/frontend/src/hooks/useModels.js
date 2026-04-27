@@ -35,7 +35,7 @@ export function useModels(type = 'sdxl') {
                 let desc = known.desc || c;
                 return { value: c, label: label, desc: desc };
             });
-            
+
             // Build the grouped structure
             const groups = {
               "flux": {

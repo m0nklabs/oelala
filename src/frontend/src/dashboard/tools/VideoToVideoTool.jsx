@@ -198,7 +198,7 @@ export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
 
     try {
       const adapterHint = 'local-v2v'
-      
+
       const reader = new FileReader()
       reader.onload = async () => {
         const base64Data = reader.result.split(',')[1]

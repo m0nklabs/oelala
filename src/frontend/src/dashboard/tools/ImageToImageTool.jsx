@@ -414,11 +414,11 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           reqPayload.negative_prompt = negativePrompt
           reqPayload.lightning = lightning
           reqPayload.edit_model = editModel
-          
+
           const editDims = getEditDimensions(editResolution, editAspectRatio)
           reqPayload.width = editDims.width
           reqPayload.height = editDims.height
-          
+
           if (loraConfigs.length > 0) {
             reqPayload.lora_configs = loraConfigs.filter(c => c.name)
           }
@@ -513,7 +513,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
           >
             <Wand2 size={14} />
             Transform
-            
+
           </button>
           <button
             onClick={() => setMode('edit')}

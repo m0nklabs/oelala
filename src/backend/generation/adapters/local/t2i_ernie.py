@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import random
-from pathlib import Path
 from typing import Any
 
 from ...adapter import GenerationAdapter, ProgressCallback
@@ -166,11 +165,13 @@ class ErnieLocalT2IAdapter(GenerationAdapter):
 
         # Build workflow and embed extras if allowed
         workflow = self.build_workflow(req)
-        
-        # Merge extra frontend configuration dynamically 
+
+        # Merge extra frontend configuration dynamically
         # (This is identical to what we added in wan22 logic)
         for _, node in workflow.items():
-            if node.get("class_type") == "UNETLoader" and getattr(req, "model_extra", None):
+            if node.get("class_type") == "UNETLoader" and getattr(
+                req, "model_extra", None
+            ):
                 for k, v in req.model_extra.items():
                     if k not in node["inputs"]:
                         node["inputs"][k] = v

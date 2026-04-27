@@ -18,7 +18,7 @@ async def main():
         credits=999,
         created_at="2026-01-01"
     )
-    
+
     file_path = "/home/flip/oelala/uploads/cat_ak.png"
     class DummyFile:
         def __init__(self):
@@ -28,18 +28,18 @@ async def main():
         async def read(self):
             self._file.seek(0)
             return self._file.read()
-    
+
     import generation.v1_compat
     from generation.v2_api import GenerationRouter
     # Setup V2 router structure
     generation.v1_compat._router = GenerationRouter()
-    
+
     # We must patch the router's generation logic since it wasn't started inside the app correctly
     from generation.factory import _registry
     if not _registry.adapters:
         from generation.factory import setup_v2_engine
         await setup_v2_engine()
-        
+
     res = await dispatch_v1(
         form=dict(
             prompt="The camera intensely shakes as the enraged cat fires the golden AK-47 in full auto, bright muzzle flashes illuminating its fur, the massive fiery explosion expanding and billowing in the cinematic background, slow motion.",
