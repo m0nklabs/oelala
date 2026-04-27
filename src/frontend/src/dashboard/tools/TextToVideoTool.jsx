@@ -941,8 +941,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   setResolution('576p')
                   setAspectRatio('9:16')
                   setDuration(5)
-                  setSteps(20)
-                  setCfg(3.0)
+                  setSteps(8)
+                  setCfg(1.0)
                   setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
                 } else if (newMode === 'cloud_wan22') {
                   setResolution('720p')

@@ -51,6 +51,18 @@ cd deploy/runpod
 > If you push `:latest` only, RunPod will keep pulling the old tag and your
 > changes will never reach production. This mistake wasted 3 deploys on 2026-04-08.
 
+After updating the template, each deploy script reapplies the endpoint defaults
+from `src/backend/runpod_defaults.py`. This keeps scaling and timeout behavior
+stable even after template edits.
+
+Current production defaults:
+
+| Endpoint | GPU tiers | Scaling | Job policy |
+|----------|-----------|---------|------------|
+| Wan2.2 Cloud Max | 48GB+ | workers `0/2`, idle `120s`, `QUEUE_DELAY:4` | 60 min execution, 120 min TTL |
+| LTX-2.3 | 80GB+ | workers `0/2`, idle `120s`, `QUEUE_DELAY:1` | 45 min execution, 120 min TTL |
+| I2I/Qwen Edit | 48GB+ | workers `0/2`, idle `120s`, `QUEUE_DELAY:4` | 15 min execution, 60 min TTL |
+
 ## LoRA / Private Asset Storage
 
 The RunPod Network Volume is reserved for LoRAs and private/custom assets only.
@@ -230,7 +242,7 @@ RunPod currently supports only one cached model per endpoint. For Oelala that me
     - private or hard-to-replace custom assets
 4. RunPod exposes cached models at `/runpod-volume/huggingface-cache/hub/` using Hugging Face cache conventions; set `RUNPOD_CACHED_MODEL_DIRS` only if you need to override or extend that search path.
 5. The worker now links files from cached-model storage before falling back to live Hugging Face downloads.
-6. Keep `workersMin=0` and `idleTimeout=120`.
+6. Keep `workersMin=0`, `workersMax=2`, and `idleTimeout=120` unless production traffic proves a different cost/latency tradeoff is needed.
 
 ### Startup vs workflow-specific preparation
 
@@ -267,4 +279,4 @@ Output files are returned as base64 in the API response.
 - **Cold start**: First job takes 30-60s while worker boots and loads models
 - **Private LoRA/custom asset not found**: Check Network Volume mount path (`/runpod-volume`) or use `upload_private_assets.py`
 - **OOM**: Use a larger GPU tier or reduce resolution/frames
-- **Timeout**: Default 30min timeout; increase for very long generations
+- **Timeout**: Request policies are set per endpoint in `src/backend/runpod_defaults.py`; increase the matching profile for very long generations.

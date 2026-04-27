@@ -136,15 +136,15 @@ I2V Generation Modes
 
 ### I2V Model Comparison
 
-| Feature | Wan2.2 | LTX-2 |
-|---------|--------|-------|
-| Pass Type | Dual (high/low noise) | Single |
-| Default Steps | 15 | 8 |
-| Default CFG | 3.0 | 1.0 |
-| Text Encoder | UMT5-XXL | Gemma 3 |
-| Best For | Quality, longer clips | Speed, shorter clips |
-| LoRA Support | ✅ Yes | ❌ No (native) |
-| Max Duration (480p) | 20 sec | 12 sec |
+| Feature | Wan2.2 Local Q6 | Wan2.2 Cloud Max | LTX-2.3 Cloud |
+|---------|-----------------|------------------|---------------|
+| Pass Type | Dual (high/low noise) | Dual (high/low noise) | Single |
+| Default Steps | 6 | 15 | 8 |
+| Default CFG | 1.0 | 3.0 | 1.0 |
+| Text Encoder | UMT5-XXL | UMT5-XXL | Gemma 3 |
+| Best For | Local quality/control | Full-precision quality | Speed, shorter clips |
+| LoRA Support | ✅ Yes | ✅ Yes | ✅ Single-stage |
+| Default Worker | Local dual GPU | RunPod 48GB+ | RunPod 80GB+ |
 
 ### I2V Alternative Models (Swappable - Wan2.2 only)
 

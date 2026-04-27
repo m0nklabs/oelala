@@ -103,7 +103,7 @@ const I2V_DEFAULT_SETTINGS = {
   aspectRatio: '9:16',
   fps: 16,
   steps: 6,
-  cfg: 3.0,
+  cfg: 1.0,
   seed: -1,
   cameraMotion: '',
   bsShift: 9.0,
@@ -1284,11 +1284,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setSteps(6)
                   setCfg(1.0)
                 } else if (newMode === 'ltx2') {
-                  setResolution('576p')  // LTX-2 handles higher res better
+                  setResolution('576p')  // LTX-2.3 distilled handles higher res efficiently on the 80GB worker
                   setAspectRatio('9:16')
                   setDuration(5)
-                  setSteps(20)  // LTX-2 needs more steps
-                  setCfg(3.0)
+                  setSteps(8)
+                  setCfg(1.0)
                   setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
                 } else if (newMode === 'blockswap_q8' || newMode === 'distorch2_q8') {
                   setResolution('720p')

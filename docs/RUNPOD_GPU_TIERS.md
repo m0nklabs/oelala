@@ -52,6 +52,14 @@ AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180
 - `scalerType=QUEUE_DELAY`, `scalerValue=4` scales after a short queue delay.
 - Async video requests use an explicit per-job RunPod policy, because the RunPod default `executionTimeout` is only 10 minutes.
 
+Current per-job policies from `src/backend/runpod_defaults.py`:
+
+| Endpoint | executionTimeout | TTL | Notes |
+|----------|------------------|-----|-------|
+| Wan2.2 Cloud Max | 60 min | 120 min | Long 48GB+ video jobs |
+| LTX-2.3 | 45 min | 120 min | 80GB+ distilled 8-step jobs |
+| I2I/Qwen Edit | 15 min | 60 min | Image edit jobs, Lightning optional |
+
 ### Why 48GB minimum?
 - WAN 2.2 14B Q6_K at 480×848 @ 321 frames needs ~26GB VRAM
 - 24GB GPUs (3090, 4090) can't fit the model + activations for long videos

@@ -186,7 +186,7 @@ sudo systemctl restart oelala-backend
 | oelala-ltx23 | `ctpoa610dva4ww` | `c1fz26l07d` | `ghcr.io/m0nklabs/oelala-ltx23-worker` | 80GB+ |
 | oelala-i2i | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-i2i-worker` | 48GB+ |
 
-All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. Wan/I2I scale at `QUEUE_DELAY:4`; LTX-2.3 uses `QUEUE_DELAY:1` because the 80GB worker cold start is more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`.
+All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. Wan/I2I scale at `QUEUE_DELAY:4`; LTX-2.3 uses `QUEUE_DELAY:1` because the 80GB worker cold start is more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`; add every new endpoint profile there so requests get an explicit `executionTimeout` and `ttl` in milliseconds.
 
 ## The Golden Rule
 
