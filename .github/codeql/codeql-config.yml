@@ -1,0 +1,18 @@
+name: Oelala CodeQL Config
+
+paths:
+  - src
+  - sdk
+  - tests
+
+paths-ignore:
+  - ComfyUI
+  - external
+  - data
+  - media
+  - generated
+  - uploads
+  - logs
+  - scratch
+  - examples
+  - oelala-storage-data
