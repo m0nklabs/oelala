@@ -127,17 +127,10 @@ export async function apiFetch(endpoint, options = {}) {
 
 // Lightweight API helper with graceful JSON parsing fallback
 export async function postForm(url, formData, headers = {}) {
-  const token = await getAccessToken()
-  const safeUrl = resolveAllowedApiUrl(url)
-  const authHeaders = token && shouldAttachAuth(safeUrl)
-    ? { ...headers, 'Authorization': `Bearer ${token}` }
-    : headers
-
-  const res = await fetch(safeUrl.toString(), {
+  const res = await apiFetch(url, {
     method: 'POST',
     body: formData,
-    headers: authHeaders,
-    credentials: 'same-origin',
+    headers,
   })
 
   const text = await res.text()
@@ -182,11 +175,7 @@ export async function postForm(url, formData, headers = {}) {
 }
 
 export async function getJson(url) {
-  const token = await getAccessToken()
-  const safeUrl = resolveAllowedApiUrl(url)
-  const headers = token && shouldAttachAuth(safeUrl) ? { 'Authorization': `Bearer ${token}` } : {}
-
-  const res = await fetch(safeUrl.toString(), { method: 'GET', headers, credentials: 'same-origin' })
+  const res = await apiFetch(url, { method: 'GET' })
   const text = await res.text()
   try {
     const data = text ? JSON.parse(text) : null
@@ -197,16 +186,10 @@ export async function getJson(url) {
 }
 
 export async function postJson(url, body = {}) {
-  const token = await getAccessToken()
-  const headers = { 'Content-Type': 'application/json' }
-  const safeUrl = resolveAllowedApiUrl(url)
-  if (token && shouldAttachAuth(safeUrl)) headers['Authorization'] = `Bearer ${token}`
-
-  const res = await fetch(safeUrl.toString(), {
+  const res = await apiFetch(url, {
     method: 'POST',
     body: JSON.stringify(body),
-    headers,
-    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
   })
   const text = await res.text()
   try {

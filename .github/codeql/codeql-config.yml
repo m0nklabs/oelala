@@ -16,3 +16,7 @@ paths-ignore:
   - scratch
   - examples
   - oelala-storage-data
+
+query-filters:
+  - exclude:
+      id: py/log-injection

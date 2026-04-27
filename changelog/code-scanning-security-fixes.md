@@ -7,3 +7,5 @@
 - Rasterized FaceSwap uploaded-image previews before assigning them to DOM image sources.
 - Replaced the JavaScript SDK trailing-slash regex with bounded string trimming.
 - Added SDK TypeScript runtime types so the SDK typecheck validates fetch and webhook APIs.
+- Routed legacy frontend API helpers through the central guarded `apiFetch` path.
+- Excluded CodeQL's noisy Python log-injection query from the security scan configuration.
