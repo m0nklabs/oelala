@@ -3,8 +3,51 @@
  * Includes authenticated requests using Supabase JWT
  */
 
-import { BACKEND_BASE, DEBUG } from './config'
+import { BACKEND_BASE, DEBUG, STORAGE_BASE } from './config'
 import { supabase } from './lib/supabase'
+
+const EXTRA_ALLOWED_ORIGINS = [
+  'https://storage.oelala.xyz',
+  'https://storage2.oelala.xyz',
+]
+
+function getBrowserOrigin() {
+  return typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : BACKEND_BASE
+}
+
+function getAllowedOrigins() {
+  const origins = new Set(EXTRA_ALLOWED_ORIGINS)
+  const browserOrigin = getBrowserOrigin()
+  try {
+    origins.add(new URL(BACKEND_BASE, browserOrigin).origin)
+    origins.add(new URL(STORAGE_BASE, browserOrigin).origin)
+    origins.add(browserOrigin)
+  } catch (e) {
+    console.error('🔐 API: failed to build allowed origins', e)
+  }
+  return origins
+}
+
+function resolveAllowedApiUrl(endpoint) {
+  const rawEndpoint = String(endpoint || '')
+  const browserOrigin = getBrowserOrigin()
+  const backendUrl = new URL(BACKEND_BASE, browserOrigin)
+  const resolvedUrl = new URL(rawEndpoint, backendUrl)
+
+  if (!getAllowedOrigins().has(resolvedUrl.origin)) {
+    throw new Error('Blocked cross-origin API request')
+  }
+
+  return resolvedUrl
+}
+
+function shouldAttachAuth(url) {
+  const browserOrigin = getBrowserOrigin()
+  const backendOrigin = new URL(BACKEND_BASE, browserOrigin).origin
+  return url.origin === backendOrigin || url.origin === browserOrigin
+}
 
 /**
  * Get the current session's access token
@@ -40,12 +83,13 @@ export async function getAccessToken() {
  */
 export async function apiFetch(endpoint, options = {}) {
   const token = await getAccessToken()
+  const url = resolveAllowedApiUrl(endpoint)
 
   const headers = {
     ...options.headers,
   }
 
-  if (token) {
+  if (token && shouldAttachAuth(url)) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
@@ -56,19 +100,21 @@ export async function apiFetch(endpoint, options = {}) {
     }
   }
 
-  const url = endpoint.startsWith('http') ? endpoint : `${BACKEND_BASE}${endpoint}`
-
   // Bust Cloudflare cache for static media files that may have been cached
   // without CORS headers (before the Vary: Origin fix was deployed)
-  const fetchUrl = (url.includes('/comfyui/output/') || url.includes('/media/generated/'))
-    ? url + (url.includes('?') ? '&' : '?') + '_cors=1'
-    : url
-
-  if (DEBUG) {
-    console.log(`🔐 API: ${options.method || 'GET'} ${endpoint}`, token ? '(authenticated)' : '(anonymous)')
+  if (url.pathname.includes('/comfyui/output/') || url.pathname.includes('/media/generated/')) {
+    url.searchParams.set('_cors', '1')
   }
 
-  return fetch(fetchUrl, {
+  if (DEBUG) {
+    console.log('🔐 API request', {
+      method: options.method || 'GET',
+      endpoint: url.pathname,
+      authenticated: Boolean(token),
+    })
+  }
+
+  return fetch(url.toString(), {
     ...options,
     headers,
     credentials: 'same-origin',
@@ -82,9 +128,12 @@ export async function apiFetch(endpoint, options = {}) {
 // Lightweight API helper with graceful JSON parsing fallback
 export async function postForm(url, formData, headers = {}) {
   const token = await getAccessToken()
-  const authHeaders = token ? { ...headers, 'Authorization': `Bearer ${token}` } : headers
+  const safeUrl = resolveAllowedApiUrl(url)
+  const authHeaders = token && shouldAttachAuth(safeUrl)
+    ? { ...headers, 'Authorization': `Bearer ${token}` }
+    : headers
 
-  const res = await fetch(url, {
+  const res = await fetch(safeUrl.toString(), {
     method: 'POST',
     body: formData,
     headers: authHeaders,
@@ -134,9 +183,10 @@ export async function postForm(url, formData, headers = {}) {
 
 export async function getJson(url) {
   const token = await getAccessToken()
-  const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+  const safeUrl = resolveAllowedApiUrl(url)
+  const headers = token && shouldAttachAuth(safeUrl) ? { 'Authorization': `Bearer ${token}` } : {}
 
-  const res = await fetch(url, { method: 'GET', headers, credentials: 'same-origin' })
+  const res = await fetch(safeUrl.toString(), { method: 'GET', headers, credentials: 'same-origin' })
   const text = await res.text()
   try {
     const data = text ? JSON.parse(text) : null
@@ -149,9 +199,10 @@ export async function getJson(url) {
 export async function postJson(url, body = {}) {
   const token = await getAccessToken()
   const headers = { 'Content-Type': 'application/json' }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  const safeUrl = resolveAllowedApiUrl(url)
+  if (token && shouldAttachAuth(safeUrl)) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(url, {
+  const res = await fetch(safeUrl.toString(), {
     method: 'POST',
     body: JSON.stringify(body),
     headers,

@@ -3,3 +3,7 @@
 - Sanitized image-to-video frontend filenames before converting fetched media blobs into `File` objects.
 - Restored the CodeQL workflow so GitHub code scanning re-analyzes `main` on push and schedule.
 - Scoped CodeQL to first-party source and tests to avoid scanning external/runtime media trees.
+- Hardened frontend API fetch helpers to allow only known service origins.
+- Rasterized FaceSwap uploaded-image previews before assigning them to DOM image sources.
+- Replaced the JavaScript SDK trailing-slash regex with bounded string trimming.
+- Added SDK TypeScript runtime types so the SDK typecheck validates fetch and webhook APIs.

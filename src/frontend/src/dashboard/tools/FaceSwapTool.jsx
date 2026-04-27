@@ -14,6 +14,34 @@ import CreationsPickerModal from '../../components/CreationsPickerModal'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
+const SAFE_PREVIEW_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+
+function isSafePreviewImage(file) {
+  return file && SAFE_PREVIEW_IMAGE_TYPES.has(file.type)
+}
+
+async function createRasterPreview(file) {
+  if (!isSafePreviewImage(file)) {
+    throw new Error('Unsupported image preview type')
+  }
+
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const context = canvas.getContext('2d')
+  context.drawImage(bitmap, 0, 0)
+  bitmap.close?.()
+  return canvas.toDataURL('image/png')
+}
+
+async function createMediaPreview(file) {
+  if (file?.type?.startsWith('video/')) {
+    return URL.createObjectURL(file)
+  }
+  return createRasterPreview(file)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FaceSwapTool
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,7 +187,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
           const filename = imageUrl.split('/').pop() || 'image.png'
           const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
           setTargetFile(fileObj)
-          setTargetPreview(URL.createObjectURL(fileObj))
+          setTargetPreview(await createRasterPreview(fileObj))
           setResult(null)
           setError(null)
           setDetectedFaces(null)
@@ -187,7 +215,7 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
       const filename = item.filename || mediaUrl.split('/').pop()
       const fileObj = new File([blob], filename, { type: blob.type || 'image/png' })
       setTargetFile(fileObj)
-      setTargetPreview(URL.createObjectURL(fileObj))
+      setTargetPreview(await createMediaPreview(fileObj))
       setResult(null)
       setError(null)
       setDetectedFaces(null)
@@ -200,26 +228,27 @@ function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImport
 
   const handleDragOver = (e) => e.preventDefault()
 
-  const handleTargetDrop = useCallback((e) => {
+  const handleTargetDrop = useCallback(async (e) => {
     e.preventDefault()
     const f = e.dataTransfer?.files?.[0] || e.target?.files?.[0]
     if (!f) return
     if (!f.type.startsWith('image/') && !f.type.startsWith('video/')) return
+    if (f.type.startsWith('image/') && !isSafePreviewImage(f)) return
     setTargetFile(f)
     setResult(null)
     setError(null)
     setDetectedFaces(null)
-    setTargetPreview(URL.createObjectURL(f))
+    setTargetPreview(await createMediaPreview(f))
   }, [])
 
-  const handleSourceDrop = useCallback((e) => {
+  const handleSourceDrop = useCallback(async (e) => {
     e.preventDefault()
     const f = e.dataTransfer?.files?.[0] || e.target?.files?.[0]
-    if (!f || !f.type.startsWith('image/')) return
+    if (!isSafePreviewImage(f)) return
     setSourceFile(f)
     setResult(null)
     setError(null)
-    setSourcePreview(URL.createObjectURL(f))
+    setSourcePreview(await createRasterPreview(f))
   }, [])
 
   const detectFaces = async () => {
@@ -590,11 +619,12 @@ function ProfilesPanel({ user, requestLogin }) {
 
   useEffect(() => { loadProfiles() }, [])
 
-  const handleImagePick = (e) => {
+  const handleImagePick = async (e) => {
     const files = Array.from(e.target.files || [])
-    const imgs = files.filter(f => f.type.startsWith('image/'))
+    const imgs = files.filter(isSafePreviewImage)
+    const previews = await Promise.all(imgs.map(createRasterPreview))
     setNewImages(prev => [...prev, ...imgs])
-    setNewPreviews(prev => [...prev, ...imgs.map(f => URL.createObjectURL(f))])
+    setNewPreviews(prev => [...prev, ...previews])
     // reset input so same file can be re-added if needed
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -892,10 +922,11 @@ function TrainLoraPanel({ user, requestLogin }) {
     return () => clearInterval(interval)
   }, [loadStatus])
 
-  const handleImagePick = (e) => {
-    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
+  const handleImagePick = async (e) => {
+    const files = Array.from(e.target.files || []).filter(isSafePreviewImage)
+    const safePreviews = await Promise.all(files.map(createRasterPreview))
     setImages(prev => [...prev, ...files])
-    setPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+    setPreviews(prev => [...prev, ...safePreviews])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 

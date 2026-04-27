@@ -22,6 +22,14 @@ const DEFAULT_BASE_URL = "https://api.oelala.xyz";
 const DEFAULT_TIMEOUT = 30_000;
 const SDK_VERSION = "0.1.0";
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 /**
  * Oelala API client for JavaScript/TypeScript.
  *
@@ -49,7 +57,7 @@ export class OelalaClient {
       throw new Error("API key must start with 'oelala_'");
     }
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = stripTrailingSlashes(config.baseUrl ?? DEFAULT_BASE_URL);
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
   }
 
