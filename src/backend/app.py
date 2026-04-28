@@ -814,7 +814,9 @@ def _validate_public_image_url(image_url: str) -> str:
             type=socket.SOCK_STREAM,
         )
     except socket.gaierror as exc:
-        raise HTTPException(status_code=400, detail="Image URL host is invalid") from exc
+        raise HTTPException(
+            status_code=400, detail="Image URL host is invalid"
+        ) from exc
 
     for address in addresses:
         ip = ipaddress.ip_address(address[4][0])
@@ -1808,7 +1810,10 @@ async def list_comfyui_media(
                 item["metadata"] = metadata
             except Exception as e:
                 logger.debug("Metadata extraction failed for %s: %s", file_path.name, e)
-                item["metadata"] = {"has_metadata": False, "error": "metadata unavailable"}
+                item["metadata"] = {
+                    "has_metadata": False,
+                    "error": "metadata unavailable",
+                }
 
         # For videos, try to find associated PNG with same timestamp or base name
         if include_metadata and media_type == "video":
@@ -2090,7 +2095,9 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
                     found = True
                     logger.info(f"   ✅ Deleted from local ComfyUI: {safe_filename}")
                 except Exception as e:
-                    logger.warning(f"Failed to delete local ComfyUI media {safe_filename}: {e}")
+                    logger.warning(
+                        f"Failed to delete local ComfyUI media {safe_filename}: {e}"
+                    )
                     errors.append({"filename": safe_filename, "error": "delete failed"})
                     found = True
 
@@ -3949,25 +3956,19 @@ async def get_job_status(prompt_id: str):
                     if "gifs" in node_output:
                         for gif in node_output["gifs"]:
                             if gif.get("type") == "output":
-                                output_video = (
-                                    f"/comfyui/output/{_safe_filename(gif.get('filename'))}"
-                                )
+                                output_video = f"/comfyui/output/{_safe_filename(gif.get('filename'))}"
                                 break
                     # Image output (SaveImage)
                     if "images" in node_output:
                         for img in node_output["images"]:
                             if img.get("type") == "output":
-                                output_image = (
-                                    f"/comfyui/output/{_safe_filename(img.get('filename'))}"
-                                )
+                                output_image = f"/comfyui/output/{_safe_filename(img.get('filename'))}"
                                 break
                     # Audio output (SaveAudio, SaveAudioMP3, SaveAudioOpus)
                     if "audio" in node_output:
                         for audio in node_output["audio"]:
                             if audio.get("type") == "output":
-                                output_audio = (
-                                    f"/comfyui/output/{_safe_filename(audio.get('filename'))}"
-                                )
+                                output_audio = f"/comfyui/output/{_safe_filename(audio.get('filename'))}"
                                 break
 
                 # Auto-upload to user storage if this is a registered job
@@ -5337,7 +5338,9 @@ async def get_user_media(
         safe_media_type = _safe_user_media_type(media_type)
         safe_filename = _safe_filename(filename)
         storage = get_storage_client()
-        debug_log(f"🔍 serving media {safe_media_type}/{safe_filename} for user {user.id}")
+        debug_log(
+            f"🔍 serving media {safe_media_type}/{safe_filename} for user {user.id}"
+        )
 
         # Determine content type
         ext = Path(safe_filename).suffix.lower()
@@ -7098,7 +7101,9 @@ async def post_process_media(
         prompt_id = await comfyui.queue_prompt(workflow)
     except Exception as e:
         logger.error(f"❌ Failed to queue post-process workflow: {e}")
-        raise HTTPException(status_code=500, detail="Failed to queue post-process workflow")
+        raise HTTPException(
+            status_code=500, detail="Failed to queue post-process workflow"
+        )
 
     # Store job info
     job_info = {
