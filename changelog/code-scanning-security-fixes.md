@@ -13,3 +13,4 @@
 - Replaced remaining internal exception text in 500 responses with generic client-facing errors.
 - Added YouTube URL allowlisting and safe external ID normalization for CodeQL-flagged service calls.
 - Excluded validated false-positive CodeQL rules where custom allowlists, safe path helpers, or server-generated API key hashing already provide the intended protection.
+- Removed the share-page JavaScript redirect and fixed CodeQL query-filter indentation so validated false positives are actually excluded.

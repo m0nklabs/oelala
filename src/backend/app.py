@@ -1071,7 +1071,6 @@ async def share_media(media_id: str, request: Request):
     share_url_html = html_lib.escape(share_url, quote=True)
     redirect_url_html = html_lib.escape(redirect_url, quote=True)
     og_type_html = html_lib.escape(og_type, quote=True)
-    redirect_url_js = _js_string_literal(redirect_url)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1100,7 +1099,6 @@ async def share_media(media_id: str, request: Request):
 </head>
 <body>
     <p>Redirecting… <a href="{redirect_url_html}">Click here if not redirected.</a></p>
-    <script>window.location.replace({redirect_url_js});</script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -3297,7 +3295,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         return {
             "prompt_id": prompt_id,
             "status": "running",
-            "error": error_str,
+            "error": "Cloud job status temporarily unavailable",
             **job_info,
         }
 

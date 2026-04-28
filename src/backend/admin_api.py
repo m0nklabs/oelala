@@ -1025,7 +1025,7 @@ async def get_queue_status(admin: User = Depends(get_admin_user)):
         logger.error(f"Queue status error: {e}")
         return {
             "status": "error",
-            "message": str(e),
+            "message": "Failed to fetch queue status",
             "running": [],
             "pending": [],
         }
