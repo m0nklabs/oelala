@@ -6,7 +6,6 @@ from .cloud_i2i import I2IEditCloudAdapter, build_i2i_edit_workflow
 
 
 class QwenEditCloudAdapter(I2IEditCloudAdapter):
-
     """Legacy public adapter name for Qwen Image Edit."""
 
     name = "qwen-cloud-edit"
