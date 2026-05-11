@@ -28,7 +28,7 @@ sentencepiece==0.2.1
 
 # GGUF / LLM support
 gguf==0.18.0
-llama-cpp-python==0.3.22
+llama-cpp-python==0.3.23
 
 # Video processing
 imageio==2.37.3
