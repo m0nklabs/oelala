@@ -21,7 +21,7 @@ triton==3.6.0
 
 # Transformers & ML core
 # GHSA-69w3-r845-3855 is patched in the first 5.0.0 release candidate.
-transformers==5.7.0
+transformers==5.8.0
 accelerate==1.13.0
 safetensors==0.7.0
 sentencepiece==0.2.1
