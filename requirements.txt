@@ -11,7 +11,7 @@
 # PyTorch 2.9.1 with CUDA 12.8 (SM 1.20 support)
 # Install separately with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 # Or for CUDA 12.4: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-torch==2.11.0
+torch==2.12.0
 torchvision==0.26.0
 torchaudio==2.11.0
 torchsde==0.2.6
