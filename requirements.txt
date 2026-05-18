@@ -17,7 +17,7 @@ torchaudio==2.11.0
 torchsde==0.2.6
 
 # Triton for GPU acceleration
-triton==3.6.0
+triton==3.7.0
 
 # Transformers & ML core
 # GHSA-69w3-r845-3855 is patched in the first 5.0.0 release candidate.
