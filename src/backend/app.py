@@ -92,7 +92,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
-from auth import get_current_user, User, decode_jwt_with_secret, decode_jwt_with_jwks
+from auth import (
+    get_current_user,
+    get_optional_user,
+    User,
+    decode_jwt_with_secret,
+    decode_jwt_with_jwks,
+)
 
 # Storage client for user media (MinIO-backed)
 from storage_client import get_client as get_storage_client
@@ -1380,13 +1386,15 @@ async def startup_event():
         logger.warning(f"Generation time backfill failed: {e}")
 
     # Start background cloud job poller
-    global _cloud_poller_task
+    global _cloud_poller_task, _local_poller_task
     if _runpod:
         _cloud_poller_task = asyncio.create_task(_cloud_job_poller())
         logger.info("☁️ Background cloud job poller started")
     else:
         logger.info("☁️ Cloud job poller skipped (RunPod not available)")
 
+    _local_poller_task = asyncio.create_task(_local_job_poller())
+    logger.info("🖼️ Background local job poller started")
     # ── V2 Unified Generation Core ──────────────────────────────
     try:
         from src.backend.generation.factory import create_registry
@@ -1421,6 +1429,7 @@ async def startup_event():
         v2_gen_router = GenerationRouter(
             v2_registry,
             comfyui_upload_fn=_comfyui_upload_b64,
+            track_local_job_fn=track_v2_local_job,
         )
         init_v2_api(
             registry=v2_registry,
@@ -1465,6 +1474,13 @@ async def shutdown_event():
         _cloud_poller_task.cancel()
         try:
             await _cloud_poller_task
+        except asyncio.CancelledError:
+            pass
+    if _local_poller_task and not _local_poller_task.done():
+        logger.info("🛑 Stopping local job poller...")
+        _local_poller_task.cancel()
+        try:
+            await _local_poller_task
         except asyncio.CancelledError:
             pass
 
@@ -2934,6 +2950,174 @@ async def _cloud_job_poller() -> None:
             await asyncio.sleep(10)
 
 
+def _get_cached_local_result(
+    prompt_id: str, user_id: Optional[str] = None
+) -> Optional[dict]:
+    """Return a cached local result when it belongs to the requesting user."""
+
+    result = _local_completed_cache.get(prompt_id)
+    if not result:
+        return None
+    if user_id is not None and result.get("user_id") != user_id:
+        return None
+    return {k: v for k, v in result.items() if k != "_cached_at"}
+
+
+async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[dict]:
+    """Resolve a local ComfyUI job from history and trigger upload when ready."""
+    import requests
+
+    cached = _get_cached_local_result(prompt_id)
+    if cached is not None:
+        return cached
+
+    history_resp = requests.get(
+        f"http://localhost:8188/history/{quote(prompt_id, safe='')}", timeout=5
+    )
+    if history_resp.status_code != 200:
+        return None
+
+    history = history_resp.json()
+    if prompt_id not in history:
+        return None
+
+    job_data = history[prompt_id]
+    outputs = job_data.get("outputs", {})
+
+    output_video = None
+    output_image = None
+    output_audio = None
+    for node_output in outputs.values():
+        if "gifs" in node_output and output_video is None:
+            for gif in node_output["gifs"]:
+                if gif.get("type") == "output":
+                    output_video = (
+                        f"/comfyui/output/{_safe_filename(gif.get('filename'))}"
+                    )
+                    break
+        if "images" in node_output and output_image is None:
+            for img in node_output["images"]:
+                if img.get("type") == "output":
+                    output_image = (
+                        f"/comfyui/output/{_safe_filename(img.get('filename'))}"
+                    )
+                    break
+        if "audio" in node_output and output_audio is None:
+            for audio in node_output["audio"]:
+                if audio.get("type") == "output":
+                    output_audio = (
+                        f"/comfyui/output/{_safe_filename(audio.get('filename'))}"
+                    )
+                    break
+
+    storage_path = None
+    signed_url = None
+    comfyui = get_comfyui_client()
+    if comfyui and (output_video or output_image or output_audio):
+        if output_video:
+            output_type = "video"
+            output_filename = output_video.split("/")[-1]
+        elif output_image:
+            output_type = "image"
+            output_filename = output_image.split("/")[-1]
+        else:
+            output_type = "audio"
+            output_filename = output_audio.split("/")[-1]
+
+        output_path = _safe_child_path(COMFYUI_OUTPUT_DIR, output_filename)
+
+        if prompt_id in pending_post_processing:
+            chain_info = pending_post_processing.pop(prompt_id)
+            logger.info(f"🔄 Continuing post-processing chain for {prompt_id}")
+            await trigger_post_processing_chain(
+                prompt_id=prompt_id,
+                video_path=str(output_path),
+                post_processing=chain_info["steps"],
+                user_id=chain_info["user_id"],
+                post_audio_path=chain_info.get("post_audio_path"),
+            )
+        elif job_info.get("post_processing") and output_video:
+            logger.info(f"🔄 Starting post-processing chain for {prompt_id}")
+            await trigger_post_processing_chain(
+                prompt_id=prompt_id,
+                video_path=str(output_path),
+                post_processing=job_info["post_processing"],
+                user_id=job_info.get("user_id", "unknown"),
+                post_audio_path=job_info.get("post_audio_path"),
+            )
+
+        if output_path.exists():
+            storage_path = await comfyui.on_job_complete_async(
+                prompt_id, str(output_path), output_type
+            )
+            if storage_path:
+                logger.info(
+                    f"✅ Auto-uploaded {output_type} for job {prompt_id}: {storage_path}"
+                )
+                signed_url = get_signed_media_url(storage_path, expires_in=86400)
+
+    _local_log = format_comfyui_history_log(prompt_id, job_data)
+    record_generation_complete(prompt_id, success=True, log_text=_local_log)
+
+    result = {
+        "prompt_id": prompt_id,
+        "status": "completed",
+        "output_video": output_video,
+        "output_image": output_image,
+        "output_audio": output_audio,
+        "url": signed_url or output_image or output_video or output_audio,
+        "signed_url": signed_url,
+        "storage_path": storage_path,
+        **job_info,
+        "_cached_at": time.time(),
+    }
+    _local_completed_cache[prompt_id] = result
+    return _get_cached_local_result(prompt_id)
+
+
+async def _local_job_poller() -> None:
+    """Background task: resolve local ComfyUI completions without frontend polling."""
+
+    logger.info(f"🖼️ Local job poller started (interval={LOCAL_JOB_POLL_INTERVAL}s)")
+    while True:
+        try:
+            await asyncio.sleep(LOCAL_JOB_POLL_INTERVAL)
+
+            local_jobs = {
+                pid: info
+                for pid, info in active_jobs.items()
+                if info.get("compute_target") == "local"
+            }
+
+            for prompt_id, job_info in list(local_jobs.items()):
+                try:
+                    result = await _resolve_local_job_result(prompt_id, job_info)
+                    if result and result.get("status") in ("completed", "failed"):
+                        active_jobs.pop(prompt_id, None)
+                        logger.info(
+                            f"🖼️ Background poll resolved {prompt_id}: {result.get('status')}"
+                        )
+                except Exception as e:
+                    logger.warning(f"🖼️ Background poll error for {prompt_id}: {e}")
+                await asyncio.sleep(0.5)
+
+            stale_ids = [
+                pid
+                for pid, result in _local_completed_cache.items()
+                if (time.time() - float(result.get("_cached_at", time.time())))
+                > LOCAL_COMPLETED_CACHE_TTL
+            ]
+            for pid in stale_ids:
+                del _local_completed_cache[pid]
+
+        except asyncio.CancelledError:
+            logger.info("🖼️ Local job poller stopping")
+            break
+        except Exception as e:
+            logger.error(f"🖼️ Local poller unexpected error: {e}")
+            await asyncio.sleep(10)
+
+
 # Generation stats file for analysis
 GENERATION_STATS_FILE = Path("/home/flip/oelala/data/generation_stats.json")
 
@@ -2976,6 +3160,32 @@ def record_generation_start(prompt_id: str, job_info: dict) -> None:
         # Persist user_id so record_generation_complete can upload log to user bucket
         if "user_id" in job_info:
             active_jobs[prompt_id]["user_id"] = job_info["user_id"]
+
+
+def track_v2_local_job(prompt_id: str, job_info: dict) -> None:
+    """Register a queued local V2 job in active_jobs for queue/status polling."""
+
+    active_jobs[prompt_id] = {
+        "prompt_id": prompt_id,
+        "user_id": job_info.get("user_id"),
+        "prompt": job_info.get("prompt", ""),
+        "job_type": job_info.get("job_type", "unknown"),
+        "model_name": job_info.get("model_name") or job_info.get("model_type"),
+        "model_type": job_info.get("model_type"),
+        "resolution": job_info.get("resolution"),
+        "aspect_ratio": job_info.get("aspect_ratio"),
+        "num_frames": job_info.get("num_frames"),
+        "fps": job_info.get("fps"),
+        "steps": job_info.get("steps"),
+        "cfg": job_info.get("cfg"),
+        "sampler": job_info.get("sampler"),
+        "scheduler": job_info.get("scheduler"),
+        "adapter_name": job_info.get("adapter_name"),
+        "source": job_info.get("source", "v2"),
+        "compute_target": "local",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    record_generation_start(prompt_id, active_jobs[prompt_id])
 
 
 def record_generation_complete(
@@ -3087,9 +3297,15 @@ HF_LORA_TOKEN = os.getenv("HF_LORA_TOKEN", "")
 
 # Cache for completed cloud jobs (prevent re-processing on repeated polls)
 _cloud_completed_cache: dict[str, dict] = {}
+# Cache for completed local jobs so the frontend can still fetch the final result
+# after the queue entry has been cleaned up.
+_local_completed_cache: dict[str, dict] = {}
 
 # Guard against cloud jobs that stay queued forever when RunPod never provisions a worker.
 CLOUD_QUEUE_TIMEOUT_SECONDS = int(os.getenv("RUNPOD_QUEUE_TIMEOUT_SECONDS", "300"))
+LOCAL_JOB_POLL_INTERVAL = int(os.getenv("LOCAL_JOB_POLL_INTERVAL", "3"))
+LOCAL_COMPLETED_CACHE_TTL = int(os.getenv("LOCAL_COMPLETED_CACHE_TTL", "600"))
+_local_poller_task: Optional[asyncio.Task] = None
 
 
 def _lora_download_token(filename: str) -> str:
@@ -3774,12 +3990,26 @@ async def trigger_post_processing_chain(
 
 
 @app.get("/comfyui/queue")
-async def get_comfyui_queue():
+async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
     """
     Get ComfyUI queue status including running and pending jobs.
     Enriches with Oelala job metadata where available.
     """
     import requests
+
+    empty_queue = {
+        "running": [],
+        "pending": [],
+        "failed": [],
+        "training": [],
+        "total_running": 0,
+        "total_pending": 0,
+        "total_failed": 0,
+        "total_training": 0,
+    }
+
+    if not user:
+        return empty_queue
 
     try:
         resp = requests.get("http://localhost:8188/queue", timeout=5)
@@ -3793,33 +4023,38 @@ async def get_comfyui_queue():
         for item in data.get("queue_running", []):
             if len(item) >= 2:
                 prompt_id = item[1]
+                active_job = active_jobs.get(prompt_id)
+                if not active_job or active_job.get("user_id") != user.id:
+                    continue
                 job_info = {
                     "prompt_id": prompt_id,
                     "status": "running",
                     "queue_position": 0,
                 }
-                # Enrich with Oelala metadata if available
-                if prompt_id in active_jobs:
-                    job_info.update(active_jobs[prompt_id])
+                job_info.update(active_job)
                 running.append(job_info)
 
         pending = []
         for idx, item in enumerate(data.get("queue_pending", [])):
             if len(item) >= 2:
                 prompt_id = item[1]
+                active_job = active_jobs.get(prompt_id)
+                if not active_job or active_job.get("user_id") != user.id:
+                    continue
                 job_info = {
                     "prompt_id": prompt_id,
                     "status": "pending",
                     "queue_position": idx + 1,
                 }
-                if prompt_id in active_jobs:
-                    job_info.update(active_jobs[prompt_id])
+                job_info.update(active_job)
                 pending.append(job_info)
 
         # Include face LoRA training jobs in the queue
         training = []
         if face_train_service:
             for job in face_train_service.list_jobs():
+                if job.get("user_id") and job.get("user_id") != user.id:
+                    continue
                 if job.get("status") in ("pending", "running"):
                     progress = 0
                     if job.get("steps_total", 0) > 0:
@@ -3847,6 +4082,8 @@ async def get_comfyui_queue():
         cloud_running = []
         cloud_failed = []
         for pid, info in list(active_jobs.items()):
+            if info.get("user_id") != user.id:
+                continue
             if info.get("compute_target") != "cloud":
                 continue
             cloud_status = info.get("_cloud_status", "IN_QUEUE")
@@ -3917,7 +4154,10 @@ async def get_comfyui_queue():
 
 
 @app.get("/comfyui/job/{prompt_id}")
-async def get_job_status(prompt_id: str):
+async def get_job_status(
+    prompt_id: str,
+    user: Optional[User] = Depends(get_optional_user),
+):
     """
     Get status of a specific job by prompt_id.
     Returns status (queued/running/completed/failed) and output if available.
@@ -3927,8 +4167,17 @@ async def get_job_status(prompt_id: str):
 
     safe_prompt_id = _safe_external_id(prompt_id, "prompt ID")
 
+    if not user:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    cached_local = _get_cached_local_result(safe_prompt_id, user.id)
+    if cached_local is not None:
+        return cached_local
+
     # Check in our active jobs store
     job_info = active_jobs.get(safe_prompt_id, {})
+    if not job_info or job_info.get("user_id") != user.id:
+        raise HTTPException(status_code=404, detail="Job not found")
 
     # ── Cloud (RunPod) job handling ──────────────────────────────────────
     if job_info.get("compute_target") == "cloud" and _runpod:
@@ -3937,117 +4186,9 @@ async def get_job_status(prompt_id: str):
     # ── Local ComfyUI job handling ──────────────────────────────────────
     # Check ComfyUI history for completion status
     try:
-        history_resp = requests.get(
-            f"http://localhost:8188/history/{quote(safe_prompt_id, safe='')}",
-            timeout=5,
-        )
-        if history_resp.status_code == 200:
-            history = history_resp.json()
-            if safe_prompt_id in history:
-                job_data = history[safe_prompt_id]
-                outputs = job_data.get("outputs", {})
-
-                # Find video, image, or audio output
-                output_video = None
-                output_image = None
-                output_audio = None
-                for node_id, node_output in outputs.items():
-                    # Video output (VHS_VideoCombine)
-                    if "gifs" in node_output:
-                        for gif in node_output["gifs"]:
-                            if gif.get("type") == "output":
-                                output_video = f"/comfyui/output/{_safe_filename(gif.get('filename'))}"
-                                break
-                    # Image output (SaveImage)
-                    if "images" in node_output:
-                        for img in node_output["images"]:
-                            if img.get("type") == "output":
-                                output_image = f"/comfyui/output/{_safe_filename(img.get('filename'))}"
-                                break
-                    # Audio output (SaveAudio, SaveAudioMP3, SaveAudioOpus)
-                    if "audio" in node_output:
-                        for audio in node_output["audio"]:
-                            if audio.get("type") == "output":
-                                output_audio = f"/comfyui/output/{_safe_filename(audio.get('filename'))}"
-                                break
-
-                # Auto-upload to user storage if this is a registered job
-                storage_path = None
-                signed_url = None
-                comfyui = get_comfyui_client()
-                if comfyui and (output_video or output_image or output_audio):
-                    # Determine output type and path
-                    if output_video:
-                        output_type = "video"
-                        output_filename = output_video.split("/")[-1]
-                    elif output_image:
-                        output_type = "image"
-                        output_filename = output_image.split("/")[-1]
-                    else:
-                        output_type = "audio"
-                        output_filename = output_audio.split("/")[-1]
-
-                    output_path = _safe_child_path(COMFYUI_OUTPUT_DIR, output_filename)
-
-                    # Check if this job has pending post-processing from a chain
-                    if safe_prompt_id in pending_post_processing:
-                        chain_info = pending_post_processing.pop(safe_prompt_id)
-                        logger.info(
-                            f"🔄 Continuing post-processing chain for {safe_prompt_id}"
-                        )
-                        await trigger_post_processing_chain(
-                            prompt_id=safe_prompt_id,
-                            video_path=str(output_path),
-                            post_processing=chain_info["steps"],
-                            user_id=chain_info["user_id"],
-                            post_audio_path=chain_info.get("post_audio_path"),
-                        )
-
-                    # Check if this is a fresh job with post-processing requested
-                    elif job_info.get("post_processing") and output_video:
-                        logger.info(
-                            f"🔄 Starting post-processing chain for {safe_prompt_id}"
-                        )
-                        await trigger_post_processing_chain(
-                            prompt_id=safe_prompt_id,
-                            video_path=str(output_path),
-                            post_processing=job_info["post_processing"],
-                            user_id=job_info.get("user_id", "unknown"),
-                            post_audio_path=job_info.get("post_audio_path"),
-                        )
-                    if output_path.exists():
-                        storage_path = await comfyui.on_job_complete_async(
-                            safe_prompt_id, str(output_path), output_type
-                        )
-                        if storage_path:
-                            logger.info(
-                                f"✅ Auto-uploaded {output_type} for job {safe_prompt_id}: {storage_path}"
-                            )
-                            # Generate signed URL for the uploaded content
-                            signed_url = get_signed_media_url(
-                                storage_path, expires_in=86400
-                            )  # 24h
-
-                # Record generation completion for stats tracking
-                _local_log = format_comfyui_history_log(safe_prompt_id, job_data)
-                record_generation_complete(
-                    safe_prompt_id, success=True, log_text=_local_log
-                )
-
-                return {
-                    "prompt_id": safe_prompt_id,
-                    "status": "completed",
-                    "output_video": output_video,
-                    "output_image": output_image,
-                    "output_audio": output_audio,
-                    "url": signed_url
-                    or output_image
-                    or output_video
-                    or output_audio,  # Prefer signed URL
-                    "signed_url": signed_url,
-                    "storage_path": storage_path,
-                    **job_info,
-                }
+        result = await _resolve_local_job_result(safe_prompt_id, job_info)
+        if result is not None:
+            return result
     except Exception as e:
         logger.warning(f"Error checking history for {safe_prompt_id}: {e}")
 
@@ -11157,9 +11298,9 @@ async def start_face_training(
     if not face_train_service:
         raise HTTPException(status_code=503, detail="face_train_service unavailable")
 
-    if len(images) < 2:
+    if len(images) < 5:
         raise HTTPException(
-            status_code=400, detail="Upload at least 2 reference photos"
+            status_code=400, detail="Upload at least 5 reference photos"
         )
     if steps < 200 or steps > 3000:
         raise HTTPException(

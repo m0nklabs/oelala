@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
-import { BACKEND_BASE, DEBUG } from '../../config'
-import { postForm, apiFetch } from '../../api'
+import { DEBUG, getMediaUrl } from '../../config'
+import { apiFetch } from '../../api'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import CameraPositionSelector, { getCameraPositionPrefix } from '../../components/CameraPositionSelector'
@@ -233,6 +233,33 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
 
   const { generate } = useGeneration()
 
+  const resolveImmediateImageOutput = useCallback((result) => {
+    const resultUrl = result?.meta?.result_url
+    const resultPath = result?.meta?.result_path
+
+    let backendPath = resultUrl || null
+
+    if (!backendPath && typeof resultPath === 'string') {
+      if (resultPath.includes('/media/generated/')) {
+        backendPath = `/media/generated/${resultPath.split('/media/generated/')[1]}`
+      } else if (resultPath.includes('/ComfyUI/output/')) {
+        backendPath = `/comfyui/output/${resultPath.split('/ComfyUI/output/')[1]}`
+      }
+    }
+
+    if (!backendPath) return null
+
+    const filename = result?.meta?.filename || backendPath.split('/').pop() || 'generated-image.png'
+    const mediaUrl = getMediaUrl(backendPath)
+
+    return {
+      kind: 'image',
+      url: mediaUrl,
+      backendUrl: mediaUrl,
+      filename,
+    }
+  }, [])
+
   const handleGenerate = async () => {
     // Check if user is logged in
     if (!user) {
@@ -289,6 +316,12 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
         }
 
         if (DEBUG) console.log(`📋 Batch ${i+1}/${batchCount} queued:`, result)
+
+        const immediateOutput = resolveImmediateImageOutput(result)
+        if (immediateOutput) {
+          if (onOutput) onOutput(immediateOutput)
+          continue
+        }
 
         // Track queued job
         if (result.prompt_id) {

@@ -114,10 +114,87 @@ class GenerationRouter:
         registry: AdapterRegistry,
         *,
         comfyui_upload_fn: Optional[Callable] = None,
+        track_local_job_fn: Optional[Callable[..., None]] = None,
     ) -> None:
         self.registry = registry
         # Callable: async (b64_data: str, filename: str) -> str (ComfyUI filename)
         self._comfyui_upload_fn = comfyui_upload_fn
+        self._track_local_job_fn = track_local_job_fn
+
+    def _register_local_job(
+        self,
+        req: GenerationRequest,
+        result: GenerationResult,
+        adapter: GenerationAdapter,
+    ) -> None:
+        """Register queued local V2 jobs for auto-upload into user media."""
+        if (
+            result.compute_target != ComputeTarget.LOCAL
+            or result.status != "queued_local"
+            or not req.user_id
+            or not result.prompt_id
+        ):
+            return
+
+        try:
+            try:
+                from src.backend.comfyui_client import get_comfyui_client
+            except ImportError:
+                from comfyui_client import get_comfyui_client
+
+            client = get_comfyui_client()
+            model_name = (
+                req.checkpoint
+                or getattr(req, "model_type", None)
+                or req.edit_model
+                or result.meta.get("checkpoint")
+                or adapter.model_family
+            )
+            settings = {
+                "job_type": f"{req.operation.value}_{req.target_type.value}",
+                "model_name": model_name,
+                "model_type": getattr(req, "model_type", None)
+                or req.edit_model
+                or adapter.model_family,
+                "resolution": (
+                    req.resolution
+                    or (
+                        f"{req.width}x{req.height}"
+                        if req.width is not None and req.height is not None
+                        else None
+                    )
+                ),
+                "aspect_ratio": req.aspect_ratio,
+                "num_frames": req.frames,
+                "fps": req.fps,
+                "seed": req.seed,
+                "steps": req.steps,
+                "cfg": req.cfg,
+                "sampler": req.sampler,
+                "scheduler": req.scheduler,
+                "adapter_name": adapter.name,
+                "source": "v2",
+            }
+            client.register_job(
+                prompt_id=result.prompt_id,
+                user_id=req.user_id,
+                prompt=req.prompt or "",
+                settings={k: v for k, v in settings.items() if v is not None},
+            )
+            if self._track_local_job_fn is not None:
+                self._track_local_job_fn(
+                    result.prompt_id,
+                    {
+                        "user_id": req.user_id,
+                        "prompt": req.prompt or "",
+                        "compute_target": "local",
+                        **{k: v for k, v in settings.items() if v is not None},
+                    },
+                )
+        except Exception as exc:
+            logger.warning(
+                f"⚠️ Failed to register local V2 job {result.prompt_id}: {exc}"
+            )
 
     def resolve_adapter(self, req: GenerationRequest) -> GenerationAdapter:
         """
@@ -396,6 +473,9 @@ class GenerationRouter:
         result = result.model_copy(
             update={"credits_used": credits_required, "adapter_name": adapter.name}
         )
+
+        # 8b. Register queued local ComfyUI jobs for auto-upload into user media.
+        self._register_local_job(req, result, adapter)
 
         # 9. Deduct credits
         if deduct_credits_fn:

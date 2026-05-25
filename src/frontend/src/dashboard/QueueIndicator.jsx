@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Clock, Play, Loader2, X, CheckCircle, RefreshCw, Brain, AlertTriangle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
+import { apiFetch } from '../api'
 import ProgressTracker from './ProgressTracker'
 
 /**
@@ -15,20 +16,28 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
   const popupRef = useRef(null)
   const prevRunningRef = useRef([])
 
+  const EMPTY_QUEUE = { running: [], pending: [], failed: [], training: [], total_running: 0, total_pending: 0, total_failed: 0, total_training: 0 }
+
   const fetchQueue = useCallback(async () => {
     try {
-      const res = await fetch(`${BACKEND_BASE}/comfyui/queue`)
-      if (!res.ok) return
+      const res = await apiFetch('/comfyui/queue')
+      if (!res.ok) {
+        setQueue(EMPTY_QUEUE)
+        setCompletedJobs([])
+        prevRunningRef.current = []
+        return
+      }
       const data = await res.json()
       setQueue(data)
     } catch (e) {
+      setQueue(EMPTY_QUEUE)
       if (DEBUG) console.debug('⚠️ Queue fetch failed:', e)
     }
   }, [])
 
   const checkJobStatus = useCallback(async (promptId) => {
     try {
-      const res = await fetch(`${BACKEND_BASE}/comfyui/job/${promptId}`)
+      const res = await apiFetch(`/comfyui/job/${promptId}`)
       if (!res.ok) return null
       return await res.json()
     } catch (e) {
