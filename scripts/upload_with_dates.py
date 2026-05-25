@@ -6,8 +6,20 @@ import httpx
 
 
 DEFAULT_SOURCES = [
-    (Path("/home/flip/BACKUP-OELALA-MEDIA/media/generated"), "generated"),
-    (Path("/home/flip/BACKUP-OELALA-MEDIA/ComfyUI/output"), "comfyui-local"),
+    (
+        Path(
+            "/home/flip/oelala/scratch/home-root-cleanup/legacy-backups/"
+            "BACKUP-OELALA-MEDIA/media/generated"
+        ),
+        "generated",
+    ),
+    (
+        Path(
+            "/home/flip/oelala/scratch/home-root-cleanup/legacy-backups/"
+            "BACKUP-OELALA-MEDIA/ComfyUI/output"
+        ),
+        "comfyui-local",
+    ),
 ]
 
 

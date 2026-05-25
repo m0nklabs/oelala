@@ -1,0 +1,3 @@
+### Changed
+- **Centralized Copilot agents**: Remove the repo-local `.github/agents/` copies (`MARK1`, `monks`, `morty`, `rick`, `spock`, `trader`) so shared agents are resolved from `/home/flip/github-copilot-config/.github/agents/` instead.
+- **Archived legacy upload sources**: Update `scripts/upload_with_dates.py` so the media re-upload helper reads from the archived backup tree under `/home/flip/oelala/scratch/home-root-cleanup/legacy-backups/` instead of the old home-root backup paths.
