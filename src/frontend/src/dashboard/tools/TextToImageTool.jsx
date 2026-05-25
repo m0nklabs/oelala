@@ -740,48 +740,71 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                         </span>
                       )}
                     </label>
-                    {selectedLoras.map((lora, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        gap: '8px',
-                        marginBottom: '8px',
-                        alignItems: 'center'
-                      }}>
-                        <select
-                          value={lora.name}
-                          onChange={(e) => updateLora(idx, 'name', e.target.value)}
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#0f0f0f',
-                            border: '1px solid #333',
-                            borderRadius: '6px',
-                            padding: '6px 8px',
-                            color: '#fff',
-                            fontSize: '0.75rem'
-                          }}
-                        >
-                          <option value="None">None</option>
-                          {filteredLoras.map((l) => (
-                            <option key={l.path} value={l.name}>{l.name}</option>
-                          ))}
-                        </select>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '80px' }}>
-                          <input
-                            type="range"
-                            min="0"
-                            max="2"
-                            step="0.1"
-                            value={lora.strength}
-                            onChange={(e) => updateLora(idx, 'strength', parseFloat(e.target.value))}
-                            disabled={lora.name === 'None'}
-                            style={{ width: '50px' }}
-                          />
-                          <span style={{ fontSize: '0.7rem', opacity: lora.name === 'None' ? 0.3 : 1 }}>
-                            {lora.strength.toFixed(1)}
-                          </span>
+                    {selectedLoras.map((lora, idx) => {
+                      const isActive = lora.name !== 'None'
+                      return (
+                        <div key={idx} style={{
+                          marginBottom: '10px',
+                          padding: '10px',
+                          backgroundColor: 'var(--bg-input)',
+                          border: '1px solid #333',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '8px'
+                          }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                              LoRA #{idx + 1}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', opacity: isActive ? 1 : 0.5 }}>
+                              {isActive ? lora.strength.toFixed(2) : 'Inactive'}
+                            </span>
+                          </div>
+                          <select
+                            value={lora.name}
+                            onChange={(e) => updateLora(idx, 'name', e.target.value)}
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#0f0f0f',
+                              border: '1px solid #333',
+                              borderRadius: '6px',
+                              padding: '8px 10px',
+                              color: '#fff',
+                              fontSize: '0.75rem',
+                              marginBottom: '10px'
+                            }}
+                          >
+                            <option value="None">None</option>
+                            {filteredLoras.map((l) => (
+                              <option key={l.path} value={l.name}>{l.name}</option>
+                            ))}
+                          </select>
+                          <div style={{ opacity: isActive ? 1 : 0.45 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Strength</label>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{lora.strength.toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="2"
+                              step="0.05"
+                              value={lora.strength}
+                              onChange={(e) => updateLora(idx, 'strength', parseFloat(e.target.value))}
+                              disabled={!isActive}
+                              style={{
+                                width: '100%',
+                                cursor: isActive ? 'pointer' : 'not-allowed',
+                                accentColor: 'var(--primary-color)'
+                              }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                     <div style={{ fontSize: '0.65rem', opacity: 0.5, marginTop: '4px' }}>
                       Strength: 0.5-1.0 recommended
                     </div>

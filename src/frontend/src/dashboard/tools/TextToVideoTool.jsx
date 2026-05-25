@@ -592,11 +592,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       postProcessingSteps.push({ type: 'add_audio' })
     }
 
-    // Lora configs correctly mapped
-    const lorasArray = resolved.loraConfigs.map(c => ({
-      lora_name: c.url || c.loraName,
-      strength: c.strength !== undefined ? c.strength : 1.0
-    }))
+    const activeLoraConfigs = resolved.loraConfigs.filter(c => c?.name || c?.high || c?.low)
 
     const reqPayload = {
       operation: 'generate',
@@ -613,7 +609,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       cfg: resolved.cfg,
       seed: resolved.seed > 0 ? resolved.seed : -1
     }
-    if (lorasArray.length > 0) reqPayload.loras = lorasArray
+    if (activeLoraConfigs.length > 0) reqPayload.loras = activeLoraConfigs
     if (postProcessingSteps.length > 0) {
       reqPayload.post_processing = postProcessingSteps
       reqPayload.post_audio_file = resolved.postAudioFile

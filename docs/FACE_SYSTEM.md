@@ -7,11 +7,12 @@ Face identity, cloning, swapping (image + video) and LoRA training.
 ## Architecture
 
 ```
-FaceSwapTool.jsx (3 tabs: Swap / Profiles / Train LoRA)
-        │
-        ▼
+FaceSwapTool.jsx (3 tabs: Swap / Profiles / Train LoRA shortcut)
+LoRATrainingTool.jsx (dedicated Person LoRA Studio)
+  │
+  ▼
    FastAPI (app.py)  ──── face_service.py       ── insightface (inswapper_128)
-                     ──── face_train_service.py  ── ai-toolkit (SDXL Dreambooth)
+         ──── face_train_service.py  ── ai-toolkit (SDXL Dreambooth)
 ```
 
 **No ComfyUI needed for face swap** — uses insightface directly (synchronous, CPU/GPU via ONNX).
@@ -25,7 +26,7 @@ FaceSwapTool.jsx (3 tabs: Swap / Profiles / Train LoRA)
 | buffalo_l analyzer | `ComfyUI/models/insightface/models/buffalo_l/` | ~320MB |
 | inswapper_128 | `ComfyUI/models/insightface/inswapper_128.onnx` | 554MB |
 | Face LoRAs (trained) | `ComfyUI/models/loras/face_loras/` | varies |
-| Base model for training | `ComfyUI/models/checkpoints/juggernautXL_ragnarok.safetensors` | ~7GB |
+| Base model for training | `stabilityai/stable-diffusion-xl-base-1.0` | remote model ref |
 
 ---
 
@@ -104,9 +105,11 @@ SDXL Dreambooth LoRA training via [ai-toolkit](https://github.com/ostris/ai-tool
 **Trigger word convention:** `ohwx_{name_snake_case}`
 - Name "John Doe" → trigger word `ohwx_john_doe`
 
-**Base model:** `juggernautXL_ragnarok.safetensors` (loaded via `from_single_file`)
+**Base model:** `stabilityai/stable-diffusion-xl-base-1.0` by default.
 
-**Output:** `ComfyUI/models/loras/face_loras/{name}_{timestamp}.safetensors`
+**Override:** set `FACE_LORA_BASE_MODEL` to a valid local checkpoint path or alternate remote model ref when needed.
+
+**Output:** `ComfyUI/models/loras/face_loras/{trigger}.safetensors`
 
 **Job tracking:** `data/face_train_jobs/index.json`
 
@@ -114,7 +117,7 @@ SDXL Dreambooth LoRA training via [ai-toolkit](https://github.com/ostris/ai-tool
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | Steps | 1000–2000 | 1000 = fast test, 2000 = better quality |
-| Photos | 10–20 | Clear frontal, varied lighting preferred |
+| Photos | 5–20 | Minimum 5 required, 10–20 preferred |
 | Resolution | 512×512 | ai-toolkit default for faces |
 
 ### Dependencies (in `/home/flip/venvs/gpu`)
@@ -123,6 +126,14 @@ SDXL Dreambooth LoRA training via [ai-toolkit](https://github.com/ostris/ai-tool
 - `torchao==0.10.0` ⚠️ May be missing — run: `pip install torchao==0.10.0`
 
 ---
+
+## Frontend: LoRATrainingTool.jsx
+
+**Dedicated tool:** `src/frontend/src/dashboard/tools/LoRATrainingTool.jsx`
+
+- Main home for person LoRA training in the dashboard
+- Shows base model, dataset minimum, active jobs, and saved LoRA library
+- Can refresh the general LoRA Browser index after training
 
 ## Frontend: FaceSwapTool.jsx
 
@@ -146,6 +157,7 @@ SDXL Dreambooth LoRA training via [ai-toolkit](https://github.com/ostris/ai-tool
 - Start training job (background)
 - Poll job status with progress bar
 - List trained LoRAs + copy trigger word
+- Shortcut version of the dedicated Person LoRA Studio flow
 
 ---
 
@@ -156,7 +168,7 @@ SDXL Dreambooth LoRA training via [ai-toolkit](https://github.com/ostris/ai-tool
 | HIGH | End-to-end test: image swap (image → image) | ⏳ needs testing |
 | HIGH | End-to-end test: video swap (mp4 → mp4) | ⏳ needs testing |
 | HIGH | End-to-end test: face profile create + swap | ⏳ needs testing |
-| HIGH | End-to-end test: LoRA training (200 steps, 2 photos) | ⏳ needs testing |
+| HIGH | End-to-end test: LoRA training (200 steps, 5 photos) | ⏳ needs testing |
 | MED | GFPGAN face enhancement post-swap | ❌ not implemented |
 | MED | Batch video upload (multiple videos, same profile) | ❌ not implemented |
 | MED | Use LoRA in ComfyUI I2V workflow for face consistency | ❌ not implemented |

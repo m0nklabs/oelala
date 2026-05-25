@@ -408,8 +408,8 @@ Separate vocals, drums, bass, other from audio.
 ### 🟡 LoRA Training - PARTIAL
 - [x] Image upload
 - [x] Basic config
-- [ ] Actual training (currently placeholder)
-- [ ] Training progress
+- [x] Actual training (person LoRA via `/api/face-train`)
+- [x] Training progress
 - [ ] Preview generations during training
 - [ ] Kohya-ss integration
 - [ ] Training presets (face, style, object)

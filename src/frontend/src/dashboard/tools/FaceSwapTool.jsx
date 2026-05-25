@@ -938,7 +938,7 @@ function TrainLoraPanel({ user, requestLogin }) {
   const handleSubmit = async () => {
     if (!user) { requestLogin('Log in om een face LoRA te trainen'); return }
     if (!name.trim()) { setError('Name is required'); return }
-    if (images.length < 2) { setError('Upload at least 2 reference photos'); return }
+    if (images.length < 5) { setError('Upload at least 5 reference photos'); return }
 
     setSubmitting(true)
     setError(null)
@@ -991,6 +991,7 @@ function TrainLoraPanel({ user, requestLogin }) {
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Trains a Dreambooth-style SDXL LoRA from your reference photos.
           Use the trigger word in any SDXL prompt to generate images with this person's face.
+          This trainer targets the official SDXL base model and stores finished LoRAs in the face_loras library.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1061,7 +1062,11 @@ function TrainLoraPanel({ user, requestLogin }) {
             </button>
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImagePick} style={{ display: 'none' }} />
-          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tip: 10–20 varied photos (angles, lighting, expressions) give the best results.</p>
+          <p style={{ fontSize: '0.7rem', color: images.length < 5 ? '#f59e0b' : 'var(--text-muted)' }}>
+            {images.length < 5
+              ? `Minimum 5 photos required. Add ${5 - images.length} more.`
+              : 'Tip: 10–20 varied photos (angles, lighting, expressions) give the best results.'}
+          </p>
         </div>
 
         {error && (
@@ -1071,7 +1076,7 @@ function TrainLoraPanel({ user, requestLogin }) {
         <button
           className="primary-btn"
           onClick={handleSubmit}
-          disabled={submitting || !name.trim() || images.length < 2}
+          disabled={submitting || !name.trim() || images.length < 5}
           style={{ height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
           {submitting
@@ -1104,6 +1109,11 @@ function TrainLoraPanel({ user, requestLogin }) {
                       trigger: <code style={{ color: '#c084fc' }}>{job.trigger}</code>
                       {' · '}{job.images_count} photos · {job.steps_total} steps
                     </div>
+                    {job.status === 'running' && job.steps_done === 0 && (
+                      <div style={{ fontSize: '0.7rem', color: '#c4b5fd', marginTop: '6px' }}>
+                        Preparing training pipeline. First run can stay at 0% while the SDXL base model downloads and loads into cache.
+                      </div>
+                    )}
                     {job.status === 'running' && (
                       <div style={{ marginTop: '8px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>

@@ -3,7 +3,7 @@ Face LoRA Training Service
 --------------------------
 Trains a Dreambooth-style SDXL face LoRA using ai-toolkit (ostris).
 
-Base model : ComfyUI/models/checkpoints/juggernautXL_ragnarok.safetensors
+Base model : stabilityai/stable-diffusion-xl-base-1.0 (default)
 Output     : ComfyUI/models/loras/face_loras/<trigger>.safetensors
 Toolkit    : external/ai-toolkit/
 
@@ -66,12 +66,8 @@ TOOLKIT_PYTHON = TOOLKIT_DIR / ".venv" / "bin" / "python"  # isolated venv
 JOBS_DIR = BASE_DIR / "data" / "face_train_jobs"
 JOBS_INDEX = JOBS_DIR / "index.json"
 LORAS_OUTPUT_DIR = BASE_DIR / "ComfyUI" / "models" / "loras" / "face_loras"
-BASE_MODEL = (
-    BASE_DIR
-    / "ComfyUI"
-    / "models"
-    / "checkpoints"
-    / "juggernautXL_ragnarok.safetensors"
+DEFAULT_BASE_MODEL_REF = os.getenv(
+    "FACE_LORA_BASE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0"
 )
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -122,7 +118,11 @@ def recover_stuck_jobs() -> int:
         if job.get("status") == "running":
             # Try to extract last known step from log
             log_path = JOBS_DIR / job_id / "training.log"
-            last_step = _extract_last_step(log_path) if log_path.exists() else 0
+            last_step = (
+                _extract_last_step(log_path, expected_total=job.get("steps_total", 0))
+                if log_path.exists()
+                else 0
+            )
             job["status"] = "failed"
             job["error"] = (
                 f"Backend restarted during training "
@@ -140,16 +140,34 @@ def recover_stuck_jobs() -> int:
     return recovered
 
 
-def _extract_last_step(log_path: Path) -> int:
+def _extract_training_step(line: str, expected_total: int | None = None) -> int:
+    """Extract a training step from ai-toolkit log output."""
+    if "lr:" in line:
+        matches = re.findall(r"(\d+)/(\d+)", line)
+        for current_str, total_str in reversed(matches):
+            current = int(current_str)
+            total = int(total_str)
+            if expected_total and total != expected_total:
+                continue
+            return current
+
+    match = re.search(r"step[:\s]+(\d+)", line, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+
+    return 0
+
+
+def _extract_last_step(log_path: Path, expected_total: int | None = None) -> int:
     """Parse the training log to find the highest step reached."""
     try:
         with open(log_path) as f:
             lines = f.readlines()
         step = 0
         for line in reversed(lines[-100:]):
-            m = re.search(r"(\d+)/\d+.*lr:", line)
-            if m:
-                step = max(step, int(m.group(1)))
+            current_step = _extract_training_step(line, expected_total=expected_total)
+            if current_step:
+                step = max(step, current_step)
                 break
         return step
     except Exception:
@@ -203,6 +221,30 @@ def _sanitize_trigger(name: str) -> str:
     return f"ohwx_{slug}"
 
 
+def _resolve_base_model_ref() -> str:
+    """Return the configured SDXL base model reference for face LoRA training."""
+    return os.getenv("FACE_LORA_BASE_MODEL", DEFAULT_BASE_MODEL_REF).strip()
+
+
+def _validate_base_model_ref(base_model_ref: str) -> None:
+    """Validate a local checkpoint override while allowing remote model IDs/URLs."""
+    is_local_path = (
+        base_model_ref.endswith(".safetensors")
+        or base_model_ref.startswith("/")
+        or base_model_ref.startswith(".")
+        or base_model_ref.startswith("~")
+    )
+    if not is_local_path:
+        return
+
+    candidate = Path(base_model_ref).expanduser()
+    if not candidate.exists():
+        raise ValueError(
+            f"Configured SDXL base model path not found: {candidate}. "
+            "Set FACE_LORA_BASE_MODEL to a valid local checkpoint or a remote model ID."
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Config generation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -217,6 +259,7 @@ def _build_training_config(
 ) -> dict:
     """Build an ai-toolkit YAML config dict for SDXL face LoRA."""
     device = _select_training_device()
+    base_model_ref = _resolve_base_model_ref()
     return {
         "job": "extension",
         "config": {
@@ -265,7 +308,7 @@ def _build_training_config(
                         "dtype": "bf16",
                     },
                     "model": {
-                        "name_or_path": str(BASE_MODEL),
+                        "name_or_path": base_model_ref,
                         "is_xl": True,
                         "arch": "sdxl",
                     },
@@ -323,11 +366,9 @@ def create_training_job(
     Returns the job dict.
     Raises ValueError if base model is missing.
     """
-    if not BASE_MODEL.exists():
-        raise ValueError(
-            f"Base model not found: {BASE_MODEL}. "
-            "juggernautXL_ragnarok.safetensors is required for SDXL face LoRA training."
-        )
+    base_model_ref = _resolve_base_model_ref()
+    _validate_base_model_ref(base_model_ref)
+
     if not TOOLKIT_RUN.exists():
         raise ValueError(f"ai-toolkit not found at {TOOLKIT_DIR}")
     if not TOOLKIT_PYTHON.exists():
@@ -376,6 +417,7 @@ def create_training_job(
         "name": name,
         "description": description,
         "trigger": trigger,
+        "base_model": base_model_ref,
         "status": "pending",
         "steps_total": steps,
         "steps_done": 0,
@@ -416,6 +458,7 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
             {
                 "name": job.get("name", ""),
                 "trigger": job.get("trigger", ""),
+                "base_model": job.get("base_model", ""),
                 "steps_total": job.get("steps_total", 0),
             },
         )
@@ -458,6 +501,7 @@ def _launch_training(job_id: str, job_dir: Path, config_path: Path) -> None:
                         {
                             "lora_path": str(dest),
                             "trigger": trigger,
+                            "base_model": job.get("base_model", ""),
                         },
                     )
                 else:
@@ -492,23 +536,24 @@ def _update_progress_from_log(job_id: str, log_path: Path) -> None:
     if not log_path.exists():
         return
     try:
+        index = _load_index()
+        job = index.get(job_id, {})
+        steps_total = int(job.get("steps_total", 0) or 0)
+
         with open(log_path) as f:
             lines = f.readlines()
-        # ai-toolkit logs lines like: "step: 100/1000 loss: 0.123"
+
         step = 0
-        for line in reversed(lines[-50:]):  # last 50 lines
-            m = re.search(r"step[:\s]+(\d+)", line, re.IGNORECASE)
-            if m:
-                step = int(m.group(1))
+        for line in reversed(lines[-200:]):
+            step = _extract_training_step(line, expected_total=steps_total)
+            if step:
                 break
+
         if step > 0:
-            index = _load_index()
-            job = index.get(job_id, {})
-            if job.get("steps_done", 0) != step:
+            if step > job.get("steps_done", 0):
                 job["steps_done"] = step
                 _save_index({**index, job_id: job})
                 # Broadcast progress via WebSocket
-                steps_total = job.get("steps_total", 0)
                 progress = round((step / steps_total) * 100) if steps_total else 0
                 _emit_event(
                     job_id,

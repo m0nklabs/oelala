@@ -52,7 +52,7 @@ See [docs/FACE_SYSTEM.md](FACE_SYSTEM.md) for full architecture.
 | ✅ DONE | Test face profile create + swap (API) | Profile CRUD + profile-based swap working |
 | ✅ DONE | Fix auth bug (JWKS exception + duplicate decode) | auth.py fixed, backend restarted |
 | ✅ DONE | Fix FaceSwapTool.jsx fetch→apiFetch | 10 raw fetch() calls migrated |
-| MED | Test LoRA training (200 steps, 2 photos) | OOM when ComfyUI loaded; needs free VRAM |
+| MED | Test LoRA training (200 steps, 5 photos) | OOM when ComfyUI loaded; needs free VRAM |
 | MED | GFPGAN face enhancement (image quality post-swap) | Model present, not wired up |
 | MED | Use trained face LoRA in ComfyUI T2I/T2V workflow | Integration missing |
 | LOW | Face swap in generated video (auto after I2V job) | UX feature |
