@@ -23,7 +23,7 @@ triton==3.7.0
 # GHSA-69w3-r845-3855 is patched in the first 5.0.0 release candidate.
 transformers==5.12.0
 accelerate==1.13.0
-safetensors==0.7.0
+safetensors==0.8.0
 sentencepiece==0.2.1
 
 # GGUF / LLM support
