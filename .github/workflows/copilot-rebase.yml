@@ -75,7 +75,7 @@ jobs:
             core.setOutput('prs', JSON.stringify(prNumbers));
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
           fetch-depth: 0
