@@ -24,7 +24,7 @@ triton==3.7.1
 transformers==5.13.0
 accelerate==1.14.0
 safetensors==0.8.0
-sentencepiece==0.2.1
+sentencepiece==0.2.2
 
 # GGUF / LLM support
 gguf==0.19.0
