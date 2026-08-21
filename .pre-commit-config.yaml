@@ -32,3 +32,14 @@ repos:
         files: ^src/
       - id: ruff-format
         files: ^src/
+
+  # Assert AGENTS.md sync-copies stay in sync (single source of truth).
+  - repo: local
+    hooks:
+      - id: sync-agent-docs
+        name: Sync tool-native agent docs (CLAUDE.md, .goosehints)
+        entry: bash scripts/sync-agent-docs.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        files: ^(AGENTS\.md|CLAUDE\.md|\.goosehints)$

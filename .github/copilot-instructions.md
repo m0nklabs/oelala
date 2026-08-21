@@ -1,6 +1,9 @@
+<!-- See AGENTS.md (repo root) for the canonical source of truth. This file is Copilot-native. -->
 # Repository custom instructions (Copilot)
 
-These instructions apply to GitHub Copilot in the context of this repository.
+These instructions apply to GitHub Copilot in the context of this repository. This file is the
+detailed Copilot-native ruleset; `AGENTS.md` (repo root) is the canonical overview and is
+referenced by `CLAUDE.md` and `.goosehints` via `scripts/sync-agent-docs.sh`.
 
 ## Primary goals
 
