@@ -2985,7 +2985,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
     comfyui = None
     if backend_id:
         try:
-            from src.backend.comfyui_client import get_comfyui_client_for_backend as _gcfb
+            from src.backend.comfyui_client import (
+                get_comfyui_client_for_backend as _gcfb,
+            )
             from src.backend.generation.compute_backends import get_backend
 
             _backend = get_backend(backend_id)
