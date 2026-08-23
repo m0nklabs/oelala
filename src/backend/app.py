@@ -11449,9 +11449,12 @@ class ComputeBackendPayload(_BaseModel):
     id: _Annotated[str, _StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")]
     name: str
     type: _Literal["comfyui", "runpod"] = "comfyui"
-    # Only plain http:// URLs are valid for a comfyui backend (ComfyUIClient
-    # speaks http/ws, not https/wss); runpod backends leave it empty.
-    base_url: _Annotated[str, _StringConstraints(pattern=r"^(|http://.*)$")] = ""
+    # base_url mirrors the ComputeBackend inventory model: a host may be given
+    # with or without an http:// scheme, non-http schemes are rejected, and any
+    # explicit port must be numeric/in-range (all enforced below so the admin
+    # CRUD returns a proper 422 instead of a 500 later). Runpod backends leave
+    # it empty.
+    base_url: str = ""
     enabled: bool = True
     model_families: _List[str] = _Field(default_factory=list)
     notes: str = ""
@@ -11463,17 +11466,30 @@ class ComputeBackendPayload(_BaseModel):
         if self.type == "comfyui":
             if not self.base_url:
                 raise ValueError("base_url is required for a comfyui backend")
+            # ComfyUIClient speaks http/ws (not https/wss), so reject any other
+            # explicit scheme the same way ComputeBackend does.
+            if "://" in self.base_url and not self.base_url.startswith("http://"):
+                raise ValueError("base_url must use http:// for a comfyui backend")
+            authority = (
+                self.base_url.split("://", 1)[1].split("/")[0]
+                if "://" in self.base_url
+                else self.base_url.split("/")[0]
+            )
+            host = authority.split(":")[0]
             # Reject bare "http://" (no host) — _parse_base_url would yield
             # "http://:8188" for it, producing a broken backend.
-            host = (
-                self.base_url.split("://", 1)[1].split("/")[0].split(":")[0]
-                if "://" in self.base_url
-                else self.base_url.split("/")[0].split(":")[0]
-            )
             if not host:
                 raise ValueError(
                     "base_url must include a host (e.g. http://192.168.1.10:8188)"
                 )
+            # An explicit port must be numeric and in range; without this a typo
+            # like 'http://host:abc' would fail later as a confusing 500.
+            if ":" in authority:
+                port = authority.split(":", 1)[1]
+                if not port.isdigit() or not (1 <= int(port) <= 65535):
+                    raise ValueError(
+                        "base_url port must be a number between 1 and 65535"
+                    )
         # A runpod backend has no base_url; a URL here is meaningless noise.
         if self.type == "runpod" and self.base_url:
             raise ValueError("base_url must be empty for a runpod backend")
