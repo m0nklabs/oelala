@@ -215,4 +215,5 @@ def client_fn_for_utility():
             return None
         return get_comfyui_client_for_backend(backend)
 
+    _fn.model_family = UTILITY_FAMILY
     return _fn

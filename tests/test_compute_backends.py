@@ -142,3 +142,8 @@ def test_client_fn_returns_none_for_runpod(monkeypatch):
         # Ensure no comfyui backend can serve ltx without network calls
         client = fn()
     assert client is None
+
+
+def test_client_fn_for_utility_exposes_model_family():
+    fn = cb.client_fn_for_utility()
+    assert fn.model_family == "utility"

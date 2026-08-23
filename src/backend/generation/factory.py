@@ -117,15 +117,24 @@ def create_registry(
 
     # ── Local T2I adapters (kept: SDXL-Pony + Flux + Krea 2) ──────
     if comfyui_client_fn:
+        from .compute_backends import client_fn_for_model, client_fn_for_utility
+
+        sdxl_client_fn = client_fn_for_model("sdxl")
+        flux_client_fn = client_fn_for_model("flux")
+        flux2_client_fn = client_fn_for_model("flux2")
+        krea2_client_fn = client_fn_for_model("krea2")
+        wan22_client_fn = client_fn_for_model("wan2.2")
+        utility_client_fn = client_fn_for_utility()
+
         from .adapters.local.t2i_sdxl import SDXLLocalT2IAdapter
         from .adapters.local.t2i_flux import FluxLocalT2IAdapter
         from .adapters.local.t2i_krea2 import Krea2LocalT2IAdapter
         from .adapters.local.t2i_flux2 import Flux2LocalT2IAdapter
 
-        _register(SDXLLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(FluxLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(Krea2LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(Flux2LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
+        _register(SDXLLocalT2IAdapter, comfyui_client_fn=sdxl_client_fn)
+        _register(FluxLocalT2IAdapter, comfyui_client_fn=flux_client_fn)
+        _register(Krea2LocalT2IAdapter, comfyui_client_fn=krea2_client_fn)
+        _register(Flux2LocalT2IAdapter, comfyui_client_fn=flux2_client_fn)
 
         # ── Local I2V adapters ──────────────────────────────────
         from .adapters.local.i2v_wan22 import (
@@ -134,14 +143,14 @@ def create_registry(
         )
         from .adapters.local.i2v_wan22_lightning import Wan22LocalI2VLightningAdapter
 
-        _register(Wan22LocalI2VQ6Adapter, comfyui_client_fn=comfyui_client_fn)
-        _register(Wan22LocalI2VDisTorch2Adapter, comfyui_client_fn=comfyui_client_fn)
-        _register(Wan22LocalI2VLightningAdapter, comfyui_client_fn=comfyui_client_fn)
+        _register(Wan22LocalI2VQ6Adapter, comfyui_client_fn=wan22_client_fn)
+        _register(Wan22LocalI2VDisTorch2Adapter, comfyui_client_fn=wan22_client_fn)
+        _register(Wan22LocalI2VLightningAdapter, comfyui_client_fn=wan22_client_fn)
 
         # ── Local T2V adapter ──────────────────────────────────
         from .adapters.local.t2v_wan22 import Wan22LocalT2VQ6Adapter
 
-        _register(Wan22LocalT2VQ6Adapter, comfyui_client_fn=comfyui_client_fn)
+        _register(Wan22LocalT2VQ6Adapter, comfyui_client_fn=wan22_client_fn)
 
         # ── Local MiniMax-H3 (Windows PC ComfyUI) ──────────────
         # Resolved through the Compute Backend Inventory instead of a hardcoded
@@ -149,8 +158,6 @@ def create_registry(
         # used (currently the Windows-PC server).
         from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
         from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
-        from .compute_backends import client_fn_for_model
-
         h3_client_fn = client_fn_for_model("minimax_h3")
         try:
             _h3_client = h3_client_fn() if h3_client_fn else None
@@ -177,15 +184,18 @@ def create_registry(
         from .adapters.local.audio_mmaudio import MMAudioAdapter
         from .adapters.local.voice_clone import VoiceCloneAdapter
 
-        _register(I2ITransformAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(V2VStyleTransferAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(ImageUpscaleAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(VideoUpscaleAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(InterpolateAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(InpaintAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(LipSyncAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(MMAudioAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(VoiceCloneAdapter, comfyui_client_fn=comfyui_client_fn)
+        # I2I/inpaint are SDXL workflows (model_family="sdxl"), so they follow
+        # SDXL backend routing instead of utility routing.
+        _register(I2ITransformAdapter, comfyui_client_fn=sdxl_client_fn)
+        # V2V style-transfer runs Wan2.2 video workflows.
+        _register(V2VStyleTransferAdapter, comfyui_client_fn=wan22_client_fn)
+        _register(ImageUpscaleAdapter, comfyui_client_fn=utility_client_fn)
+        _register(VideoUpscaleAdapter, comfyui_client_fn=utility_client_fn)
+        _register(InterpolateAdapter, comfyui_client_fn=utility_client_fn)
+        _register(InpaintAdapter, comfyui_client_fn=sdxl_client_fn)
+        _register(LipSyncAdapter, comfyui_client_fn=utility_client_fn)
+        _register(MMAudioAdapter, comfyui_client_fn=utility_client_fn)
+        _register(VoiceCloneAdapter, comfyui_client_fn=utility_client_fn)
     else:
         logger.warning("⚠️ ComfyUI not available — skipping all local adapters")
 

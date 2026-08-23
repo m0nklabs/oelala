@@ -403,6 +403,56 @@ class TestRouterResolve:
         with pytest.raises(ValueError, match="No adapter found"):
             router.resolve_adapter(req)
 
+    def test_resolve_falls_back_to_cloud_when_local_backend_unavailable(self):
+        class LocalUnavailableAdapter(FakeAdapter):
+            name = "local-unavailable"
+
+            def __init__(self):
+                self._get_comfyui = lambda: None
+
+        class CloudSameRouteAdapter(FakeAdapter):
+            name = "cloud-same-route"
+            compute = ComputeTarget.CLOUD
+
+            async def execute(self, req, progress_callback=None):
+                return GenerationResult(
+                    prompt_id="cloud-fallback",
+                    status="queued_cloud",
+                    compute_target=ComputeTarget.CLOUD,
+                    credits_used=5,
+                    adapter_name=self.name,
+                )
+
+        reg = AdapterRegistry()
+        reg.register(LocalUnavailableAdapter())
+        reg.register(CloudSameRouteAdapter())
+        r = GenerationRouter(reg)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            prompt="fallback",
+        )
+        adapter = r.resolve_adapter(req)
+        assert adapter.name == "cloud-same-route"
+
+    def test_resolve_raises_when_only_local_backend_unavailable(self):
+        class LocalUnavailableAdapter(FakeAdapter):
+            name = "local-unavailable-only"
+
+            def __init__(self):
+                self._get_comfyui = lambda: None
+
+        reg = AdapterRegistry()
+        reg.register(LocalUnavailableAdapter())
+        r = GenerationRouter(reg)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            prompt="fallback",
+        )
+        with pytest.raises(ValueError, match="No adapter found"):
+            r.resolve_adapter(req)
+
 
 class TestRouterValidation:
     def test_apply_defaults(self, router):

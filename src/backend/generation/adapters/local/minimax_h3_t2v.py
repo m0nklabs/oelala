@@ -109,6 +109,8 @@ class MiniMaxH3LocalT2VAdapter(GenerationAdapter):
         if self._get_comfyui is None:
             raise RuntimeError("ComfyUI client not available")
         client = self._get_comfyui()
+        if client is None:
+            raise RuntimeError("No enabled local ComfyUI backend for minimax_h3")
 
         if not client.is_available():
             raise RuntimeError(
