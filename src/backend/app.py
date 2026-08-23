@@ -11437,7 +11437,9 @@ from typing import Annotated as _Annotated
 class ComputeBackendPayload(_BaseModel):
     """Mutable fields for a compute backend (admin-editable subset)."""
 
-    id: str
+    # Slug-constrained: id is used as a URL path parameter, so it must be URL-safe
+    # (no '/', whitespace, or other characters that would break update/delete routing).
+    id: _Annotated[str, _StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")] = ""
     name: str
     type: _Literal["comfyui", "runpod"] = "comfyui"
     # Only http(s) URLs are valid for a ComfyUI backend; runpod backends leave it empty.

@@ -48,7 +48,7 @@ sudo systemctl restart actions.runner.m0nklabs-oelala-storage.oelala-storage-run
 
 All workflows should use:
 ```yaml
-runs-on: [self-hosted, Linux, ci]
+runs-on: [self-hosted, Linux]
 ```
 
 For GPU-specific jobs:
