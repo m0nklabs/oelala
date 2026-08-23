@@ -130,14 +130,14 @@ def test_client_fn_for_model_exposes_backend_id(monkeypatch):
     assert client.base_url == "http://192.168.1.245:8188"
 
 
-def test_client_fn_returns_none_for_runpod(monkeypatch):
+def test_client_fn_raises_for_runpod(monkeypatch):
     cb.load_backends(force=True)
-    # ltx is runpod-only -> client fn resolves nothing
+    # ltx is runpod-only -> the local client fn raises instead of returning None
+    # (a local adapter that reached this point is misconfigured; returning None
+    # would later crash with a cryptic AttributeError).
     fn = cb.client_fn_for_model("ltx")
-    with monkeypatch.context() as m:
-        # Ensure no comfyui backend can serve ltx without network calls
-        client = fn()
-    assert client is None
+    with pytest.raises(RuntimeError, match="runpod"):
+        fn()
 
 
 def test_client_fn_for_utility_exposes_model_family():
