@@ -131,11 +131,11 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
 
         if not client.is_available():
             raise RuntimeError(
-                "Windows ComfyUI server not reachable — is COMFYUI_WINDOWS_HOST "
-                "set and ComfyUI running on that machine?"
+                f"ComfyUI backend at {client.host}:{client.port} is not reachable — "
+                "is the configured compute backend running on that machine?"
             )
 
-        # Upload the input image to the WINDOWS server (router pre-upload skipped).
+        # Upload the input image to the resolved server (router pre-upload skipped).
         try:
             img_bytes = self._to_png_bytes(req.input_images[0])
             uploaded_name = client.upload_image_from_bytes(

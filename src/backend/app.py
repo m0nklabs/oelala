@@ -11460,8 +11460,20 @@ class ComputeBackendPayload(_BaseModel):
     def _validate_by_type(self):
         # A comfyui backend must name a reachable HTTP server; an empty base_url
         # would win resolution for a family but then return no usable client.
-        if self.type == "comfyui" and not self.base_url:
-            raise ValueError("base_url is required for a comfyui backend")
+        if self.type == "comfyui":
+            if not self.base_url:
+                raise ValueError("base_url is required for a comfyui backend")
+            # Reject bare "http://" (no host) — _parse_base_url would yield
+            # "http://:8188" for it, producing a broken backend.
+            host = (
+                self.base_url.split("://", 1)[1].split("/")[0].split(":")[0]
+                if "://" in self.base_url
+                else self.base_url.split("/")[0].split(":")[0]
+            )
+            if not host:
+                raise ValueError(
+                    "base_url must include a host (e.g. http://192.168.1.10:8188)"
+                )
         # A runpod backend has no base_url; a URL here is meaningless noise.
         if self.type == "runpod" and self.base_url:
             raise ValueError("base_url must be empty for a runpod backend")

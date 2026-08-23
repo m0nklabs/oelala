@@ -29,7 +29,7 @@ import os
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +42,31 @@ UTILITY_FAMILY = "utility"
 class ComputeBackend(BaseModel):
     """A configurable source of compute for generation."""
 
-    id: str
+    # Slug-constrained so the id stays URL-safe ({backend_id} path parameters).
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")
     name: str
     type: Literal["comfyui", "runpod"] = "comfyui"
     base_url: str = ""
     enabled: bool = True
     model_families: List[str] = Field(default_factory=list)
     notes: str = ""
+
+    @model_validator(mode="after")
+    def _validate_inventory_entry(self):
+        # Enforce the same type-based base_url rules on the inventory model itself,
+        # so a manually edited compute_backends.json can't load a broken entry
+        # (an entry load_backends() would otherwise skip anyway).
+        if self.type == "comfyui":
+            # A comfyui backend must name a reachable HTTP server.
+            if not self.base_url:
+                raise ValueError("base_url is required for a comfyui backend")
+            host = self.base_url.split("://", 1)[1].split("/")[0].split(":")[0] if "://" in self.base_url else self.base_url.split("/")[0].split(":")[0]
+            if not host:
+                raise ValueError("base_url must include a host for a comfyui backend")
+        elif self.type == "runpod" and self.base_url:
+            # A runpod backend has no base_url; a URL here is meaningless noise.
+            raise ValueError("base_url must be empty for a runpod backend")
+        return self
 
 
 # Path to the inventory JSON (next to this module).
