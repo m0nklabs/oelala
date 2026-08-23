@@ -123,7 +123,9 @@ def load_backends(force: bool = False) -> List[ComputeBackend]:
                 # inventory (an invalid type/base_url must not reset everything).
                 logger.warning(f"⚠️ Skipping invalid compute backend entry: {exc}")
         if not _backends:
-            logger.warning("⚠️ No valid compute backends in inventory; using built-in defaults")
+            logger.warning(
+                "⚠️ No valid compute backends in inventory; using built-in defaults"
+            )
             _backends = _default_backends()
         else:
             logger.info(f"🗄️ Loaded {len(_backends)} compute backends from {_json_path}")
