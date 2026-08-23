@@ -40,6 +40,13 @@ class GenerationAdapter(ABC):
     compute: ComputeTarget
     lora_format: LoraFormat
 
+    # ── Optional behaviour flags (subclass may override) ────────
+    handles_own_image_upload: bool = False
+    """If True, the router's local-image pre-upload is skipped and the
+    adapter uploads input images itself (to a possibly different ComfyUI
+    server). Used by the local MiniMax-H3 adapter which targets the user's
+    Windows PC ComfyUI, not the default ai-kvm2 one."""
+
     # ── Abstract interface ──────────────────────────────────────
 
     @abstractmethod

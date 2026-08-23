@@ -137,12 +137,24 @@ class GenerationRouter:
             return
 
         try:
-            try:
-                from src.backend.comfyui_client import get_comfyui_client
-            except ImportError:
-                from comfyui_client import get_comfyui_client
-
-            client = get_comfyui_client()
+            # Register job metadata on the ComfyUI client that actually ran the
+            # job. Local adapters expose their own client (e.g. the Windows-PC
+            # MiniMax-H3 client via _get_comfyui), which differs from the default
+            # ai-kvm2 client. register_job metadata must live on that same client
+            # so completion polling (on_job_complete_async) can find the user_id.
+            client = None
+            adapter_get = getattr(adapter, "_get_comfyui", None)
+            if callable(adapter_get):
+                try:
+                    client = adapter_get()
+                except Exception:
+                    client = None
+            if client is None:
+                try:
+                    from src.backend.comfyui_client import get_comfyui_client
+                except ImportError:
+                    from comfyui_client import get_comfyui_client
+                client = get_comfyui_client()
             model_name = (
                 req.checkpoint
                 or getattr(req, "model_type", None)
@@ -300,6 +312,10 @@ class GenerationRouter:
         upload them to ComfyUI and replace with the returned filename.
         """
         if adapter.compute != ComputeTarget.LOCAL:
+            return req
+        # Adapters that upload their own input images (e.g. to a different
+        # ComfyUI server) skip the router pre-upload here.
+        if getattr(adapter, "handles_own_image_upload", False):
             return req
         if not req.input_images:
             return req

@@ -170,13 +170,18 @@ except ImportError as e:
 
 # ComfyUI Client for all image/video generation
 try:
-    from src.backend.comfyui_client import ComfyUIClient, get_comfyui_client
+    from src.backend.comfyui_client import (
+        ComfyUIClient,
+        get_comfyui_client,
+        get_windows_comfyui_client,
+    )
 
     print("✅ ComfyUIClient imported successfully")
 except ImportError as e:
     print(f"❌ Failed to import ComfyUIClient: {e}")
     ComfyUIClient = None
     get_comfyui_client = None
+    get_windows_comfyui_client = None
 
 # WebSocket progress tracking
 try:
@@ -2971,8 +2976,25 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
     if cached is not None:
         return cached
 
+    # MiniMax-H3 local jobs run on the Windows-PC ComfyUI (get_windows_comfyui_client),
+    # not on the ai-kvm2 localhost server. Pick the right client so we poll + fetch
+    # output from the server that actually ran the job.
+    adapter_name = job_info.get("adapter_name", "")
+    is_windows_h3 = adapter_name in (
+        "minimax-h3-local-t2v",
+        "minimax-h3-local-i2v",
+    )
+    comfyui = None
+    if is_windows_h3 and get_windows_comfyui_client is not None:
+        comfyui = get_windows_comfyui_client()
+    if comfyui is None:
+        comfyui = get_comfyui_client()
+    if comfyui is None:
+        return None
+    comfyui_base = comfyui.base_url
+
     history_resp = requests.get(
-        f"http://localhost:8188/history/{quote(prompt_id, safe='')}", timeout=5
+        f"{comfyui_base}/history/{quote(prompt_id, safe='')}", timeout=5
     )
     if history_resp.status_code != 200:
         return None
@@ -2991,13 +3013,26 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
         if "gifs" in node_output and output_video is None:
             for gif in node_output["gifs"]:
                 if gif.get("type") == "output":
-                    output_video = (
-                        f"/comfyui/output/{_safe_filename(gif.get('filename'))}"
-                    )
+                    output_video = gif
+                    break
+        # SaveVideo (MiniMax-H3 local) writes the mp4 under the "images" key
+        # (node output) with a .mp4 filename — recognise it as a video.
+        if (
+            output_video is None
+            and "images" in node_output
+            and node_output.get("images")
+        ):
+            for img in node_output["images"]:
+                if img.get("type") == "output" and str(img.get("filename", "")).lower().endswith(
+                    (".mp4", ".webm", ".mov", ".mkv")
+                ):
+                    output_video = img
                     break
         if "images" in node_output and output_image is None:
             for img in node_output["images"]:
-                if img.get("type") == "output":
+                if img.get("type") == "output" and not str(
+                    img.get("filename", "")
+                ).lower().endswith((".mp4", ".webm", ".mov", ".mkv")):
                     output_image = (
                         f"/comfyui/output/{_safe_filename(img.get('filename'))}"
                     )
@@ -3010,9 +3045,38 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                     )
                     break
 
+    # If the video was found as an output record (SaveVideo / VHS), try to
+    # download it from the job's ComfyUI server so we have a local file to
+    # upload. For Windows-PC (H3 local) the file is NOT on ai-kvm2, so this
+    # download is required.
+    if output_video and isinstance(output_video, dict):
+        vf = output_video.get("filename")
+        output_filename = _safe_filename(vf) if vf else None
+        if output_filename:
+            dl_params = {
+                "filename": vf,
+                "subfolder": output_video.get("subfolder", ""),
+                "type": output_video.get("type", "output"),
+            }
+            try:
+                dl_resp = requests.get(f"{comfyui_base}/view", params=dl_params, timeout=15)
+                if dl_resp.status_code == 200:
+                    out_dir = Path(COMFYUI_OUTPUT_DIR)
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_path = out_dir / output_filename
+                    out_path.write_bytes(dl_resp.content)
+                    output_video = f"/comfyui/output/{output_filename}"
+                else:
+                    logger.warning(
+                        f"⚠️ Failed to download {output_filename}: HTTP {dl_resp.status_code}"
+                    )
+                    output_video = None
+            except Exception as e:
+                logger.error(f"❌ Failed to download {output_filename} from {comfyui_base}: {e}")
+                output_video = None
+
     storage_path = None
     signed_url = None
-    comfyui = get_comfyui_client()
     if comfyui and (output_video or output_image or output_audio):
         if output_video:
             output_type = "video"
@@ -4049,6 +4113,72 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                 job_info.update(active_job)
                 pending.append(job_info)
 
+        # ── Windows-PC ComfyUI (remote MiniMax-H3) queue ─────────────────
+        # H3 local jobs run on 192.168.1.245, NOT on the ai-kvm2 localhost
+        # server. Surface them in the queue indicator as running/pending so
+        # the user sees remote jobs alongside local/cloud ones.
+        windows_running = []
+        windows_pending = []
+        if get_windows_comfyui_client is not None:
+            try:
+                wclient = get_windows_comfyui_client()
+                if wclient is not None:
+                    wq_resp = requests.get(f"{wclient.base_url}/queue", timeout=5)
+                    if wq_resp.status_code == 200:
+                        wq = wq_resp.json()
+                        # Which of this user's active jobs live on the Windows server?
+                        windows_local = {
+                            pid: info
+                            for pid, info in active_jobs.items()
+                            if info.get("user_id") == user.id
+                            and info.get("adapter_name")
+                            in ("minimax-h3-local-t2v", "minimax-h3-local-i2v")
+                        }
+                        seen = set()
+                        for item in wq.get("queue_running", []):
+                            if len(item) >= 2:
+                                pid = item[1]
+                                if pid not in windows_local:
+                                    continue
+                                seen.add(pid)
+                                job_info = {
+                                    "prompt_id": pid,
+                                    "status": "running",
+                                    "queue_position": 0,
+                                    "server": "windows",
+                                }
+                                job_info.update(windows_local[pid])
+                                windows_running.append(job_info)
+                        for idx, item in enumerate(wq.get("queue_pending", [])):
+                            if len(item) >= 2:
+                                pid = item[1]
+                                if pid not in windows_local:
+                                    continue
+                                seen.add(pid)
+                                job_info = {
+                                    "prompt_id": pid,
+                                    "status": "pending",
+                                    "queue_position": idx + 1,
+                                    "server": "windows",
+                                }
+                                job_info.update(windows_local[pid])
+                                windows_pending.append(job_info)
+                        # Windows-local jobs tracked locally but no longer on
+                        # Windows queue → treat as pending (still to be freed).
+                        for pid in windows_local:
+                            if pid not in seen:
+                                job_info = {
+                                    "prompt_id": pid,
+                                    "status": "pending",
+                                    "queue_position": 0,
+                                    "server": "windows",
+                                }
+                                job_info.update(windows_local[pid])
+                                windows_pending.append(job_info)
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to get Windows ComfyUI queue: {e}")
+
+
         # Include face LoRA training jobs in the queue
         training = []
         if face_train_service:
@@ -4134,15 +4264,16 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                 cloud_job["status"] = "running"
                 cloud_running.append(cloud_job)
 
-        all_running = running + cloud_running
+        all_running = running + cloud_running + windows_running
+        all_pending = pending + windows_pending
 
         return {
             "running": all_running,
-            "pending": pending,
+            "pending": all_pending,
             "failed": cloud_failed,
             "training": training,
             "total_running": len(all_running),
-            "total_pending": len(pending),
+            "total_pending": len(all_pending),
             "total_failed": len(cloud_failed),
             "total_training": len(training),
         }
@@ -6170,10 +6301,9 @@ def list_comfyui_checkpoints():
         return {
             "checkpoints": [
                 "CyberRealistic_Pony_v14.1_FP16.safetensors",
-                "dreamshaperXL_lightningDPMSDE.safetensors",
-                "illustriousRealismBy_v10VAE.safetensors",
-                "juggernautXL_ragnarok.safetensors",
                 "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+                "reapony_v90.safetensors",
+                "flux1-dev-fp8.safetensors",
             ]
         }  # Fallback list
 
@@ -6268,122 +6398,8 @@ async def generate_flux_image(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SD 1.5 Text-to-Image via ComfyUI
+# Wan2.2 Text-to-Video via ComfyUI (next section)
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-@app.post("/generate-sd15")
-async def generate_sd15_image(
-    prompt: str = Form(...),
-    negative_prompt: str = Form(
-        "(deformed, blurry, bad anatomy, extra fingers, mutated hands, poorly drawn face, low quality:1.4)"
-    ),
-    aspect_ratio: str = Form("2:3"),
-    steps: int = Form(25),
-    cfg: float = Form(7.0),
-    seed: int = Form(-1),
-    sampler_name: str = Form("dpmpp_sde"),
-    scheduler: str = Form("karras"),
-    lora_configs: str = Form("[]"),  # JSON string of [{name, strength}]
-    user: User = Depends(get_current_user),  # Require authenticated user
-):
-    """Generate image using SD 1.5 (Realistic Vision V5.1) via ComfyUI (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            lora_configs=lora_configs,
-        ),
-        files={},
-        operation=Operation.GENERATE,
-        target_type=MediaType.IMAGE,
-        adapter_hint="sd15-local-t2i",
-        user=user,
-        register_job_settings={
-            "job_type": "t2i",
-        },
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Wan2.2 Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@app.post("/generate-wan22-t2i")
-async def generate_wan22_t2i(
-    prompt: str = Form(...),
-    aspect_ratio: str = Form("1:1"),
-    steps: int = Form(8),
-    seed: int = Form(-1),
-    user: User = Depends(get_current_user),  # Require authenticated user
-):
-    """Generate image using Wan2.2 T2V model in T2I mode via ComfyUI (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            seed=seed,
-        ),
-        files={},
-        operation=Operation.GENERATE,
-        target_type=MediaType.IMAGE,
-        adapter_hint="wan22-local-t2i",
-        user=user,
-        register_job_settings={
-            "job_type": "t2i",
-        },
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ERNIE-Image Text-to-Image via ComfyUI (DisTorch2 Multi-GPU)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@app.post("/generate-ernie")
-async def generate_ernie_t2i(
-    prompt: str = Form(...),
-    aspect_ratio: str = Form("1:1"),
-    steps: int = Form(20),
-    guidance: float = Form(4.0),
-    seed: int = Form(-1),
-    user: User = Depends(get_current_user),
-):
-    """Generate image using ERNIE-Image via ComfyUI (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=guidance,
-            seed=seed,
-        ),
-        files={},
-        operation=Operation.GENERATE,
-        target_type=MediaType.IMAGE,
-        adapter_hint="ernie-local-t2i",
-        user=user,
-        register_job_settings={
-            "job_type": "t2i",
-        },
-    )
 
 
 @app.post("/generate")

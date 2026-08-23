@@ -12,6 +12,7 @@ import requests
 import websocket
 import random
 import threading
+import math
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime
@@ -3947,6 +3948,479 @@ class ComfyUIClient:
         )
         return workflow
 
+    # ── MiniMax-H3 cloud workflows ────────────────────────────────────
+    #
+    # MiniMax-H3 is a joint video+audio DiT (FL2VA). It always generates a
+    # synchronized soundtrack: the AV latent carries both a video stream
+    # (24 channels, 24 fps) and an audio stream (40 fps). The workflows below
+    # mirror Comfy-Org's official "Image to Video (MiniMax H3)" template:
+    #   UNETLoader(fl2va int8) + CLIPLoader(qwen3vl minimax) + 2× VAELoader
+    #   → MiniMaxH3ImageToVideo (conditioning + AV latent)
+    #   → BasicGuider + KSamplerSelect(res_multistep) + BasicScheduler(simple)
+    #   → SamplerCustomAdvanced → VAEDecode (video) + VAEDecodeAudio (audio)
+    #   → VHS_VideoCombine (mp4 with muxed audio).
+    # The same fl2va checkpoint serves t2v AND i2v (i2v anchors the input
+    # image as the first keyframe via MiniMaxH3ImageToVideo.first_frame).
+
+    @staticmethod
+    def _align_minimax_h3_frames(num_frames: int) -> int:
+        """Snap a frame count to MiniMax-H3's 17k+5 grid at 24 fps."""
+        n = max(5, int(num_frames))
+        while n % 17 != 5:
+            n += 1
+        return n
+
+    @staticmethod
+    def _aspect_ratio_pair(aspect_ratio: str) -> Tuple[int, int]:
+        """Resolve an aspect ratio string (e.g. '16:9') to a (w, h) pair."""
+        pairs = {
+            "1:1": (1, 1),
+            "9:16": (9, 16),
+            "16:9": (16, 9),
+            "4:3": (4, 3),
+            "3:4": (3, 4),
+            "3:2": (3, 2),
+            "2:3": (2, 3),
+            "21:9": (21, 9),
+            "9:21": (9, 21),
+        }
+        return pairs.get(aspect_ratio, (16, 9))
+
+    @staticmethod
+    def _minimax_h3_canvas(
+        aspect_ratio: str, megapixels: Optional[float] = None
+    ) -> Tuple[int, int]:
+        """Compute the MiniMax-H3 output canvas (w, h), rounded to multiples of 32.
+
+        Without *megapixels*: H3's native canvas — a 768px short edge capped at
+        768×1344 pixels, using the exact same math as ComfyUI's official
+        MiniMaxH3 nodes (`adapt_canvas` in nodes_minimax_h3.py).
+
+        With *megapixels*: the official ResolutionSelector formula —
+        target area = megapixels × 1024² px at the given aspect ratio, rounded
+        to the nearest multiple of 32 (0.4 MP @16:9 → 864×480, 0.98 MP @16:9 →
+        1344×768, 2.0 MP @16:9 → 1920×1088). Clamped to 0.2–2.0 MP.
+        """
+        ar_w, ar_h = ComfyUIClient._aspect_ratio_pair(aspect_ratio)
+
+        if megapixels is None:
+            ratio = ar_w / ar_h
+            if ratio >= 1.0:
+                nom_w, nom_h = 768.0 * ratio, 768.0
+            else:
+                nom_w, nom_h = 768.0, 768.0 / ratio
+            max_pixels = 768 * 1344
+            if nom_w * nom_h > max_pixels:
+                s = math.sqrt(max_pixels / (nom_w * nom_h))
+                nom_w, nom_h = nom_w * s, nom_h * s
+            width = max(32, round(nom_w / 32) * 32)
+            height = max(32, round(nom_h / 32) * 32)
+            return width, height
+
+        mp = max(0.2, min(2.0, float(megapixels)))
+        total_pixels = mp * 1024 * 1024
+        scale = math.sqrt(total_pixels / (ar_w * ar_h))
+        width = max(32, round(ar_w * scale / 32) * 32)
+        height = max(32, round(ar_h * scale / 32) * 32)
+        return width, height
+
+    def _build_minimax_h3_workflow(
+        self,
+        *,
+        prompt: str,
+        width: int,
+        height: int,
+        length: int,
+        fps: int,
+        seed: int,
+        steps: int,
+        output_prefix: str,
+        checkpoint: str,
+        text_encoder: str,
+        video_vae: str,
+        audio_vae: str,
+        first_frame_link: Optional[list] = None,
+        last_frame_link: Optional[list] = None,
+        output_kind: str = "vhs",
+    ) -> Dict[str, Any]:
+        """Shared MiniMax-H3 sampling graph (model load → AV decode → mp4).
+
+        *output_kind* selects how the decoded frames + audio are written:
+          - "vhs" (default, cloud / ai-kvm2): the `VHS_VideoCombine` custom-node
+            (VideoHelperSuite), which is available on the RunPod workers.
+          - "savevideo" (local Windows PC): core `CreateVideo` + `SaveVideo`
+            nodes, which exist on the Windows portable install where
+            VideoHelperSuite (VHS_VideoCombine) is NOT installed.
+        """
+        workflow = {}
+
+        # Node 1: UNETLoader — FL2VA diffusion model (t2v + i2v keyframes)
+        workflow["1"] = {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": checkpoint,
+                "weight_dtype": "default",
+            },
+        }
+
+        # Node 2: CLIPLoader — Qwen3-VL-32B MiniMax text encoder
+        workflow["2"] = {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": text_encoder,
+                "type": "minimax",
+                "device": "default",
+            },
+        }
+
+        # Node 3: VAELoader — video VAE
+        workflow["3"] = {
+            "class_type": "VAELoader",
+            "inputs": {"vae_name": video_vae},
+        }
+
+        # Node 4: VAELoader — audio VAE (H3 generates audio unconditionally)
+        workflow["4"] = {
+            "class_type": "VAELoader",
+            "inputs": {"vae_name": audio_vae},
+        }
+
+        # Node 5: MiniMaxH3ImageToVideo — prompt → conditioning + AV latent
+        h3_inputs = {
+            "clip": ["2", 0],
+            "vae": ["3", 0],
+            "prompt": prompt,
+            "width": width,
+            "height": height,
+            "length": length,
+        }
+        if first_frame_link:
+            h3_inputs["first_frame"] = first_frame_link
+        if last_frame_link:
+            h3_inputs["last_frame"] = last_frame_link
+        workflow["5"] = {
+            "class_type": "MiniMaxH3ImageToVideo",
+            "inputs": h3_inputs,
+        }
+
+        # Node 6: BasicGuider — no CFG / no negative prompt for H3
+        workflow["6"] = {
+            "class_type": "BasicGuider",
+            "inputs": {
+                "model": ["1", 0],
+                "conditioning": ["5", 0],
+            },
+        }
+
+        # Node 7: KSamplerSelect — res_multistep (official template)
+        workflow["7"] = {
+            "class_type": "KSamplerSelect",
+            "inputs": {"sampler_name": "res_multistep"},
+        }
+
+        # Node 8: BasicScheduler — simple schedule (official template)
+        workflow["8"] = {
+            "class_type": "BasicScheduler",
+            "inputs": {
+                "model": ["1", 0],
+                "scheduler": "simple",
+                "steps": steps,
+                "denoise": 1.0,
+            },
+        }
+
+        # Node 9: RandomNoise
+        workflow["9"] = {
+            "class_type": "RandomNoise",
+            "inputs": {"noise_seed": seed},
+        }
+
+        # Node 10: SamplerCustomAdvanced — samples the flat AV pack
+        workflow["10"] = {
+            "class_type": "SamplerCustomAdvanced",
+            "inputs": {
+                "noise": ["9", 0],
+                "guider": ["6", 0],
+                "sampler": ["7", 0],
+                "sigmas": ["8", 0],
+                "latent_image": ["5", 1],
+            },
+        }
+
+        # Node 11: VAEDecode — video frames from the AV latent
+        workflow["11"] = {
+            "class_type": "VAEDecode",
+            "inputs": {
+                "samples": ["10", 0],
+                "vae": ["3", 0],
+            },
+        }
+
+        # Node 12: VAEDecodeAudio — soundtrack from the AV latent
+        workflow["12"] = {
+            "class_type": "VAEDecodeAudio",
+            "inputs": {
+                "samples": ["10", 0],
+                "vae": ["4", 0],
+            },
+        }
+
+        # Node 13: output node — mp4 with muxed audio
+        if output_kind == "savevideo":
+            # Core CreateVideo (frames + audio -> VIDEO) + SaveVideo (-> mp4).
+            # Used on the Windows PC portable ComfyUI where VideoHelperSuite
+            # (VHS_VideoCombine) is not installed.
+            #
+            # Node 14 is reserved for the I2V LoadImage first-frame keyframe, so
+            # SaveVideo lives on node 15 to avoid a collision.
+            workflow["13"] = {
+                "class_type": "CreateVideo",
+                "inputs": {
+                    "images": ["11", 0],
+                    "fps": float(fps),
+                    "audio": ["12", 0],
+                },
+            }
+            workflow["15"] = {
+                "class_type": "SaveVideo",
+                "inputs": {
+                    "video": ["13", 0],
+                    "filename_prefix": output_prefix,
+                    "format": "auto",
+                    "codec": "auto",
+                },
+            }
+        else:
+            # VHS_VideoCombine — VideoHelperSuite custom node (available on
+            # the RunPod / ai-kvm2 workers).
+            workflow["13"] = {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {
+                    "frame_rate": fps,
+                    "loop_count": 0,
+                    "filename_prefix": output_prefix,
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 17,
+                    "save_metadata": True,
+                    "trim_to_audio": True,
+                    "pingpong": False,
+                    "save_output": True,
+                    "images": ["11", 0],
+                    "audio": ["12", 0],
+                },
+            }
+
+        return workflow
+
+    def build_cloud_minimax_h3_t2v_workflow(
+        self,
+        prompt: str,
+        width: int = 1344,
+        height: int = 768,
+        num_frames: int = 124,
+        fps: int = 24,
+        seed: int = -1,
+        steps: int = 20,
+        output_prefix: str = "oelala_minimax_h3_t2v",
+        checkpoint: str = "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        text_encoder: str = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
+        audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
+        aspect_ratio: str = "16:9",
+        megapixels: Optional[float] = None,
+        long_edge: int = 768,
+        output_kind: str = "vhs",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build MiniMax-H3 22B Cloud T2V workflow — text-to-video+audio.
+
+        Matches Comfy-Org's official MiniMax-H3 template (simple/20-step
+        schedule, res_multistep sampler, BasicGuider — no negative prompt).
+        The model always generates a synchronized soundtrack.
+
+        Canvas: native 768px short edge (capped 768×1344) unless *megapixels*
+        is set, in which case the official ResolutionSelector formula is used
+        (0.4 MP @16:9 → 864×480, 0.98 → 1344×768, 2.0 → 1920×1088).
+        """
+        length = self._align_minimax_h3_frames(num_frames)
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        width, height = self._minimax_h3_canvas(aspect_ratio, megapixels)
+
+        logger.info(
+            f"☁️ Building MiniMax-H3 Cloud T2V: {width}x{height}, "
+            f"{length}f@{fps}fps, {steps} steps, seed={seed}"
+        )
+
+        return self._build_minimax_h3_workflow(
+            prompt=prompt,
+            width=width,
+            height=height,
+            length=length,
+            fps=fps,
+            seed=seed,
+            steps=steps,
+            output_prefix=output_prefix,
+            checkpoint=checkpoint,
+            text_encoder=text_encoder,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            output_kind=output_kind,
+        )
+
+    def build_cloud_minimax_h3_i2v_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        width: int = 1344,
+        height: int = 768,
+        num_frames: int = 124,
+        fps: int = 24,
+        seed: int = -1,
+        steps: int = 20,
+        output_prefix: str = "oelala_minimax_h3_i2v",
+        checkpoint: str = "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        text_encoder: str = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
+        audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
+        aspect_ratio: str = "16:9",
+        megapixels: Optional[float] = None,
+        long_edge: int = 768,
+        output_kind: str = "vhs",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build MiniMax-H3 22B Cloud I2V workflow — image-to-video+audio.
+
+        Uses the same FL2VA checkpoint as T2V: the input image is anchored
+        as the first keyframe of the video (MiniMaxH3ImageToVideo.first_frame).
+        Canvas follows the same rule as T2V (native 768p short edge, or the
+        official ResolutionSelector formula when *megapixels* is set).
+        """
+        length = self._align_minimax_h3_frames(num_frames)
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        width, height = self._minimax_h3_canvas(aspect_ratio, megapixels)
+
+        logger.info(
+            f"☁️ Building MiniMax-H3 Cloud I2V: {width}x{height}, "
+            f"{length}f@{fps}fps, {steps} steps, seed={seed}, image={image_name}"
+        )
+
+        workflow = self._build_minimax_h3_workflow(
+            prompt=prompt,
+            width=width,
+            height=height,
+            length=length,
+            fps=fps,
+            seed=seed,
+            steps=steps,
+            output_prefix=output_prefix,
+            checkpoint=checkpoint,
+            text_encoder=text_encoder,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            first_frame_link=["14", 0],
+            output_kind=output_kind,
+        )
+
+        # Node 14: LoadImage — first-frame keyframe
+        workflow["14"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": image_name},
+        }
+        return workflow
+
+    def build_local_minimax_h3_t2v_workflow(
+        self,
+        prompt: str,
+        width: int = 1344,
+        height: int = 768,
+        num_frames: int = 124,
+        fps: int = 24,
+        seed: int = -1,
+        steps: int = 20,
+        output_prefix: str = "oelala_minimax_h3_t2v",
+        checkpoint: str = "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        text_encoder: str = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
+        audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
+        aspect_ratio: str = "16:9",
+        megapixels: Optional[float] = None,
+        long_edge: int = 768,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build MiniMax-H3 local (Windows PC ComfyUI) T2V workflow.
+
+        Same MiniMax-H3 FL2VA graph as the cloud builder, but uses the model
+        files on the user's Windows PC (ComfyUI portable). The local text
+        encoder is the **int8_convrot** variant (`qwen3vl_32b_minimax_h3_int8_convrot.safetensors`),
+        matching the Comfy-Org int8 pruned set that fits the 16 GB GPU —
+        unlike the cloud worker's nvfp4_awq encoder.
+
+        Always generates a synchronized soundtrack (H3 FL2VA).
+        """
+        return self.build_cloud_minimax_h3_t2v_workflow(
+            prompt=prompt,
+            num_frames=num_frames,
+            fps=fps,
+            seed=seed,
+            steps=steps,
+            output_prefix=output_prefix,
+            checkpoint=checkpoint,
+            text_encoder=text_encoder,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            aspect_ratio=aspect_ratio,
+            megapixels=megapixels,
+            output_kind="savevideo",
+        )
+
+    def build_local_minimax_h3_i2v_workflow(
+        self,
+        image_name: str,
+        prompt: str,
+        width: int = 1344,
+        height: int = 768,
+        num_frames: int = 124,
+        fps: int = 24,
+        seed: int = -1,
+        steps: int = 20,
+        output_prefix: str = "oelala_minimax_h3_i2v",
+        checkpoint: str = "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        text_encoder: str = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
+        audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
+        aspect_ratio: str = "16:9",
+        megapixels: Optional[float] = None,
+        long_edge: int = 768,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build MiniMax-H3 local (Windows PC ComfyUI) I2V workflow.
+
+        Same FL2VA graph as the cloud I2V builder, but with the local
+        int8_convrot text encoder that lives on the Windows PC. The input
+        image is anchored as the first keyframe. Always generates audio.
+        """
+        return self.build_cloud_minimax_h3_i2v_workflow(
+            image_name=image_name,
+            prompt=prompt,
+            num_frames=num_frames,
+            fps=fps,
+            seed=seed,
+            steps=steps,
+            output_prefix=output_prefix,
+            checkpoint=checkpoint,
+            text_encoder=text_encoder,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            aspect_ratio=aspect_ratio,
+            megapixels=megapixels,
+            output_kind="savevideo",
+        )
+
     def queue_prompt(self, workflow: Dict[str, Any]) -> Optional[str]:
         """Queue workflow for execution, return prompt_id.
 
@@ -4670,404 +5144,6 @@ class ComfyUIClient:
             return None
         return self.get_output_image(history, output_dir, prompt_id)
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # ERNIE-Image Text-to-Image Generation (DisTorch2 Multi-GPU)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def generate_ernie_t2i(
-        self,
-        prompt: str,
-        output_dir: str,
-        width: int = 1024,
-        height: int = 1024,
-        steps: int = 20,
-        guidance: float = 4.0,
-        seed: int = -1,
-        user_id: Optional[str] = None,
-    ) -> Optional[str]:
-        """
-        Generate image using ERNIE-Image via ComfyUI.
-        Uses Flux2 sampling pipeline with ComfyUI's dynamic VRAM offloading.
-        NOTE: DisTorch2 multi-GPU produces NaN with ERNIE — plain loaders only.
-
-        ERNIE-Image uses:
-        - Flux2 latent format (128 channels, 16x downscale)
-        - Ministral-3-3B text encoder (auto-detected from weights)
-        - FlowMatch sampling via SamplerCustomAdvanced + Flux2Scheduler
-        - FluxGuidance + BasicGuider (NOT KSampler)
-
-        Args:
-            prompt: Text prompt for image generation
-            output_dir: Directory to save output
-            width, height: Image dimensions (default 1024x1024)
-            steps: Sampling steps (default 20)
-            guidance: Flux guidance scale (default 4.0)
-            seed: Random seed (-1 for random)
-
-        Returns:
-            Path to generated image, or None on failure
-        """
-        import random
-
-        if seed == -1:
-            seed = random.randint(0, 2**63 - 1)
-
-        # Build ERNIE-Image workflow (Flux2 sampling pipeline)
-        # NOTE: DisTorch2 multi-GPU causes NaN/inf during ERNIE inference — produces
-        # garbage output. Use plain loaders with ComfyUI's built-in dynamic VRAM
-        # offloading instead. The 15.3GB UNET gets streamed in/out as needed.
-        # ERNIE uses Flux2 latent format (128ch, 16x downscale) and FlowMatch sampling.
-        # Requires: EmptyFlux2LatentImage, Flux2Scheduler, FluxGuidance, BasicGuider,
-        #           SamplerCustomAdvanced — NOT KSampler.
-        workflow = {
-            "10": {
-                "inputs": {
-                    "unet_name": "ernie-image.safetensors",
-                    "weight_dtype": "default",
-                },
-                "class_type": "UNETLoader",
-                "_meta": {"title": "Load ERNIE-Image UNET"},
-            },
-            "11": {
-                "inputs": {
-                    "clip_name": "ministral-3-3b.safetensors",
-                    "type": "flux2",
-                },
-                "class_type": "CLIPLoader",
-                "_meta": {"title": "Load Ministral-3-3B Text Encoder"},
-            },
-            "12": {
-                "inputs": {
-                    "vae_name": "flux2-vae.safetensors",
-                },
-                "class_type": "VAELoader",
-                "_meta": {"title": "Load Flux2 VAE"},
-            },
-            # Text encoding
-            "20": {
-                "inputs": {"text": prompt, "clip": ["11", 0]},
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "Positive Prompt"},
-            },
-            # FluxGuidance — applies guidance embed for FlowMatch models
-            "21": {
-                "inputs": {
-                    "guidance": guidance,
-                    "conditioning": ["20", 0],
-                },
-                "class_type": "FluxGuidance",
-                "_meta": {"title": "Flux Guidance"},
-            },
-            # BasicGuider — wraps model + conditioning for SamplerCustomAdvanced
-            "22": {
-                "inputs": {
-                    "model": ["10", 0],
-                    "conditioning": ["21", 0],
-                },
-                "class_type": "BasicGuider",
-                "_meta": {"title": "Basic Guider"},
-            },
-            # Flux2Scheduler — generates sigmas based on resolution
-            "23": {
-                "inputs": {
-                    "steps": steps,
-                    "width": width,
-                    "height": height,
-                },
-                "class_type": "Flux2Scheduler",
-                "_meta": {"title": "Flux2 Scheduler"},
-            },
-            # KSamplerSelect — just selects the sampler algorithm
-            "24": {
-                "inputs": {"sampler_name": "euler"},
-                "class_type": "KSamplerSelect",
-                "_meta": {"title": "Sampler Select (euler)"},
-            },
-            # RandomNoise — generates noise with seed
-            "25": {
-                "inputs": {"noise_seed": seed},
-                "class_type": "RandomNoise",
-                "_meta": {"title": "Random Noise"},
-            },
-            # EmptyFlux2LatentImage — native 128-channel, 16x downscale
-            "30": {
-                "inputs": {
-                    "width": width,
-                    "height": height,
-                    "batch_size": 1,
-                },
-                "class_type": "EmptyFlux2LatentImage",
-                "_meta": {"title": "Empty Flux2 Latent (128ch)"},
-            },
-            # SamplerCustomAdvanced — the actual sampling
-            "40": {
-                "inputs": {
-                    "noise": ["25", 0],
-                    "guider": ["22", 0],
-                    "sampler": ["24", 0],
-                    "sigmas": ["23", 0],
-                    "latent_image": ["30", 0],
-                },
-                "class_type": "SamplerCustomAdvanced",
-                "_meta": {"title": "Sampler (FlowMatch)"},
-            },
-            # VAE Decode + Save
-            "50": {
-                "inputs": {"samples": ["40", 0], "vae": ["12", 0]},
-                "class_type": "VAEDecode",
-                "_meta": {"title": "VAE Decode"},
-            },
-            "51": {
-                "inputs": {"filename_prefix": "Ernie_T2I", "images": ["50", 0]},
-                "class_type": "SaveImage",
-                "_meta": {"title": "Save Image"},
-            },
-        }
-
-        logger.info(
-            f"🎨 ERNIE-Image T2I: {prompt[:50]}... ({width}x{height}, {steps} steps, cfg={guidance})"
-        )
-
-        # Queue and wait for completion
-        prompt_id = self.queue_prompt(workflow)
-        if not prompt_id:
-            logger.error("Failed to queue ERNIE-Image T2I workflow")
-            return None
-
-        # Register job for auto-upload tracking
-        if user_id:
-            self.register_job(
-                prompt_id=prompt_id,
-                user_id=user_id,
-                prompt=prompt,
-                settings={
-                    "width": width,
-                    "height": height,
-                    "steps": steps,
-                    "guidance": guidance,
-                    "seed": seed,
-                    "model": "ernie-image",
-                },
-            )
-
-        # Wait for completion (ERNIE with 20 steps should be ~2-3 min)
-        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)
-
-        if output_path:
-            logger.info(f"✅ ERNIE-Image T2I generated: {output_path}")
-        else:
-            logger.error("ERNIE-Image T2I generation failed or timed out")
-
-        return output_path
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Wan2.2 Text-to-Image Generation (DisTorch2 Multi-GPU)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def generate_wan22_t2i(
-        self,
-        prompt: str,
-        output_dir: str,
-        width: int = 512,
-        height: int = 512,
-        steps: int = 8,
-        seed: int = -1,
-        user_id: Optional[str] = None,
-    ) -> Optional[str]:
-        """
-        Generate image using Wan2.2 T2V model in T2I mode via ComfyUI.
-        Uses DisTorch2 multi-GPU setup with high/low noise models.
-
-        Args:
-            prompt: Text prompt for image generation
-            output_dir: Directory to save output
-            width, height: Image dimensions
-            steps: Total number of sampling steps (split between high/low noise)
-            seed: Random seed (-1 for random)
-
-        Returns:
-            Path to generated image, or None on failure
-        """
-        import random
-
-        if seed == -1:
-            seed = random.randint(0, 2**63 - 1)
-        seed2 = random.randint(0, 2**63 - 1)
-
-        half_steps = steps // 2
-
-        # Build the Wan2.2 T2I workflow (DisTorch2 multi-GPU)
-        workflow = {
-            "3": {
-                "inputs": {"text": prompt, "clip": ["29", 1]},
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "Positive Prompt"},
-            },
-            "4": {
-                "inputs": {"text": "", "clip": ["29", 1]},
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "Negative Prompt"},
-            },
-            "5": {
-                "inputs": {
-                    "width": width,
-                    "height": height,
-                    "length": 1,
-                    "batch_size": 1,
-                },
-                "class_type": "EmptyHunyuanLatentVideo",
-                "_meta": {"title": "Empty HunyuanVideo 1.0 Latent"},
-            },
-            "9": {
-                "inputs": {"samples": ["36", 0], "vae": ["55", 0]},
-                "class_type": "VAEDecode",
-                "_meta": {"title": "VAE Decode"},
-            },
-            "10": {
-                "inputs": {"filename_prefix": "Wan22_T2I", "images": ["9", 0]},
-                "class_type": "SaveImage",
-                "_meta": {"title": "Save Image"},
-            },
-            "29": {
-                "inputs": {
-                    "lora_name": "Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors",
-                    "strength_model": 0,
-                    "strength_clip": 0,
-                    "model": ["50", 0],
-                    "clip": ["51", 0],
-                },
-                "class_type": "LoraLoader",
-                "_meta": {"title": "Load LoRA"},
-            },
-            "35": {
-                "inputs": {
-                    "add_noise": "enable",
-                    "noise_seed": seed,
-                    "steps": steps,
-                    "cfg": 1,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "start_at_step": 0,
-                    "end_at_step": half_steps,
-                    "return_with_leftover_noise": "disable",
-                    "model": ["29", 0],
-                    "positive": ["3", 0],
-                    "negative": ["4", 0],
-                    "latent_image": ["5", 0],
-                },
-                "class_type": "KSamplerAdvanced",
-                "_meta": {"title": "KSampler (Advanced)"},
-            },
-            "36": {
-                "inputs": {
-                    "add_noise": "enable",
-                    "noise_seed": seed2,
-                    "steps": steps,
-                    "cfg": 1,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "start_at_step": half_steps,
-                    "end_at_step": steps,
-                    "return_with_leftover_noise": "disable",
-                    "model": ["44", 0],
-                    "positive": ["3", 0],
-                    "negative": ["4", 0],
-                    "latent_image": ["35", 0],
-                },
-                "class_type": "KSamplerAdvanced",
-                "_meta": {"title": "KSampler (Advanced)"},
-            },
-            "44": {
-                "inputs": {
-                    "lora_name": "Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors",
-                    "strength_model": 0,
-                    "model": ["52", 0],
-                },
-                "class_type": "LoraLoaderModelOnly",
-                "_meta": {"title": "LoraLoaderModelOnly"},
-            },
-            "50": {
-                "inputs": {
-                    "unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
-                    "weight_dtype": "default",
-                    "compute_device": "cuda:1",
-                    "virtual_vram_gb": 5,
-                    "donor_device": "cuda:0",
-                    "expert_mode_allocations": "",
-                    "eject_models": True,
-                },
-                "class_type": "UNETLoaderDisTorch2MultiGPU",
-                "_meta": {"title": "UNETLoaderDisTorch2MultiGPU"},
-            },
-            "51": {
-                "inputs": {
-                    "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
-                    "type": "wan",
-                    "device": "cuda:1",
-                },
-                "class_type": "CLIPLoaderMultiGPU",
-                "_meta": {"title": "CLIPLoaderMultiGPU"},
-            },
-            "52": {
-                "inputs": {
-                    "unet_name": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
-                    "weight_dtype": "default",
-                    "compute_device": "cuda:1",
-                    "virtual_vram_gb": 5,
-                    "donor_device": "cuda:0",
-                    "expert_mode_allocations": "",
-                    "eject_models": True,
-                },
-                "class_type": "UNETLoaderDisTorch2MultiGPU",
-                "_meta": {"title": "UNETLoaderDisTorch2MultiGPU"},
-            },
-            "55": {
-                "inputs": {
-                    "vae_name": "wan_2.1_vae.safetensors",
-                    "compute_device": "cuda:1",
-                    "virtual_vram_gb": 0,
-                    "donor_device": "cuda:0",
-                    "expert_mode_allocations": "",
-                    "eject_models": True,
-                },
-                "class_type": "VAELoaderDisTorch2MultiGPU",
-                "_meta": {"title": "VAELoaderDisTorch2MultiGPU"},
-            },
-        }
-
-        logger.info(
-            f"🎬 Wan2.2 T2I: {prompt[:50]}... ({width}x{height}, {steps} steps)"
-        )
-
-        # Queue and wait for completion
-        prompt_id = self.queue_prompt(workflow)
-        if not prompt_id:
-            logger.error("Failed to queue Wan2.2 T2I workflow")
-            return None
-
-        # Register job for auto-upload tracking
-        if user_id:
-            self.register_job(
-                prompt_id=prompt_id,
-                user_id=user_id,
-                prompt=prompt,
-                settings={
-                    "width": width,
-                    "height": height,
-                    "steps": steps,
-                    "seed": seed,
-                },
-            )
-
-        # Wait for completion with timeout (Wan2.2 is slower)
-        output_path = self.wait_and_download_image(prompt_id, output_dir, timeout=600)
-
-        if output_path:
-            logger.info(f"✅ Wan2.2 T2I image generated: {output_path}")
-        else:
-            logger.error("Wan2.2 T2I generation failed or timed out")
-
-        return output_path
 
     def build_distorch2_workflow(
         self,
@@ -5784,6 +5860,11 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
 # Singleton instance
 _comfyui_client: Optional[ComfyUIClient] = None
 
+# Optional second ComfyUI server — the user's Windows PC (used for local
+# MiniMax-H3 generation, which runs on that machine's ComfyUI rather than the
+# one on ai-kvm2). Configured via COMFYUI_WINDOWS_HOST / COMFYUI_WINDOWS_PORT.
+_windows_comfyui_client: Optional[ComfyUIClient] = None
+
 
 def get_comfyui_client() -> ComfyUIClient:
     """Get or create ComfyUI client singleton"""
@@ -5791,3 +5872,31 @@ def get_comfyui_client() -> ComfyUIClient:
     if _comfyui_client is None:
         _comfyui_client = ComfyUIClient()
     return _comfyui_client
+
+
+def get_windows_comfyui_client() -> Optional[ComfyUIClient]:
+    """Get/create the ComfyUI client for the user's Windows PC.
+
+    This is a separate ComfyUI server from the one on ai-kvm2 (which
+    get_comfyui_client() targets). Local MiniMax-H3 generation is routed here
+    because the H3 models + workflow live on the Windows machine
+    (ComfyUI portable, e.g. 192.168.1.245:8188).
+
+    Returns None when the host/port haven't been configured, so any
+    dependent adapter/registration is skipped gracefully.
+    """
+    global _windows_comfyui_client
+    if _windows_comfyui_client is not None:
+        return _windows_comfyui_client
+
+    host = os.getenv("COMFYUI_WINDOWS_HOST", "").strip()
+    port = int(os.getenv("COMFYUI_WINDOWS_PORT", "8188") or "8188")
+    if not host:
+        logger.info(
+            "⬛ COMFYUI_WINDOWS_HOST not set — Windows ComfyUI client unavailable"
+        )
+        return None
+
+    _windows_comfyui_client = ComfyUIClient(host=host, port=port)
+    logger.info(f"🪟 Windows ComfyUI client ready: {host}:{port}")
+    return _windows_comfyui_client

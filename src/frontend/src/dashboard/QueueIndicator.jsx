@@ -317,6 +317,7 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
 function JobRow({ job, status, onCancel, onJobComplete }) {
   const [showDetails, setShowDetails] = useState(status === 'running')
   const isCloud = job.compute_target === 'cloud'
+  const isWindows = job.server === 'windows'
   const colors = { running: '#22c55e', pending: '#fbbf24', completed: '#3b82f6', failed: '#ef4444' }
   const Icon = { running: Loader2, pending: Clock, completed: CheckCircle, failed: AlertTriangle }[status]
 
@@ -328,15 +329,15 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
           alignItems: 'center',
           gap: '8px',
           padding: '6px 8px',
-          backgroundColor: isCloud ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-input)',
+          backgroundColor: isCloud ? 'rgba(99, 102, 241, 0.08)' : isWindows ? 'rgba(14, 165, 233, 0.08)' : 'var(--bg-input)',
           borderRadius: '4px',
           fontSize: '0.8rem',
           cursor: status === 'running' ? 'pointer' : 'default',
-          borderLeft: isCloud ? '2px solid #6366f1' : 'none',
+          borderLeft: isCloud ? '2px solid #6366f1' : isWindows ? '2px solid #0ea5e9' : 'none',
         }}
         onClick={() => status === 'running' && setShowDetails(!showDetails)}
       >
-        <Icon size={12} color={isCloud ? '#6366f1' : colors[status]} className={status === 'running' ? 'spin' : ''} />
+        <Icon size={12} color={isCloud ? '#6366f1' : isWindows ? '#0ea5e9' : colors[status]} className={status === 'running' ? 'spin' : ''} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -350,10 +351,12 @@ function JobRow({ job, status, onCancel, onJobComplete }) {
             }}
           >
             {isCloud && <span title="Cloud Max (RunPod)" style={{ fontSize: '11px' }}>☁️</span>}
+            {isWindows && <span title="MiniMax-H3 (Windows PC)" style={{ fontSize: '11px' }}>🪟</span>}
             {job.prompt || job.prompt_id.slice(0, 8)}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
             {isCloud && <span style={{ color: '#6366f1', marginRight: '4px' }}>Cloud</span>}
+            {isWindows && <span style={{ color: '#0ea5e9', marginRight: '4px' }}>Windows PC</span>}
             {status === 'failed' && job.error && <span style={{ color: '#ef4444' }}>{job.error.slice(0, 60)}</span>}
             {status !== 'failed' && <>{job.resolution} {job.aspect_ratio} {job.num_frames && `• ${job.num_frames}f`}</>}
           </div>

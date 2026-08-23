@@ -105,6 +105,7 @@ class GenerationRequest(BaseModel):
     fps: Optional[int] = None
     resolution: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    megapixels: Optional[float] = None  # MiniMax-H3: target output size in MP (0.2–2.0)
     sampler: Optional[str] = None
     scheduler: Optional[str] = None
     loras: list[LoraStackItem] = Field(default_factory=list)

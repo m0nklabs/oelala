@@ -65,6 +65,8 @@ def create_registry(
         from .adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
         from .adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
         from .adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
+        from .adapters.cloud.minimax_h3_i2v import MiniMaxH3CloudI2VAdapter
+        from .adapters.cloud.minimax_h3_t2v import MiniMaxH3CloudT2VAdapter
         from .adapters.cloud.cloud_i2i import (
             I2IEditCloudAdapter,
             CloudI2ITransformAdapter,
@@ -93,6 +95,16 @@ def create_registry(
             comfyui_client_fn=comfyui_client_fn,
         )
         _register(
+            MiniMaxH3CloudI2VAdapter,
+            submit_to_runpod_fn=submit_to_runpod_fn,
+            comfyui_client_fn=comfyui_client_fn,
+        )
+        _register(
+            MiniMaxH3CloudT2VAdapter,
+            submit_to_runpod_fn=submit_to_runpod_fn,
+            comfyui_client_fn=comfyui_client_fn,
+        )
+        _register(
             I2IEditCloudAdapter,
             submit_to_runpod_fn=submit_to_runpod_fn,
         )
@@ -103,19 +115,17 @@ def create_registry(
     else:
         logger.info("☁️ RunPod not available — skipping cloud adapters")
 
-    # ── Local T2I adapters ──────────────────────────────────────
+    # ── Local T2I adapters (kept: SDXL-Pony + Flux + Krea 2) ──────
     if comfyui_client_fn:
         from .adapters.local.t2i_sdxl import SDXLLocalT2IAdapter
         from .adapters.local.t2i_flux import FluxLocalT2IAdapter
-        from .adapters.local.t2i_sd15 import SD15LocalT2IAdapter
-        from .adapters.local.t2i_wan22 import Wan22LocalT2IAdapter
-        from .adapters.local.t2i_ernie import ErnieLocalT2IAdapter
+        from .adapters.local.t2i_krea2 import Krea2LocalT2IAdapter
+        from .adapters.local.t2i_flux2 import Flux2LocalT2IAdapter
 
         _register(SDXLLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
         _register(FluxLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(SD15LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(Wan22LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
-        _register(ErnieLocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
+        _register(Krea2LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
+        _register(Flux2LocalT2IAdapter, comfyui_client_fn=comfyui_client_fn)
 
         # ── Local I2V adapters ──────────────────────────────────
         from .adapters.local.i2v_wan22 import (
@@ -132,6 +142,31 @@ def create_registry(
         from .adapters.local.t2v_wan22 import Wan22LocalT2VQ6Adapter
 
         _register(Wan22LocalT2VQ6Adapter, comfyui_client_fn=comfyui_client_fn)
+
+        # ── Local MiniMax-H3 (Windows PC ComfyUI) ──────────────
+        from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
+        from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
+        from comfyui_client import get_windows_comfyui_client
+
+        try:
+            _windows_client = get_windows_comfyui_client()
+        except Exception as exc:
+            logger.warning(f"⚠️ Windows ComfyUI client init failed: {exc}")
+            _windows_client = None
+
+        if _windows_client is not None:
+            _register(
+                MiniMaxH3LocalT2VAdapter,
+                comfyui_client_fn=get_windows_comfyui_client,
+            )
+            _register(
+                MiniMaxH3LocalI2VAdapter,
+                comfyui_client_fn=get_windows_comfyui_client,
+            )
+        else:
+            logger.info(
+                "🪟 No Windows ComfyUI configured — skipping local MiniMax-H3 adapters"
+            )
 
         # ── Utility adapters ───────────────────────────────────
         from .adapters.local.i2i_transform import I2ITransformAdapter

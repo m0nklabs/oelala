@@ -29,6 +29,8 @@ const MODEL_MODES = [
   { value: 'wan2.2', label: '✅ Stable Local — Wan2.2 Q6', desc: 'Reliable local dual-pass via ComfyUI' },
   { value: 'distorch2_q8', label: '🏆 Quality Local — Wan2.2 Q8', desc: 'Q8 quality + DisTorch2 multi-GPU' },
   { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
+  { value: 'minimax_h3', label: '🎥 MiniMax H3 — Cloud Video+Audio', desc: '24fps cloud I2V with native stereo audio (80GB+ GPU)' },
+  { value: 'minimax_h3_local', label: '🪟 MiniMax H3 — Lokaal (Windows PC)', desc: '24fps lokal op je Windows-PC ComfyUI met native stereo audio' },
 ]
 
 const I2V_ADAPTER_BY_MODE = {
@@ -38,9 +40,43 @@ const I2V_ADAPTER_BY_MODE = {
   ultra_q8: 'wan22-local-i2v-ultra',
   cloud_wan22: 'wan22-cloud-i2v',
   ltx2: 'ltx23-cloud-i2v',
+  minimax_h3: 'minimax-h3-cloud-i2v',
+  minimax_h3_local: 'minimax-h3-local-i2v',
 }
 
-const I2V_CLOUD_ONLY_MODES = new Set(['cloud_wan22', 'ltx2'])
+// MiniMax-H3 runs both in the cloud (RunPod 80GB+) and locally on the user's
+// Windows PC ComfyUI — both share the same FL2VA UI (no CFG / neg prompt,
+// MP-selector canvas, 24fps, fixed stereo audio).
+const H3_MODES = new Set(['minimax_h3', 'minimax_h3_local'])
+const isH3Mode = (m) => H3_MODES.has(m)
+
+const I2V_CLOUD_ONLY_MODES = new Set(['cloud_wan22', 'ltx2', 'minimax_h3'])
+
+// MiniMax-H3 quality levels (official ResolutionSelector: target MP at the
+// chosen aspect ratio, rounded to a multiple of 32). 0.98 MP @16:9 = H3's
+// native 1344×768 canvas; 2.0 MP = 2K. 0.4 MP is the template's fast default.
+const H3_QUALITY_PRESETS = [
+  { value: '0.4', label: '0.4 MP', tag: 'Snel preview', note: 'Officiële template default' },
+  { value: '0.6', label: '0.6 MP', tag: 'Standaard', note: '' },
+  { value: '0.98', label: '0.98 MP', tag: 'Native 768p', note: 'Aanbevolen — full quality' },
+  { value: '2.0', label: '2.0 MP', tag: '2K', note: 'Maximaal, langzaamst' },
+]
+
+// Same math as ComfyUI's ResolutionSelector node (multiple = 32)
+const h3CanvasDims = (mp, aspect) => {
+  const [a, b] = aspect.split(':').map(Number)
+  const scale = Math.sqrt((parseFloat(mp) * 1024 * 1024) / (a * b))
+  const w = Math.round((a * scale) / 32) * 32
+  const h = Math.round((b * scale) / 32) * 32
+  return `${w}×${h}`
+}
+
+// MiniMax-H3 snaps the frame count to the model's 17k+5 grid at 24 fps
+const snapH3Frames = (n) => {
+  let f = Math.max(5, n)
+  while (f % 17 !== 5) f += 1
+  return f
+}
 
 const getI2VComputeTarget = (modelMode) => (
   I2V_CLOUD_ONLY_MODES.has(modelMode) ? 'cloud' : 'local'
@@ -144,6 +180,7 @@ const I2V_DEFAULT_SETTINGS = {
   modelVersion: 'v2',
   aspectRatio: '9:16',
   fps: 16,
+  h3Quality: '0.98',
   steps: 6,
   cfg: 1.0,
   seed: -1,
@@ -183,6 +220,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     if (s.modelVersion) setModelVersion(s.modelVersion)
     if (s.aspectRatio) setAspectRatio(s.aspectRatio)
     if (s.fps !== undefined) setFps(s.fps)
+    if (s.h3Quality) setH3Quality(s.h3Quality)
     if (s.steps !== undefined) setSteps(s.steps)
     if (s.cfg !== undefined) setCfg(s.cfg)
     if (s.seed !== undefined) setSeed(s.seed)
@@ -251,6 +289,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [computeTarget, setComputeTarget] = useState('local')
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [fps, setFps] = useState(16)
+  const [h3Quality, setH3Quality] = useState('0.98')
   const [steps, setSteps] = useState(6)
   const [cfg, setCfg] = useState(1.0)
   const [seed, setSeed] = useState(-1)
@@ -427,7 +466,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   // ── Auto-save settings to profile on every change ─────────────────────
   const settingsSnapshot = useMemo(() => ({
     prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
-    aspectRatio, fps, steps, cfg, seed, cameraMotion,
+    aspectRatio, fps, h3Quality, steps, cfg, seed, cameraMotion,
     bsShift, bsNagScale, bsEnableFlorence2, bsEnableUpscale,
     bsEnableInterpolation, bsHighNoiseSteps,
     loraConfigs, unetHighNoise, unetLowNoise,
@@ -437,7 +476,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
     sourceImageName: file?.name || null,
   }), [
     prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
-    aspectRatio, fps, steps, cfg, seed, cameraMotion,
+    aspectRatio, fps, h3Quality, steps, cfg, seed, cameraMotion,
     bsShift, bsNagScale, bsEnableFlorence2, bsEnableUpscale,
     bsEnableInterpolation, bsHighNoiseSteps,
     loraConfigs, unetHighNoise, unetLowNoise,
@@ -570,6 +609,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
 
   // Calculate max duration based on resolution and model mode
   const maxDuration = useMemo(() => {
+    if (isH3Mode(modelMode)) return 15 // 362f @24fps ≈ 15.1s — trained range ~124–362
     const preset = RESOLUTION_PRESETS[resolution]
     if (!preset) return 30
     if (modelMode === 'ltx2') {
@@ -1024,6 +1064,18 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         adapter_hint: adapterHint,
       }
 
+      if (isH3Mode(modelMode)) {
+        // MiniMax-H3: the canvas derives from aspect ratio + megapixels (the
+        // official ResolutionSelector formula on the backend). Fixed 24 fps and
+        // no CFG / negative prompt — the model only follows the positive prompt.
+        reqPayload.megapixels = parseFloat(h3Quality)
+        reqPayload.aspect_ratio = aspectRatio
+        reqPayload.fps = 24
+        reqPayload.cfg = 1.0
+        reqPayload.negative_prompt = ''
+        delete reqPayload.resolution
+      }
+
       // Add model-specific parameters
       if (!usePose && (modelMode === 'blockswap_q8' || modelMode === 'distorch2_q8' || modelMode === 'ultra_q8' || modelMode === 'wan22')) {
         reqPayload.shift = bsShift
@@ -1357,6 +1409,15 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   setBsShift(8.0)
                   setBsHighNoiseSteps(8)
                   setComputeTarget('cloud')  // Cloud Wan22 is cloud-only
+                } else if (newMode === 'minimax_h3' || newMode === 'minimax_h3_local') {
+                  setResolution('720p')  // unused for H3 — canvas comes from MP selector
+                  setAspectRatio('9:16')
+                  setDuration(5)
+                  setFps(24)
+                  setSteps(20)
+                  setCfg(1.0)
+                  setH3Quality('0.98')
+                  setComputeTarget(newMode === 'minimax_h3_local' ? 'local' : 'cloud')
                 }
               }}
               style={{
@@ -1438,6 +1499,16 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
               </div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
                 NAG + EnhanceAVideo + TorchCompile + Florence2 • All resolutions up to 30s
+              </div>
+            </div>
+          ) : isH3Mode(modelMode) ? (
+            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#22d3ee' }}>
+              <span style={{ fontWeight: 600 }}>🎥 MiniMax H3 — FL2VA 22B</span> • <span style={{ color: '#67e8f9' }}>{modelMode === 'minimax_h3_local' ? 'Windows PC (lokaal)' : 'RunPod 80GB+ GPU'}</span>
+              <div style={{ marginTop: '4px', opacity: 0.8 }}>
+                24 fps • native stereo audio (geen aparte audio-stap nodig) • geen negative prompt / CFG • simple/20-step
+              </div>
+              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
+                Canvas: 768px short edge (cap 768×1344) — kwaliteit via MP-selector • tot ~15s per clip
               </div>
             </div>
           ) : (
@@ -1885,51 +1956,57 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         </div>
 
-        {/* Negative Prompt - Collapsible */}
-        <div style={{ marginTop: '12px' }}>
-          <div
-            onClick={() => setShowNegativePrompt(!showNegativePrompt)}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer',
-              padding: '8px 0'
-            }}
-          >
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Negative Prompt
-            </span>
-            <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showNegativePrompt ? '▼' : '▶'}</span>
-          </div>
-
-          {showNegativePrompt && (
-            <div style={{ position: 'relative' }}>
-              <textarea
-                className="form-textarea"
-                value={negativePrompt}
-                onChange={(e) => setNegativePrompt(e.target.value)}
-                rows={3}
-                placeholder="Things to avoid in the generation..."
-                style={{
-                  backgroundColor: '#0f0f0f',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  resize: 'vertical',
-                  minHeight: '60px',
-                  padding: '12px',
-                  paddingBottom: '28px',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  fontSize: '0.85rem'
-                }}
-              />
-              <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                {negativePrompt.length}/2048
-              </div>
+        {/* Negative Prompt - Collapsible (not for MiniMax-H3: no negative prompt) */}
+        {!isH3Mode(modelMode) ? (
+          <div style={{ marginTop: '12px' }}>
+            <div
+              onClick={() => setShowNegativePrompt(!showNegativePrompt)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                padding: '8px 0'
+              }}
+            >
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Negative Prompt
+              </span>
+              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showNegativePrompt ? '▼' : '▶'}</span>
             </div>
-          )}
-        </div>
+
+            {showNegativePrompt && (
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  className="form-textarea"
+                  value={negativePrompt}
+                  onChange={(e) => setNegativePrompt(e.target.value)}
+                  rows={3}
+                  placeholder="Things to avoid in the generation..."
+                  style={{
+                    backgroundColor: '#0f0f0f',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    resize: 'vertical',
+                    minHeight: '60px',
+                    padding: '12px',
+                    paddingBottom: '28px',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: '0.85rem'
+                  }}
+                />
+                <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {negativePrompt.length}/2048
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ marginTop: '12px', fontSize: '0.8rem', color: 'var(--text-muted)', opacity: 0.85 }}>
+            MiniMax H3 heeft geen negative prompt — het model volgt alleen de positieve prompt (inclusief gewenste audio).
+          </div>
+        )}
 
         {/* Audio Prompt — for LTX-2 audio-video generation */}
         {modelMode === 'ltx2' && (
@@ -1987,57 +2064,63 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         )}
 
-        {/* Prompt Strength Slider */}
-        <div style={{ marginTop: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Prompt Strength / CFG
-              </label>
-              <InfoTooltip text="How strictly the video follows your prompt. Low (1.0) = natural, subtle movement. Medium (2-3) = balanced motion. High (4-5) = dramatic action but may cause visual artifacts. For LTX models, keep at 1.0 — they are distilled and don't need CFG guidance." size={12} />
+        {/* Prompt Strength Slider (not for MiniMax-H3: no CFG) */}
+        {!isH3Mode(modelMode) ? (
+          <div style={{ marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Prompt Strength / CFG
+                </label>
+                <InfoTooltip text="How strictly the video follows your prompt. Low (1.0) = natural, subtle movement. Medium (2-3) = balanced motion. High (4-5) = dramatic action but may cause visual artifacts. For LTX models, keep at 1.0 — they are distilled and don't need CFG guidance." size={12} />
+              </div>
+              <span style={{
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: cfg <= 1.5 ? '#fbbf24' : cfg <= 3 ? '#34d399' : '#f87171',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                backgroundColor: cfg <= 1.5 ? 'rgba(251,191,36,0.1)' : cfg <= 3 ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+              }}>
+                {cfg <= 1.5 ? '🌊 Subtle' : cfg <= 3 ? '⚡ Balanced' : '🔥 Strong'}
+              </span>
             </div>
-            <span style={{
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              color: cfg <= 1.5 ? '#fbbf24' : cfg <= 3 ? '#34d399' : '#f87171',
-              padding: '2px 8px',
-              borderRadius: '4px',
-              backgroundColor: cfg <= 1.5 ? 'rgba(251,191,36,0.1)' : cfg <= 3 ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="0.1"
+                value={cfg}
+                onChange={(e) => setCfg(parseFloat(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                minWidth: '32px',
+                textAlign: 'right',
+                color: 'var(--text-primary)'
+              }}>
+                {cfg.toFixed(1)}
+              </span>
+            </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '0.7rem',
+              color: 'var(--text-muted)',
+              marginTop: '4px'
             }}>
-              {cfg <= 1.5 ? '🌊 Subtle' : cfg <= 3 ? '⚡ Balanced' : '🔥 Strong'}
-            </span>
+              <span>Subtle motion</span>
+              <span>Strong action</span>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              step="0.1"
-              value={cfg}
-              onChange={(e) => setCfg(parseFloat(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              minWidth: '32px',
-              textAlign: 'right',
-              color: 'var(--text-primary)'
-            }}>
-              {cfg.toFixed(1)}
-            </span>
+        ) : (
+          <div style={{ marginTop: '16px', fontSize: '0.8rem', color: 'var(--text-muted)', opacity: 0.85 }}>
+            MiniMax H3 gebruikt geen CFG (guidance) — de sampler draait met BasicGuider op 20 stappen (simple schedule).
           </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: '0.7rem',
-            color: 'var(--text-muted)',
-            marginTop: '4px'
-          }}>
-            <span>Subtle motion</span>
-            <span>Strong action</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Upload Photo */}
@@ -2333,23 +2416,43 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       <div className="grok-card">
         <div className="form-group">
           <label className="grok-section-label">
-            Resolution
-            <InfoTooltip text="Higher resolution = sharper details, but uses more VRAM and takes longer. 480p is best for quick iterations. 720p for final renders. Use Upscale post-generation to get high resolution without the VRAM cost." />
+            {isH3Mode(modelMode) ? 'Kwaliteit (megapixels)' : 'Resolution'}
+            <InfoTooltip text={isH3Mode(modelMode)
+              ? 'MiniMax H3 draait op een vaste 768px short-edge canvas (cap 768×1344). De MP-selector bepaalt het outputformaat via de officiële ResolutionSelector-formule: 0.4 MP @16:9 = 864×480 (snel), 0.98 MP = 1344×768 (native, aanbevolen), 2.0 MP = 1920×1088 (2K, langzaamst).'
+              : 'Higher resolution = sharper details, but uses more VRAM and takes longer. 480p is best for quick iterations. 720p for final renders. Use Upscale post-generation to get high resolution without the VRAM cost.'} />
           </label>
-          <div className="grok-toggle-group">
-            {Object.entries(RESOLUTION_PRESETS).map(([key, preset]) => (
-              <button
-                key={key}
-                className={`grok-toggle-btn ${resolution === key ? 'active' : ''}`}
-                onClick={() => setResolution(key)}
-              >
-                {preset.label}
-                <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block' }}>
-                  {preset.dimensions[aspectRatio] || preset.dimensions['1:1']}
-                </span>
-              </button>
-            ))}
-          </div>
+          {isH3Mode(modelMode) ? (
+            <div className="grok-toggle-group">
+              {H3_QUALITY_PRESETS.map((q) => (
+                <button
+                  key={q.value}
+                  className={`grok-toggle-btn ${h3Quality === q.value ? 'active' : ''}`}
+                  onClick={() => setH3Quality(q.value)}
+                  title={q.note}
+                >
+                  {q.label}
+                  <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block' }}>
+                    {h3CanvasDims(q.value, aspectRatio)} · {q.tag}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="grok-toggle-group">
+              {Object.entries(RESOLUTION_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  className={`grok-toggle-btn ${resolution === key ? 'active' : ''}`}
+                  onClick={() => setResolution(key)}
+                >
+                  {preset.label}
+                  <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block' }}>
+                    {preset.dimensions[aspectRatio] || preset.dimensions['1:1']}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Upscale Output */}
           <div style={{
@@ -2377,9 +2480,13 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                 </div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: 600 }}>
                   → {(() => {
-                    const preset = RESOLUTION_PRESETS[resolution]
-                    const dimStr = preset?.dimensions?.[aspectRatio] || preset?.dimensions?.['1:1'] || '480×848'
-                    const [w, h] = dimStr.split('×').map(Number)
+                    const [w, h] = isH3Mode(modelMode)
+                      ? h3CanvasDims(h3Quality, aspectRatio).split('×').map(Number)
+                      : (() => {
+                          const preset = RESOLUTION_PRESETS[resolution]
+                          const dimStr = preset?.dimensions?.[aspectRatio] || preset?.dimensions?.['1:1'] || '480×848'
+                          return dimStr.split('×').map(Number)
+                        })()
                     return `${w * postUpscaleScale}×${h * postUpscaleScale}`
                   })()}
                 </span>
@@ -2407,7 +2514,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <label className="grok-section-label">Duration <InfoTooltip text="Length of the generated video in seconds. Longer = more frames = more VRAM and time. For quick tests, use 3-5 seconds. For production, 8-20 seconds depending on your GPU and resolution." /></label>
-            <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{duration}s ({duration * fps}f)</span>
+            <span className="nav-badge" style={{ fontSize: '0.8rem' }}>
+              {duration}s ({isH3Mode(modelMode) ? `${snapH3Frames(duration * 24)}f` : `${duration * fps}f`})
+            </span>
           </div>
           <div style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
             <input
@@ -2453,31 +2562,43 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
           </div>
         </div>
 
-        {/* FPS Control */}
-        <div className="form-group">
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="grok-section-label">Frame Rate (FPS) <InfoTooltip text="Frames per second — how smooth the motion looks. 8 fps = choppy/artistic. 16 fps = standard for AI video. 24 fps = cinematic. Higher FPS generates more frames, using more VRAM and time." /></label>
-            <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{fps} fps</span>
+        {/* FPS Control (fixed at 24 for MiniMax-H3) */}
+        {!isH3Mode(modelMode) ? (
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label className="grok-section-label">Frame Rate (FPS) <InfoTooltip text="Frames per second — how smooth the motion looks. 8 fps = choppy/artistic. 16 fps = standard for AI video. 24 fps = cinematic. Higher FPS generates more frames, using more VRAM and time." /></label>
+              <span className="nav-badge" style={{ fontSize: '0.8rem' }}>{fps} fps</span>
+            </div>
+            <div className="grok-toggle-group">
+              {FPS_OPTIONS.map((f) => (
+                <button
+                  key={f}
+                  className={`grok-toggle-btn ${fps === f ? 'active' : ''}`}
+                  onClick={() => setFps(f)}
+                  type="button"
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+              Higher FPS = smoother motion, more VRAM required
+            </div>
           </div>
-          <div className="grok-toggle-group">
-            {FPS_OPTIONS.map((f) => (
-              <button
-                key={f}
-                className={`grok-toggle-btn ${fps === f ? 'active' : ''}`}
-                onClick={() => setFps(f)}
-                type="button"
-              >
-                {f}
-              </button>
-            ))}
+        ) : (
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label className="grok-section-label">Frame Rate (FPS)</label>
+              <span className="nav-badge" style={{ fontSize: '0.8rem' }}>24 fps</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              MiniMax H3 genereert altijd op 24 fps (vast).
+            </div>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-            Higher FPS = smoother motion, more VRAM required
-          </div>
-        </div>
+        )}
 
         {/* Model Version - only for non-Wan2.2, non-Cloud modes */}
-        {modelMode !== 'wan2.2' && modelMode !== 'cloud_wan22' && (
+        {modelMode !== 'wan2.2' && modelMode !== 'cloud_wan22' && !isH3Mode(modelMode) && (
           <div className="form-group">
             <label className="grok-section-label">Model Version <InfoTooltip text="V1 is the original model. V2 (Enhanced) features improved video quality, smoother motion, and optional audio generation capabilities." /></label>
             <div className="grok-toggle-group">
@@ -3250,6 +3371,93 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   color: 'var(--text-muted)'
                 }}>
                   💰 Cloud Wan22 uses 2× credits • GPU: A6000/A40 ($1.22/hr) • No local GPU needed
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Advanced Settings for MiniMax-H3 — steps + seed only */}
+        {isH3Mode(modelMode) && (
+          <div style={{
+            backgroundColor: 'var(--bg-tertiary)',
+            padding: '16px',
+            borderRadius: '8px',
+            marginTop: '8px'
+          }}>
+            <div
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: 'var(--text-primary)'
+              }}>
+                🎥 MiniMax H3 Settings
+              </div>
+              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
+            </div>
+
+            {showAdvanced && (
+              <div style={{ marginTop: '12px' }}>
+                {/* Steps */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising steps (simple schedule). The base model is tuned for 20; the official template uses 20. Fewer steps = faster but softer, more = sharper but slower." /></label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
+                  </div>
+                  <input
+                    type="range" min="8" max="50" step="1"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    <span>8 (snel)</span><span>20 (rec)</span><span>50 (kwaliteit)</span>
+                  </div>
+                </div>
+
+                {/* Seed */}
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for random each time. Set a specific number to reproduce the exact same result." /></label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number" value={seed}
+                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
+                      placeholder="-1 for random"
+                      style={{
+                        flex: 1, padding: '8px 12px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.9rem'
+                      }}
+                    />
+                    <button className="btn ghost sm" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap' }}>Random</button>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    -1 = random seed each generation
+                  </div>
+                </div>
+
+                {/* Cost estimate */}
+                <div style={{
+                  marginTop: '16px',
+                  padding: '10px 12px',
+                  backgroundColor: 'rgba(34, 211, 238, 0.08)',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(34, 211, 238, 0.2)',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)'
+                }}>
+                  {modelMode === 'minimax_h3_local'
+                    ? '🪟 MiniMax H3 draait lokaal op je Windows-PC ComfyUI • 24 fps • native stereo audio • LoRA\u2032s worden nog niet ondersteund op deze server'
+                    : '💰 MiniMax H3 draait op de RunPod 80GB+ worker • 24 fps • native stereo audio • LoRA\u2032s worden nog niet ondersteund op deze worker'}
                 </div>
               </div>
             )}
