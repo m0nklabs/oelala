@@ -265,7 +265,8 @@ class GenerationRouter:
                 return False
 
         candidates = [
-            a for a in candidates
+            a
+            for a in candidates
             if a.compute != ComputeTarget.LOCAL or _local_backend_ready(a)
         ]
 

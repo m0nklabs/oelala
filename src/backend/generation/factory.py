@@ -158,6 +158,7 @@ def create_registry(
         # used (currently the Windows-PC server).
         from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
         from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
+
         h3_client_fn = client_fn_for_model("minimax_h3")
         try:
             _h3_client = h3_client_fn() if h3_client_fn else None
