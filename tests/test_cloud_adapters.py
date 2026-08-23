@@ -18,12 +18,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "backend"))
 
 from generation.types import (
-    AdapterConstraints,
     ComputeTarget,
     GenerationRequest,
-    GenerationResult,
     LoraFormat,
-    LoraStackItem,
     MediaType,
     Operation,
 )
@@ -31,6 +28,8 @@ from generation.adapters.cloud.wan22_i2v import Wan22CloudI2VAdapter
 from generation.adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
 from generation.adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
 from generation.adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
+from generation.adapters.cloud.minimax_h3_i2v import MiniMaxH3CloudI2VAdapter
+from generation.adapters.cloud.minimax_h3_t2v import MiniMaxH3CloudT2VAdapter
 
 
 # ── Wan22 Cloud I2V ─────────────────────────────────────────────────
@@ -448,6 +447,247 @@ class TestLTX23CloudT2V:
                 await adapter.execute(req)
 
 
+# ── MiniMax-H3 Cloud I2V ────────────────────────────────────────────
+
+
+class TestMiniMaxH3CloudI2V:
+    def test_metadata(self):
+        adapter = MiniMaxH3CloudI2VAdapter()
+        assert adapter.name == "minimax-h3-cloud-i2v"
+        assert adapter.model_family == "minimax_h3"
+        assert MediaType.IMAGE in adapter.input_types
+        assert adapter.output_type == MediaType.VIDEO
+        assert adapter.compute == ComputeTarget.CLOUD
+        assert adapter.lora_format == LoraFormat.SINGLE_STAGE
+
+    def test_constraints(self):
+        adapter = MiniMaxH3CloudI2VAdapter()
+        c = adapter.constraints()
+        assert c.resolution_step == 32
+        assert c.max_frames == 362  # 17k+5 grid, trained range ~124-362
+        assert c.allowed_fps == [24]
+        assert c.default_steps == 20
+        assert c.default_cfg == 1.0
+        assert not c.supports_negative_prompt  # H3 has no negative prompt
+        assert c.max_input_images == 1
+
+    @pytest.mark.parametrize("frames,expected_cost", [
+        (124, 5),
+        (210, 8),
+        (362, 15),
+    ])
+    def test_cost(self, frames, expected_cost):
+        adapter = MiniMaxH3CloudI2VAdapter()
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="test",
+            frames=frames,
+        )
+        assert adapter.cost(req) == expected_cost
+
+    def test_build_workflow_delegates(self):
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
+
+        adapter = MiniMaxH3CloudI2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="test",
+            input_images=["img.png"],
+            frames=124,
+        )
+        result = adapter.build_workflow(req)
+        assert result == {"h3_i2v": True}
+        call_kwargs = mock_comfyui.build_cloud_minimax_h3_i2v_workflow.call_args[1]
+        assert call_kwargs["image_name"] == "input.png"
+
+    def test_build_workflow_passes_megapixels(self):
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
+
+        adapter = MiniMaxH3CloudI2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="test",
+            input_images=["img.png"],
+            frames=124,
+            aspect_ratio="16:9",
+            megapixels=0.98,
+        )
+        adapter.build_workflow(req)
+        call_kwargs = mock_comfyui.build_cloud_minimax_h3_i2v_workflow.call_args[1]
+        assert call_kwargs["megapixels"] == 0.98
+        assert call_kwargs["aspect_ratio"] == "16:9"
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self):
+        mock_submit = AsyncMock(return_value={
+            "prompt_id": "h3-i2v-id",
+            "runpod_job_id": "rp-h3-i2v",
+        })
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
+
+        adapter = MiniMaxH3CloudI2VAdapter(
+            submit_to_runpod_fn=mock_submit,
+            comfyui_client_fn=lambda: mock_comfyui,
+        )
+        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}):
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="test",
+                input_images=["base64data"],
+                frames=124,
+            )
+            result = await adapter.execute(req)
+            assert result.status == "queued_cloud"
+            assert result.adapter_name == "minimax-h3-cloud-i2v"
+            assert result.runpod_job_id == "rp-h3-i2v"
+            call_kwargs = mock_submit.call_args
+            images = call_kwargs.kwargs.get("images") or call_kwargs[1].get("images")
+            assert images is not None
+            for key in images:
+                assert key == "input.png", f"Expected filename key, got: {key[:20]}..."
+
+    @pytest.mark.asyncio
+    async def test_execute_no_endpoint_raises(self):
+        adapter = MiniMaxH3CloudI2VAdapter(submit_to_runpod_fn=AsyncMock())
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("RUNPOD_MINIMAX_H3_ENDPOINT_ID", None)
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="test",
+                input_images=["base64data"],
+            )
+            with pytest.raises(RuntimeError, match="RUNPOD_MINIMAX_H3_ENDPOINT_ID"):
+                await adapter.execute(req)
+
+    @pytest.mark.asyncio
+    async def test_execute_no_image_raises(self):
+        adapter = MiniMaxH3CloudI2VAdapter(submit_to_runpod_fn=AsyncMock())
+        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test"}):
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="test",
+            )
+            with pytest.raises(ValueError, match="requires an input image"):
+                await adapter.execute(req)
+
+
+# ── MiniMax-H3 Cloud T2V ────────────────────────────────────────────
+
+
+class TestMiniMaxH3CloudT2V:
+    def test_metadata(self):
+        adapter = MiniMaxH3CloudT2VAdapter()
+        assert adapter.name == "minimax-h3-cloud-t2v"
+        assert adapter.model_family == "minimax_h3"
+        assert MediaType.TEXT in adapter.input_types
+        assert adapter.output_type == MediaType.VIDEO
+        assert adapter.compute == ComputeTarget.CLOUD
+
+    def test_constraints(self):
+        adapter = MiniMaxH3CloudT2VAdapter()
+        c = adapter.constraints()
+        assert c.max_width == 1920  # 2K via official MP selector
+        assert c.max_height == 1920
+        assert c.resolution_presets == []  # H3 sizes come via megapixels
+        assert "21:9" in c.aspect_ratios
+        assert not c.supports_negative_prompt
+
+    @pytest.mark.parametrize("frames,expected_cost", [
+        (124, 8),
+        (210, 12),
+        (362, 15),
+    ])
+    def test_cost(self, frames, expected_cost):
+        adapter = MiniMaxH3CloudT2VAdapter()
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="test",
+            frames=frames,
+        )
+        assert adapter.cost(req) == expected_cost
+
+    def test_build_workflow_delegates(self):
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
+
+        adapter = MiniMaxH3CloudT2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="a cat surfing",
+            frames=124,
+        )
+        result = adapter.build_workflow(req)
+        assert result == {"h3_t2v": True}
+        mock_comfyui.build_cloud_minimax_h3_t2v_workflow.assert_called_once()
+
+    def test_build_workflow_passes_megapixels(self):
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
+
+        adapter = MiniMaxH3CloudT2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="a cat surfing",
+            frames=124,
+            aspect_ratio="16:9",
+            megapixels=0.4,
+        )
+        adapter.build_workflow(req)
+        call_kwargs = mock_comfyui.build_cloud_minimax_h3_t2v_workflow.call_args[1]
+        assert call_kwargs["megapixels"] == 0.4
+        assert call_kwargs["aspect_ratio"] == "16:9"
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self):
+        mock_submit = AsyncMock(return_value={
+            "prompt_id": "h3-t2v-id",
+            "runpod_job_id": "rp-h3-t2v",
+        })
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
+
+        adapter = MiniMaxH3CloudT2VAdapter(
+            submit_to_runpod_fn=mock_submit,
+            comfyui_client_fn=lambda: mock_comfyui,
+        )
+        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}):
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="a cat surfing",
+                frames=124,
+            )
+            result = await adapter.execute(req)
+            assert result.status == "queued_cloud"
+            assert result.adapter_name == "minimax-h3-cloud-t2v"
+            assert result.runpod_job_id == "rp-h3-t2v"
+
+    @pytest.mark.asyncio
+    async def test_execute_no_endpoint_raises(self):
+        adapter = MiniMaxH3CloudT2VAdapter(submit_to_runpod_fn=AsyncMock())
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("RUNPOD_MINIMAX_H3_ENDPOINT_ID", None)
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="test",
+            )
+            with pytest.raises(RuntimeError, match="RUNPOD_MINIMAX_H3_ENDPOINT_ID"):
+                await adapter.execute(req)
+
+
 # ── Registry integration ────────────────────────────────────────────
 
 
@@ -460,12 +700,16 @@ class TestCloudAdaptersRegistry:
         registry.register(Wan22CloudT2VAdapter())
         registry.register(LTX23CloudI2VAdapter())
         registry.register(LTX23CloudT2VAdapter())
+        registry.register(MiniMaxH3CloudI2VAdapter())
+        registry.register(MiniMaxH3CloudT2VAdapter())
 
-        assert len(registry) == 4
+        assert len(registry) == 6
         assert "wan22-cloud-i2v" in registry
         assert "wan22-cloud-t2v" in registry
         assert "ltx23-cloud-i2v" in registry
         assert "ltx23-cloud-t2v" in registry
+        assert "minimax-h3-cloud-i2v" in registry
+        assert "minimax-h3-cloud-t2v" in registry
 
     def test_find_cloud_i2v_adapters(self):
         from generation.registry import AdapterRegistry
@@ -473,6 +717,7 @@ class TestCloudAdaptersRegistry:
         registry = AdapterRegistry()
         registry.register(Wan22CloudI2VAdapter())
         registry.register(LTX23CloudI2VAdapter())
+        registry.register(MiniMaxH3CloudI2VAdapter())
 
         results = registry.find(
             operation=Operation.GENERATE,
@@ -480,7 +725,7 @@ class TestCloudAdaptersRegistry:
             target_type=MediaType.VIDEO,
             compute=ComputeTarget.CLOUD,
         )
-        assert len(results) == 2
+        assert len(results) == 3
 
     def test_find_cloud_t2v_adapters(self):
         from generation.registry import AdapterRegistry
@@ -488,6 +733,7 @@ class TestCloudAdaptersRegistry:
         registry = AdapterRegistry()
         registry.register(Wan22CloudT2VAdapter())
         registry.register(LTX23CloudT2VAdapter())
+        registry.register(MiniMaxH3CloudT2VAdapter())
 
         results = registry.find(
             operation=Operation.GENERATE,
@@ -495,4 +741,55 @@ class TestCloudAdaptersRegistry:
             target_type=MediaType.VIDEO,
             compute=ComputeTarget.CLOUD,
         )
-        assert len(results) == 2
+        assert len(results) == 3
+
+
+# ── MiniMax-H3 canvas helper ────────────────────────────────────────
+
+
+class TestMiniMaxH3Canvas:
+    """_minimax_h3_canvas matches ComfyUI's official node math exactly."""
+
+    @staticmethod
+    def _canvas(aspect_ratio, megapixels=None):
+        import sys as _sys
+        import types as _types
+
+        # Stub heavy backend deps so ComfyUIClient can be imported
+        for mod_name in ("storage_client", "guardian_client", "media_service", "minio"):
+            if mod_name not in _sys.modules:
+                stub = _types.ModuleType(mod_name)
+                stub.get_client = lambda *a, **k: None
+                stub.get_guardian = lambda *a, **k: None
+                _sys.modules[mod_name] = stub
+
+        from comfyui_client import ComfyUIClient
+
+        client = ComfyUIClient.__new__(ComfyUIClient)
+        return client._minimax_h3_canvas(aspect_ratio, megapixels)
+
+    @pytest.mark.parametrize("aspect,expected", [
+        ("16:9", (1344, 768)),
+        ("9:16", (768, 1344)),
+        ("1:1", (768, 768)),
+        ("4:3", (1024, 768)),
+        ("3:4", (768, 1024)),
+    ])
+    def test_native_canvas_768_short_edge(self, aspect, expected):
+        assert self._canvas(aspect) == expected
+
+    @pytest.mark.parametrize("mp,aspect,expected", [
+        (0.4, "16:9", (864, 480)),
+        (0.6, "16:9", (1056, 608)),
+        (0.98, "16:9", (1344, 768)),
+        (2.0, "16:9", (1920, 1088)),
+        (2.0, "9:16", (1088, 1920)),
+    ])
+    def test_megapixel_selector_formula(self, mp, aspect, expected):
+        assert self._canvas(aspect, mp) == expected
+
+    def test_megapixels_clamped_to_sane_range(self):
+        w, h = self._canvas("16:9", 0.01)  # below 0.2 → clamped up
+        assert w >= 32 and h >= 32
+        w, h = self._canvas("16:9", 99)  # above 2.0 → clamped down
+        assert w <= 1920 and h <= 1088

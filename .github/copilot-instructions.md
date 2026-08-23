@@ -528,6 +528,24 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
   - CLIP: `qwen_2.5_vl_7b_fp8_scaled.safetensors` (8.8 GB)
   - VAE: `qwen_image_vae.safetensors` (243 MB)
   - Lightning LoRA: `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` (850 MB)
+
+## RunPod Serverless (MiniMax-H3 video+audio — t2v / i2v)
+
+- **Endpoint**: `5xuvnvyww4ujnc` ("oelala-minimax-h3")
+- **Template**: `fpfo4gmnrw` ("oelala-minimax-h3-worker"), containerDisk=100GB, serverless
+- **Image**: `ghcr.io/m0nklabs/oelala-minimax-h3-worker` (dated tags)
+- **GPU Tiers**: `AMPERE_80,ADA_80_PRO,HOPPER_141,BLACKWELL_96,BLACKWELL_180` (80GB+; int8/nvfp4 quants may fit 48GB, untested)
+- **Deploy**: `deploy/runpod-minimax-h3/deploy.sh` (same pattern as Wan/LTX workers)
+- **Models** (~42.5 GB downloaded at runtime from `Comfy-Org/MiniMax-H3`):
+  - Diffusion: `minimax_h3_fl2va_pruned_int8_convrot.safetensors` (20.97 GB) — same checkpoint for t2v AND i2v (i2v anchors first-frame keyframe)
+  - Text encoder: `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` (15.69 GB, Qwen3-VL-32B, no Blackwell needed)
+  - VAEs: `minimax_h3_video_vae_fp16.safetensors` (5.21 GB) + `minimax_h3_audio_vae_fp32.safetensors` (0.61 GB)
+- **Audio**: MiniMax-H3 is a joint video+audio DiT — every generation includes a synchronized soundtrack (no separate audio step)
+- **ComfyUI**: cloned from official `Comfy-Org/ComfyUI` master (H3 core nodes in `comfy_extras/nodes_minimax_h3.py`); bump `CACHE_DATE` in the Dockerfile to refresh
+- **Workflow builders**: `build_cloud_minimax_h3_t2v_workflow` / `build_cloud_minimax_h3_i2v_workflow` in `src/backend/comfyui_client.py` (mirror official template: simple/20-step, res_multistep, BasicGuider — no negative prompt, 24 fps, 17k+5 frame grid)
+- **Adapters**: `MiniMaxH3CloudT2VAdapter` / `MiniMaxH3CloudI2VAdapter` (`src/backend/generation/adapters/cloud/minimax_h3_{t2v,i2v}.py`)
+- **Config**: `workersMin=0`, `workersMax=2`, `idleTimeout=120`, `QUEUE_DELAY:1`, `executionTimeout=45min`, `ttl=2h` (`minimax_h3` profile in `src/backend/runpod_defaults.py`)
+
 - **Config**: `workersMin=0`, `workersMax=1`, `idleTimeout=120`
 
 ## Node Architecture Updates (2026-03-06)

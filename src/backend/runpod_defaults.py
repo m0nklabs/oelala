@@ -123,6 +123,22 @@ RUNPOD_ENDPOINT_DEFAULTS: dict[str, RunPodEndpointDefaults] = {
         execution_timeout_ms=15 * MILLISECONDS_PER_MINUTE,
         ttl_ms=60 * MILLISECONDS_PER_MINUTE,
     ),
+    "minimax_h3": RunPodEndpointDefaults(
+        profile="minimax_h3",
+        name="oelala-minimax-h3",
+        endpoint_env_vars=("RUNPOD_MINIMAX_H3_ENDPOINT_ID",),
+        template_env_var="RUNPOD_MINIMAX_H3_TEMPLATE_ID",
+        fallback_endpoint_id="5xuvnvyww4ujnc",
+        fallback_template_id="fpfo4gmnrw",
+        gpu_ids="AMPERE_80,ADA_80_PRO,HOPPER_141,BLACKWELL_96,BLACKWELL_180",
+        workers_min=0,
+        workers_max=2,
+        idle_timeout=120,
+        scaler_type="QUEUE_DELAY",
+        scaler_value=1,
+        execution_timeout_ms=45 * MILLISECONDS_PER_MINUTE,
+        ttl_ms=2 * 60 * MILLISECONDS_PER_MINUTE,
+    ),
 }
 
 
