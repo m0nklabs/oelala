@@ -2985,7 +2985,7 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
     comfyui = None
     if backend_id:
         try:
-            from comfyui_client import get_comfyui_client_for_backend as _gcfb
+            from src.backend.comfyui_client import get_comfyui_client_for_backend as _gcfb
             from src.backend.generation.compute_backends import get_backend
 
             _backend = get_backend(backend_id)
@@ -6469,7 +6469,7 @@ async def get_i2v_generation_modes():
     Get available I2V generation modes.
     Each mode has different workflow presets (LoRAs, models, etc.)
     """
-    from comfyui_client import get_available_i2v_modes
+    from src.backend.comfyui_client import get_available_i2v_modes
 
     return {
         "modes": get_available_i2v_modes(),
@@ -6483,7 +6483,7 @@ async def get_t2v_generation_modes():
     Get available T2V (Text-to-Video) generation modes.
     Different base models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
     """
-    from comfyui_client import get_available_t2v_modes
+    from src.backend.comfyui_client import get_available_t2v_modes
 
     return {
         "modes": get_available_t2v_modes(),
@@ -6497,7 +6497,7 @@ async def get_v2v_generation_modes():
     Get available V2V (Video-to-Video) style transfer modes.
     Uses I2V pipeline with extracted first frame.
     """
-    from comfyui_client import get_available_i2v_modes
+    from src.backend.comfyui_client import get_available_i2v_modes
 
     # V2V uses I2V modes under the hood
     i2v_modes = get_available_i2v_modes()
@@ -11442,8 +11442,9 @@ class ComputeBackendPayload(_BaseModel):
     id: _Annotated[str, _StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")] = ""
     name: str
     type: _Literal["comfyui", "runpod"] = "comfyui"
-    # Only http(s) URLs are valid for a ComfyUI backend; runpod backends leave it empty.
-    base_url: _Annotated[str, _StringConstraints(pattern=r"^(|https?://.*)$")] = ""
+    # Only plain http:// URLs are valid for a comfyui backend (ComfyUIClient
+    # speaks http/ws, not https/wss); runpod backends leave it empty.
+    base_url: _Annotated[str, _StringConstraints(pattern=r"^(|http://.*)$")] = ""
     enabled: bool = True
     model_families: _List[str] = _Field(default_factory=list)
     notes: str = ""

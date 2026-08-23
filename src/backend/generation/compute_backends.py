@@ -50,10 +50,6 @@ class ComputeBackend(BaseModel):
     model_families: List[str] = Field(default_factory=list)
     notes: str = ""
 
-    # ── RunPod-specific (used only when type == 'runpod') ───────────
-    # Endpoint/template IDs are kept in .env (secrets), referenced by name here.
-    endpoint_env_var: Optional[str] = None
-
 
 # Path to the inventory JSON (next to this module).
 _BACKENDS_FILE = Path(__file__).with_name("compute_backends.json")
@@ -197,8 +193,10 @@ def client_fn_for_model(model_family: str):
 
     The callable lazily resolves against the current inventory each call, so
     admin edits to backends (URLs, enable/disable) take effect on the next
-    dispatch without a backend restart. Returns None for families that resolve
-    to a runpod (non-comfyui) backend or to no enabled backend.
+    dispatch without a backend restart. Raises a clear ``RuntimeError`` when
+    no enabled comfyui backend supports the family (rather than returning
+    ``None``, which would make local adapters crash later with a cryptic
+    ``AttributeError``).
 
     The returned callable exposes ``.backend_id`` (the id of the backend it
     currently resolves to, refreshed on every call so it never drifts from the
@@ -214,7 +212,14 @@ def client_fn_for_model(model_family: str):
         _fn.backend_id = (
             backend.id if backend is not None and backend.type == "comfyui" else None
         )
-        if backend is None or backend.type != "comfyui":
+        if backend is None:
+            # Nothing usable is configured — surface a clear error instead of
+            # letting local adapters crash later with a cryptic AttributeError.
+            raise RuntimeError(
+                f"No enabled backend supports model family '{model_family}'"
+            )
+        if backend.type != "comfyui":
+            # Deliberately routed to runpod (cloud); no local ComfyUI client.
             return None
         return get_comfyui_client_for_backend(backend)
 
@@ -229,7 +234,8 @@ def client_fn_for_utility():
 
     Exposes ``.backend_id`` (refreshed on every call, like
     ``client_fn_for_model``) so utility jobs can be tagged with the ComfyUI
-    server that actually ran them.
+    server that actually ran them. Raises a clear ``RuntimeError`` when no
+    enabled comfyui backend is available.
     """
     from comfyui_client import get_comfyui_client_for_backend
 
@@ -241,7 +247,7 @@ def client_fn_for_utility():
             backend.id if backend is not None and backend.type == "comfyui" else None
         )
         if backend is None or backend.type != "comfyui":
-            return None
+            raise RuntimeError("No enabled comfyui backend for utility adapters")
         return get_comfyui_client_for_backend(backend)
 
     _fn.backend_id = None
