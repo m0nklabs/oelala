@@ -132,3 +132,5 @@ supabase/.temp/
 # RunPod SSH keys
 oelala-cloud-wan22_*_ssh.key*
 scratch/
+pnpm-lock.yaml
+pnpm-workspace.yaml
