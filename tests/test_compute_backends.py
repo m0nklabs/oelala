@@ -125,8 +125,11 @@ def test_save_load_roundtrip(tmp_path):
 def test_client_fn_for_model_exposes_backend_id(monkeypatch):
     cb.load_backends(force=True)
     fn = cb.client_fn_for_model("minimax_h3")
-    assert fn.backend_id == "windows-pc-comfyui"
+    # .backend_id is refreshed on each call (matching the router, which calls
+    # the fn before reading backend_id) so it never drifts after admin edits.
+    assert fn.backend_id is None
     client = fn()
+    assert fn.backend_id == "windows-pc-comfyui"
     assert client is not None
     assert client.base_url == "http://192.168.1.245:8188"
 

@@ -11418,6 +11418,8 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
 # Reads/writes src/backend/generation/compute_backends.json.
 
 from pydantic import BaseModel as _BaseModel
+from typing import List as _List
+from pydantic import Field as _Field
 
 
 class ComputeBackendPayload(_BaseModel):
@@ -11428,8 +11430,7 @@ class ComputeBackendPayload(_BaseModel):
     type: str = "comfyui"
     base_url: str = ""
     enabled: bool = True
-    model_families: list = []
-    auth_token: str = ""
+    model_families: _List[str] = _Field(default_factory=list)
     notes: str = ""
 
 
@@ -11466,7 +11467,6 @@ async def admin_create_backend(
         base_url=payload.base_url,
         enabled=payload.enabled,
         model_families=list(payload.model_families),
-        auth_token=payload.auth_token or None,
         notes=payload.notes,
     )
     backends = list_backends() + [backend]
@@ -11501,7 +11501,6 @@ async def admin_update_backend(
         base_url=payload.base_url,
         enabled=payload.enabled,
         model_families=list(payload.model_families),
-        auth_token=payload.auth_token or None,
         notes=payload.notes,
     )
     backends = [backend if b.id == backend_id else b for b in list_backends()]

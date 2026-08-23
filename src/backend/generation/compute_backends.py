@@ -48,7 +48,6 @@ class ComputeBackend(BaseModel):
     base_url: str = ""
     enabled: bool = True
     model_families: List[str] = Field(default_factory=list)
-    auth_token: Optional[str] = None
     notes: str = ""
 
     # ── RunPod-specific (used only when type == 'runpod') ───────────
@@ -168,8 +167,9 @@ def resolve_backend_for_model(model_family: str) -> Optional[ComputeBackend]:
     candidates = [b for b in enabled_backends() if model_family in b.model_families]
     if not candidates:
         return None
-    # Local-first: comfyui ahead of runpod, then by original order.
-    candidates.sort(key=lambda b: (b.type == "runpod", b.id))
+    # Local-first: comfyui ahead of runpod. Stable sort (no secondary key)
+    # preserves the inventory's original order within each type.
+    candidates.sort(key=lambda b: b.type == "runpod")
     return candidates[0]
 
 
@@ -182,19 +182,24 @@ def client_fn_for_model(model_family: str):
     to a runpod (non-comfyui) backend or to no enabled backend.
 
     The returned callable exposes ``.backend_id`` (the id of the backend it
-    currently resolves to) and ``.model_family`` so adapters/routers can tag
-    jobs with the backend that ran them.
+    currently resolves to, refreshed on every call so it never drifts from the
+    server actually used after admin edits) and ``.model_family`` so
+    adapters/routers can tag jobs with the backend that ran them.
     """
     from comfyui_client import get_comfyui_client_for_backend
 
     def _fn():
         backend = resolve_backend_for_model(model_family)
+        # Keep .backend_id in sync with what this call would actually use, so
+        # job metadata always matches the resolved dispatch backend.
+        _fn.backend_id = (
+            backend.id if backend is not None and backend.type == "comfyui" else None
+        )
         if backend is None or backend.type != "comfyui":
             return None
         return get_comfyui_client_for_backend(backend)
 
-    backend = resolve_backend_for_model(model_family)
-    _fn.backend_id = backend.id if backend and backend.type == "comfyui" else None
+    _fn.backend_id = None
     _fn.model_family = model_family
     return _fn
 

@@ -13,7 +13,6 @@ const EMPTY_FORM = {
   base_url: '',
   enabled: true,
   model_families: [],
-  auth_token: '',
   notes: '',
 }
 
@@ -54,15 +53,9 @@ export default function AdminComputeTab() {
     if (isAdmin) fetchBackends()
   }, [isAdmin, fetchBackends])
 
-  useEffect(() => {
-    if (!showForm) return
-    // initialise model families field from form
-    setFamiliesText((form.model_families || []).join(', '))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showForm])
-
   const openCreate = () => {
     setForm({ ...EMPTY_FORM })
+    setFamiliesText('')
     setEditing(null)
     setShowForm(true)
   }
@@ -75,9 +68,9 @@ export default function AdminComputeTab() {
       base_url: b.base_url || '',
       enabled: b.enabled,
       model_families: b.model_families || [],
-      auth_token: b.auth_token || '',
       notes: b.notes || '',
     })
+    setFamiliesText((b.model_families || []).join(', '))
     setEditing(b.id)
     setShowForm(true)
   }
@@ -153,7 +146,6 @@ export default function AdminComputeTab() {
         base_url: b.base_url || '',
         enabled: !b.enabled,
         model_families: b.model_families || [],
-        auth_token: b.auth_token || '',
         notes: b.notes || '',
       }
       const resp = await apiFetch(`/api/admin/backends/${encodeURIComponent(b.id)}`, {
@@ -245,11 +237,6 @@ export default function AdminComputeTab() {
               Base URL (comfyui only)
               <input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
                 style={inputStyle} placeholder="http://host:8188" />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem' }}>
-              Auth token (optional)
-              <input value={form.auth_token} onChange={(e) => setForm({ ...form, auth_token: e.target.value })}
-                style={inputStyle} placeholder="optional bearer token" />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem' }}>
               Notes
