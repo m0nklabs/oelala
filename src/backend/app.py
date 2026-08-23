@@ -11429,8 +11429,9 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
 # Reads/writes src/backend/generation/compute_backends.json.
 
 from pydantic import BaseModel as _BaseModel
-from typing import List as _List
-from pydantic import Field as _Field
+from typing import List as _List, Literal as _Literal
+from pydantic import Field as _Field, StringConstraints as _StringConstraints
+from typing import Annotated as _Annotated
 
 
 class ComputeBackendPayload(_BaseModel):
@@ -11438,8 +11439,11 @@ class ComputeBackendPayload(_BaseModel):
 
     id: str
     name: str
-    type: str = "comfyui"
-    base_url: str = ""
+    type: _Literal["comfyui", "runpod"] = "comfyui"
+    # Only http(s) URLs are valid for a ComfyUI backend; runpod backends leave it empty.
+    base_url: _Annotated[
+        str, _StringConstraints(pattern=r"^(|https?://.*)$")
+    ] = ""
     enabled: bool = True
     model_families: _List[str] = _Field(default_factory=list)
     notes: str = ""

@@ -114,21 +114,24 @@ def load_backends(force: bool = False) -> List[ComputeBackend]:
         with open(_json_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         raw = data.get("backends", [])
-        _backends = []
+        parsed = []
         for b in raw:
             try:
-                _backends.append(ComputeBackend(**b))
+                parsed.append(ComputeBackend(**b))
             except Exception as exc:
                 # Skip a single bad entry instead of dropping the whole
                 # inventory (an invalid type/base_url must not reset everything).
                 logger.warning(f"⚠️ Skipping invalid compute backend entry: {exc}")
-        if not _backends:
+        if not parsed:
             logger.warning(
                 "⚠️ No valid compute backends in inventory; using built-in defaults"
             )
-            _backends = _default_backends()
+            parsed = _default_backends()
         else:
-            logger.info(f"🗄️ Loaded {len(_backends)} compute backends from {_json_path}")
+            logger.info(f"🗄️ Loaded {len(parsed)} compute backends from {_json_path}")
+        # Assign only once so concurrent readers never observe a partially
+        # populated module-level _backends during a reload (atomic swap).
+        _backends = parsed
     except Exception as exc:
         logger.warning(
             f"⚠️ Could not load compute backends from {_json_path} ({exc}); "

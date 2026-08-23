@@ -2,10 +2,11 @@
 - **Compute Backend Inventory** — modular, configurable sources of compute for generation
   - New `src/backend/generation/compute_backends.py` + `compute_backends.json`: a typed
     `ComputeBackend` model (id, name, `type` = `comfyui` | `runpod`, `base_url`, `enabled`,
-    `model_families`, optional `auth_token`, `notes`), a JSON loader/saver, and resolvers
+    `model_families`, `notes`), a JSON loader/saver, and resolvers
     (`list_backends`, `get_backend`, `enabled_backends`, `resolve_backend_for_model`).
   - Generic client factory `get_comfyui_client_for_backend()` in `comfyui_client.py`
-    (cached per backend-id) so any configured ComfyUI server becomes usable with no code change.
+    (cached by `(backend_id, base_url)`) so any configured ComfyUI server becomes usable
+    with no code change — and a `base_url` edit takes effect on the next dispatch.
   - `client_fn_for_model()` / `client_fn_for_utility()` — adapters resolve their ComfyUI client
     lazily from the inventory each dispatch instead of a hardcoded client.
   - Admin API: `GET/POST /api/admin/backends`, `PUT/DELETE /api/admin/backends/{id}` (admin-only)
