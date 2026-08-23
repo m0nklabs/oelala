@@ -246,30 +246,6 @@ class GenerationRouter:
             target_type=req.target_type,
         )
 
-        def _local_backend_ready(adapter: GenerationAdapter) -> bool:
-            adapter_get = getattr(adapter, "_get_comfyui", None)
-            if not callable(adapter_get):
-                return True
-            model_family = getattr(adapter_get, "model_family", None)
-            if model_family:
-                try:
-                    from .compute_backends import resolve_backend_for_model
-
-                    backend = resolve_backend_for_model(model_family)
-                    return backend is not None and backend.type == "comfyui"
-                except Exception:
-                    return False
-            try:
-                return adapter_get() is not None
-            except Exception:
-                return False
-
-        candidates = [
-            a
-            for a in candidates
-            if a.compute != ComputeTarget.LOCAL or _local_backend_ready(a)
-        ]
-
         if not candidates:
             raise ValueError(
                 f"No adapter found for operation={req.operation.value}, "
@@ -279,8 +255,9 @@ class GenerationRouter:
 
         # If multiple candidates, prefer local over cloud (unless cloud requested)
         # Sort by name for deterministic behaviour regardless of registration order.
-        # Local adapters that currently resolve no ComfyUI backend are skipped so
-        # we can cleanly fall back to cloud after runtime backend inventory edits.
+        # NOTE: local adapters are never silently dropped for cloud — a local
+        # workflow whose ComfyUI backend is unavailable fails explicitly instead
+        # of being re-routed to (paid) cloud compute.
         if len(candidates) > 1:
             local = sorted(
                 [a for a in candidates if a.compute == ComputeTarget.LOCAL],

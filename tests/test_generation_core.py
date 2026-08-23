@@ -403,7 +403,7 @@ class TestRouterResolve:
         with pytest.raises(ValueError, match="No adapter found"):
             router.resolve_adapter(req)
 
-    def test_resolve_falls_back_to_cloud_when_local_backend_unavailable(self):
+    def test_resolve_never_falls_back_to_cloud_when_local_backend_unavailable(self):
         class LocalUnavailableAdapter(FakeAdapter):
             name = "local-unavailable"
 
@@ -432,10 +432,17 @@ class TestRouterResolve:
             target_type=MediaType.IMAGE,
             prompt="fallback",
         )
+        # Local-first routing is preserved even when the local backend is
+        # unavailable: a local workflow is NEVER silently re-routed to (paid)
+        # cloud compute. The local adapter stays selected and fails explicitly
+        # on execution instead.
         adapter = r.resolve_adapter(req)
-        assert adapter.name == "cloud-same-route"
+        assert adapter.name == "local-unavailable"
 
-    def test_resolve_raises_when_only_local_backend_unavailable(self):
+    def test_resolve_selects_local_adapter_without_backend(self):
+        # When only an unavailable local adapter matches, resolve still returns
+        # it (no "No adapter found"): the failure surfaces at execution time as
+        # an explicit error, not as a silent cloud fallback.
         class LocalUnavailableAdapter(FakeAdapter):
             name = "local-unavailable-only"
 
@@ -450,8 +457,8 @@ class TestRouterResolve:
             target_type=MediaType.IMAGE,
             prompt="fallback",
         )
-        with pytest.raises(ValueError, match="No adapter found"):
-            r.resolve_adapter(req)
+        adapter = r.resolve_adapter(req)
+        assert adapter.name == "local-unavailable-only"
 
 
 class TestRouterValidation:
