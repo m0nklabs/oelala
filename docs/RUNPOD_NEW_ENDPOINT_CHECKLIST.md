@@ -185,8 +185,17 @@ sudo systemctl restart oelala-backend
 | oelala-wan22 | `x2x496ymkidl3m` | `tkpy0pi8gt` | `ghcr.io/m0nklabs/oelala-comfyui-worker` | 48GB+ |
 | oelala-ltx23 | `ctpoa610dva4ww` | `c1fz26l07d` | `ghcr.io/m0nklabs/oelala-ltx23-worker` | 80GB+ |
 | oelala-i2i | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-i2i-worker` | 48GB+ |
+| oelala-minimax-h3 | `5xuvnvyww4ujnc` | `fpfo4gmnrw` | `ghcr.io/m0nklabs/oelala-minimax-h3-worker` | 80GB+ |
 
-All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. Wan/I2I scale at `QUEUE_DELAY:4`; LTX-2.3 uses `QUEUE_DELAY:1` because the 80GB worker cold start is more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`; add every new endpoint profile there so requests get an explicit `executionTimeout` and `ttl` in milliseconds.
+All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. Wan/I2I scale at `QUEUE_DELAY:4`; LTX-2.3 and MiniMax-H3 use `QUEUE_DELAY:1` because the big workers' cold starts are more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`; add every new endpoint profile there so requests get an explicit `executionTimeout` and `ttl` in milliseconds.
+
+### MiniMax-H3 endpoint notes (`deploy/runpod-minimax-h3/`)
+
+- **Model**: MiniMax-H3 FL2VA (joint video+audio DiT, t2v + i2v via first-frame keyframes). Repack: `Comfy-Org/MiniMax-H3`; workflow mirrors the official Comfy-Org "Image to Video (MiniMax H3)" template.
+- **Models downloaded at cold start (~42.5 GB total)**: `minimax_h3_fl2va_pruned_int8_convrot.safetensors` (20.97 GB), `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` (15.69 GB, no Blackwell needed), `minimax_h3_video_vae_fp16.safetensors` (5.21 GB), `minimax_h3_audio_vae_fp32.safetensors` (0.61 GB).
+- **ComfyUI**: cloned from official `Comfy-Org/ComfyUI` master — the H3 core nodes (`MiniMaxH3ImageToVideo`, `VAEDecodeAudio`, ...) landed there with the H3 release. Bump `CACHE_DATE` in the Dockerfile to refresh the checkout.
+- **GPU**: 80GB+ tiers (`AMPERE_80,ADA_80_PRO,HOPPER_141,BLACKWELL_96,BLACKWELL_180`). The int8/nvfp4 quantizations also fit 48GB tiers for short generations — untested, start on 80GB.
+- **Audio**: H3 always generates a synchronized soundtrack — no `audio_prompt` needed; the mp4 comes out with muxed audio.
 
 ## The Golden Rule
 

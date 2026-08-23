@@ -42,12 +42,13 @@ This document provides a comprehensive overview of all available generation mode
 |-------|------|--------------|-------|
 | Lightning High | `Wan22-I2V_A14B-Lightning-H-Q6_K.gguf` | Q6_K | Faster, may need fewer steps |
 | Lightning Low | `Wan22-I2V_A14B-Lightning-L-Q6_K.gguf` | Q6_K | Faster, may need fewer steps |
-| SmoothMix High | `smoothMixWan22GGUF_highQ6K.gguf` | Q6_K | Community merge |
-| SmoothMix Low | `smoothMixWan22GGUF_lowQ6K.gguf` | Q6_K | Community merge |
 | Enhanced NSFW High | `wan22EnhancedNSFW_V2_Q6K_HIGH.gguf` | Q6_K | NSFW optimized |
 | Enhanced NSFW Low | `wan22EnhancedNSFW_V2_Q6K_LOW.gguf` | Q6_K | NSFW optimized |
-| Enhanced Camera High | `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH.gguf` | Q6_K | Better camera motion |
-| Enhanced Camera Low | `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KL.gguf` | Q6_K | Better camera motion |
+
+> **Removed in cleanup** (unused/duplicated, freed ~98GB): `smoothMixWan22GGUF_high/lowQ6K.gguf`,
+> `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH/L.gguf`, `LTX-2-dev-Q2_K.gguf`, and the local LTX-2
+> 19B set (`ltx-2-19b-dev-Q4_K_M`, `ltx-2-19b-distilled_Q4_K_M`, `ltx-2-19b-distilled-fp8`,
+> `ltx-2-19b-embeddings_connector_bf16`, `LTX2_video_vae_bf16`, `ltx2_audio_vae`).
 
 ---
 
@@ -58,7 +59,9 @@ This document provides a comprehensive overview of all available generation mode
 | Mode | Model | Workflow File | VRAM Required | Max Frames | Notes |
 |------|-------|---------------|---------------|------------|-------|
 | `wan22` | Wan2.2 14B | Built-in builder | ~24GB | 81 | T2I → I2V pipeline |
-| `ltx2` | LTX-2 19B Distilled | `ltx2_distorch2_multigpu_api.json` | ~20GB | 97 | Direct T2V, faster |
+| `ltx2` | LTX-2.3 22B Distilled | Cloud (RunPod) builder | Cloud 80GB | 97 | Cloud-only, fast 8-step |
+| `minimax_h3` | MiniMax-H3 FL2VA 22B | Cloud (RunPod) builder | Cloud 80GB | 362 | Cloud T2V+audio |
+| `minimax_h3_local` | MiniMax-H3 FL2VA 22B | `build_local_minimax_h3_t2v_workflow` | ~16GB (Windows PC) | 362 | **Lokaal** op Windows-PC ComfyUI (int8 set) |
 
 ### T2V Model Components
 
@@ -70,21 +73,24 @@ This document provides a comprehensive overview of all available generation mode
 | **Text Encoder** | `umt5-xxl-enc-bf16.safetensors` | 11GB | `models/text_encoders/` |
 | **VAE** | `wan_2.1_vae.safetensors` | 242MB | `models/vae/` |
 
-#### LTX-2 T2V Components
-| Component | Model File | Size | Location |
-|-----------|------------|------|----------|
-| **Diffusion Model** | `ltx-2-19b-distilled_Q4_K_M.gguf` | 12GB | `models/diffusion_models/` |
-| **Text Encoder (Gemma)** | `gemma-3-12b-it-qat-q4_0-unquantized/` | 8GB | `models/text_encoders/` |
-| **Embeddings Connector** | `ltx-2-19b-embeddings_connector_bf16.safetensors` | 2.9GB | `models/text_encoders/` |
-| **VAE** | `LTX2_video_vae_bf16.safetensors` | 2.5GB | `models/vae/` |
+#### MiniMax-H3 Local (Windows PC ComfyUI) Components
+| Component | Model File | Location (Windows PC) |
+|-----------|------------|----------------------|
+| **Diffusion** | `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `diffusion_models/` |
+| **Text Encoder** | `qwen3vl_32b_minimax_h3_int8_convrot.safetensors` | `text_encoders/` |
+| **Video VAE** | `minimax_h3_video_vae_fp16.safetensors` | `vae/` |
+| **Audio VAE** | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` |
+
+Lokaal draait MiniMax-H3 op de **Windows-PC ComfyUI** (`COMFYUI_WINDOWS_HOST`, default `192.168.1.245:8188`)
+— een tweede ComfyUI-server naast die op ai-kvm2. De int8_convrot text-encoder past in 16GB VRAM
+(zie `README_MiniMax_H3_workflow.md` en `download_minimax_h3.*`).
 
 ### T2V Alternative Models (Untested/Experimental)
 
-| Model | File | Notes |
-|-------|------|-------|
-| LTX-2 Dev Q4 | `ltx-2-19b-dev-Q4_K_M.gguf` | Dev version, potentially higher quality |
-| LTX-2 Dev Q2 | `LTX-2-dev-Q2_K.gguf` | Lower quality, uses less VRAM |
-| LTX-2 FP8 Full | `ltx-2-19b-distilled-fp8.safetensors` | Full precision, needs ~27GB |
+> Lokale LTX-2 19B-modellen zijn verwijderd (LTX-2.3 draait nu cloud-only).
+> Verwijderd: `ltx-2-19b-dev-Q4_K_M.gguf`, `ltx-2-19b-distilled_Q4_K_M.gguf`,
+> `ltx-2-19b-distilled-fp8.safetensors`, `LTX-2-dev-Q2_K.gguf`,
+> `ltx-2-19b-embeddings_connector_bf16.safetensors`, `LTX2_video_vae_bf16.safetensors`.
 
 ---
 
@@ -94,27 +100,27 @@ This document provides a comprehensive overview of all available generation mode
 
 | Category | Models | Typical Use |
 |----------|--------|-------------|
-| `wan22` | Wan2.2 T2I Multi-GPU | For video-ready images |
-| `flux` | Flux.1 Dev FP8 | High quality artistic |
-| `sdxl` | Various SDXL checkpoints | General purpose |
-| `sd15` | Realistic Vision V5.1 | Photorealistic |
-| `diffusers` | SD3.5 Large INT8 | Experimental |
+| `krea2` | Krea 2 Turbo (INT8 ConvRot) | Fast, expressive, 8 steps |
+| `flux` | Flux.1 Dev FP8 + NSFW fine-tunes | High quality / NSFW photoreal |
+| `flux2` | Flux.2 Dev (GGUF Q4, multi-GPU) | Nieuwste Flux, 32B, meest kwaliteit |
+| `sdxl` | SDXL-Pony (Pony V6, CyberRealistic Pony, Reapony) | NSFW / stylized, LoRA-ecosysteem |
 
 ### T2I Checkpoints Available
 
 | Model | File | Architecture | VRAM |
 |-------|------|--------------|------|
-| CyberRealistic Pony | `CyberRealistic_Pony_v14.1_FP16.safetensors` | SDXL | 6.5GB |
-| Dreamshaper Lightning | `dreamshaperXL_lightningDPMSDE.safetensors` | SDXL | 6.5GB |
+| Krea 2 Turbo | `krea2_turbo_int8_convrot.safetensors` | Krea 2 (12.9B DiT, INT8) | ~10-12GB |
+| CyberRealistic Pony | `CyberRealistic_Pony_v14.1_FP16.safetensors` | SDXL Pony | 6.5GB |
 | Flux.1 Dev FP8 | `flux1-dev-fp8.safetensors` | Flux | 17GB |
-| Illustrious Realism | `illustriousRealismBy_v10VAE.safetensors` | SDXL | 6.5GB |
-| Juggernaut XL | `juggernautXL_ragnarok.safetensors` | SDXL | 7GB |
-| Nova Anime XL | `novaAnimeXL_ilV150.safetensors` | SDXL | 6.5GB |
+| Flux.2 Dev (GGUF Q4) | `unet/flux2-dev-Q4_K_M.gguf` | Flux 2 (32B, multi-GPU) | ~19GB (2x GPU + CPU) |
 | Pony Diffusion V6 | `ponyDiffusionV6XL_v6StartWithThisOne.safetensors` | SDXL Pony | 6.5GB |
 | Reapony V9 | `reapony_v90.safetensors` | SDXL Pony | 6.5GB |
-| Realistic Vision V5.1 | `Realistic_Vision_V5.1.safetensors` | SD1.5 | 4GB |
-| Ultra Realistic | `ultraRealisticByStable_v20FP16.safetensors` | SDXL | 6.5GB |
-| Wai Illustrious | `waiIllustriousSDXL_v160.safetensors` | SDXL | 6.5GB |
+| Fluxed Up (NSFW) | `fluxedUpFluxNSFW_51FP8.safetensors` | Flux (diffusion) | ~12GB |
+| Persephone (NSFW) | `persephoneFluxNSFWSFW_11FP8.safetensors` | Flux (diffusion) | ~12GB |
+
+**Krea 2 notes**: text encoder = Qwen3-VL-4B (`qwen3vl_4b_bf16.safetensors`, CLIPLoader type `krea2`), VAE = `qwen_image_vae.safetensors`, CFG 1.0, 8 steps, euler/simple. ComfyUI ≥ 0.27 (INT8 ConvRot fix; v0.33.x tested). License: Krea 2 Community License.
+
+**Flux 2 notes**: GGUF UNet verdeeld over beide GPU's via DisTorch2 (`cuda:1,8gb;cuda:0,4gb;cpu,*`), text encoder = Mistral3-small FP8 (`mistral_3_small_flux2_fp8.safetensors`, CLIPLoader type `flux2`, device=cpu), VAE = `flux2-vae.safetensors`. Geen negatieve prompt (guidance i.p.v. CFG). Getest: 1024×1024 ~297s. License: FLUX [dev] Non-Commercial.
 
 ---
 
@@ -129,7 +135,6 @@ This document provides a comprehensive overview of all available generation mode
 | Gemma 3 12B QAT | `gemma-3-12b-it-qat-q4_0-unquantized/` | 8GB | LTX-2 |
 | Gemma 3 12B GGUF | `gemma-3-12b-it-q4_0.gguf` | 8GB | LTX-2 (alt) |
 | Qwen 2.5 VL 7B | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | 9.4GB | Qwen vision |
-| Qwen 3 4B | `qwen_3_4b.safetensors` | 8GB | General |
 
 ### VAE Models
 
@@ -208,6 +213,7 @@ cuda:1,12gb;cuda:0,16gb
 |------------|-----------|------------|-----------------|
 | SDXL | ❌ | ✅ | Checkpoint, SDXL VAE |
 | Flux | ✅ | ⚠️ | flux1-dev-fp8, T5, AE |
+| Flux 2 | ✅ | ❌ | flux2-dev-Q4_K_M.gguf, mistral_3_small_flux2_fp8, flux2-vae |
 | SD1.5 | ❌ | ✅ | Checkpoint |
 
 ---

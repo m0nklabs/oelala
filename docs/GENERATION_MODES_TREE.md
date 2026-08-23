@@ -163,17 +163,12 @@ Alternative High/Low Noise Pairs
 │   ├── Wan22-I2V_A14B-Lightning-H-Q6_K.gguf
 │   └── Wan22-I2V_A14B-Lightning-L-Q6_K.gguf
 │
-├── 🎭 SmoothMix (community merge)
-│   ├── smoothMixWan22GGUF_highQ6K.gguf
-│   └── smoothMixWan22GGUF_lowQ6K.gguf
-│
-├── 🔞 Enhanced NSFW V2
-│   ├── wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
-│   └── wan22EnhancedNSFW_V2_Q6K_LOW.gguf
-│
-└── 📷 Enhanced Camera Motion
-    ├── wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH.gguf
-    └── wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KL.gguf
+└── 🔞 Enhanced NSFW V2
+    ├── wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
+    └── wan22EnhancedNSFW_V2_Q6K_LOW.gguf
+
+# Removed in cleanup (unused/duplicated): smoothMixWan22GGUF_high/lowQ6K.gguf,
+# wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH/L.gguf, LTX-2-dev-Q2_K.gguf
 ```
 
 ---
@@ -197,34 +192,28 @@ T2V Generation Modes
 │   └── 🎨 VAE
 │       └── wan_2.1_vae.safetensors                           [242MB]
 │
-└── 📦 ltx2
-    │   "LTX-2 19B Distilled (Direct T2V)"
-    │   Max frames: 97 | Default: 25
+└── 📦 minimax_h3
+    │   "MiniMax-H3 FL2VA 22B (joint video+audio) — cloud + local"
+    │   Max frames: 362 | Default: 124 | Fixed 24fps
     │
-    ├── 🧠 Diffusion Model (GGUF)
-    │   └── ltx-2-19b-distilled_Q4_K_M.gguf                   [12GB]
+    ├── ☁️ Cloud (RunPod 80GB+, nvfp4 text encoder)
+    │   ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors   [20.97GB]
+    │   └── qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors      [15.69GB]
     │
-    ├── 📝 Text Encoder (Gemma)
-    │   ├── gemma-3-12b-it-qat-q4_0-unquantized/              [8GB]
-    │   └── ltx-2-19b-embeddings_connector_bf16.safetensors   [2.9GB]
-    │
-    └── 🎨 VAE
-        └── LTX2_video_vae_bf16.safetensors                   [2.5GB]
+    └── 🪟 Local (Windows PC ComfyUI, int8_convrot set, 16GB GPU)
+        ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors
+        ├── qwen3vl_32b_minimax_h3_int8_convrot.safetensors
+        ├── minimax_h3_video_vae_fp16.safetensors
+        └── minimax_h3_audio_vae_fp32.safetensors
 ```
 
 ### T2V Alternative Models (Swappable)
 
 ```
-Alternative LTX-2 Variants
-│
-├── 🔬 LTX-2 Dev (potentially higher quality)
-│   └── ltx-2-19b-dev-Q4_K_M.gguf                            [12GB]
-│
-├── 💾 LTX-2 Dev Q2 (lower VRAM)
-│   └── LTX-2-dev-Q2_K.gguf                                  [7.5GB]
-│
-└── 🎯 LTX-2 FP8 Full (highest quality)
-    └── ltx-2-19b-distilled-fp8.safetensors                  [27GB]
+# Lokale LTX-2 19B-modellen zijn verwijderd (LTX-2.3 draait nu cloud-only).
+# Verwijderd: ltx-2-19b-dev-Q4_K_M.gguf, ltx-2-19b-distilled_Q4_K_M.gguf,
+# ltx-2-19b-distilled-fp8.safetensors, LTX-2-dev-Q2_K.gguf,
+# ltx-2-19b-embeddings_connector_bf16.safetensors, LTX2_video_vae_bf16.safetensors
 ```
 
 ---
@@ -235,63 +224,21 @@ Alternative LTX-2 Variants
 > All benchmarks tested 2026-01-16 on RTX 5060 Ti 16GB.
 
 ```
-T2I Model Categories (Speed Tiers)
+T2I Model Categories (Kept: Flux + Flux 2 + SDXL-Pony) (Krea 2 / Flux 2 zie hieronder)
 │
-├── ⚡ LIGHTNING FAST (5-15 sec)
+├── 👑 MAX QUALITY (200-300 sec, multi-GPU)
 │   │
-│   ├── 📦 sdxl_lightning
-│   │   │   "DreamShaper XL Lightning - FASTEST SDXL"
-│   │   │   1024×1024 @ 8 steps: ~8s | VRAM: ~8GB
-│   │   │
-│   │   └── dreamshaperXL_lightningDPMSDE.safetensors     [6.5GB]
-│   │       ├── Sampler: dpmpp_sde + karras
-│   │       ├── Steps: 8 (optimized for lightning)
-│   │       ├── CFG: 2.0
-│   │       └── Best for: Quick iterations, previews
-│   │
-│   └── 📦 z_image_turbo
-│       │   "Z-Image Turbo - Experimental Fast Model"
-│       │   Status: 🔨 NEEDS TESTING
+│   └── 📦 flux2_dev
+│       │   "Flux.2 Dev 32B (GGUF Q4) - nieuwste, meest kwaliteit"
+│       │   1024×1024 @ 20 steps: ~297s | 2x GPU + CPU-offload
+│       │   DisTorch2: cuda:1,8gb;cuda:0,4gb;cpu,*
 │       │
-│       └── z_image_turbo_bf16.safetensors                [12GB]
-│
-├── 🏃 FAST (15-30 sec)
-│   │
-│   └── 📦 sdxl_standard
-│       │   "SDXL Standard Checkpoints"
-│       │   1024×1024 @ 25 steps: ~18-28s | VRAM: ~8GB
-│       │
-│       ├── CyberRealistic_Pony_v14.1_FP16.safetensors    [6.5GB] ★ FASTEST
-│       │   ├── 1024×1024 @ 25 steps: ~18s
-│       │   ├── Category: Realistic/Pony
-│       │   ├── Sampler: dpmpp_2m + karras
-│       │   ├── CFG: 7.0
-│       │   └── Prompt: score_9, score_8_up prefixes
-│       │
-│       ├── reapony_v90.safetensors                       [6.5GB]
-│       │   ├── 1024×1024 @ 25 steps: ~27s
-│       │   ├── Category: Realistic/Pony
-│       │   └── Best for: NSFW realistic content
-│       │
-│       ├── juggernautXL_ragnarok.safetensors             [7GB]
-│       │   ├── 1024×1024 @ 25 steps: ~28s
-│       │   └── Category: General/Artistic
-│       │
-│       ├── novaAnimeXL_ilV150.safetensors                [6.5GB]
-│       │   ├── 1024×1024 @ 25 steps: ~28s
-│       │   └── Category: Anime
-│       │
-│       ├── illustriousRealismBy_v10VAE.safetensors       [6.5GB]
-│       │   └── Category: Realistic
-│       │
-│       ├── ponyDiffusionV6XL_v6StartWithThisOne.safetensors [6.5GB]
-│       │   └── Category: Pony base
-│       │
-│       ├── ultraRealisticByStable_v20FP16.safetensors    [6.5GB]
-│       │   └── Category: Photorealistic
-│       │
-│       └── waiIllustriousSDXL_v160.safetensors           [6.5GB]
-│           └── Category: Anime/Illustrious
+│       └── flux2-dev-Q4_K_M.gguf  [19.9GB] ★ (nieuw)
+│           ├── Sampler: euler + simple (via Flux2Scheduler)
+│           ├── Steps: 20
+│           ├── Guidance: 4.0 (géén negatieve prompt / CFG)
+│           ├── Text encoder: mistral_3_small_flux2_fp8 (18GB, cpu)
+│           └── Nodig: flux2-vae.safetensors (Mage one-step VAE)
 │
 ├── 🐢 QUALITY (60-120 sec)
 │   │
@@ -305,45 +252,36 @@ T2I Model Categories (Speed Tiers)
 │   │       ├── CFG: 3.5
 │   │       └── Best for: Final renders, marketing
 │   │
-│   ├── 📦 flux_nsfw
-│   │   │   "Flux NSFW Variants"
-│   │   │   1024×1024 @ 20 steps: ~75s | VRAM: ~12GB
-│   │   │
-│   │   ├── fluxedUpFluxNSFW_51FP8.safetensors            [12GB]
-│   │   │   ├── 1024×1024 @ 20 steps: ~75s
-│   │   │   └── CFG: 1.0 (classifier-free)
-│   │   │
-│   │   └── persephoneFluxNSFWSFW_11FP8.safetensors       [12GB]
-│   │       └── NSFW/SFW dual mode
-│   │
-│   └── 📦 wan22_t2i
-│       │   "Wan2.2 T2I (video-compatible images)"
-│       │   Status: 🔨 NEEDS TESTING
+│   └── 📦 flux_nsfw
+│       │   "Flux NSFW Variants (beste fotorealistische NSFW)"
+│       │   1024×1024 @ 20 steps: ~75s | VRAM: ~12GB
 │       │
-│       └── Uses T2V models for T2I
-│           └── Best for: Images that will become video
+│       ├── fluxedUpFluxNSFW_51FP8.safetensors            [12GB]
+│       │   ├── 1024×1024 @ 20 steps: ~75s
+│       │   └── CFG: 1.0 (classifier-free)
+│       │
+│       └── persephoneFluxNSFWSFW_11FP8.safetensors       [12GB]
+│           └── NSFW/SFW dual mode
 │
-├── 📦 ernie
-│   │   "ERNIE-Image (Flux2 architecture, Baidu)"
-│   │   1024×1024 @ 20 steps: ~170s | VRAM: ~22GB (dynamic offload)
-│   │   Status: ✅ PRODUCTION
-│   │
-│   └── ernie-image.safetensors (15.3GB BF16)          [dynamic offload]
-│       ├── Text encoder: Ministral-3-3B (6.5GB)
-│       ├── VAE: flux2-vae.safetensors (336MB, tiled decode)
-│       ├── Pipeline: SamplerCustomAdvanced + FluxGuidance + BasicGuider + Flux2Scheduler
-│       ├── Sampler: euler
-│       ├── Steps: 20 (default), Guidance: 4.0
-│       ├── ⚠️ DisTorch2 INCOMPATIBLE (NaN/inf)
-│       └── Best for: High quality artistic images
-│
-└── 📦 sd15
-    │   "SD 1.5 (legacy, fast)"
-    │   512×512 @ 25 steps: ~5s | VRAM: ~4GB
+└── 🏃 FAST (15-30 sec)
     │
-    └── Realistic_Vision_V5.1.safetensors                 [4GB]
-        └── Best for: Quick low-res previews
-```
+    └── 📦 sdxl_pony
+        │   "SDXL-Pony (NSFW-specialist, grootste LoRA-ecosysteem)"
+        │   1024×1024 @ 25 steps: ~18-28s | VRAM: ~8GB
+        │
+        ├── CyberRealistic_Pony_v14.1_FP16.safetensors    [6.5GB] ★
+        │   ├── 1024×1024 @ 25 steps: ~18s
+        │   ├── Category: Realistic/Pony (photoreal NSFW)
+        │   ├── Sampler: dpmpp_2m + karras
+        │   ├── CFG: 7.0
+        │   └── Prompt: score_9, score_8_up prefixes
+        │
+        ├── ponyDiffusionV6XL_v6StartWithThisOne.safetensors [6.5GB]
+        │   └── Category: Pony base (anime/stylized NSFW)
+        │
+        └── reapony_v90.safetensors                       [6.5GB]
+            ├── Category: Realistic/Pony
+            └── Best for: NSFW realistic content
 
 ### T2I Resolution Limits (SDXL)
 
@@ -360,19 +298,24 @@ SDXL Tested Resolutions (DreamShaper Lightning)
 
 Flux Tested Resolutions
 │
-├── 1024×1024: ✅ ~119s
-├── 1536×1536: ✅ ~4x time
-└── 2048×2048: ⚠️ May need fp16 offload
+├── Flux.1 Dev FP8
+│   ├── 1024×1024: ✅ ~119s
+│   ├── 1536×1536: ✅ ~4x time
+│   └── 2048×2048: ⚠️ May need fp16 offload
+│
+└── Flux.2 Dev (GGUF Q4, multi-GPU)
+    ├── 768×768: ✅ ~215s
+    └── 1024×1024: ✅ ~297s (compute-kaart niet >75% vullen → OOM)
 ```
 
 ### T2I Optimal Settings Quick Reference
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ SPEED PRIORITY (previews, iterations)                               │
-│ Model: dreamshaperXL_lightningDPMSDE.safetensors                    │
-│ Steps: 8 | CFG: 2.0 | Sampler: dpmpp_sde + karras                  │
-│ Result: 1024×1024 in ~8 seconds                                     │
+│ SDXL-Pony (balanced speed/quality)                                    │
+│ Model: CyberRealistic_Pony_v14.1_FP16.safetensors                   │
+│ Steps: 25-30 | CFG: 7.0 | Sampler: dpmpp_2m + karras               │
+│ Result: 1024×1024 in ~18-25 seconds                                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │ QUALITY PRIORITY (final renders)                                    │
 │ Model: CyberRealistic_Pony_v14.1_FP16.safetensors                   │
@@ -411,13 +354,11 @@ Sub-Models (Shared Components)
 │   │   └── gemma_3_12B_it_nvfp4.safetensors                [8.3GB]
 │   │
 │   └── Qwen Family (Vision/General)
-│       ├── qwen_2.5_vl_7b_fp8_scaled.safetensors           [9.4GB]
-│       └── qwen_3_4b.safetensors                           [8GB]
+│       └── qwen_2.5_vl_7b_fp8_scaled.safetensors           [9.4GB]
 │
 ├── 🎨 VAE Models
 │   │
 │   ├── wan_2.1_vae.safetensors                             [242MB] → Wan2.2
-│   ├── LTX2_video_vae_bf16.safetensors                     [2.5GB] → LTX-2
 │   ├── sdxl_vae.safetensors                                [335MB] → SDXL
 │   ├── ae.safetensors                                      [335MB] → Flux
 │   └── qwen_image_vae.safetensors                          [254MB] → Qwen
@@ -430,7 +371,7 @@ Sub-Models (Shared Components)
 │
 └── 🔗 Connectors
     │
-    └── ltx-2-19b-embeddings_connector_bf16.safetensors     [2.9GB] → LTX-2
+    └── (LTX-2 lokale connector verwijderd — LTX-2.3 draait cloud-only)
 ```
 
 ---
@@ -551,32 +492,30 @@ ComfyUI/models/
 │   ├── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors
 │   ├── Wan22-I2V_A14B-Lightning-H-Q6_K.gguf
 │   ├── Wan22-I2V_A14B-Lightning-L-Q6_K.gguf
-│   ├── smoothMixWan22GGUF_highQ6K.gguf
-│   ├── smoothMixWan22GGUF_lowQ6K.gguf
 │   ├── wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
 │   ├── wan22EnhancedNSFW_V2_Q6K_LOW.gguf
 │   └── ...
 │
 ├── diffusion_models/
-│   ├── ltx-2-19b-distilled_Q4_K_M.gguf
-│   └── ltx-2-19b-dev-Q4_K_M.gguf
+│   └── flux2-dev-Q4_K_M.gguf  (MiniMax-H3 local modellen draaien op de Windows-PC server)
 │
 ├── text_encoders/
 │   ├── umt5-xxl-enc-bf16.safetensors
 │   ├── gemma-3-12b-it-qat-q4_0-unquantized/
-│   ├── ltx-2-19b-embeddings_connector_bf16.safetensors
+│   ├── qwen3vl_4b_bf16.safetensors
 │   └── ...
 │
 ├── vae/
 │   ├── wan_2.1_vae.safetensors
-│   ├── LTX2_video_vae_bf16.safetensors
 │   ├── sdxl_vae.safetensors
-│   └── ae.safetensors
+│   ├── ae.safetensors
+│   └── flux2-vae.safetensors
 │
 ├── checkpoints/
 │   ├── flux1-dev-fp8.safetensors
 │   ├── CyberRealistic_Pony_v14.1_FP16.safetensors
-│   ├── dreamshaperXL_lightningDPMSDE.safetensors
+│   ├── ponyDiffusionV6XL_v6StartWithThisOne.safetensors
+│   ├── reapony_v90.safetensors
 │   └── ...
 │
 ├── clip_vision/
@@ -594,22 +533,8 @@ ComfyUI/models/
 Audio Generation Modes
 │
 └── 📦 ltx2_audio (experimental)
-    │   "LTX-2 with Audio Track"
-    │   Status: 🔨 IN DEVELOPMENT
-    │
-    ├── 📂 Workflow: workflows/ltx2_audio_t2v_api.json
-    │
-    ├── 🧠 Diffusion Model
-    │   └── ltx-2-19b-distilled_Q4_K_M.gguf
-    │
-    ├── 📝 Text Encoder (Gemma)
-    │   └── gemma-3-12b-it-qat-q4_0-unquantized/
-    │
-    ├── 🎨 VAE
-    │   └── LTX2_video_vae_bf16.safetensors
-    │
-    └── 🔊 Audio Model
-        └── [TBD - MMAudio integration]
+    │   # REMOVED in cleanup — lokale LTX-2 draait niet meer (LTX-2.3 cloud-only).
+    │   # MiniMax-H3 FL2VA genereert nu native stereo audio (geen aparte audio-stap).
 ```
 
 ---
@@ -989,8 +914,12 @@ TTS Modes
 │   Result: ✅ COMPLETED on RunPod serverless (2026-03-07)            │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
-│ �🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B                                  │
+│ 🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B (LOKALE MODUS VERWIJDERD — zie hieronder)│
 │ ═══════════════════════════════════════════════════════════════════ │
+│  # Historische benchmark (2026-01-12). De lokale LTX-2 19B-modellen │
+│  # (ltx-2-19b-distilled_Q4_K_M.gguf, LTX2_video_vae_bf16,           │
+│  # ltx-2-19b-embeddings_connector_bf16) en workflow ltx2_distorch2_ │
+│  # multigpu_api.json zijn verwijderd — LTX-2.3 draait nu cloud-only.│
 │                                                                      │
 │ 768×512 Landscape                                                    │
 │ ─────────────────────────────────────────────────────────────────── │
@@ -1036,12 +965,12 @@ TTS Modes
 │ 🖼️ TEXT-TO-IMAGE (T2I) - SDXL (Benchmarked 2026-01-16)              │
 │ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
-│ ⚡ DreamShaper Lightning - 1024×1024 (FASTEST)                       │
+│ Pony Diffusion V6 - 1024×1024                                         │
 │ ─────────────────────────────────────────────────────────────────── │
-│   Model: dreamshaperXL_lightningDPMSDE.safetensors [6.5GB]          │
-│   VRAM: ~8GB | Time: 8-33s (depends on model warmup)                │
-│   Steps: 8 | CFG: 2.0 | Sampler: dpmpp_sde + karras                 │
-│   Best for: Quick iterations, previews                              │
+│   Model: ponyDiffusionV6XL_v6StartWithThisOne.safetensors [6.5GB]   │
+│   Steps: 28 | CFG: 7.0 | Sampler: dpmpp_2m + karras                 │
+│   Prompt: score_9, score_8_up prefixes                              │
+│   Best for: anime/stylized NSFW, booru tags                         │
 │   Tested: 2026-01-16 ✅                                              │
 │                                                                      │
 │ CyberRealistic Pony - 1024×1024 (FASTEST STANDARD)                   │
@@ -1060,37 +989,6 @@ TTS Modes
 │   Steps: 25 | CFG: 7.0 | Sampler: dpmpp_2m + karras                 │
 │   Best for: NSFW realistic content                                  │
 │   Tested: 2026-01-16 ✅                                              │
-│                                                                      │
-│ Juggernaut Ragnarok - 1024×1024                                      │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Model: juggernautXL_ragnarok.safetensors [7GB]                    │
-│   VRAM: ~8GB | Time: 28s @ 25 steps                                 │
-│   Best for: General/artistic                                        │
-│   Tested: 2026-01-16 ✅                                              │
-│                                                                      │
-│ Nova Anime - 1024×1024                                               │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Model: novaAnimeXL_ilV150.safetensors [6.5GB]                     │
-│   VRAM: ~8GB | Time: 28s @ 25 steps                                 │
-│   Best for: Anime style                                             │
-│   Tested: 2026-01-16 ✅                                              │
-│                                                                      │
-│ ═══════════════════════════════════════════════════════════════════ │
-│ 🖼️ TEXT-TO-IMAGE (T2I) - ERNIE-Image (Tested 2026-04-20)            │
-│ ═══════════════════════════════════════════════════════════════════ │
-│                                                                      │
-│ ERNIE-Image BF16 - 1024×1024                                         │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Model: ernie-image.safetensors [15.3GB BF16]                      │
-│   Text Encoder: ministral-3-3b.safetensors [6.5GB]                  │
-│   VAE: flux2-vae.safetensors [336MB] (tiled decode)                 │
-│   VRAM: ~22GB (dynamic offload) | Time: ~170s (20 steps)            │
-│   Steps: 20 | Guidance: 4.0 | Sampler: euler                        │
-│   Pipeline: SamplerCustomAdvanced + FluxGuidance + BasicGuider       │
-│             + Flux2Scheduler + EmptyFlux2LatentImage                 │
-│   ⚠️ DisTorch2 INCOMPATIBLE (NaN/inf) — plain loaders only          │
-│   Quality: EXCELLENT - artistic/detailed images                     │
-│   Tested: 2026-04-20 ✅                                              │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 🔬 EXPERIMENTAL / NEEDS MORE TESTING                                │
@@ -1165,6 +1063,7 @@ TTS Modes
 | Nova Anime | 1024×1024 | 25 | **28s** | 8GB | 🎌 Anime |
 | FluxedUp NSFW | 1024×1024 | 20 | **75s** | 12GB | 🔥 Quality NSFW |
 | Flux Dev FP8 | 1024×1024 | 20 | **119s** | 17GB | 👑 HIGHEST quality |
+| Flux.2 Dev GGUF | 1024×1024 | 20 | **297s** | 19GB+2GPU | 🌌 Nieuwste 32B (nieuw) |
 
 #### ⏱️ T2I Speed Tiers
 
@@ -1172,6 +1071,7 @@ TTS Modes
 ⚡ LIGHTNING (5-10s)     → DreamShaper Lightning @ 8 steps
 🏃 FAST (15-30s)         → SDXL models @ 25 steps
 🐢 QUALITY (60-120s)     → Flux models @ 20 steps
+🐌 MAX (200-300s)        → Flux.2 Dev 32B (multi-GPU)
 ```
 
 ### ❌ REMOVED - Under 5 seconds (UNACCEPTABLE)

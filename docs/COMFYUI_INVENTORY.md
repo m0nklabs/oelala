@@ -50,33 +50,19 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 | T2I | SDXL Lightning | 1024x1024 | ~6GB |
 | T2I | SDXL (full) | 1024x1024 | ~8GB |
 | T2I | Flux FP8 | 1024x1024 | ~12GB |
-| T2I | ERNIE-Image (BF16) | 1024x1024-1536x1536 | ~22GB (dynamic VRAM offload) |
+| T2I | Krea 2 Turbo (INT8) | 1024x1024-2048x2048 | ~10-12GB |
 | I2I | SDXL | 1536x1536 | ~10GB |
 | Upscale | 4x (ESRGAN) / AI (SeedVR2) | 720p-2048p | ~10-16GB |
 
 **Note**: Image gen fits on single GPU. Use `cuda:0` (16GB) for headroom.
-ERNIE-Image uses dynamic VRAM offloading across both GPUs (~170s/20 steps at 1024x1024). DisTorch2 NOT compatible (NaN).
 
 ### LTX-2 Video Generation (⚠️ Experimental)
 
-| Model | Size | Text Encoder | Total VRAM |
-|-------|------|--------------|------------|
-| `ltx-2-19b-distilled-fp8.safetensors` | 26GB | UMT5 FP8 (5.6GB) | ~32GB |
-| `ltx-2-19b-distilled-fp8.safetensors` | 26GB | Gemma 3 12B (23GB) | ~49GB ❌ |
-
-**Current Status**: LTX-2 requires ~32GB VRAM minimum with UMT5, or ~49GB with Gemma 3 12B.
-With 28GB total VRAM, LTX-2 is **not yet practical** on this setup.
-
-**Blockers**:
-1. Native ComfyUI loaders expect `spiece_model` tensor embedded in safetensors
-2. HuggingFace Gemma 3 format uses separate `tokenizer.model` file
-3. ComfyUI-LTXVideo custom nodes work but conflict with ComfyUI memory management when using `device_map="auto"`
-
-**Future Options**:
-- Wait for smaller quantized LTX-2 models (FP4)
-- Use diffusers directly instead of ComfyUI nodes
-- Use UMT5 with manual memory management
-- Upgrade to 32GB+ GPU
+> **Removed in cleanup** — de lokale LTX-2 19B-modellen zijn van de schijf
+> verwijderd (LTX-2.3 draait nu **cloud-only** via RunPod). Verwijderde files:
+> `ltx-2-19b-distilled-fp8.safetensors`, `ltx-2-19b-distilled_Q4_K_M.gguf`,
+> `ltx-2-19b-dev-Q4_K_M.gguf`, `ltx-2-19b-embeddings_connector_bf16.safetensors`,
+> `LTX2_video_vae_bf16.safetensors`, `ltx2_audio_vae.safetensors`.
 
 ### Audio Generation (MMAudio)
 
@@ -112,32 +98,48 @@ With 28GB total VRAM, you can run:
 | Model | Category | Notes |
 |-------|----------|-------|
 | `CyberRealistic_Pony_v14.1_FP16.safetensors` | Realistic/Pony | High quality |
-| `dreamshaperXL_lightningDPMSDE.safetensors` | SDXL | **Fast** - recommended for T2I |
 | `flux1-dev-fp8.safetensors` | Flux | FP8 quantized |
-| `illustriousRealismBy_v10VAE.safetensors` | Realistic | Built-in VAE |
-| `juggernautXL_ragnarok.safetensors` | SDXL | Popular |
-| `novaAnimeXL_ilV150.safetensors` | Anime | SDXL |
 | `ponyDiffusionV6XL_v6StartWithThisOne.safetensors` | Pony | Base Pony model |
-| `Realistic_Vision_V5.1.safetensors` | SD1.5 | Legacy support |
 | `reapony_v90.safetensors` | Realistic/Pony | |
-| `ultraRealisticByStable_v20FP16.safetensors` | Realistic | FP16 |
-| `waiIllustriousSDXL_v160.safetensors` | Anime | Illustrious-based |
 
 ---
 
-## 🖼️ ERNIE-Image (Flux2 Architecture)
+## 🖼️ Krea 2 (Flux2-familie, ComfyUI ≥ 0.27)
 
 | Model | File | Size | Notes |
 |-------|------|------|-------|
-| UNET | `diffusion_models/ernie-image.safetensors` | 15.3GB BF16 | Flux2 latent (128ch, 16x), FlowMatch |
-| Text Encoder | `text_encoders/ministral-3-3b.safetensors` | 6.5GB | Ministral-3-3B, auto-detected |
-| Prompt Enhancer | `text_encoders/ernie-image-prompt-enhancer.safetensors` | 6.9GB | Not yet integrated |
-| VAE | `vae/flux2-vae.safetensors` | 336MB | AutoencoderKL |
+| Diffusion | `diffusion_models/krea2_turbo_int8_convrot.safetensors` | 13.5GB INT8 | Turbo = 8-step distilled |
+| Text Encoder | `text_encoders/qwen3vl_4b_bf16.safetensors` | 8.9GB | CLIPLoader type `krea2` |
+| VAE | `vae/qwen_image_vae.safetensors` | 254MB | Gedeeld met Qwen Image |
 
-**Pipeline**: `UNETLoader` → `CLIPLoader(type=flux2)` → `VAELoader` → `SamplerCustomAdvanced` + `FluxGuidance` + `BasicGuider` + `Flux2Scheduler`
-**Performance**: ~170s for 20 steps at 1024x1024 (dynamic VRAM offload, tiled VAE decode)
-**⚠️ DisTorch2 NOT compatible** — produces NaN/inf. Use plain loaders only.
-**Storage**: Symlinked from `/mnt/ssd/ernie-image-dl/` into ComfyUI/models/
+**Pipeline**: `UNETLoader(weight_dtype=default)` → `CLIPLoader(type=krea2)` → `KSampler(8 steps, CFG 1.0, euler/simple)` → `VAEDecode`
+**Getest**: 2026-08-21 ✅ (1024×1024, ~80s eerste load)
+**NSFW**: via CivitAI LoRA's (bijv. krea-2-nsfw-v2, 12 steps)
+**License**: Krea 2 Community License (gratis < $1M omzet / 50 seats)
+
+---
+
+## 🌌 Flux 2 Dev (32B, multi-GPU, ComfyUI ≥ 0.31)
+
+| Model | File | Size | Notes |
+|-------|------|------|-------|
+| Diffusion (GGUF) | `unet/flux2-dev-Q4_K_M.gguf` | 19.9GB Q4_K_M | unsloth Dynamic 2.0; 32B rectified-flow |
+| Text Encoder | `text_encoders/mistral_3_small_flux2_fp8.safetensors` | 18GB FP8 | Mistral3-small, CLIPLoader type `flux2`, device=cpu |
+| VAE | `vae/flux2-vae.safetensors` | 336MB | Flux 2 (Mage) one-step VAE |
+
+**Pipeline**: `UnetLoaderGGUFDisTorch2MultiGPU(flux2 Q4, multi-GPU)` → `CLIPLoader(type=flux2, mistral3, cpu)` → `FluxGuidance` + `Flux2Scheduler` + `EmptyFlux2LatentImage` → `SamplerCustomAdvanced(euler/simple)` → `VAEDecode`
+
+**Multi-GPU allocatie (DisTorch2, getest op RTX 3060 12GB + RTX 5060 Ti 16GB)**:
+```
+cuda:1,8gb;cuda:0,4gb;cpu,*
+```
+Compute op `cuda:1`, ~7.2GB model naar CPU-offload. De compute-kaart NIET >75% vullen — anders OOM op activations.
+
+**Getest**: 2026-08-21 ✅ (1024×1024, ~297s; 768px ~215s). Eerste pogingen OOM'den op hogere allocatie.
+**NSFW**: BFL heeft expliciete NSFW-mitigaties; community fine-tunes (bijv. AniEdit Flux.2 Klein) bestaan maar zijn schaarser dan Flux.1.
+**License**: FLUX [dev] Non-Commercial License.
+
+> **Opmerking**: `mistral_3_small_flux2_bf16` (35GB) en `flux2_dev_fp8mixed` (35GB) zijn ook op HF beschikbaar, maar we gebruiken alleen de fp8-Te + Q4-diffusie versies vanwege VRAM.
 
 ---
 
@@ -151,8 +153,9 @@ With 28GB total VRAM, you can run:
 | `wan2.2_i2v_low_noise_14B_Q6_K.gguf` | I2V Low | Standard |
 | `Wan22-I2V_A14B-Lightning-H-Q6_K.gguf` | I2V High | **Lightning (fast)** |
 | `Wan22-I2V_A14B-Lightning-L-Q6_K.gguf` | I2V Low | **Lightning (fast)** |
-| `smoothMixWan22GGUF_highQ6K.gguf` | I2V High | Smooth motion |
-| `smoothMixWan22GGUF_lowQ6K.gguf` | I2V Low | Smooth motion |
+
+> **Removed in cleanup**: `smoothMixWan22GGUF_high/lowQ6K.gguf`,
+> `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH/L.gguf` (ongebruikt/duplicaat).
 
 > **Note**: Additional specialized UNET variants available on the server.
 
@@ -164,6 +167,37 @@ With 28GB total VRAM, you can run:
 | `Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors` | T2V Low |
 | `wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors` | T2V High |
 | `wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors` | T2V Low |
+
+---
+
+## 🪟 Windows-PC ComfyUI (tweede server — lokale MiniMax-H3)
+
+Naast de ComfyUI op **ai-kvm2** (`localhost:8188`, systemd `comfyui`) is er een **tweede
+ComfyUI-server op de Windows-PC van de user** waarop lokale MiniMax-H3 draait.
+
+| Eigenschap | Waarde |
+|-----------|--------|
+| Host (default) | `192.168.1.245` (`COMFYUI_WINDOWS_HOST`) |
+| Poort (default) | `8188` (`COMFYUI_WINDOWS_PORT`) |
+| Installatie | ComfyUI portable (`C:\PROGRAMME\ComfyUI_windows_portable`) |
+| Draaiend via | Taak `ComfyUIServer` bij inloggen (`start_comfy_server.bat`, log `comfy_server.log`) |
+| Backend-client | `get_windows_comfyui_client()` in `comfyui_client.py` |
+
+Lokale MiniMax-H3 adapters (`minimax-h3-local-t2v` / `-i2v`) worden alleen geregistreerd
+wanneer `COMFYUI_WINDOWS_HOST` is gezet. De I2V-variant uploadt z'n input-image zelf naar
+deze server (`handles_own_image_upload=True`).
+
+### MiniMax-H3 local modellen (Windows PC)
+
+| Component | File | Subdir |
+|-----------|------|--------|
+| Diffusion (int8 pruned) | `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `diffusion_models/` |
+| Text encoder (int8 convrot) | `qwen3vl_32b_minimax_h3_int8_convrot.safetensors` | `text_encoders/` |
+| Video VAE | `minimax_h3_video_vae_fp16.safetensors` | `vae/` |
+| Audio VAE | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` |
+
+Intro/uitgelegd in `README_MiniMax_H3_workflow.md`; downloadscripts `download_minimax_h3.cmd` / `.ps1`.
+FL2VA genereert altijd een synchrone soundtrack (24 fps, 17k+5 frame grid, geen negative prompt / CFG).
 
 ---
 
@@ -210,8 +244,8 @@ Available categories:
 | `sdxl_vae.safetensors` | SDXL |
 | `wan_2.1_vae.safetensors` | Wan 2.1/2.2 video |
 | `Wan2.1_VAE.safetensors` | Wan 2.1/2.2 video |
-| `qwen_image_vae.safetensors` | QwenVL |
-| `flux2-vae.safetensors` | ERNIE-Image / Flux2 (336MB) |
+| `qwen_image_vae.safetensors` | QwenVL / Krea 2 |
+| `flux2-vae.safetensors` | Flux2 |
 
 ---
 
@@ -222,8 +256,7 @@ Available categories:
 | `clip_l.safetensors` | CLIP-L (SDXL) |
 | `t5xxl_fp8_e4m3fn.safetensors` | T5-XXL FP8 (Wan/Flux) |
 | `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (Wan 2.2) |
-| `ministral-3-3b.safetensors` | Ministral-3-3B (ERNIE-Image, 6.5GB BF16) |
-| `ernie-image-prompt-enhancer.safetensors` | ERNIE prompt enhancer (6.9GB, not yet integrated) |
+| `qwen3vl_4b_bf16.safetensors` | Qwen3-VL-4B (Krea 2, type krea2) |
 
 ---
 

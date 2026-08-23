@@ -18,9 +18,18 @@ source of truth.
   (torch 2.12, transformers 5.8).
 - **Frontend** — React 18 + Vite 7, **JSX only** (67 `.jsx`, 0 `.tsx`) in `src/frontend/src/`
   (port 5174). Supabase, Sentry, Recharts. Always use `apiFetch()` from `utils/api.ts`, never raw `fetch()`.
-- **Execution** — local ComfyUI (port 8188; workflows in `workflows/`, models in `ComfyUI/models/`)
-  plus RunPod cloud (Wan2.2, LTX-2.3, MiniMax-H3, Qwen I2I). DisTorch2 multi-GPU alloc:
-  `cuda:0,10gb;cuda:1,15gb;cpu,*` with **RTX 3060 first**.
+- **Execution / compute** — modular *compute backends*, each a configurable source that can run
+  certain model families (see `src/backend/generation/compute_backends.py` + `compute_backends.json`):
+  - **ai-kvm2 local ComfyUI** — `localhost:8188` (default client, workflows in `workflows/`,
+    models in `ComfyUI/models/`), DisTorch2 multi-GPU alloc `cuda:0,10gb;cuda:1,15gb;cpu,*` with
+    **RTX 3060 first**. Managed by systemd `comfyui`; **`always_on`** (monifuse must not idle-stop it).
+  - **Windows-PC ComfyUI** — `192.168.1.245:8188` (second server, hosts local MiniMax-H3). Configured
+    via `COMFYUI_WINDOWS_HOST`/`COMFYUI_WINDOWS_PORT` in `.env`; accessed through
+    `get_windows_comfyui_client()`.
+  - **RunPod cloud** — headless = a container with an ephemeral ComfyUI server (Wan2.2, LTX-2.3,
+    MiniMax-H3, Qwen I2I). Submit via `submit_to_runpod_fn`.
+  Adapters live in `src/backend/generation/adapters/{cloud,local}/`; the registry + router resolve
+  the enabled backend per request by model-family capability.
 - **Storage** — MinIO (S3). Canonical dirs: `media/generated/`, `ComfyUI/output/`, `uploads/`.
 - **DB / monetization** — Supabase/PostgreSQL; Stripe credits.
 - **Tests / lint** — pytest (`tests/`, GPU in `tests/gpu/` on self-hosted runner `oelala-gpu`); ruff on `src/`.
@@ -63,6 +72,7 @@ When touching an area, read its detail-skill:
 - Detailed operational rules: `@.github/copilot-instructions.md` (Copilot-native, source of the
   critical rules above; also covers MinIO, Cloudflare/CORS, RunPod endpoints, DisTorch2).
 - Architecture: `docs/ARCHITECTURE.md`; model inventory: `docs/COMFYUI_INVENTORY.md`.
+- Compute backends inventory: `src/backend/generation/compute_backends.py` + `compute_backends.json`; admin UI under the Admin panel → "Compute".
 - Todo list: `docs/TODO_LIST.md`.
 
 ## Maintenance

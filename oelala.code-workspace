@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../github-copilot-config"
+		},
+		{
+			"path": "../m0nkdash"
 		}
 	],
 	"settings": {}
