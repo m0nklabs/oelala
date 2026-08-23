@@ -145,5 +145,12 @@ def test_client_fn_returns_none_for_runpod(monkeypatch):
 
 
 def test_client_fn_for_utility_exposes_model_family():
+    cb.load_backends(force=True)
     fn = cb.client_fn_for_utility()
     assert fn.model_family == "utility"
+    # .backend_id is refreshed on each call (matching client_fn_for_model), so
+    # utility jobs record the ComfyUI server that actually ran them.
+    assert fn.backend_id is None
+    client = fn()
+    assert fn.backend_id == "ai-kvm2-comfyui"
+    assert client is not None

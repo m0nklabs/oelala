@@ -1165,8 +1165,6 @@ class ComfyUIClient:
             logger.error(f"Upload error: {e}")
             return None
 
-        return []
-
     def upload_image_from_bytes(
         self, image_bytes: bytes, filename: str = "input_image.png"
     ) -> Optional[str]:

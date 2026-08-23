@@ -206,14 +206,25 @@ def client_fn_for_model(model_family: str):
 
 def client_fn_for_utility():
     """Client fn for utility adapters (no model family) — always the default
-    local ComfyUI backend."""
+    local ComfyUI backend.
+
+    Exposes ``.backend_id`` (refreshed on every call, like
+    ``client_fn_for_model``) so utility jobs can be tagged with the ComfyUI
+    server that actually ran them.
+    """
     from comfyui_client import get_comfyui_client_for_backend
 
     def _fn():
         backend = resolve_backend_for_model(UTILITY_FAMILY)
+        # Keep .backend_id in sync with what this call would actually use, so
+        # job metadata always matches the resolved dispatch backend.
+        _fn.backend_id = (
+            backend.id if backend is not None and backend.type == "comfyui" else None
+        )
         if backend is None or backend.type != "comfyui":
             return None
         return get_comfyui_client_for_backend(backend)
 
+    _fn.backend_id = None
     _fn.model_family = UTILITY_FAMILY
     return _fn
