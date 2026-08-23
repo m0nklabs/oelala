@@ -1165,17 +1165,6 @@ class ComfyUIClient:
             logger.error(f"Upload error: {e}")
             return None
 
-    def get_model_names(self, loader_type: str = "UnetLoaderGGUF") -> list[str]:
-        """Fetch available models dynamically from ComfyUI"""
-        try:
-            import requests
-
-            resp = requests.get(f"{self.base_url}/object_info/{loader_type}", timeout=5)
-            data = resp.json()
-            if loader_type in data:
-                return data[loader_type]["input"]["required"].get("unet_name", [[]])[0]
-        except Exception as e:
-            logger.error(f"Error fetching {loader_type} models: {e}")
         return []
 
     def upload_image_from_bytes(

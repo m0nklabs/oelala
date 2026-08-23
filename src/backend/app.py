@@ -6297,6 +6297,8 @@ async def generate_image_legacy(
 @app.get("/api/models/checkpoints")
 def list_comfyui_checkpoints():
     """List available checkpoints dynamically from ComfyUI"""
+    import requests
+
     client = get_comfyui_client()
     try:
         resp = requests.get(
