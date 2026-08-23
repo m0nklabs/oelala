@@ -2976,16 +2976,39 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
     if cached is not None:
         return cached
 
-    # MiniMax-H3 local jobs run on the Windows-PC ComfyUI (get_windows_comfyui_client),
-    # not on the ai-kvm2 localhost server. Pick the right client so we poll + fetch
-    # output from the server that actually ran the job.
+    # Resolve the ComfyUI client that actually ran the job. Prefer the
+    # backend_id attached at dispatch (config-driven via the compute backend
+    # inventory, e.g. Windows-PC for MiniMax-H3), falling back to the legacy
+    # adapter-name check.
     adapter_name = job_info.get("adapter_name", "")
+    backend_id = job_info.get("backend_id")
+    comfyui = None
+    if backend_id:
+        try:
+            from src.backend.comfyui_client import (
+                get_comfyui_client_for_backend as _gcfb,
+            )
+            from src.backend.generation.compute_backends import get_backend
+
+            _backend = get_backend(backend_id)
+            if _backend is not None:
+                comfyui = _gcfb(_backend)
+        except Exception:
+            # Keep good diagnostics: if resolving the configured backend fails
+            # (bad inventory entry, import error, ...), log it with the
+            # backend_id before falling back so polling/downloads never silently
+            # hit the wrong ComfyUI server without breadcrumbs.
+            logger.warning(
+                f"⚠️ Failed to resolve ComfyUI client for backend_id={backend_id}; "
+                "falling back",
+                exc_info=True,
+            )
+            comfyui = None
     is_windows_h3 = adapter_name in (
         "minimax-h3-local-t2v",
         "minimax-h3-local-i2v",
     )
-    comfyui = None
-    if is_windows_h3 and get_windows_comfyui_client is not None:
+    if comfyui is None and is_windows_h3 and get_windows_comfyui_client is not None:
         comfyui = get_windows_comfyui_client()
     if comfyui is None:
         comfyui = get_comfyui_client()
@@ -3023,9 +3046,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
             and node_output.get("images")
         ):
             for img in node_output["images"]:
-                if img.get("type") == "output" and str(img.get("filename", "")).lower().endswith(
-                    (".mp4", ".webm", ".mov", ".mkv")
-                ):
+                if img.get("type") == "output" and str(
+                    img.get("filename", "")
+                ).lower().endswith((".mp4", ".webm", ".mov", ".mkv")):
                     output_video = img
                     break
         if "images" in node_output and output_image is None:
@@ -3059,7 +3082,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                 "type": output_video.get("type", "output"),
             }
             try:
-                dl_resp = requests.get(f"{comfyui_base}/view", params=dl_params, timeout=15)
+                dl_resp = requests.get(
+                    f"{comfyui_base}/view", params=dl_params, timeout=15
+                )
                 if dl_resp.status_code == 200:
                     out_dir = Path(COMFYUI_OUTPUT_DIR)
                     out_dir.mkdir(parents=True, exist_ok=True)
@@ -3072,7 +3097,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                     )
                     output_video = None
             except Exception as e:
-                logger.error(f"❌ Failed to download {output_filename} from {comfyui_base}: {e}")
+                logger.error(
+                    f"❌ Failed to download {output_filename} from {comfyui_base}: {e}"
+                )
                 output_video = None
 
     storage_path = None
@@ -4177,7 +4204,6 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                                 windows_pending.append(job_info)
             except Exception as e:
                 logger.warning(f"⚠️ Failed to get Windows ComfyUI queue: {e}")
-
 
         # Include face LoRA training jobs in the queue
         training = []
@@ -6282,6 +6308,8 @@ async def generate_image_legacy(
 @app.get("/api/models/checkpoints")
 def list_comfyui_checkpoints():
     """List available checkpoints dynamically from ComfyUI"""
+    import requests
+
     client = get_comfyui_client()
     try:
         resp = requests.get(
@@ -6443,7 +6471,7 @@ async def get_i2v_generation_modes():
     Get available I2V generation modes.
     Each mode has different workflow presets (LoRAs, models, etc.)
     """
-    from comfyui_client import get_available_i2v_modes
+    from src.backend.comfyui_client import get_available_i2v_modes
 
     return {
         "modes": get_available_i2v_modes(),
@@ -6457,7 +6485,7 @@ async def get_t2v_generation_modes():
     Get available T2V (Text-to-Video) generation modes.
     Different base models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
     """
-    from comfyui_client import get_available_t2v_modes
+    from src.backend.comfyui_client import get_available_t2v_modes
 
     return {
         "modes": get_available_t2v_modes(),
@@ -6471,7 +6499,7 @@ async def get_v2v_generation_modes():
     Get available V2V (Video-to-Video) style transfer modes.
     Uses I2V pipeline with extracted first frame.
     """
-    from comfyui_client import get_available_i2v_modes
+    from src.backend.comfyui_client import get_available_i2v_modes
 
     # V2V uses I2V modes under the hood
     i2v_modes = get_available_i2v_modes()
@@ -11394,6 +11422,170 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
             detail=f"Job '{job_id}' not found, not failed, or missing config",
         )
     return job
+
+
+# =============================================================================
+# Compute Backend Inventory — admin CRUD
+# =============================================================================
+# Configure which servers/models can be used for generation (modular compute).
+# Reads/writes src/backend/generation/compute_backends.json.
+
+from pydantic import BaseModel as _BaseModel
+from typing import List as _List, Literal as _Literal
+from pydantic import (
+    Field as _Field,
+    StringConstraints as _StringConstraints,
+    model_validator as _model_validator,
+)
+from typing import Annotated as _Annotated
+
+
+class ComputeBackendPayload(_BaseModel):
+    """Mutable fields for a compute backend (admin-editable subset)."""
+
+    # Slug-constrained and REQUIRED: id is used as a URL path parameter, so it
+    # must be URL-safe (no '/', whitespace, ...) and can never be empty (an empty
+    # id would break {backend_id} routing/inventory lookups).
+    id: _Annotated[str, _StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")]
+    name: str
+    type: _Literal["comfyui", "runpod"] = "comfyui"
+    # base_url mirrors the ComputeBackend inventory model: a host may be given
+    # with or without an http:// scheme, non-http schemes are rejected, and any
+    # explicit port must be numeric/in-range (all enforced below so the admin
+    # CRUD returns a proper 422 instead of a 500 later). Runpod backends leave
+    # it empty.
+    base_url: str = ""
+    enabled: bool = True
+    model_families: _List[str] = _Field(default_factory=list)
+    notes: str = ""
+
+    @_model_validator(mode="after")
+    def _validate_by_type(self):
+        # A comfyui backend must name a reachable HTTP server; an empty base_url
+        # would win resolution for a family but then return no usable client.
+        if self.type == "comfyui":
+            if not self.base_url:
+                raise ValueError("base_url is required for a comfyui backend")
+            # ComfyUIClient speaks http/ws (not https/wss), so reject any other
+            # explicit scheme the same way ComputeBackend does.
+            if "://" in self.base_url and not self.base_url.startswith("http://"):
+                raise ValueError("base_url must use http:// for a comfyui backend")
+            authority = (
+                self.base_url.split("://", 1)[1].split("/")[0]
+                if "://" in self.base_url
+                else self.base_url.split("/")[0]
+            )
+            host = authority.split(":")[0]
+            # Reject bare "http://" (no host) — _parse_base_url would yield
+            # "http://:8188" for it, producing a broken backend.
+            if not host:
+                raise ValueError(
+                    "base_url must include a host (e.g. http://192.168.1.10:8188)"
+                )
+            # An explicit port must be numeric and in range; without this a typo
+            # like 'http://host:abc' would fail later as a confusing 500.
+            if ":" in authority:
+                port = authority.split(":", 1)[1]
+                if not port.isdigit() or not (1 <= int(port) <= 65535):
+                    raise ValueError(
+                        "base_url port must be a number between 1 and 65535"
+                    )
+        # A runpod backend has no base_url; a URL here is meaningless noise.
+        if self.type == "runpod" and self.base_url:
+            raise ValueError("base_url must be empty for a runpod backend")
+        return self
+
+
+@app.get("/api/admin/backends")
+async def admin_list_backends(user: User = Depends(get_current_user)):
+    """List all compute backends (name, url, type, enabled, model_families)."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import list_backends
+
+    return {"backends": [b.model_dump(mode="json") for b in list_backends()]}
+
+
+@app.post("/api/admin/backends")
+async def admin_create_backend(
+    payload: ComputeBackendPayload, user: User = Depends(get_current_user)
+):
+    """Create a new compute backend."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import (
+        ComputeBackend,
+        get_backend,
+        list_backends,
+        save_backends,
+    )
+
+    if get_backend(payload.id):
+        raise HTTPException(status_code=409, detail=f"backend '{payload.id}' exists")
+    backend = ComputeBackend(
+        id=payload.id,
+        name=payload.name,
+        type=payload.type,
+        base_url=payload.base_url,
+        enabled=payload.enabled,
+        model_families=list(payload.model_families),
+        notes=payload.notes,
+    )
+    backends = list_backends() + [backend]
+    save_backends(backends)
+    return backend.model_dump(mode="json")
+
+
+@app.put("/api/admin/backends/{backend_id}")
+async def admin_update_backend(
+    backend_id: str,
+    payload: ComputeBackendPayload,
+    user: User = Depends(get_current_user),
+):
+    """Update an existing compute backend."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import (
+        ComputeBackend,
+        get_backend,
+        list_backends,
+        save_backends,
+    )
+
+    if not get_backend(backend_id):
+        raise HTTPException(status_code=404, detail=f"backend '{backend_id}' not found")
+    if payload.id != backend_id:
+        raise HTTPException(status_code=400, detail="id cannot be changed")
+    backend = ComputeBackend(
+        id=payload.id,
+        name=payload.name,
+        type=payload.type,
+        base_url=payload.base_url,
+        enabled=payload.enabled,
+        model_families=list(payload.model_families),
+        notes=payload.notes,
+    )
+    backends = [backend if b.id == backend_id else b for b in list_backends()]
+    save_backends(backends)
+    return backend.model_dump(mode="json")
+
+
+@app.delete("/api/admin/backends/{backend_id}")
+async def admin_delete_backend(backend_id: str, user: User = Depends(get_current_user)):
+    """Delete a compute backend."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import (
+        get_backend,
+        list_backends,
+        save_backends,
+    )
+
+    if not get_backend(backend_id):
+        raise HTTPException(status_code=404, detail=f"backend '{backend_id}' not found")
+    backends = [b for b in list_backends() if b.id != backend_id]
+    save_backends(backends)
+    return {"deleted": backend_id}
 
 
 if __name__ == "__main__":

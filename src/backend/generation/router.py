@@ -185,6 +185,9 @@ class GenerationRouter:
                 "sampler": req.sampler,
                 "scheduler": req.scheduler,
                 "adapter_name": adapter.name,
+                "backend_id": getattr(
+                    getattr(adapter, "_get_comfyui", None), "backend_id", None
+                ),
                 "source": "v2",
             }
             client.register_job(
@@ -251,7 +254,10 @@ class GenerationRouter:
             )
 
         # If multiple candidates, prefer local over cloud (unless cloud requested)
-        # Sort by name for deterministic behaviour regardless of registration order
+        # Sort by name for deterministic behaviour regardless of registration order.
+        # NOTE: local adapters are never silently dropped for cloud — a local
+        # workflow whose ComfyUI backend is unavailable fails explicitly instead
+        # of being re-routed to (paid) cloud compute.
         if len(candidates) > 1:
             local = sorted(
                 [a for a in candidates if a.compute == ComputeTarget.LOCAL],

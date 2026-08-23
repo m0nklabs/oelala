@@ -108,6 +108,12 @@ class TestMiniMaxH3LocalT2V:
         with pytest.raises(RuntimeError):
             await a.execute(_req())
 
+    @pytest.mark.asyncio
+    async def test_execute_raises_when_backend_unresolved(self):
+        a = MiniMaxH3LocalT2VAdapter(comfyui_client_fn=lambda: None)
+        with pytest.raises(RuntimeError, match="No enabled local ComfyUI backend"):
+            await a.execute(_req())
+
 
 class TestMiniMaxH3LocalI2V:
     def test_metadata(self):
@@ -154,6 +160,12 @@ class TestMiniMaxH3LocalI2V:
         a = MiniMaxH3LocalI2VAdapter(comfyui_client_fn=lambda: MagicMock())
         with pytest.raises(ValueError):
             await a.execute(_req())
+
+    @pytest.mark.asyncio
+    async def test_execute_raises_when_backend_unresolved(self):
+        a = MiniMaxH3LocalI2VAdapter(comfyui_client_fn=lambda: None)
+        with pytest.raises(RuntimeError, match="No enabled local ComfyUI backend"):
+            await a.execute(_req(input_images=[_png_b64()]))
 
     @pytest.mark.asyncio
     async def test_execute_raises_when_upload_fails(self):

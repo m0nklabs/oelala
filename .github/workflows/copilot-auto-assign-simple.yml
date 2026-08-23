@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   assign-copilot:
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     # Only run if labeled with 'copilot' or manual dispatch
     if: github.event.label.name == 'copilot' || github.event_name == 'workflow_dispatch'
     steps:

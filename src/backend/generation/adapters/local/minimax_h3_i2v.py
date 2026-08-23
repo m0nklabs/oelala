@@ -123,17 +123,19 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         if self._get_comfyui is None:
             raise RuntimeError("ComfyUI client not available")
         client = self._get_comfyui()
+        if client is None:
+            raise RuntimeError("No enabled local ComfyUI backend for minimax_h3")
 
         if not req.input_images:
             raise ValueError("MiniMax-H3 local I2V requires an input image")
 
         if not client.is_available():
             raise RuntimeError(
-                "Windows ComfyUI server not reachable — is COMFYUI_WINDOWS_HOST "
-                "set and ComfyUI running on that machine?"
+                f"ComfyUI backend at {client.host}:{client.port} is not reachable — "
+                "is the configured compute backend running on that machine?"
             )
 
-        # Upload the input image to the WINDOWS server (router pre-upload skipped).
+        # Upload the input image to the resolved server (router pre-upload skipped).
         try:
             img_bytes = self._to_png_bytes(req.input_images[0])
             uploaded_name = client.upload_image_from_bytes(

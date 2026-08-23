@@ -1,7 +1,12 @@
 # ComfyUI Server Inventory
 
 Complete inventory of available resources on the self-hosted GPU runner.
-**Last updated**: 2026-03-02
+**Last updated**: 2026-08-23
+
+> **Compute backends** — which generation model families run on which server is now
+> configurable via the **Compute Backend Inventory** (`src/backend/generation/compute_backends.py`
+> + `compute_backends.json`), editable in the Admin panel → "Compute". Sections below document the
+> known servers (ai-kvm2 default, Windows-PC, RunPod) that the inventory currently defines.
 
 ---
 

@@ -17,7 +17,7 @@ permissions:
 jobs:
   ci:
     name: Run CI checks
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     outputs:
       ci_passed: ${{ steps.result.outputs.passed }}
     steps:

@@ -16,7 +16,7 @@ permissions:
 jobs:
   security:
     name: Security Scan
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - uses: actions/checkout@v6
 

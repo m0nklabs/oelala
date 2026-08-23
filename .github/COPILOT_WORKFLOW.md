@@ -104,7 +104,7 @@ After **2 failed CI fix attempts** within 2 hours:
 
 ## Self-Hosted Runner
 
-All workflows run on: `[self-hosted, Linux, ci]`
+All workflows run on: `[self-hosted, Linux]` (GPU jobs on `[self-hosted, Linux, gpu]`)
 
 Runner: `oelala-gpu`
 - Python 3.11+ pre-installed

@@ -8,7 +8,7 @@ on:
 jobs:
   check-changelog:
     name: Check changelog fragment exists
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
 
     steps:
       - name: Checkout

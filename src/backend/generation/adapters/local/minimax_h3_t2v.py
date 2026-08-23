@@ -109,11 +109,13 @@ class MiniMaxH3LocalT2VAdapter(GenerationAdapter):
         if self._get_comfyui is None:
             raise RuntimeError("ComfyUI client not available")
         client = self._get_comfyui()
+        if client is None:
+            raise RuntimeError("No enabled local ComfyUI backend for minimax_h3")
 
         if not client.is_available():
             raise RuntimeError(
-                "Windows ComfyUI server not reachable — is COMFYUI_WINDOWS_HOST "
-                "set and ComfyUI running on that machine?"
+                f"ComfyUI backend at {client.host}:{client.port} is not reachable — "
+                "is the configured compute backend running on that machine?"
             )
 
         workflow = self.build_workflow(req)
