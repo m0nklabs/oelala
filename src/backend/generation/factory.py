@@ -144,28 +144,26 @@ def create_registry(
         _register(Wan22LocalT2VQ6Adapter, comfyui_client_fn=comfyui_client_fn)
 
         # ── Local MiniMax-H3 (Windows PC ComfyUI) ──────────────
+        # Resolved through the Compute Backend Inventory instead of a hardcoded
+        # client: any enabled 'comfyui' backend that runs minimax_h3 will be
+        # used (currently the Windows-PC server).
         from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
         from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
-        from comfyui_client import get_windows_comfyui_client
+        from .compute_backends import client_fn_for_model
 
+        h3_client_fn = client_fn_for_model("minimax_h3")
         try:
-            _windows_client = get_windows_comfyui_client()
+            _h3_client = h3_client_fn() if h3_client_fn else None
         except Exception as exc:
-            logger.warning(f"⚠️ Windows ComfyUI client init failed: {exc}")
-            _windows_client = None
+            logger.warning(f"⚠️ MiniMax-H3 backend client init failed: {exc}")
+            _h3_client = None
 
-        if _windows_client is not None:
-            _register(
-                MiniMaxH3LocalT2VAdapter,
-                comfyui_client_fn=get_windows_comfyui_client,
-            )
-            _register(
-                MiniMaxH3LocalI2VAdapter,
-                comfyui_client_fn=get_windows_comfyui_client,
-            )
+        if _h3_client is not None:
+            _register(MiniMaxH3LocalT2VAdapter, comfyui_client_fn=h3_client_fn)
+            _register(MiniMaxH3LocalI2VAdapter, comfyui_client_fn=h3_client_fn)
         else:
             logger.info(
-                "🪟 No Windows ComfyUI configured — skipping local MiniMax-H3 adapters"
+                "🪟 No enabled ComfyUI backend for minimax_h3 — skipping local MiniMax-H3 adapters"
             )
 
         # ── Utility adapters ───────────────────────────────────

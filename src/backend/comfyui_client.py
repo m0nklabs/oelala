@@ -5900,3 +5900,58 @@ def get_windows_comfyui_client() -> Optional[ComfyUIClient]:
     _windows_comfyui_client = ComfyUIClient(host=host, port=port)
     logger.info(f"🪟 Windows ComfyUI client ready: {host}:{port}")
     return _windows_comfyui_client
+
+
+# ── Generic per-backend ComfyUI clients ─────────────────────────────
+# The Compute Backend Inventory (generation/compute_backends.py) drives which
+# server an adapter targets. get_comfyui_client_for_backend() returns a
+# (cached) ComfyUIClient for any configured 'comfyui' backend so adding a new
+# server is purely a config change.
+_backend_clients: dict = {}
+
+
+def _parse_base_url(base_url: str):
+    """Split 'http://host:port' -> (host, port). Defaults to localhost:8188."""
+    host, port = "localhost", 8188
+    clean = (base_url or "").strip()
+    if clean:
+        if "://" in clean:
+            clean = clean.split("://", 1)[1]
+        host = clean.split("/")[0].split(":")[0]
+        if ":" in clean.split("/")[0]:
+            try:
+                port = int(clean.split("/")[0].split(":")[1])
+            except (ValueError, IndexError):
+                port = 8188
+    return host, port
+
+
+def get_comfyui_client_for_backend(backend) -> Optional[ComfyUIClient]:
+    """Get or create a ComfyUIClient for a ComputeBackend.
+
+    Accepts a ComputeBackend object (generation.compute_backends) or a plain
+    dict with keys id/base_url/type. Returns None for runpod backends or when
+    no base_url is configured.
+    """
+    if backend is None:
+        return None
+    if isinstance(backend, dict):
+        backend_id = backend.get("id", "")
+        base_url = backend.get("base_url", "")
+        btype = backend.get("type", "comfyui")
+    else:
+        backend_id = backend.id
+        base_url = backend.base_url
+        btype = backend.type
+
+    if btype == "runpod" or not base_url:
+        return None
+
+    if backend_id in _backend_clients:
+        return _backend_clients[backend_id]
+
+    host, port = _parse_base_url(base_url)
+    client = ComfyUIClient(host=host, port=port)
+    _backend_clients[backend_id] = client
+    logger.info(f"⚙️ ComfyUI client ready for backend '{backend_id}': {host}:{port}")
+    return client

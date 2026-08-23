@@ -2976,16 +2976,27 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
     if cached is not None:
         return cached
 
-    # MiniMax-H3 local jobs run on the Windows-PC ComfyUI (get_windows_comfyui_client),
-    # not on the ai-kvm2 localhost server. Pick the right client so we poll + fetch
-    # output from the server that actually ran the job.
+    # Resolve the ComfyUI client that actually ran the job. Prefer the
+    # backend_id attached at dispatch (config-driven via the compute backend
+    # inventory, e.g. Windows-PC for MiniMax-H3), falling back to the legacy
+    # adapter-name check.
     adapter_name = job_info.get("adapter_name", "")
+    backend_id = job_info.get("backend_id")
+    comfyui = None
+    if backend_id:
+        try:
+            from comfyui_client import get_comfyui_client_for_backend as _gcfb
+            from src.backend.generation.compute_backends import get_backend
+            _backend = get_backend(backend_id)
+            if _backend is not None:
+                comfyui = _gcfb(_backend)
+        except Exception:
+            comfyui = None
     is_windows_h3 = adapter_name in (
         "minimax-h3-local-t2v",
         "minimax-h3-local-i2v",
     )
-    comfyui = None
-    if is_windows_h3 and get_windows_comfyui_client is not None:
+    if comfyui is None and is_windows_h3 and get_windows_comfyui_client is not None:
         comfyui = get_windows_comfyui_client()
     if comfyui is None:
         comfyui = get_comfyui_client()
@@ -11394,6 +11405,120 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
             detail=f"Job '{job_id}' not found, not failed, or missing config",
         )
     return job
+
+
+# =============================================================================
+# Compute Backend Inventory — admin CRUD
+# =============================================================================
+# Configure which servers/models can be used for generation (modular compute).
+# Reads/writes src/backend/generation/compute_backends.json.
+
+from pydantic import BaseModel as _BaseModel
+
+
+class ComputeBackendPayload(_BaseModel):
+    """Mutable fields for a compute backend (admin-editable subset)."""
+
+    id: str
+    name: str
+    type: str = "comfyui"
+    base_url: str = ""
+    enabled: bool = True
+    model_families: list = []
+    auth_token: str = ""
+    notes: str = ""
+
+
+@app.get("/api/admin/backends")
+async def admin_list_backends(user: User = Depends(get_current_user)):
+    """List all compute backends (name, url, type, enabled, model_families)."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import list_backends
+    return {"backends": [b.model_dump(mode="json") for b in list_backends()]}
+
+
+@app.post("/api/admin/backends")
+async def admin_create_backend(
+    payload: ComputeBackendPayload, user: User = Depends(get_current_user)
+):
+    """Create a new compute backend."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import (
+        ComputeBackend,
+        get_backend,
+        list_backends,
+        save_backends,
+    )
+    if get_backend(payload.id):
+        raise HTTPException(status_code=409, detail=f"backend '{payload.id}' exists")
+    backend = ComputeBackend(
+        id=payload.id,
+        name=payload.name,
+        type=payload.type,
+        base_url=payload.base_url,
+        enabled=payload.enabled,
+        model_families=list(payload.model_families),
+        auth_token=payload.auth_token or None,
+        notes=payload.notes,
+    )
+    backends = list_backends() + [backend]
+    save_backends(backends)
+    return backend.model_dump(mode="json")
+
+
+@app.put("/api/admin/backends/{backend_id}")
+async def admin_update_backend(
+    backend_id: str, payload: ComputeBackendPayload, user: User = Depends(get_current_user)
+):
+    """Update an existing compute backend."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import (
+        ComputeBackend,
+        get_backend,
+        list_backends,
+        save_backends,
+    )
+    if not get_backend(backend_id):
+        raise HTTPException(status_code=404, detail=f"backend '{backend_id}' not found")
+    if payload.id != backend_id:
+        raise HTTPException(status_code=400, detail="id cannot be changed")
+    backend = ComputeBackend(
+        id=payload.id,
+        name=payload.name,
+        type=payload.type,
+        base_url=payload.base_url,
+        enabled=payload.enabled,
+        model_families=list(payload.model_families),
+        auth_token=payload.auth_token or None,
+        notes=payload.notes,
+    )
+    backends = [
+        backend if b.id == backend_id else b for b in list_backends()
+    ]
+    save_backends(backends)
+    return backend.model_dump(mode="json")
+
+
+@app.delete("/api/admin/backends/{backend_id}")
+async def admin_delete_backend(
+    backend_id: str, user: User = Depends(get_current_user)
+):
+    """Delete a compute backend."""
+    if not await check_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    from src.backend.generation.compute_backends import (
+        get_backend,
+        list_backends,
+        save_backends,
+    )
+    if not get_backend(backend_id):
+        raise HTTPException(status_code=404, detail=f"backend '{backend_id}' not found")
+    backends = [b for b in list_backends() if b.id != backend_id]
+    save_backends(backends)
+    return {"deleted": backend_id}
 
 
 if __name__ == "__main__":

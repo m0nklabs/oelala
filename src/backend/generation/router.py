@@ -185,6 +185,9 @@ class GenerationRouter:
                 "sampler": req.sampler,
                 "scheduler": req.scheduler,
                 "adapter_name": adapter.name,
+                "backend_id": getattr(
+                    getattr(adapter, "_get_comfyui", None), "backend_id", None
+                ),
                 "source": "v2",
             }
             client.register_job(
