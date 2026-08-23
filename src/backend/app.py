@@ -11441,9 +11441,7 @@ class ComputeBackendPayload(_BaseModel):
     name: str
     type: _Literal["comfyui", "runpod"] = "comfyui"
     # Only http(s) URLs are valid for a ComfyUI backend; runpod backends leave it empty.
-    base_url: _Annotated[
-        str, _StringConstraints(pattern=r"^(|https?://.*)$")
-    ] = ""
+    base_url: _Annotated[str, _StringConstraints(pattern=r"^(|https?://.*)$")] = ""
     enabled: bool = True
     model_families: _List[str] = _Field(default_factory=list)
     notes: str = ""
