@@ -2992,6 +2992,15 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
             if _backend is not None:
                 comfyui = _gcfb(_backend)
         except Exception:
+            # Keep good diagnostics: if resolving the configured backend fails
+            # (bad inventory entry, import error, ...), log it with the
+            # backend_id before falling back so polling/downloads never silently
+            # hit the wrong ComfyUI server without breadcrumbs.
+            logger.warning(
+                f"⚠️ Failed to resolve ComfyUI client for backend_id={backend_id}; "
+                "falling back",
+                exc_info=True,
+            )
             comfyui = None
     is_windows_h3 = adapter_name in (
         "minimax-h3-local-t2v",

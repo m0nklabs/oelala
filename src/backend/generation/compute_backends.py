@@ -27,7 +27,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,7 +44,7 @@ class ComputeBackend(BaseModel):
 
     id: str
     name: str
-    type: str = Field(description="'comfyui' or 'runpod'")
+    type: Literal["comfyui", "runpod"] = "comfyui"
     base_url: str = ""
     enabled: bool = True
     model_families: List[str] = Field(default_factory=list)
@@ -114,8 +114,19 @@ def load_backends(force: bool = False) -> List[ComputeBackend]:
         with open(_json_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         raw = data.get("backends", [])
-        _backends = [ComputeBackend(**b) for b in raw]
-        logger.info(f"🗄️ Loaded {len(_backends)} compute backends from {_json_path}")
+        _backends = []
+        for b in raw:
+            try:
+                _backends.append(ComputeBackend(**b))
+            except Exception as exc:
+                # Skip a single bad entry instead of dropping the whole
+                # inventory (an invalid type/base_url must not reset everything).
+                logger.warning(f"⚠️ Skipping invalid compute backend entry: {exc}")
+        if not _backends:
+            logger.warning("⚠️ No valid compute backends in inventory; using built-in defaults")
+            _backends = _default_backends()
+        else:
+            logger.info(f"🗄️ Loaded {len(_backends)} compute backends from {_json_path}")
     except Exception as exc:
         logger.warning(
             f"⚠️ Could not load compute backends from {_json_path} ({exc}); "
@@ -133,6 +144,9 @@ def save_backends(backends: List[ComputeBackend]) -> None:
         "backends": [b.model_dump(mode="json") for b in backends],
     }
     tmp = _json_path.with_suffix(".json.tmp")
+    # Ensure the target directory exists (e.g. a fresh COMPUTE_BACKENDS_JSON
+    # path in a containerized deployment) before writing the temp file.
+    _json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2)
     tmp.replace(_json_path)

@@ -154,3 +154,47 @@ def test_client_fn_for_utility_exposes_model_family():
     client = fn()
     assert fn.backend_id == "ai-kvm2-comfyui"
     assert client is not None
+
+
+def test_skips_invalid_backend_type_keeps_others(tmp_path):
+    # A malformed entry (unknown 'type') is skipped with the rest preserved,
+    # instead of resetting the whole inventory to built-in defaults.
+    fp = tmp_path / "backends.json"
+    fp.write_text(
+        json.dumps({
+            "backends": [
+                {"id": "good", "name": "Good", "type": "comfyui",
+                 "base_url": "http://localhost:8188", "enabled": True,
+                 "model_families": ["sdxl"]},
+                {"id": "bad", "name": "Bad", "type": "bogus",
+                 "base_url": "http://localhost:9999", "enabled": True,
+                 "model_families": ["sdxl"]},
+            ]
+        })
+    )
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(cb, "_json_path", fp)
+    cb._loaded = False
+    backends = cb.load_backends(force=True)
+    ids = [b.id for b in backends]
+    assert "good" in ids
+    assert "bad" not in ids
+    monkeypatch.undo()
+
+
+def test_get_comfyui_client_for_backend_refreshes_on_base_url_change(monkeypatch):
+    # Fix: client cache is keyed by (backend_id, base_url), so editing a
+    # backend's base_url yields a fresh client on the next dispatch instead of
+    # returning the stale one.
+    from comfyui_client import get_comfyui_client_for_backend
+
+    b = cb.ComputeBackend(
+        id="test-backend", name="Test", type="comfyui",
+        base_url="http://192.0.2.1:8188", enabled=True, model_families=[],
+    )
+    c1 = get_comfyui_client_for_backend(b)
+    b.base_url = "http://192.0.2.2:8188"
+    c2 = get_comfyui_client_for_backend(b)
+    assert c1.base_url == "http://192.0.2.1:8188"
+    assert c2.base_url == "http://192.0.2.2:8188"
+    assert c1 is not c2

@@ -5933,11 +5933,14 @@ def get_comfyui_client_for_backend(backend) -> Optional[ComfyUIClient]:
     if btype == "runpod" or not base_url:
         return None
 
-    if backend_id in _backend_clients:
-        return _backend_clients[backend_id]
+    # Cache by (backend_id, base_url) so an admin edit to a backend's base_url
+    # takes effect on the next dispatch instead of returning the stale client.
+    cache_key = (backend_id, base_url)
+    if cache_key in _backend_clients:
+        return _backend_clients[cache_key]
 
     host, port = _parse_base_url(base_url)
     client = ComfyUIClient(host=host, port=port)
-    _backend_clients[backend_id] = client
+    _backend_clients[cache_key] = client
     logger.info(f"⚙️ ComfyUI client ready for backend '{backend_id}': {host}:{port}")
     return client
