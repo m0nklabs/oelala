@@ -42,9 +42,6 @@ echo "[5/6] Downloading WAN Text Encoders..."
 wget -c "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
     -O "$MODELS_DIR/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 
-wget -c "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors" \
-    -O "$MODELS_DIR/text_encoders/qwen_3_4b.safetensors"
-
 # Flux Dev Checkpoint
 echo "[6/6] Downloading Flux Dev FP8..."
 wget -c "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors" \

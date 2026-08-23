@@ -51,9 +51,6 @@ echo [5/6] Downloading WAN Text Encoders...
 curl -L -o "%MODELS_DIR%\text_encoders\umt5_xxl_fp8_e4m3fn_scaled.safetensors" ^
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 
-curl -L -o "%MODELS_DIR%\text_encoders\qwen_3_4b.safetensors" ^
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors"
-
 REM -----------------------------------------
 REM Flux Dev Checkpoint
 REM -----------------------------------------

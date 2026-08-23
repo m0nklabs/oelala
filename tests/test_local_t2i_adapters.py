@@ -1,5 +1,5 @@
 """
-Tests for Phase 4 local T2I adapters: SDXL, Flux, SD 1.5, Wan2.2.
+Tests for local T2I adapters: SDXL-Pony and Flux.
 
 Tests cover:
 - Adapter metadata (name, model_family, ops, types, compute, LoRA format)
@@ -27,8 +27,8 @@ from generation.types import (
 )
 from generation.adapters.local.t2i_sdxl import SDXLLocalT2IAdapter
 from generation.adapters.local.t2i_flux import FluxLocalT2IAdapter
-from generation.adapters.local.t2i_sd15 import SD15LocalT2IAdapter
-from generation.adapters.local.t2i_wan22 import Wan22LocalT2IAdapter
+from generation.adapters.local.t2i_krea2 import Krea2LocalT2IAdapter
+from generation.adapters.local.t2i_flux2 import Flux2LocalT2IAdapter
 
 
 # ── SDXL ────────────────────────────────────────────────────────────
@@ -190,50 +190,51 @@ class TestFluxLocalT2I:
         assert result.adapter_name == "flux-local-t2i"
 
 
-# ── SD 1.5 ──────────────────────────────────────────────────────────
+# ── Krea 2 ─────────────────────────────────────────────────────────
 
 
-class TestSD15LocalT2I:
+class TestKrea2LocalT2I:
     def test_metadata(self):
-        a = SD15LocalT2IAdapter()
-        assert a.name == "sd15-local-t2i"
-        assert a.model_family == "sd1.5"
-        assert a.lora_format == LoraFormat.SINGLE_STAGE
+        a = Krea2LocalT2IAdapter()
+        assert a.name == "krea2-local-t2i"
+        assert a.model_family == "krea2"
+        assert a.compute == ComputeTarget.LOCAL
 
     def test_constraints(self):
-        c = SD15LocalT2IAdapter().constraints()
-        assert c.max_loras == 6
-        assert c.max_width == 1024
-        assert c.default_steps == 25
-        assert "dpmpp_sde" in c.supported_samplers
+        c = Krea2LocalT2IAdapter().constraints()
+        assert c.default_steps == 8
+        assert c.default_cfg == 1.0
+        assert c.supports_negative_prompt is False
+        assert "euler" in c.supported_samplers
 
     def test_cost(self):
-        a = SD15LocalT2IAdapter()
+        a = Krea2LocalT2IAdapter()
         req = GenerationRequest(
             operation=Operation.GENERATE, target_type=MediaType.IMAGE, prompt="t"
         )
         assert a.cost(req) == 1
 
-    def test_build_workflow_with_6_loras(self):
-        a = SD15LocalT2IAdapter()
-        loras = [LoraStackItem(name=f"lora_{i}.safetensors", strength=0.5) for i in range(6)]
+    def test_build_workflow(self):
+        a = Krea2LocalT2IAdapter()
         req = GenerationRequest(
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
-            prompt="test",
-            loras=loras,
+            prompt="a cat",
         )
         wf = a.build_workflow(req)
-        # All 6 slots should be filled
-        for i in range(1, 7):
-            assert wf["2"]["inputs"][f"lora_{i}"]["on"] is True
+        # CLIPLoader type must be krea2, UNETLoader krea2_turbo_int8_convrot
+        assert wf["2"]["inputs"]["type"] == "krea2"
+        assert wf["2"]["inputs"]["clip_name"] == "qwen3vl_4b_bf16.safetensors"
+        assert wf["1"]["inputs"]["unet_name"] == "krea2_turbo_int8_convrot.safetensors"
+        assert wf["5"]["inputs"]["cfg"] == 1.0
+        assert wf["5"]["inputs"]["steps"] == 8
 
     @pytest.mark.asyncio
     async def test_execute_success(self):
         mock = MagicMock()
-        mock.queue_prompt.return_value = "sd15-prompt-id"
+        mock.queue_prompt.return_value = "krea2-prompt-id"
 
-        a = SD15LocalT2IAdapter(comfyui_client_fn=lambda: mock)
+        a = Krea2LocalT2IAdapter(comfyui_client_fn=lambda: mock)
         req = GenerationRequest(
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
@@ -241,49 +242,79 @@ class TestSD15LocalT2I:
         )
         result = await a.execute(req)
         assert result.status == "queued_local"
-        assert result.adapter_name == "sd15-local-t2i"
+        assert result.adapter_name == "krea2-local-t2i"
 
 
-# ── Wan2.2 T2I ──────────────────────────────────────────────────────
+# ── Registry integration ────────────────────────────────────────────
 
 
-class TestWan22LocalT2I:
+class TestFlux2LocalT2I:
     def test_metadata(self):
-        a = Wan22LocalT2IAdapter()
-        assert a.name == "wan22-local-t2i"
-        assert a.model_family == "wan2.2"
-        assert a.lora_format == LoraFormat.DUAL_STAGE
+        a = Flux2LocalT2IAdapter()
+        assert a.name == "flux2-local-t2i"
+        assert a.model_family == "flux2"
+        assert a.compute == ComputeTarget.LOCAL
 
     def test_constraints(self):
-        c = Wan22LocalT2IAdapter().constraints()
-        assert c.default_steps == 8
-        assert c.max_width == 1024
+        c = Flux2LocalT2IAdapter().constraints()
+        assert c.default_steps == 20
+        assert c.default_cfg == 4.0
+        assert c.supports_negative_prompt is False
+        assert "euler" in c.supported_samplers
 
     def test_cost(self):
-        a = Wan22LocalT2IAdapter()
+        a = Flux2LocalT2IAdapter()
         req = GenerationRequest(
             operation=Operation.GENERATE, target_type=MediaType.IMAGE, prompt="t"
         )
-        assert a.cost(req) == 2
+        assert a.cost(req) == 3
+        req_hd = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            prompt="t",
+            width=1536,
+            height=1024,
+        )
+        assert a.cost(req_hd) == 4
+
+    def test_build_workflow(self):
+        a = Flux2LocalT2IAdapter()
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            prompt="a cat",
+        )
+        wf = a.build_workflow(req)
+        # UnetLoaderGGUFDisTorch2MultiGPU with flux2 GGUF + multi-GPU alloc
+        assert wf["1"]["class_type"] == "UnetLoaderGGUFDisTorch2MultiGPU"
+        assert wf["1"]["inputs"]["unet_name"] == "flux2-dev-Q4_K_M.gguf"
+        assert "expert_mode_allocations" in wf["1"]["inputs"]
+        assert "cuda:1" in wf["1"]["inputs"]["expert_mode_allocations"]
+        # CLIPLoader type flux2 with Mistral3 encoder, device cpu
+        assert wf["2"]["inputs"]["type"] == "flux2"
+        assert wf["2"]["inputs"]["clip_name"] == "mistral_3_small_flux2_fp8.safetensors"
+        assert wf["2"]["inputs"]["device"] == "cpu"
+        # FLUX.2-specific nodes
+        assert wf["4"]["class_type"] == "EmptyFlux2LatentImage"
+        assert wf["6"]["class_type"] == "Flux2Scheduler"
+        assert wf["11"]["class_type"] == "FluxGuidance"
+        # VAE is flux2-vae
+        assert wf["5"]["inputs"]["vae_name"] == "flux2-vae.safetensors"
 
     @pytest.mark.asyncio
     async def test_execute_success(self):
         mock = MagicMock()
-        mock.generate_wan22_t2i.return_value = "/tmp/oelala_generated/wan22_t2i.png"
+        mock.queue_prompt.return_value = "flux2-prompt-id"
 
-        a = Wan22LocalT2IAdapter(comfyui_client_fn=lambda: mock)
+        a = Flux2LocalT2IAdapter(comfyui_client_fn=lambda: mock)
         req = GenerationRequest(
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
             prompt="test",
         )
         result = await a.execute(req)
-        assert result.status == "completed"
-        assert result.adapter_name == "wan22-local-t2i"
-        mock.generate_wan22_t2i.assert_called_once()
-
-
-# ── Registry integration ────────────────────────────────────────────
+        assert result.status == "queued_local"
+        assert result.adapter_name == "flux2-local-t2i"
 
 
 class TestLocalT2IRegistry:
@@ -293,8 +324,8 @@ class TestLocalT2IRegistry:
         registry = AdapterRegistry()
         registry.register(SDXLLocalT2IAdapter())
         registry.register(FluxLocalT2IAdapter())
-        registry.register(SD15LocalT2IAdapter())
-        registry.register(Wan22LocalT2IAdapter())
+        registry.register(Krea2LocalT2IAdapter())
+        registry.register(Flux2LocalT2IAdapter())
 
         assert len(registry) == 4
 
@@ -304,8 +335,8 @@ class TestLocalT2IRegistry:
         registry = AdapterRegistry()
         registry.register(SDXLLocalT2IAdapter())
         registry.register(FluxLocalT2IAdapter())
-        registry.register(SD15LocalT2IAdapter())
-        registry.register(Wan22LocalT2IAdapter())
+        registry.register(Krea2LocalT2IAdapter())
+        registry.register(Flux2LocalT2IAdapter())
 
         results = registry.find(
             operation=Operation.GENERATE,

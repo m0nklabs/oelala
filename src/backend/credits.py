@@ -55,8 +55,8 @@ class GenerationType(str, Enum):
     SDXL_HD = "sdxl_hd"
     FLUX = "flux"
     FLUX_HD = "flux_hd"
-    SD15 = "sd15"
-    WAN22_T2I = "wan22_t2i"
+    KREA2 = "krea2"
+    KREA2_HD = "krea2_hd"
 
     # Videos
     WAN22_I2V_SHORT = "wan22_i2v_short"  # 3 sec 720p
@@ -79,8 +79,8 @@ CREDIT_COSTS: Dict[GenerationType, int] = {
     GenerationType.SDXL_HD: 2,
     GenerationType.FLUX: 2,
     GenerationType.FLUX_HD: 3,
-    GenerationType.SD15: 1,
-    GenerationType.WAN22_T2I: 2,
+    GenerationType.KREA2: 1,
+    GenerationType.KREA2_HD: 2,
     # Videos (expensive)
     GenerationType.WAN22_I2V_SHORT: 5,
     GenerationType.WAN22_I2V_MEDIUM: 8,
@@ -123,8 +123,6 @@ def calculate_credits(
         "generate_image": GenerationType.SDXL,
         "generate_sdxl": GenerationType.SDXL,
         "generate_flux": GenerationType.FLUX,
-        "generate_sd15": GenerationType.SD15,
-        "generate_wan22_t2i": GenerationType.WAN22_T2I,
         "generate": "wan22_i2v",  # Dynamic based on params
         "generate_wan22": "wan22_i2v",
         "generate_wan22_comfyui": "wan22_i2v",

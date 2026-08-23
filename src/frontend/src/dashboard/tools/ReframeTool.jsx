@@ -33,8 +33,8 @@ const POSITIONS = [
 ]
 
 const MODELS = [
-  { id: 'sdxl', label: 'SDXL (Quality)', file: 'CyberRealisticPony_v8.safetensors' },
-  { id: 'flux', label: 'Flux (Fast)', file: 'flux1-dev-bnb-nf4.safetensors' },
+  { id: 'sdxl', label: 'SDXL (Quality)', file: 'CyberRealistic_Pony_v14.1_FP16.safetensors' },
+  { id: 'flux', label: 'Flux (Fast)', file: 'flux1-dev-fp8.safetensors' },
 ]
 
 const REFRAME_DEFAULTS = {

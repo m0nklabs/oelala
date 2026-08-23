@@ -13,12 +13,7 @@ import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const CHECKPOINTS = [
   { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony' },
-  { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning' },
-  { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL' },
-  { value: 'Realistic_Vision_V5.1.safetensors', label: 'Realistic Vision V5.1' },
-  { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious (Anime)' },
   { value: 'ponyDiffusionV6XL_v6StartWithThisOne.safetensors', label: 'Pony Diffusion V6' },
-  { value: 'illustriousRealismBy_v10VAE.safetensors', label: 'Illustrious Realism' },
   { value: 'reapony_v90.safetensors', label: 'ReaPony V9' },
 ]
 

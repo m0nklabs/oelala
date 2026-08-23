@@ -17,8 +17,6 @@ class TestCreditIntegration:
         "/generate-wan22-comfyui",
         "/generate-wan22-async",
         "/generate-image",
-        "/generate-sd15",
-        "/generate-wan22-t2i",
         "/generate",  # I2V
         "/generate-text",  # T2V
         "/generate-pose",
@@ -29,7 +27,7 @@ class TestCreditIntegration:
 
     def test_all_endpoints_documented(self):
         """Verify all generation endpoints are listed"""
-        assert len(self.ENDPOINTS_WITH_CREDITS) == 13
+        assert len(self.ENDPOINTS_WITH_CREDITS) == 11
         assert "/generate-sdxl" in self.ENDPOINTS_WITH_CREDITS
         assert "/generate-flux" in self.ENDPOINTS_WITH_CREDITS
 

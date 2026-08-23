@@ -61,7 +61,7 @@ class InpaintAdapter(GenerationAdapter):
 
     def build_workflow(self, req: GenerationRequest) -> dict:
         """Build inpainting ComfyUI workflow."""
-        checkpoint = req.checkpoint or "dreamshaperXL_lightningDPMSDE.safetensors"
+        checkpoint = req.checkpoint or "CyberRealistic_Pony_v14.1_FP16.safetensors"
         image_name = req.input_images[0] if req.input_images else "input.png"
         mask_name = req.input_mask or "mask.png"
         feathering = req.feathering
@@ -165,6 +165,6 @@ class InpaintAdapter(GenerationAdapter):
             adapter_name=self.name,
             meta={
                 "checkpoint": req.checkpoint
-                or "dreamshaperXL_lightningDPMSDE.safetensors"
+                or "CyberRealistic_Pony_v14.1_FP16.safetensors"
             },
         )

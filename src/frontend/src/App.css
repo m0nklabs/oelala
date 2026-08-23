@@ -1,25 +1,57 @@
 :root {
-  /* Grok-inspired Palette */
-  --bg-root: #0a0a0a;
-  --bg-sidebar: #121212;
-  --bg-panel: #1a1a1a;
-  --bg-input: #262626;
+  /* ── FLIP unified tokens (adopt/oelala.css) ─────────────────────── */
+  --bg-root: #0a0e14;
+  --bg-soft: #0d1219;
+  --panel: #121a24;
+  --panel-2: #0f151d;
+  --panel-soft: rgba(24, 34, 46, 0.68);
+  --elevated: #18212d;
+  --line: rgba(148, 163, 184, 0.14);
+  --line-strong: rgba(148, 163, 184, 0.26);
+  --line-soft: rgba(148, 163, 184, 0.07);
+  --text: #e8eef5;
+  --text-2: #c3ced9;
+  --muted: #8ea2b8;
+  --faint: #5c6a78;
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  --info: #22d3ee;
+  --info-soft: rgba(34, 211, 238, 0.14);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --violet: #a78bfa;
+  --violet-soft: rgba(167, 139, 250, 0.14);
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --font-sans: "Space Grotesk", "Inter", -apple-system, "Segoe UI",
+               system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", "Cascadia Code",
+               ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --text-primary: #ffffff;
-  --text-secondary: #a3a3a3;
-  --text-muted: #525252;
-
-  --accent-color: #3b82f6; /* Blue accent */
-  --accent-hover: #2563eb;
-
-  --border-color: #333333;
-  --border-light: #404040;
-
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* ── oelala-aliassen (oude Grok-namen → unified) ───────────────── */
+  --bg-sidebar: var(--bg-root);
+  --bg-panel: var(--panel);
+  --bg-input: var(--elevated);
+  --bg-secondary: var(--panel-2);
+  --bg-tertiary: var(--elevated);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-muted: var(--faint);
+  --accent-color: var(--accent);
+  --accent-hover: var(--accent-strong);
+  --border-color: var(--line-strong);
+  --border-light: var(--line);
+  --error-color: var(--danger);
+  --success-color: var(--success);
+  --radius-md: var(--radius);
 }
 
 * {

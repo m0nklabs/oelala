@@ -30,9 +30,7 @@ export const DEFAULT_NSFW_LLM = 'GLM-4.7-Flash-Uncensored-Balanced'
 export const VISION_MODELS = [
   { id: 'Huihui-gemma-4-26B-A4B-it-abliterated', label: 'Gemma 4 26B MoE', description: 'Best quality · abliterated · fast' },
   { id: 'gemma-4-31B-it-uncensored-heretic', label: 'Gemma 4 31B Heretic', description: 'Full 31B · uncensored · slower' },
-  { id: 'Qwen3-VL-32B-Gemini-Heretic-Uncensored-Thinking', label: 'Qwen3-VL 32B Heretic', description: 'Best quality · uncensored · slow' },
   { id: 'Gemma3-27B-it-vl-GLM-4.7-Uncensored-Heretic-Deep-Reasoning', label: 'Gemma3 27B VL Heretic', description: 'Vision + deep reasoning · uncensored' },
-  { id: 'Qwen3-VL-30B-A3B-Thinking', label: 'Qwen3-VL 30B MoE', description: 'MoE · thinking mode · fast' },
   { id: 'Step3-VL-10B', label: 'Step3-VL 10B', description: 'Fast · good quality' },
 ]
 
