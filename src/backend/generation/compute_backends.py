@@ -60,9 +60,7 @@ class ComputeBackend(BaseModel):
 _BACKENDS_FILE = Path(__file__).with_name("compute_backends.json")
 
 # In-memory source of truth, loaded lazily.
-_json_path: Path = Path(
-    os.getenv("COMPUTE_BACKENDS_JSON", str(_BACKENDS_FILE))
-)
+_json_path: Path = Path(os.getenv("COMPUTE_BACKENDS_JSON", str(_BACKENDS_FILE)))
 _backends: List[ComputeBackend] = []
 _loaded = False
 
@@ -167,11 +165,7 @@ def resolve_backend_for_model(model_family: str) -> Optional[ComputeBackend]:
     over runpod when both can run a family (local-first), matching the router's
     existing local-over-cloud preference.
     """
-    candidates = [
-        b
-        for b in enabled_backends()
-        if model_family in b.model_families
-    ]
+    candidates = [b for b in enabled_backends() if model_family in b.model_families]
     if not candidates:
         return None
     # Local-first: comfyui ahead of runpod, then by original order.

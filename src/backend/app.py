@@ -2987,6 +2987,7 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
         try:
             from comfyui_client import get_comfyui_client_for_backend as _gcfb
             from src.backend.generation.compute_backends import get_backend
+
             _backend = get_backend(backend_id)
             if _backend is not None:
                 comfyui = _gcfb(_backend)
@@ -3034,9 +3035,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
             and node_output.get("images")
         ):
             for img in node_output["images"]:
-                if img.get("type") == "output" and str(img.get("filename", "")).lower().endswith(
-                    (".mp4", ".webm", ".mov", ".mkv")
-                ):
+                if img.get("type") == "output" and str(
+                    img.get("filename", "")
+                ).lower().endswith((".mp4", ".webm", ".mov", ".mkv")):
                     output_video = img
                     break
         if "images" in node_output and output_image is None:
@@ -3070,7 +3071,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                 "type": output_video.get("type", "output"),
             }
             try:
-                dl_resp = requests.get(f"{comfyui_base}/view", params=dl_params, timeout=15)
+                dl_resp = requests.get(
+                    f"{comfyui_base}/view", params=dl_params, timeout=15
+                )
                 if dl_resp.status_code == 200:
                     out_dir = Path(COMFYUI_OUTPUT_DIR)
                     out_dir.mkdir(parents=True, exist_ok=True)
@@ -3083,7 +3086,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                     )
                     output_video = None
             except Exception as e:
-                logger.error(f"❌ Failed to download {output_filename} from {comfyui_base}: {e}")
+                logger.error(
+                    f"❌ Failed to download {output_filename} from {comfyui_base}: {e}"
+                )
                 output_video = None
 
     storage_path = None
@@ -4188,7 +4193,6 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                                 windows_pending.append(job_info)
             except Exception as e:
                 logger.warning(f"⚠️ Failed to get Windows ComfyUI queue: {e}")
-
 
         # Include face LoRA training jobs in the queue
         training = []
@@ -11435,6 +11439,7 @@ async def admin_list_backends(user: User = Depends(get_current_user)):
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
     from src.backend.generation.compute_backends import list_backends
+
     return {"backends": [b.model_dump(mode="json") for b in list_backends()]}
 
 
@@ -11451,6 +11456,7 @@ async def admin_create_backend(
         list_backends,
         save_backends,
     )
+
     if get_backend(payload.id):
         raise HTTPException(status_code=409, detail=f"backend '{payload.id}' exists")
     backend = ComputeBackend(
@@ -11470,7 +11476,9 @@ async def admin_create_backend(
 
 @app.put("/api/admin/backends/{backend_id}")
 async def admin_update_backend(
-    backend_id: str, payload: ComputeBackendPayload, user: User = Depends(get_current_user)
+    backend_id: str,
+    payload: ComputeBackendPayload,
+    user: User = Depends(get_current_user),
 ):
     """Update an existing compute backend."""
     if not await check_admin(user):
@@ -11481,6 +11489,7 @@ async def admin_update_backend(
         list_backends,
         save_backends,
     )
+
     if not get_backend(backend_id):
         raise HTTPException(status_code=404, detail=f"backend '{backend_id}' not found")
     if payload.id != backend_id:
@@ -11495,17 +11504,13 @@ async def admin_update_backend(
         auth_token=payload.auth_token or None,
         notes=payload.notes,
     )
-    backends = [
-        backend if b.id == backend_id else b for b in list_backends()
-    ]
+    backends = [backend if b.id == backend_id else b for b in list_backends()]
     save_backends(backends)
     return backend.model_dump(mode="json")
 
 
 @app.delete("/api/admin/backends/{backend_id}")
-async def admin_delete_backend(
-    backend_id: str, user: User = Depends(get_current_user)
-):
+async def admin_delete_backend(backend_id: str, user: User = Depends(get_current_user)):
     """Delete a compute backend."""
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -11514,6 +11519,7 @@ async def admin_delete_backend(
         list_backends,
         save_backends,
     )
+
     if not get_backend(backend_id):
         raise HTTPException(status_code=404, detail=f"backend '{backend_id}' not found")
     backends = [b for b in list_backends() if b.id != backend_id]
