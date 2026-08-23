@@ -11432,7 +11432,11 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
 
 from pydantic import BaseModel as _BaseModel
 from typing import List as _List, Literal as _Literal
-from pydantic import Field as _Field, StringConstraints as _StringConstraints, model_validator as _model_validator
+from pydantic import (
+    Field as _Field,
+    StringConstraints as _StringConstraints,
+    model_validator as _model_validator,
+)
 from typing import Annotated as _Annotated
 
 
