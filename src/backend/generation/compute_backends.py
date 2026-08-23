@@ -60,7 +60,11 @@ class ComputeBackend(BaseModel):
             # A comfyui backend must name a reachable HTTP server.
             if not self.base_url:
                 raise ValueError("base_url is required for a comfyui backend")
-            host = self.base_url.split("://", 1)[1].split("/")[0].split(":")[0] if "://" in self.base_url else self.base_url.split("/")[0].split(":")[0]
+            host = (
+                self.base_url.split("://", 1)[1].split("/")[0].split(":")[0]
+                if "://" in self.base_url
+                else self.base_url.split("/")[0].split(":")[0]
+            )
             if not host:
                 raise ValueError("base_url must include a host for a comfyui backend")
         elif self.type == "runpod" and self.base_url:
