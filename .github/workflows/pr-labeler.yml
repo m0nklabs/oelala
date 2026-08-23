@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   label:
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - uses: actions/labeler@v6
         if: github.event_name == 'pull_request'

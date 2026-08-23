@@ -13,7 +13,7 @@ concurrency:
 jobs:
   auto-trigger:
     name: Trigger workflows for blocked Copilot PRs
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - name: Trigger workflows via dispatch (bypasses approval)
         env:
@@ -78,7 +78,7 @@ jobs:
 
   trigger-ci-feedback:
     name: Trigger CI Feedback for failed Copilot runs
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - name: Check for failed CI on Copilot branches
         env:

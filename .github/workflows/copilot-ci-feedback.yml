@@ -28,7 +28,7 @@ jobs:
       (github.event_name == 'workflow_dispatch') ||
       (github.event.workflow_run.conclusion == 'failure' &&
        startsWith(github.event.workflow_run.head_branch, 'copilot/'))
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - name: Get PR details
         id: pr

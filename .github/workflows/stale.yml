@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   stale:
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - uses: actions/stale@v10
         with:

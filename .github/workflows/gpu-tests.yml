@@ -34,7 +34,7 @@ on:
 jobs:
   gpu-tests:
     name: GPU Integration Tests
-    runs-on: [self-hosted, gpu, comfyui]
+    runs-on: [self-hosted, Linux, gpu]
     timeout-minutes: 30
 
     steps:

@@ -16,7 +16,7 @@ permissions:
 jobs:
   check-stuck-prs:
     name: Check for stuck Copilot PRs
-    runs-on: [self-hosted, Linux, ci]
+    runs-on: [self-hosted, Linux]
     steps:
       - name: Find stuck Copilot PRs
         env:
