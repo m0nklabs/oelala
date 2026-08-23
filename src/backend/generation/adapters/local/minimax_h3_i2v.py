@@ -124,7 +124,9 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
             raise RuntimeError("ComfyUI client not available")
         comfyui = self._get_comfyui()
         lora_configs = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else None
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
         )
         return comfyui.build_local_minimax_h3_i2v_workflow(
             image_name="input.png" if req.input_images else "",
@@ -183,7 +185,9 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         _upload_minimax_loras(client, req)
 
         lora_configs = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else None
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
         )
         workflow = client.build_local_minimax_h3_i2v_workflow(
             image_name=uploaded_name,

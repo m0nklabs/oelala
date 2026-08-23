@@ -111,7 +111,9 @@ class MiniMaxH3LocalT2VAdapter(GenerationAdapter):
             raise RuntimeError("ComfyUI client not available")
         comfyui = self._get_comfyui()
         lora_configs = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else None
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
         )
         return comfyui.build_local_minimax_h3_t2v_workflow(
             prompt=req.prompt,
