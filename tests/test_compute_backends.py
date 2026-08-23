@@ -35,7 +35,8 @@ def test_loads_inventory_from_json():
 
 
 def test_default_fallback_when_json_missing(monkeypatch):
-    monkeypatch.setattr(cb, "_json_path", "/nonexistent/path/backends.json")
+    from pathlib import Path
+    monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/path/backends.json"))
     cb._loaded = False
     backends = cb.load_backends(force=True)
     assert len(backends) == 3
