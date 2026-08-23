@@ -3023,9 +3023,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
             and node_output.get("images")
         ):
             for img in node_output["images"]:
-                if img.get("type") == "output" and str(img.get("filename", "")).lower().endswith(
-                    (".mp4", ".webm", ".mov", ".mkv")
-                ):
+                if img.get("type") == "output" and str(
+                    img.get("filename", "")
+                ).lower().endswith((".mp4", ".webm", ".mov", ".mkv")):
                     output_video = img
                     break
         if "images" in node_output and output_image is None:
@@ -3059,7 +3059,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                 "type": output_video.get("type", "output"),
             }
             try:
-                dl_resp = requests.get(f"{comfyui_base}/view", params=dl_params, timeout=15)
+                dl_resp = requests.get(
+                    f"{comfyui_base}/view", params=dl_params, timeout=15
+                )
                 if dl_resp.status_code == 200:
                     out_dir = Path(COMFYUI_OUTPUT_DIR)
                     out_dir.mkdir(parents=True, exist_ok=True)
@@ -3072,7 +3074,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                     )
                     output_video = None
             except Exception as e:
-                logger.error(f"❌ Failed to download {output_filename} from {comfyui_base}: {e}")
+                logger.error(
+                    f"❌ Failed to download {output_filename} from {comfyui_base}: {e}"
+                )
                 output_video = None
 
     storage_path = None
@@ -4177,7 +4181,6 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                                 windows_pending.append(job_info)
             except Exception as e:
                 logger.warning(f"⚠️ Failed to get Windows ComfyUI queue: {e}")
-
 
         # Include face LoRA training jobs in the queue
         training = []

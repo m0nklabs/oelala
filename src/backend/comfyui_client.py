@@ -5144,7 +5144,6 @@ class ComfyUIClient:
             return None
         return self.get_output_image(history, output_dir, prompt_id)
 
-
     def build_distorch2_workflow(
         self,
         image_name: str,
