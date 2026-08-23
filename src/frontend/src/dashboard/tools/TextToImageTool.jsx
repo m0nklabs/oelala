@@ -16,6 +16,13 @@ import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 // Models grouped by category
 const MODEL_GROUPS = {
+  krea2: {
+    label: '⚡ Krea 2',
+    desc: 'Fast, expressive',
+    models: [
+      { value: 'krea2_turbo_int8_convrot.safetensors', label: 'Krea 2 Turbo (INT8)', desc: '8 steps, CFG 1.0' },
+    ]
+  },
   flux: {
     label: '⚡ Flux',
     desc: 'Best quality',
@@ -23,47 +30,20 @@ const MODEL_GROUPS = {
       { value: 'flux1-dev-fp8', label: 'Flux.1 Dev (FP8)', desc: 'Highest quality, slower' },
     ]
   },
+  flux2: {
+    label: '🌌 Flux 2',
+    desc: 'Newest, multi-GPU',
+    models: [
+      { value: 'flux2-dev-Q4_K_M.gguf', label: 'Flux.2 Dev (GGUF Q4)', desc: '32B, multi-GPU, 20 steps' },
+    ]
+  },
   sdxl: {
-    label: '🎨 SDXL',
-    desc: 'Great balance',
+    label: '🎨 SDXL-Pony',
+    desc: 'NSFW-ecosysteem',
     models: [
       { value: 'CyberRealistic_Pony_v14.1_FP16.safetensors', label: 'CyberRealistic Pony', desc: 'Photorealistic + Pony tags' },
-      { value: 'dreamshaperXL_lightningDPMSDE.safetensors', label: 'Dreamshaper Lightning', desc: 'Fast, artistic' },
-      { value: 'illustriousRealismBy_v10VAE.safetensors', label: 'Illustrious Realism', desc: 'Detailed realistic' },
-      { value: 'juggernautXL_ragnarok.safetensors', label: 'Juggernaut XL', desc: 'All-rounder' },
-      { value: 'novaAnimeXL_ilV150.safetensors', label: 'Nova Anime XL', desc: 'Anime style' },
       { value: 'ponyDiffusionV6XL_v6StartWithThisOne.safetensors', label: 'Pony Diffusion V6', desc: 'Booru tags, NSFW' },
       { value: 'reapony_v90.safetensors', label: 'Reapony V9', desc: 'Realistic + Pony' },
-      { value: 'ultraRealisticByStable_v20FP16.safetensors', label: 'Ultra Realistic', desc: 'Hyperrealistic' },
-      { value: 'waiIllustriousSDXL_v160.safetensors', label: 'Wai Illustrious', desc: 'Anime + 2.5D' },
-    ]
-  },
-  sd15: {
-    label: '🚀 SD 1.5',
-    desc: 'Fast, low VRAM',
-    models: [
-      { value: 'Realistic_Vision_V5.1.safetensors', label: 'Realistic Vision V5.1', desc: 'Fast realistic' },
-    ]
-  },
-  wan22: {
-    label: '🎬 Wan2.2',
-    desc: 'Video model T2I',
-    models: [
-      { value: 'wan2.2-t2i', label: 'Wan2.2 T2I', desc: 'Multi-GPU video model' },
-    ]
-  },
-  ernie: {
-    label: '🖼️ ERNIE-Image',
-    desc: 'Baidu ERNIE',
-    models: [
-      { value: 'ernie-image', label: 'ERNIE-Image', desc: 'Flux2 latent, Ministral-3B' },
-    ]
-  },
-  diffusers: {
-    label: '🐍 Diffusers',
-    desc: 'Python pipeline',
-    models: [
-      { value: 'sd3.5-large-int8', label: 'SD3.5 Large (INT8)', desc: 'Latest SD3.5' },
     ]
   },
 }
@@ -284,10 +264,9 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
         const modelType = getModelType(model)
 
         let adapterHint = 'sdxl-local-t2i'
-        if (modelType === 'wan22') adapterHint = 'wan22-local-t2i'
-        else if (modelType === 'ernie') adapterHint = 'ernie-local-t2i'
-        else if (modelType === 'flux') adapterHint = 'flux-local-t2i'
-        else if (modelType === 'sd15') adapterHint = 'sd15-local-t2i'
+        if (modelType === 'flux') adapterHint = 'flux-local-t2i'
+        else if (modelType === 'krea2') adapterHint = 'krea2-local-t2i'
+        else if (modelType === 'flux2') adapterHint = 'flux2-local-t2i'
 
         if (DEBUG) console.debug('🎨 T2I V2 request:', { adapterHint, modelType, model })
 
@@ -462,8 +441,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
         <CameraPositionSelector value={cameraPosition} onChange={setCameraPosition} style={{ marginTop: '12px' }} />
       </div>
 
-      {/* Negative Prompt (for SDXL and SD1.5, not Flux) */}
-      {(getModelType(model) === 'sdxl' || getModelType(model) === 'sd15') && (
+      {/* Negative Prompt (for SDXL, not Flux) */}
+      {getModelType(model) === 'sdxl' && (
         <div className="grok-card">
           <div className="grok-card-header">
             <div className="grok-card-title">Negative Prompt</div>
@@ -554,8 +533,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
               </div>
             </div>
 
-            {/* Flux-specific settings */}
-            {getModelType(model) === 'flux' && (
+            {/* Flux-specific settings (Flux.1 + Flux.2 share the guidance-based model family) */}
+            {(getModelType(model) === 'flux' || getModelType(model) === 'flux2') && (
               <>
                 <div className="form-group" style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -607,48 +586,8 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
               </>
             )}
 
-            {/* Wan2.2 T2I settings */}
-            {getModelType(model) === 'wan22' && (
-              <>
-                <div className="form-group" style={{ marginTop: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Steps <InfoTooltip text="Denoising steps for Wan2.2 text-to-image. Uses multi-GPU DisTorch2 pipeline. 20-30 recommended for quality results." /></label>
-                    <span className="nav-badge">{steps}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="50"
-                    value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value))}
-                    className="form-range"
-                  />
-                  <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: '4px' }}>
-                    Multi-GPU workflow (DisTorch2) - 2-stage denoising
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="grok-section-label">Seed (-1 = random) <InfoTooltip text="Use -1 for random. Set a specific seed to reproduce the exact same output." /></label>
-                  <input
-                    type="number"
-                    value={seed}
-                    onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
-                    className="form-input"
-                    style={{
-                      backgroundColor: '#0f0f0f',
-                      border: '1px solid #333',
-                      borderRadius: '6px',
-                      padding: '8px',
-                      width: '100%'
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* SDXL and SD1.5 settings */}
-            {(getModelType(model) === 'sdxl' || getModelType(model) === 'sd15') && (
+            {/* SDXL settings */}
+            {getModelType(model) === 'sdxl' && (
               <>
                 <div className="form-group" style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -731,8 +670,7 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                 </div>
 
                 {/* LoRA Settings (SDXL only) */}
-                {getModelType(model) === 'sdxl' && filteredLoras.length > 0 && (
-                  <div className="form-group">
+                {getModelType(model) === 'sdxl' && filteredLoras.length > 0 && (                  <div className="form-group">
                     <label className="grok-section-label" style={{ marginBottom: '8px' }}>
                       LoRAs (up to 3) <InfoTooltip text="LoRA (Low-Rank Adaptation) models add specific styles, characters, or concepts to your images. Stack up to 3 LoRAs. Adjust strength per LoRA — 0.5-0.8 is usually best." /> {!nsfwEnabled && availableLoras.length > filteredLoras.length && (
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
@@ -810,6 +748,59 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                     </div>
                   </div>
                 )}
+              </>
+            )}
+
+            {/* Krea 2 settings (distilled: 8 steps, CFG 1.0) */}
+            {getModelType(model) === 'krea2' && (
+              <>
+                <div className="form-group" style={{ marginTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">Steps <InfoTooltip text="Krea 2 Turbo is distilled — 8 steps is the sweet spot. 4-12 all work." /></label>
+                    <span className="nav-badge">{steps}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="4"
+                    max="20"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value))}
+                    className="form-range"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="grok-section-label">CFG Scale <InfoTooltip text="Krea 2 Turbo is distilled for CFG ~1.0. Higher values degrade output." /></label>
+                    <span className="nav-badge">{cfg}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.1"
+                    value={cfg}
+                    onChange={(e) => setCfg(parseFloat(e.target.value))}
+                    className="form-range"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="grok-section-label">Seed (-1 = random) <InfoTooltip text="Use -1 for random. Set a specific seed to reproduce the exact same image." /></label>
+                  <input
+                    type="number"
+                    value={seed}
+                    onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
+                    className="form-input"
+                    style={{
+                      backgroundColor: '#0f0f0f',
+                      border: '1px solid #333',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      width: '100%'
+                    }}
+                  />
+                </div>
               </>
             )}
           </>

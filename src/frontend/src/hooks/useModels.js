@@ -2,18 +2,16 @@ import { useState, useEffect } from 'react';
 import { apiFetch } from '../api';
 
 const KNOWN_MODELS = {
+  // Krea 2
+  'krea2_turbo_int8_convrot.safetensors': { label: 'Krea 2 Turbo (INT8)', desc: 'Fast, expressive, 8 steps' },
   // FLUX
   'flux1-dev-fp8': { label: 'Flux.1 Dev (FP8)', desc: 'Highest quality, slower' },
-  // SDXL
+  // FLUX 2 (GGUF, multi-GPU)
+  'flux2-dev-Q4_K_M.gguf': { label: 'Flux.2 Dev (GGUF Q4)', desc: '32B, multi-GPU, 20 steps' },
+  // SDXL-Pony
   'CyberRealistic_Pony_v14.1_FP16.safetensors': { label: 'CyberRealistic Pony', desc: 'Photorealistic + Pony tags' },
-  'dreamshaperXL_lightningDPMSDE.safetensors': { label: 'Dreamshaper Lightning', desc: 'Fast, artistic' },
-  'illustriousRealismBy_v10VAE.safetensors': { label: 'Illustrious Realism', desc: 'Detailed realistic' },
-  'juggernautXL_ragnarok.safetensors': { label: 'Juggernaut XL', desc: 'All-rounder' },
-  'novaAnimeXL_ilV150.safetensors': { label: 'Nova Anime XL', desc: 'Anime style' },
   'ponyDiffusionV6XL_v6StartWithThisOne.safetensors': { label: 'Pony Diffusion V6', desc: 'Booru tags, NSFW' },
   'reapony_v90.safetensors': { label: 'Reapony V9', desc: 'Realistic + Pony' },
-  'ultraRealisticByStable_v20FP16.safetensors': { label: 'Ultra Realistic', desc: 'Hyperrealistic' },
-  'waiIllustriousSDXL_v160.safetensors': { label: 'Wai Illustrious', desc: 'Anime + 2.5D' },
 };
 
 export function useModels(type = 'sdxl') {
