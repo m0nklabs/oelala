@@ -1,7 +1,7 @@
 # ComfyUI Server Inventory
 
 Complete inventory of available resources on the self-hosted GPU runner.
-**Last updated**: 2026-03-02
+**Last updated**: 2026-08-23
 
 > **Compute backends** — which generation model families run on which server is now
 > configurable via the **Compute Backend Inventory** (`src/backend/generation/compute_backends.py`
