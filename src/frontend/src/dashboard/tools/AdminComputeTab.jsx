@@ -237,15 +237,29 @@ export default function AdminComputeTab() {
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem' }}>
               Type
-              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
+              <select
+                value={form.type}
+                onChange={(e) => {
+                  const type = e.target.value
+                  // runpod backends must have an empty base_url (the API rejects
+                  // a URL here), so clear it when switching to runpod.
+                  setForm({ ...form, type, base_url: type === 'runpod' ? '' : form.base_url })
+                }}
+                style={inputStyle}
+              >
                 <option value="comfyui">comfyui</option>
                 <option value="runpod">runpod</option>
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem' }}>
               Base URL (comfyui only)
-              <input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-                style={inputStyle} placeholder="http://host:8188" />
+              <input
+                value={form.base_url}
+                disabled={form.type === 'runpod'}
+                onChange={(e) => setForm({ ...form, base_url: e.target.value })}
+                style={{ ...inputStyle, opacity: form.type === 'runpod' ? 0.5 : 1 }}
+                placeholder={form.type === 'runpod' ? '—' : 'http://host:8188'}
+              />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem' }}>
               Notes

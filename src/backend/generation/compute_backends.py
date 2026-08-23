@@ -60,6 +60,11 @@ class ComputeBackend(BaseModel):
             # A comfyui backend must name a reachable HTTP server.
             if not self.base_url:
                 raise ValueError("base_url is required for a comfyui backend")
+            # ComfyUIClient always builds an http://{host}:{port} base_url, so a
+            # non-http scheme (https/ftp/...) would be silently ignored — reject
+            # it explicitly, matching the Admin API constraints.
+            if "://" in self.base_url and not self.base_url.startswith("http://"):
+                raise ValueError("base_url must use http:// for a comfyui backend")
             host = (
                 self.base_url.split("://", 1)[1].split("/")[0].split(":")[0]
                 if "://" in self.base_url

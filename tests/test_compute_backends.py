@@ -176,6 +176,26 @@ def test_skips_invalid_backend_type_keeps_others(tmp_path, monkeypatch):
     assert "bad" not in ids
 
 
+def test_rejects_non_http_scheme_for_comfyui_backend():
+    # ComfyUIClient builds http://{host}:{port}; a non-http scheme would be
+    # silently ignored, so the inventory model must reject it explicitly.
+    with pytest.raises(Exception):
+        cb.ComputeBackend(
+            id="https-bad", name="HTTPS", type="comfyui",
+            base_url="https://192.0.2.1:8188", enabled=True, model_families=[],
+        )
+    with pytest.raises(Exception):
+        cb.ComputeBackend(
+            id="ftp-bad", name="FTP", type="comfyui",
+            base_url="ftp://192.0.2.1:21", enabled=True, model_families=[],
+        )
+    # Plain http (and scheme-less host:port) remain valid.
+    cb.ComputeBackend(
+        id="http-ok", name="HTTP", type="comfyui",
+        base_url="http://192.0.2.1:8188", enabled=True, model_families=[],
+    )
+
+
 def test_get_comfyui_client_for_backend_refreshes_on_base_url_change(monkeypatch):
     # Fix: client cache is keyed by (backend_id, base_url), so editing a
     # backend's base_url yields a fresh client on the next dispatch instead of
