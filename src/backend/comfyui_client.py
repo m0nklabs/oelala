@@ -5939,6 +5939,11 @@ def get_comfyui_client_for_backend(backend) -> Optional[ComfyUIClient]:
     if cache_key in _backend_clients:
         return _backend_clients[cache_key]
 
+    # A base_url change created a new cache key; drop any prior entry for the
+    # same backend id so repeated admin edits don't grow the cache unboundedly
+    # during a long-lived backend process.
+    for stale_key in [k for k in _backend_clients if k[0] == backend_id]:
+        del _backend_clients[stale_key]
     host, port = _parse_base_url(base_url)
     client = ComfyUIClient(host=host, port=port)
     _backend_clients[cache_key] = client

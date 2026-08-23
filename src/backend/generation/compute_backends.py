@@ -224,7 +224,13 @@ def client_fn_for_model(model_family: str):
     server actually used after admin edits) and ``.model_family`` so
     adapters/routers can tag jobs with the backend that ran them.
     """
-    from comfyui_client import get_comfyui_client_for_backend
+    # Import via the canonical src.backend path to avoid loading comfyui_client
+    # twice (two module instances = two separate client caches), falling back
+    # to the bare name only when running with src/backend on sys.path (tests).
+    try:
+        from src.backend.comfyui_client import get_comfyui_client_for_backend
+    except ImportError:
+        from comfyui_client import get_comfyui_client_for_backend
 
     def _fn():
         backend = resolve_backend_for_model(model_family)
@@ -264,7 +270,10 @@ def client_fn_for_utility():
     server that actually ran them. Raises a clear ``RuntimeError`` when no
     enabled comfyui backend is available.
     """
-    from comfyui_client import get_comfyui_client_for_backend
+    try:
+        from src.backend.comfyui_client import get_comfyui_client_for_backend
+    except ImportError:
+        from comfyui_client import get_comfyui_client_for_backend
 
     def _fn():
         backend = resolve_backend_for_model(UTILITY_FAMILY)
