@@ -77,7 +77,7 @@ def test_resolve_unknown_returns_none():
     assert cb.resolve_backend_for_model("does-not-exist") is None
 
 
-def test_enabled_filter_excludes_disabled(tmp_path):
+def test_enabled_filter_excludes_disabled(tmp_path, monkeypatch):
     # Point the module at a throwaway file so we don't touch the real config.
     fp = tmp_path / "backends.json"
     fp.write_text(
@@ -91,7 +91,6 @@ def test_enabled_filter_excludes_disabled(tmp_path):
             ]
         })
     )
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(cb, "_json_path", fp)
     cb._loaded = False
     cb.load_backends(force=True)
@@ -104,13 +103,11 @@ def test_enabled_filter_excludes_disabled(tmp_path):
     b = cb.resolve_backend_for_model("minimax_h3")
     assert b is not None
     assert b.id == "runpod-cloud"
-    monkeypatch.undo()
 
 
-def test_save_load_roundtrip(tmp_path):
+def test_save_load_roundtrip(tmp_path, monkeypatch):
     # Round-trip on a throwaway file so the real config stays untouched.
     fp = tmp_path / "backends.json"
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(cb, "_json_path", fp)
     cb._loaded = False
     backends = cb.load_backends(force=True).copy()
@@ -119,7 +116,6 @@ def test_save_load_roundtrip(tmp_path):
     assert [b.model_dump(mode="json") for b in reloaded] == [
         b.model_dump(mode="json") for b in backends
     ]
-    monkeypatch.undo()
 
 
 def test_client_fn_for_model_exposes_backend_id(monkeypatch):
@@ -156,7 +152,7 @@ def test_client_fn_for_utility_exposes_model_family():
     assert client is not None
 
 
-def test_skips_invalid_backend_type_keeps_others(tmp_path):
+def test_skips_invalid_backend_type_keeps_others(tmp_path, monkeypatch):
     # A malformed entry (unknown 'type') is skipped with the rest preserved,
     # instead of resetting the whole inventory to built-in defaults.
     fp = tmp_path / "backends.json"
@@ -172,14 +168,12 @@ def test_skips_invalid_backend_type_keeps_others(tmp_path):
             ]
         })
     )
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(cb, "_json_path", fp)
     cb._loaded = False
     backends = cb.load_backends(force=True)
     ids = [b.id for b in backends]
     assert "good" in ids
     assert "bad" not in ids
-    monkeypatch.undo()
 
 
 def test_get_comfyui_client_for_backend_refreshes_on_base_url_change(monkeypatch):
