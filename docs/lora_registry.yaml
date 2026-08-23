@@ -1318,3 +1318,58 @@
   modes: ["t2i", "i2i"]
   usage_notes: "Sounding concept LoRA, early checkpoint (2 epochs)."
   last_checked: "2026-07-23"
+# ─── MiniMax-H3 LoRAs ────────────────────────────────────────────────────────
+
+- filename: "minimax-h3/bounceV07_fl2va-000230_Intense.safetensors"
+  display_name: "Bounce V07 (MiniMax-H3)"
+  base_model: "minimax_h3"
+  creator: "fl2va"
+  version: "V07 - step 000230 Intense"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "natural_language"
+  recommended_strength: 0.8
+  strength_range: [0.6, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2v", "i2v"]
+  usage_notes: >
+    Motion/bounce LoRA for MiniMax-H3 FL2VA. Single-stage; trained at step
+    000230 (Intense variant). Boosts bouncing/motion behaviour — describe the
+    action naturally in the prompt.
+  last_checked: "2026-08-23"
+
+- filename: "minimax-h3/PenisV2_minimax-h3_epoch60.safetensors"
+  display_name: "Penis V2 (MiniMax-H3)"
+  base_model: "minimax_h3"
+  creator: "unknown"
+  version: "V2 - epoch 60"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.6, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2v", "i2v"]
+  usage_notes: "Penis anatomy LoRA for MiniMax-H3 FL2VA, single-stage, 60 epochs."
+  last_checked: "2026-08-23"
+
+- filename: "minimax-h3/Vagina_minimax-h3_epoch20.safetensors"
+  display_name: "Vagina (MiniMax-H3)"
+  base_model: "minimax_h3"
+  creator: "unknown"
+  version: "epoch 20"
+  source_url: null
+  civitai_model_id: null
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 0.8
+  strength_range: [0.6, 1.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2v", "i2v"]
+  usage_notes: "Vagina anatomy LoRA for MiniMax-H3 FL2VA, single-stage, 20 epochs."
+  last_checked: "2026-08-23"

@@ -21,6 +21,7 @@ from generation.types import (
     ComputeTarget,
     GenerationRequest,
     LoraFormat,
+    LoraStackItem,
     MediaType,
     Operation,
 )
@@ -84,6 +85,33 @@ class TestMiniMaxH3LocalT2V:
         assert kwargs["num_frames"] == 124
         assert kwargs["aspect_ratio"] == "16:9"
         assert kwargs["megapixels"] == 0.98
+        assert kwargs["lora_configs"] is None
+
+    def test_build_workflow_passes_loras(self):
+        mock = MagicMock()
+        mock.build_local_minimax_h3_t2v_workflow.return_value = {"h3": "wf"}
+        a = MiniMaxH3LocalT2VAdapter(comfyui_client_fn=lambda: mock)
+        req = _req(loras=[LoraStackItem(name="bounce.safetensors", strength=0.8)])
+        a.build_workflow(req)
+        kwargs = mock.build_local_minimax_h3_t2v_workflow.call_args[1]
+        assert kwargs["lora_configs"] == [{"name": "bounce.safetensors", "strength": 0.8}]
+
+    @pytest.mark.asyncio
+    async def test_execute_uploads_loras_before_queue(self):
+        mock = MagicMock()
+        mock.is_available.return_value = True
+        mock.queue_prompt.return_value = "p123"
+        mock.upload_lora.return_value = "bounce.safetensors"
+        mock.host = "192.168.1.245"
+        mock.port = 8188
+        import generation.adapters.local.minimax_h3_t2v as mod
+        mod._MINIMAX_H3_LORA_DIR = mod.Path("/definitely/missing/dir")
+        a = MiniMaxH3LocalT2VAdapter(comfyui_client_fn=lambda: mock)
+        req = _req(loras=[LoraStackItem(name="missing.safetensors", strength=0.8)])
+        await a.execute(req)
+        # missing lora file -> skipped, upload never called, but job still runs
+        mock.upload_lora.assert_not_called()
+        mock.queue_prompt.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_execute_queues_to_client(self):

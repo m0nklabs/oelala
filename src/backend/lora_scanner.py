@@ -184,6 +184,12 @@ def _derive_base_model(filename: str) -> str:
         return "wan2.2"
     if "ltx" in lower:
         return "ltx"
+    # MiniMax-H3 — check subdirectory and name markers before the generic
+    # i2v/t2v → wan2.2 fallback (an H3 LoRA can carry i2v/t2v in its name).
+    if lower.startswith("minimax-h3/") or lower.startswith("minimax-h3\\"):
+        return "minimax_h3"
+    if "minimax" in lower or "fl2va" in lower:
+        return "minimax_h3"
     # I2V/T2V without ltx → wan2.2 (only Wan uses these LoRA modes)
     if ("i2v" in lower or "t2v" in lower) and "ltx" not in lower:
         return "wan2.2"
