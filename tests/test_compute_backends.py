@@ -197,6 +197,27 @@ def test_rejects_non_http_scheme_for_comfyui_backend():
     )
 
 
+def test_rejects_invalid_port_for_comfyui_backend():
+    # _parse_base_url() falls back to port 8188 on parse failure, so an
+    # explicitly non-numeric/out-of-range port must be rejected here, otherwise
+    # a typo like 'http://host:abc' would silently target the wrong server.
+    for bad in ("http://192.0.2.1:abc", "http://192.0.2.1:0", "http://192.0.2.1:65536"):
+        with pytest.raises(Exception):
+            cb.ComputeBackend(
+                id="port-bad", name="Bad port", type="comfyui",
+                base_url=bad, enabled=True, model_families=[],
+            )
+    # A valid port and a portless host both still load.
+    cb.ComputeBackend(
+        id="port-ok", name="OK port", type="comfyui",
+        base_url="http://192.0.2.1:8188", enabled=True, model_families=[],
+    )
+    cb.ComputeBackend(
+        id="portless-ok", name="No port", type="comfyui",
+        base_url="http://192.0.2.1", enabled=True, model_families=[],
+    )
+
+
 def test_get_comfyui_client_for_backend_refreshes_on_base_url_change(monkeypatch):
     # Fix: client cache is keyed by (backend_id, base_url), so editing a
     # backend's base_url yields a fresh client on the next dispatch instead of

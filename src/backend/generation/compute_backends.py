@@ -65,13 +65,23 @@ class ComputeBackend(BaseModel):
             # it explicitly, matching the Admin API constraints.
             if "://" in self.base_url and not self.base_url.startswith("http://"):
                 raise ValueError("base_url must use http:// for a comfyui backend")
-            host = (
-                self.base_url.split("://", 1)[1].split("/")[0].split(":")[0]
+            authority = (
+                self.base_url.split("://", 1)[1].split("/")[0]
                 if "://" in self.base_url
-                else self.base_url.split("/")[0].split(":")[0]
+                else self.base_url.split("/")[0]
             )
+            host = authority.split(":")[0]
             if not host:
                 raise ValueError("base_url must include a host for a comfyui backend")
+            # An explicit port must be numeric and in range. _parse_base_url()
+            # falls back to 8188 on parse failure, so without this check a typo
+            # like 'http://host:abc' would silently target the wrong server.
+            if ":" in authority:
+                port = authority.split(":", 1)[1]
+                if not port.isdigit() or not (1 <= int(port) <= 65535):
+                    raise ValueError(
+                        "base_url port must be a number between 1 and 65535"
+                    )
         elif self.type == "runpod" and self.base_url:
             # A runpod backend has no base_url; a URL here is meaningless noise.
             raise ValueError("base_url must be empty for a runpod backend")
