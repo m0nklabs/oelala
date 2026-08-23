@@ -5,12 +5,13 @@ import { apiFetch } from '../../api'
 import {
   Users, Search, Coins, Shield, Crown,
   ChevronDown, ChevronUp,
-  TrendingUp, Server, Activity, Flag
+  TrendingUp, Server, Activity, Flag, Cpu
 } from 'lucide-react'
 import AdminSystemTab from './AdminSystemTab'
 import AdminAnalyticsTab from './AdminAnalyticsTab'
 import AdminModerationTab from './AdminModerationTab'
 import AdminStorageNodesTab from './AdminStorageNodesTab'
+import AdminComputeTab from './AdminComputeTab'
 
 export default function AdminPanel() {
   const { session, isAdmin } = useAuth()
@@ -372,6 +373,26 @@ export default function AdminPanel() {
           <Server size={18} />
           Storage Nodes
         </button>
+        <button
+          onClick={() => setActiveMainTab('compute')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1.25rem',
+            background: activeMainTab === 'compute' ? 'var(--accent-color)' : 'transparent',
+            border: 'none',
+            borderRadius: '8px 8px 0 0',
+            color: activeMainTab === 'compute' ? 'white' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontWeight: activeMainTab === 'compute' ? 600 : 400,
+            fontSize: '1rem',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Cpu size={18} />
+          Compute
+        </button>
       </div>
 
       {/* Render tab content */}
@@ -381,6 +402,8 @@ export default function AdminPanel() {
         <AdminAnalyticsTab />
       ) : activeMainTab === 'moderation' ? (
         <AdminModerationTab />
+      ) : activeMainTab === 'compute' ? (
+        <AdminComputeTab />
       ) : activeMainTab === 'storage' ? (
         <AdminStorageNodesTab />
       ) : (
