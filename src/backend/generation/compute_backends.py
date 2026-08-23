@@ -193,10 +193,12 @@ def client_fn_for_model(model_family: str):
 
     The callable lazily resolves against the current inventory each call, so
     admin edits to backends (URLs, enable/disable) take effect on the next
-    dispatch without a backend restart. Raises a clear ``RuntimeError`` when
-    no enabled comfyui backend supports the family (rather than returning
-    ``None``, which would make local adapters crash later with a cryptic
-    ``AttributeError``).
+    dispatch without a backend restart. Behavior:
+    - **No enabled backend at all** supports the family -> raises a clear
+      ``RuntimeError`` (rather than returning ``None``, which would make local
+      adapters crash later with a cryptic ``AttributeError``).
+    - The family resolves to an enabled **runpod** backend -> returns ``None``
+      (deliberate cloud routing; no local ComfyUI client needed).
 
     The returned callable exposes ``.backend_id`` (the id of the backend it
     currently resolves to, refreshed on every call so it never drifts from the

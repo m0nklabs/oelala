@@ -109,8 +109,17 @@ export default function AdminComputeTab() {
         body: JSON.stringify(payload),
       })
       if (!resp.ok) {
-        const detail = await resp.json().catch(() => ({}))
-        throw new Error(detail.detail || 'Failed to save backend')
+        const body = await resp.json().catch(() => ({}))
+        // FastAPI validation errors (HTTP 422) surface as { detail: [{ msg, loc }, ...] },
+        // whereas custom HTTPException uses { detail: "..." }. Handle both so the user
+        // sees the actual field-level message instead of a generic failure.
+        let message = body.detail
+        if (Array.isArray(body.detail)) {
+          message = body.detail
+            .map(d => (d.loc ? `${d.loc.slice(-1)[0]}: ${d.msg}` : d.msg))
+            .join('; ')
+        }
+        throw new Error(message || 'Failed to save backend')
       }
       setOk(editing ? 'Backend updated' : 'Backend created')
       closeForm()

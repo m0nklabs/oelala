@@ -11432,16 +11432,17 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
 
 from pydantic import BaseModel as _BaseModel
 from typing import List as _List, Literal as _Literal
-from pydantic import Field as _Field, StringConstraints as _StringConstraints
+from pydantic import Field as _Field, StringConstraints as _StringConstraints, model_validator as _model_validator
 from typing import Annotated as _Annotated
 
 
 class ComputeBackendPayload(_BaseModel):
     """Mutable fields for a compute backend (admin-editable subset)."""
 
-    # Slug-constrained: id is used as a URL path parameter, so it must be URL-safe
-    # (no '/', whitespace, or other characters that would break update/delete routing).
-    id: _Annotated[str, _StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")] = ""
+    # Slug-constrained and REQUIRED: id is used as a URL path parameter, so it
+    # must be URL-safe (no '/', whitespace, ...) and can never be empty (an empty
+    # id would break {backend_id} routing/inventory lookups).
+    id: _Annotated[str, _StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]*$")]
     name: str
     type: _Literal["comfyui", "runpod"] = "comfyui"
     # Only plain http:// URLs are valid for a comfyui backend (ComfyUIClient
@@ -11450,6 +11451,17 @@ class ComputeBackendPayload(_BaseModel):
     enabled: bool = True
     model_families: _List[str] = _Field(default_factory=list)
     notes: str = ""
+
+    @_model_validator(mode="after")
+    def _validate_by_type(self):
+        # A comfyui backend must name a reachable HTTP server; an empty base_url
+        # would win resolution for a family but then return no usable client.
+        if self.type == "comfyui" and not self.base_url:
+            raise ValueError("base_url is required for a comfyui backend")
+        # A runpod backend has no base_url; a URL here is meaningless noise.
+        if self.type == "runpod" and self.base_url:
+            raise ValueError("base_url must be empty for a runpod backend")
+        return self
 
 
 @app.get("/api/admin/backends")
