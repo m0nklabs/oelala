@@ -1,8 +1,9 @@
 """
-Tests for local MiniMax-H3 adapters (Windows PC ComfyUI).
+Tests for local MiniMax-H3 adapters (remote ComfyUI node).
 
-These adapters route MiniMax-H3 generation to the user's Windows PC ComfyUI
-server (get_windows_comfyui_client) instead of the default ai-kvm2 ComfyUI.
+These adapters route MiniMax-H3 generation to the 'comfyui' compute backend
+that declares the minimax_h3 family (e.g. a second server), resolved via the
+compute backend inventory instead of the default ai-kvm2 ComfyUI.
 
 Covers: metadata, constraints, cost, workflow delegation, execute (t2v + i2v,
 including the adapter-level image upload for i2v).

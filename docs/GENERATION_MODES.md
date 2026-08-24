@@ -81,8 +81,10 @@ This document provides a comprehensive overview of all available generation mode
 | **Video VAE** | `minimax_h3_video_vae_fp16.safetensors` | `vae/` |
 | **Audio VAE** | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` |
 
-Lokaal draait MiniMax-H3 op de **Windows-PC ComfyUI** (`COMFYUI_WINDOWS_HOST`, set via `COMFYUI_WINDOWS_HOST`)
-— een tweede ComfyUI-server naast die op ai-kvm2. De int8_convrot text-encoder past in 16GB VRAM
+Lokaal draait MiniMax-H3 op een **tweede ComfyUI-server** (remote compute node, bijv. de
+Windows-PC) — geconfigureerd via de compute backend inventory (`COMPUTE_NODE_{n}_HOST` in `.env`
+als fresh-install fallback; Admin panel → Compute als bron van waarheid). De int8_convrot
+text-encoder past in 16GB VRAM
 (zie `README_MiniMax_H3_workflow.md` en `download_minimax_h3.*`).
 
 ### T2V Alternative Models (Untested/Experimental)
