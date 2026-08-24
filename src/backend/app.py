@@ -11480,9 +11480,7 @@ class ComputeBackendPayload(_BaseModel):
             # Reject bare "http://" (no host) — _parse_base_url would yield
             # "http://:8188" for it, producing a broken backend.
             if not host:
-                raise ValueError(
-                    "base_url must include a host (e.g. http://host:8188)"
-                )
+                raise ValueError("base_url must include a host (e.g. http://host:8188)")
             # An explicit port must be numeric and in range; without this a typo
             # like 'http://host:abc' would fail later as a confusing 500.
             if ":" in authority:
