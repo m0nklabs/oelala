@@ -211,7 +211,9 @@ class TestMiniMaxH3LocalI2V:
 
     @pytest.mark.asyncio
     async def test_execute_requires_image(self):
-        a = minimax_h3_i2v.MiniMaxH3LocalI2VAdapter(comfyui_client_fn=MagicMock)
+        mock = MagicMock()
+        mock.is_available.return_value = True
+        a = minimax_h3_i2v.MiniMaxH3LocalI2VAdapter(comfyui_client_fn=lambda: mock)
         with pytest.raises(ValueError):
             await a.execute(_req())
 

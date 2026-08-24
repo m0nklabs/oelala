@@ -155,11 +155,11 @@ class MiniMaxH3LocalT2VAdapter(GenerationAdapter):
                 "is the configured compute backend running on that machine?"
             )
 
+        _upload_minimax_loras(client, req)
+
         workflow = self.build_workflow(req)
         if not workflow:
             raise RuntimeError("Failed to build MiniMax-H3 local T2V workflow")
-
-        _upload_minimax_loras(client, req)
 
         prompt_id = client.queue_prompt(workflow)
         if not prompt_id:
