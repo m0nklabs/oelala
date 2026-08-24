@@ -152,10 +152,10 @@ def create_registry(
 
         _register(Wan22LocalT2VQ6Adapter, comfyui_client_fn=wan22_client_fn)
 
-        # ── Local MiniMax-H3 (Windows PC ComfyUI) ──────────────
+        # ── Local MiniMax-H3 (remote ComfyUI node) ──────────────
         # Resolved through the Compute Backend Inventory instead of a hardcoded
         # client: any enabled 'comfyui' backend that runs minimax_h3 will be
-        # used (currently the Windows-PC server).
+        # used (could be a second server like a Windows PC).
         from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
         from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
 
@@ -171,7 +171,7 @@ def create_registry(
             _register(MiniMaxH3LocalI2VAdapter, comfyui_client_fn=h3_client_fn)
         else:
             logger.info(
-                "🪟 No enabled ComfyUI backend for minimax_h3 — skipping local MiniMax-H3 adapters"
+                "⚙️ No enabled ComfyUI backend for minimax_h3 — skipping local MiniMax-H3 adapters"
             )
 
         # ── Utility adapters ───────────────────────────────────

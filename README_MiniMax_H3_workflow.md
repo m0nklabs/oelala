@@ -17,7 +17,8 @@ text-encoder aangepast naar de **int8_convrot** variant die op de server staat
 ## Openen
 
 - **In de browser (aanbevolen)** — server draait al met alle modellen op schijf:
-  `http://COMFYUI_WINDOWS_HOST:8188` → sleep het .json op het canvas (of Workflow → Open).
+  `http://COMPUTE_NODE_2_HOST:8188` (de remote ComfyUI node die minimax_h3 draait) → sleep
+  het .json op het canvas (of Workflow → Open).
 - **In Comfy Desktop:** Workflow-menu → Open → dit bestand.
 
 ## Belangrijk — waar Desktop z'n modellen vandaan haalt

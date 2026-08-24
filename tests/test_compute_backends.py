@@ -1,8 +1,9 @@
 """
-Tests for the Compute Backend Inventory (modular compute sources).
+Tests for the Compute Backend Inventory (modular compute sources / node types).
 
-Covers: config loading, fallback defaults, backend lookup, model-family
-resolution (local-first), client-fn generation, and save/load round-trip.
+Covers: config loading, fallback defaults (incl. the COMPUTE_NODE_* env schema),
+backend lookup, model-family resolution (local-first), client-fn generation, and
+save/load round-trip.
 """
 
 import os
@@ -18,15 +19,36 @@ from generation import compute_backends as cb
 
 CLEAN_CONFIG = {
     "backends": [
-        {"id": "ai-kvm2-comfyui", "name": "ai-kvm2 ComfyUI (local)", "type": "comfyui",
-         "base_url": "http://localhost:8188", "enabled": True,
-         "model_families": ["wan2.2", "sdxl", "flux", "flux2", "krea2", "utility"]},
-        {"id": "windows-pc-comfyui", "name": "Windows-PC ComfyUI", "type": "comfyui",
-         "base_url": "http://windows-pc.test.invalid:8188", "enabled": True,
-         "model_families": ["minimax_h3"]},
-        {"id": "runpod-cloud", "name": "RunPod serverless cloud", "type": "runpod",
-         "base_url": "", "enabled": True,
-         "model_families": ["wan2.2", "ltx", "minimax_h3", "qwen_image_edit", "i2i_edit_model"]},
+        {
+            "id": "ai-kvm2-comfyui",
+            "name": "ai-kvm2 ComfyUI (local)",
+            "type": "comfyui",
+            "base_url": "http://localhost:8188",
+            "enabled": True,
+            "model_families": ["wan2.2", "sdxl", "flux", "flux2", "krea2", "utility"],
+        },
+        {
+            "id": "windows-pc-comfyui",
+            "name": "Windows-PC ComfyUI",
+            "type": "comfyui",
+            "base_url": "http://windows-pc.test.invalid:8188",
+            "enabled": True,
+            "model_families": ["minimax_h3"],
+        },
+        {
+            "id": "runpod-cloud",
+            "name": "RunPod serverless cloud",
+            "type": "runpod",
+            "base_url": "",
+            "enabled": True,
+            "model_families": [
+                "wan2.2",
+                "ltx",
+                "minimax_h3",
+                "qwen_image_edit",
+                "i2i_edit_model",
+            ],
+        },
     ]
 }
 
@@ -48,6 +70,34 @@ def reset_cache(tmp_path, monkeypatch):
     cb._backends = []
 
 
+def _clear_env_nodes(monkeypatch):
+    """Clear every COMPUTE_NODE_* / legacy COMFYUI_WINDOWS_* var so tests are
+    deterministic regardless of the developer's shell environment."""
+    for name in list(os.environ):
+        if name.startswith("COMPUTE_NODE_") or name.startswith("COMFYUI_WINDOWS_"):
+            monkeypatch.delenv(name, raising=False)
+
+
+def _set_env_nodes(monkeypatch, nodes):
+    """Set COMPUTE_NODE_* env groups for a test.
+
+    ``nodes``: dict of node index -> dict of suffix -> value, e.g. {1: {"type":
+    "comfy", "host": "localhost", "families": "sdxl"}}.
+    """
+    _clear_env_nodes(monkeypatch)
+    for idx, fields in nodes.items():
+        prefix = f"COMPUTE_NODE_{idx}"
+        monkeypatch.setenv(f"{prefix}_TYPE", fields["type"])
+        if "host" in fields:
+            monkeypatch.setenv(f"{prefix}_HOST", fields["host"])
+        if "port" in fields:
+            monkeypatch.setenv(f"{prefix}_PORT", fields["port"])
+        if "name" in fields:
+            monkeypatch.setenv(f"{prefix}_NAME", fields["name"])
+        if "families" in fields:
+            monkeypatch.setenv(f"{prefix}_MODEL_FAMILIES", fields["families"])
+
+
 def test_loads_inventory_from_json():
     backends = cb.load_backends(force=True)
     ids = [b.id for b in backends]
@@ -58,17 +108,125 @@ def test_loads_inventory_from_json():
 
 def test_default_fallback_when_json_missing(monkeypatch):
     from pathlib import Path
-    # Force the missing-file branch and clear the env so the fallback inventory
-    # is fully deterministic (Windows-PC backend is only added when
-    # COMFYUI_WINDOWS_HOST is set).
+
+    # Force the missing-file branch and clear all env node vars so the fallback
+    # is fully deterministic (COMPUTE_NODE_* builds the fallback when present;
+    # otherwise the two hardcoded backends ai-kvm2 + runpod).
     monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/path/backends.json"))
-    monkeypatch.delenv("COMFYUI_WINDOWS_HOST", raising=False)
+    _clear_env_nodes(monkeypatch)
     cb._loaded = False
     backends = cb.load_backends(force=True)
     ids = [b.id for b in backends]
     assert "ai-kvm2-comfyui" in ids
     assert "runpod-cloud" in ids
     assert "windows-pc-comfyui" not in ids
+
+
+def test_env_fallback_builds_nodes(monkeypatch):
+    _set_env_nodes(
+        monkeypatch,
+        {
+            1: {
+                "type": "comfy",
+                "host": "localhost",
+                "port": "8188",
+                "name": "ai-kvm2",
+                "families": "wan2.2,sdxl,flux,flux2,krea2,utility",
+            },
+            2: {
+                "type": "comfy",
+                "host": "node2.test.invalid",
+                "name": "Second server",
+                "families": "minimax_h3",
+            },
+            3: {"type": "runpod", "name": "RunPod", "families": "ltx,minimax_h3"},
+        },
+    )
+    from pathlib import Path
+
+    monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/env-fallback.json"))
+    cb._loaded = False
+    backends = cb.load_backends(force=True)
+
+    assert [b.id for b in backends] == ["node-1", "node-2", "node-3"]
+    b1, b2, b3 = backends
+    assert (b1.id, b1.type, b1.base_url) == (
+        "node-1",
+        "comfyui",
+        "http://localhost:8188",
+    )
+    assert b1.model_families == ["wan2.2", "sdxl", "flux", "flux2", "krea2", "utility"]
+    # Port defaults to 8188 when omitted.
+    assert b2.base_url == "http://node2.test.invalid:8188"
+    assert b2.model_families == ["minimax_h3"]
+    # A runpod node carries no base_url.
+    assert b3.type == "runpod" and b3.base_url == ""
+
+
+def test_env_fallback_accepts_comfyui_alias(monkeypatch):
+    _set_env_nodes(
+        monkeypatch,
+        {1: {"type": "comfyui", "host": "localhost", "families": "sdxl"}},
+    )
+    from pathlib import Path
+
+    monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/env-fallback.json"))
+    cb._loaded = False
+    backends = cb.load_backends(force=True)
+    assert len(backends) == 1
+    assert backends[0].type == "comfyui"
+    assert backends[0].base_url == "http://localhost:8188"
+
+
+def test_env_fallback_skips_unknown_type(monkeypatch):
+    _set_env_nodes(
+        monkeypatch,
+        {
+            1: {"type": "bogus", "host": "localhost", "families": "sdxl"},
+            2: {"type": "comfy", "host": "localhost", "families": "sdxl"},
+            3: {"type": "runpod", "families": "ltx"},
+        },
+    )
+    from pathlib import Path
+
+    monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/env-fallback.json"))
+    cb._loaded = False
+    backends = cb.load_backends(force=True)
+    # bogus is skipped; the scan continues onto the valid nodes.
+    assert [b.id for b in backends] == ["node-2", "node-3"]
+
+
+def test_env_fallback_skips_comfy_without_host(monkeypatch):
+    _set_env_nodes(
+        monkeypatch,
+        {
+            1: {"type": "comfy", "families": "sdxl"},  # no HOST -> skipped
+            2: {"type": "runpod", "families": "ltx"},
+        },
+    )
+    from pathlib import Path
+
+    monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/env-fallback.json"))
+    cb._loaded = False
+    backends = cb.load_backends(force=True)
+    assert [b.id for b in backends] == ["node-2"]
+
+
+def test_env_fallback_stops_at_first_gap(monkeypatch):
+    # Node 2 absent -> only node-1 is read (groups must be contiguous).
+    _set_env_nodes(
+        monkeypatch,
+        {
+            1: {"type": "comfy", "host": "localhost", "families": "sdxl"},
+            3: {"type": "runpod", "families": "ltx"},
+        },
+    )
+    from pathlib import Path
+
+    monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/env-fallback.json"))
+    cb._loaded = False
+    backends = cb.load_backends(force=True)
+    assert [b.id for b in backends] == ["node-1"]
 
 
 def test_get_backend():
@@ -111,15 +269,28 @@ def test_enabled_filter_excludes_disabled(tmp_path, monkeypatch):
     # Point the module at a throwaway file so we don't touch the real config.
     fp = tmp_path / "backends.json"
     fp.write_text(
-        json.dumps({
-            "backends": [
-                {"id": "windows-pc-comfyui", "name": "Windows", "type": "comfyui",
-                 "base_url": "http://windows-pc.test.invalid:8188", "enabled": True,
-                 "model_families": ["minimax_h3"]},
-                {"id": "runpod-cloud", "name": "RunPod", "type": "runpod",
-                 "base_url": "", "enabled": True, "model_families": ["minimax_h3"]},
-            ]
-        })
+        json.dumps(
+            {
+                "backends": [
+                    {
+                        "id": "windows-pc-comfyui",
+                        "name": "Windows",
+                        "type": "comfyui",
+                        "base_url": "http://windows-pc.test.invalid:8188",
+                        "enabled": True,
+                        "model_families": ["minimax_h3"],
+                    },
+                    {
+                        "id": "runpod-cloud",
+                        "name": "RunPod",
+                        "type": "runpod",
+                        "base_url": "",
+                        "enabled": True,
+                        "model_families": ["minimax_h3"],
+                    },
+                ]
+            }
+        )
     )
     monkeypatch.setattr(cb, "_json_path", fp)
     cb._loaded = False
@@ -187,16 +358,28 @@ def test_skips_invalid_backend_type_keeps_others(tmp_path, monkeypatch):
     # instead of resetting the whole inventory to built-in defaults.
     fp = tmp_path / "backends.json"
     fp.write_text(
-        json.dumps({
-            "backends": [
-                {"id": "good", "name": "Good", "type": "comfyui",
-                 "base_url": "http://localhost:8188", "enabled": True,
-                 "model_families": ["sdxl"]},
-                {"id": "bad", "name": "Bad", "type": "bogus",
-                 "base_url": "http://localhost:9999", "enabled": True,
-                 "model_families": ["sdxl"]},
-            ]
-        })
+        json.dumps(
+            {
+                "backends": [
+                    {
+                        "id": "good",
+                        "name": "Good",
+                        "type": "comfyui",
+                        "base_url": "http://localhost:8188",
+                        "enabled": True,
+                        "model_families": ["sdxl"],
+                    },
+                    {
+                        "id": "bad",
+                        "name": "Bad",
+                        "type": "bogus",
+                        "base_url": "http://localhost:9999",
+                        "enabled": True,
+                        "model_families": ["sdxl"],
+                    },
+                ]
+            }
+        )
     )
     monkeypatch.setattr(cb, "_json_path", fp)
     cb._loaded = False
@@ -211,18 +394,30 @@ def test_rejects_non_http_scheme_for_comfyui_backend():
     # silently ignored, so the inventory model must reject it explicitly.
     with pytest.raises(Exception):
         cb.ComputeBackend(
-            id="https-bad", name="HTTPS", type="comfyui",
-            base_url="https://192.0.2.1:8188", enabled=True, model_families=[],
+            id="https-bad",
+            name="HTTPS",
+            type="comfyui",
+            base_url="https://192.0.2.1:8188",
+            enabled=True,
+            model_families=[],
         )
     with pytest.raises(Exception):
         cb.ComputeBackend(
-            id="ftp-bad", name="FTP", type="comfyui",
-            base_url="ftp://192.0.2.1:21", enabled=True, model_families=[],
+            id="ftp-bad",
+            name="FTP",
+            type="comfyui",
+            base_url="ftp://192.0.2.1:21",
+            enabled=True,
+            model_families=[],
         )
     # Plain http (and scheme-less host:port) remain valid.
     cb.ComputeBackend(
-        id="http-ok", name="HTTP", type="comfyui",
-        base_url="http://192.0.2.1:8188", enabled=True, model_families=[],
+        id="http-ok",
+        name="HTTP",
+        type="comfyui",
+        base_url="http://192.0.2.1:8188",
+        enabled=True,
+        model_families=[],
     )
 
 
@@ -233,17 +428,29 @@ def test_rejects_invalid_port_for_comfyui_backend():
     for bad in ("http://192.0.2.1:abc", "http://192.0.2.1:0", "http://192.0.2.1:65536"):
         with pytest.raises(Exception):
             cb.ComputeBackend(
-                id="port-bad", name="Bad port", type="comfyui",
-                base_url=bad, enabled=True, model_families=[],
+                id="port-bad",
+                name="Bad port",
+                type="comfyui",
+                base_url=bad,
+                enabled=True,
+                model_families=[],
             )
     # A valid port and a portless host both still load.
     cb.ComputeBackend(
-        id="port-ok", name="OK port", type="comfyui",
-        base_url="http://192.0.2.1:8188", enabled=True, model_families=[],
+        id="port-ok",
+        name="OK port",
+        type="comfyui",
+        base_url="http://192.0.2.1:8188",
+        enabled=True,
+        model_families=[],
     )
     cb.ComputeBackend(
-        id="portless-ok", name="No port", type="comfyui",
-        base_url="http://192.0.2.1", enabled=True, model_families=[],
+        id="portless-ok",
+        name="No port",
+        type="comfyui",
+        base_url="http://192.0.2.1",
+        enabled=True,
+        model_families=[],
     )
 
 
@@ -254,8 +461,12 @@ def test_get_comfyui_client_for_backend_refreshes_on_base_url_change(monkeypatch
     from comfyui_client import get_comfyui_client_for_backend
 
     b = cb.ComputeBackend(
-        id="test-backend", name="Test", type="comfyui",
-        base_url="http://192.0.2.1:8188", enabled=True, model_families=[],
+        id="test-backend",
+        name="Test",
+        type="comfyui",
+        base_url="http://192.0.2.1:8188",
+        enabled=True,
+        model_families=[],
     )
     c1 = get_comfyui_client_for_backend(b)
     b.base_url = "http://192.0.2.2:8188"

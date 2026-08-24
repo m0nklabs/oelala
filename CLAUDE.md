@@ -19,13 +19,16 @@ source of truth.
 - **Frontend** — React 18 + Vite 7, **JSX only** (67 `.jsx`, 0 `.tsx`) in `src/frontend/src/`
   (port 5174). Supabase, Sentry, Recharts. Always use `apiFetch()` from `utils/api.ts`, never raw `fetch()`.
 - **Execution / compute** — modular *compute backends*, each a configurable source that can run
-  certain model families (see `src/backend/generation/compute_backends.py` + `compute_backends.json`):
+  certain model families. The backend inventory (see `src/backend/generation/compute_backends.py` +
+  `compute_backends.json`, editable via the Admin panel → "Compute") is the **source of truth**;
+  the `COMPUTE_NODE_*` env schema in `.env` is only the fresh-install fallback. Backend types are an
+  extensible enum: `comfyui` (any hosted/desktop ComfyUI reachable by `base_url`) and `runpod`
+  (serverless container submitted via the RunPod client):
   - **ai-kvm2 local ComfyUI** — `localhost:8188` (default client, workflows in `workflows/`,
     models in `ComfyUI/models/`), DisTorch2 multi-GPU alloc `cuda:0,10gb;cuda:1,15gb;cpu,*` with
     **RTX 3060 first**. Managed by systemd `comfyui`; **`always_on`** (monifuse must not idle-stop it).
-  - **Windows-PC ComfyUI** — a second server (hosts local MiniMax-H3). Configured
-    via `COMFYUI_WINDOWS_HOST`/`COMFYUI_WINDOWS_PORT` in `.env`; accessed through
-    `get_windows_comfyui_client()`.
+  - **Second ComfyUI server** (e.g. a Windows-PC) — hosts local MiniMax-H3; resolved purely through
+    the inventory like any other `comfyui` backend (no bespoke `get_windows_comfyui_client`).
   - **RunPod cloud** — headless = a container with an ephemeral ComfyUI server (Wan2.2, LTX-2.3,
     MiniMax-H3, Qwen I2I). Submit via `submit_to_runpod_fn`.
   Adapters live in `src/backend/generation/adapters/{cloud,local}/`; the registry + router resolve

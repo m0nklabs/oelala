@@ -4,8 +4,7 @@ Compute Backend Inventory — configurable sources of compute for OELALA generat
 Every generation runs on a *compute backend*. A backend is one of:
 
 - ``comfyui`` — any ComfyUI server (headless or desktop) reachable over HTTP by
-  ``base_url``. Both the ai-kvm2 default (``localhost:8188``) and the user's
-  Windows-PC (configured via ``COMFYUI_WINDOWS_HOST``) are ComfyUI backends.
+  ``base_url`` (e.g. the ai-kvm2 default ``localhost:8188``).
 - ``runpod`` — a serverless RunPod container, i.e. an ephemeral ComfyUI server
   submitted to via the RunPod client (submit_to_runpod_fn). RunPod is "just a
   container with a temporary ComfyUI server"; endpoint IDs stay in ``.env``.
@@ -15,10 +14,12 @@ registry + router use this inventory to pick an enabled backend per request, so
 adding a new ComfyUI server becomes a configuration change (Admin UI + JSON)
 instead of a code change.
 
-Configuration lives in ``compute_backends.json`` (same directory) and is editable
-through the Admin panel → "Compute" API. If the file is missing/unreadable the
-module falls back to a built-in default equal to the three known backends
-(ai-kvm2, Windows-PC, RunPod), so generation never breaks.
+Configuration lives in ``compute_backends.json`` (same directory, gitignored;
+see ``compute_backends.json.example``) and is editable through the Admin panel →
+"Compute" API — that is the source of truth. If the file is missing/unreadable
+the module falls back to a built-in default: the ``COMPUTE_NODE_*`` env schema
+when present (fresh-install fallback; see ``_nodes_from_env``), otherwise the two
+known backends (ai-kvm2 local, RunPod), so generation never breaks.
 """
 
 from __future__ import annotations
@@ -37,6 +38,16 @@ logger = logging.getLogger(__name__)
 # upscale, lipsync, faceswap, caption, voice-clone, mmaudio) — they run on the
 # default local ComfyUI.
 UTILITY_FAMILY = "utility"
+
+# Maps the generic COMPUTE_NODE_n_TYPE value to a backend type. Node types are
+# intentionally a small extensible enum: 'comfy' (any hosted/desktop ComfyUI
+# server) and 'runpod' (serverless container) today; a future node kind only
+# extends this map without touching any other code.
+_NODE_TYPE_MAP = {
+    "comfy": "comfyui",
+    "comfyui": "comfyui",  # accepted alias; canonical spelling is "comfy"
+    "runpod": "runpod",
+}
 
 
 class ComputeBackend(BaseModel):
@@ -98,13 +109,17 @@ _loaded = False
 
 
 def _default_backends() -> List[ComputeBackend]:
-    """Built-in fallback inventory (ai-kvm2, Windows-PC, RunPod).
+    """Built-in fallback inventory (missing/unreadable compute_backends.json).
 
-    The Windows-PC address comes solely from env config — it is never
-    hardcoded here. When ``COMFYUI_WINDOWS_HOST`` is unset the backend is
-    omitted entirely rather than created with an invalid empty base_url.
+    When ``COMPUTE_NODE_*`` env vars are present they fully define the fallback
+    inventory, so a fresh install can be bootstrapped per operator (see
+    ``_nodes_from_env``). Without them, falls back to the two known backends
+    (ai-kvm2 local, RunPod) so generation still works out of the box.
     """
-    backends = [
+    env_nodes = _nodes_from_env()
+    if env_nodes:
+        return env_nodes
+    return [
         ComputeBackend(
             id="ai-kvm2-comfyui",
             name="ai-kvm2 ComfyUI (local)",
@@ -128,20 +143,75 @@ def _default_backends() -> List[ComputeBackend]:
             ],
         ),
     ]
-    windows_host = os.getenv("COMFYUI_WINDOWS_HOST", "").strip()
-    if windows_host:
-        windows_port = os.getenv("COMFYUI_WINDOWS_PORT", "8188").strip() or "8188"
-        backends.insert(
-            1,
-            ComputeBackend(
-                id="windows-pc-comfyui",
-                name="Windows-PC ComfyUI",
-                type="comfyui",
-                base_url=f"http://{windows_host}:{windows_port}",
-                enabled=True,
-                model_families=["minimax_h3"],
-            ),
-        )
+
+
+def _nodes_from_env() -> List[ComputeBackend]:
+    """Parse the ``COMPUTE_NODE_*`` env schema into backends.
+
+    Each ``COMPUTE_NODE_{n}_*`` group declares one compute node:
+
+    - ``COMPUTE_NODE_{n}_TYPE`` — node type, mapped via ``_NODE_TYPE_MAP``
+      (canonical values ``comfy`` and ``runpod``; ``comfyui`` accepted as an
+      alias). Unknown types are skipped with a warning.
+    - ``COMPUTE_NODE_{n}_HOST`` (+ optional ``..._PORT``, default 8188) — the
+      address for a ``comfy`` node; ignored for ``runpod``. A missing host on a
+      ``comfy`` node skips it.
+    - ``COMPUTE_NODE_{n}_NAME`` — optional display name (defaults to the id).
+    - ``COMPUTE_NODE_{n}_MODEL_FAMILIES`` — comma-separated model families.
+
+    Node numbers are scanned from 1 upward and the scan stops at the first gap,
+    so the env groups must be contiguous (``COMPUTE_NODE_1..N``). Each node gets
+    the deterministic id ``node-{n}``. Any addresses come only from env config —
+    they are never hardcoded here.
+    """
+    backends: List[ComputeBackend] = []
+    idx = 1
+    while True:
+        prefix = f"COMPUTE_NODE_{idx}"
+        node_type = (os.getenv(f"{prefix}_TYPE", "") or "").strip().lower()
+        if not node_type:
+            # First gap ends the scan; the groups must be contiguous.
+            break
+        backend_type = _NODE_TYPE_MAP.get(node_type)
+        if backend_type is None:
+            logger.warning(
+                f"⚠️ Skipping {prefix}: unknown node type '{node_type}' "
+                "(supported: comfy, runpod)"
+            )
+            idx += 1
+            continue
+        node_id = f"node-{idx}"
+        name = (os.getenv(f"{prefix}_NAME", "") or "").strip() or node_id
+        families = [
+            fam.strip()
+            for fam in (os.getenv(f"{prefix}_MODEL_FAMILIES", "") or "").split(",")
+            if fam.strip()
+        ]
+        base_url = ""
+        if backend_type == "comfyui":
+            host = (os.getenv(f"{prefix}_HOST", "") or "").strip()
+            if not host:
+                logger.warning(
+                    f"⚠️ Skipping {prefix}: comfy node requires {prefix}_HOST"
+                )
+                idx += 1
+                continue
+            port = (os.getenv(f"{prefix}_PORT", "") or "").strip() or "8188"
+            base_url = f"http://{host}:{port}"
+        try:
+            backends.append(
+                ComputeBackend(
+                    id=node_id,
+                    name=name,
+                    type=backend_type,
+                    base_url=base_url,
+                    enabled=True,
+                    model_families=families,
+                )
+            )
+        except Exception as exc:
+            logger.warning(f"⚠️ Skipping {prefix}: invalid compute node ({exc})")
+        idx += 1
     return backends
 
 
