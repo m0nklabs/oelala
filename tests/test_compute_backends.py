@@ -16,9 +16,31 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "backend
 from generation import compute_backends as cb
 
 
+CLEAN_CONFIG = {
+    "backends": [
+        {"id": "ai-kvm2-comfyui", "name": "ai-kvm2 ComfyUI (local)", "type": "comfyui",
+         "base_url": "http://localhost:8188", "enabled": True,
+         "model_families": ["wan2.2", "sdxl", "flux", "flux2", "krea2", "utility"]},
+        {"id": "windows-pc-comfyui", "name": "Windows-PC ComfyUI", "type": "comfyui",
+         "base_url": "http://windows-pc.test.invalid:8188", "enabled": True,
+         "model_families": ["minimax_h3"]},
+        {"id": "runpod-cloud", "name": "RunPod serverless cloud", "type": "runpod",
+         "base_url": "", "enabled": True,
+         "model_families": ["wan2.2", "ltx", "minimax_h3", "qwen_image_edit", "i2i_edit_model"]},
+    ]
+}
+
+
 @pytest.fixture(autouse=True)
-def reset_cache():
-    """Reset the module-level cache before/after each test."""
+def reset_cache(tmp_path, monkeypatch):
+    """Reset cache and point the module at a deterministic throwaway inventory.
+
+    Uses a placeholder host (no real addresses) and never touches the live,
+    gitignored compute_backends.json on disk.
+    """
+    fp = tmp_path / "backends.json"
+    fp.write_text(json.dumps(CLEAN_CONFIG))
+    monkeypatch.setattr(cb, "_json_path", fp)
     cb._loaded = False
     cb._backends = []
     yield
@@ -36,10 +58,17 @@ def test_loads_inventory_from_json():
 
 def test_default_fallback_when_json_missing(monkeypatch):
     from pathlib import Path
+    # Force the missing-file branch and clear the env so the fallback inventory
+    # is fully deterministic (Windows-PC backend is only added when
+    # COMFYUI_WINDOWS_HOST is set).
     monkeypatch.setattr(cb, "_json_path", Path("/nonexistent/path/backends.json"))
+    monkeypatch.delenv("COMFYUI_WINDOWS_HOST", raising=False)
     cb._loaded = False
     backends = cb.load_backends(force=True)
-    assert len(backends) == 3
+    ids = [b.id for b in backends]
+    assert "ai-kvm2-comfyui" in ids
+    assert "runpod-cloud" in ids
+    assert "windows-pc-comfyui" not in ids
 
 
 def test_get_backend():
@@ -85,7 +114,7 @@ def test_enabled_filter_excludes_disabled(tmp_path, monkeypatch):
         json.dumps({
             "backends": [
                 {"id": "windows-pc-comfyui", "name": "Windows", "type": "comfyui",
-                 "base_url": "http://192.168.1.245:8188", "enabled": True,
+                 "base_url": "http://windows-pc.test.invalid:8188", "enabled": True,
                  "model_families": ["minimax_h3"]},
                 {"id": "runpod-cloud", "name": "RunPod", "type": "runpod",
                  "base_url": "", "enabled": True, "model_families": ["minimax_h3"]},
@@ -128,7 +157,7 @@ def test_client_fn_for_model_exposes_backend_id(monkeypatch):
     client = fn()
     assert fn.backend_id == "windows-pc-comfyui"
     assert client is not None
-    assert client.base_url == "http://192.168.1.245:8188"
+    assert client.base_url == "http://windows-pc.test.invalid:8188"
 
 
 def test_client_fn_raises_for_runpod(monkeypatch):

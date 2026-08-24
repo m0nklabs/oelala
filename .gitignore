@@ -134,3 +134,4 @@ oelala-cloud-wan22_*_ssh.key*
 scratch/
 pnpm-lock.yaml
 pnpm-workspace.yaml
+src/backend/generation/compute_backends.json

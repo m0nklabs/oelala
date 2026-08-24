@@ -204,7 +204,7 @@ When `include_metadata=true`, each item includes:
 - **Dev Port**: 5174
 - **API Proxy**: Proxied to backend in dev mode
 - **Theme**: Dark mode with CSS variables
-- **Host**: 192.168.1.2
+- **Host**: ai-kvm2 (LAN)
 - **Port**: 3000
 - **API proxy**: `/api` routes proxied to backend
 

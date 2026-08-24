@@ -194,6 +194,6 @@ if __name__ == "__main__":
     print("🚀 Starting Gradio UI for WAN2.2 Video Generator...")
     print(f"📡 Backend URL: {BACKEND_URL}")
     print("🌐 Frontend will be available at: http://127.0.0.1:7860")
-    print("📱 Or access from network: http://192.168.1.2:7860")
+    print("📱 Or access from network: http://localhost:7860")
 
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False)

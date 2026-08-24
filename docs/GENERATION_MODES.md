@@ -81,7 +81,7 @@ This document provides a comprehensive overview of all available generation mode
 | **Video VAE** | `minimax_h3_video_vae_fp16.safetensors` | `vae/` |
 | **Audio VAE** | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` |
 
-Lokaal draait MiniMax-H3 op de **Windows-PC ComfyUI** (`COMFYUI_WINDOWS_HOST`, default `192.168.1.245:8188`)
+Lokaal draait MiniMax-H3 op de **Windows-PC ComfyUI** (`COMFYUI_WINDOWS_HOST`, set via `COMFYUI_WINDOWS_HOST`)
 — een tweede ComfyUI-server naast die op ai-kvm2. De int8_convrot text-encoder past in 16GB VRAM
 (zie `README_MiniMax_H3_workflow.md` en `download_minimax_h3.*`).
 

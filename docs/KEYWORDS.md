@@ -8,4 +8,4 @@ Realistic Avatar
 Realistic and Consistent AI Avatar
 
 # Network
-oelala-lan:192.168.1.2
+oelala-lan:<LAN-IP>

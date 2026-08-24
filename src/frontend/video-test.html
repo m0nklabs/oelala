@@ -200,7 +200,7 @@
 
             <div class="video-wrapper">
                 <video id="testVideo" controls preload="metadata">
-                    <source id="videoSource" src="http://192.168.1.2:7995/files/20251128_214806_text_video.mp4" type="video/mp4">
+                    <source id="videoSource" src="http://localhost:7995/files/20251128_214806_text_video.mp4" type="video/mp4">
                     Je browser ondersteunt geen HTML5 video.
                 </video>
             </div>
@@ -216,7 +216,7 @@
             <div id="status" class="status"></div>
 
             <div class="video-url" id="videoUrl">
-                <strong>URL:</strong> http://192.168.1.2:7995/files/20251128_214806_text_video.mp4
+                <strong>URL:</strong> http://localhost:7995/files/20251128_214806_text_video.mp4
             </div>
         </div>
 
@@ -308,7 +308,7 @@
             formData.append('model_type', modelType);
 
             try {
-                const response = await fetch('http://192.168.1.2:7995/generate-text', {
+                const response = await fetch('http://localhost:7995/generate-text', {
                     method: 'POST',
                     body: formData
                 });
@@ -323,7 +323,7 @@
                     showStatus('✅ Video gegenereerd! Laden...', 'success');
 
                     // Update video source
-                    const videoUrl = `http://192.168.1.2:7995${result.video_url}`;
+                    const videoUrl = `http://localhost:7995${result.video_url}`;
                     document.getElementById('videoSource').src = videoUrl;
                     document.getElementById('videoUrl').innerHTML = `<strong>URL:</strong> ${videoUrl}`;
 

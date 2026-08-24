@@ -5,21 +5,21 @@ const isProduction = window.location.hostname === 'oelala.xyz'
 // Set the backend base URL based on environment
 const BACKEND_BASE = isProduction
   ? 'https://api.oelala.xyz'
-  : 'http://192.168.1.2:7998'
+  : 'http://localhost:7998'
 
 // Storage service URL (MinIO — serves presigned URLs directly)
 const STORAGE_BASE = isProduction
   ? 'https://storage-main.oelala.xyz'
-  : 'http://192.168.1.2:9000'
+  : 'http://localhost:9000'
 
 // Global debug flag for UI logging
 const DEBUG = import.meta.env?.DEV ?? false
 
 // External service URLs
 const EXTERNAL_SERVICES = {
-  COMFYUI: isProduction ? 'https://comfy.oelala.xyz/' : 'http://192.168.1.2:8188/',
-  TARS_AI: 'http://192.168.1.35:8001/',
-  NADSCAB: 'http://192.168.1.2:7000/'
+  COMFYUI: isProduction ? 'https://comfy.oelala.xyz/' : 'http://localhost:8188/',
+  TARS_AI: 'http://localhost:8001/',
+  NADSCAB: 'http://localhost:7000/'
 }
 
 /**

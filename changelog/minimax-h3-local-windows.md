@@ -1,7 +1,7 @@
 ### Added
 - Local MiniMax-H3 generation (t2v + i2v) via the user's **Windows PC ComfyUI**
   - New `get_windows_comfyui_client()` factory in `comfyui_client.py` — a second
-    ComfyUI server (default `192.168.1.245:8188`, configurable via
+    ComfyUI server (default set via
     `COMFYUI_WINDOWS_HOST` / `COMFYUI_WINDOWS_PORT`) separate from the one on ai-kvm2
   - New local builders `build_local_minimax_h3_t2v_workflow()` /
     `build_local_minimax_h3_i2v_workflow()` — reuse the FL2VA cloud graph but with the

@@ -63,7 +63,7 @@
 | Current (systemd) | Machine | After |
 |-------------------|---------|-------|
 | `oelala-storage.service` (port 7990) | ai-kvm2 | `minio.service` (port 9000 API, 9001 Console) |
-| `oelala-storage.service` (port 7990) | 192.168.1.62 | `minio.service` (port 9000 API, 9001 Console) |
+| `oelala-storage.service` (port 7990) | <storage-IP> | `minio.service` (port 9000 API, 9001 Console) |
 | `oelala-storage-autoupdate.timer` | ai-kvm2 | **Remove** (MinIO has its own update mechanism) |
 
 ### Cloudflare Tunnels
@@ -146,7 +146,7 @@
 ### Phase 7: Node 2 (Site Replication)
 > Set up MinIO on node 2 for redundancy.
 
-- [ ] Install MinIO on 192.168.1.62
+- [ ] Install MinIO on the storage node (LAN IP)
 - [ ] Create systemd service
 - [ ] Configure as site replication peer (NOT a distributed cluster — 2 independent sites)
 - [ ] Set up site replication: `mc admin replicate add site1 site2`

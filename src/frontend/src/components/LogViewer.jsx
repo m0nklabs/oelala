@@ -4,7 +4,7 @@ import { BACKEND_BASE } from '../config'
 
 // Convert HTTP URL to WebSocket URL
 const getWsUrl = () => {
-  // BACKEND_BASE is like 'http://192.168.1.2:7998'
+  // BACKEND_BASE is like 'http://localhost:7998'
   const wsProtocol = BACKEND_BASE.startsWith('https') ? 'wss:' : 'ws:'
   const hostPart = BACKEND_BASE.replace(/^https?:\/\//, '')
   return `${wsProtocol}//${hostPart}/ws/logs`

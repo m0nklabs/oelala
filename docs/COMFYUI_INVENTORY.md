@@ -182,7 +182,7 @@ ComfyUI-server op de Windows-PC van de user** waarop lokale MiniMax-H3 draait.
 
 | Eigenschap | Waarde |
 |-----------|--------|
-| Host (default) | `192.168.1.245` (`COMFYUI_WINDOWS_HOST`) |
+| Host | `COMFYUI_WINDOWS_HOST` (set in `.env`) |
 | Poort (default) | `8188` (`COMFYUI_WINDOWS_PORT`) |
 | Installatie | ComfyUI portable (`C:\PROGRAMME\ComfyUI_windows_portable`) |
 | Draaiend via | Taak `ComfyUIServer` bij inloggen (`start_comfy_server.bat`, log `comfy_server.log`) |
