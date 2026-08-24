@@ -1266,6 +1266,43 @@ class ComfyUIClient:
             logger.error(f"🎬 Video upload error: {e}")
             return None
 
+    def upload_lora(self, lora_path: str) -> Optional[str]:
+        """Upload a LoRA file to this ComfyUI server's loras folder.
+
+        Targets the modern ``/internal/models/upload`` endpoint (available on
+        current ComfyUI installs — including the Windows-PC portable), which
+        writes into ``models/loras`` so a subsequent ``LoraLoaderModelOnly``
+        node can load the file by name. Returns the uploaded filename (the
+        basename) on success, else ``None``.
+        """
+        try:
+            path = Path(lora_path)
+            if not path.exists():
+                logger.error(f"🎨 LoRA not found: {lora_path}")
+                return None
+            with open(path, "rb") as f:
+                files = {"file": (path.name, f)}
+                # type=loras routes the file into models/loras on the server.
+                data = {"type": "loras", "subfolder": "", "overwrite": "true"}
+                resp = requests.post(
+                    f"{self.base_url}/internal/models/upload",
+                    files=files,
+                    data=data,
+                    timeout=300,
+                )
+            if resp.status_code == 200:
+                result = resp.json() if resp.text else {}
+                name = result.get("name") or path.name
+                logger.info(f"🎨 LoRA uploaded to server: {name}")
+                return name
+            logger.error(
+                f"🎨 LoRA upload failed: {resp.status_code} - {resp.text[:200]}"
+            )
+            return None
+        except Exception as e:
+            logger.error(f"🎨 LoRA upload error: {e}")
+            return None
+
     def get_resolution_dimensions(
         self, resolution: str, aspect_ratio: str
     ) -> Tuple[int, int]:
@@ -4028,6 +4065,7 @@ class ComfyUIClient:
         audio_vae: str,
         first_frame_link: Optional[list] = None,
         last_frame_link: Optional[list] = None,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
         output_kind: str = "vhs",
     ) -> Dict[str, Any]:
         """Shared MiniMax-H3 sampling graph (model load → AV decode → mp4).
@@ -4049,6 +4087,10 @@ class ComfyUIClient:
                 "weight_dtype": "default",
             },
         }
+        # The diffusion model the guider + scheduler sample from. With LoRAs we
+        # chain LoraLoaderModelOnly nodes in front of the base model, so this
+        # link points at the last loader in the chain.
+        model_link = ["1", 0]
 
         # Node 2: CLIPLoader — Qwen3-VL-32B MiniMax text encoder
         workflow["2"] = {
@@ -4090,11 +4132,35 @@ class ComfyUIClient:
             "inputs": h3_inputs,
         }
 
+        # Apply MiniMax-H3 LoRAs (single-stage) by chaining LoraLoaderModelOnly
+        # in front of the base model. The guider + scheduler already reference
+        # model_link, which now points at the last loader in the chain.
+        if lora_configs:
+            lora_node_id = 16
+            for i, cfg in enumerate(lora_configs):
+                if not cfg:
+                    continue
+                lora_name = cfg.get("name") or ""
+                strength = cfg.get("strength", 1.0)
+                if not lora_name:
+                    continue
+                workflow[str(lora_node_id)] = {
+                    "class_type": "LoraLoaderModelOnly",
+                    "inputs": {
+                        "model": model_link,
+                        "lora_name": lora_name,
+                        "strength_model": strength,
+                    },
+                }
+                model_link = [str(lora_node_id), 0]
+                logger.info(f"🎨 MiniMax-H3 LoRA #{i + 1}: {lora_name} @ {strength}")
+                lora_node_id += 1
+
         # Node 6: BasicGuider — no CFG / no negative prompt for H3
         workflow["6"] = {
             "class_type": "BasicGuider",
             "inputs": {
-                "model": ["1", 0],
+                "model": model_link,
                 "conditioning": ["5", 0],
             },
         }
@@ -4109,7 +4175,7 @@ class ComfyUIClient:
         workflow["8"] = {
             "class_type": "BasicScheduler",
             "inputs": {
-                "model": ["1", 0],
+                "model": model_link,
                 "scheduler": "simple",
                 "steps": steps,
                 "denoise": 1.0,
@@ -4217,6 +4283,7 @@ class ComfyUIClient:
         aspect_ratio: str = "16:9",
         megapixels: Optional[float] = None,
         long_edge: int = 768,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
         output_kind: str = "vhs",
     ) -> Optional[Dict[str, Any]]:
         """
@@ -4254,6 +4321,7 @@ class ComfyUIClient:
             text_encoder=text_encoder,
             video_vae=video_vae,
             audio_vae=audio_vae,
+            lora_configs=lora_configs,
             output_kind=output_kind,
         )
 
@@ -4275,6 +4343,7 @@ class ComfyUIClient:
         aspect_ratio: str = "16:9",
         megapixels: Optional[float] = None,
         long_edge: int = 768,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
         output_kind: str = "vhs",
     ) -> Optional[Dict[str, Any]]:
         """
@@ -4310,6 +4379,7 @@ class ComfyUIClient:
             video_vae=video_vae,
             audio_vae=audio_vae,
             first_frame_link=["14", 0],
+            lora_configs=lora_configs,
             output_kind=output_kind,
         )
 
@@ -4337,6 +4407,7 @@ class ComfyUIClient:
         aspect_ratio: str = "16:9",
         megapixels: Optional[float] = None,
         long_edge: int = 768,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Build MiniMax-H3 local (Windows PC ComfyUI) T2V workflow.
@@ -4362,6 +4433,7 @@ class ComfyUIClient:
             audio_vae=audio_vae,
             aspect_ratio=aspect_ratio,
             megapixels=megapixels,
+            lora_configs=lora_configs,
             output_kind="savevideo",
         )
 
@@ -4383,6 +4455,7 @@ class ComfyUIClient:
         aspect_ratio: str = "16:9",
         megapixels: Optional[float] = None,
         long_edge: int = 768,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Build MiniMax-H3 local (Windows PC ComfyUI) I2V workflow.
@@ -4405,6 +4478,7 @@ class ComfyUIClient:
             audio_vae=audio_vae,
             aspect_ratio=aspect_ratio,
             megapixels=megapixels,
+            lora_configs=lora_configs,
             output_kind="savevideo",
         )
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from pathlib import Path
 from typing import Any
 
 from ...adapter import GenerationAdapter, ProgressCallback
@@ -26,6 +27,36 @@ from ...types import (
 )
 
 logger = logging.getLogger(__name__)
+
+# LoRAs for the local MiniMax-H3 (Windows-PC ComfyUI) live here on this
+# server and are uploaded to the Windows-PC on demand before dispatch.
+_MINIMAX_H3_LORA_DIR = Path("/mnt/ssd/loras/minimax-h3")
+
+
+def _upload_minimax_loras(client: Any, req: GenerationRequest) -> None:
+    """Upload any requested MiniMax-H3 LoRAs to the Windows-PC ComfyUI server.
+
+    ``LoraStackItem.name`` is the LoRA filename as the server knows it, so each
+    requested LoRA is uploaded from the local ``minimax-h3`` folder (by that
+    basename) before the workflow runs. Missing files are warned about and
+    skipped; the run proceeds without them rather than failing the whole job.
+    """
+    if not req.loras:
+        return
+    for lora in req.loras:
+        name = (lora.name or "").strip()
+        if not name or name == "None":
+            continue
+        src = _MINIMAX_H3_LORA_DIR / name
+        if not src.resolve().is_relative_to(_MINIMAX_H3_LORA_DIR.resolve()):
+            logger.warning(f"🎨 Refusing out-of-directory LoRA path: {name}")
+            continue
+        if not src.is_file():
+            logger.warning(f"🎨 MiniMax-H3 LoRA not found, skipping: {src}")
+            continue
+        uploaded = client.upload_lora(str(src))
+        if not uploaded:
+            logger.warning(f"🎨 MiniMax-H3 LoRA upload failed, skipping: {name}")
 
 
 class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
@@ -91,12 +122,23 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
             raw = raw + ("=" * missing)
         return base64.b64decode(raw)
 
-    def build_workflow(self, req: GenerationRequest) -> dict:
+    def build_workflow(self, req: GenerationRequest, image_name: str = "") -> dict:
+        """Build the local MiniMax-H3 I2V ComfyUI workflow.
+
+        ``image_name`` is the filename the input image was uploaded as on the
+        target server (it is read back from the upload in ``execute``). It
+        defaults to a placeholder so workflow-only callers can still build one.
+        """
         if self._get_comfyui is None:
             raise RuntimeError("ComfyUI client not available")
         comfyui = self._get_comfyui()
+        lora_configs = (
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
+        )
         return comfyui.build_local_minimax_h3_i2v_workflow(
-            image_name="input.png" if req.input_images else "",
+            image_name=image_name or "input.png",
             prompt=req.prompt,
             num_frames=req.frames or 124,
             fps=req.fps or 24,
@@ -104,6 +146,7 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
             steps=req.steps or 20,
             aspect_ratio=req.aspect_ratio or "16:9",
             megapixels=req.megapixels,
+            lora_configs=lora_configs,
         )
 
     def cost(self, req: GenerationRequest) -> int:
@@ -148,16 +191,9 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         if not uploaded_name:
             raise RuntimeError("ComfyUI image upload failed on Windows server")
 
-        workflow = client.build_local_minimax_h3_i2v_workflow(
-            image_name=uploaded_name,
-            prompt=req.prompt,
-            num_frames=req.frames or 124,
-            fps=req.fps or 24,
-            seed=req.seed,
-            steps=req.steps or 20,
-            aspect_ratio=req.aspect_ratio or "16:9",
-            megapixels=req.megapixels,
-        )
+        _upload_minimax_loras(client, req)
+
+        workflow = self.build_workflow(req, image_name=uploaded_name)
         if not workflow:
             raise RuntimeError("Failed to build MiniMax-H3 local I2V workflow")
 

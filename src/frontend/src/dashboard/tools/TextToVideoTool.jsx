@@ -1704,8 +1704,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               </div>
             )}
 
-            {/* LoRA Settings (not for MiniMax-H3 — worker has no LoRA support yet) */}
-            {!isH3Mode(modelType) && (
+            {/* LoRA Settings (MiniMax-H3 local supports LoRAs via the Windows-PC ComfyUI; the cloud worker does not yet) */}
+            {modelType !== 'minimax_h3' && (
             <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
               <div
                 onClick={() => setShowLoraPanel(!showLoraPanel)}
