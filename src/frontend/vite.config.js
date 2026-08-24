@@ -38,18 +38,18 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5174,
-    allowedHosts: ['ai-kvm2', 'localhost', '192.168.1.2', 'oelala.xyz'],
+    allowedHosts: ['ai-kvm2', 'localhost', 'localhost', 'oelala.xyz'],
     proxy: {
       '/api': {
-        target: 'http://192.168.1.2:7998',
+        target: 'http://localhost:7998',
         changeOrigin: true
       },
       '/comfyui': {
-        target: 'http://192.168.1.2:7998',
+        target: 'http://localhost:7998',
         changeOrigin: true
       },
       '/media': {
-        target: 'http://192.168.1.2:7998',
+        target: 'http://localhost:7998',
         changeOrigin: true
       }
     }

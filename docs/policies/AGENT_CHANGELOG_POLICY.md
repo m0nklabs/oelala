@@ -30,7 +30,7 @@ Agent: GitHub Copilot
 AgentTag: GCOP
 ModelTag: WAN2
 Details:
-- Updated multiple README files to change project LAN IP to 192.168.1.2.
+- Updated multiple README files to change the project's LAN IP.
 - added network notes in WAN2_README.md and PROJECT_PLAN.md.
 FilesChanged:
 - WEB_INTERFACE_README.md

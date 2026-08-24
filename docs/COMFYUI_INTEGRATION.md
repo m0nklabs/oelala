@@ -1,7 +1,7 @@
 # ComfyUI Integratie Ideeën
 
 ## 🎯 Huidige Status
-- ✅ ComfyUI runs on `http://192.168.1.2:8188/`
+- ✅ ComfyUI runs on `http://localhost:8188/`
 - ✅ Toegankelijk via Oelala sidebar link
 - ✅ Ondersteunt Wan2.2, Flux, SDXL, and vele andere modellen
 

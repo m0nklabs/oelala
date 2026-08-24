@@ -87,14 +87,14 @@ referenced by `CLAUDE.md` and `.goosehints` via `scripts/sync-agent-docs.sh`.
 
 ## Storage: MinIO (replaced oelala-storage as of 2026-04-15)
 
-### Node 1 — ai-kvm2 (192.168.1.35)
+### Node 1 — ai-kvm2
 - **MinIO S3 API**: `http://localhost:9000` (systemd: `minio.service`)
 - **MinIO Console**: `http://localhost:9001`
 - **Data directory**: `/home/flip/minio-data`
 - **Cloudflare**: `storage.oelala.xyz` → `:9000`, `storage-main.oelala.xyz` → `:9001`
 - **mc alias**: `mc alias set oelala http://localhost:9000 $ACCESS $SECRET`
 
-### Node 2 — ubuntu-oelalastorage2 (192.168.1.62)
+### Node 2 — ubuntu-oelalastorage2
 - **MinIO S3 API**: `http://localhost:9000` (systemd: `minio.service`)
 - **Cloudflare**: `storage2.oelala.xyz` → `:9000`
 - **mc binary**: `mcli` (not `mc`), alias `local`
@@ -249,8 +249,8 @@ systemctl is-enabled oelala-backend oelala-frontend comfyui minio
 
 | Tunnel | ID | Machine | Config |
 |--------|----|---------|--------|
-| `oelala-main` | `b34ce27b-e9b1-4926-b5fe-ebbaf42d506a` | 192.168.1.35 (ai-kvm2) | `/etc/cloudflared/config.yml` |
-| `oelala-storage-node2` | `83d253c4-24eb-4643-b36f-174a2fc3f10b` | 192.168.1.62 (ubuntu-oelalastorage2) | `/etc/cloudflared/config.yml` |
+| `oelala-main` | `b34ce27b-e9b1-4926-b5fe-ebbaf42d506a` | ai-kvm2 (LAN) | `/etc/cloudflared/config.yml` |
+| `oelala-storage-node2` | `83d253c4-24eb-4643-b36f-174a2fc3f10b` | ubuntu-oelalastorage2 (LAN) | `/etc/cloudflared/config.yml` |
 
 ### DNS → Tunnel Routing
 
@@ -275,7 +275,7 @@ systemctl is-enabled oelala-backend oelala-frontend comfyui minio
 - **Allowed Origins**:
   ```python
   ["https://oelala.xyz", "http://oelala.xyz", "http://localhost:5174",
-   "http://localhost:5173", "http://localhost:3000", "http://192.168.1.26:5174"]
+   "http://localhost:5173", "http://localhost:3000", "http://localhost:5174"]
   ```
 - **Cloudflare Cache Gotcha**: CF caches responses WITHOUT `Vary: Origin`, so the first CORS response gets served to all origins. Fix: add `Vary: Origin` header to all CORS-sensitive endpoints.
 - **Static File CORS**: The `/comfyui/output/` endpoint has explicit CORS headers + `Vary: Origin` because CF caches aggressively.

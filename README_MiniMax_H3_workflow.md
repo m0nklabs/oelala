@@ -17,7 +17,7 @@ text-encoder aangepast naar de **int8_convrot** variant die op de server staat
 ## Openen
 
 - **In de browser (aanbevolen)** — server draait al met alle modellen op schijf:
-  `http://192.168.1.245:8188` → sleep het .json op het canvas (of Workflow → Open).
+  `http://COMFYUI_WINDOWS_HOST:8188` → sleep het .json op het canvas (of Workflow → Open).
 - **In Comfy Desktop:** Workflow-menu → Open → dit bestand.
 
 ## Belangrijk — waar Desktop z'n modellen vandaan haalt

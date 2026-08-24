@@ -12,7 +12,6 @@ import urllib.error
 import random
 import time
 import sys
-import base64
 from pathlib import Path
 
 COMFYUI_URL = "http://localhost:8188"
@@ -176,7 +175,7 @@ def main():
         ], check=False)
 
     print(f"📸 Input: {input_image.name}")
-    print(f"🎬 Output: wan_multigpu_*.mp4")
+    print("🎬 Output: wan_multigpu_*.mp4")
     print()
 
     # Queue the workflow
@@ -187,7 +186,7 @@ def main():
         prompt_id = result.get('prompt_id', 'unknown')
         print(f"✅ Queued! Prompt ID: {prompt_id}")
         print()
-        print("📊 Monitor progress at: http://192.168.1.2:8188")
+        print("📊 Monitor progress at: http://localhost:8188")
         print("   Or check GPU usage: nvidia-smi -l 2")
 
         # Wait and check queue

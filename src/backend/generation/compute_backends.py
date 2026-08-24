@@ -5,7 +5,7 @@ Every generation runs on a *compute backend*. A backend is one of:
 
 - ``comfyui`` — any ComfyUI server (headless or desktop) reachable over HTTP by
   ``base_url``. Both the ai-kvm2 default (``localhost:8188``) and the user's
-  Windows-PC (``192.168.1.245:8188``) are ComfyUI backends.
+  Windows-PC (configured via ``COMFYUI_WINDOWS_HOST``) are ComfyUI backends.
 - ``runpod`` — a serverless RunPod container, i.e. an ephemeral ComfyUI server
   submitted to via the RunPod client (submit_to_runpod_fn). RunPod is "just a
   container with a temporary ComfyUI server"; endpoint IDs stay in ``.env``.
@@ -98,8 +98,13 @@ _loaded = False
 
 
 def _default_backends() -> List[ComputeBackend]:
-    """Built-in fallback inventory (ai-kvm2, Windows-PC, RunPod)."""
-    return [
+    """Built-in fallback inventory (ai-kvm2, Windows-PC, RunPod).
+
+    The Windows-PC address comes solely from env config — it is never
+    hardcoded here. When ``COMFYUI_WINDOWS_HOST`` is unset the backend is
+    omitted entirely rather than created with an invalid empty base_url.
+    """
+    backends = [
         ComputeBackend(
             id="ai-kvm2-comfyui",
             name="ai-kvm2 ComfyUI (local)",
@@ -107,14 +112,6 @@ def _default_backends() -> List[ComputeBackend]:
             base_url="http://localhost:8188",
             enabled=True,
             model_families=["wan2.2", "sdxl", "flux", "flux2", "krea2", UTILITY_FAMILY],
-        ),
-        ComputeBackend(
-            id="windows-pc-comfyui",
-            name="Windows-PC ComfyUI",
-            type="comfyui",
-            base_url=f"http://{os.getenv('COMFYUI_WINDOWS_HOST', '192.168.1.245')}:{os.getenv('COMFYUI_WINDOWS_PORT', '8188')}",
-            enabled=bool(os.getenv("COMFYUI_WINDOWS_HOST", "").strip()),
-            model_families=["minimax_h3"],
         ),
         ComputeBackend(
             id="runpod-cloud",
@@ -131,6 +128,21 @@ def _default_backends() -> List[ComputeBackend]:
             ],
         ),
     ]
+    windows_host = os.getenv("COMFYUI_WINDOWS_HOST", "").strip()
+    if windows_host:
+        windows_port = os.getenv("COMFYUI_WINDOWS_PORT", "8188").strip() or "8188"
+        backends.insert(
+            1,
+            ComputeBackend(
+                id="windows-pc-comfyui",
+                name="Windows-PC ComfyUI",
+                type="comfyui",
+                base_url=f"http://{windows_host}:{windows_port}",
+                enabled=True,
+                model_families=["minimax_h3"],
+            ),
+        )
+    return backends
 
 
 def load_backends(force: bool = False) -> List[ComputeBackend]:

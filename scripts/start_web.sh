@@ -32,8 +32,8 @@ python app.py &
 BACKEND_PID=$!
 
 echo "✅ Backend started (PID: $BACKEND_PID)"
-echo "🌐 Backend URL: http://192.168.1.2:7998"
-echo "📊 API Docs: http://192.168.1.2:7998/docs"
+echo "🌐 Backend URL: http://localhost:7998"
+echo "📊 API Docs: http://localhost:7998/docs"
 
 # Wait a moment for backend to start
 sleep 3
@@ -47,11 +47,11 @@ npm run dev &
 FRONTEND_PID=$!
 
 echo "✅ Frontend started (PID: $FRONTEND_PID)"
-echo "🌐 Frontend URL: http://192.168.1.2:5174"
+echo "🌐 Frontend URL: http://localhost:5174"
 
 echo ""
 echo "🎉 Oelala Web Interface is running!"
-echo "📱 Open http://192.168.1.2:5174 in your browser"
+echo "📱 Open http://localhost:5174 in your browser"
 echo ""
 echo "Press Ctrl+C to stop all services"
 

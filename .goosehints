@@ -23,7 +23,7 @@ source of truth.
   - **ai-kvm2 local ComfyUI** — `localhost:8188` (default client, workflows in `workflows/`,
     models in `ComfyUI/models/`), DisTorch2 multi-GPU alloc `cuda:0,10gb;cuda:1,15gb;cpu,*` with
     **RTX 3060 first**. Managed by systemd `comfyui`; **`always_on`** (monifuse must not idle-stop it).
-  - **Windows-PC ComfyUI** — `192.168.1.245:8188` (second server, hosts local MiniMax-H3). Configured
+  - **Windows-PC ComfyUI** — a second server (hosts local MiniMax-H3). Configured
     via `COMFYUI_WINDOWS_HOST`/`COMFYUI_WINDOWS_PORT` in `.env`; accessed through
     `get_windows_comfyui_client()`.
   - **RunPod cloud** — headless = a container with an ephemeral ComfyUI server (Wan2.2, LTX-2.3,
@@ -45,15 +45,19 @@ source of truth.
 4. **Media storage**: use only canonical dirs (see Stack). Never create new output dirs. Follow
    naming conventions (`oelala_t2v_{date}_{time}_{idx}.mp4`, etc.).
 5. **Secrets**: never commit keys/credentials; use env vars + `.env.example`. Don't log sensitive values.
-6. **Language**: artifacts (docs/comments/commits) in **English**; chat with the user in **Dutch**.
-7. **Log integrity**: logs are historical — never rewrite/delete/trim old entries; only append.
-8. **Docs**: don't delete/prune docs. Keep `docs/GENERATION_MODES_TREE.md` current after successful
+6. **No hardcoded addresses/config**: never put private IPs, ports, hostnames, or environment-specific
+   values directly in committed code — **including tests and docs**. Read them from env/config
+   (`.env`, `.env.example`, `compute_backends.json`). A hardcoded real address in any committed file
+   is treated as a bug and must be replaced with an env placeholder or a generic dummy (`_.test.invalid`).
+7. **Language**: artifacts (docs/comments/commits) in **English**; chat with the user in **Dutch**.
+8. **Log integrity**: logs are historical — never rewrite/delete/trim old entries; only append.
+9. **Docs**: don't delete/prune docs. Keep `docs/GENERATION_MODES_TREE.md` current after successful
    generation runs. LoRA metadata lives in `docs/lora_registry.yaml`.
-9. **Tests**: run relevant lint/tests before claiming fixed; add/extend tests for changed behavior.
-   GPU-affecting work adds tests under `tests/gpu/`.
-10. **GPU venv**: use canonical `/home/flip/venvs/gpu` (symlink); don't create heavy project `.venv`s.
-11. **Scope**: smallest correct change; follow existing patterns; don't reformat unrelated files.
-12. **Loop device / debug code**: add debug logging with emoji prefixes (🐛🔍⚠️❌✅) and timestamps
+10. **Tests**: run relevant lint/tests before claiming fixed; add/extend tests for changed behavior.
+    GPU-affecting work adds tests under `tests/gpu/`.
+11. **GPU venv**: use canonical `/home/flip/venvs/gpu` (symlink); don't create heavy project `.venv`s.
+12. **Scope**: smallest correct change; follow existing patterns; don't reformat unrelated files.
+13. **Loop device / debug code**: add debug logging with emoji prefixes (🐛🔍⚠️❌✅) and timestamps
     on every log line.
 
 ## Skills

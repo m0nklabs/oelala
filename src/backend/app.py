@@ -4141,9 +4141,10 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                 pending.append(job_info)
 
         # ── Windows-PC ComfyUI (remote MiniMax-H3) queue ─────────────────
-        # H3 local jobs run on 192.168.1.245, NOT on the ai-kvm2 localhost
-        # server. Surface them in the queue indicator as running/pending so
-        # the user sees remote jobs alongside local/cloud ones.
+        # H3 local jobs run on the remote Windows-PC ComfyUI, NOT on the
+        # ai-kvm2 localhost server. Surface them in the queue indicator as
+        # running/pending so the user sees remote jobs alongside local/cloud
+        # ones.
         windows_running = []
         windows_pending = []
         if get_windows_comfyui_client is not None:
@@ -11479,9 +11480,7 @@ class ComputeBackendPayload(_BaseModel):
             # Reject bare "http://" (no host) — _parse_base_url would yield
             # "http://:8188" for it, producing a broken backend.
             if not host:
-                raise ValueError(
-                    "base_url must include a host (e.g. http://192.168.1.10:8188)"
-                )
+                raise ValueError("base_url must include a host (e.g. http://host:8188)")
             # An explicit port must be numeric and in range; without this a typo
             # like 'http://host:abc' would fail later as a confusing 500.
             if ":" in authority:
@@ -11589,4 +11588,4 @@ async def admin_delete_backend(backend_id: str, user: User = Depends(get_current
 
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="192.168.1.2", port=7998, reload=True, log_level="info")
+    uvicorn.run("app:app", host="0.0.0.0", port=7998, reload=True, log_level="info")

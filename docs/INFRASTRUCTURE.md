@@ -34,8 +34,8 @@ This document is the canonical infrastructure snapshot for Oelala.
 
 | Machine | Address | Role |
 |---------|---------|------|
-| `ai-kvm2` | `192.168.1.35` | main Oelala host |
-| `ubuntu-oelalastorage2` | `192.168.1.62` | remote storage node |
+| `ai-kvm2` | `LAN` | main Oelala host |
+| `ubuntu-oelalastorage2` | `LAN` | remote storage node |
 
 ## Public Hostnames
 
