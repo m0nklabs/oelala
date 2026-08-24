@@ -102,7 +102,7 @@ class TestMiniMaxH3LocalT2V:
         mock.is_available.return_value = True
         mock.queue_prompt.return_value = "p123"
         mock.upload_lora.return_value = "bounce.safetensors"
-        mock.host = "192.168.1.245"
+        mock.host = "windows-comfy.test.internal"
         mock.port = 8188
         import generation.adapters.local.minimax_h3_t2v as mod
         mod._MINIMAX_H3_LORA_DIR = mod.Path("/definitely/missing/dir")
@@ -118,7 +118,7 @@ class TestMiniMaxH3LocalT2V:
         mock = MagicMock()
         mock.is_available.return_value = True
         mock.queue_prompt.return_value = "p123"
-        mock.host = "192.168.1.245"
+        mock.host = "windows-comfy.test.internal"
         mock.port = 8188
         a = MiniMaxH3LocalT2VAdapter(comfyui_client_fn=lambda: mock)
         req = _req(frames=124)
@@ -170,7 +170,7 @@ class TestMiniMaxH3LocalI2V:
         mock.is_available.return_value = True
         mock.upload_image_from_bytes.return_value = "v2_minimax_i2v_input.png"
         mock.queue_prompt.return_value = "p456"
-        mock.host = "192.168.1.245"
+        mock.host = "windows-comfy.test.internal"
         mock.port = 8188
         a = MiniMaxH3LocalI2VAdapter(comfyui_client_fn=lambda: mock)
         req = _req(input_images=[_png_b64()], frames=124)

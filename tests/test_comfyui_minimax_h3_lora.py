@@ -17,7 +17,9 @@ from comfyui_client import ComfyUIClient
 
 
 def _client() -> ComfyUIClient:
-    return ComfyUIClient(host="localhost", port=8188)
+    # Any non-resolving host works — the builders only assemble the workflow
+    # dict and never touch the network.
+    return ComfyUIClient(host="comfyui.test.internal", port=8188)
 
 
 def test_t2v_injects_single_lora():

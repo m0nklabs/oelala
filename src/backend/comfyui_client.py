@@ -5940,7 +5940,7 @@ def get_windows_comfyui_client() -> Optional[ComfyUIClient]:
     This is a separate ComfyUI server from the one on ai-kvm2 (which
     get_comfyui_client() targets). Local MiniMax-H3 generation is routed here
     because the H3 models + workflow live on the Windows machine
-    (ComfyUI portable, e.g. 192.168.1.245:8188).
+    (ComfyUI portable, reachable via COMFYUI_WINDOWS_HOST / COMFYUI_WINDOWS_PORT).
 
     Returns None when the host/port haven't been configured, so any
     dependent adapter/registration is skipped gracefully.
