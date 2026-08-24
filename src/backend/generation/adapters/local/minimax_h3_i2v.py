@@ -122,6 +122,33 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
             raw = raw + ("=" * missing)
         return base64.b64decode(raw)
 
+    def build_workflow(self, req: GenerationRequest, image_name: str = "") -> dict:
+        """Build the local MiniMax-H3 I2V ComfyUI workflow.
+
+        ``image_name`` is the filename the input image was uploaded as on the
+        target server (it is read back from the upload in ``execute``). It
+        defaults to a placeholder so workflow-only callers can still build one.
+        """
+        if self._get_comfyui is None:
+            raise RuntimeError("ComfyUI client not available")
+        comfyui = self._get_comfyui()
+        lora_configs = (
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
+        )
+        return comfyui.build_local_minimax_h3_i2v_workflow(
+            image_name=image_name or "input.png",
+            prompt=req.prompt,
+            num_frames=req.frames or 124,
+            fps=req.fps or 24,
+            seed=req.seed,
+            steps=req.steps or 20,
+            aspect_ratio=req.aspect_ratio or "16:9",
+            megapixels=req.megapixels,
+            lora_configs=lora_configs,
+        )
+
     def cost(self, req: GenerationRequest) -> int:
         frames = req.frames or 124
         if frames <= 124:
@@ -166,22 +193,7 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
 
         _upload_minimax_loras(client, req)
 
-        lora_configs = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras]
-            if req.loras
-            else None
-        )
-        workflow = client.build_local_minimax_h3_i2v_workflow(
-            image_name=uploaded_name,
-            prompt=req.prompt,
-            num_frames=req.frames or 124,
-            fps=req.fps or 24,
-            seed=req.seed,
-            steps=req.steps or 20,
-            aspect_ratio=req.aspect_ratio or "16:9",
-            megapixels=req.megapixels,
-            lora_configs=lora_configs,
-        )
+        workflow = self.build_workflow(req, image_name=uploaded_name)
         if not workflow:
             raise RuntimeError("Failed to build MiniMax-H3 local I2V workflow")
 
