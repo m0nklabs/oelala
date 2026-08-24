@@ -173,7 +173,6 @@ try:
     from src.backend.comfyui_client import (
         ComfyUIClient,
         get_comfyui_client,
-        get_windows_comfyui_client,
     )
 
     print("✅ ComfyUIClient imported successfully")
@@ -181,7 +180,6 @@ except ImportError as e:
     print(f"❌ Failed to import ComfyUIClient: {e}")
     ComfyUIClient = None
     get_comfyui_client = None
-    get_windows_comfyui_client = None
 
 # WebSocket progress tracking
 try:
@@ -2976,10 +2974,9 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
     if cached is not None:
         return cached
 
-    # Resolve the ComfyUI client that actually ran the job. Prefer the
-    # backend_id attached at dispatch (config-driven via the compute backend
-    # inventory, e.g. Windows-PC for MiniMax-H3), falling back to the legacy
-    # adapter-name check.
+    # Resolve the ComfyUI client that actually ran the job. The backend_id
+    # attached at dispatch drives it via the compute backend inventory (any
+    # enabled comfyui backend, e.g. a second server running MiniMax-H3).
     adapter_name = job_info.get("adapter_name", "")
     backend_id = job_info.get("backend_id")
     comfyui = None
@@ -3004,12 +3001,6 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
                 exc_info=True,
             )
             comfyui = None
-    is_windows_h3 = adapter_name in (
-        "minimax-h3-local-t2v",
-        "minimax-h3-local-i2v",
-    )
-    if comfyui is None and is_windows_h3 and get_windows_comfyui_client is not None:
-        comfyui = get_windows_comfyui_client()
     if comfyui is None:
         comfyui = get_comfyui_client()
     if comfyui is None:
@@ -3070,8 +3061,8 @@ async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[
 
     # If the video was found as an output record (SaveVideo / VHS), try to
     # download it from the job's ComfyUI server so we have a local file to
-    # upload. For Windows-PC (H3 local) the file is NOT on ai-kvm2, so this
-    # download is required.
+    # upload. For a remote compute backend (e.g. MiniMax-H3 on a second
+    # server) the file is NOT on ai-kvm2, so this download is required.
     if output_video and isinstance(output_video, dict):
         vf = output_video.get("filename")
         output_filename = _safe_filename(vf) if vf else None
@@ -4140,71 +4131,83 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                 job_info.update(active_job)
                 pending.append(job_info)
 
-        # ── Windows-PC ComfyUI (remote MiniMax-H3) queue ─────────────────
-        # H3 local jobs run on the remote Windows-PC ComfyUI, NOT on the
-        # ai-kvm2 localhost server. Surface them in the queue indicator as
-        # running/pending so the user sees remote jobs alongside local/cloud
-        # ones.
-        windows_running = []
-        windows_pending = []
-        if get_windows_comfyui_client is not None:
-            try:
-                wclient = get_windows_comfyui_client()
-                if wclient is not None:
-                    wq_resp = requests.get(f"{wclient.base_url}/queue", timeout=5)
-                    if wq_resp.status_code == 200:
-                        wq = wq_resp.json()
-                        # Which of this user's active jobs live on the Windows server?
-                        windows_local = {
-                            pid: info
-                            for pid, info in active_jobs.items()
-                            if info.get("user_id") == user.id
-                            and info.get("adapter_name")
-                            in ("minimax-h3-local-t2v", "minimax-h3-local-i2v")
-                        }
-                        seen = set()
-                        for item in wq.get("queue_running", []):
-                            if len(item) >= 2:
-                                pid = item[1]
-                                if pid not in windows_local:
-                                    continue
-                                seen.add(pid)
-                                job_info = {
-                                    "prompt_id": pid,
-                                    "status": "running",
-                                    "queue_position": 0,
-                                    "server": "windows",
-                                }
-                                job_info.update(windows_local[pid])
-                                windows_running.append(job_info)
-                        for idx, item in enumerate(wq.get("queue_pending", [])):
-                            if len(item) >= 2:
-                                pid = item[1]
-                                if pid not in windows_local:
-                                    continue
-                                seen.add(pid)
-                                job_info = {
-                                    "prompt_id": pid,
-                                    "status": "pending",
-                                    "queue_position": idx + 1,
-                                    "server": "windows",
-                                }
-                                job_info.update(windows_local[pid])
-                                windows_pending.append(job_info)
-                        # Windows-local jobs tracked locally but no longer on
-                        # Windows queue → treat as pending (still to be freed).
-                        for pid in windows_local:
-                            if pid not in seen:
-                                job_info = {
-                                    "prompt_id": pid,
-                                    "status": "pending",
-                                    "queue_position": 0,
-                                    "server": "windows",
-                                }
-                                job_info.update(windows_local[pid])
-                                windows_pending.append(job_info)
-            except Exception as e:
-                logger.warning(f"⚠️ Failed to get Windows ComfyUI queue: {e}")
+        # ── Remote ComfyUI backends (compute node inventory) ──────────────
+        # Local jobs may run on any enabled 'comfyui' backend from the compute
+        # inventory (e.g. a second server running MiniMax-H3), not just the
+        # ai-kvm2 default server. Surface each backend this user's active local
+        # jobs are tagged with in the queue indicator alongside local/cloud
+        # ones. The default server is already polled above, so backends whose
+        # resolved client equals it are skipped.
+        remote_running = []
+        remote_pending = []
+        try:
+            from src.backend.comfyui_client import get_comfyui_client_for_backend
+            from src.backend.generation.compute_backends import get_backend
+
+            default_base = get_comfyui_client().base_url
+            # Group this user's active local (non-cloud) jobs by backend.
+            by_backend: dict = {}
+            for pid, info in active_jobs.items():
+                if info.get("user_id") != user.id:
+                    continue
+                if info.get("compute_target") == "cloud":
+                    continue
+                bid = info.get("backend_id")
+                if bid:
+                    by_backend.setdefault(bid, {})[pid] = info
+
+            if by_backend:
+                for bid, jobs in by_backend.items():
+                    backend = get_backend(bid)
+                    if backend is None or backend.type != "comfyui":
+                        continue
+                    client = get_comfyui_client_for_backend(backend)
+                    if client is None or client.base_url == default_base:
+                        # Resolves to the default server — polled above.
+                        continue
+                    queue_resp = requests.get(f"{client.base_url}/queue", timeout=5)
+                    if queue_resp.status_code != 200:
+                        continue
+                    queue = queue_resp.json()
+                    seen = set()
+                    for item in queue.get("queue_running", []):
+                        if len(item) >= 2 and item[1] in jobs:
+                            pid = item[1]
+                            seen.add(pid)
+                            job_info = {
+                                "prompt_id": pid,
+                                "status": "running",
+                                "queue_position": 0,
+                                "server": backend.name,
+                            }
+                            job_info.update(jobs[pid])
+                            remote_running.append(job_info)
+                    for idx, item in enumerate(queue.get("queue_pending", [])):
+                        if len(item) >= 2 and item[1] in jobs:
+                            pid = item[1]
+                            seen.add(pid)
+                            job_info = {
+                                "prompt_id": pid,
+                                "status": "pending",
+                                "queue_position": idx + 1,
+                                "server": backend.name,
+                            }
+                            job_info.update(jobs[pid])
+                            remote_pending.append(job_info)
+                    # Locally tracked jobs no longer on this backend's queue →
+                    # treat as pending (still to be released).
+                    for pid in jobs:
+                        if pid not in seen:
+                            job_info = {
+                                "prompt_id": pid,
+                                "status": "pending",
+                                "queue_position": 0,
+                                "server": backend.name,
+                            }
+                            job_info.update(jobs[pid])
+                            remote_pending.append(job_info)
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to poll remote ComfyUI backends: {e}")
 
         # Include face LoRA training jobs in the queue
         training = []
@@ -4291,8 +4294,8 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                 cloud_job["status"] = "running"
                 cloud_running.append(cloud_job)
 
-        all_running = running + cloud_running + windows_running
-        all_pending = pending + windows_pending
+        all_running = running + cloud_running + remote_running
+        all_pending = pending + remote_pending
 
         return {
             "running": all_running,

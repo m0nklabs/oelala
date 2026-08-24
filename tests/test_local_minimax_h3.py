@@ -1,8 +1,9 @@
 """
-Tests for local MiniMax-H3 adapters (Windows PC ComfyUI).
+Tests for local MiniMax-H3 adapters (remote ComfyUI node).
 
-These adapters route MiniMax-H3 generation to the user's Windows PC ComfyUI
-server (get_windows_comfyui_client) instead of the default ai-kvm2 ComfyUI.
+These adapters route MiniMax-H3 generation to the 'comfyui' compute backend
+that declares the minimax_h3 family (e.g. a second server), resolved via the
+compute backend inventory instead of the default ai-kvm2 ComfyUI.
 
 Covers: metadata, constraints, cost, workflow delegation, execute (t2v + i2v,
 including the adapter-level image upload for i2v).
@@ -40,7 +41,11 @@ def _png_b64() -> str:
 
 
 def _req(**kw):
-    base = {"operation": Operation.GENERATE, "target_type": MediaType.VIDEO, "prompt": "test"}
+    base = {
+        "operation": Operation.GENERATE,
+        "target_type": MediaType.VIDEO,
+        "prompt": "test",
+    }
     base.update(kw)
     return GenerationRequest(**base)
 
@@ -65,9 +70,14 @@ class TestMiniMaxH3LocalT2V:
         assert c.supports_negative_prompt is False
         assert "16:9" in c.aspect_ratios
 
-    @pytest.mark.parametrize("frames,expected", [
-        (124, 8), (210, 12), (362, 15),
-    ])
+    @pytest.mark.parametrize(
+        "frames,expected",
+        [
+            (124, 8),
+            (210, 12),
+            (362, 15),
+        ],
+    )
     def test_cost(self, frames, expected):
         assert MiniMaxH3LocalT2VAdapter().cost(_req(frames=frames)) == expected
 
@@ -75,7 +85,9 @@ class TestMiniMaxH3LocalT2V:
         mock = MagicMock()
         mock.build_local_minimax_h3_t2v_workflow.return_value = {"h3": "wf"}
         a = MiniMaxH3LocalT2VAdapter(comfyui_client_fn=lambda: mock)
-        req = _req(frames=124, fps=24, seed=5, steps=20, aspect_ratio="16:9", megapixels=0.98)
+        req = _req(
+            frames=124, fps=24, seed=5, steps=20, aspect_ratio="16:9", megapixels=0.98
+        )
         wf = a.build_workflow(req)
         assert wf == {"h3": "wf"}
         mock.build_local_minimax_h3_t2v_workflow.assert_called_once()
@@ -130,9 +142,14 @@ class TestMiniMaxH3LocalI2V:
         assert c.allowed_fps == [24]
         assert c.supports_negative_prompt is False
 
-    @pytest.mark.parametrize("frames,expected", [
-        (124, 5), (210, 8), (362, 15),
-    ])
+    @pytest.mark.parametrize(
+        "frames,expected",
+        [
+            (124, 5),
+            (210, 8),
+            (362, 15),
+        ],
+    )
     def test_cost(self, frames, expected):
         assert MiniMaxH3LocalI2VAdapter().cost(_req(frames=frames)) == expected
 
@@ -153,7 +170,10 @@ class TestMiniMaxH3LocalI2V:
         mock.upload_image_from_bytes.assert_called_once()
         # and the workflow built with the returned filename
         mock.build_local_minimax_h3_i2v_workflow.assert_called_once()
-        assert mock.build_local_minimax_h3_i2v_workflow.call_args[1]["image_name"] == "v2_minimax_i2v_input.png"
+        assert (
+            mock.build_local_minimax_h3_i2v_workflow.call_args[1]["image_name"]
+            == "v2_minimax_i2v_input.png"
+        )
 
     @pytest.mark.asyncio
     async def test_execute_requires_image(self):

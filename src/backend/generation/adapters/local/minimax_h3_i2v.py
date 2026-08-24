@@ -1,11 +1,12 @@
 """
-MiniMax-H3 Local I2V adapter — image-to-video (+audio) via the user's Windows PC ComfyUI.
+MiniMax-H3 Local I2V adapter — image-to-video (+audio) via a remote ComfyUI node.
 
-Runs the MiniMax-H3 FL2VA workflow on the Windows PC's ComfyUI server
-(get_windows_comfyui_client()), separate from the default ai-kvm2 ComfyUI.
-The input image is anchored as the first keyframe. Because it targets a
-different server, this adapter uploads the input image itself
-(handles_own_image_upload=True) and the router skips its default pre-upload.
+Runs the MiniMax-H3 FL2VA workflow on the enabled 'comfyui' compute backend
+that declares the minimax_h3 model family (e.g. a second server), separate from
+the default ai-kvm2 ComfyUI. The input image is anchored as the first keyframe.
+Because it targets a different server, this adapter uploads the input image
+itself (handles_own_image_upload=True) and the router skips its default
+pre-upload.
 """
 
 from __future__ import annotations

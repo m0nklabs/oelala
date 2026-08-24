@@ -1,12 +1,13 @@
 """
-MiniMax-H3 Local T2V adapter — text-to-video (+audio) via the user's Windows PC ComfyUI.
+MiniMax-H3 Local T2V adapter — text-to-video (+audio) via a remote ComfyUI node.
 
-Runs the MiniMax-H3 FL2VA workflow on the Windows PC's ComfyUI server
-(get_windows_comfyui_client()), which is a DIFFERENT server from the default
-ComfyUI on ai-kvm2 (get_comfyui_client()). It uses the int8_convrot model set
-that was downloaded onto that machine (see download_minimax_h3.* and
-README_MiniMax_H3_workflow.md). The model always generates a synchronized
-soundtrack — no separate audio prompt needed.
+Runs the MiniMax-H3 FL2VA workflow on the enabled 'comfyui' compute backend
+that declares the minimax_h3 model family (e.g. a second server), which is a
+DIFFERENT server from the default ComfyUI on ai-kvm2. The client is injected
+via ``comfyui_client_fn`` (resolved from the compute backend inventory). It
+uses the int8_convrot model set that was downloaded onto that machine (see
+download_minimax_h3.* and README_MiniMax_H3_workflow.md). The model always
+generates a synchronized soundtrack — no separate audio prompt needed.
 """
 
 from __future__ import annotations

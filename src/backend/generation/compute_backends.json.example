@@ -17,7 +17,7 @@
       "base_url": "http://windows-pc.test.invalid:8188",
       "enabled": false,
       "model_families": ["minimax_h3"],
-      "notes": "User's Windows PC (ComfyUI portable) running local MiniMax-H3. Set the real host via COMFYUI_WINDOWS_HOST in .env or the Admin panel (never commit it)."
+      "notes": "User's Windows PC (ComfyUI portable) running local MiniMax-H3. Set the real host here via the Admin panel, or via COMPUTE_NODE_2_HOST in .env for the fresh-install fallback (never commit it)."
     },
     {
       "id": "runpod-cloud",

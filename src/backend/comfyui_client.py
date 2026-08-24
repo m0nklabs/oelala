@@ -5846,11 +5846,6 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
 # Singleton instance
 _comfyui_client: Optional[ComfyUIClient] = None
 
-# Optional second ComfyUI server — the user's Windows PC (used for local
-# MiniMax-H3 generation, which runs on that machine's ComfyUI rather than the
-# one on ai-kvm2). Configured via COMFYUI_WINDOWS_HOST / COMFYUI_WINDOWS_PORT.
-_windows_comfyui_client: Optional[ComfyUIClient] = None
-
 
 def get_comfyui_client() -> ComfyUIClient:
     """Get or create ComfyUI client singleton"""
@@ -5860,39 +5855,13 @@ def get_comfyui_client() -> ComfyUIClient:
     return _comfyui_client
 
 
-def get_windows_comfyui_client() -> Optional[ComfyUIClient]:
-    """Get/create the ComfyUI client for the user's Windows PC.
-
-    This is a separate ComfyUI server from the one on ai-kvm2 (which
-    get_comfyui_client() targets). Local MiniMax-H3 generation is routed here
-    because the H3 models + workflow live on the Windows machine
-    (ComfyUI portable, reachable via COMFYUI_WINDOWS_HOST / COMFYUI_WINDOWS_PORT).
-
-    Returns None when the host/port haven't been configured, so any
-    dependent adapter/registration is skipped gracefully.
-    """
-    global _windows_comfyui_client
-    if _windows_comfyui_client is not None:
-        return _windows_comfyui_client
-
-    host = os.getenv("COMFYUI_WINDOWS_HOST", "").strip()
-    port = int(os.getenv("COMFYUI_WINDOWS_PORT", "8188") or "8188")
-    if not host:
-        logger.info(
-            "⬛ COMFYUI_WINDOWS_HOST not set — Windows ComfyUI client unavailable"
-        )
-        return None
-
-    _windows_comfyui_client = ComfyUIClient(host=host, port=port)
-    logger.info(f"🪟 Windows ComfyUI client ready: {host}:{port}")
-    return _windows_comfyui_client
-
-
 # ── Generic per-backend ComfyUI clients ─────────────────────────────
 # The Compute Backend Inventory (generation/compute_backends.py) drives which
 # server an adapter targets. get_comfyui_client_for_backend() returns a
 # (cached) ComfyUIClient for any configured 'comfyui' backend so adding a new
-# server is purely a config change.
+# server is purely a config change (Admin panel → compute_backends.json, or the
+# COMPUTE_NODE_* env fallback) — there is no longer a bespoke per-server client
+# factory.
 _backend_clients: dict = {}
 
 

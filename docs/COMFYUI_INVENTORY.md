@@ -175,22 +175,25 @@ Compute op `cuda:1`, ~7.2GB model naar CPU-offload. De compute-kaart NIET >75% v
 
 ---
 
-## 🪟 Windows-PC ComfyUI (tweede server — lokale MiniMax-H3)
+## 🖥️ Tweede ComfyUI-server (remote compute node — lokale MiniMax-H3)
 
-Naast de ComfyUI op **ai-kvm2** (`localhost:8188`, systemd `comfyui`) is er een **tweede
-ComfyUI-server op de Windows-PC van de user** waarop lokale MiniMax-H3 draait.
+Naast de ComfyUI op **ai-kvm2** (`localhost:8188`, systemd `comfyui`) kan er een **tweede
+ComfyUI-server** zijn (bijv. de Windows-PC van de user) waarop lokale MiniMax-H3 draait. Die
+wordt, net als elke andere `comfyui` backend, geconfigureerd via de compute backend inventory
+(Admin panel → Compute) of de `COMPUTE_NODE_*` env-fallback — er is geen aparte server-client
+meer.
 
 | Eigenschap | Waarde |
 |-----------|--------|
-| Host | `COMFYUI_WINDOWS_HOST` (set in `.env`) |
-| Poort (default) | `8188` (`COMFYUI_WINDOWS_PORT`) |
+| Host | `base_url` in `compute_backends.json` / `COMPUTE_NODE_{n}_HOST` (fallback) |
+| Poort (default) | `8188` |
 | Installatie | ComfyUI portable (`C:\PROGRAMME\ComfyUI_windows_portable`) |
 | Draaiend via | Taak `ComfyUIServer` bij inloggen (`start_comfy_server.bat`, log `comfy_server.log`) |
-| Backend-client | `get_windows_comfyui_client()` in `comfyui_client.py` |
+| Backend-client | `get_comfyui_client_for_backend()` (inventory) in `comfyui_client.py` |
 
 Lokale MiniMax-H3 adapters (`minimax-h3-local-t2v` / `-i2v`) worden alleen geregistreerd
-wanneer `COMFYUI_WINDOWS_HOST` is gezet. De I2V-variant uploadt z'n input-image zelf naar
-deze server (`handles_own_image_upload=True`).
+wanneer er een enabled `comfyui` backend is die `minimax_h3` declareert. De I2V-variant
+uploadt z'n input-image zelf naar deze server (`handles_own_image_upload=True`).
 
 ### MiniMax-H3 local modellen (Windows PC)
 
