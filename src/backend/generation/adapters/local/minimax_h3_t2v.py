@@ -48,6 +48,9 @@ def _upload_minimax_loras(client: Any, req: GenerationRequest) -> None:
         if not name or name == "None":
             continue
         src = _MINIMAX_H3_LORA_DIR / name
+        if not src.resolve().is_relative_to(_MINIMAX_H3_LORA_DIR.resolve()):
+            logger.warning(f"🎨 Refusing out-of-directory LoRA path: {name}")
+            continue
         if not src.is_file():
             logger.warning(f"🎨 MiniMax-H3 LoRA not found, skipping: {src}")
             continue

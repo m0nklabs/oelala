@@ -48,6 +48,9 @@ def _upload_minimax_loras(client: Any, req: GenerationRequest) -> None:
         if not name or name == "None":
             continue
         src = _MINIMAX_H3_LORA_DIR / name
+        if not src.resolve().is_relative_to(_MINIMAX_H3_LORA_DIR.resolve()):
+            logger.warning(f"🎨 Refusing out-of-directory LoRA path: {name}")
+            continue
         if not src.is_file():
             logger.warning(f"🎨 MiniMax-H3 LoRA not found, skipping: {src}")
             continue
@@ -118,27 +121,6 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         if missing:
             raw = raw + ("=" * missing)
         return base64.b64decode(raw)
-
-    def build_workflow(self, req: GenerationRequest) -> dict:
-        if self._get_comfyui is None:
-            raise RuntimeError("ComfyUI client not available")
-        comfyui = self._get_comfyui()
-        lora_configs = (
-            [lr.model_dump(exclude_none=True) for lr in req.loras]
-            if req.loras
-            else None
-        )
-        return comfyui.build_local_minimax_h3_i2v_workflow(
-            image_name="input.png" if req.input_images else "",
-            prompt=req.prompt,
-            num_frames=req.frames or 124,
-            fps=req.fps or 24,
-            seed=req.seed,
-            steps=req.steps or 20,
-            aspect_ratio=req.aspect_ratio or "16:9",
-            megapixels=req.megapixels,
-            lora_configs=lora_configs,
-        )
 
     def cost(self, req: GenerationRequest) -> int:
         frames = req.frames or 124
