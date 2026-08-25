@@ -188,7 +188,7 @@ meer.
 | Host | `base_url` in `compute_backends.json` / `COMPUTE_NODE_{n}_HOST` (fallback) |
 | Poort (default) | `8188` |
 | Installatie | ComfyUI portable (`C:\PROGRAMME\ComfyUI_windows_portable`) |
-| Draaiend via | Taak `ComfyUIServer` bij inloggen (`start_comfy_server.bat`, log `comfy_server.log`) |
+| Draaiend via | Taak `ComfyUIServer` bij inloggen (`scripts/start_comfy_server.bat`, log `comfy_server.log`) |
 | Backend-client | `get_comfyui_client_for_backend()` (inventory) in `comfyui_client.py` |
 
 Lokale MiniMax-H3 adapters (`minimax-h3-local-t2v` / `-i2v`) worden alleen geregistreerd
@@ -204,7 +204,7 @@ uploadt z'n input-image zelf naar deze server (`handles_own_image_upload=True`).
 | Video VAE | `minimax_h3_video_vae_fp16.safetensors` | `vae/` |
 | Audio VAE | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` |
 
-Intro/uitgelegd in `README_MiniMax_H3_workflow.md`; downloadscripts `download_minimax_h3.cmd` / `.ps1`.
+Intro/uitgelegd in `workflows/README_MiniMax_H3_workflow.md`; downloadscripts `scripts/download_minimax_h3.cmd` / `.ps1`.
 FL2VA genereert altijd een synchrone soundtrack (24 fps, 17k+5 frame grid, geen negative prompt / CFG).
 
 ---

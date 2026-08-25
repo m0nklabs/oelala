@@ -51,7 +51,7 @@ Meestal zit de Desktop-modellenmap op `%USERPROFILE%\Documents\ComfyUI\models`.
 
 Gebruikt de 16GB-kaart, en de int8-gewichten stromen via NVMe binnen. Mocht je
 toch OOM krijgen: eerste zet `--disable-pinned-memory` aan in
-`start_comfy_server.bat`, daarna `--vram-headroom 1`.
+`scripts/start_comfy_server.bat`, daarna `--vram-headroom 1`.
 
 ---
 
