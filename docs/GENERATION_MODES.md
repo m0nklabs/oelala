@@ -85,7 +85,7 @@ Lokaal draait MiniMax-H3 op een **tweede ComfyUI-server** (remote compute node, 
 Windows-PC) — geconfigureerd via de compute backend inventory (`COMPUTE_NODE_{n}_HOST` in `.env`
 als fresh-install fallback; Admin panel → Compute als bron van waarheid). De int8_convrot
 text-encoder past in 16GB VRAM
-(zie `README_MiniMax_H3_workflow.md` en `download_minimax_h3.*`).
+(zie `workflows/README_MiniMax_H3_workflow.md` en `scripts/download_minimax_h3.*`).
 
 ### T2V Alternative Models (Untested/Experimental)
 

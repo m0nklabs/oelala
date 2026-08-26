@@ -6,7 +6,7 @@ that declares the minimax_h3 model family (e.g. a second server), which is a
 DIFFERENT server from the default ComfyUI on ai-kvm2. The client is injected
 via ``comfyui_client_fn`` (resolved from the compute backend inventory). It
 uses the int8_convrot model set that was downloaded onto that machine (see
-download_minimax_h3.* and README_MiniMax_H3_workflow.md). The model always
+scripts/download_minimax_h3.* and workflows/README_MiniMax_H3_workflow.md). The model always
 generates a synchronized soundtrack — no separate audio prompt needed.
 """
 
