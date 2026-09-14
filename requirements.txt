@@ -33,7 +33,7 @@ llama-cpp-python==0.3.35
 # Video processing
 imageio==2.37.4
 imageio-ffmpeg==0.6.0
-opencv-python==4.13.0.92
+opencv-python==5.0.0.93
 opencv-python-headless==4.13.0.92
 
 # Dynamic prompts
