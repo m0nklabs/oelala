@@ -21,6 +21,7 @@ from generation.types import (
     ComputeTarget,
     GenerationRequest,
     LoraFormat,
+    LoraStackItem,
     MediaType,
     Operation,
 )
@@ -522,6 +523,80 @@ class TestMiniMaxH3CloudI2V:
         assert call_kwargs["megapixels"] == 0.98
         assert call_kwargs["aspect_ratio"] == "16:9"
 
+    def test_build_workflow_passes_lora_configs(self):
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
+
+        adapter = MiniMaxH3CloudI2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="test",
+            input_images=["img.png"],
+            frames=124,
+            loras=[LoraStackItem(name="minimax-h3/test.safetensors", strength=0.8)],
+        )
+        adapter.build_workflow(req)
+        call_kwargs = mock_comfyui.build_cloud_minimax_h3_i2v_workflow.call_args[1]
+        assert call_kwargs["lora_configs"] == [
+            {"name": "minimax-h3/test.safetensors", "strength": 0.8}
+        ]
+
+    @pytest.mark.asyncio
+    async def test_execute_passes_lora_downloads(self):
+        mock_submit = AsyncMock(return_value={
+            "prompt_id": "h3-i2v-id",
+            "runpod_job_id": "rp-h3-i2v",
+        })
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
+
+        adapter = MiniMaxH3CloudI2VAdapter(
+            submit_to_runpod_fn=mock_submit,
+            comfyui_client_fn=lambda: mock_comfyui,
+        )
+        downloads = [
+            {"filename": "minimax-h3/test.safetensors", "url": "https://backend.invalid/loras/download/minimax-h3/test.safetensors"}
+        ]
+        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}), \
+                patch("generation.lora_utils.build_lora_download_list", return_value=downloads):
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="test",
+                input_images=["base64data"],
+                frames=124,
+                loras=[LoraStackItem(name="minimax-h3/test.safetensors", strength=0.8)],
+            )
+            await adapter.execute(req)
+        call_kwargs = mock_submit.call_args
+        assert call_kwargs.kwargs.get("lora_downloads") == downloads
+
+    @pytest.mark.asyncio
+    async def test_execute_without_loras_sends_no_downloads(self):
+        mock_submit = AsyncMock(return_value={
+            "prompt_id": "h3-i2v-id",
+            "runpod_job_id": "rp-h3-i2v",
+        })
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
+
+        adapter = MiniMaxH3CloudI2VAdapter(
+            submit_to_runpod_fn=mock_submit,
+            comfyui_client_fn=lambda: mock_comfyui,
+        )
+        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}):
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="test",
+                input_images=["base64data"],
+                frames=124,
+            )
+            await adapter.execute(req)
+        call_kwargs = mock_submit.call_args
+        assert call_kwargs.kwargs.get("lora_downloads") is None
+
     @pytest.mark.asyncio
     async def test_execute_success(self):
         mock_submit = AsyncMock(return_value={
@@ -648,6 +723,53 @@ class TestMiniMaxH3CloudT2V:
         call_kwargs = mock_comfyui.build_cloud_minimax_h3_t2v_workflow.call_args[1]
         assert call_kwargs["megapixels"] == 0.4
         assert call_kwargs["aspect_ratio"] == "16:9"
+
+    def test_build_workflow_passes_lora_configs(self):
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
+
+        adapter = MiniMaxH3CloudT2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            prompt="a cat surfing",
+            frames=124,
+            loras=[LoraStackItem(name="minimax-h3/test.safetensors", strength=0.8)],
+        )
+        adapter.build_workflow(req)
+        call_kwargs = mock_comfyui.build_cloud_minimax_h3_t2v_workflow.call_args[1]
+        assert call_kwargs["lora_configs"] == [
+            {"name": "minimax-h3/test.safetensors", "strength": 0.8}
+        ]
+
+    @pytest.mark.asyncio
+    async def test_execute_passes_lora_downloads(self):
+        mock_submit = AsyncMock(return_value={
+            "prompt_id": "h3-t2v-id",
+            "runpod_job_id": "rp-h3-t2v",
+        })
+        mock_comfyui = MagicMock()
+        mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
+
+        adapter = MiniMaxH3CloudT2VAdapter(
+            submit_to_runpod_fn=mock_submit,
+            comfyui_client_fn=lambda: mock_comfyui,
+        )
+        downloads = [
+            {"filename": "minimax-h3/test.safetensors", "url": "https://backend.invalid/loras/download/minimax-h3/test.safetensors"}
+        ]
+        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}), \
+                patch("generation.lora_utils.build_lora_download_list", return_value=downloads):
+            req = GenerationRequest(
+                operation=Operation.GENERATE,
+                target_type=MediaType.VIDEO,
+                prompt="a cat surfing",
+                frames=124,
+                loras=[LoraStackItem(name="minimax-h3/test.safetensors", strength=0.8)],
+            )
+            await adapter.execute(req)
+        call_kwargs = mock_submit.call_args
+        assert call_kwargs.kwargs.get("lora_downloads") == downloads
 
     @pytest.mark.asyncio
     async def test_execute_success(self):

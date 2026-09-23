@@ -666,9 +666,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
       if (!nsfwEnabled) items = items.filter(l => !l.nsfw)
       return items
     }
-    // Model-type category filter: LTX only sees ltx/, Wan sees everything else
+    // Model-type category filter: LTX only sees ltx/, MiniMax-H3 only sees
+    // minimax-h3/, Wan sees everything else
     const isLtx = modelMode === 'ltx2'
-    const categoryFilter = (cat) => isLtx ? cat === 'ltx' : cat !== 'ltx'
+    const isH3 = H3_MODES.has(modelMode)
+    const categoryFilter = (cat) => isLtx ? cat === 'ltx' : isH3 ? cat === 'minimax-h3' : cat !== 'ltx'
     const filteredByCategory = {}
     if (availableLoras.by_category) {
       Object.keys(availableLoras.by_category).forEach(cat => {
@@ -3445,6 +3447,115 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   </div>
                 </div>
 
+                {/* LoRA Stack — single-stage (cloud worker downloads LoRAs, the
+                    local adapter uploads them to the Windows-PC ComfyUI) */}
+                <div style={{
+                  marginTop: '4px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid var(--border-color)'
+                }}>
+                  <div
+                    onClick={() => setShowLoraPanel(!showLoraPanel)}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      marginBottom: showLoraPanel ? '12px' : 0
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>🎨 LoRA Stack</span>
+                      {loraConfigs.length > 0 && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '2px 6px',
+                          backgroundColor: 'rgba(var(--accent-rgb), 0.2)',
+                          borderRadius: '10px',
+                          color: 'var(--accent-color)'
+                        }}>
+                          {loraConfigs.length} active
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
+                  </div>
+
+                  {showLoraPanel && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {loraConfigs.map((config, idx) => (
+                        <div key={idx} style={{
+                          padding: '10px',
+                          backgroundColor: 'var(--bg-secondary)',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>LoRA #{idx + 1}</span>
+                            <button
+                              onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
+                              style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem' }}
+                            >✕ Remove</button>
+                          </div>
+
+                          {/* Single LoRA selector — H3 is a single-stage model */}
+                          <div style={{ marginBottom: '8px' }}>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>LoRA</label>
+                            <select
+                              value={config.name || ''}
+                              onChange={(e) => {
+                                const nc = [...loraConfigs]
+                                nc[idx] = { ...config, name: e.target.value }
+                                setLoraConfigs(nc)
+                              }}
+                              style={{ width: '100%', padding: '6px 10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem' }}
+                            >
+                              <option value="">None</option>
+                              {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
+                                <optgroup key={category} label={category === 'root' ? 'Root' : category}>
+                                  {filteredLoras.by_category[category].map((lora) => (
+                                    <option key={lora.path} value={lora.path}>{lora.name} ({lora.size_mb}MB)</option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Strength */}
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
+                            </div>
+                            <input
+                              type="range" min="0" max="2" step="0.05" value={config.strength || 1.0}
+                              onChange={(e) => { const nc = [...loraConfigs]; nc[idx] = { ...config, strength: parseFloat(e.target.value) }; setLoraConfigs(nc) }}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => setLoraConfigs([...loraConfigs, { name: '', strength: 1.0 }])}
+                        style={{
+                          padding: '8px',
+                          backgroundColor: 'transparent',
+                          border: '1px dashed var(--border-color)',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem'
+                        }}
+                      >+ Add LoRA</button>
+
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        💡 Single-stage model — one LoRA selector per slot. Max 5 LoRA's.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Cost estimate */}
                 <div style={{
                   marginTop: '16px',
@@ -3456,8 +3567,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   color: 'var(--text-muted)'
                 }}>
                   {modelMode === 'minimax_h3_local'
-                    ? '🪟 MiniMax H3 draait lokaal op je Windows-PC ComfyUI • 24 fps • native stereo audio • LoRA\u2032s worden nog niet ondersteund op deze server'
-                    : '💰 MiniMax H3 draait op de RunPod 80GB+ worker • 24 fps • native stereo audio • LoRA\u2032s worden nog niet ondersteund op deze worker'}
+                    ? '🪟 MiniMax H3 draait lokaal op je Windows-PC ComfyUI • 24 fps • native stereo audio • LoRA\u2032s worden automatisch geüpload naar die server'
+                    : '💰 MiniMax H3 draait op de RunPod 80GB+ worker • 24 fps • native stereo audio • LoRA\u2032s worden automatisch naar de worker gedownload'}
                 </div>
               </div>
             )}

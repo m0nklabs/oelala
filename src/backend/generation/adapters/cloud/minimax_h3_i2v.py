@@ -87,6 +87,12 @@ class MiniMaxH3CloudI2VAdapter(GenerationAdapter):
             raise RuntimeError("ComfyUI client not available")
         comfyui = self._get_comfyui()
 
+        lora_dicts = (
+            [lr.model_dump(exclude_none=True) for lr in req.loras]
+            if req.loras
+            else None
+        )
+
         return comfyui.build_cloud_minimax_h3_i2v_workflow(
             image_name="input.png" if req.input_images else "",
             prompt=req.prompt,
@@ -98,6 +104,7 @@ class MiniMaxH3CloudI2VAdapter(GenerationAdapter):
             steps=req.steps or 20,
             aspect_ratio=req.aspect_ratio or "16:9",
             megapixels=req.megapixels,
+            lora_configs=lora_dicts,
         )
 
     def cost(self, req: GenerationRequest) -> int:
@@ -145,6 +152,18 @@ class MiniMaxH3CloudI2VAdapter(GenerationAdapter):
             {"input.png": req.input_images[0]} if len(req.input_images) > 0 else None
         )
 
+        lora_dicts = (
+            [lr.model_dump(exclude_none=True) for lr in req.loras] if req.loras else []
+        )
+
+        from ... import lora_utils
+        from ...lora_utils import sanitize_lora_configs_for_single_stage
+
+        lora_dicts = sanitize_lora_configs_for_single_stage(lora_dicts)
+        cloud_lora_downloads = (
+            lora_utils.build_lora_download_list(lora_dicts) if lora_dicts else []
+        )
+
         job_info = {
             "user_id": req.user_id or "adapter",
             "prompt": req.prompt[:100],
@@ -164,6 +183,7 @@ class MiniMaxH3CloudI2VAdapter(GenerationAdapter):
             prompt_id=prompt_id,
             job_info=job_info,
             images=input_images_b64,
+            lora_downloads=cloud_lora_downloads if cloud_lora_downloads else None,
             prompt_full=req.prompt,
             endpoint_id=endpoint_id,
         )
