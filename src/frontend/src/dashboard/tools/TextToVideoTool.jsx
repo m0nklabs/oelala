@@ -413,9 +413,11 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       if (!nsfwEnabled) items = items.filter(l => !l.nsfw)
       return items
     }
-    // Model-type category filter: LTX only sees ltx/, Wan sees everything else
+    // Model-type category filter: LTX only sees ltx/, MiniMax-H3 only sees
+    // minimax-h3/, Wan sees everything else
     const isLtx = modelType === 'ltx2'
-    const categoryFilter = (cat) => isLtx ? cat === 'ltx' : cat !== 'ltx'
+    const isH3 = H3_MODES.has(modelType)
+    const categoryFilter = (cat) => isLtx ? cat === 'ltx' : isH3 ? cat === 'minimax-h3' : cat !== 'ltx'
     const filteredByCategory = {}
     if (availableLoras.by_category) {
       Object.keys(availableLoras.by_category).forEach(cat => {
@@ -432,6 +434,10 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       by_category: filteredByCategory,
     }
   }, [availableLoras, nsfwEnabled, modelType])
+
+  // Single-stage LoRA models: one {name, strength} selector per slot
+  // (Wan2.2 uses dual high/low noise slots instead)
+  const isSingleStageLora = modelType === 'ltx2' || H3_MODES.has(modelType)
 
   // Fetch available unet models on mount
   useEffect(() => {
@@ -1704,8 +1710,9 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
               </div>
             )}
 
-            {/* LoRA Settings (MiniMax-H3 local supports LoRAs via the Windows-PC ComfyUI; the cloud worker does not yet) */}
-            {modelType !== 'minimax_h3' && (
+            {/* LoRA Settings — MiniMax-H3 (cloud + local) and LTX use single-stage
+                LoRAs; the cloud worker downloads them, the local H3 adapter
+                uploads them to the Windows-PC ComfyUI before dispatch. */}
             <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
               <div
                 onClick={() => setShowLoraPanel(!showLoraPanel)}
@@ -1735,16 +1742,16 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                           Remove
                         </button>
                       </div>
-                      {/* LoRA selector — single for LTX-2.3, dual high/low for Wan2.2 */}
+                      {/* LoRA selector — single for LTX-2.3 / MiniMax-H3, dual high/low for Wan2.2 */}
                       <div style={{ marginBottom: '8px' }}>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          {modelType === 'ltx2' ? 'LoRA' : 'High Noise (steps 0-3)'}
+                          {isSingleStageLora ? 'LoRA' : 'High Noise (steps 0-3)'}
                         </label>
                         <select
                           value={config.name || config.high || ''}
                           onChange={(e) => {
                             const nc = [...loraConfigs]
-                            if (modelType === 'ltx2') {
+                            if (isSingleStageLora) {
                               nc[idx] = { ...config, name: e.target.value }
                             } else {
                               nc[idx] = { ...config, high: e.target.value }
@@ -1764,7 +1771,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                         </select>
                       </div>
                       {/* Low Noise LoRA — only for Wan2.2 dual-pass */}
-                      {modelType !== 'ltx2' && (
+                      {!isSingleStageLora && (
                       <div style={{ marginBottom: '8px' }}>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
                           Low Noise (steps 3+)
@@ -1801,7 +1808,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                   ))}
 
                   <button
-                    onClick={() => setLoraConfigs([...loraConfigs, modelType === 'ltx2' ? { name: '', strength: 1.0 } : { high: '', low: '', strength: 1.0 }])}
+                    onClick={() => setLoraConfigs([...loraConfigs, isSingleStageLora ? { name: '', strength: 1.0 } : { high: '', low: '', strength: 1.0 }])}
                     style={{
                       padding: '8px 12px', backgroundColor: 'transparent', border: '1px dashed var(--border-color)',
                       borderRadius: '6px', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem',
@@ -1816,7 +1823,6 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                 </div>
               )}
             </div>
-            )}
           </div>
         )}
       </div>
