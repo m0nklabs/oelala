@@ -405,6 +405,12 @@ export default function PromptGeneratorTool({ onSendToTool }) {
 
       {result && (
         <div className="results-section">
+          {result.llm_used === false && (
+            <div className="error-message">
+              ⚠️ LLM unreachable or timed out — this is a template fallback, the output is
+              barely enhanced. Try again.
+            </div>
+          )}
           <div className="result-card">
             <div className="result-header">
               <h4>✨ Enhanced Prompt</h4>

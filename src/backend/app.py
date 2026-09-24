@@ -8820,16 +8820,20 @@ Generate as JSON."""
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(
-                timeout=120.0, headers=_guardian_headers()
+                # Generous timeout: reasoning models without a max_tokens cap
+                # can think for minutes (measured ~150s for the H3 skill on
+                # the 9B Guardian route) before their answer arrives.
+                timeout=600.0, headers=_guardian_headers()
             ) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
                     json=llm_request_body,
                 )
 
-                if response.status_code == 503 and attempt < max_retries - 1:
+                if response.status_code in (502, 503, 504) and attempt < max_retries - 1:
                     logger.info(
-                        f"⏳ Guardian 503 (model loading), retry {attempt + 1}/{max_retries} in {retry_delay}s..."
+                        f"⏳ Guardian {response.status_code} (proxy/model hiccup or loading), "
+                        f"retry {attempt + 1}/{max_retries} in {retry_delay}s..."
                     )
                     import asyncio
 
@@ -8888,9 +8892,9 @@ Generate as JSON."""
             logger.warning(f"LLM returned invalid JSON: {e}")
             return None
         except Exception as e:
-            if "503" in str(e) and attempt < max_retries - 1:
+            if any(f"{code}" in str(e) for code in (502, 503, 504)) and attempt < max_retries - 1:
                 logger.info(
-                    f"⏳ Guardian 503, retry {attempt + 1}/{max_retries} in {retry_delay}s..."
+                    f"⏳ Guardian gateway error, retry {attempt + 1}/{max_retries} in {retry_delay}s..."
                 )
                 import asyncio
 
@@ -8900,7 +8904,7 @@ Generate as JSON."""
             return None
 
     logger.warning(
-        "Guardian still 503 after all retries, falling back to template mode"
+        "Guardian still unreachable after all retries, falling back to template mode"
     )
     return None
 
