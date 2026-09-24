@@ -8555,7 +8555,9 @@ class PromptGenerateRequest(BaseModel):
     target_model: Optional[str] = (
         None  # Target generation model, e.g. "minimax_h3" → H3-Context-IR skill
     )
-    target_i2v: bool = False  # H3 skill: prompt anchors an input image (I2VA first frame)
+    target_i2v: bool = (
+        False  # H3 skill: prompt anchors an input image (I2VA first frame)
+    )
 
 
 # Style keywords mapping (used for both template and LLM modes)
@@ -8695,10 +8697,14 @@ async def generate_prompt_with_llm(
         if nsfw_intensity and nsfw_intensity >= 1:
             nsfw_level = max(1, min(5, nsfw_intensity))
             level_desc = (
-                "suggestive/sensual" if nsfw_level == 1
-                else "softcore erotic" if nsfw_level == 2
-                else "full nudity" if nsfw_level == 3
-                else "hardcore explicit" if nsfw_level == 4
+                "suggestive/sensual"
+                if nsfw_level == 1
+                else "softcore erotic"
+                if nsfw_level == 2
+                else "full nudity"
+                if nsfw_level == 3
+                else "hardcore explicit"
+                if nsfw_level == 4
                 else "extreme/no limits"
             )
             system_prompt += DEFAULT_H3_NSFW_ADDENDUM.format(
@@ -8721,9 +8727,9 @@ Generate as JSON."""
             if target_i2v:
                 i2v_instruction = (
                     "IMAGE-TO-VIDEO: the input image is the first keyframe of the video. "
-                    "Prepend the mandatory first line — \"For the target video, at 0.00 "
+                    'Prepend the mandatory first line — "For the target video, at 0.00 '
                     "seconds into the target video, <Picture 1> (from [Shot 1]) is fully "
-                    "referenced.\" — followed by a blank line, then develop the action "
+                    'referenced." — followed by a blank line, then develop the action '
                     "from that anchor."
                 )
             user_prompt = f"""Create a UNIQUE MiniMax-H3 video+audio prompt in H3-Context-IR format. Seed: {random_seed}
@@ -8979,7 +8985,11 @@ async def _process_llm_job(request_data: dict) -> dict | None:
     # Fall back to template mode
     if result is None:
         result = generate_prompt_template(
-            base_input, style, mode, include_negative, include_motion,
+            base_input,
+            style,
+            mode,
+            include_negative,
+            include_motion,
             target_model=target_model,
         )
 
