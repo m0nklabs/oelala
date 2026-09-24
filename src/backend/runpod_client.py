@@ -14,16 +14,15 @@ Usage:
         status = await client.get_job_status(job["id"])
 """
 
-import os
 import asyncio
 import logging
+import os
 import time
-from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 import httpx
-
 from runpod_defaults import get_runpod_job_policy
 
 logger = logging.getLogger(__name__)
@@ -32,9 +31,9 @@ logger = logging.getLogger(__name__)
 DEBUG = os.getenv("RUNPOD_DEBUG", "false").lower() in ("true", "1", "yes")
 
 
-def _parse_endpoint_ids(raw_value: str) -> List[str]:
+def _parse_endpoint_ids(raw_value: str) -> list[str]:
     """Parse a comma-separated RunPod endpoint list into unique IDs."""
-    endpoint_ids: List[str] = []
+    endpoint_ids: list[str] = []
     for endpoint_id in (part.strip() for part in raw_value.split(",")):
         if endpoint_id and endpoint_id not in endpoint_ids:
             endpoint_ids.append(endpoint_id)
@@ -83,11 +82,11 @@ class RunPodJob:
     id: str
     endpoint_id: str
     status: RunPodJobStatus = RunPodJobStatus.IN_QUEUE
-    output: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    output: dict[str, Any] | None = None
+    error: str | None = None
     created_at: float = field(default_factory=time.time)
-    completed_at: Optional[float] = None
-    execution_time_ms: Optional[int] = None
+    completed_at: float | None = None
+    execution_time_ms: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -102,21 +101,21 @@ class RunPodClient:
     Manages endpoints, submits ComfyUI workflows, and polls for results.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.getenv("RUNPOD_API_KEY", "")
-        self._http: Optional[httpx.AsyncClient] = None
+        self._http: httpx.AsyncClient | None = None
         # Endpoint cache — endpoint_id -> RunPodEndpoint
-        self._endpoints: Dict[str, RunPodEndpoint] = {}
+        self._endpoints: dict[str, RunPodEndpoint] = {}
         # Active jobs — job_id -> RunPodJob
-        self._active_jobs: Dict[str, RunPodJob] = {}
+        self._active_jobs: dict[str, RunPodJob] = {}
         configured_endpoints = _parse_endpoint_ids(os.getenv("RUNPOD_ENDPOINT_IDS", ""))
         explicit_default = os.getenv("RUNPOD_ENDPOINT_ID", "").strip()
         if explicit_default and explicit_default not in configured_endpoints:
             configured_endpoints.insert(0, explicit_default)
 
-        self.endpoint_ids: List[str] = configured_endpoints
+        self.endpoint_ids: list[str] = configured_endpoints
         # Default endpoint (set via env var, configure, or auto-detected)
-        self.default_endpoint_id: Optional[str] = explicit_default or (
+        self.default_endpoint_id: str | None = explicit_default or (
             configured_endpoints[0] if configured_endpoints else None
         )
 
@@ -143,13 +142,13 @@ class RunPodClient:
 
     def _candidate_endpoint_ids(
         self,
-        endpoint_id: Optional[str] = None,
-    ) -> List[str]:
+        endpoint_id: str | None = None,
+    ) -> list[str]:
         """Return endpoint candidates ordered by preference with duplicates removed."""
         if endpoint_id:
             return [endpoint_id]
 
-        candidates: List[str] = []
+        candidates: list[str] = []
         for candidate in [
             self.default_endpoint_id,
             *self.endpoint_ids,
@@ -160,7 +159,7 @@ class RunPodClient:
         return candidates
 
     @staticmethod
-    def _health_count(health: Dict[str, Any], key: str) -> int:
+    def _health_count(health: dict[str, Any], key: str) -> int:
         """Read a health counter from either the top-level or nested workers payload."""
         workers = (
             health.get("workers") if isinstance(health.get("workers"), dict) else {}
@@ -169,7 +168,7 @@ class RunPodClient:
         return int(value or 0)
 
     @staticmethod
-    def _is_endpoint_healthy(health: Dict[str, Any]) -> bool:
+    def _is_endpoint_healthy(health: dict[str, Any]) -> bool:
         """Check whether an endpoint is suitable for new submissions."""
         if not health or health.get("status") in {
             "error",
@@ -190,7 +189,7 @@ class RunPodClient:
 
     async def select_submit_endpoint(
         self,
-        endpoint_id: Optional[str] = None,
+        endpoint_id: str | None = None,
     ) -> str:
         """Select the best endpoint for a new submission, preferring healthy candidates."""
         candidates = self._candidate_endpoint_ids(endpoint_id)
@@ -201,7 +200,7 @@ class RunPodClient:
             return candidates[0]
 
         fallback_endpoint = candidates[0]
-        failed_health_checks: Dict[str, Dict[str, Any]] = {}
+        failed_health_checks: dict[str, dict[str, Any]] = {}
 
         for candidate in candidates:
             health = await self.get_endpoint_health(candidate)
@@ -230,7 +229,7 @@ class RunPodClient:
     # Account
     # ------------------------------------------------------------------
 
-    async def get_account_info(self) -> Dict[str, Any]:
+    async def get_account_info(self) -> dict[str, Any]:
         """Get RunPod account info (balance, spend, etc.)."""
         query = "{ myself { id email clientBalance spendLimit currentSpendPerHr } }"
         resp = await self.http.post(RUNPOD_GRAPHQL, json={"query": query})
@@ -244,7 +243,7 @@ class RunPodClient:
     # Endpoints
     # ------------------------------------------------------------------
 
-    async def list_endpoints(self) -> List[Dict[str, Any]]:
+    async def list_endpoints(self) -> list[dict[str, Any]]:
         """List all serverless endpoints on the account."""
         query = """
         {
@@ -297,11 +296,11 @@ class RunPodClient:
 
     async def submit_workflow(
         self,
-        workflow: Dict[str, Any],
-        endpoint_id: Optional[str] = None,
-        webhook_url: Optional[str] = None,
-        extra_input: Optional[Dict[str, Any]] = None,
-        policy: Optional[Dict[str, Any]] = None,
+        workflow: dict[str, Any],
+        endpoint_id: str | None = None,
+        webhook_url: str | None = None,
+        extra_input: dict[str, Any] | None = None,
+        policy: dict[str, Any] | None = None,
     ) -> RunPodJob:
         """
         Submit a ComfyUI workflow to RunPod serverless.
@@ -318,7 +317,7 @@ class RunPodClient:
         """
         ep_id = await self.select_submit_endpoint(endpoint_id)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "input": {
                 "workflow": workflow,
                 **(extra_input or {}),
@@ -349,10 +348,10 @@ class RunPodClient:
 
     async def submit_workflow_sync(
         self,
-        workflow: Dict[str, Any],
-        endpoint_id: Optional[str] = None,
-        extra_input: Optional[Dict[str, Any]] = None,
-        policy: Optional[Dict[str, Any]] = None,
+        workflow: dict[str, Any],
+        endpoint_id: str | None = None,
+        extra_input: dict[str, Any] | None = None,
+        policy: dict[str, Any] | None = None,
         timeout: int = 600,
     ) -> RunPodJob:
         """
@@ -372,7 +371,7 @@ class RunPodClient:
         """
         ep_id = await self.select_submit_endpoint(endpoint_id)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "input": {
                 "workflow": workflow,
                 **(extra_input or {}),
@@ -413,7 +412,7 @@ class RunPodClient:
     async def get_job_status(
         self,
         job_id: str,
-        endpoint_id: Optional[str] = None,
+        endpoint_id: str | None = None,
     ) -> RunPodJob:
         """Get current status of a RunPod job."""
         ep_id = endpoint_id or self.default_endpoint_id
@@ -449,7 +448,7 @@ class RunPodClient:
     async def poll_job(
         self,
         job_id: str,
-        endpoint_id: Optional[str] = None,
+        endpoint_id: str | None = None,
         interval: float = 3.0,
         timeout: int = 600,
     ) -> RunPodJob:
@@ -493,7 +492,7 @@ class RunPodClient:
     async def cancel_job(
         self,
         job_id: str,
-        endpoint_id: Optional[str] = None,
+        endpoint_id: str | None = None,
     ) -> bool:
         """Cancel a running/queued job."""
         ep_id = endpoint_id or self.default_endpoint_id
@@ -516,8 +515,8 @@ class RunPodClient:
 
     async def get_endpoint_health(
         self,
-        endpoint_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        endpoint_id: str | None = None,
+    ) -> dict[str, Any]:
         """Get health/worker status of an endpoint."""
         ep_id = endpoint_id or self.default_endpoint_id
         if not ep_id:
@@ -541,7 +540,7 @@ class RunPodClient:
             await self._http.aclose()
             self._http = None
 
-    def get_active_jobs(self) -> List[RunPodJob]:
+    def get_active_jobs(self) -> list[RunPodJob]:
         """Get all tracked active jobs."""
         return [
             j
@@ -549,9 +548,9 @@ class RunPodClient:
             if j.status in (RunPodJobStatus.IN_QUEUE, RunPodJobStatus.IN_PROGRESS)
         ]
 
-    def get_job_stats(self) -> Dict[str, int]:
+    def get_job_stats(self) -> dict[str, int]:
         """Get job count by status."""
-        stats: Dict[str, int] = {}
+        stats: dict[str, int] = {}
         for job in self._active_jobs.values():
             stats[job.status.value] = stats.get(job.status.value, 0) + 1
         return stats
@@ -561,7 +560,7 @@ class RunPodClient:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_client: Optional[RunPodClient] = None
+_client: RunPodClient | None = None
 
 
 def get_runpod_client() -> RunPodClient:

@@ -18,7 +18,7 @@ import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -65,15 +65,15 @@ class WebhookPayload:
     def __init__(
         self,
         event_type: str,
-        data: Dict[str, Any],
-        event_id: Optional[str] = None,
+        data: dict[str, Any],
+        event_id: str | None = None,
     ):
         self.event_type = event_type
         self.event_id = event_id or str(uuid.uuid4())
         self.timestamp = datetime.now(timezone.utc).isoformat()
         self.data = data
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "event": self.event_type,
@@ -100,8 +100,8 @@ class WebhookService:
 
     def __init__(
         self,
-        supabase_url: Optional[str] = None,
-        supabase_key: Optional[str] = None,
+        supabase_url: str | None = None,
+        supabase_key: str | None = None,
     ):
         """
         Initialize webhook service.
@@ -114,16 +114,16 @@ class WebhookService:
         self.supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
 
         # Background retry task
-        self._retry_task: Optional[asyncio.Task] = None
+        self._retry_task: asyncio.Task | None = None
         self._running = False
 
         # In-memory cache of active webhooks (refreshed periodically)
-        self._webhook_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._webhook_cache: dict[str, list[dict[str, Any]]] = {}
         self._cache_expires_at: float = 0
 
         logger.info("🪝 WebhookService initialized")
 
-    def _supabase_headers(self) -> Dict[str, str]:
+    def _supabase_headers(self) -> dict[str, str]:
         """Headers for Supabase requests."""
         if not self.supabase_key:
             return {}
@@ -170,8 +170,8 @@ class WebhookService:
         return hmac.compare_digest(expected, signature)
 
     async def get_webhooks_for_user(
-        self, user_id: str, event_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, user_id: str, event_type: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get enabled webhooks for a user, optionally filtered by event type.
 
@@ -224,11 +224,11 @@ class WebhookService:
 
     async def deliver_webhook(
         self,
-        webhook: Dict[str, Any],
+        webhook: dict[str, Any],
         payload: WebhookPayload,
-        delivery_id: Optional[str] = None,
+        delivery_id: str | None = None,
         attempt: int = 1,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Deliver a webhook with HMAC signing.
 
@@ -315,13 +315,13 @@ class WebhookService:
         except httpx.RequestError as e:
             result["response_time_ms"] = int((time.time() - start_time) * 1000)
             result["status"] = "failed"
-            result["error_message"] = f"Connection error: {str(e)}"
+            result["error_message"] = f"Connection error: {e!s}"
             logger.warning(f"🔌 Webhook connection error: {webhook_id} -> {url}: {e}")
 
         except Exception as e:
             result["response_time_ms"] = int((time.time() - start_time) * 1000)
             result["status"] = "failed"
-            result["error_message"] = f"Unexpected error: {str(e)}"
+            result["error_message"] = f"Unexpected error: {e!s}"
             logger.error(f"❌ Webhook error: {webhook_id} -> {url}: {e}")
 
         # Log delivery to database
@@ -338,9 +338,9 @@ class WebhookService:
     async def _log_delivery(
         self,
         webhook_id: str,
-        delivery_id: Optional[str],
+        delivery_id: str | None,
         payload: WebhookPayload,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         attempt: int,
     ):
         """Log delivery attempt to database."""
@@ -437,7 +437,7 @@ class WebhookService:
         self,
         user_id: str,
         event_type: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ):
         """
         Dispatch an event to all relevant webhooks for a user.
@@ -526,7 +526,7 @@ class WebhookService:
     async def _process_single_retry(
         self,
         client: httpx.AsyncClient,
-        delivery: Dict[str, Any],
+        delivery: dict[str, Any],
     ):
         """Process a single retry delivery."""
         try:
@@ -660,7 +660,7 @@ async def trigger_job_queued(
     job_type: str,
     queue_position: int,
     total_pending: int,
-    eta_seconds: Optional[int] = None,
+    eta_seconds: int | None = None,
 ):
     """Trigger job.queued webhook event."""
     data = {
@@ -699,9 +699,9 @@ async def trigger_job_completed(
     user_id: str,
     job_id: str,
     job_type: str,
-    output_url: Optional[str] = None,
-    processing_time_seconds: Optional[float] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    output_url: str | None = None,
+    processing_time_seconds: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ):
     """Trigger job.completed webhook event."""
     data = {

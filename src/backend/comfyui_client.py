@@ -4,33 +4,34 @@ ComfyUI API Client for Oelala Backend
 Enables integration with ComfyUI for Wan2.2 Q5 GGUF workflows
 """
 
+import copy
+import io
 import json
+import logging
+import math
 import os
-import uuid
-import time
-import requests
-import websocket
 import random
 import threading
-import math
-from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
+import time
+import uuid
 from datetime import datetime
-import logging
-import io
-import copy
+from pathlib import Path
+from typing import Any
 
-# Import for auto-upload functionality (legacy sync client)
-from storage_client import get_client as get_storage_client
+import requests
+import websocket
 
 # Guardian LLM proxy — VRAM management
 from guardian_client import get_guardian
+
+# Import for auto-upload functionality (legacy sync client)
+from storage_client import get_client as get_storage_client
 
 # Import MediaService for async uploads with Supabase sync
 try:
     from media_service import MediaService
 
-    _media_service: Optional[MediaService] = None
+    _media_service: MediaService | None = None
 
     def get_media_service() -> MediaService:
         """Get or create the global MediaService instance."""
@@ -128,7 +129,7 @@ T2V_GENERATION_MODES = {
 }
 
 
-def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
+def load_workflow_from_file(workflow_path: str) -> dict | None:
     """Load a workflow JSON file and return as dict."""
     full_path = WORKFLOWS_DIR / workflow_path
     if not full_path.exists():
@@ -142,12 +143,12 @@ def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
         return None
 
 
-def get_available_i2v_modes() -> Dict:
+def get_available_i2v_modes() -> dict:
     """Return available I2V generation modes."""
     return I2V_GENERATION_MODES
 
 
-def get_available_t2v_modes() -> Dict:
+def get_available_t2v_modes() -> dict:
     """Return available T2V generation modes (base models)."""
     return T2V_GENERATION_MODES
 
@@ -1139,7 +1140,7 @@ class ComfyUIClient:
             logger.error(f"Error fetching {loader_type} models: {e}")
         return []
 
-    def upload_image(self, image_path: str, subfolder: str = "") -> Optional[str]:
+    def upload_image(self, image_path: str, subfolder: str = "") -> str | None:
         """Upload image to ComfyUI input folder"""
         try:
             path = Path(image_path)
@@ -1167,7 +1168,7 @@ class ComfyUIClient:
 
     def upload_image_from_bytes(
         self, image_bytes: bytes, filename: str = "input_image.png"
-    ) -> Optional[str]:
+    ) -> str | None:
         """Upload image from bytes to ComfyUI"""
         try:
             files = {"image": (filename, io.BytesIO(image_bytes), "image/png")}
@@ -1187,7 +1188,7 @@ class ComfyUIClient:
             logger.error(f"Upload error: {e}")
             return None
 
-    def upload_video(self, video_path: str, subfolder: str = "") -> Optional[str]:
+    def upload_video(self, video_path: str, subfolder: str = "") -> str | None:
         """Upload video to ComfyUI input folder.
 
         ComfyUI's /upload/image endpoint accepts any file type,
@@ -1234,7 +1235,7 @@ class ComfyUIClient:
 
     def upload_video_from_bytes(
         self, video_bytes: bytes, filename: str = "input_video.mp4"
-    ) -> Optional[str]:
+    ) -> str | None:
         """Upload video from bytes to ComfyUI"""
         try:
             # Determine content type based on extension
@@ -1266,7 +1267,7 @@ class ComfyUIClient:
             logger.error(f"🎬 Video upload error: {e}")
             return None
 
-    def upload_lora(self, lora_path: str) -> Optional[str]:
+    def upload_lora(self, lora_path: str) -> str | None:
         """Upload a LoRA file to this ComfyUI server's loras folder.
 
         Targets the modern ``/internal/models/upload`` endpoint (available on
@@ -1305,7 +1306,7 @@ class ComfyUIClient:
 
     def get_resolution_dimensions(
         self, resolution: str, aspect_ratio: str
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Calculate width/height from resolution and aspect ratio"""
         # Base heights for each resolution
         base_heights = {"480p": 480, "576p": 576, "720p": 720, "1080p": 1080}
@@ -1351,15 +1352,15 @@ class ComfyUIClient:
         cfg: float = 5.0,
         seed: int = -1,
         output_prefix: str = "oelala_wan22",
-        t2i_checkpoint_name: Optional[str] = None,
-        t2i_prompt: Optional[str] = None,
+        t2i_checkpoint_name: str | None = None,
+        t2i_prompt: str | None = None,
         t2i_negative_prompt: str = "",
         t2i_steps: int = 20,
         t2i_cfg: float = 6.0,
         t2i_seed: int = -1,
         t2i_sampler_name: str = "euler",
         t2i_scheduler: str = "normal",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build ComfyUI API-format workflow with custom parameters"""
         workflow = copy.deepcopy(WAN22_I2V_Q5_API_WORKFLOW)
 
@@ -1467,8 +1468,8 @@ class ComfyUIClient:
         long_edge: int = 480,
         unet_high_noise: str = "wan2.2_t2v_high_noise_14B_Q6_K.gguf",
         unet_low_noise: str = "wan2.2_t2v_low_noise_14B_Q6_K.gguf",
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        lora_configs: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """
         Build native Text-to-Video DisTorch2 dual-pass Q6_K workflow.
 
@@ -1668,7 +1669,7 @@ class ComfyUIClient:
         output_prefix: str = "oelala_wan22enh",
         model_variant: str = "HIGH",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Build ComfyUI API-format workflow for WAN 2.2 Enhanced NSFW FAST MOVE V2 Q4KM.
 
@@ -1756,8 +1757,8 @@ class ComfyUIClient:
         long_edge: int = 480,
         unet_high_noise: str = "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
         unet_low_noise: str = "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        lora_configs: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """
         Build ComfyUI API-format workflow for WAN 2.2 DisTorch2 Dual-Pass.
 
@@ -1983,10 +1984,10 @@ class ComfyUIClient:
         enable_upscale: bool = False,
         enable_interpolation: bool = False,
         enable_florence2: bool = True,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 720,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build BlockSwap Q8 experimental workflow.
 
@@ -2228,11 +2229,11 @@ class ComfyUIClient:
         enable_upscale: bool = False,
         enable_interpolation: bool = False,
         enable_florence2: bool = True,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 480,
         distorch2_alloc: str = "cuda:0,10gb;cuda:1,14.5gb;cpu,*",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build DisTorch2 Q8 experimental workflow.
 
@@ -2459,10 +2460,10 @@ class ComfyUIClient:
         enable_upscale: bool = False,
         enable_interpolation: bool = False,
         enable_florence2: bool = True,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 576,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build Ultra Q8 workflow — max VRAM + unlimited CPU RAM.
 
@@ -2669,7 +2670,7 @@ class ComfyUIClient:
         shift: float = 8.0,
         sampler_name: str = "dpmpp_2m",
         scheduler: str = "beta",
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 720,
         diffusion_model_high: str = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
@@ -2678,8 +2679,8 @@ class ComfyUIClient:
         vae_model: str = "wan_2.1_vae.safetensors",
         clip_vision: str = "clip_vision_h.safetensors",
         # Legacy compat: if caller passes single diffusion_model, use it for both
-        diffusion_model: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        diffusion_model: str | None = None,
+    ) -> dict[str, Any] | None:
         """
         Build Cloud Wan22 I2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
 
@@ -2989,7 +2990,7 @@ class ComfyUIClient:
         shift: float = 8.0,
         sampler_name: str = "dpmpp_2m",
         scheduler: str = "beta",
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         aspect_ratio: str = "9:16",
         long_edge: int = 720,
         diffusion_model_high: str = "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
@@ -2997,8 +2998,8 @@ class ComfyUIClient:
         text_encoder: str = "umt5_xxl_fp16.safetensors",
         vae_model: str = "wan_2.1_vae.safetensors",
         # Legacy compat: if caller passes single diffusion_model, use it for both
-        diffusion_model: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        diffusion_model: str | None = None,
+    ) -> dict[str, Any] | None:
         """
         Build Cloud Wan22 T2V workflow — Wan 2.2 fp8_scaled for cloud GPUs (48GB+).
 
@@ -3251,10 +3252,10 @@ class ComfyUIClient:
         text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
         aspect_ratio: str = "9:16",
         long_edge: int = 768,
-        lora_configs: Optional[list] = None,
-        audio_prompt: Optional[str] = None,
+        lora_configs: list | None = None,
+        audio_prompt: str | None = None,
         audio_vae_checkpoint: str = "ltx2_audio_vae.safetensors",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build LTX-2.3 22B Cloud T2V workflow — single-stage distilled pipeline.
 
@@ -3609,10 +3610,10 @@ class ComfyUIClient:
         output_prefix: str = "oelala_ltx23_i2v",
         checkpoint: str = "ltx-2.3-22b-distilled.safetensors",
         text_encoder: str = "gemma_3_12B_it_fp8_scaled.safetensors",
-        lora_configs: Optional[list] = None,
-        audio_prompt: Optional[str] = None,
+        lora_configs: list | None = None,
+        audio_prompt: str | None = None,
         audio_vae_checkpoint: str = "ltx2_audio_vae.safetensors",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build LTX-2.3 22B Cloud I2V workflow — image-to-video with
         LTXVImgToVideoConditionOnly from ComfyUI-LTXVideo.
@@ -3995,7 +3996,7 @@ class ComfyUIClient:
         return n
 
     @staticmethod
-    def _aspect_ratio_pair(aspect_ratio: str) -> Tuple[int, int]:
+    def _aspect_ratio_pair(aspect_ratio: str) -> tuple[int, int]:
         """Resolve an aspect ratio string (e.g. '16:9') to a (w, h) pair."""
         pairs = {
             "1:1": (1, 1),
@@ -4012,8 +4013,8 @@ class ComfyUIClient:
 
     @staticmethod
     def _minimax_h3_canvas(
-        aspect_ratio: str, megapixels: Optional[float] = None
-    ) -> Tuple[int, int]:
+        aspect_ratio: str, megapixels: float | None = None
+    ) -> tuple[int, int]:
         """Compute the MiniMax-H3 output canvas (w, h), rounded to multiples of 32.
 
         Without *megapixels*: H3's native canvas — a 768px short edge capped at
@@ -4063,11 +4064,11 @@ class ComfyUIClient:
         text_encoder: str,
         video_vae: str,
         audio_vae: str,
-        first_frame_link: Optional[list] = None,
-        last_frame_link: Optional[list] = None,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        first_frame_link: list | None = None,
+        last_frame_link: list | None = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         output_kind: str = "vhs",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Shared MiniMax-H3 sampling graph (model load → AV decode → mp4).
 
         *output_kind* selects how the decoded frames + audio are written:
@@ -4281,11 +4282,11 @@ class ComfyUIClient:
         video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
         audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
         aspect_ratio: str = "16:9",
-        megapixels: Optional[float] = None,
+        megapixels: float | None = None,
         long_edge: int = 768,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         output_kind: str = "vhs",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build MiniMax-H3 22B Cloud T2V workflow — text-to-video+audio.
 
@@ -4341,11 +4342,11 @@ class ComfyUIClient:
         video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
         audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
         aspect_ratio: str = "16:9",
-        megapixels: Optional[float] = None,
+        megapixels: float | None = None,
         long_edge: int = 768,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        lora_configs: list[dict[str, Any]] | None = None,
         output_kind: str = "vhs",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Build MiniMax-H3 22B Cloud I2V workflow — image-to-video+audio.
 
@@ -4405,10 +4406,10 @@ class ComfyUIClient:
         video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
         audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
         aspect_ratio: str = "16:9",
-        megapixels: Optional[float] = None,
+        megapixels: float | None = None,
         long_edge: int = 768,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        lora_configs: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
         """
         Build MiniMax-H3 local (Windows PC ComfyUI) T2V workflow.
 
@@ -4453,10 +4454,10 @@ class ComfyUIClient:
         video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
         audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
         aspect_ratio: str = "16:9",
-        megapixels: Optional[float] = None,
+        megapixels: float | None = None,
         long_edge: int = 768,
-        lora_configs: Optional[List[Dict[str, Any]]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        lora_configs: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
         """
         Build MiniMax-H3 local (Windows PC ComfyUI) I2V workflow.
 
@@ -4482,7 +4483,7 @@ class ComfyUIClient:
             output_kind="savevideo",
         )
 
-    def queue_prompt(self, workflow: Dict[str, Any]) -> Optional[str]:
+    def queue_prompt(self, workflow: dict[str, Any]) -> str | None:
         """Queue workflow for execution, return prompt_id.
 
         Unloads the Guardian LLM from VRAM before queuing so ComfyUI has
@@ -4519,7 +4520,7 @@ class ComfyUIClient:
             logger.error(f"Queue error: {e}")
             return None
 
-    def _convert_to_api_format(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_to_api_format(self, workflow: dict[str, Any]) -> dict[str, Any]:
         """Convert node-based workflow to API format"""
         api_format = {}
 
@@ -4652,7 +4653,7 @@ class ComfyUIClient:
         prompt_id: str,
         user_id: str,
         prompt: str = "",
-        settings: Optional[Dict[str, Any]] = None,
+        settings: dict[str, Any] | None = None,
     ):
         """Register job metadata for tracking and auto-upload on completion.
 
@@ -4671,7 +4672,7 @@ class ComfyUIClient:
             }
         logger.info(f"📝 Registered job {prompt_id} for user {user_id}")
 
-    def get_job_metadata(self, prompt_id: str) -> Optional[Dict[str, Any]]:
+    def get_job_metadata(self, prompt_id: str) -> dict[str, Any] | None:
         """Get job metadata for a prompt ID.
 
         Returns a deep copy to prevent external mutation of internal state,
@@ -4691,7 +4692,7 @@ class ComfyUIClient:
         prompt_id: str,
         output_path: str,
         output_type: str = "video",
-    ) -> Optional[str]:
+    ) -> str | None:
         """Auto-upload generated content to user storage on job completion.
 
         Args:
@@ -4724,7 +4725,7 @@ class ComfyUIClient:
                 try:
                     with open(output_path, "rb") as f:
                         file_data = f.read()
-                except (IOError, OSError) as e:
+                except OSError as e:
                     logger.error(f"❌ Failed to read file {output_path}: {e}")
                     self.clear_job_metadata(prompt_id)
                     return None
@@ -4827,7 +4828,7 @@ class ComfyUIClient:
         prompt_id: str,
         output_path: str,
         output_type: str = "video",
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Async version of on_job_complete that uses MediaService for upload + Supabase sync.
 
@@ -4953,7 +4954,7 @@ class ComfyUIClient:
         prompt_id: str,
         timeout: int = 1800,  # 30 minutes for longer generations
         progress_callback=None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Wait for workflow completion using websocket"""
         # Node ID to friendly name mapping for progress display
         NODE_NAMES = {
@@ -5030,7 +5031,7 @@ class ComfyUIClient:
             logger.error(f"WebSocket error: {e}")
             return None
 
-    def _get_history(self, prompt_id: str) -> Optional[Dict[str, Any]]:
+    def _get_history(self, prompt_id: str) -> dict[str, Any] | None:
         """Get execution history for prompt"""
         try:
             resp = requests.get(f"{self.base_url}/history/{prompt_id}")
@@ -5042,8 +5043,8 @@ class ComfyUIClient:
             return None
 
     def get_output_video(
-        self, history: Dict[str, Any], output_dir: str, prompt_id: Optional[str] = None
-    ) -> Optional[str]:
+        self, history: dict[str, Any], output_dir: str, prompt_id: str | None = None
+    ) -> str | None:
         """Extract output video path from history and auto-upload to user storage.
 
         Args:
@@ -5112,8 +5113,8 @@ class ComfyUIClient:
             return None
 
     def get_output_image(
-        self, history: Dict[str, Any], output_dir: str, prompt_id: Optional[str] = None
-    ) -> Optional[str]:
+        self, history: dict[str, Any], output_dir: str, prompt_id: str | None = None
+    ) -> str | None:
         """Extract output image path from history and auto-upload to user storage.
 
         Args:
@@ -5188,7 +5189,7 @@ class ComfyUIClient:
         output_dir: str,
         timeout: int = 300,
         progress_callback=None,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Wait for workflow completion and download resulting image.
 
         Args:
@@ -5221,7 +5222,7 @@ class ComfyUIClient:
         lora_strength: float = 1.5,
         lora_config: list = None,  # Dynamic LoRA list: [{name, high, low}, ...]
         generation_mode: str = "standard",  # "standard" or "nsfw_lora"
-    ) -> Dict:
+    ) -> dict:
         """
         Build DisTorch2 dual-noise workflow with Power Lora Loader.
         Uses high_noise model for first half of steps, low_noise for second half.
@@ -5356,7 +5357,7 @@ class ComfyUIClient:
         enable_lightx2v_lora: bool = None,
         enable_cumshot_lora: bool = None,
         progress_callback=None,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Full pipeline for WAN 2.2 DisTorch2 dual-noise models.
         High-quality Q6_K GGUF with dual-GPU distribution.
@@ -5467,7 +5468,7 @@ class ComfyUIClient:
         scale: int = 2,
         output_prefix: str = "upscaled",
         model: str = "realesrgan-x4plus",
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """
         Build a video upscaling workflow using Real-ESRGAN.
 
@@ -5542,7 +5543,7 @@ class ComfyUIClient:
         target_fps: int = 60,
         output_prefix: str = "interpolated",
         multiplier: int = 2,
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """
         Build a RIFE frame interpolation workflow.
 
@@ -5615,7 +5616,7 @@ class ComfyUIClient:
         video_paths: list,
         output_prefix: str = "concatenated",
         transition: str = "none",
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """
         Build a video concatenation workflow to join multiple videos.
 
@@ -5918,7 +5919,7 @@ WAN22_I2V_DISTORCH2_API_WORKFLOW = {
 
 
 # Singleton instance
-_comfyui_client: Optional[ComfyUIClient] = None
+_comfyui_client: ComfyUIClient | None = None
 
 
 def get_comfyui_client() -> ComfyUIClient:
@@ -5955,7 +5956,7 @@ def _parse_base_url(base_url: str):
     return host, port
 
 
-def get_comfyui_client_for_backend(backend) -> Optional[ComfyUIClient]:
+def get_comfyui_client_for_backend(backend) -> ComfyUIClient | None:
     """Get or create a ComfyUIClient for a ComputeBackend.
 
     Accepts a ComputeBackend object (generation.compute_backends) or a plain

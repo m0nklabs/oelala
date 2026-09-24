@@ -32,14 +32,14 @@ Usage:
     media_list = await service.list_user_media(user_id, media_type="video")
 """
 
-import os
-import logging
 import hashlib
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Union
-from pathlib import Path
-from dataclasses import dataclass
+import logging
 import mimetypes
+import os
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 # Retention policy: days until media expires per tier
 # Storage GC will clean up files after X-Expires-At passes
-TIER_RETENTION_DAYS: Dict[str, int] = {
+TIER_RETENTION_DAYS: dict[str, int] = {
     "free": 30,  # 1 month
     "pro": 90,  # 3 months
     "vip": 365,  # 1 year
@@ -78,12 +78,12 @@ class MediaRecord:
     user_id: str
     storage_path: str  # Full path: users/{user_id}/videos/filename.mp4
     media_type: str  # video, image, audio
-    workflow_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None  # JSONB: prompt, model, dimensions, etc.
+    workflow_id: str | None = None
+    metadata: dict[str, Any] | None = None  # JSONB: prompt, model, dimensions, etc.
     is_nsfw: bool = False
     is_published: bool = False
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     @property
     def bucket(self) -> str:
@@ -111,34 +111,34 @@ class MediaRecord:
 
     # Convenience accessors for metadata
     @property
-    def prompt(self) -> Optional[str]:
+    def prompt(self) -> str | None:
         return self.metadata.get("prompt") if self.metadata else None
 
     @property
-    def model_name(self) -> Optional[str]:
+    def model_name(self) -> str | None:
         return self.metadata.get("model_name") if self.metadata else None
 
     @property
-    def generation_type(self) -> Optional[str]:
+    def generation_type(self) -> str | None:
         return self.metadata.get("generation_type") if self.metadata else None
 
     @property
-    def width(self) -> Optional[int]:
+    def width(self) -> int | None:
         return self.metadata.get("width") if self.metadata else None
 
     @property
-    def height(self) -> Optional[int]:
+    def height(self) -> int | None:
         return self.metadata.get("height") if self.metadata else None
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         return self.metadata.get("duration_seconds") if self.metadata else None
 
     @property
-    def size_bytes(self) -> Optional[int]:
+    def size_bytes(self) -> int | None:
         return self.metadata.get("size_bytes") if self.metadata else None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API responses."""
         return {
             "id": self.id,
@@ -170,11 +170,11 @@ class MediaService:
 
     def __init__(
         self,
-        storage_url: Optional[str] = None,
-        storage_token: Optional[str] = None,
-        supabase_url: Optional[str] = None,
-        supabase_key: Optional[str] = None,
-        signing_secret: Optional[str] = None,
+        storage_url: str | None = None,
+        storage_token: str | None = None,
+        supabase_url: str | None = None,
+        supabase_key: str | None = None,
+        signing_secret: str | None = None,
     ):
         """
         Initialize media service.
@@ -194,7 +194,7 @@ class MediaService:
         self.supabase_url = (supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
         self.supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
 
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
 
         # Lazy-init storage client for presigned URLs and uploads
         self._storage_client = None
@@ -227,7 +227,7 @@ class MediaService:
     async def __aexit__(self, *args):
         await self.close()
 
-    def _supabase_headers(self) -> Dict[str, str]:
+    def _supabase_headers(self) -> dict[str, str]:
         """Headers for Supabase requests."""
         if not self.supabase_key:
             return {}
@@ -312,18 +312,18 @@ class MediaService:
     async def upload(
         self,
         user_id: str,
-        file_data: Union[bytes, Path],
+        file_data: bytes | Path,
         filename: str,
-        mime_type: Optional[str] = None,
-        generation_type: Optional[str] = None,
-        prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
-        workflow_id: Optional[str] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        duration_seconds: Optional[float] = None,
+        mime_type: str | None = None,
+        generation_type: str | None = None,
+        prompt: str | None = None,
+        model_name: str | None = None,
+        workflow_id: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        duration_seconds: float | None = None,
         is_nsfw: bool = False,
-        user_tier: Optional[str] = None,
+        user_tier: str | None = None,
     ) -> MediaRecord:
         """
         Upload a file to storage and create Supabase metadata record.
@@ -388,7 +388,7 @@ class MediaService:
         logger.info(f"✅ Uploaded to storage: {storage_hash}")
 
         # Build metadata JSONB
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "mime_type": mime_type,
             "size_bytes": len(data),
             "storage_hash": storage_hash,
@@ -412,8 +412,8 @@ class MediaService:
         metadata["expires_at"] = expires_at.isoformat() + "Z"
 
         # 2. Create Supabase metadata record
-        record_id: Optional[str] = None
-        created_at: Optional[str] = None
+        record_id: str | None = None
+        created_at: str | None = None
 
         if self.supabase_url and self.supabase_key:
             record_data = {
@@ -473,7 +473,7 @@ class MediaService:
             created_at=parsed_created_at,
         )
 
-    async def get(self, media_id: str) -> Optional[MediaRecord]:
+    async def get(self, media_id: str) -> MediaRecord | None:
         """Get media record by ID."""
         if not self.supabase_url:
             return None
@@ -493,12 +493,12 @@ class MediaService:
     async def list_user_media(
         self,
         user_id: str,
-        media_type: Optional[str] = None,
+        media_type: str | None = None,
         limit: int = 50,
         offset: int = 0,
         order_by: str = "created_at",
         ascending: bool = False,
-    ) -> List[MediaRecord]:
+    ) -> list[MediaRecord]:
         """
         List user's media files.
 
@@ -513,7 +513,7 @@ class MediaService:
         if not self.supabase_url:
             return []
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "user_id": f"eq.{user_id}",
             "select": "*",
             "limit": limit,
@@ -595,9 +595,7 @@ class MediaService:
             bucket_path, key_path, expires=expires_in
         )
 
-    async def get_signed_url(
-        self, media_id: str, expires_in: int = 3600
-    ) -> Optional[str]:
+    async def get_signed_url(self, media_id: str, expires_in: int = 3600) -> str | None:
         """
         Get signed URL for a media record.
 
@@ -613,7 +611,7 @@ class MediaService:
             return None
         return self.generate_signed_url(record.storage_path, expires_in)
 
-    async def get_user_quota(self, user_id: str) -> Dict[str, Any]:
+    async def get_user_quota(self, user_id: str) -> dict[str, Any]:
         """
         Get storage quota information for a user.
 
@@ -709,7 +707,7 @@ class MediaService:
             size_bytes /= 1024
         return f"{size_bytes:.1f} PB"
 
-    def _record_from_dict(self, data: Dict[str, Any]) -> MediaRecord:
+    def _record_from_dict(self, data: dict[str, Any]) -> MediaRecord:
         """Create MediaRecord from database dictionary."""
         created_at = data.get("created_at")
         updated_at = data.get("updated_at")
@@ -741,7 +739,7 @@ class MediaService:
 
 
 # Singleton instance
-_media_service: Optional[MediaService] = None
+_media_service: MediaService | None = None
 
 
 def get_media_service() -> MediaService:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
 from .registry import AdapterRegistry
 
@@ -22,10 +22,10 @@ def create_registry(
     comfyui_client_fn: Any = None,
     submit_to_runpod_fn: Any = None,
     face_service_mod: Any = None,
-    guardian_base_url: Optional[str] = None,
-    runpod_endpoint_wan22: Optional[str] = None,
-    runpod_endpoint_ltx23: Optional[str] = None,
-    runpod_endpoint_i2i: Optional[str] = None,
+    guardian_base_url: str | None = None,
+    runpod_endpoint_wan22: str | None = None,
+    runpod_endpoint_ltx23: str | None = None,
+    runpod_endpoint_i2i: str | None = None,
 ) -> AdapterRegistry:
     """
     Build an AdapterRegistry with all adapters wired to real dependencies.
@@ -61,16 +61,16 @@ def create_registry(
 
     # ── Cloud adapters ──────────────────────────────────────────
     if submit_to_runpod_fn:
-        from .adapters.cloud.wan22_i2v import Wan22CloudI2VAdapter
-        from .adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
+        from .adapters.cloud.cloud_i2i import (
+            CloudI2ITransformAdapter,
+            I2IEditCloudAdapter,
+        )
         from .adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
         from .adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
         from .adapters.cloud.minimax_h3_i2v import MiniMaxH3CloudI2VAdapter
         from .adapters.cloud.minimax_h3_t2v import MiniMaxH3CloudT2VAdapter
-        from .adapters.cloud.cloud_i2i import (
-            I2IEditCloudAdapter,
-            CloudI2ITransformAdapter,
-        )
+        from .adapters.cloud.wan22_i2v import Wan22CloudI2VAdapter
+        from .adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
 
         _register(
             Wan22CloudI2VAdapter,
@@ -126,10 +126,10 @@ def create_registry(
         wan22_client_fn = client_fn_for_model("wan2.2")
         utility_client_fn = client_fn_for_utility()
 
-        from .adapters.local.t2i_sdxl import SDXLLocalT2IAdapter
         from .adapters.local.t2i_flux import FluxLocalT2IAdapter
-        from .adapters.local.t2i_krea2 import Krea2LocalT2IAdapter
         from .adapters.local.t2i_flux2 import Flux2LocalT2IAdapter
+        from .adapters.local.t2i_krea2 import Krea2LocalT2IAdapter
+        from .adapters.local.t2i_sdxl import SDXLLocalT2IAdapter
 
         _register(SDXLLocalT2IAdapter, comfyui_client_fn=sdxl_client_fn)
         _register(FluxLocalT2IAdapter, comfyui_client_fn=flux_client_fn)
@@ -138,8 +138,8 @@ def create_registry(
 
         # ── Local I2V adapters ──────────────────────────────────
         from .adapters.local.i2v_wan22 import (
-            Wan22LocalI2VQ6Adapter,
             Wan22LocalI2VDisTorch2Adapter,
+            Wan22LocalI2VQ6Adapter,
         )
         from .adapters.local.i2v_wan22_lightning import Wan22LocalI2VLightningAdapter
 
@@ -156,8 +156,8 @@ def create_registry(
         # Resolved through the Compute Backend Inventory instead of a hardcoded
         # client: any enabled 'comfyui' backend that runs minimax_h3 will be
         # used (could be a second server like a Windows PC).
-        from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
         from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
+        from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
 
         h3_client_fn = client_fn_for_model("minimax_h3")
         try:
@@ -175,14 +175,14 @@ def create_registry(
             )
 
         # ── Utility adapters ───────────────────────────────────
+        from .adapters.local.audio_mmaudio import MMAudioAdapter
         from .adapters.local.i2i_transform import I2ITransformAdapter
-        from .adapters.local.v2v import V2VStyleTransferAdapter
+        from .adapters.local.inpaint import InpaintAdapter
+        from .adapters.local.interpolate import InterpolateAdapter
+        from .adapters.local.lipsync import LipSyncAdapter
         from .adapters.local.upscale_image import ImageUpscaleAdapter
         from .adapters.local.upscale_video import VideoUpscaleAdapter
-        from .adapters.local.interpolate import InterpolateAdapter
-        from .adapters.local.inpaint import InpaintAdapter
-        from .adapters.local.lipsync import LipSyncAdapter
-        from .adapters.local.audio_mmaudio import MMAudioAdapter
+        from .adapters.local.v2v import V2VStyleTransferAdapter
         from .adapters.local.voice_clone import VoiceCloneAdapter
 
         # I2I/inpaint are SDXL workflows (model_family="sdxl"), so they follow

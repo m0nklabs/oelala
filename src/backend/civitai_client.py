@@ -15,10 +15,9 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
-
 
 CIVITAI_BASE_URL = "https://civitai.com/api/v1"
 
@@ -34,13 +33,13 @@ def _safe_filename(name: str) -> str:
 class CivitaiFileChoice:
     file_id: int
     name: str
-    size_kb: Optional[int]
+    size_kb: int | None
     download_url: str
     primary: bool
 
 
 class CivitaiClient:
-    def __init__(self, token: Optional[str] = None, timeout: int = 60):
+    def __init__(self, token: str | None = None, timeout: int = 60):
         self.token = token or os.getenv("CIVITAI_API_TOKEN") or None
         self.timeout = timeout
         self.session = requests.Session()
@@ -52,9 +51,9 @@ class CivitaiClient:
         )
 
     def search_models(
-        self, query: str, limit: int = 10, types: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"query": query, "limit": limit}
+        self, query: str, limit: int = 10, types: list[str] | None = None
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"query": query, "limit": limit}
         if types:
             # Civitai supports repeated 'types' query params; requests handles list values
             params["types"] = types
@@ -64,7 +63,7 @@ class CivitaiClient:
         resp.raise_for_status()
         return resp.json()
 
-    def get_model_version(self, version_id: int) -> Dict[str, Any]:
+    def get_model_version(self, version_id: int) -> dict[str, Any]:
         resp = self.session.get(
             f"{CIVITAI_BASE_URL}/model-versions/{version_id}", timeout=self.timeout
         )
@@ -73,15 +72,15 @@ class CivitaiClient:
 
     def choose_file(
         self,
-        version_payload: Dict[str, Any],
-        file_id: Optional[int] = None,
+        version_payload: dict[str, Any],
+        file_id: int | None = None,
         prefer_primary: bool = True,
     ) -> CivitaiFileChoice:
         files = version_payload.get("files") or []
         if not files:
             raise ValueError("Civitai model version has no files")
 
-        def to_choice(f: Dict[str, Any]) -> CivitaiFileChoice:
+        def to_choice(f: dict[str, Any]) -> CivitaiFileChoice:
             return CivitaiFileChoice(
                 file_id=int(f.get("id")),
                 name=str(f.get("name") or "model.safetensors"),
@@ -144,8 +143,8 @@ class CivitaiClient:
         self,
         version_id: int,
         dest_dir: Path,
-        file_id: Optional[int] = None,
-        filename_hint: Optional[str] = None,
+        file_id: int | None = None,
+        filename_hint: str | None = None,
     ) -> Path:
         payload = self.get_model_version(version_id)
         choice = self.choose_file(payload, file_id=file_id)
@@ -167,7 +166,7 @@ class CivitaiClient:
             return dest_path
 
         # Small backoff for transient CDN hiccups
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
         for attempt in range(3):
             try:
                 return self.download_file(choice.download_url, dest_path)

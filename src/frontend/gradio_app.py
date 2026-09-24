@@ -4,9 +4,10 @@ Gradio UI for WAN2.2 Video Generation
 Simple interface for testing text-to-video and image-to-video
 """
 
+import os
+
 import gradio as gr
 import requests
-import os
 
 # Backend URL
 BACKEND_URL = "http://127.0.0.1:7995"
@@ -40,7 +41,7 @@ def generate_text_to_video(prompt, num_frames, model_type):
             return None, f"❌ Error: {response.status_code} - {response.text}"
 
     except Exception as e:
-        return None, f"❌ Exception: {str(e)}"
+        return None, f"❌ Exception: {e!s}"
 
 
 def generate_image_to_video(image, prompt, num_frames):
@@ -81,7 +82,7 @@ def generate_image_to_video(image, prompt, num_frames):
             return None, f"❌ Error: {response.status_code} - {response.text}"
 
     except Exception as e:
-        return None, f"❌ Exception: {str(e)}"
+        return None, f"❌ Exception: {e!s}"
 
 
 def check_backend_status():
@@ -94,7 +95,7 @@ def check_backend_status():
         else:
             return f"⚠️ Backend responded with status {response.status_code}"
     except Exception as e:
-        return f"❌ Backend not reachable: {str(e)}"
+        return f"❌ Backend not reachable: {e!s}"
 
 
 # Create Gradio interface

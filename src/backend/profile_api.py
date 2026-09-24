@@ -4,20 +4,20 @@ User Profiles API for Oelala
 Handles user profile CRUD operations and lookups
 """
 
-import os
+import asyncio
 import io
 import logging
-import re
+import os
 import random
+import re
 import string
-import asyncio
 from contextlib import asynccontextmanager
+
 import httpx
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Query, File, UploadFile
-from pydantic import BaseModel, Field, validator
+from auth import User, get_current_user, get_optional_user
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from PIL import Image
-from auth import get_current_user, get_optional_user, User
+from pydantic import BaseModel, Field, validator
 
 # Note: avatars stored in MinIO 'oelala-avatars' bucket
 AVATAR_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -44,18 +44,18 @@ def debug_log(msg: str):
 class ProfileCreateRequest(BaseModel):
     """Request to create/update user profile"""
 
-    username: Optional[str] = Field(
+    username: str | None = Field(
         None,
         min_length=1,
         max_length=30,
         description="Unique username (1-30 chars, alphanumeric + _ -)",
     )
-    display_name: Optional[str] = Field(
+    display_name: str | None = Field(
         None, max_length=100, description="Display name shown in UI"
     )
-    avatar_url: Optional[str] = Field(None, description="URL to user avatar image")
-    bio: Optional[str] = Field(None, max_length=500, description="User biography")
-    social_links: Optional[dict] = Field(
+    avatar_url: str | None = Field(None, description="URL to user avatar image")
+    bio: str | None = Field(None, max_length=500, description="User biography")
+    social_links: dict | None = Field(
         default={}, description="Social media links (twitter, instagram, etc.)"
     )
     is_public: bool = Field(True, description="Whether profile is publicly visible")
@@ -98,10 +98,10 @@ class ProfileResponse(BaseModel):
     """User profile response"""
 
     id: str
-    username: Optional[str]
-    display_name: Optional[str]
-    avatar_url: Optional[str]
-    bio: Optional[str]
+    username: str | None
+    display_name: str | None
+    avatar_url: str | None
+    bio: str | None
     social_links: dict
     is_public: bool
     created_at: str
@@ -130,10 +130,10 @@ class FollowListItem(BaseModel):
     """User in a followers/following list"""
 
     id: str
-    username: Optional[str] = None
-    display_name: Optional[str] = None
-    avatar_url: Optional[str] = None
-    bio: Optional[str] = None
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+    bio: str | None = None
 
 
 # =============================================================================
@@ -149,7 +149,7 @@ router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
 # Shared httpx client singleton (connection pooling, reuse across requests)
-_supabase_client: Optional[httpx.AsyncClient] = None
+_supabase_client: httpx.AsyncClient | None = None
 
 
 @asynccontextmanager
@@ -306,7 +306,7 @@ async def update_my_profile(
 @router.get("/username/{username}", response_model=ProfileResponse)
 async def get_profile_by_username(
     username: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User | None = Depends(get_optional_user),
 ):
     """
     Get user profile by username.
@@ -337,7 +337,7 @@ async def get_profile_by_username(
 @router.get("/id/{user_id}", response_model=ProfileResponse)
 async def get_profile_by_id(
     user_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User | None = Depends(get_optional_user),
 ):
     """
     Get user profile by user ID.
@@ -643,7 +643,7 @@ async def get_followers(
     user_id: str,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    _current_user: Optional[User] = Depends(get_optional_user),
+    _current_user: User | None = Depends(get_optional_user),
 ):
     """Get user's followers list."""
     async with get_supabase_client() as client:
@@ -685,7 +685,7 @@ async def get_following(
     user_id: str,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    _current_user: Optional[User] = Depends(get_optional_user),
+    _current_user: User | None = Depends(get_optional_user),
 ):
     """Get list of users this user follows."""
     async with get_supabase_client() as client:
@@ -799,8 +799,8 @@ async def list_all_profiles(
 
 
 class NotificationPrefsRequest(BaseModel):
-    email_on_job_complete: Optional[bool] = None
-    email_on_job_failed: Optional[bool] = None
+    email_on_job_complete: bool | None = None
+    email_on_job_failed: bool | None = None
 
 
 @router.get("/me/notifications")

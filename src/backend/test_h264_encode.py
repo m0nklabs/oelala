@@ -8,6 +8,7 @@ Run: python test_h264_encode.py
 
 import os
 import subprocess
+
 import numpy as np
 from PIL import Image
 

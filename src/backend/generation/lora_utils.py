@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ LORA_DIR = Path(os.getenv("LORA_DIR", "/home/flip/oelala/ComfyUI/models/loras"))
 LORA_SSD_DIR = Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras"))
 
 
-def resolve_lora_path(name: str) -> tuple[Optional[Path], Optional[str]]:
+def resolve_lora_path(name: str) -> tuple[Path | None, str | None]:
     """
     Resolve a LoRA name to its actual file path.
 
@@ -74,9 +73,9 @@ def sanitize_lora_configs_for_single_stage(lora_configs: list[dict]) -> list[dic
     """
     sanitized: list[dict] = []
     for config in lora_configs:
-        if "name" in config and config["name"]:
+        if config.get("name"):
             sanitized.append(config)
-        elif "high" in config and config["high"]:
+        elif config.get("high"):
             logger.warning(
                 f"⚠️ Converting Wan2.2 dual-stage LoRA to single-stage: "
                 f"high={config.get('high')} (low={config.get('low')} dropped)"
@@ -127,10 +126,10 @@ def filter_loras_by_model_compat(
 def build_lora_download_list(
     lora_configs: list[dict],
     *,
-    backend_public_url: Optional[str] = None,
-    hf_sources: Optional[dict] = None,
-    hf_token: Optional[str] = None,
-    lora_download_token_fn: Optional[object] = None,
+    backend_public_url: str | None = None,
+    hf_sources: dict | None = None,
+    hf_token: str | None = None,
+    lora_download_token_fn: object | None = None,
 ) -> list[dict]:
     """
     Build download URLs for LoRAs needed by a cloud job.

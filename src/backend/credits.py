@@ -3,12 +3,13 @@ Oelala Credits System
 Pay-as-you-go credit management for AI generation.
 """
 
-import os
 import logging
-from datetime import datetime
-from typing import Optional, Dict, Any, List
+import os
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from typing import Any
+
 import httpx
 from pydantic import BaseModel
 
@@ -73,7 +74,7 @@ class GenerationType(str, Enum):
 
 
 # Base credit costs
-CREDIT_COSTS: Dict[GenerationType, int] = {
+CREDIT_COSTS: dict[GenerationType, int] = {
     # Images (cheap)
     GenerationType.SDXL: 1,
     GenerationType.SDXL_HD: 2,
@@ -99,7 +100,7 @@ def calculate_credits(
     generation_type: str,
     width: int = 1024,
     height: int = 1024,
-    duration_seconds: Optional[int] = None,
+    duration_seconds: int | None = None,
     steps: int = 20,
 ) -> int:
     """
@@ -204,12 +205,12 @@ class CreditPackage:
     credits: int
     price_cents: int
     currency: str = "EUR"
-    stripe_price_id: Optional[str] = None
+    stripe_price_id: str | None = None
     is_active: bool = True
 
 
 # Default packages (also stored in database)
-DEFAULT_PACKAGES: List[CreditPackage] = [
+DEFAULT_PACKAGES: list[CreditPackage] = [
     CreditPackage("starter", "Starter", 100, 500, "EUR"),
     CreditPackage("basic", "Basic", 500, 2000, "EUR"),
     CreditPackage("pro", "Pro", 1500, 5000, "EUR"),
@@ -245,9 +246,9 @@ class CreditEstimate(BaseModel):
     """Credit cost estimate response."""
 
     estimated_credits: int
-    breakdown: Dict[str, Any]
-    current_balance: Optional[int] = None
-    sufficient: Optional[bool] = None
+    breakdown: dict[str, Any]
+    current_balance: int | None = None
+    sufficient: bool | None = None
 
 
 class CreditTransaction(BaseModel):
@@ -256,8 +257,8 @@ class CreditTransaction(BaseModel):
     id: str
     amount: int
     type: str  # 'purchase', 'bonus', 'generation', 'refund', 'admin'
-    description: Optional[str]
-    reference_id: Optional[str]
+    description: str | None
+    reference_id: str | None
     created_at: datetime
 
 
@@ -265,7 +266,7 @@ class InsufficientCreditsError(Exception):
     """Raised when user doesn't have enough credits."""
 
     def __init__(
-        self, required: int, available: int, packages: List[CreditPackage] = None
+        self, required: int, available: int, packages: list[CreditPackage] = None
     ):
         self.required = required
         self.available = available
@@ -292,10 +293,10 @@ class CreditManager:
     def __init__(self, supabase_url: str = None, service_key: str = None):
         self.supabase_url = supabase_url or SUPABASE_URL
         self.service_key = service_key or SUPABASE_SERVICE_KEY
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         """Auth headers for Supabase REST API."""
         return {
             "apikey": self.service_key,
@@ -511,7 +512,7 @@ class CreditManager:
         amount: int,
         reference_id: str,
         description: str = None,
-        metadata: Dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> bool:
         """
         Deduct credits and log transaction atomically.
@@ -564,7 +565,7 @@ class CreditManager:
         type: str,
         description: str = None,
         reference_id: str = None,
-        metadata: Dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> CreditBalance:
         """
         Add credits to user account (purchase, bonus, refund).
@@ -641,7 +642,7 @@ class CreditManager:
         type: str,
         description: str = None,
         reference_id: str = None,
-        metadata: Dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ):
         """Log a credit transaction."""
         client = await self.get_client()
@@ -666,7 +667,7 @@ class CreditManager:
         user_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[CreditTransaction]:
+    ) -> list[CreditTransaction]:
         """Get user's transaction history."""
         client = await self.get_client()
 
@@ -702,7 +703,7 @@ class CreditManager:
     # Packages
     # -------------------------------------------------------------------------
 
-    async def get_packages(self) -> List[CreditPackageResponse]:
+    async def get_packages(self) -> list[CreditPackageResponse]:
         """Get available credit packages."""
         client = await self.get_client()
 
@@ -735,7 +736,7 @@ class CreditManager:
 # Singleton Instance
 # =============================================================================
 
-_credit_manager: Optional[CreditManager] = None
+_credit_manager: CreditManager | None = None
 
 
 def get_credit_manager() -> CreditManager:

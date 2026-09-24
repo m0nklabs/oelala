@@ -1,8 +1,9 @@
-import os
-import torch
-from diffusers import StableDiffusion3Pipeline, SD3Transformer2DModel
-from transformers import BitsAndBytesConfig, T5EncoderModel
 import logging
+import os
+
+import torch
+from diffusers import SD3Transformer2DModel, StableDiffusion3Pipeline
+from transformers import BitsAndBytesConfig, T5EncoderModel
 
 logger = logging.getLogger(__name__)
 

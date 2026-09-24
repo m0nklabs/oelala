@@ -3,13 +3,12 @@ Storage Node data models using SQLite with SQLAlchemy.
 """
 
 import hashlib
-from datetime import datetime
-from typing import Optional, List
-from pathlib import Path
-from dataclasses import dataclass, field
-from enum import Enum
 import json
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
 
 
 class MediaType(str, Enum):
@@ -54,21 +53,21 @@ class MediaFile:
     mime_type: str = ""
 
     # Metadata
-    width: Optional[int] = None
-    height: Optional[int] = None
-    duration_seconds: Optional[float] = None
-    fps: Optional[float] = None
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
+    fps: float | None = None
 
     # Generation info (if AI-generated)
-    prompt: Optional[str] = None
-    negative_prompt: Optional[str] = None
-    model: Optional[str] = None
-    seed: Optional[int] = None
-    workflow_json: Optional[str] = None
+    prompt: str | None = None
+    negative_prompt: str | None = None
+    model: str | None = None
+    seed: int | None = None
+    workflow_json: str | None = None
 
     # User info (for multi-tenant)
-    user_id: Optional[str] = None
-    project_id: Optional[str] = None
+    user_id: str | None = None
+    project_id: str | None = None
 
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -76,11 +75,11 @@ class MediaFile:
 
     # Sync info
     sync_status: SyncStatus = SyncStatus.LOCAL_ONLY
-    last_synced_at: Optional[datetime] = None
-    source_node_id: Optional[str] = None
+    last_synced_at: datetime | None = None
+    source_node_id: str | None = None
 
     # Tags and organization
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     favorite: bool = False
     archived: bool = False
 
@@ -143,11 +142,11 @@ class SyncState:
 
     node_id: str
     peer_node_id: str
-    last_sync_at: Optional[datetime] = None
+    last_sync_at: datetime | None = None
     files_synced: int = 0
     files_pending: int = 0
     bytes_transferred: int = 0
-    sync_errors: List[str] = field(default_factory=list)
+    sync_errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -189,11 +188,11 @@ class NodeConfig:
     # Sync settings
     sync_enabled: bool = True
     sync_interval_seconds: int = 300  # 5 minutes
-    sync_peers: List[dict] = field(default_factory=list)
+    sync_peers: list[dict] = field(default_factory=list)
 
     # Security
     encryption_enabled: bool = False
-    encryption_key: Optional[str] = None
+    encryption_key: str | None = None
 
     # Compression
     compression_enabled: bool = False

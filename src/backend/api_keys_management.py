@@ -3,16 +3,15 @@ API Key Management Endpoints
 Allows users to create, list, and revoke their API keys.
 """
 
-import os
 import logging
-from typing import List, Optional
+import os
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
 
-from auth import get_current_user, User
 from api_key_auth import generate_api_key
+from auth import User, get_current_user
 from credits import get_credit_manager
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class CreateAPIKeyRequest(BaseModel):
     name: str = Field(
         ..., min_length=1, max_length=100, description="Friendly name for the key"
     )
-    expires_days: Optional[int] = Field(
+    expires_days: int | None = Field(
         None, ge=1, le=365, description="Days until expiration (optional)"
     )
 
@@ -54,7 +53,7 @@ class CreateAPIKeyResponse(BaseModel):
     )
     key_prefix: str
     created_at: str
-    expires_at: Optional[str]
+    expires_at: str | None
 
 
 class APIKeyInfo(BaseModel):
@@ -65,16 +64,16 @@ class APIKeyInfo(BaseModel):
     key_prefix: str = Field(..., description="First few characters for identification")
     is_active: bool
     usage_count: int
-    last_used_at: Optional[str]
+    last_used_at: str | None
     created_at: str
-    expires_at: Optional[str]
+    expires_at: str | None
 
 
 class UpdateAPIKeyRequest(BaseModel):
     """Request to update API key."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    is_active: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=100)
+    is_active: bool | None = None
 
 
 # =============================================================================
@@ -165,7 +164,7 @@ async def create_api_key(
         raise HTTPException(status_code=500, detail="Failed to create API key")
 
 
-@router.get("", response_model=List[APIKeyInfo])
+@router.get("", response_model=list[APIKeyInfo])
 async def list_api_keys(
     user: User = Depends(get_current_user),
 ):

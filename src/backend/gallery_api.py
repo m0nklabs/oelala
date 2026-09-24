@@ -4,18 +4,18 @@ Gallery API for Oelala
 Handles publishing/unpublishing media and fetching gallery content
 """
 
-import os
 import logging
+import os
 import re
-import tempfile
 import subprocess
+import tempfile
 from pathlib import Path
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
+
+from auth import User, get_current_user, get_optional_user
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, validator
-from auth import get_current_user, get_optional_user, User
-from storage_utils import parse_range_header, format_last_modified, ALLOWED_ORIGINS
+from storage_utils import ALLOWED_ORIGINS, format_last_modified, parse_range_header
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -33,13 +33,13 @@ class PublishRequest(BaseModel):
     title: str = Field(
         ..., min_length=1, max_length=100, description="Title for the media"
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None, max_length=500, description="Optional description"
     )
-    tags: List[str] = Field(default=[], description="List of tags")
+    tags: list[str] = Field(default=[], description="List of tags")
     is_nsfw: bool = Field(False, description="Whether content is NSFW")
     media_type: str = Field(..., description="Type of media: video, image, or audio")
-    thumbnail_url: Optional[str] = Field(None, description="URL to thumbnail")
+    thumbnail_url: str | None = Field(None, description="URL to thumbnail")
     metadata: dict = Field(
         default={}, description="Additional metadata (prompt, settings, etc.)"
     )
@@ -88,27 +88,27 @@ class PublishedMediaResponse(BaseModel):
     user_id: str
     storage_path: str
     title: str
-    description: Optional[str]
-    tags: List[str]
+    description: str | None
+    tags: list[str]
     is_nsfw: bool
     media_type: str
-    thumbnail_url: Optional[str]
+    thumbnail_url: str | None
     metadata: dict
     view_count: int
     like_count: int
     created_at: str
     updated_at: str
     # Additional fields for frontend
-    user_email: Optional[str] = None
-    user_liked: Optional[bool] = None
+    user_email: str | None = None
+    user_liked: bool | None = None
     # Creator info (from profiles table)
-    creator_username: Optional[str] = None
-    creator_display_name: Optional[str] = None
-    creator_avatar_url: Optional[str] = None
+    creator_username: str | None = None
+    creator_display_name: str | None = None
+    creator_avatar_url: str | None = None
 
 
 class GalleryListResponse(BaseModel):
-    items: List[PublishedMediaResponse]
+    items: list[PublishedMediaResponse]
     total: int
     page: int
     per_page: int
@@ -293,15 +293,15 @@ async def unpublish_media(media_id: str, user: User = Depends(get_current_user))
 # ============================================================================
 @router.get("", response_model=GalleryListResponse)
 async def list_published_media(
-    media_type: Optional[str] = Query(None, description="Filter by media type"),
-    is_nsfw: Optional[bool] = Query(None, description="Filter by NSFW status"),
+    media_type: str | None = Query(None, description="Filter by media type"),
+    is_nsfw: bool | None = Query(None, description="Filter by NSFW status"),
     sort_by: str = Query(
         "created_at", description="Sort by: created_at, like_count, view_count"
     ),
     order: str = Query("desc", description="Order: asc or desc"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(30, ge=1, le=100, description="Items per page"),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     List published media items in the gallery.
@@ -426,7 +426,7 @@ async def list_published_media(
 # ============================================================================
 @router.get("/{media_id}", response_model=PublishedMediaResponse)
 async def get_published_media(
-    media_id: str, user: Optional[User] = Depends(get_optional_user)
+    media_id: str, user: User | None = Depends(get_optional_user)
 ):
     """
     Get details of a single published media item.
@@ -613,8 +613,9 @@ async def get_published_media_workflow(media_id: str):
 
             elif ext in [".png"]:
                 # Extract from PNG metadata
-                from PIL import Image
                 import json
+
+                from PIL import Image
 
                 img = Image.open(tmp_path)
                 if hasattr(img, "text"):
@@ -649,7 +650,7 @@ async def get_user_published_media(
     user_id: str,
     page: int = Query(1, ge=1),
     per_page: int = Query(30, ge=1, le=100),
-    viewer: Optional[User] = Depends(get_optional_user),
+    viewer: User | None = Depends(get_optional_user),
 ):
     """
     Get all published media for a specific user.

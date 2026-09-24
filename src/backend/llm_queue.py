@@ -18,7 +18,7 @@ import os
 import time
 import uuid
 from collections import OrderedDict
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 DEBUG_ENABLED = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -33,38 +33,38 @@ class LLMJob:
     """Represents a single LLM prompt enhancement job."""
 
     __slots__ = (
-        "job_id",
-        "status",
-        "created_at",
-        "started_at",
         "completed_at",
+        "created_at",
+        "error",
+        "job_id",
         "queue_position",
         "request_data",
         "result",
-        "error",
+        "started_at",
+        "status",
         "user_id",
     )
 
     def __init__(
         self,
         job_id: str,
-        request_data: Dict[str, Any],
-        user_id: Optional[str] = None,
+        request_data: dict[str, Any],
+        user_id: str | None = None,
     ):
         self.job_id = job_id
         self.status = "queued"  # queued → processing → completed | failed
         self.created_at = time.time()
-        self.started_at: Optional[float] = None
-        self.completed_at: Optional[float] = None
+        self.started_at: float | None = None
+        self.completed_at: float | None = None
         self.queue_position: int = 0
         self.request_data = request_data
-        self.result: Optional[Dict[str, Any]] = None
-        self.error: Optional[str] = None
+        self.result: dict[str, Any] | None = None
+        self.error: str | None = None
         self.user_id = user_id
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize job state for API response."""
-        d: Dict[str, Any] = {
+        d: dict[str, Any] = {
             "job_id": self.job_id,
             "status": self.status,
             "queue_position": self.queue_position,
@@ -100,12 +100,12 @@ class LLMQueueManager:
         self._lock = asyncio.Lock()
         self._jobs: OrderedDict[str, LLMJob] = OrderedDict()
         self._pending_queue: list[str] = []  # job_ids in FIFO order
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
 
     def submit(
         self,
-        request_data: Dict[str, Any],
-        user_id: Optional[str] = None,
+        request_data: dict[str, Any],
+        user_id: str | None = None,
     ) -> LLMJob:
         """
         Submit a new LLM job to the queue. Returns the job immediately.
@@ -133,7 +133,7 @@ class LLMQueueManager:
 
         return job
 
-    def get_job(self, job_id: str) -> Optional[LLMJob]:
+    def get_job(self, job_id: str) -> LLMJob | None:
         """Get job by ID (returns None if not found or expired)."""
         return self._jobs.get(job_id)
 
@@ -253,7 +253,7 @@ class LLMQueueManager:
             except Exception as exc:
                 logger.warning(f"LLM queue cleanup error: {exc}")
 
-    def get_queue_status(self) -> Dict[str, Any]:
+    def get_queue_status(self) -> dict[str, Any]:
         """Get overall queue status for debugging/admin."""
         return {
             "pending": len(self._pending_queue),

@@ -9,11 +9,13 @@ Also handles auto-upload of generated media when async jobs complete.
 import asyncio
 import json
 import logging
-import websocket
 import threading
-import requests
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Dict, Any, Callable
+from typing import Any
+
+import requests
+import websocket
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +43,15 @@ class ComfyUIProgressMonitor:
         self.base_url = f"http://{comfyui_host}:{comfyui_port}"
 
         # Callbacks: prompt_id -> async callback(progress, node_name)
-        self.progress_callbacks: Dict[str, Callable] = {}
+        self.progress_callbacks: dict[str, Callable] = {}
 
         # Running state
         self._running = False
-        self._monitor_thread: Optional[threading.Thread] = None
-        self._ws: Optional[websocket.WebSocket] = None
+        self._monitor_thread: threading.Thread | None = None
+        self._ws: websocket.WebSocket | None = None
 
         # Event loop reference - set when start() is called from async context
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
 
         # Reference to ComfyUI client for auto-upload (lazy loaded)
         self._comfyui_client = None
@@ -122,7 +124,7 @@ class ComfyUIProgressMonitor:
 
         logger.info("🛑 ComfyUI progress monitor stopped")
 
-    def _handle_message(self, data: Dict[str, Any]):
+    def _handle_message(self, data: dict[str, Any]):
         """Process a message from ComfyUI WebSocket"""
         msg_type = data.get("type")
         msg_data = data.get("data", {})
@@ -303,10 +305,10 @@ class ComfyUIProgressMonitor:
     def _download_and_upload(
         self,
         prompt_id: str,
-        file_info: Dict[str, Any],
+        file_info: dict[str, Any],
         output_type: str,
         comfyui,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Download a file from ComfyUI and upload to user storage.
 

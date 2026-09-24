@@ -10,14 +10,14 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .types import GenerationRequest, GenerationResult
 from .registry import AdapterRegistry
 from .router import GenerationRouter
+from .types import GenerationRequest, GenerationResult
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def init_v2_api(
 
 async def _resolve_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_security),
 ):
     """Resolve the current user via the injected auth dependency.
 

@@ -4,10 +4,9 @@ Sends email notifications on job completion/failure using Resend API.
 Falls back to SMTP if configured. Disabled gracefully when no provider is set.
 """
 
-import os
-import logging
 import asyncio
-from typing import Optional
+import logging
+import os
 
 import httpx
 
@@ -132,7 +131,7 @@ async def get_user_notification_prefs(user_id: str) -> dict:
     return defaults
 
 
-async def get_user_email(user_id: str) -> Optional[str]:
+async def get_user_email(user_id: str) -> str | None:
     """Fetch user email from Supabase Admin API."""
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         return None

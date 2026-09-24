@@ -14,7 +14,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ def save_gen_start_artifacts(
     workflow: dict,
     prompt: str,
     job_info: dict,
-    input_image_path: Optional[str] = None,
+    input_image_path: str | None = None,
 ) -> None:
     """Save workflow, manifest, and optional input image at generation start.
 
@@ -119,7 +118,7 @@ def save_gen_logs(
     prompt_id: str,
     log_text: str,
     status: str = "completed",
-    duration_seconds: Optional[float] = None,
+    duration_seconds: float | None = None,
 ) -> None:
     """Save execution logs for a completed generation.
 

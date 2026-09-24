@@ -3,13 +3,13 @@ Supabase JWT Authentication for Oelala Backend
 Validates JWT tokens from frontend and extracts user information.
 """
 
-import os
 import logging
-from typing import Optional
+import os
 from functools import lru_cache
-from fastapi import Request, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 import jwt
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from pydantic import BaseModel
 
@@ -28,7 +28,7 @@ class User(BaseModel):
     """Authenticated user from Supabase JWT"""
 
     id: str  # Supabase user ID (UUID)
-    email: Optional[str] = None
+    email: str | None = None
     role: str = "authenticated"
     app_metadata: dict = {}
     user_metadata: dict = {}
@@ -44,7 +44,7 @@ JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 
 
 @lru_cache(maxsize=1)
-def get_jwk_client() -> Optional[PyJWKClient]:
+def get_jwk_client() -> PyJWKClient | None:
     """Get cached JWK client for Supabase"""
     try:
         return PyJWKClient(JWKS_URL)
@@ -53,7 +53,7 @@ def get_jwk_client() -> Optional[PyJWKClient]:
         return None
 
 
-def decode_jwt_with_secret(token: str) -> Optional[dict]:
+def decode_jwt_with_secret(token: str) -> dict | None:
     """Decode JWT using Supabase JWT secret (faster, local verification)"""
     if not SUPABASE_JWT_SECRET:
         return None
@@ -66,7 +66,7 @@ def decode_jwt_with_secret(token: str) -> Optional[dict]:
         return None
 
 
-def decode_jwt_with_jwks(token: str) -> Optional[dict]:
+def decode_jwt_with_jwks(token: str) -> dict | None:
     """Decode JWT using Supabase JWKS (remote key verification)"""
     client = get_jwk_client()
     if not client:
@@ -81,7 +81,7 @@ def decode_jwt_with_jwks(token: str) -> Optional[dict]:
         return None
 
 
-def decode_supabase_jwt(token: str) -> Optional[dict]:
+def decode_supabase_jwt(token: str) -> dict | None:
     """Decode Supabase JWT, trying secret first then JWKS then unverified"""
     # Try HS256 with secret first (faster, most secure)
     payload = decode_jwt_with_secret(token)
@@ -116,9 +116,7 @@ def decode_supabase_jwt(token: str) -> Optional[dict]:
 class OptionalHTTPBearer(HTTPBearer):
     """HTTP Bearer that doesn't fail on missing auth"""
 
-    async def __call__(
-        self, request: Request
-    ) -> Optional[HTTPAuthorizationCredentials]:
+    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
         try:
             return await super().__call__(request)
         except HTTPException:
@@ -132,7 +130,7 @@ optional_security = OptionalHTTPBearer(auto_error=False)
 
 async def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> User:
     """
     Extract and validate user from JWT token.
@@ -165,8 +163,8 @@ async def get_current_user(
 
 async def get_optional_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
-) -> Optional[User]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+) -> User | None:
     """
     Extract user from JWT if present, otherwise return None.
     Useful for endpoints that work both authenticated and anonymous.

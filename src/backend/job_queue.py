@@ -7,8 +7,9 @@ Integrates with ComfyUI queue and broadcasts real-time updates
 import asyncio
 import logging
 import time
-from typing import Dict, Optional, Any
 from collections import deque
+from typing import Any
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -31,21 +32,21 @@ class JobQueueManager:
     def __init__(self, comfyui_host: str = "localhost", comfyui_port: int = 8188):
         self.comfyui_url = f"http://{comfyui_host}:{comfyui_port}"
         # Job metadata: prompt_id -> {user_id, created_at, type, ...}
-        self.jobs: Dict[str, Dict[str, Any]] = {}
+        self.jobs: dict[str, dict[str, Any]] = {}
         # Historical completion times for ETA estimation (last 20 jobs)
         self.completion_times: deque = deque(maxlen=20)
         # Last known queue state for change detection
-        self.last_queue_state: Dict[str, int] = {}  # prompt_id -> position
+        self.last_queue_state: dict[str, int] = {}  # prompt_id -> position
         # Polling task
-        self._poll_task: Optional[asyncio.Task] = None
+        self._poll_task: asyncio.Task | None = None
         self._running = False
 
     def register_job(
         self,
         prompt_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         job_type: str = "generation",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """
         Register a new job in the queue.
@@ -68,7 +69,7 @@ class JobQueueManager:
         }
         debug_log(f"Registered job {prompt_id} for user {user_id}")
 
-    def get_job(self, prompt_id: str) -> Optional[Dict[str, Any]]:
+    def get_job(self, prompt_id: str) -> dict[str, Any] | None:
         """Get job metadata"""
         return self.jobs.get(prompt_id)
 
@@ -124,7 +125,7 @@ class JobQueueManager:
         # Account for jobs ahead in queue
         return int(avg_time * queue_position)
 
-    async def get_comfyui_queue(self) -> Optional[Dict[str, Any]]:
+    async def get_comfyui_queue(self) -> dict[str, Any] | None:
         """Fetch current queue state from ComfyUI"""
         try:
             async with httpx.AsyncClient() as client:
@@ -254,7 +255,7 @@ class JobQueueManager:
         except Exception as e:
             logger.warning(f"Failed to check job completion for {prompt_id}: {e}")
 
-    def _extract_output_url(self, history: Dict[str, Any]) -> Optional[str]:
+    def _extract_output_url(self, history: dict[str, Any]) -> str | None:
         """Extract output URL from ComfyUI history"""
         try:
             outputs = history.get("outputs", {})

@@ -387,8 +387,9 @@ def create_training_job(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save images to training dataset dir
-    from PIL import Image as PILImage
     import io
+
+    from PIL import Image as PILImage
 
     for idx, img_data in enumerate(images):
         img_path = images_dir / f"face_{idx:03d}.png"

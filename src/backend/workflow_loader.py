@@ -4,11 +4,11 @@ ComfyUI Workflow Loader
 Loads workflow templates from JSON files with configurable parameters
 """
 
-import json
 import copy
-from pathlib import Path
-from typing import Dict, Any, Optional, List
+import json
 import logging
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,23 +25,23 @@ class WorkflowConfig:
         file_path: Path,
         category: str,
         description: str,
-        parameters: Dict[str, Dict[str, Any]],
+        parameters: dict[str, dict[str, Any]],
     ):
         self.name = name
         self.file_path = file_path
         self.category = category
         self.description = description
         self.parameters = parameters  # {param_name: {node_id, input_key, type, default, min, max, options, label}}
-        self._template: Optional[Dict] = None
+        self._template: dict | None = None
 
     @property
-    def template(self) -> Dict:
+    def template(self) -> dict:
         """Lazy load the workflow template"""
         if self._template is None:
             self._template = load_workflow_json(self.file_path)
         return self._template
 
-    def build(self, **kwargs) -> Dict:
+    def build(self, **kwargs) -> dict:
         """Build a workflow with custom parameters"""
         workflow = copy.deepcopy(self.template)
 
@@ -59,7 +59,7 @@ class WorkflowConfig:
 
         return workflow
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Export config for frontend"""
         return {
             "name": self.name,
@@ -81,7 +81,7 @@ class WorkflowConfig:
         }
 
 
-def load_workflow_json(file_path: Path) -> Dict:
+def load_workflow_json(file_path: Path) -> dict:
     """Load a workflow JSON file"""
     if not file_path.exists():
         raise FileNotFoundError(f"Workflow not found: {file_path}")
@@ -90,7 +90,7 @@ def load_workflow_json(file_path: Path) -> Dict:
         return json.load(f)
 
 
-def convert_to_api_format(workflow: Dict) -> Dict:
+def convert_to_api_format(workflow: dict) -> dict:
     """
     Convert ComfyUI UI workflow format to API format.
 
@@ -165,7 +165,7 @@ class WorkflowRegistry:
 
     def __init__(self, workflow_dir: Path = WORKFLOW_DIR):
         self.workflow_dir = workflow_dir
-        self.workflows: Dict[str, WorkflowConfig] = {}
+        self.workflows: dict[str, WorkflowConfig] = {}
         self._load_registry()
 
     def _load_registry(self):
@@ -189,11 +189,11 @@ class WorkflowRegistry:
         else:
             logger.warning(f"No registry.json found at {registry_file}")
 
-    def get(self, workflow_id: str) -> Optional[WorkflowConfig]:
+    def get(self, workflow_id: str) -> WorkflowConfig | None:
         """Get a workflow config by ID"""
         return self.workflows.get(workflow_id)
 
-    def list_workflows(self, category: Optional[str] = None) -> List[Dict]:
+    def list_workflows(self, category: str | None = None) -> list[dict]:
         """List available workflows, optionally filtered by category"""
         result = []
         for wf_id, config in self.workflows.items():
@@ -203,11 +203,11 @@ class WorkflowRegistry:
                 result.append(info)
         return result
 
-    def get_categories(self) -> List[str]:
+    def get_categories(self) -> list[str]:
         """Get list of unique categories"""
         return list(set(wf.category for wf in self.workflows.values()))
 
-    def build_workflow(self, workflow_id: str, **params) -> Dict:
+    def build_workflow(self, workflow_id: str, **params) -> dict:
         """Build a workflow with parameters"""
         config = self.get(workflow_id)
         if not config:
@@ -216,7 +216,7 @@ class WorkflowRegistry:
 
 
 # Global registry instance
-_registry: Optional[WorkflowRegistry] = None
+_registry: WorkflowRegistry | None = None
 
 
 def get_registry() -> WorkflowRegistry:

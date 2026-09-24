@@ -11,7 +11,6 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-
 MILLISECONDS_PER_SECOND = 1000
 MILLISECONDS_PER_MINUTE = 60 * MILLISECONDS_PER_SECOND
 

@@ -28,7 +28,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -59,7 +59,7 @@ class ComputeBackend(BaseModel):
     type: Literal["comfyui", "runpod"] = "comfyui"
     base_url: str = ""
     enabled: bool = True
-    model_families: List[str] = Field(default_factory=list)
+    model_families: list[str] = Field(default_factory=list)
     notes: str = ""
 
     @model_validator(mode="after")
@@ -104,11 +104,11 @@ _BACKENDS_FILE = Path(__file__).with_name("compute_backends.json")
 
 # In-memory source of truth, loaded lazily.
 _json_path: Path = Path(os.getenv("COMPUTE_BACKENDS_JSON", str(_BACKENDS_FILE)))
-_backends: List[ComputeBackend] = []
+_backends: list[ComputeBackend] = []
 _loaded = False
 
 
-def _default_backends() -> List[ComputeBackend]:
+def _default_backends() -> list[ComputeBackend]:
     """Built-in fallback inventory (missing/unreadable compute_backends.json).
 
     When ``COMPUTE_NODE_*`` env vars are present they fully define the fallback
@@ -145,7 +145,7 @@ def _default_backends() -> List[ComputeBackend]:
     ]
 
 
-def _nodes_from_env() -> List[ComputeBackend]:
+def _nodes_from_env() -> list[ComputeBackend]:
     """Parse the ``COMPUTE_NODE_*`` env schema into backends.
 
     Each ``COMPUTE_NODE_{n}_*`` group declares one compute node:
@@ -164,7 +164,7 @@ def _nodes_from_env() -> List[ComputeBackend]:
     the deterministic id ``node-{n}``. Any addresses come only from env config —
     they are never hardcoded here.
     """
-    backends: List[ComputeBackend] = []
+    backends: list[ComputeBackend] = []
     idx = 1
     while True:
         prefix = f"COMPUTE_NODE_{idx}"
@@ -215,7 +215,7 @@ def _nodes_from_env() -> List[ComputeBackend]:
     return backends
 
 
-def load_backends(force: bool = False) -> List[ComputeBackend]:
+def load_backends(force: bool = False) -> list[ComputeBackend]:
     """Load the backend inventory from disk (or built-in defaults).
 
     Cached after first load; call with force=True to re-read (e.g. after the
@@ -257,7 +257,7 @@ def load_backends(force: bool = False) -> List[ComputeBackend]:
     return _backends
 
 
-def save_backends(backends: List[ComputeBackend]) -> None:
+def save_backends(backends: list[ComputeBackend]) -> None:
     """Persist the backend inventory to the JSON file and refresh cache."""
     data = {
         "$comment": "Compute Backend Inventory — managed via Admin panel → Compute.",
@@ -273,12 +273,12 @@ def save_backends(backends: List[ComputeBackend]) -> None:
     load_backends(force=True)
 
 
-def list_backends() -> List[ComputeBackend]:
+def list_backends() -> list[ComputeBackend]:
     """Return all backends (enabled and disabled)."""
     return list(load_backends())
 
 
-def get_backend(backend_id: str) -> Optional[ComputeBackend]:
+def get_backend(backend_id: str) -> ComputeBackend | None:
     """Look up a backend by id."""
     for b in load_backends():
         if b.id == backend_id:
@@ -286,12 +286,12 @@ def get_backend(backend_id: str) -> Optional[ComputeBackend]:
     return None
 
 
-def enabled_backends() -> List[ComputeBackend]:
+def enabled_backends() -> list[ComputeBackend]:
     """Return only enabled backends."""
     return [b for b in load_backends() if b.enabled]
 
 
-def resolve_backend_for_model(model_family: str) -> Optional[ComputeBackend]:
+def resolve_backend_for_model(model_family: str) -> ComputeBackend | None:
     """Find the first enabled backend able to run ``model_family``.
 
     Returns None when nothing enabled can run it. ComfyUI backends are preferred

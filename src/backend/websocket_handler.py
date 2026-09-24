@@ -7,10 +7,11 @@ Manages client connections and broadcasts queue/progress events
 import asyncio
 import json
 import logging
-from datetime import datetime
-from typing import Dict, Set, Any, Optional
-from fastapi import WebSocket
 from collections import defaultdict
+from datetime import datetime
+from typing import Any
+
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ _webhook_triggers = None
 _GENERATION_TIMES_FILE = "/home/flip/oelala/data/generation_times.json"
 
 
-async def _get_comfyui_execution_time(prompt_id: str) -> Optional[float]:
+async def _get_comfyui_execution_time(prompt_id: str) -> float | None:
     """
     Fetch execution time from ComfyUI history API.
 
@@ -84,7 +85,7 @@ def _store_generation_time(output_url: str, processing_time: float):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load existing
-        times: Dict[str, float] = {}
+        times: dict[str, float] = {}
         if path.exists():
             try:
                 times = json.loads(path.read_text())
@@ -106,7 +107,7 @@ def _store_generation_time(output_url: str, processing_time: float):
         logger.warning(f"Failed to store generation time: {e}")
 
 
-def load_generation_times() -> Dict[str, float]:
+def load_generation_times() -> dict[str, float]:
     """Load generation times lookup. Used by unified media endpoint."""
     from pathlib import Path
 
@@ -124,8 +125,9 @@ async def backfill_generation_times_from_comfyui():
     One-time backfill: pull all execution times from ComfyUI history
     and populate generation_times.json for existing media files.
     """
-    import httpx
     from pathlib import Path
+
+    import httpx
 
     url = "http://localhost:8188/history"
     try:
@@ -183,10 +185,10 @@ def _get_webhook_triggers():
     if _webhook_triggers is None:
         try:
             from webhook_service import (
-                trigger_job_queued,
-                trigger_job_started,
                 trigger_job_completed,
                 trigger_job_failed,
+                trigger_job_queued,
+                trigger_job_started,
             )
 
             _webhook_triggers = {
@@ -210,13 +212,13 @@ class WebSocketManager:
 
     def __init__(self):
         # WebSocket connections grouped by user_id
-        self.connections: Dict[str, Set[WebSocket]] = defaultdict(set)
+        self.connections: dict[str, set[WebSocket]] = defaultdict(set)
         # Track job ownership: job_id -> {user_id, job_type, started_at}
-        self.job_ownership: Dict[str, Dict[str, Any]] = {}
+        self.job_ownership: dict[str, dict[str, Any]] = {}
         # Last broadcast timestamps to avoid spam
-        self.last_broadcast: Dict[str, float] = {}
+        self.last_broadcast: dict[str, float] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None):
+    async def connect(self, websocket: WebSocket, user_id: str | None = None):
         """Register a new WebSocket connection (must be already accepted)"""
         user_key = user_id or "anonymous"
         self.connections[user_key].add(websocket)
@@ -225,7 +227,7 @@ class WebSocketManager:
         )
         debug_log(f"Active users: {list(self.connections.keys())}")
 
-    def disconnect(self, websocket: WebSocket, user_id: Optional[str] = None):
+    def disconnect(self, websocket: WebSocket, user_id: str | None = None):
         """Unregister a WebSocket connection"""
         user_key = user_id or "anonymous"
         if websocket in self.connections[user_key]:
@@ -239,7 +241,7 @@ class WebSocketManager:
                 debug_log(f"Removed empty connection set for user {user_key}")
 
     def register_job(
-        self, job_id: str, user_id: Optional[str] = None, job_type: str = "generation"
+        self, job_id: str, user_id: str | None = None, job_type: str = "generation"
     ):
         """Register a job for a specific user"""
         user_key = user_id or "anonymous"
@@ -266,7 +268,7 @@ class WebSocketManager:
                 )
 
     async def broadcast_to_user(
-        self, user_id: Optional[str], event_type: str, data: Dict[str, Any]
+        self, user_id: str | None, event_type: str, data: dict[str, Any]
     ):
         """
         Broadcast an event to all connections for a specific user.
@@ -314,7 +316,7 @@ class WebSocketManager:
                 f"📡 Removed {len(disconnected)} dead connections for user {user_key}"
             )
 
-    async def broadcast_to_all(self, event_type: str, data: Dict[str, Any]):
+    async def broadcast_to_all(self, event_type: str, data: dict[str, Any]):
         """
         Broadcast an event to ALL connected users.
 
@@ -328,7 +330,7 @@ class WebSocketManager:
         job_id: str,
         queue_position: int,
         total_pending: int,
-        eta_seconds: Optional[int] = None,
+        eta_seconds: int | None = None,
     ):
         """
         Broadcast queue position update to job owner.
@@ -387,8 +389,8 @@ class WebSocketManager:
         self,
         job_id: str,
         progress: int,
-        message: Optional[str] = None,
-        node_name: Optional[str] = None,
+        message: str | None = None,
+        node_name: str | None = None,
     ):
         """
         Broadcast generation progress update to job owner.
@@ -444,8 +446,8 @@ class WebSocketManager:
     async def broadcast_job_complete(
         self,
         job_id: str,
-        output_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        output_url: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """
         Broadcast job completion to job owner.
@@ -535,7 +537,7 @@ class WebSocketManager:
         self.unregister_job(job_id)
 
     async def broadcast_job_failed(
-        self, job_id: str, error: str, metadata: Optional[Dict[str, Any]] = None
+        self, job_id: str, error: str, metadata: dict[str, Any] | None = None
     ):
         """
         Broadcast job failure to job owner.

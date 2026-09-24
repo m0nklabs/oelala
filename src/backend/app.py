@@ -4,8 +4,8 @@ Oelala Web Interface Backend
 FastAPI application for AI Video Generation Pipeline
 """
 
-import io
 import html as html_lib
+import io
 import ipaddress
 import os
 import posixpath
@@ -22,8 +22,8 @@ load_dotenv(dotenv_path="/home/flip/oelala/.env")
 # ── Sentry SDK (must init before FastAPI) ────────────────────────────
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 _sentry_dsn = os.getenv("SENTRY_DSN", "")
 if _sentry_dsn:
@@ -49,41 +49,41 @@ if _sentry_dsn:
 else:
     print("ℹ️  Sentry disabled (SENTRY_DSN not set)")
 
-import uvicorn
-import threading
 import asyncio
+import json
+import logging
+import re
+import shutil
+import threading
+import uuid
+from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote, unquote, urlparse
+
+import httpx
+import uvicorn
 from fastapi import (
+    Depends,
     FastAPI,
     File,
-    UploadFile,
     Form,
     HTTPException,
+    Query,
+    Request,
+    UploadFile,
     WebSocket,
     WebSocketDisconnect,
-    Depends,
-    Request,
-    Query,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
-    JSONResponse,
-    StreamingResponse,
     HTMLResponse,
+    JSONResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
-import httpx
-import shutil
-from pathlib import Path
-import logging
-from datetime import datetime, timezone
-import json
-import re
-from urllib.parse import quote, unquote, urlparse
-from collections import deque
-import uuid
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
@@ -92,60 +92,64 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append("/home/flip/oelala")  # Add oelala root directory
 
 # Authentication
+from admin_api import check_admin
+
+# Admin system
+from admin_api import router as admin_router
 from auth import (
+    User,
+    decode_jwt_with_jwks,
+    decode_jwt_with_secret,
     get_current_user,
     get_optional_user,
-    User,
-    decode_jwt_with_secret,
-    decode_jwt_with_jwks,
-)
-
-# Storage client for user media (MinIO-backed)
-from storage_client import get_client as get_storage_client
-from storage_utils import parse_range_header, format_last_modified, ALLOWED_ORIGINS
-from minio.error import S3Error
-
-# MediaService for MinIO + Supabase integration (async client)
-from media_service import MediaService, MediaRecord
-
-# Generation artifact storage (workflow, settings, logs per generation)
-from gen_artifacts import (
-    save_gen_start_artifacts,
-    save_gen_logs,
-    format_comfyui_history_log,
 )
 
 # Credits system
-from credits import calculate_credits
+from credits import calculate_credits, get_credit_manager
 from credits_api import (
-    router as credits_router,
-    stripe_router,
     check_credits,
     deduct_credits,
+    stripe_router,
 )
-from credits import get_credit_manager
+from credits_api import (
+    router as credits_router,
+)
 
 # Gallery system
 from gallery_api import router as gallery_router
 
-# Profile system
-from profile_api import router as profile_router
-
-# Admin system
-from admin_api import router as admin_router, check_admin
+# Generation artifact storage (workflow, settings, logs per generation)
+from gen_artifacts import (
+    format_comfyui_history_log,
+    save_gen_logs,
+    save_gen_start_artifacts,
+)
 
 # LoRA browser
 from lora_api import router as lora_router
 
-# Webhooks system
-from webhooks_api import router as webhooks_router
+# MediaService for MinIO + Supabase integration (async client)
+from media_service import MediaRecord, MediaService
+from minio.error import S3Error
+from moderation_api import (
+    admin_router as moderation_admin_router,
+)
 
 # Content moderation
 from moderation_api import (
     public_router as moderation_public_router,
-    admin_router as moderation_admin_router,
 )
+
+# Profile system
+from profile_api import router as profile_router
+
+# Storage client for user media (MinIO-backed)
+from storage_client import get_client as get_storage_client
+from storage_utils import ALLOWED_ORIGINS, format_last_modified, parse_range_header
 from webhook_service import webhook_service
+
+# Webhooks system
+from webhooks_api import router as webhooks_router
 
 # Face swap / face profile service (insightface-based, no ComfyUI)
 try:
@@ -183,9 +187,9 @@ except ImportError as e:
 
 # WebSocket progress tracking
 try:
-    from websocket_handler import ws_manager
-    from job_queue import job_queue_manager
     from comfyui_progress_monitor import progress_monitor
+    from job_queue import job_queue_manager
+    from websocket_handler import ws_manager
 
     print("✅ WebSocket progress modules imported successfully")
 except ImportError as e:
@@ -205,7 +209,7 @@ except ImportError as e:
 
 # RunPod Serverless client for cloud GPU offloading
 try:
-    from runpod_client import get_runpod_client, RunPodJobStatus
+    from runpod_client import RunPodJobStatus, get_runpod_client
 
     _runpod = get_runpod_client()
     if _runpod.is_available():
@@ -257,9 +261,7 @@ if face_train_service and ws_manager:
             return  # No event loop available
 
         payload = {"job_id": job_id, "prompt_id": prompt_id, "status": event, **data}
-        if event == "started":
-            payload["status"] = "running"
-        elif event == "progress":
+        if event == "started" or event == "progress":
             payload["status"] = "running"
         # "completed" and "failed" map directly
 
@@ -285,7 +287,7 @@ WEBSOCKET_AUTH_TIMEOUT = 5.0  # seconds - timeout for WebSocket authentication
 QUEUE_POLLING_INTERVAL = 2.0  # seconds - interval for ComfyUI queue polling
 
 # Global MediaService instance (initialized lazily)
-_media_service: Optional[MediaService] = None
+_media_service: MediaService | None = None
 
 
 def get_media_service() -> MediaService:
@@ -637,10 +639,9 @@ async def request_metrics_middleware(request: Request, call_next):
 
 
 # API v1 router (programmatic access)
-from api_v1 import router as api_v1_router
-
 # API keys management router
 from api_keys_management import router as api_keys_router
+from api_v1 import router as api_v1_router
 
 # Include API routers
 app.include_router(api_v1_router)  # REST API v1 at /api/v1/*
@@ -738,7 +739,7 @@ def _safe_child_path(base_dir: Path, filename: str) -> Path:
     return candidate
 
 
-def _find_existing_media_path(media_ref: str) -> Optional[str]:
+def _find_existing_media_path(media_ref: str) -> str | None:
     """Resolve an existing media reference under known local media roots."""
     ref = str(media_ref or "").strip()
     if not ref:
@@ -1144,9 +1145,9 @@ async def upload_generated_media(
     file_path: Path,
     generation_type: str,
     prompt: str,
-    workflow_id: Optional[str] = None,
-    extra_metadata: Optional[dict] = None,
-) -> Optional[MediaRecord]:
+    workflow_id: str | None = None,
+    extra_metadata: dict | None = None,
+) -> MediaRecord | None:
     """
     Upload a generated media file to MinIO and sync metadata to Supabase.
 
@@ -1716,7 +1717,7 @@ async def list_comfyui_media(
                                             "lora_low",
                                             "lora_name",
                                         ]:
-                                            if key in inputs and inputs[key]:
+                                            if inputs.get(key):
                                                 lora_name = inputs[key]
                                                 if isinstance(
                                                     lora_name, str
@@ -1942,7 +1943,7 @@ async def list_comfyui_media(
                                     or "lora_low" in inputs
                                 ):
                                     for key in ["lora_high", "lora_low", "lora_name"]:
-                                        if key in inputs and inputs[key]:
+                                        if inputs.get(key):
                                             lora_name = inputs[key]
                                             if isinstance(
                                                 lora_name, str
@@ -2073,7 +2074,7 @@ from pydantic import BaseModel
 
 
 class DeleteMediaRequest(BaseModel):
-    filenames: List[str]
+    filenames: list[str]
 
 
 @app.delete("/delete-comfyui-media")
@@ -2323,8 +2324,9 @@ async def validate_lora_config(request: Request):
 
     Body: {"loras": [{"filename": "...", "strength": 1.0}], "positive_prompt": "..."}
     """
-    from lora_scanner import validate_lora_batch
     from dataclasses import asdict
+
+    from lora_scanner import validate_lora_batch
 
     body = await request.json()
     loras = body.get("loras", [])
@@ -2535,8 +2537,10 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
 
     # Gemma 4 26B needs ~14GB VRAM — free ComfyUI first
     from guardian_client import (
-        wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
+    )
+    from guardian_client import (
+        wait_for_comfyui_idle,
     )
 
     await wait_for_comfyui_idle()
@@ -2868,7 +2872,7 @@ CLOUD_POLL_INTERVAL = int(os.getenv("CLOUD_POLL_INTERVAL", "10"))
 # Max age before a cloud job is considered abandoned (2 hours)
 CLOUD_JOB_MAX_AGE = int(os.getenv("CLOUD_JOB_MAX_AGE", "7200"))
 
-_cloud_poller_task: Optional[asyncio.Task] = None
+_cloud_poller_task: asyncio.Task | None = None
 
 
 async def _cloud_job_poller() -> None:
@@ -2952,9 +2956,7 @@ async def _cloud_job_poller() -> None:
             await asyncio.sleep(10)
 
 
-def _get_cached_local_result(
-    prompt_id: str, user_id: Optional[str] = None
-) -> Optional[dict]:
+def _get_cached_local_result(prompt_id: str, user_id: str | None = None) -> dict | None:
     """Return a cached local result when it belongs to the requesting user."""
 
     result = _local_completed_cache.get(prompt_id)
@@ -2965,7 +2967,7 @@ def _get_cached_local_result(
     return {k: v for k, v in result.items() if k != "_cached_at"}
 
 
-async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> Optional[dict]:
+async def _resolve_local_job_result(prompt_id: str, job_info: dict) -> dict | None:
     """Resolve a local ComfyUI job from history and trigger upload when ready."""
     import requests
 
@@ -3386,13 +3388,13 @@ _local_completed_cache: dict[str, dict] = {}
 CLOUD_QUEUE_TIMEOUT_SECONDS = int(os.getenv("RUNPOD_QUEUE_TIMEOUT_SECONDS", "300"))
 LOCAL_JOB_POLL_INTERVAL = int(os.getenv("LOCAL_JOB_POLL_INTERVAL", "3"))
 LOCAL_COMPLETED_CACHE_TTL = int(os.getenv("LOCAL_COMPLETED_CACHE_TTL", "600"))
-_local_poller_task: Optional[asyncio.Task] = None
+_local_poller_task: asyncio.Task | None = None
 
 
 def _lora_download_token(filename: str) -> str:
     """Generate HMAC-SHA256 token for LoRA download URL validation."""
-    import hmac
     import hashlib
+    import hmac
 
     key = os.getenv("RUNPOD_API_KEY", "fallback-lora-key").encode()
     return hmac.new(key, filename.encode(), hashlib.sha256).hexdigest()[:32]
@@ -3449,7 +3451,7 @@ CLOUD_LOGS_DIR = Path("/home/flip/oelala/logs/cloud")
 CLOUD_LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Optional[Path]:
+def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Path | None:
     """Save raw ComfyUI logs from a cloud job to logs/cloud/."""
     try:
         output = rp_job.output
@@ -3475,7 +3477,7 @@ def _save_cloud_logs(runpod_job_id: str, prompt_id: str, rp_job) -> Optional[Pat
 
 def _mark_cloud_job_timed_out(
     prompt_id: str, job_info: dict, queue_age: float
-) -> Optional[dict]:
+) -> dict | None:
     """Mark a cloud job as failed when it sits in queue beyond the allowed timeout."""
     if queue_age < CLOUD_QUEUE_TIMEOUT_SECONDS:
         return None
@@ -4071,7 +4073,7 @@ async def trigger_post_processing_chain(
 
 
 @app.get("/comfyui/queue")
-async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
+async def get_comfyui_queue(user: User | None = Depends(get_optional_user)):
     """
     Get ComfyUI queue status including running and pending jobs.
     Enriches with Oelala job metadata where available.
@@ -4308,15 +4310,13 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to get ComfyUI queue: {e}")
-        raise HTTPException(
-            status_code=502, detail=f"ComfyUI connection failed: {str(e)}"
-        )
+        raise HTTPException(status_code=502, detail=f"ComfyUI connection failed: {e!s}")
 
 
 @app.get("/comfyui/job/{prompt_id}")
 async def get_job_status(
     prompt_id: str,
-    user: Optional[User] = Depends(get_optional_user),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Get status of a specific job by prompt_id.
@@ -4620,8 +4620,7 @@ async def cancel_job(prompt_id: str):
             "http://localhost:8188/queue", json={"delete": [prompt_id]}, timeout=5
         )
 
-        if prompt_id in active_jobs:
-            del active_jobs[prompt_id]
+        active_jobs.pop(prompt_id, None)
 
         return {"success": True, "prompt_id": prompt_id}
     except Exception as e:
@@ -5177,7 +5176,7 @@ async def list_unified_media(
     type: str = "all",
     source: str = "all",
     # Admin-only filters
-    filter_user_id: Optional[str] = None,  # Admin: filter by specific user
+    filter_user_id: str | None = None,  # Admin: filter by specific user
     include_all_users: bool = False,  # Admin: show media from all users
     user: User = Depends(get_current_user),
 ):
@@ -6197,8 +6196,8 @@ async def get_preset(preset_id: str):
 @app.post("/restart")
 async def restart_backend():
     """Restart the backend server (uvicorn --reload will handle this)"""
-    import signal
     import os
+    import signal
 
     logger.info("🔄 Backend restart requested via API")
 
@@ -6278,8 +6277,8 @@ async def generate_image_legacy(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Legacy endpoint - redirects to SDXL via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6362,8 +6361,8 @@ async def generate_sdxl_image(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Queue SDXL image generation via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6405,8 +6404,8 @@ async def generate_flux_image(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Generate image using Flux Dev via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6445,8 +6444,8 @@ async def generate_video(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Generate video from uploaded image via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6557,8 +6556,8 @@ async def generate_video_to_video(
     user: User = Depends(get_current_user),
 ):
     """Video-to-Video style transfer using AI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6614,8 +6613,8 @@ async def generate_wan22_comfyui(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6774,8 +6773,8 @@ async def generate_wan22_async(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Queue Wan2.2 I2V video generation and return immediately (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6844,8 +6843,8 @@ async def generate_blockswap_q8_async(
     user: User = Depends(get_current_user),
 ):
     """Queue BlockSwap Q8 experimental I2V video generation (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6917,8 +6916,8 @@ async def generate_distorch2_q8_async(
     user: User = Depends(get_current_user),
 ):
     """Queue DisTorch2 Q8 experimental I2V video generation (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -6988,8 +6987,8 @@ async def generate_ultra_q8_async(
     user: User = Depends(get_current_user),
 ):
     """Queue Ultra Q8 I2V video generation — max VRAM + unlimited CPU RAM (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -7057,8 +7056,8 @@ async def generate_cloud_wan22_async(
     user: User = Depends(get_current_user),
 ):
     """Queue Cloud Wan22 video generation on RunPod — bf16 full precision (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -7125,8 +7124,8 @@ async def generate_ltx2_i2v_async(
     user: User = Depends(get_current_user),
 ):
     """Queue LTX-2 I2V video generation and return immediately (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -7164,7 +7163,7 @@ async def generate_ltx2_i2v_async(
 @app.post("/post-process")
 async def post_process_media(
     mode: str = Form(...),  # "upscale", "interpolate", "concat"
-    files: List[UploadFile] = File(None),
+    files: list[UploadFile] = File(None),
     media_urls: str = Form(""),  # JSON array of existing media URLs/filenames
     model: str = Form("realesrgan-x4plus"),  # For upscale
     scale: int = Form(2),  # For upscale: 2 or 4
@@ -7398,8 +7397,8 @@ async def generate_text_video(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Generate video from text prompt via ComfyUI T2V workflow (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     # Map model_type + compute_target to adapter_hint
     hint_map = {
@@ -7601,40 +7600,40 @@ def _build_nsfw_prompt(intensity: int) -> str:
 async def caption_image(
     user: User = Depends(get_current_user),
     file: UploadFile = File(...),
-    model: Optional[str] = Form(
+    model: str | None = Form(
         None, description="Guardian vision model ID (default: VISION_MODEL env)"
     ),
     mode: str = Form(
         "detailed",
         description="Mode: brief, detailed, tags, structured, prompt_i2v, prompt_t2i, prompt_nsfw",
     ),
-    nsfw_intensity: Optional[int] = Form(
+    nsfw_intensity: int | None = Form(
         None, description="NSFW intensity level 1-5 (only for prompt_nsfw mode)"
     ),
-    detail_level: Optional[int] = Form(
+    detail_level: int | None = Form(
         3, description="Vision detail level 1-5 (1=brief, 3=default, 5=exhaustive)"
     ),
     include_negative: bool = Form(False, description="Also generate a negative prompt"),
     include_motion: bool = Form(
         False, description="Also generate a motion/continuation prompt for video"
     ),
-    motion_hint: Optional[str] = Form(
+    motion_hint: str | None = Form(
         None,
         description="User hint for desired motion/action (e.g., 'walking towards camera, hair blowing')",
     ),
-    audio_context: Optional[str] = Form(
+    audio_context: str | None = Form(
         None,
         description="JSON string with director's audio context: {ambient, dialogue: [{subject, line}]}",
     ),
-    concept_context: Optional[str] = Form(
+    concept_context: str | None = Form(
         None,
         description="JSON string with concept analysis to enrich prompt generation",
     ),
-    refinement_prompt: Optional[str] = Form(
+    refinement_prompt: str | None = Form(
         None,
         description="User instruction to refine concept analysis or director's notes (e.g., 'make it more dramatic')",
     ),
-    refinement_target: Optional[str] = Form(
+    refinement_target: str | None = Form(
         None,
         description="What to refine: 'concept' (scene/subjects/mood) or 'notes' (motion/audio/dialogue/camera)",
     ),
@@ -7746,8 +7745,10 @@ async def caption_image(
                 # Notes refinement: text-only call (no image needed, avoids LLM reinterpreting visual)
                 import httpx
                 from guardian_client import (
-                    wait_for_comfyui_idle,
                     free_comfyui_vram as _free_comfy_vram,
+                )
+                from guardian_client import (
+                    wait_for_comfyui_idle,
                 )
 
                 await wait_for_comfyui_idle()
@@ -7835,8 +7836,10 @@ async def caption_image(
 
                 import httpx
                 from guardian_client import (
-                    wait_for_comfyui_idle,
                     free_comfyui_vram as _free_comfy_vram,
+                )
+                from guardian_client import (
+                    wait_for_comfyui_idle,
                 )
 
                 await wait_for_comfyui_idle()
@@ -8229,9 +8232,9 @@ class RefineCaptionRequest(BaseModel):
     """Request body for refining generated captions with user suggestions."""
 
     positive: str = ""
-    negative: Optional[str] = None
+    negative: str | None = None
     suggestion: str  # User's refinement instruction
-    model: Optional[str] = None
+    model: str | None = None
 
 
 @app.post("/refine-caption")
@@ -8276,8 +8279,10 @@ async def refine_caption(
     )
 
     from guardian_client import (
-        wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
+    )
+    from guardian_client import (
+        wait_for_comfyui_idle,
     )
 
     await wait_for_comfyui_idle()
@@ -8334,7 +8339,7 @@ async def refine_caption(
                 await asyncio.sleep(10)
                 continue
             logger.error(f"Refine caption failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Refine failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Refine failed: {e!s}")
 
     raise HTTPException(status_code=503, detail="Model still loading — try again")
 
@@ -8343,7 +8348,7 @@ class MotionPromptRequest(BaseModel):
     """Request body for motion prompt generation."""
 
     prompt: str
-    model: Optional[str] = None  # T2T model override
+    model: str | None = None  # T2T model override
 
 
 @app.post("/generate-motion-prompt")
@@ -8381,8 +8386,10 @@ async def generate_motion_prompt(
     try:
         import httpx
         from guardian_client import (
-            wait_for_comfyui_idle,
             free_comfyui_vram as _free_comfy_vram,
+        )
+        from guardian_client import (
+            wait_for_comfyui_idle,
         )
 
         await wait_for_comfyui_idle()
@@ -8542,20 +8549,22 @@ class PromptGenerateRequest(BaseModel):
     """JSON body for prompt generation"""
 
     input: str
-    style: Optional[str] = None
+    style: str | None = None
     mode: str = "expand"  # expand, refine, variations
     include_negative: bool = True
     include_motion: bool = False
     use_llm: bool = True  # Set to False to use template-only mode
-    model: Optional[str] = None  # Guardian model ID override; None = use pinned/default
-    refine_instruction: Optional[str] = (
+    model: str | None = None  # Guardian model ID override; None = use pinned/default
+    refine_instruction: str | None = (
         None  # User instruction for refine mode (e.g. "add more motion")
     )
-    nsfw_intensity: Optional[int] = None  # 1-5: enables NSFW prompt mode
-    target_model: Optional[str] = (
+    nsfw_intensity: int | None = None  # 1-5: enables NSFW prompt mode
+    target_model: str | None = (
         None  # Target generation model, e.g. "minimax_h3" → H3-Context-IR skill
     )
-    target_i2v: bool = False  # H3 skill: prompt anchors an input image (I2VA first frame)
+    target_i2v: bool = (
+        False  # H3 skill: prompt anchors an input image (I2VA first frame)
+    )
 
 
 # Style keywords mapping (used for both template and LLM modes)
@@ -8651,13 +8660,13 @@ NSFW INTENSITY MODE (level {level}/5): write the scene at this explicitness — 
 
 async def generate_prompt_with_llm(
     base_input: str,
-    style: Optional[str],
+    style: str | None,
     mode: str,
     include_motion: bool,
-    model_override: Optional[str] = None,
-    refine_instruction: Optional[str] = None,
-    nsfw_intensity: Optional[int] = None,
-    target_model: Optional[str] = None,
+    model_override: str | None = None,
+    refine_instruction: str | None = None,
+    nsfw_intensity: int | None = None,
+    target_model: str | None = None,
     target_i2v: bool = False,
 ) -> dict:
     """Use Guardian LLM proxy to generate enhanced prompts."""
@@ -8695,10 +8704,14 @@ async def generate_prompt_with_llm(
         if nsfw_intensity and nsfw_intensity >= 1:
             nsfw_level = max(1, min(5, nsfw_intensity))
             level_desc = (
-                "suggestive/sensual" if nsfw_level == 1
-                else "softcore erotic" if nsfw_level == 2
-                else "full nudity" if nsfw_level == 3
-                else "hardcore explicit" if nsfw_level == 4
+                "suggestive/sensual"
+                if nsfw_level == 1
+                else "softcore erotic"
+                if nsfw_level == 2
+                else "full nudity"
+                if nsfw_level == 3
+                else "hardcore explicit"
+                if nsfw_level == 4
                 else "extreme/no limits"
             )
             system_prompt += DEFAULT_H3_NSFW_ADDENDUM.format(
@@ -8721,9 +8734,9 @@ Generate as JSON."""
             if target_i2v:
                 i2v_instruction = (
                     "IMAGE-TO-VIDEO: the input image is the first keyframe of the video. "
-                    "Prepend the mandatory first line — \"For the target video, at 0.00 "
+                    'Prepend the mandatory first line — "For the target video, at 0.00 '
                     "seconds into the target video, <Picture 1> (from [Shot 1]) is fully "
-                    "referenced.\" — followed by a blank line, then develop the action "
+                    'referenced." — followed by a blank line, then develop the action '
                     "from that anchor."
                 )
             user_prompt = f"""Create a UNIQUE MiniMax-H3 video+audio prompt in H3-Context-IR format. Seed: {random_seed}
@@ -8795,8 +8808,10 @@ Generate as JSON."""
 
     # Wait for ComfyUI to finish any active generation before LLM call
     from guardian_client import (
-        wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
+    )
+    from guardian_client import (
+        wait_for_comfyui_idle,
     )
 
     await wait_for_comfyui_idle()
@@ -8823,14 +8838,18 @@ Generate as JSON."""
                 # Generous timeout: reasoning models without a max_tokens cap
                 # can think for minutes (measured ~150s for the H3 skill on
                 # the 9B Guardian route) before their answer arrives.
-                timeout=600.0, headers=_guardian_headers()
+                timeout=600.0,
+                headers=_guardian_headers(),
             ) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
                     json=llm_request_body,
                 )
 
-                if response.status_code in (502, 503, 504) and attempt < max_retries - 1:
+                if (
+                    response.status_code in (502, 503, 504)
+                    and attempt < max_retries - 1
+                ):
                     logger.info(
                         f"⏳ Guardian {response.status_code} (proxy/model hiccup or loading), "
                         f"retry {attempt + 1}/{max_retries} in {retry_delay}s..."
@@ -8892,7 +8911,10 @@ Generate as JSON."""
             logger.warning(f"LLM returned invalid JSON: {e}")
             return None
         except Exception as e:
-            if any(f"{code}" in str(e) for code in (502, 503, 504)) and attempt < max_retries - 1:
+            if (
+                any(f"{code}" in str(e) for code in (502, 503, 504))
+                and attempt < max_retries - 1
+            ):
                 logger.info(
                     f"⏳ Guardian gateway error, retry {attempt + 1}/{max_retries} in {retry_delay}s..."
                 )
@@ -8911,11 +8933,11 @@ Generate as JSON."""
 
 def generate_prompt_template(
     base_input: str,
-    style: Optional[str],
+    style: str | None,
     mode: str,
     include_negative: bool,
     include_motion: bool,
-    target_model: Optional[str] = None,
+    target_model: str | None = None,
 ) -> dict:
     """Template-based prompt enhancement (no LLM needed)"""
     is_h3 = target_model == TARGET_MINIMAX_H3
@@ -8983,7 +9005,11 @@ async def _process_llm_job(request_data: dict) -> dict | None:
     # Fall back to template mode
     if result is None:
         result = generate_prompt_template(
-            base_input, style, mode, include_negative, include_motion,
+            base_input,
+            style,
+            mode,
+            include_negative,
+            include_motion,
             target_model=target_model,
         )
 
@@ -9107,10 +9133,10 @@ VISION_MODEL = os.getenv("VISION_MODEL", "Huihui-gemma-4-26B-A4B-it-abliterated"
 async def analyze_image_with_vision(
     image_base64: str,
     custom_prompt: str = None,
-    model_override: Optional[str] = None,
-    max_tokens: Optional[int] = None,
-    system_message: Optional[str] = None,
-    temperature: Optional[float] = None,
+    model_override: str | None = None,
+    max_tokens: int | None = None,
+    system_message: str | None = None,
+    temperature: float | None = None,
 ) -> str:
     """
     Use a vision LLM via Guardian proxy to analyze an image and return a description.
@@ -9150,8 +9176,10 @@ async def analyze_image_with_vision(
 
     # Wait for ComfyUI to finish any active generation before vision LLM call
     from guardian_client import (
-        wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
+    )
+    from guardian_client import (
+        wait_for_comfyui_idle,
     )
 
     await wait_for_comfyui_idle()
@@ -9229,7 +9257,7 @@ async def analyze_image_with_vision(
                 continue
             logger.error(f"Vision analysis failed: {e}")
             raise HTTPException(
-                status_code=500, detail=f"Vision analysis failed: {str(e)}"
+                status_code=500, detail=f"Vision analysis failed: {e!s}"
             )
 
     raise HTTPException(
@@ -9329,8 +9357,10 @@ Generate a compelling video scene as JSON. Include what happens, how things move
 
     # Wait for ComfyUI to finish any active generation, then free VRAM
     from guardian_client import (
-        wait_for_comfyui_idle,
         free_comfyui_vram as _free_comfy_vram,
+    )
+    from guardian_client import (
+        wait_for_comfyui_idle,
     )
 
     await wait_for_comfyui_idle()
@@ -9410,7 +9440,7 @@ Generate a compelling video scene as JSON. Include what happens, how things move
                 continue
             logger.error(f"I2V prompt generation failed: {e}")
             raise HTTPException(
-                status_code=500, detail=f"Prompt generation failed: {str(e)}"
+                status_code=500, detail=f"Prompt generation failed: {e!s}"
             )
 
     raise HTTPException(
@@ -9422,7 +9452,7 @@ class AnalyzeImageRequest(BaseModel):
     """Request body for image analysis"""
 
     image_base64: str  # Base64 encoded image
-    custom_prompt: Optional[str] = None
+    custom_prompt: str | None = None
 
 
 class AnalyzeAndGenerateRequest(BaseModel):
@@ -9554,8 +9584,8 @@ async def youtube_info(
     Fetch metadata from a YouTube URL without downloading.
     Returns: title, channel, duration, thumbnail, view_count, etc.
     """
-    import subprocess
     import shutil
+    import subprocess
 
     url = _validate_youtube_url(request.url)
     if not url:
@@ -9611,8 +9641,8 @@ async def youtube_download(
     Download video/audio from YouTube URL.
     Returns: path to downloaded file.
     """
-    import subprocess
     import shutil
+    import subprocess
 
     url = _validate_youtube_url(request.url)
     if not url:
@@ -9740,8 +9770,9 @@ async def caption_video(
         frame_interval: Seconds between sampled frames
         max_frames: Maximum frames to analyze
     """
-    import cv2
     import base64
+
+    import cv2
 
     logger.info(
         f"🎬 V2T request: model={model}, mode={mode}, frames={max_frames}, video_path={video_path}"
@@ -9874,8 +9905,8 @@ async def generate_audio(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Generate audio from text (TTS, music, or SFX) via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -10158,8 +10189,8 @@ async def generate_i2i(
     user: User = Depends(get_current_user),
 ):
     """Enhanced Image-to-Image generation via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -10216,8 +10247,8 @@ async def generate_i2i_edit(
     user: User = Depends(get_current_user),
 ):
     """I2I Edit 2511 — instruction-based image editing via RunPod (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -10299,8 +10330,8 @@ async def upscale_image(
     user: User = Depends(get_current_user),
 ):
     """Upscale image using Real-ESRGAN via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -10335,8 +10366,8 @@ async def upscale_video(
     user: User = Depends(get_current_user),
 ):
     """Upscale video using various methods (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -10511,8 +10542,8 @@ async def generate_v2v(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """Video-to-Video style transfer via ComfyUI (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -10621,7 +10652,7 @@ async def list_videos(user: User = Depends(get_current_user)):
 @app.post("/train-lora")
 async def train_lora_model(
     user: User = Depends(get_current_user),
-    files: List[UploadFile] = File(...),
+    files: list[UploadFile] = File(...),
     model_name: str = Form("", description="Name for the trained model"),
     num_epochs: int = Form(10, description="Number of training epochs"),
     learning_rate: float = Form(1e-4, description="Learning rate"),
@@ -10702,7 +10733,7 @@ async def train_lora_model(
 @app.post("/train-lora-placeholder")
 async def train_lora_placeholder(
     user: User = Depends(get_current_user),
-    files: List[UploadFile] = File(...),
+    files: list[UploadFile] = File(...),
     model_name: str = Form("", description="Name for the trained model"),
 ):
     """
@@ -11009,6 +11040,7 @@ async def reframe_image(
         feathering: Edge blend in pixels
     """
     import random
+
     from PIL import Image as PILImage
 
     logger.info(
@@ -11252,8 +11284,8 @@ async def face_swap(
     enhance: str = Form("none"),  # none (gfpgan requires extra package)
 ):
     """Face swap: replace face(s) in target image with face from source image (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -11363,8 +11395,8 @@ async def face_swap_with_profile(
     face_indices: str = Form("0"),
 ):
     """Face swap using a saved face profile as source (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -11397,8 +11429,8 @@ async def face_swap_video(
     ),
 ):
     """Apply face swap to every frame of a video (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -11425,8 +11457,8 @@ async def face_swap_video_with_profile(
     ),
 ):
     """Apply face swap to every frame of a video using a saved face profile (V2 thin wrapper)"""
+    from src.backend.generation.types import MediaType, Operation
     from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
 
     return await dispatch_v1(
         form=dict(
@@ -11560,14 +11592,19 @@ async def retry_face_training_job(job_id: str, user: User = Depends(get_current_
 # Configure which servers/models can be used for generation (modular compute).
 # Reads/writes src/backend/generation/compute_backends.json.
 
+from typing import Annotated as _Annotated
+from typing import Literal as _Literal
+
 from pydantic import BaseModel as _BaseModel
-from typing import List as _List, Literal as _Literal
 from pydantic import (
     Field as _Field,
+)
+from pydantic import (
     StringConstraints as _StringConstraints,
+)
+from pydantic import (
     model_validator as _model_validator,
 )
-from typing import Annotated as _Annotated
 
 
 class ComputeBackendPayload(_BaseModel):
@@ -11586,7 +11623,7 @@ class ComputeBackendPayload(_BaseModel):
     # it empty.
     base_url: str = ""
     enabled: bool = True
-    model_families: _List[str] = _Field(default_factory=list)
+    model_families: list[str] = _Field(default_factory=list)
     notes: str = ""
 
     @_model_validator(mode="after")

@@ -7,7 +7,8 @@ Each adapter represents one model/compute/operation combination.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Optional
 
 from .types import (
     AdapterConstraints,

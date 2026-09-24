@@ -3,22 +3,21 @@ Oelala Credits API Routes
 FastAPI endpoints for credit management.
 """
 
-import os
 import logging
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel
+import os
 
-from auth import get_current_user, User
+from auth import User, get_current_user
 from credits import (
-    get_credit_manager,
+    DEFAULT_PACKAGES,
     CreditBalance,
-    CreditPackageResponse,
     CreditEstimate,
+    CreditPackageResponse,
     CreditTransaction,
     calculate_credits,
-    DEFAULT_PACKAGES,
+    get_credit_manager,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ class EstimateRequest(BaseModel):
     generation_type: str
     width: int = 1024
     height: int = 1024
-    duration_seconds: Optional[int] = None
+    duration_seconds: int | None = None
     steps: int = 20
 
 
@@ -54,8 +53,8 @@ class PurchaseRequest(BaseModel):
     """Request body for initiating purchase."""
 
     package_id: str
-    success_url: Optional[str] = None
-    cancel_url: Optional[str] = None
+    success_url: str | None = None
+    cancel_url: str | None = None
 
 
 class PurchaseResponse(BaseModel):
@@ -97,7 +96,7 @@ async def get_balance(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Failed to get credit balance")
 
 
-@router.get("/packages", response_model=List[CreditPackageResponse])
+@router.get("/packages", response_model=list[CreditPackageResponse])
 async def get_packages():
     """
     Get available credit packages for purchase.
@@ -180,7 +179,7 @@ async def estimate_cost(
     )
 
 
-@router.get("/history", response_model=List[CreditTransaction])
+@router.get("/history", response_model=list[CreditTransaction])
 async def get_transaction_history(
     limit: int = 50,
     offset: int = 0,
@@ -193,8 +192,7 @@ async def get_transaction_history(
     """
     manager = get_credit_manager()
 
-    if limit > 100:
-        limit = 100  # Cap at 100
+    limit = min(limit, 100)  # Cap at 100
 
     try:
         transactions = await manager.get_transactions(user.id, limit, offset)

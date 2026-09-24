@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
+from . import lora_utils
 from .adapter import GenerationAdapter, ProgressCallback
 from .registry import AdapterRegistry
 from .types import (
@@ -28,7 +30,6 @@ from .types import (
     LoraFormat,
     MediaType,
 )
-from . import lora_utils
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,8 @@ _ASPECT_RATIOS = {
 
 
 def resolve_resolution(
-    resolution: Optional[str],
-    aspect_ratio: Optional[str],
+    resolution: str | None,
+    aspect_ratio: str | None,
     step: int = 8,
 ) -> tuple[int, int] | None:
     """
@@ -113,8 +114,8 @@ class GenerationRouter:
         self,
         registry: AdapterRegistry,
         *,
-        comfyui_upload_fn: Optional[Callable] = None,
-        track_local_job_fn: Optional[Callable[..., None]] = None,
+        comfyui_upload_fn: Callable | None = None,
+        track_local_job_fn: Callable[..., None] | None = None,
     ) -> None:
         self.registry = registry
         # Callable: async (b64_data: str, filename: str) -> str (ComfyUI filename)

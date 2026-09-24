@@ -11,12 +11,10 @@ Provides:
 
 import logging
 import os
-from typing import List, Optional
 
-from fastapi import APIRouter, Query, HTTPException
-from pydantic import BaseModel
-
+from fastapi import APIRouter, HTTPException, Query
 from lora_scanner import lora_cache
+from pydantic import BaseModel
 
 logger = logging.getLogger("lora_api")
 
@@ -44,7 +42,7 @@ class LoRAItem(BaseModel):
     size_mb: float
     modified: float
     category: str
-    tags: List[str]
+    tags: list[str]
     base_model: str
     noise_level: str
     format: str
@@ -52,10 +50,10 @@ class LoRAItem(BaseModel):
 
 
 class LoRAListResponse(BaseModel):
-    items: List[LoRAItem]
+    items: list[LoRAItem]
     total: int
-    categories: List[dict]
-    tags: List[dict]
+    categories: list[dict]
+    tags: list[dict]
 
 
 class LoRADetailResponse(LoRAItem):
@@ -70,11 +68,11 @@ class LoRADetailResponse(LoRAItem):
 
 @router.get("", response_model=LoRAListResponse)
 async def list_loras(
-    q: Optional[str] = Query(None, description="Search query"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    tag: Optional[str] = Query(None, description="Filter by tag"),
-    base_model: Optional[str] = Query(None, description="Filter by base model"),
-    noise: Optional[str] = Query(None, description="Filter by noise level (high/low)"),
+    q: str | None = Query(None, description="Search query"),
+    category: str | None = Query(None, description="Filter by category"),
+    tag: str | None = Query(None, description="Filter by tag"),
+    base_model: str | None = Query(None, description="Filter by base model"),
+    noise: str | None = Query(None, description="Filter by noise level (high/low)"),
     sort: str = Query("name", description="Sort by: name, size, modified"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),

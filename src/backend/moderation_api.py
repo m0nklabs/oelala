@@ -3,15 +3,14 @@ Oelala Content Moderation API
 Endpoints for content reporting and admin moderation queue.
 """
 
-import os
 import logging
-from typing import Optional, List
+import os
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel, Field
-import httpx
 
-from auth import get_current_user, User
+import httpx
+from auth import User, get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -50,7 +49,7 @@ def debug_log(msg: str):
 # Shared HTTP client
 # =============================================================================
 
-_mod_http_client: Optional[httpx.AsyncClient] = None
+_mod_http_client: httpx.AsyncClient | None = None
 
 
 def _get_client() -> httpx.AsyncClient:
@@ -79,7 +78,7 @@ class ReportRequest(BaseModel):
 
     media_id: str = Field(..., description="UUID of the published media item")
     reason: str = Field(..., description="Report reason category")
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None, max_length=500, description="Additional details"
     )
 
@@ -98,18 +97,16 @@ class ModerationActionRequest(BaseModel):
     """Admin moderation action request."""
 
     action: str = Field(..., description="Moderation action to take")
-    reason: Optional[str] = Field(None, max_length=500, description="Reason for action")
-    report_id: Optional[str] = Field(
-        None, description="Associated report ID to resolve"
-    )
+    reason: str | None = Field(None, max_length=500, description="Reason for action")
+    report_id: str | None = Field(None, description="Associated report ID to resolve")
 
 
 class BulkActionRequest(BaseModel):
     """Bulk moderation action."""
 
-    media_ids: List[str] = Field(..., min_length=1, max_length=50)
+    media_ids: list[str] = Field(..., min_length=1, max_length=50)
     action: str = Field(..., description="Action to apply to all items")
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class QueueItem(BaseModel):
@@ -122,7 +119,7 @@ class QueueItem(BaseModel):
     is_nsfw: bool
     moderation_status: str
     creator_id: str
-    creator_email: Optional[str] = None
+    creator_email: str | None = None
     report_count: int
     reports: list
     created_at: str

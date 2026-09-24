@@ -3,21 +3,20 @@ Oelala Admin API Routes
 FastAPI endpoints for admin user management.
 """
 
-import os
 import asyncio
 import logging
+import os
 import uuid
-from pathlib import Path
-from typing import Optional, List
 from datetime import datetime
-from cachetools import TTLCache
-from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import Response
-from pydantic import BaseModel, Field, validator
-import httpx
-from minio.error import S3Error
+from pathlib import Path
 
-from auth import get_current_user, User
+import httpx
+from auth import User, get_current_user
+from cachetools import TTLCache
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
+from minio.error import S3Error
+from pydantic import BaseModel, Field, validator
 from storage_client import get_client as get_storage_client
 
 logger = logging.getLogger(__name__)
@@ -59,15 +58,15 @@ class UserInfo(BaseModel):
     """User information for admin panel."""
 
     user_id: str
-    email: Optional[str]
+    email: str | None
     created_at: datetime
     balance: int
     tier: str
     is_vip: bool
     is_admin: bool
     is_suspended: bool = False
-    suspended_at: Optional[datetime] = None
-    suspension_reason: Optional[str] = None
+    suspended_at: datetime | None = None
+    suspension_reason: str | None = None
     lifetime_purchased: int
     lifetime_used: int
 
@@ -75,7 +74,7 @@ class UserInfo(BaseModel):
 class UserListResponse(BaseModel):
     """Response for user list with pagination."""
 
-    users: List[UserInfo]
+    users: list[UserInfo]
     total: int
     page: int
     per_page: int
@@ -110,8 +109,8 @@ class StatusToggle(BaseModel):
     """Request to toggle admin/VIP status."""
 
     user_id: str
-    is_admin: Optional[bool] = None
-    is_vip: Optional[bool] = None
+    is_admin: bool | None = None
+    is_vip: bool | None = None
 
 
 class SuspensionToggle(BaseModel):
@@ -119,7 +118,7 @@ class SuspensionToggle(BaseModel):
 
     user_id: str
     is_suspended: bool
-    reason: Optional[str] = Field(
+    reason: str | None = Field(
         None,
         max_length=500,
         description="Reason for suspension (optional for unsuspend)",
@@ -133,8 +132,8 @@ class TransactionInfo(BaseModel):
     user_id: str
     amount: int
     type: str
-    description: Optional[str]
-    reference_id: Optional[str]
+    description: str | None
+    reference_id: str | None
     created_at: datetime
 
 
@@ -157,7 +156,7 @@ class AdminStats(BaseModel):
 _admin_cache: TTLCache = TTLCache(maxsize=128, ttl=60)
 
 # Shared httpx client for Supabase requests (connection pooling)
-_admin_http_client: Optional[httpx.AsyncClient] = None
+_admin_http_client: httpx.AsyncClient | None = None
 
 
 def _get_admin_client() -> httpx.AsyncClient:
@@ -239,8 +238,8 @@ async def check_admin_status(user: User = Depends(get_current_user)):
 async def list_users(
     page: int = Query(1, ge=1),
     per_page: int = Query(30, ge=1, le=100),
-    search: Optional[str] = None,
-    tier: Optional[str] = None,
+    search: str | None = None,
+    tier: str | None = None,
     admin: User = Depends(get_admin_user),
 ):
     """
@@ -544,7 +543,7 @@ async def toggle_suspension(
     return {"success": True, "message": f"User {action} successfully"}
 
 
-@router.get("/transactions/{user_id}", response_model=List[TransactionInfo])
+@router.get("/transactions/{user_id}", response_model=list[TransactionInfo])
 async def get_user_transactions(
     user_id: str,
     limit: int = Query(50, ge=1, le=200),
@@ -673,8 +672,8 @@ def check_file_has_metadata(file_path: Path) -> bool:
     Quick check if a media file has embedded ComfyUI workflow metadata.
     Returns True if metadata exists, False otherwise.
     """
-    import subprocess
     import json
+    import subprocess
 
     ext = file_path.suffix.lower()
 
@@ -1184,9 +1183,9 @@ Output format (strict JSON):
 class AISettingsUpdate(BaseModel):
     """AI settings update request"""
 
-    prompt_system: Optional[str] = None
-    llm_model: Optional[str] = None
-    ollama_model: Optional[str] = None  # Deprecated alias, use llm_model
+    prompt_system: str | None = None
+    llm_model: str | None = None
+    ollama_model: str | None = None  # Deprecated alias, use llm_model
 
 
 @router.get("/ai-settings")

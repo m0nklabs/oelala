@@ -3,16 +3,15 @@ API Key Authentication for Oelala REST API v1
 Validates API keys for programmatic access.
 """
 
-import os
 import hashlib
-import secrets
 import logging
-from typing import Optional
+import os
+import secrets
+
+from auth import User  # Reuse User model from JWT auth
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
-
-from auth import User  # Reuse User model from JWT auth
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +33,9 @@ class APIKey(BaseModel):
     key_prefix: str
     is_active: bool
     usage_count: int
-    last_used_at: Optional[str] = None
+    last_used_at: str | None = None
     created_at: str
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
 
 
 # API Key header scheme
@@ -71,7 +70,7 @@ def hash_api_key(api_key: str) -> str:
     return hashlib.sha256(api_key.encode()).hexdigest()
 
 
-async def validate_api_key_db(key_hash: str) -> Optional[tuple[str, str]]:
+async def validate_api_key_db(key_hash: str) -> tuple[str, str] | None:
     """
     Validate API key against database.
 
@@ -122,7 +121,7 @@ async def validate_api_key_db(key_hash: str) -> Optional[tuple[str, str]]:
         return None
 
 
-async def get_api_key_user(api_key: Optional[str] = Security(api_key_header)) -> User:
+async def get_api_key_user(api_key: str | None = Security(api_key_header)) -> User:
     """
     Extract and validate user from API key.
     Raises HTTPException 401 if invalid.
@@ -165,8 +164,8 @@ async def get_api_key_user(api_key: Optional[str] = Security(api_key_header)) ->
 
 
 async def get_optional_api_key_user(
-    api_key: Optional[str] = Security(api_key_header),
-) -> Optional[User]:
+    api_key: str | None = Security(api_key_header),
+) -> User | None:
     """
     Extract user from API key if present, otherwise return None.
     Useful for endpoints that work both authenticated and anonymous.

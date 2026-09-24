@@ -7,7 +7,6 @@ Supports registration, lookup by criteria, and listing all adapters.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from .adapter import GenerationAdapter
 from .types import ComputeTarget, MediaType, Operation
@@ -28,16 +27,16 @@ class AdapterRegistry:
         self._adapters[adapter.name] = adapter
         logger.info(f"📦 Registered adapter: {adapter.name}")
 
-    def get(self, name: str) -> Optional[GenerationAdapter]:
+    def get(self, name: str) -> GenerationAdapter | None:
         """Look up an adapter by exact name."""
         return self._adapters.get(name)
 
     def find(
         self,
-        operation: Optional[Operation] = None,
-        input_type: Optional[MediaType] = None,
-        target_type: Optional[MediaType] = None,
-        compute: Optional[ComputeTarget] = None,
+        operation: Operation | None = None,
+        input_type: MediaType | None = None,
+        target_type: MediaType | None = None,
+        compute: ComputeTarget | None = None,
     ) -> list[GenerationAdapter]:
         """
         Find adapters matching the given criteria.

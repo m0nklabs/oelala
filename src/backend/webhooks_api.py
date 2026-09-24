@@ -16,13 +16,12 @@ import logging
 import os
 import secrets
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
+from auth import User, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-
-from auth import User, get_current_user
 from webhook_service import (
     WebhookEvent,
     WebhookPayload,
@@ -38,7 +37,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 
-def _supabase_headers() -> Dict[str, str]:
+def _supabase_headers() -> dict[str, str]:
     """Headers for Supabase requests."""
     if not SUPABASE_KEY:
         return {}
@@ -60,12 +59,12 @@ class WebhookCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255, description="Friendly name")
     url: str = Field(..., description="Webhook endpoint URL (HTTPS recommended)")
-    events: List[str] = Field(
+    events: list[str] = Field(
         default=["job.completed", "job.failed"],
         description="Event types to subscribe to",
     )
-    description: Optional[str] = Field(None, max_length=500)
-    headers: Optional[Dict[str, str]] = Field(default_factory=dict)
+    description: str | None = Field(None, max_length=500)
+    headers: dict[str, str] | None = Field(default_factory=dict)
     enabled: bool = Field(default=True)
 
     @field_validator("url")
@@ -84,7 +83,7 @@ class WebhookCreate(BaseModel):
 
     @field_validator("events")
     @classmethod
-    def validate_events(cls, v: List[str]) -> List[str]:
+    def validate_events(cls, v: list[str]) -> list[str]:
         """Validate event types."""
         if not v:
             raise ValueError("At least one event type is required")
@@ -100,17 +99,17 @@ class WebhookCreate(BaseModel):
 class WebhookUpdate(BaseModel):
     """Request model for updating a webhook."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    url: Optional[str] = None
-    events: Optional[List[str]] = None
-    description: Optional[str] = Field(None, max_length=500)
-    headers: Optional[Dict[str, str]] = None
-    enabled: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    url: str | None = None
+    events: list[str] | None = None
+    description: str | None = Field(None, max_length=500)
+    headers: dict[str, str] | None = None
+    enabled: bool | None = None
     regenerate_secret: bool = Field(default=False, description="Generate a new secret")
 
     @field_validator("url")
     @classmethod
-    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_url(cls, v: str | None) -> str | None:
         """Validate webhook URL."""
         if v is None:
             return v
@@ -120,7 +119,7 @@ class WebhookUpdate(BaseModel):
 
     @field_validator("events")
     @classmethod
-    def validate_events(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+    def validate_events(cls, v: list[str] | None) -> list[str] | None:
         """Validate event types."""
         if v is None:
             return v
@@ -141,13 +140,13 @@ class WebhookResponse(BaseModel):
     id: str
     name: str
     url: str
-    events: List[str]
+    events: list[str]
     enabled: bool
-    description: Optional[str] = None
-    headers: Optional[Dict[str, str]] = None
-    secret: Optional[str] = None  # Only included on create
-    last_delivery_at: Optional[str] = None
-    last_delivery_status: Optional[str] = None
+    description: str | None = None
+    headers: dict[str, str] | None = None
+    secret: str | None = None  # Only included on create
+    last_delivery_at: str | None = None
+    last_delivery_status: str | None = None
     total_deliveries: int = 0
     successful_deliveries: int = 0
     failed_deliveries: int = 0
@@ -164,20 +163,20 @@ class WebhookDeliveryResponse(BaseModel):
     status: str
     attempt_count: int
     max_attempts: int
-    response_status: Optional[int] = None
-    response_time_ms: Optional[int] = None
-    error_message: Optional[str] = None
+    response_status: int | None = None
+    response_time_ms: int | None = None
+    error_message: str | None = None
     created_at: str
-    delivered_at: Optional[str] = None
+    delivered_at: str | None = None
 
 
 class TestWebhookResponse(BaseModel):
     """Response model for test webhook."""
 
     success: bool
-    status_code: Optional[int] = None
-    response_time_ms: Optional[int] = None
-    error: Optional[str] = None
+    status_code: int | None = None
+    response_time_ms: int | None = None
+    error: str | None = None
 
 
 # ==============================================================================
@@ -185,10 +184,10 @@ class TestWebhookResponse(BaseModel):
 # ==============================================================================
 
 
-@router.get("", response_model=List[WebhookResponse])
+@router.get("", response_model=list[WebhookResponse])
 async def list_webhooks(
     current_user: User = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     List all webhooks for the current user.
     """
@@ -234,7 +233,7 @@ async def list_webhooks(
 async def create_webhook(
     data: WebhookCreate,
     current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a new webhook.
 
@@ -294,7 +293,7 @@ async def create_webhook(
 async def get_webhook(
     webhook_id: str,
     current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get a specific webhook by ID.
     """
@@ -343,7 +342,7 @@ async def update_webhook(
     webhook_id: str,
     data: WebhookUpdate,
     current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Update a webhook.
 
@@ -373,7 +372,7 @@ async def update_webhook(
                 raise HTTPException(status_code=404, detail="Webhook not found")
 
             # Build update data
-            update_data: Dict[str, Any] = {
+            update_data: dict[str, Any] = {
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -475,13 +474,13 @@ async def delete_webhook(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{webhook_id}/deliveries", response_model=List[WebhookDeliveryResponse])
+@router.get("/{webhook_id}/deliveries", response_model=list[WebhookDeliveryResponse])
 async def list_deliveries(
     webhook_id: str,
     current_user: User = Depends(get_current_user),
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     List delivery history for a webhook.
     """
@@ -544,7 +543,7 @@ async def list_deliveries(
 async def test_webhook(
     webhook_id: str,
     current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Send a test webhook to verify the endpoint is working.
 
@@ -609,10 +608,10 @@ async def test_webhook(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/events/types", response_model=List[str])
+@router.get("/events/types", response_model=list[str])
 async def list_event_types(
     current_user: User = Depends(get_current_user),
-) -> List[str]:
+) -> list[str]:
     """
     List all available webhook event types.
     """

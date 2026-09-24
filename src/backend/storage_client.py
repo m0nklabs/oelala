@@ -33,16 +33,18 @@ Usage:
     url = client.presigned_get("generated", "video.mp4", expires=3600)
 """
 
-import io
+import builtins
 import hashlib
+import io
 import itertools
+import logging
 import mimetypes
 import os
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, List, Dict, Any, BinaryIO, Iterator, Tuple, Union
+from typing import Any, BinaryIO
 from urllib.parse import urlparse
-import logging
 
 from minio import Minio
 from minio.commonconfig import CopySource
@@ -51,7 +53,7 @@ from minio.error import S3Error
 logger = logging.getLogger(__name__)
 
 # Logical bucket name → MinIO bucket name
-_BUCKET_MAP: Dict[str, str] = {
+_BUCKET_MAP: dict[str, str] = {
     "generated": "oelala-generated",
     "comfyui-local": "oelala-comfyui",
     "avatars": "oelala-avatars",
@@ -74,9 +76,9 @@ class StorageClient:
         self,
         base_url: str = "http://localhost:9000",
         timeout: float = 30.0,
-        auth_token: Optional[str] = None,
-        access_key: Optional[str] = None,
-        secret_key: Optional[str] = None,
+        auth_token: str | None = None,
+        access_key: str | None = None,
+        secret_key: str | None = None,
     ):
         """
         Initialize MinIO storage client.
@@ -107,7 +109,7 @@ class StorageClient:
 
         # Public storage nodes for CDN-served content (round-robin)
         nodes_str = os.environ.get("STORAGE_PUBLIC_NODES", "")
-        self._storage_nodes: List[str] = [
+        self._storage_nodes: list[str] = [
             n.strip().rstrip("/") for n in nodes_str.split(",") if n.strip()
         ]
         self._node_cycle = (
@@ -133,7 +135,6 @@ class StorageClient:
 
     def close(self):
         """Close the client (no-op for MinIO SDK, kept for API compat)."""
-        pass
 
     def __enter__(self):
         return self
@@ -145,7 +146,7 @@ class StorageClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _resolve(self, bucket: str, key: str = "") -> Tuple[str, str]:
+    def _resolve(self, bucket: str, key: str = "") -> tuple[str, str]:
         """
         Resolve a logical bucket (possibly compound like 'users/{id}')
         into a MinIO (bucket, key_prefix + key) pair.
@@ -182,7 +183,7 @@ class StorageClient:
     # Core operations (same public signatures as before)
     # ------------------------------------------------------------------
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         """Check storage service health by listing buckets."""
         try:
             buckets = self._minio.list_buckets()
@@ -194,7 +195,7 @@ class StorageClient:
         except Exception as e:
             return {"status": "unhealthy", "error": str(e)}
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Get storage service status."""
         return self.health()
 
@@ -202,9 +203,9 @@ class StorageClient:
         self,
         bucket: str,
         key: str,
-        data: Union[bytes, BinaryIO, Path],
-        content_type: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        data: bytes | BinaryIO | Path,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
         """
         Upload an object to storage.
 
@@ -270,7 +271,7 @@ class StorageClient:
 
     def get_with_metadata(
         self, bucket: str, key: str
-    ) -> Tuple[bytes, str, int, Optional[str], Optional[str]]:
+    ) -> tuple[bytes, str, int, str | None, str | None]:
         """
         Download an object and return content with metadata for proxying.
 
@@ -290,7 +291,7 @@ class StorageClient:
             resp.close()
             resp.release_conn()
 
-    def stat(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+    def stat(self, bucket: str, key: str) -> dict[str, Any] | None:
         """
         Get full object metadata via stat_object.
 
@@ -366,7 +367,7 @@ class StorageClient:
 
     def stream_with_metadata(
         self, bucket: str, key: str
-    ) -> Tuple[Iterator[bytes], str, int, Optional[str], Optional[str]]:
+    ) -> tuple[Iterator[bytes], str, int, str | None, str | None]:
         """
         Stream an object and return metadata for proxy responses.
 
@@ -446,7 +447,7 @@ class StorageClient:
         except S3Error:
             return False
 
-    def head(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+    def head(self, bucket: str, key: str) -> dict[str, Any] | None:
         """
         Get object metadata without downloading.
 
@@ -478,7 +479,7 @@ class StorageClient:
         self,
         bucket: str,
         prefix: str = "",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         List objects in a bucket.
 
@@ -529,7 +530,7 @@ class StorageClient:
             raise
         return objects
 
-    def list_buckets(self) -> List[str]:
+    def list_buckets(self) -> builtins.list[str]:
         """List available MinIO buckets."""
         return [b.name for b in self._minio.list_buckets()]
 
@@ -598,7 +599,7 @@ class StorageClient:
         self,
         bucket: str,
         key: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generate a direct public CDN URL for a public bucket object.
 
@@ -640,9 +641,9 @@ class StorageClient:
         user_id: str,
         media_type: str,  # 'images', 'videos', 'audio'
         filename: str,
-        data: Union[bytes, BinaryIO, Path],
-        content_type: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        data: bytes | BinaryIO | Path,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
         """
         Upload media for a specific user.
 
@@ -728,8 +729,8 @@ class StorageClient:
     def list_user_media(
         self,
         user_id: str,
-        media_type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        media_type: str | None = None,
+    ) -> builtins.list[dict[str, Any]]:
         """
         List all media for a user, optionally filtered by type.
 
@@ -751,8 +752,7 @@ class StorageClient:
         for obj in objects:
             obj["user_id"] = user_id
             key = obj.get("key", "")
-            if key.startswith(user_prefix):
-                key = key[len(user_prefix) :]
+            key = key.removeprefix(user_prefix)
             parts = key.split("/", 1)
             if len(parts) >= 1:
                 obj["media_type"] = parts[0]
@@ -799,7 +799,7 @@ class StorageClient:
 # =====================================================================
 # Module-level singleton & convenience functions
 # =====================================================================
-_default_client: Optional[StorageClient] = None
+_default_client: StorageClient | None = None
 
 
 def get_client() -> StorageClient:
@@ -835,8 +835,8 @@ get_storage_client = get_client
 
 
 def put(
-    bucket: str, key: str, data: Union[bytes, BinaryIO, Path], **kwargs
-) -> Dict[str, Any]:
+    bucket: str, key: str, data: bytes | BinaryIO | Path, **kwargs
+) -> dict[str, Any]:
     """Upload an object using the default client."""
     return get_client().put(bucket, key, data, **kwargs)
 
@@ -856,7 +856,7 @@ def delete(bucket: str, key: str) -> bool:
     return get_client().delete(bucket, key)
 
 
-def list_objects(bucket: str, prefix: str = "") -> List[Dict[str, Any]]:
+def list_objects(bucket: str, prefix: str = "") -> list[dict[str, Any]]:
     """List objects using the default client."""
     return get_client().list(bucket, prefix)
 

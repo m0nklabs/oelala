@@ -3,19 +3,19 @@ Oelala REST API v1
 Public programmatic API for external integrations.
 """
 
-import os
 import logging
+import os
 import uuid
-from typing import Optional, Literal
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, Field
+from typing import Literal
 
 from api_key_auth import get_api_key_user
 from auth import User
+from comfyui_client import get_comfyui_client
 from credits import calculate_credits, get_credit_manager
 from credits_api import check_credits, deduct_credits
-from comfyui_client import get_comfyui_client
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +43,22 @@ class GenerateRequest(BaseModel):
         ..., description="Type of generation"
     )
     prompt: str = Field(..., min_length=1, description="Text prompt for generation")
-    negative_prompt: Optional[str] = Field(
+    negative_prompt: str | None = Field(
         None, description="Negative prompt (what to avoid)"
     )
-    width: Optional[int] = Field(1024, ge=256, le=2048, description="Output width")
-    height: Optional[int] = Field(1024, ge=256, le=2048, description="Output height")
-    steps: Optional[int] = Field(20, ge=1, le=100, description="Inference steps")
-    cfg: Optional[float] = Field(7.5, ge=1.0, le=20.0, description="CFG scale")
-    seed: Optional[int] = Field(-1, description="Random seed (-1 for random)")
-    duration_seconds: Optional[int] = Field(
+    width: int | None = Field(1024, ge=256, le=2048, description="Output width")
+    height: int | None = Field(1024, ge=256, le=2048, description="Output height")
+    steps: int | None = Field(20, ge=1, le=100, description="Inference steps")
+    cfg: float | None = Field(7.5, ge=1.0, le=20.0, description="CFG scale")
+    seed: int | None = Field(-1, description="Random seed (-1 for random)")
+    duration_seconds: int | None = Field(
         None,
         ge=1,
         le=30,
         description="Video duration in seconds (for video generation)",
     )
     # For image-to-video
-    image_url: Optional[str] = Field(None, description="URL of source image (for I2V)")
+    image_url: str | None = Field(None, description="URL of source image (for I2V)")
 
 
 class GenerateResponse(BaseModel):
@@ -69,7 +69,7 @@ class GenerateResponse(BaseModel):
         ..., description="Job status (queued, running, completed, failed)"
     )
     credits_used: int = Field(..., description="Credits deducted for this generation")
-    estimated_time_seconds: Optional[int] = Field(
+    estimated_time_seconds: int | None = Field(
         None, description="Estimated completion time in seconds"
     )
 
@@ -81,16 +81,14 @@ class JobStatus(BaseModel):
     status: Literal["queued", "running", "completed", "failed"] = Field(
         ..., description="Current job status"
     )
-    progress: Optional[int] = Field(
-        None, ge=0, le=100, description="Progress percentage"
-    )
+    progress: int | None = Field(None, ge=0, le=100, description="Progress percentage")
     created_at: str = Field(..., description="Job creation timestamp (ISO 8601)")
-    completed_at: Optional[str] = Field(None, description="Job completion timestamp")
-    error: Optional[str] = Field(None, description="Error message if failed")
-    result_url: Optional[str] = Field(
+    completed_at: str | None = Field(None, description="Job completion timestamp")
+    error: str | None = Field(None, description="Error message if failed")
+    result_url: str | None = Field(
         None, description="URL to download result (when completed)"
     )
-    metadata: Optional[dict] = Field(None, description="Additional job metadata")
+    metadata: dict | None = Field(None, description="Additional job metadata")
 
 
 class CreditsResponse(BaseModel):

@@ -8,9 +8,9 @@ This module provides:
 - P2P sync between nodes
 """
 
-from .node import StorageNode
-from .models import MediaFile, SyncState, NodeConfig
 from .api import create_storage_api
+from .models import MediaFile, NodeConfig, SyncState
+from .node import StorageNode
 
 __version__ = "0.1.0"
-__all__ = ["StorageNode", "MediaFile", "SyncState", "NodeConfig", "create_storage_api"]
+__all__ = ["MediaFile", "NodeConfig", "StorageNode", "SyncState", "create_storage_api"]

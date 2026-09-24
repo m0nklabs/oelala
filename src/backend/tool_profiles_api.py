@@ -7,14 +7,15 @@ Stores all user-adjustable settings (prompt, resolution, model, sliders, etc.)
 as JSONB profiles that auto-save on every change.
 """
 
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
-from typing import Optional, List
+from typing import Optional
+
 import httpx
-from fastapi import APIRouter, HTTPException, Depends
+from auth import User, get_current_user
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from auth import get_current_user, User
 
 logger = logging.getLogger(__name__)
 DEBUG = os.getenv("OELALA_DEBUG", "0") == "1"
@@ -322,8 +323,8 @@ class ToolProfileResponse(BaseModel):
 class ToolProfileListResponse(BaseModel):
     """List of profiles for a tool"""
 
-    profiles: List[ToolProfileResponse]
-    active_profile: Optional[str] = None
+    profiles: list[ToolProfileResponse]
+    active_profile: str | None = None
 
 
 class FactoryPreset(BaseModel):
@@ -338,7 +339,7 @@ class FactoryPreset(BaseModel):
 class FactoryPresetsResponse(BaseModel):
     """List of factory presets for a tool"""
 
-    presets: List[FactoryPreset]
+    presets: list[FactoryPreset]
 
 
 # =============================================================================
@@ -352,7 +353,7 @@ router = APIRouter(prefix="/api/settings", tags=["tool-profiles"])
 # Supabase Client (shared singleton, same pattern as profile_api.py)
 # =============================================================================
 
-_supabase_client: Optional[httpx.AsyncClient] = None
+_supabase_client: httpx.AsyncClient | None = None
 
 
 @asynccontextmanager

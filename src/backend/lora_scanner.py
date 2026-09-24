@@ -11,9 +11,9 @@ import logging
 import os
 import struct
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
@@ -28,7 +28,7 @@ def debug_log(msg: str):
 
 
 # LoRA directories to scan
-LORA_DIRS: List[Path] = [
+LORA_DIRS: list[Path] = [
     Path("/mnt/ssd/loras"),
     Path("/home/flip/oelala/ComfyUI/models/loras"),
 ]
@@ -43,21 +43,21 @@ REGISTRY_PATH = (
 class LoRARegistry:
     """Usage metadata from the LoRA registry for a single LoRA."""
 
-    trigger_words: List[str] = field(default_factory=list)
+    trigger_words: list[str] = field(default_factory=list)
     trigger_mode: str = ""  # "none" | "required" | "natural_language"
     trigger_format: str = ""  # Pattern for structured triggers
-    trigger_examples: List[str] = field(default_factory=list)
+    trigger_examples: list[str] = field(default_factory=list)
     recommended_strength: float = 1.0
-    strength_range: List[float] = field(default_factory=lambda: [0.5, 1.2])
-    source_url: Optional[str] = None
-    civitai_model_id: Optional[int] = None
+    strength_range: list[float] = field(default_factory=lambda: [0.5, 1.2])
+    source_url: str | None = None
+    civitai_model_id: int | None = None
     display_name: str = ""
     creator: str = ""
     version: str = ""
     usage_notes: str = ""
     noise_type: str = ""  # "single" | "dual"
-    paired_with: Optional[str] = None
-    modes: List[str] = field(default_factory=list)
+    paired_with: str | None = None
+    modes: list[str] = field(default_factory=list)
     base_model: str = ""  # e.g., "wan2.2", "ltx", "sdxl"
     last_checked: str = ""
 
@@ -75,12 +75,12 @@ class LoRAInfo:
     size_mb: float
     modified: float  # Unix timestamp
     category: str  # Derived from subdirectory or filename
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     base_model: str = ""  # e.g., "wan2.2", "sdxl", "pony"
     noise_level: str = ""  # "high", "low", or ""
     format: str = ""  # From safetensors metadata
     rank: str = ""  # LoRA rank if detectable
-    registry: Optional[LoRARegistry] = None  # Enriched metadata from registry
+    registry: LoRARegistry | None = None  # Enriched metadata from registry
 
 
 def _derive_name(filename: str) -> str:
@@ -96,7 +96,7 @@ def _derive_name(filename: str) -> str:
     return name
 
 
-def _derive_tags(filename: str, category: str) -> List[str]:
+def _derive_tags(filename: str, category: str) -> list[str]:
     """Derive tags from filename and category."""
     tags = []
     lower = filename.lower()
@@ -207,7 +207,7 @@ def _derive_base_model(filename: str) -> str:
     return ""
 
 
-def _read_safetensors_metadata(filepath: str) -> Dict:
+def _read_safetensors_metadata(filepath: str) -> dict:
     """Read metadata from safetensors file header."""
     try:
         with open(filepath, "rb") as f:
@@ -228,7 +228,7 @@ def _make_id(path: str) -> str:
     return hashlib.md5(path.encode()).hexdigest()[:12]
 
 
-def _load_registry() -> Dict[str, LoRARegistry]:
+def _load_registry() -> dict[str, LoRARegistry]:
     """Load the LoRA registry YAML and return a dict keyed by filename."""
     if not REGISTRY_PATH.exists():
         logger.warning(f"⚠️ LoRA registry not found at {REGISTRY_PATH}")
@@ -239,7 +239,7 @@ def _load_registry() -> Dict[str, LoRARegistry]:
         if not entries or not isinstance(entries, list):
             return {}
 
-        registry: Dict[str, LoRARegistry] = {}
+        registry: dict[str, LoRARegistry] = {}
         for entry in entries:
             fn = entry.get("filename", "")
             if not fn:
@@ -270,7 +270,7 @@ def _load_registry() -> Dict[str, LoRARegistry]:
         return {}
 
 
-def _enrich_with_registry(lora: LoRAInfo, registry: Dict[str, LoRARegistry]) -> None:
+def _enrich_with_registry(lora: LoRAInfo, registry: dict[str, LoRARegistry]) -> None:
     """Enrich a LoRAInfo with registry metadata (in-place)."""
     # Try exact path match first, then filename-only match
     reg = registry.get(lora.path) or registry.get(lora.filename)
@@ -297,16 +297,16 @@ class LoRAValidation:
 
     lora_filename: str
     is_valid: bool
-    warnings: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    suggestions: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
 
 
 def validate_lora_usage(
     lora_filename: str,
     positive_prompt: str,
     strength: float,
-    registry: Optional[Dict[str, LoRARegistry]] = None,
+    registry: dict[str, LoRARegistry] | None = None,
 ) -> LoRAValidation:
     """Validate that a LoRA is being used correctly.
 
@@ -368,9 +368,9 @@ def validate_lora_usage(
 
 
 def validate_lora_batch(
-    loras: List[Dict[str, Any]],
+    loras: list[dict[str, Any]],
     positive_prompt: str,
-) -> List[LoRAValidation]:
+) -> list[LoRAValidation]:
     """Validate multiple LoRA configs at once.
 
     Each lora dict should have 'filename' and 'strength' keys.
@@ -386,8 +386,8 @@ def validate_lora_batch(
 
 def scan_lora_directory(
     lora_dir: Path,
-    registry: Optional[Dict[str, LoRARegistry]] = None,
-) -> List[LoRAInfo]:
+    registry: dict[str, LoRARegistry] | None = None,
+) -> list[LoRAInfo]:
     """Scan a single LoRA directory for models."""
     results = []
     if not lora_dir.exists():
@@ -436,11 +436,11 @@ class LoRACache:
     """Cached LoRA scanner with TTL."""
 
     def __init__(self, ttl_seconds: int = 300):
-        self._cache: List[LoRAInfo] = []
+        self._cache: list[LoRAInfo] = []
         self._last_scan: float = 0
         self._ttl = ttl_seconds
 
-    def get_all(self, force_refresh: bool = False) -> List[LoRAInfo]:
+    def get_all(self, force_refresh: bool = False) -> list[LoRAInfo]:
         """Get all LoRAs, scanning if cache is stale."""
         now = time.time()
         if force_refresh or not self._cache or (now - self._last_scan) > self._ttl:
@@ -485,7 +485,7 @@ class LoRACache:
             f"LoRA scan complete: {len(all_loras)} total in {time.time() - start:.2f}s"
         )
 
-    def search(self, query: str) -> List[LoRAInfo]:
+    def search(self, query: str) -> list[LoRAInfo]:
         """Search LoRAs by name, tags, or category."""
         all_loras = self.get_all()
         if not query:
@@ -504,23 +504,23 @@ class LoRACache:
                 results.append(lora)
         return results
 
-    def get_by_id(self, lora_id: str) -> Optional[LoRAInfo]:
+    def get_by_id(self, lora_id: str) -> LoRAInfo | None:
         """Get a specific LoRA by ID."""
         for lora in self.get_all():
             if lora.id == lora_id:
                 return lora
         return None
 
-    def get_categories(self) -> List[Dict]:
+    def get_categories(self) -> list[dict]:
         """Get unique categories with counts."""
-        cats: Dict[str, int] = {}
+        cats: dict[str, int] = {}
         for lora in self.get_all():
             cats[lora.category] = cats.get(lora.category, 0) + 1
         return [{"name": k, "count": v} for k, v in sorted(cats.items())]
 
-    def get_tags(self) -> List[Dict]:
+    def get_tags(self) -> list[dict]:
         """Get unique tags with counts."""
-        tag_counts: Dict[str, int] = {}
+        tag_counts: dict[str, int] = {}
         for lora in self.get_all():
             for tag in lora.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
@@ -529,7 +529,7 @@ class LoRACache:
             for k, v in sorted(tag_counts.items(), key=lambda x: -x[1])
         ]
 
-    def to_dict(self, lora: LoRAInfo) -> Dict:
+    def to_dict(self, lora: LoRAInfo) -> dict:
         """Convert LoRAInfo to API-friendly dict."""
         d = asdict(lora)
         # Flatten registry into top-level keys for API convenience
