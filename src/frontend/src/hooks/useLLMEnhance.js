@@ -111,6 +111,8 @@ export default function useLLMEnhance() {
    * @param {boolean} params.use_llm - Use LLM (default true)
    * @param {string|null} params.model - Model override (optional)
    * @param {string|null} params.refine_instruction - Refine instruction (optional)
+   * @param {string|null} params.target_model - Target generation model (e.g. 'minimax_h3' → H3 skill)
+   * @param {boolean} params.target_i2v - H3 skill: prompt anchors an input image (I2VA)
    * @returns {Promise<Object|null>} Enhanced prompt result or null on failure
    */
   const enhance = useCallback(async (params) => {
@@ -139,6 +141,8 @@ export default function useLLMEnhance() {
           model: params.model ?? null,
           refine_instruction: params.refine_instruction ?? null,
           nsfw_intensity: params.nsfw_intensity ?? null,
+          target_model: params.target_model ?? null,
+          target_i2v: params.target_i2v ?? false,
         }),
         signal: controller.signal,
       })

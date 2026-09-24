@@ -3,7 +3,7 @@ import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send, Flame } from 'lucide-r
 import { BACKEND_BASE, DEBUG } from '../../config'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
-import { PROMPT_LLM_MODELS, NSFW_LLM_MODELS, DEFAULT_PROMPT_LLM, DEFAULT_NSFW_LLM } from '../../constants/llmModels'
+import { PROMPT_LLM_MODELS, NSFW_LLM_MODELS, DEFAULT_PROMPT_LLM, DEFAULT_NSFW_LLM, MINIMAX_H3_PROMPT_LLM, MINIMAX_H3_TARGET } from '../../constants/llmModels'
 import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
@@ -52,6 +52,7 @@ const ENHANCEMENT_MODES = [
 const PROMPTGEN_DEFAULTS = {
   input: '', style: '', enhanceMode: 'expand', includeNegative: true,
   includeMotion: false, cameraMotion: '', nsfwMode: false, nsfwIntensity: 3, enhanceModel: DEFAULT_PROMPT_LLM,
+  targetModel: '', h3I2v: false,
 }
 
 export default function PromptGeneratorTool({ onSendToTool }) {
@@ -66,6 +67,10 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
   const [nsfwMode, setNsfwMode] = useState(initial.nsfwMode)
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)
+  const [targetModel, setTargetModel] = useState(initial.targetModel || '')
+  const [h3I2v, setH3I2v] = useState(initial.h3I2v || false)
+
+  const targetIsH3 = targetModel === MINIMAX_H3_TARGET
 
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -75,9 +80,9 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
     input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
-    nsfwMode, nsfwIntensity, enhanceModel,
+    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v,
   }), [input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
-    nsfwMode, nsfwIntensity, enhanceModel])
+    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
@@ -86,6 +91,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     setIncludeNegative(d.includeNegative); setIncludeMotion(d.includeMotion)
     setCameraMotion(d.cameraMotion || '')
     setNsfwMode(d.nsfwMode); setNsfwIntensity(d.nsfwIntensity); setEnhanceModel(d.enhanceModel)
+    setTargetModel(d.targetModel || ''); setH3I2v(d.h3I2v || false)
   }, [resetDefaults])
 
   // Auto-switch model list when toggling NSFW
@@ -95,7 +101,19 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const handleNsfwToggle = (enabled) => {
     setNsfwMode(enabled)
     setStyle('') // reset style when switching
-    setEnhanceModel(enabled ? DEFAULT_NSFW_LLM : DEFAULT_PROMPT_LLM)
+    // Keep the H3 skill model when an H3 target is selected
+    setEnhanceModel(
+      targetIsH3 ? MINIMAX_H3_PROMPT_LLM : (enabled ? DEFAULT_NSFW_LLM : DEFAULT_PROMPT_LLM)
+    )
+  }
+
+  const handleTargetModelChange = (value) => {
+    setTargetModel(value)
+    if (value === MINIMAX_H3_TARGET) {
+      // The H3 prompt-writing skill pairs with the Huihui Qwen3.5 9B model
+      // (via the Guardian 14700K route); still user-overridable below.
+      setEnhanceModel(MINIMAX_H3_PROMPT_LLM)
+    }
   }
 
   // LLM prompt enhancement queue
@@ -112,10 +130,11 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       input: input.trim(),
       style: style || null,
       mode: enhanceMode,
-      include_negative: includeNegative,
+      include_negative: targetIsH3 ? false : includeNegative,
       include_motion: includeMotion,
       model: enhanceModel,
       ...(nsfwMode && { nsfw_intensity: nsfwIntensity }),
+      ...(targetIsH3 && { target_model: MINIMAX_H3_TARGET, target_i2v: h3I2v }),
     })
 
     if (result) {
@@ -143,6 +162,19 @@ export default function PromptGeneratorTool({ onSendToTool }) {
 
     // Prepend camera motion prefix if selected
     const motionPrefix = getCameraMotionPrefix(cameraMotion)
+
+    if (targetIsH3) {
+      // H3: one positive prompt drives video + audio; no negative prompt,
+      // no abstract quality boosters (official H3-Context-IR guidance)
+      setResult({
+        prompt: `${motionPrefix}${basePrompt}${styleKeywords}`,
+        negative_prompt: '',
+        motion_prompt: '',
+        variations: null,
+      })
+      return
+    }
+
     const enhancedPrompt = `${motionPrefix}${basePrompt}${styleKeywords}, masterpiece, best quality, highly detailed`
 
     const negativePrompt = includeNegative
@@ -251,14 +283,16 @@ export default function PromptGeneratorTool({ onSendToTool }) {
           <div className="grok-card-title">Options</div>
         </div>
         <div className="options-row">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={includeNegative}
-              onChange={(e) => setIncludeNegative(e.target.checked)}
-            />
-            Generate negative prompt
-          </label>
+          {!targetIsH3 && (
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={includeNegative}
+                onChange={(e) => setIncludeNegative(e.target.checked)}
+              />
+              Generate negative prompt
+            </label>
+          )}
           <label className="checkbox-label">
             <input
               type="checkbox"
@@ -268,6 +302,37 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             Include motion prompts (for video)
           </label>
         </div>
+      </div>
+
+      {/* Target Model — picks the prompt-writing skill (e.g. MiniMax-H3) */}
+      <div className="grok-card">
+        <div className="grok-card-header">
+          <div className="grok-card-title">Target Model</div>
+        </div>
+        <select
+          value={targetModel}
+          onChange={(e) => handleTargetModelChange(e.target.value)}
+          className="form-select"
+        >
+          <option value="">Generic — image / video prompts</option>
+          <option value={MINIMAX_H3_TARGET}>🎥 MiniMax-H3 — video + audio (H3-Context-IR skill)</option>
+        </select>
+        {targetIsH3 && (
+          <div style={{ marginTop: '10px' }}>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={h3I2v}
+                onChange={(e) => setH3I2v(e.target.checked)}
+              />
+              Use as first keyframe (image-to-video)
+            </label>
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
+              Official H3-Context-IR format: one prompt drives video and its synchronized
+              soundtrack (shots, camera moves, soundscape, music). No negative prompt — H3 ignores them.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Camera Motion Selector — available for both SFW and NSFW */}
