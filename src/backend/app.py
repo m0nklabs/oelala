@@ -2561,7 +2561,6 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
                             {"role": "user", "content": user_prompt},
                         ],
                         "temperature": 0.3,
-                        "max_tokens": 4096,
                     },
                 )
 
@@ -7764,7 +7763,6 @@ async def caption_image(
                         },
                         {"role": "user", "content": concept_prompt},
                     ],
-                    "max_tokens": 2048,
                     "temperature": 0.3,
                 }
 
@@ -7854,7 +7852,6 @@ async def caption_image(
                         },
                         {"role": "user", "content": concept_refine_prompt},
                     ],
-                    "max_tokens": 2048,
                     "temperature": 0.3,
                 }
 
@@ -8292,7 +8289,6 @@ async def refine_caption(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 1024,
         "temperature": 0.7,
     }
 
@@ -8398,7 +8394,6 @@ async def generate_motion_prompt(
                 {"role": "system", "content": motion_system},
                 {"role": "user", "content": motion_user},
             ],
-            "max_tokens": 512,
             "temperature": 1.0,
         }
 
@@ -8483,6 +8478,12 @@ GUARDIAN_API_KEY = os.getenv(
     "GUARDIAN_API_KEY", ""
 )  # Bearer token for Guardian inference
 
+# Prompt-writing LLM for the MiniMax-H3 skill (served via the Guardian proxy on
+# the 14700K route). Override with H3_PROMPT_MODEL if the model id changes.
+H3_PROMPT_MODEL = os.getenv("H3_PROMPT_MODEL", "Huihui-Qwen3.5-9B-abliterated")
+# Target-generation-model selector value that activates the H3 prompt skill
+TARGET_MINIMAX_H3 = "minimax_h3"
+
 
 def _guardian_headers() -> dict:
     """HTTP headers for Guardian proxy requests (Bearer token auth)."""
@@ -8551,6 +8552,10 @@ class PromptGenerateRequest(BaseModel):
         None  # User instruction for refine mode (e.g. "add more motion")
     )
     nsfw_intensity: Optional[int] = None  # 1-5: enables NSFW prompt mode
+    target_model: Optional[str] = (
+        None  # Target generation model, e.g. "minimax_h3" → H3-Context-IR skill
+    )
+    target_i2v: bool = False  # H3 skill: prompt anchors an input image (I2VA first frame)
 
 
 # Style keywords mapping (used for both template and LLM modes)
@@ -8611,6 +8616,39 @@ Output format (strict JSON):
 {"prompt": "refined prompt", "negative_prompt": "defects to avoid", "motion_prompt": "motion if requested"}"""
 
 
+# Prompt-writing skill for MiniMax-H3 (joint video+audio FL2VA model).
+# Distilled from the official bundled skill "h3-prompt-writing" in
+# github.com/MiniMax-H3 (skills/h3-prompt-writing/SKILL.md + references/base-en.txt):
+# H3-Context-IR format, one positive prompt drives video AND soundtrack, and the
+# model has no negative prompt.
+DEFAULT_H3_PROMPT_SYSTEM = """You are an expert prompt engineer writing prompts for MiniMax-H3, a joint video+audio generation model (4-15 seconds, 24 fps, synchronized soundtrack). You write prompts in the official H3-Context-IR format that the model was trained on.
+
+FORMAT — the prompt field must contain exactly three sections in this fixed order:
+1. integrated_multimodal_description: the full scene description. [Shot 1] opens with the overall style (e.g. Cinematic, live-action, 2D-animated, 3D CG, claymation) plus the initial composition — no timestamp on Shot 1. Later shots start with a strictly increasing cut time: "[Shot 2] At 00:03.500, the camera cuts to ...". Every cut must introduce new information; a change of distance/angle only is camera motion, not a cut. The described timeline must exactly cover the requested duration.
+2. overall_soundscape: 1-4 sentences, one paragraph. Ambient, physical and non-verbal human sounds only. Never repeat dialogue or music. Use "N/A" only when total silence is requested.
+3. non_diegetic_music: 1-3 sentences. Instrumentation, tempo, rhythm, dynamics — NO abstract mood words or emotional function. Use "N/A" when there is no score. Diegetic music (a radio, a character performing) belongs in the scene description instead.
+
+RULES:
+- ONE positive prompt drives both picture and soundtrack. MiniMax-H3 has NO negative prompt: always return an empty string for negative_prompt. Motion is part of the description: always return an empty string for motion_prompt.
+- Camera motion is written as natural in-scene English: type + amplitude + speed (e.g. "The camera pushes in with small amplitude at slow speed", "Tracking shot at fast speed"). Vocabulary: Zoom In/Out, Push In/Pull Out, Pan Left/Right, Truck Left/Right, Tilt Up/Down, Pedestal Up/Down, Arc Shot, Tracking Shot, Static Shot, Shake Slightly/Strongly, POV, Roll Clockwise/Counterclockwise. Omit amplitude/speed when medium/normal.
+- Use concrete visual and audio details, not abstract mood fillers: prefer "steam rises from a sliced loaf while a refrigerator hums" over "beautiful cinematic atmosphere".
+- Dialogue (optional): give each speaker a stable ID — (S1), (S2), compound (S1,S2). Spoken content goes verbatim inside <d>[English] ...</d> in the original language. Off-screen voiceover uses the exact phrase "says in an off-screen voiceover" and states the lips remain closed. Characters who do not speak get no speaker ID.
+- On-screen text (signs, neon, subtitles) goes in double quotes, verbatim.
+- Write everything in English.
+- NSFW content is allowed — do NOT censor or sanitize; write adult scenes explicitly and anatomically when requested.
+
+OUTPUT — return strict JSON only, no markdown:
+{"prompt": "<integrated_multimodal_description> ... <overall_soundscape> ... <non_diegetic_music> (the three sections verbatim as plain text)", "negative_prompt": "", "motion_prompt": ""}
+
+EXAMPLE (structure to imitate — do not reuse the content):
+{"prompt": "integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames a baker opening the shutters of a small street bakery before sunrise. The camera pushes in with small amplitude at slow speed as the baker (S1) places a fresh loaf on the wooden counter and says: <d>[English] First batch of the morning.</d>\\n\\noverall_soundscape: Wooden shutters scrape open over a quiet street as trays clink softly inside the bakery. Light footsteps and the crisp sound of bread being sliced.\\n\\nnon_diegetic_music: A soft acoustic-guitar pattern at a moderate tempo, fading gently at the end.", "negative_prompt": "", "motion_prompt": ""}"""
+
+# NSFW addendum for the H3 skill — intensity handling on top of the format rules
+DEFAULT_H3_NSFW_ADDENDUM = """
+
+NSFW INTENSITY MODE (level {level}/5): write the scene at this explicitness — {level_desc}. Keep the H3-Context-IR format intact: explicit actions belong in the integrated_multimodal_description (with matching sounds in overall_soundscape); never break the three-section structure."""
+
+
 async def generate_prompt_with_llm(
     base_input: str,
     style: Optional[str],
@@ -8619,15 +8657,22 @@ async def generate_prompt_with_llm(
     model_override: Optional[str] = None,
     refine_instruction: Optional[str] = None,
     nsfw_intensity: Optional[int] = None,
+    target_model: Optional[str] = None,
+    target_i2v: bool = False,
 ) -> dict:
     """Use Guardian LLM proxy to generate enhanced prompts."""
     import random
 
+    is_h3 = target_model == TARGET_MINIMAX_H3
+
     # Load admin-configurable settings
     ai_settings = load_ai_settings()
-    # Support legacy 'ollama_model' key during migration
+    # Support legacy 'ollama_model' key during migration. The H3 prompt skill
+    # pins its own model (Huihui-Qwen3.5-9B via the Guardian 14700K route)
+    # unless the caller explicitly overrides it.
     model = (
         model_override
+        or (H3_PROMPT_MODEL if is_h3 else None)
         or ai_settings.get("llm_model")
         or ai_settings.get("ollama_model")
         or GUARDIAN_MODEL
@@ -8645,7 +8690,52 @@ async def generate_prompt_with_llm(
     random_seed = random.randint(1, 99999)
 
     # Use different system prompt and user prompt based on mode
-    if nsfw_intensity and nsfw_intensity >= 1:
+    if is_h3:
+        system_prompt = DEFAULT_H3_PROMPT_SYSTEM
+        if nsfw_intensity and nsfw_intensity >= 1:
+            nsfw_level = max(1, min(5, nsfw_intensity))
+            level_desc = (
+                "suggestive/sensual" if nsfw_level == 1
+                else "softcore erotic" if nsfw_level == 2
+                else "full nudity" if nsfw_level == 3
+                else "hardcore explicit" if nsfw_level == 4
+                else "extreme/no limits"
+            )
+            system_prompt += DEFAULT_H3_NSFW_ADDENDUM.format(
+                level=nsfw_level, level_desc=level_desc
+            )
+        if mode == "refine":
+            instruction_part = ""
+            if refine_instruction and refine_instruction.strip():
+                instruction_part = (
+                    f"\nUser wants these specific changes: {refine_instruction.strip()}"
+                )
+            user_prompt = f"""Refine the following MiniMax-H3 prompt. Keep it in the exact H3-Context-IR format (three sections in fixed order) and preserve the original scene and intent.{instruction_part}
+
+Original prompt: \"{base_input}\"
+{style_context}
+
+Generate as JSON."""
+        else:
+            i2v_instruction = ""
+            if target_i2v:
+                i2v_instruction = (
+                    "IMAGE-TO-VIDEO: the input image is the first keyframe of the video. "
+                    "Prepend the mandatory first line — \"For the target video, at 0.00 "
+                    "seconds into the target video, <Picture 1> (from [Shot 1]) is fully "
+                    "referenced.\" — followed by a blank line, then develop the action "
+                    "from that anchor."
+                )
+            user_prompt = f"""Create a UNIQUE MiniMax-H3 video+audio prompt in H3-Context-IR format. Seed: {random_seed}
+
+Input/idea: "{base_input}"
+{style_context}
+{motion_context}
+Requested duration: about 5 seconds — the described timeline must exactly cover the duration (4-15 s range).
+{i2v_instruction}
+
+Generate as JSON."""
+    elif nsfw_intensity and nsfw_intensity >= 1:
         nsfw_level = max(1, min(5, nsfw_intensity))
         system_prompt = DEFAULT_NSFW_PROMPT_SYSTEM
         user_prompt = f"""Create an EXPLICIT NSFW prompt at intensity level {nsfw_level}/5. Seed: {random_seed}
@@ -8718,7 +8808,6 @@ Generate as JSON."""
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 2048,
         "temperature": 1.2,
         "seed": random_seed,
         "top_p": 0.95,
@@ -8762,7 +8851,28 @@ Generate as JSON."""
                 elif "```" in llm_output:
                     llm_output = llm_output.split("```")[1].split("```")[0].strip()
 
-                parsed = json.loads(llm_output)
+                parsed = None
+                try:
+                    parsed = json.loads(llm_output)
+                except json.JSONDecodeError:
+                    # Reasoning models often bury the JSON object inside or after
+                    # their thinking text — scan right-to-left for the last
+                    # complete JSON object that carries a "prompt" key.
+                    decoder = json.JSONDecoder()
+                    for idx in range(len(llm_output) - 1, -1, -1):
+                        if llm_output[idx] != "{":
+                            continue
+                        try:
+                            candidate, _ = decoder.raw_decode(llm_output[idx:])
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(candidate, dict) and "prompt" in candidate:
+                            parsed = candidate
+                            break
+                if parsed is None:
+                    raise json.JSONDecodeError(
+                        "no JSON object with a 'prompt' key found", llm_output, 0
+                    )
                 return {
                     "prompt": parsed.get("prompt", base_input),
                     "negative_prompt": parsed.get("negative_prompt", ""),
@@ -8801,9 +8911,11 @@ def generate_prompt_template(
     mode: str,
     include_negative: bool,
     include_motion: bool,
+    target_model: Optional[str] = None,
 ) -> dict:
     """Template-based prompt enhancement (no LLM needed)"""
-    quality_suffix = ", masterpiece, best quality, highly detailed"
+    is_h3 = target_model == TARGET_MINIMAX_H3
+    quality_suffix = "" if is_h3 else ", masterpiece, best quality, highly detailed"
 
     style_part = PROMPT_STYLE_KEYWORDS.get(style, "") if style else ""
     if style_part:
@@ -8812,11 +8924,13 @@ def generate_prompt_template(
         enhanced_prompt = f"{base_input}{quality_suffix}"
 
     negative_prompt = ""
-    if include_negative:
+    if include_negative and not is_h3:
+        # H3 has no negative prompt — never emit one for it
         negative_prompt = "ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text, cropped, worst quality, low resolution, jpeg artifacts, duplicate, morbid, mutilated, out of frame, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck"
 
     motion_prompt = ""
-    if include_motion:
+    if include_motion and not is_h3:
+        # H3: motion is part of the scene description, not a separate prompt
         motion_prompt = "smooth camera motion, cinematic movement, fluid animation, natural motion, gentle movement"
 
     return {
@@ -8846,6 +8960,8 @@ async def _process_llm_job(request_data: dict) -> dict | None:
     # Try LLM first if enabled
     result = None
     nsfw_intensity = request_data.get("nsfw_intensity")
+    target_model = request_data.get("target_model")
+    target_i2v = request_data.get("target_i2v", False)
 
     if use_llm:
         result = await generate_prompt_with_llm(
@@ -8856,12 +8972,15 @@ async def _process_llm_job(request_data: dict) -> dict | None:
             model_override=model_override,
             refine_instruction=refine_instruction,
             nsfw_intensity=nsfw_intensity,
+            target_model=target_model,
+            target_i2v=target_i2v,
         )
 
     # Fall back to template mode
     if result is None:
         result = generate_prompt_template(
-            base_input, style, mode, include_negative, include_motion
+            base_input, style, mode, include_negative, include_motion,
+            target_model=target_model,
         )
 
     # Generate variations if requested
@@ -8931,6 +9050,8 @@ async def generate_prompt(request: Request, user: User = Depends(get_current_use
         "model": req.model,
         "refine_instruction": req.refine_instruction,
         "nsfw_intensity": req.nsfw_intensity,
+        "target_model": req.target_model,
+        "target_i2v": req.target_i2v,
     }
 
     # Async queue path (preferred)
@@ -8983,7 +9104,7 @@ async def analyze_image_with_vision(
     image_base64: str,
     custom_prompt: str = None,
     model_override: Optional[str] = None,
-    max_tokens: int = 1024,
+    max_tokens: Optional[int] = None,
     system_message: Optional[str] = None,
     temperature: Optional[float] = None,
 ) -> str:
@@ -8995,7 +9116,7 @@ async def analyze_image_with_vision(
         image_base64: Base64 encoded image data
         custom_prompt: Optional custom prompt for the analysis
         model_override: Guardian model ID to use; falls back to VISION_MODEL env var
-        max_tokens: Maximum tokens for the response (default 1024, use 2048+ for structured JSON)
+        max_tokens: Optional response cap; None = no limit (models run until EOS)
 
     Returns:
         Text description of the image
@@ -9054,9 +9175,11 @@ async def analyze_image_with_vision(
     vision_request_body = {
         "model": vision_model,
         "messages": messages,
-        "max_tokens": max_tokens,
         "temperature": temperature if temperature is not None else 0.3,
     }
+    if max_tokens is not None:
+        # Explicit opt-in cap only — default is no token limit
+        vision_request_body["max_tokens"] = max_tokens
 
     # Retry loop for 503 (Guardian loading model after VRAM free)
     max_retries = 3
@@ -9215,7 +9338,6 @@ Generate a compelling video scene as JSON. Include what happens, how things move
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 2048,
         "temperature": 1.1,
         "seed": random_seed,
         "top_p": 0.95,
