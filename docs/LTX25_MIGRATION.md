@@ -244,6 +244,21 @@ plain Gemma 4 encoder is expected to fail or produce garbage.
 **[verified that the two files differ and that the workflow names the `with-proj` one;
 needs runtime confirmation that the plain one actually fails]**
 
+**This set is not our inference — it is the vendor's own default.** ComfyUI's built-in
+LTX-2.5 template (`Comfy-Org/workflow_templates`, `templates/video_ltx2_5_t2v.json`)
+loads:
+
+| Node | Value |
+|---|---|
+| `UNETLoader` | `ltx-2.5-22b-distilled-transformer-**comfy-int8-convrot**.safetensors` |
+| `CLIPLoader` | `gemma4-12b-with-proj-ltx-2.5-**comfy-int8-convrot**.safetensors`, type `ltxv` |
+| `VAELoader` | `ltx-2.5-video-vae-bf16.safetensors` |
+| `VAELoader` | `ltx-2.5-audio-vae-bf16.safetensors` |
+| `CLIPLoader` (enhancer, optional) | `gemma4_e2b_it_int8_convrot.safetensors`, type `ltxv` |
+
+**The int8 path is the official default**, which is a strong confirmation that §4.2 is
+the right target for a 48 GB-class worker. **[verified]**
+
 **There is no official ungated Comfy-Org mirror of LTX-2.5.** `Comfy-Org/LTX-2.5`
 does not resolve (401). Comfy-Org publishes the 2.3-era repacks only — `Comfy-Org/ltx-2`
 (9 files) and `Comfy-Org/ltx-2.3` (6 files), both ungated — and an HF-wide search for
@@ -581,23 +596,24 @@ documentation confirming the loader path). **[needs runtime confirmation]**
 Two things worth knowing before editing the builders, because they are easy to get
 wrong:
 
-1. **There is more than one guider.** The pack's single-stage distilled graph uses
-   plain `CFGGuider` (what we already emit). ComfyUI core's own 2.5 support added
-   **`LTXVDualCFGGuider`** — verified present in `comfy_extras/nodes_lt.py` at
-   v0.32.0 (3 occurrences) and absent at v0.31.0 — alongside `LTXVDurationPredictor`,
-   `LTXVModalityGuidance` and `LTXVSpatioTemporalGuidance`. Some official 2.5 graphs
-   use the dual-CFG guider with `[1, 1]` instead of `CFGGuider`. **Pick one graph and
-   copy it faithfully**; do not mix guider and sigma values across sources.
-   **[verified that both guiders exist; needs runtime confirmation which one the
-   graph we adopt actually uses]**
-2. **Stage-2 sigmas genuinely differ between official sources.** The pack's
-   `2.5/…Two_Stage_Distilled.json` uses `0.909375, 0.725, 0.421875, 0.0` for stage 2,
-   while other official 2.5 graphs keep `0.85, 0.7250, 0.4219, 0.0`. The pack README's
-   note *"I2V stage-2 distilled sigmas should be `0.909375, …` (not `0.85, …`)"* is
-   **I2V-specific**, not a general rule. **Do not bulk-rewrite stage-2 sigmas during
-   migration.** Stage-1 (the 8-step schedule) is byte-identical across all sources.
-   **[needs runtime confirmation — source discrepancy observed, correct value depends
-   on the graph adopted]**
+1. **There is more than one guider, and two official 2.5 graphs disagree.** The pack's
+   single-stage distilled graph uses plain **`CFGGuider` (`cfg = 1`)** — what we already
+   emit. ComfyUI's built-in 2.5 template (`Comfy-Org/workflow_templates`,
+   `templates/video_ltx2_5_t2v.json`) uses **`LTXVDualCFGGuider` (`[1, 1]`) twice**, once
+   per stage. `LTXVDualCFGGuider` is verified present in `comfy_extras/nodes_lt.py` at
+   v0.32.0 (3 occurrences) and absent at v0.31.0. **Pick one graph and copy it
+   faithfully**; do not mix guider and sigma values across sources.
+   **[verified — both graphs parsed directly]**
+2. **Stage-2 sigmas genuinely differ between the official sources — and this is now
+   settled, not merely observed.** The built-in template's stage 2 uses
+   **`0.85, 0.7250, 0.4219, 0.0`** (identical to 2.3), while the pack's
+   `2.5/…Two_Stage_Distilled.json` uses **`0.909375, 0.725, 0.421875, 0.0`**. The pack
+   README's note *"I2V stage-2 distilled sigmas should be `0.909375, …` (not `0.85, …`)"*
+   is therefore **I2V-specific** — the built-in **T2V** template legitimately keeps
+   `0.85`. **Do not bulk-rewrite stage-2 sigmas during migration**, and treat 2.5-T2V and
+   2.5-I2V as different cases. Stage-1 (the 8-step schedule) is byte-identical across all
+   three graphs (`1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0`).
+   **[verified — all three graphs parsed directly]**
 3. **The workflow JSONs carry stale 2.3-era sample prompts.** The 2.5 graph's
    `GemmaAPITextEncode` widgets still reference `ltx-2.3-22b-dev.safetensors` — a
    leftover placeholder, not a required model. Do not treat filenames found inside
@@ -847,6 +863,10 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 - `https://raw.githubusercontent.com/Lightricks/ComfyUI-LTXVideo/master/requirements.txt`
 - `https://raw.githubusercontent.com/Lightricks/ComfyUI-LTXVideo/master/example_workflows/2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled.json`
 - `https://raw.githubusercontent.com/Lightricks/ComfyUI-LTXVideo/master/example_workflows/2.5/README.md`
+
+**ComfyUI official workflow templates** (separate repo — this is why a search inside the
+ComfyUI repo for these files returns 404)
+- `https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_ltx2_5_t2v.json` — built-in 2.5 T2V template; source for the int8 default set, `LTXVDualCFGGuider` and the stage-2 `0.85` sigmas
 
 **Pricing**
 - `https://www.runpod.io/pricing` — serverless per-hour rates, page dated 2026-09-27
