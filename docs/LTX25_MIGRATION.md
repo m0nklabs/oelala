@@ -188,10 +188,11 @@ plain Gemma 4 encoder is expected to fail or produce garbage.
 needs runtime confirmation that the plain one actually fails]**
 
 **There is no official ungated Comfy-Org mirror of LTX-2.5.** `Comfy-Org/LTX-2.5`
-does not resolve (401), and an HF-wide search for `LTX-2.5` returns only the
-Lightricks repos plus third-party community quantizations (GGUF/FP8/MLX by
-unrelated accounts) — not acceptable for a commercial service. **Consequence: the
-gated `Lightricks/LTX-2.5` repo is the only source, so the gate is unavoidable.**
+does not resolve (401). Comfy-Org publishes the 2.3-era repacks only — `Comfy-Org/ltx-2`
+(9 files) and `Comfy-Org/ltx-2.3` (6 files), both ungated — and an HF-wide search for
+`LTX-2.5` returns only the Lightricks repos plus third-party community quantizations
+(GGUF/FP8/MLX by unrelated accounts). **Consequence: the gated `Lightricks/LTX-2.5`
+repo is the only official source, so the gate is unavoidable for a sanctioned set.**
 **[verified]**
 
 ### 4.3 The nvfp4 variant — and why int8 is the right call for 48 GB
@@ -236,6 +237,55 @@ alike. **[verified]**
 **Conclusion:** use int8-convrot on the current 48 GB tiers; consider nvfp4 only if the
 platform standardises on a Blackwell tier (`BLACKWELL_96` / `BLACKWELL_180`). The
 ~3 GB saving is not worth a hardware migration on its own.
+
+### 4.5 The community-checkpoint shortcut — technically real, legally not a shortcut
+
+The public mirror `bomehika/oelala-models` (**ungated**, 9 files, last modified
+2026-09-30) contains a community LTX-2.5 int8 checkpoint:
+
+| Path | GB |
+|---|---:|
+| `diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors` | **17.026** |
+| `LICENSE-LTX-2.x.txt` | ~0 |
+
+The mirror also ships the LTX-2.x licence text alongside the weights. **[verified:
+repo exists, ungated, file and size read from the HF API. The measured size is
+17.026 GB — not 16.63 GB as reported informally.]**
+
+**This solves the access problem but NOT the licence question, and the difference
+matters.** The LTX-2.x licence grants rights over "LTX-2.x **and Derivatives of
+LTX-2.x**" (§2.1), and §1.5 defines Derivatives to include modified weights. A
+community int8 quant is therefore a Derivative, and:
+
+- **§2.1** — the USD 10 M revenue threshold applies to "LTX-2.x **and Derivatives of
+  LTX-2.x**", so the paid-licence obligation is unchanged by where you downloaded it.
+- **§3.5 (Transfer of Derivatives)** — a Derivative must be distributed under the terms
+  of this same agreement, which is why the mirror carries `LICENSE-LTX-2.x.txt`.
+- **Attachment A** — the use restrictions and the Acceptable Use Policy apply to "the
+  Outputs, LTX-2.x **and any Derivatives thereof**".
+
+**So: downloading from an ungated mirror does not remove the obligation to comply with
+the LTX-2.x Community Licence.** It only removes the click. The operator still has to
+honour the licence (and the AUP) whether the weights come from the gated repo or from
+a third-party quant of them. **[verified: licence text; the practical consequence is a
+legal judgement, not a technical one]**
+
+Two further caveats before treating this file as a drop-in:
+
+- **Provenance and quality are unverified.** It is a third-party Civitai quantization
+  (REDGraft "Fast 2K" int8). Its tensor layout, quant format and prompt-following
+  behaviour have not been validated against the official int8 file. It may not load via
+  `UNETLoader` at all, and it is not the file the official workflows were tuned for.
+  **[needs runtime confirmation]**
+- **The text encoder stays gated.** Even with an ungated transformer, the
+  `gemma4-12b-with-proj-ltx-2.5-*` encoder has no ungated official equivalent (§4.2).
+  Without gate acceptance there is **no complete 2.5 set** — the operator's own
+  assessment is correct on this point.
+
+**Recommendation:** treat the community checkpoint as a *fallback for experimentation*,
+not as the production path. If the gate is accepted (Phase A), use the official int8
+files; they are the ones the vendor's workflows target and the ones whose licence
+position is unambiguous.
 
 ### 4.4 Cold-start download size
 
@@ -462,6 +512,27 @@ wrong:
    leftover placeholder, not a required model. Do not treat filenames found inside
    prompt/enhancer widgets as the model manifest; use the loader nodes (§6.1) as the
    authoritative list. **[verified]**
+4. **Do not trust community/Civitai workflow configs as the model manifest.** A
+   widely-circulated community config for LTX-2.5 reportedly loads a separate vocoder
+   (`ltx-av-step-1751000_vocoder_24K`) and a text projection
+   (`ltx-2.3_text_projection_bf16`). **Neither belongs to the official 2.5 ComfyUI
+   path.** Evidence:
+   - The official 2.5 single-stage graph contains **0** occurrences of `vocoder`,
+     `step-1751000` or `text_projection`; its entire Load Models subgraph is the five
+     nodes in §6.1.
+   - `LTXVAudioVAEDecode` (`comfy_extras/nodes_lt_audio.py`, v0.38.0) takes only
+     `samples` + `audio_vae` and decodes via `audio_vae.first_stage_model`, reading
+     `output_sample_rate` from the VAE itself — **the vocoder lives inside the audio
+     VAE**, so no separate vocoder file is needed.
+   - `ltx-2.3_text_projection_bf16` is a **2.3-era** filename that exists only in
+     scattered single-file user repos, not in `Lightricks/LTX-2.5`; the 2.5 encoder
+     ships its projection *inside* `gemma4-12b-with-proj-ltx-2.5-*` (the `with-proj` in
+     the name). No separate projection file is required.
+   - `ltx-av-step-1751000_vocoder_24K` could not be found on HuggingFace at all.
+
+   **Net effect:** the official 2.5 audio path costs **0.365 GB** (the audio VAE), not
+   an extra vocoder + projection. Adding those files would inflate the cold start for
+   no benefit. **[verified]**
 
 ---
 
@@ -599,8 +670,13 @@ it grants access to a separate repo and does not affect the 2.3 worker.
    nvfp4 transformer is worth evaluating; if no, int8 is the target.
 4. **Single-stage or two-stage?** Single-stage is the minimal path (§4.2, 38.7 GB).
    Two-stage adds the 2× spatial upscaler (+1.0 GB) and materially more VRAM/time.
-5. **Audio in the second slot.** H3 already leads on joint audio-video. Should the LTX
-   slot keep the AV path, or drop audio to simplify (W6)?
+5. **Audio in the second slot — now answered in principle.** LTX-2.5 has **native
+   joint audio-video** generation, and the official single-stage graph emits audio
+   through `ltx-2.5-audio-vae-bf16` (0.365 GB) + `LTXVAudioVAEDecode`, at no extra
+   model cost and **no separate vocoder** (§6.4 item 4). So the second slot can match
+   H3's joint audio-video capability. Remaining decision: keep it, given H3 already
+   leads on that axis, or drop the AV branch to simplify (W6)? **[verified that the
+   capability exists at 0.365 GB; product decision is the operator's]**
 6. **LoRA expectations.** Do users expect LTX LoRAs in the second slot? If yes, the
    LoRA compatibility question (C6) becomes a gating item, not a follow-up.
 7. **Is `docs/LEGACY.md`'s "code v1.4.x" claim authoritative?** It could not be
@@ -623,6 +699,10 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 - **Whether the official 2.5 two-stage or IC-LoRA workflows add further required
   models** — only the single-stage distilled graph was analysed in depth.
 - **"code v1.4.x"** for `ComfyUI-LTXVideo` — no such version string exists in the pack.
+- **The community checkpoint's provenance and behaviour** (§4.5) — the REDGraft int8 file
+  exists on the public mirror at 17.026 GB, but its quant format, tensor layout,
+  `UNETLoader` compatibility and output quality were not validated, and the Civitai
+  model/version/file IDs it is attributed to were not independently checked.
 - **The exact ComfyUI-LTXVideo and VHS/KJNodes commits** baked into the currently
   deployed image — the Dockerfile records no pins and the image tag only gives a date.
 - **Whether LTX-2.5's `Lightricks/LTX-2.5` repo has a `LICENSE` file** — it does not
@@ -638,6 +718,8 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 - `https://huggingface.co/api/models/Lightricks/LTX-2.3?blobs=true` — comparison
 - `https://huggingface.co/api/models/Comfy-Org/ltx-2?blobs=true` — current 2.3 text encoder
 - `https://huggingface.co/api/models/Comfy-Org/gemma-4?blobs=true` — Gemma 4 encoders
+- `https://huggingface.co/api/models/Comfy-Org/ltx-2.3?blobs=true` — 2.3-era repack (ungated)
+- `https://huggingface.co/api/models/bomehika/oelala-models?blobs=true` — public mirror (ungated), community LTX-2.5 int8 checkpoint
 - `https://huggingface.co/Lightricks/LTX-2.5` — gating banner
 
 **License**
