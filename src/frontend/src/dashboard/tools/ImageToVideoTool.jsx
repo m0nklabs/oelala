@@ -1096,8 +1096,9 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
         // official ResolutionSelector formula on the backend). Fixed 24 fps and
         // no CFG / negative prompt — the model only follows the positive prompt.
         reqPayload.megapixels = parseFloat(h3Quality)
-      reqPayload.model_variant = resolved.h3Variant || h3Variant
-      reqPayload.quality_mode = resolved.h3QualityMode || h3QualityMode
+      // I2V builds the payload directly (no profile merge here), so read state.
+      reqPayload.model_variant = h3Variant
+      reqPayload.quality_mode = h3QualityMode
         reqPayload.aspect_ratio = aspectRatio
         reqPayload.fps = 24
         reqPayload.cfg = 1.0

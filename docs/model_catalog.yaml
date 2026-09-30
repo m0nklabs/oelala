@@ -565,13 +565,9 @@ entries:
     civitai:
       version_id: '3314686'
       file_id: '3203135'
-    private_mirror:
-      repo: m0nk111/oelala-models
-      path: diffusion_models/DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors
   available_on:
     runpod_h3_worker: on_demand_download
     windows_pc_comfyui: unverified
-    hf_mirror_private: true
   used_by:
   - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
   - 'minimax_h3 adapters: model_variant=dasiwa_turbo (turbo)'
@@ -645,13 +641,9 @@ entries:
     civitai:
       version_id: '3294059'
       file_id: '3178732'
-    private_mirror:
-      repo: m0nk111/oelala-models
-      path: diffusion_models/h3ErosMax_beta5_3178732.safetensors
   available_on:
     runpod_h3_worker: on_demand_download
     windows_pc_comfyui: unverified
-    hf_mirror_private: true
   used_by:
   - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
   - 'minimax_h3 adapters: model_variant=eros_int8_turbo (turbo)'
@@ -671,13 +663,9 @@ entries:
     civitai:
       version_id: '3294059'
       file_id: null
-    private_mirror:
-      repo: m0nk111/oelala-models
-      path: diffusion_models/h3ErosMax_beta5_3185144.safetensors
   available_on:
     runpod_h3_worker: on_demand_download
     windows_pc_comfyui: unverified
-    hf_mirror_private: true
   used_by:
   - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
   - 'minimax_h3 adapters: model_variant=eros (turbo)'
@@ -697,13 +685,9 @@ entries:
     civitai:
       version_id: '3294059'
       file_id: '3185154'
-    private_mirror:
-      repo: m0nk111/oelala-models
-      path: diffusion_models/h3ErosMax_beta5_3185154.safetensors
   available_on:
     runpod_h3_worker: on_demand_download
     windows_pc_comfyui: unverified
-    hf_mirror_private: true
   used_by:
   - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
   - 'minimax_h3 adapters: model_variant=eros_int8 (non-turbo)'

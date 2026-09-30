@@ -60,11 +60,11 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 
 | filename | role | dir | GB | quant | cloud | local | windows | mirror |
 |---|---|---|---|---|---|---|---|---|
-| DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | private |
+| DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | — |
 | DasiwaMinimaxH3_dasiwaHybridV2_3203130.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | — |
-| h3ErosMax_beta5_3178732.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | private |
-| h3ErosMax_beta5_3185144.safetensors | diffusion_model | diffusion_models | 13.67 | unknown | on_demand_download | — | unverified | private |
-| h3ErosMax_beta5_3185154.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | private |
+| h3ErosMax_beta5_3178732.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | — |
+| h3ErosMax_beta5_3185144.safetensors | diffusion_model | diffusion_models | 13.67 | unknown | on_demand_download | — | unverified | — |
+| h3ErosMax_beta5_3185154.safetensors | diffusion_model | diffusion_models | 20.97 | int8 | on_demand_download | — | unverified | — |
 | minimax_h3_fl2va_pruned_int8_convrot.safetensors | diffusion_model | diffusion_models | 20.97 | int8_convrot | on_demand_download | — | unverified | — |
 | PenisV2_minimax-h3_epoch60.safetensors | lora | loras | 0.08 | unknown | — | yes | unverified | dump |
 | Vagina_minimax-h3_epoch20.safetensors | lora | loras | 0.08 | unknown | — | yes | unverified | dump |
