@@ -56,6 +56,25 @@ const H3_QUALITY_PRESETS = [
 ]
 
 // Same math as ComfyUI's ResolutionSelector node (multiple = 32)
+// MiniMax-H3 model variants (backend `MINIMAX_H3_VARIANTS`). Turbo variants carry
+// a baked distillation and run 4/8 steps; non-turbo variants keep the full step
+// count. Mirrored Civitai finetunes are pulled on demand by the cloud worker.
+const H3_VARIANTS = [
+  { value: 'eros', label: '🔥 Eros', tag: 'Turbo fp8', note: 'NSFW finetune met ingebakken turbo — 4/8 stappen, sterk geluid' },
+  { value: 'eros_int8_turbo', label: '🔥 Eros int8', tag: 'Turbo int8', note: 'Zelfde turbo, 8-bit precisie (21GB, iets scherper)' },
+  { value: 'eros_int8', label: '🔥 Eros non-turbo', tag: 'Volle stappen', note: 'Non-turbo int8 — beste audio, heeft 20 stappen nodig' },
+  { value: 'dasiwa_turbo', label: '⛩️ DaSiWa Turbo', tag: 'Turbo int8', note: 'DaSiWa Hybrid Turbo v2 — 4-8 stappen' },
+  { value: 'dasiwa', label: '⛩️ DaSiWa', tag: 'Volle stappen', note: 'DaSiWa Hybrid v2 non-turbo — volle stappen' },
+  { value: 'official', label: '🎬 Officieel', tag: 'Comfy-Org', note: 'Originele MiniMax-H3 weights, 20 stappen' },
+]
+
+// Sampling presets; turbo variants ignore "full" and keep their baked steps.
+const H3_QUALITY_MODES = [
+  { value: 'draft', label: 'Draft', tag: '4 stappen', note: 'Snelst en goedkoopst (~$0,07 per gen)' },
+  { value: 'standard', label: 'Standard', tag: '8 stappen', note: 'Turbo-kwaliteit, ~2,5× duurder dan draft' },
+  { value: 'full', label: 'Full', tag: '20 stappen', note: 'Maximale kwaliteit, geen turbo — duurst' },
+]
+
 const h3CanvasDims = (mp, aspect) => {
   const [a, b] = aspect.split(':').map(Number)
   const scale = Math.sqrt((parseFloat(mp) * 1024 * 1024) / (a * b))
@@ -111,6 +130,8 @@ const T2V_DEFAULTS = {
   resolution: '480p',
   fps: 16,
   h3Quality: '0.98',
+  h3Variant: 'eros',
+  h3QualityMode: 'draft',
   cameraMotion: '',
   enhanceModel: DEFAULT_PROMPT_LLM,
   steps: 6,
@@ -192,6 +213,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     if (s.aspectRatio) setAspectRatio(s.aspectRatio)
     if (s.fps !== undefined) setFps(s.fps)
     if (s.h3Quality) setH3Quality(s.h3Quality)
+    if (s.h3Variant) setH3Variant(s.h3Variant)
+    if (s.h3QualityMode) setH3QualityMode(s.h3QualityMode)
     if (s.steps !== undefined) setSteps(s.steps)
     if (s.cfg !== undefined) setCfg(s.cfg)
     if (s.seed !== undefined) setSeed(s.seed)
@@ -240,6 +263,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const [resolution, setResolution] = useState('480p')
   const [fps, setFps] = useState(16)
   const [h3Quality, setH3Quality] = useState('0.98')
+  const [h3Variant, setH3Variant] = useState('eros')
+  const [h3QualityMode, setH3QualityMode] = useState('draft')
   const [cameraMotion, setCameraMotion] = useState('')
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [isRefining, setIsRefining] = useState(false)
@@ -582,6 +607,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       resolution,
       fps,
       h3Quality,
+      h3Variant,
+      h3QualityMode,
       cameraMotion,
       steps,
       cfg,
@@ -661,6 +688,8 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
       // official ResolutionSelector formula on the backend). Fixed 24 fps and
       // no CFG / negative prompt — the model only follows the positive prompt.
       reqPayload.megapixels = parseFloat(resolved.h3Quality || h3Quality)
+      reqPayload.model_variant = resolved.h3Variant || h3Variant
+      reqPayload.quality_mode = resolved.h3QualityMode || h3QualityMode
       reqPayload.aspect_ratio = resolved.aspectRatio
       reqPayload.fps = 24
       reqPayload.cfg = 1.0
@@ -1522,6 +1551,59 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
                 </button>
               ))}
             </div>
+          )}
+
+          {/* MiniMax-H3 model + sampling. The variant selector only shows for
+              the cloud worker: the Windows box runs the official weights. */}
+          {isH3Mode(modelType) && (
+            <>
+              <div className="form-group">
+                <label className="grok-section-label">
+                  Model
+                  <InfoTooltip text="Community-finetunes staan als mirror op HuggingFace en worden door de cloud-worker on-demand geladen. Turbo-varianten hebben de distillatie ingebakken (4/8 stappen); non-turbo varianten hebben volle stappen nodig." />
+                </label>
+                {modelType === 'minimax_h3' ? (
+                  <div className="grok-toggle-group">
+                    {H3_VARIANTS.map((v) => (
+                      <button
+                        key={v.value}
+                        className={`grok-toggle-btn ${h3Variant === v.value ? 'active' : ''}`}
+                        onClick={() => setH3Variant(v.value)}
+                        type="button"
+                        title={v.note}
+                      >
+                        {v.label}
+                        <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block' }}>{v.tag}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.8rem', opacity: 0.75, margin: 0 }}>
+                    Lokaal draait altijd de officiële weights — kies de cloud-variant voor Eros/DaSiWa.
+                  </p>
+                )}
+              </div>
+              <div className="form-group">
+                <label className="grok-section-label">
+                  Sampling
+                  <InfoTooltip text="Draft = 4 stappen, Standard = 8 stappen (beide turbo), Full = 20 stappen met de basis-sampler. Non-turbo modellen negeren draft/standard en houden 20 stappen aan." />
+                </label>
+                <div className="grok-toggle-group">
+                  {H3_QUALITY_MODES.map((q) => (
+                    <button
+                      key={q.value}
+                      className={`grok-toggle-btn ${h3QualityMode === q.value ? 'active' : ''}`}
+                      onClick={() => setH3QualityMode(q.value)}
+                      type="button"
+                      title={q.note}
+                    >
+                      {q.label}
+                      <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block' }}>{q.tag}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           {/* Upscale Output */}

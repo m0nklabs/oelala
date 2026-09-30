@@ -1,0 +1,3667 @@
+{
+ "meta": {
+  "source": "h3_porn_scene_randomizer (62).html",
+  "generated_by": "scripts/extract_h3_scene_vocab.py",
+  "purpose": "Structured scene vocabulary and H3 stage/audio/camera knowledge, used by the prompt generator to write concrete, varied scenes.",
+  "dimensions": 46,
+  "options": 772
+ },
+ "vocab": {
+  "cast": {
+   "dimension": "cast",
+   "options": [
+    {
+     "value": "fm",
+     "label": "1F + 1M"
+    },
+    {
+     "value": "ff",
+     "label": "2F"
+    },
+    {
+     "value": "mm",
+     "label": "2M"
+    },
+    {
+     "value": "fmm",
+     "label": "1F + 2M"
+    },
+    {
+     "value": "ffm",
+     "label": "2F + 1M"
+    },
+    {
+     "value": "fff",
+     "label": "3F"
+    },
+    {
+     "value": "mmm",
+     "label": "3M"
+    },
+    {
+     "value": "ffmm",
+     "label": "2F + 2M"
+    },
+    {
+     "value": "soloF",
+     "label": "solo F"
+    },
+    {
+     "value": "soloM",
+     "label": "solo M"
+    },
+    {
+     "value": "custom",
+     "label": "custom anatomy"
+    }
+   ]
+  },
+  "relate": {
+   "dimension": "relationship",
+   "options": [
+    {
+     "value": "off",
+     "label": "off"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "strangers",
+     "label": "strangers"
+    },
+    {
+     "value": "couple",
+     "label": "in a relationship"
+    },
+    {
+     "value": "married",
+     "label": "married"
+    },
+    {
+     "value": "ex",
+     "label": "exes"
+    },
+    {
+     "value": "dad",
+     "label": "adult father + adult daughter"
+    },
+    {
+     "value": "mom",
+     "label": "adult mother + adult son"
+    },
+    {
+     "value": "brother",
+     "label": "adult brother + adult sister"
+    },
+    {
+     "value": "sister",
+     "label": "adult sister + adult brother"
+    }
+   ]
+  },
+  "place": {
+   "dimension": "place",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any place (random)"
+    },
+    {
+     "value": "bedroom",
+     "label": "bedroom, rumpled bed"
+    },
+    {
+     "value": "sheets",
+     "label": "crumpled sheets only"
+    },
+    {
+     "value": "sofa",
+     "label": "living-room sofa"
+    },
+    {
+     "value": "floor",
+     "label": "carpet or rug"
+    },
+    {
+     "value": "wall",
+     "label": "interior wall"
+    },
+    {
+     "value": "door",
+     "label": "closed door"
+    },
+    {
+     "value": "kitchen",
+     "label": "kitchen counter"
+    },
+    {
+     "value": "chair",
+     "label": "armchair or dining chair"
+    },
+    {
+     "value": "stairs",
+     "label": "indoor stair landing"
+    },
+    {
+     "value": "window",
+     "label": "in front of a window"
+    },
+    {
+     "value": "closet",
+     "label": "closet / dressing space"
+    },
+    {
+     "value": "laundry",
+     "label": "laundry room"
+    },
+    {
+     "value": "porch",
+     "label": "back porch, night"
+    },
+    {
+     "value": "hallway",
+     "label": "apartment hallway"
+    },
+    {
+     "value": "bath",
+     "label": "bathroom"
+    },
+    {
+     "value": "shower",
+     "label": "shower, steam"
+    },
+    {
+     "value": "tub",
+     "label": "bathtub edge"
+    },
+    {
+     "value": "sauna",
+     "label": "sauna bench"
+    },
+    {
+     "value": "pool",
+     "label": "pool edge"
+    },
+    {
+     "value": "hot tub",
+     "label": "hot tub rim"
+    },
+    {
+     "value": "desk",
+     "label": "desk"
+    },
+    {
+     "value": "office",
+     "label": "empty office after hours"
+    },
+    {
+     "value": "fitting",
+     "label": "fitting room"
+    },
+    {
+     "value": "gym",
+     "label": "empty gym bench"
+    },
+    {
+     "value": "studio",
+     "label": "seamless studio"
+    },
+    {
+     "value": "loft",
+     "label": "loft mattress"
+    },
+    {
+     "value": "penthouse",
+     "label": "penthouse glass, night"
+    },
+    {
+     "value": "greenroom",
+     "label": "backstage couch"
+    },
+    {
+     "value": "clubbath",
+     "label": "club bathroom stall"
+    },
+    {
+     "value": "diner",
+     "label": "empty diner booth, night"
+    },
+    {
+     "value": "hotel",
+     "label": "hotel bed"
+    },
+    {
+     "value": "motel",
+     "label": "cheap motel"
+    },
+    {
+     "value": "car",
+     "label": "car back seat"
+    },
+    {
+     "value": "frontseat",
+     "label": "car front seat"
+    },
+    {
+     "value": "van",
+     "label": "cargo van"
+    },
+    {
+     "value": "garage",
+     "label": "parked garage"
+    },
+    {
+     "value": "balcony",
+     "label": "private balcony, night"
+    },
+    {
+     "value": "rooftop",
+     "label": "rooftop, night"
+    },
+    {
+     "value": "cabin",
+     "label": "cabin bedroom"
+    },
+    {
+     "value": "tent",
+     "label": "tent interior"
+    },
+    {
+     "value": "woods",
+     "label": "woods"
+    },
+    {
+     "value": "beach",
+     "label": "beach towel, dusk"
+    },
+    {
+     "value": "alley",
+     "label": "alley wall, night"
+    },
+    {
+     "value": "warehouse",
+     "label": "empty warehouse corner"
+    },
+    {
+     "value": "castlebed",
+     "label": "castle bed"
+    },
+    {
+     "value": "stonehall",
+     "label": "stone hall, torches"
+    },
+    {
+     "value": "dungeon",
+     "label": "stone chamber, furs"
+    },
+    {
+     "value": "temple",
+     "label": "temple, candles"
+    },
+    {
+     "value": "throne",
+     "label": "throne dais"
+    },
+    {
+     "value": "tavernloft",
+     "label": "tavern loft"
+    },
+    {
+     "value": "tower",
+     "label": "tower room"
+    },
+    {
+     "value": "faegrove",
+     "label": "glowing grove"
+    },
+    {
+     "value": "icehall",
+     "label": "ice hall"
+    },
+    {
+     "value": "ruins",
+     "label": "overgrown ruins"
+    },
+    {
+     "value": "abandoned",
+     "label": "abandoned house"
+    },
+    {
+     "value": "attic",
+     "label": "attic"
+    },
+    {
+     "value": "basement",
+     "label": "basement, one bulb"
+    },
+    {
+     "value": "chapel",
+     "label": "empty chapel at night"
+    },
+    {
+     "value": "greenhouse",
+     "label": "dead greenhouse"
+    },
+    {
+     "value": "morgue",
+     "label": "empty tiled back room"
+    },
+    {
+     "value": "theater",
+     "label": "unused theater room"
+    },
+    {
+     "value": "graveedge",
+     "label": "cemetery edge at night"
+    },
+    {
+     "value": "flooded",
+     "label": "flooded room"
+    },
+    {
+     "value": "redroom",
+     "label": "red-lit spare room"
+    }
+   ]
+  },
+  "placeLight": {
+   "dimension": "lighting",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "day",
+     "label": "daylight, window"
+    },
+    {
+     "value": "lamps",
+     "label": "warm lamps"
+    },
+    {
+     "value": "dim",
+     "label": "dim, practicals only"
+    },
+    {
+     "value": "neon",
+     "label": "cheap neon / sign spill"
+    },
+    {
+     "value": "night",
+     "label": "night interior"
+    },
+    {
+     "value": "harsh",
+     "label": "harsh overhead"
+    },
+    {
+     "value": "candle",
+     "label": "candles"
+    },
+    {
+     "value": "moon",
+     "label": "moonlight"
+    },
+    {
+     "value": "storm",
+     "label": "storm flashes"
+    },
+    {
+     "value": "red",
+     "label": "red light"
+    }
+   ]
+  },
+  "clothes": {
+   "dimension": "her clothes",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any style (random)"
+    },
+    {
+     "value": "teejeans",
+     "label": "tee and jeans, closed"
+    },
+    {
+     "value": "tankshorts",
+     "label": "tank and shorts"
+    },
+    {
+     "value": "bandtee",
+     "label": "band tee and jeans"
+    },
+    {
+     "value": "tiedtee",
+     "label": "tee knotted at the waist"
+    },
+    {
+     "value": "sundress",
+     "label": "sundress, closed"
+    },
+    {
+     "value": "slipdress",
+     "label": "slip dress, closed"
+    },
+    {
+     "value": "sweater",
+     "label": "knit sweater and pants"
+    },
+    {
+     "value": "offshoulder",
+     "label": "off-shoulder sweater"
+    },
+    {
+     "value": "cardigan",
+     "label": "cardigan and skirt"
+    },
+    {
+     "value": "flannel",
+     "label": "open flannel over a tank"
+    },
+    {
+     "value": "sweats",
+     "label": "sweats / lounge set"
+    },
+    {
+     "value": "satinpj",
+     "label": "satin pajama set"
+    },
+    {
+     "value": "buttoned",
+     "label": "shirt buttoned, slacks"
+    },
+    {
+     "value": "polo",
+     "label": "polo and skirt"
+    },
+    {
+     "value": "denimskirt",
+     "label": "denim skirt and tank"
+    },
+    {
+     "value": "overalls",
+     "label": "overalls, one strap down"
+    },
+    {
+     "value": "jumpsuit",
+     "label": "jumpsuit zipped"
+    },
+    {
+     "value": "raincoat",
+     "label": "raincoat over clothes"
+    },
+    {
+     "value": "bootscoat",
+     "label": "coat and boots, dressed"
+    },
+    {
+     "value": "yoga",
+     "label": "yoga set, closed"
+    },
+    {
+     "value": "aside",
+     "label": "same clothes, pulled aside"
+    },
+    {
+     "value": "half",
+     "label": "same clothes, sex through them"
+    },
+    {
+     "value": "shirtup",
+     "label": "top pulled up, breasts out"
+    },
+    {
+     "value": "dressup",
+     "label": "dress shoved up around the waist"
+    },
+    {
+     "value": "skirtnone",
+     "label": "skirt on, no underwear"
+    },
+    {
+     "value": "jeanszip",
+     "label": "jeans open at the fly"
+    },
+    {
+     "value": "jeansthigh",
+     "label": "jeans to mid-thigh"
+    },
+    {
+     "value": "pantsdown",
+     "label": "pants around the ankles"
+    },
+    {
+     "value": "cargodown",
+     "label": "cargo pants shoved down"
+    },
+    {
+     "value": "unbutton",
+     "label": "shirt unbuttoned, open"
+    },
+    {
+     "value": "rippedtee",
+     "label": "ripped tee"
+    },
+    {
+     "value": "wetshirt",
+     "label": "wet clinging shirt"
+    },
+    {
+     "value": "wetjeans",
+     "label": "wet jeans, fly open"
+    },
+    {
+     "value": "jumpsuitopen",
+     "label": "jumpsuit unzipped to the navel"
+    },
+    {
+     "value": "bikeshorts",
+     "label": "bike shorts pulled aside"
+    },
+    {
+     "value": "hoodie",
+     "label": "hoodie only"
+    },
+    {
+     "value": "hoodiesocks",
+     "label": "hoodie and ankle socks"
+    },
+    {
+     "value": "croptop",
+     "label": "crop top, no bottoms"
+    },
+    {
+     "value": "tankpanty",
+     "label": "tank and panties"
+    },
+    {
+     "value": "night",
+     "label": "sleep shirt ridden up"
+    },
+    {
+     "value": "robe",
+     "label": "open robe"
+    },
+    {
+     "value": "kimono",
+     "label": "open kimono"
+    },
+    {
+     "value": "towel",
+     "label": "towel slipping"
+    },
+    {
+     "value": "socksandshirt",
+     "label": "oversized shirt + socks"
+    },
+    {
+     "value": "boytee",
+     "label": "oversized boyfriend tee"
+    },
+    {
+     "value": "apron",
+     "label": "apron only"
+    },
+    {
+     "value": "socks",
+     "label": "naked except socks"
+    },
+    {
+     "value": "onesie",
+     "label": "onesie unzipped"
+    },
+    {
+     "value": "underwear",
+     "label": "underwear only"
+    },
+    {
+     "value": "bralette",
+     "label": "bralette and boyshorts"
+    },
+    {
+     "value": "lingerie",
+     "label": "lingerie set"
+    },
+    {
+     "value": "longline",
+     "label": "longline bra and panties"
+    },
+    {
+     "value": "sheer",
+     "label": "sheer / see-through"
+    },
+    {
+     "value": "meshtop",
+     "label": "mesh top, underwear under"
+    },
+    {
+     "value": "thongonly",
+     "label": "thong only"
+    },
+    {
+     "value": "crotchless",
+     "label": "crotchless panties"
+    },
+    {
+     "value": "openbra",
+     "label": "open bra, nothing else"
+    },
+    {
+     "value": "cupless",
+     "label": "cupless bra"
+    },
+    {
+     "value": "pasties",
+     "label": "pasties only"
+    },
+    {
+     "value": "stockings",
+     "label": "stockings + garter"
+    },
+    {
+     "value": "thighhighs",
+     "label": "thigh highs only"
+    },
+    {
+     "value": "fishnet",
+     "label": "fishnets"
+    },
+    {
+     "value": "pantyhose",
+     "label": "pantyhose ripped"
+    },
+    {
+     "value": "tights",
+     "label": "opaque tights ripped"
+    },
+    {
+     "value": "bikini",
+     "label": "bikini pulled aside"
+    },
+    {
+     "value": "microkini",
+     "label": "micro bikini"
+    },
+    {
+     "value": "slingkini",
+     "label": "sling bikini"
+    },
+    {
+     "value": "swim",
+     "label": "one-piece peeled off"
+    },
+    {
+     "value": "gym",
+     "label": "gym kit yanked aside"
+    },
+    {
+     "value": "sportsbra",
+     "label": "sports bra and shorts yanked"
+    },
+    {
+     "value": "jersey",
+     "label": "sports jersey, nothing under"
+    },
+    {
+     "value": "jock",
+     "label": "jock / pouch only"
+    },
+    {
+     "value": "office",
+     "label": "blouse open, skirt hiked"
+    },
+    {
+     "value": "suit",
+     "label": "suit trousers open"
+    },
+    {
+     "value": "tie",
+     "label": "shirt and tie loose"
+    },
+    {
+     "value": "scrubs",
+     "label": "scrubs pulled aside"
+    },
+    {
+     "value": "waitapron",
+     "label": "wait dress + apron hiked"
+    },
+    {
+     "value": "coat",
+     "label": "coat on, bare under"
+    },
+    {
+     "value": "winterbare",
+     "label": "winter coat, bare under"
+    },
+    {
+     "value": "minidress",
+     "label": "tiny dress riding up"
+    },
+    {
+     "value": "bodycon",
+     "label": "bodycon dress hiked"
+    },
+    {
+     "value": "cocktaildress",
+     "label": "cocktail dress shoved up"
+    },
+    {
+     "value": "cutoutdress",
+     "label": "cutout dress"
+    },
+    {
+     "value": "heels",
+     "label": "naked except heels"
+    },
+    {
+     "value": "wrapdress",
+     "label": "wrap dress falling open"
+    },
+    {
+     "value": "latex",
+     "label": "latex / wet-look"
+    },
+    {
+     "value": "pvc",
+     "label": "pvc / vinyl"
+    },
+    {
+     "value": "leather",
+     "label": "leather harness"
+    },
+    {
+     "value": "cagebra",
+     "label": "cage / strap harness"
+    },
+    {
+     "value": "corset",
+     "label": "corset, crotch free"
+    },
+    {
+     "value": "bustier",
+     "label": "bustier, no bottoms"
+    },
+    {
+     "value": "bodysuit",
+     "label": "bodysuit pulled aside"
+    },
+    {
+     "value": "bodychain",
+     "label": "body chain only"
+    },
+    {
+     "value": "collaronly",
+     "label": "collar, otherwise bare"
+    },
+    {
+     "value": "chokerheels",
+     "label": "choker and heels only"
+    },
+    {
+     "value": "maid",
+     "label": "adult maid dress hiked"
+    },
+    {
+     "value": "bunny",
+     "label": "bunny suit panel open"
+    },
+    {
+     "value": "silkwrap",
+     "label": "silk wrap slipping off"
+    },
+    {
+     "value": "velvetgown",
+     "label": "velvet gown shoved up"
+    },
+    {
+     "value": "ritualrobe",
+     "label": "ritual robe open"
+    },
+    {
+     "value": "travelercloak",
+     "label": "travel cloak, clothes yanked"
+    },
+    {
+     "value": "chainmail",
+     "label": "ornament mail on skin"
+    },
+    {
+     "value": "elfsilk",
+     "label": "thin otherworld silk"
+    },
+    {
+     "value": "priestess",
+     "label": "priestess wrap"
+    },
+    {
+     "value": "goddess",
+     "label": "goddess drape"
+    },
+    {
+     "value": "sari",
+     "label": "sari slipping"
+    },
+    {
+     "value": "cheongsam",
+     "label": "cheongsam hiked"
+    },
+    {
+     "value": "coinbelt",
+     "label": "coin belt and veil"
+    },
+    {
+     "value": "hospitalgown",
+     "label": "hospital gown, open back"
+    },
+    {
+     "value": "tornnight",
+     "label": "torn nightgown"
+    },
+    {
+     "value": "dirtyshirt",
+     "label": "dirty oversized shirt only"
+    },
+    {
+     "value": "ragged",
+     "label": "ragged clothes hanging off"
+    },
+    {
+     "value": "occult",
+     "label": "black occult robe, open"
+    },
+    {
+     "value": "wetblack",
+     "label": "soaked black fabric"
+    },
+    {
+     "value": "widow",
+     "label": "black dress ripped"
+    },
+    {
+     "value": "off",
+     "label": "already naked"
+    },
+    {
+     "value": "jewelry",
+     "label": "jewelry only"
+    }
+   ]
+  },
+  "manCloth": {
+   "dimension": "his clothes",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "nude",
+     "label": "nude"
+    },
+    {
+     "value": "jeanszip",
+     "label": "jeans open, cock out the fly"
+    },
+    {
+     "value": "jeansdown",
+     "label": "jeans at mid-thigh"
+    },
+    {
+     "value": "pantsdown",
+     "label": "pants at the ankles"
+    },
+    {
+     "value": "underwear",
+     "label": "underwear only"
+    },
+    {
+     "value": "boxers",
+     "label": "boxers, cock out"
+    },
+    {
+     "value": "briefs",
+     "label": "briefs pulled aside"
+    },
+    {
+     "value": "jock",
+     "label": "jock only"
+    },
+    {
+     "value": "tee",
+     "label": "tee still on, bottom off"
+    },
+    {
+     "value": "shirtopen",
+     "label": "shirt open, cock out"
+    },
+    {
+     "value": "suit",
+     "label": "suit trousers open, shirt on"
+    },
+    {
+     "value": "sweats",
+     "label": "sweats shoved down"
+    },
+    {
+     "value": "shorts",
+     "label": "shorts pulled aside"
+    },
+    {
+     "value": "robe",
+     "label": "open robe"
+    },
+    {
+     "value": "towel",
+     "label": "towel slipping"
+    },
+    {
+     "value": "hoodie",
+     "label": "hoodie, cock out"
+    },
+    {
+     "value": "tank",
+     "label": "tank top, bottom off"
+    },
+    {
+     "value": "belt",
+     "label": "belt open, pants shoved"
+    },
+    {
+     "value": "cargo",
+     "label": "cargo pants open"
+    },
+    {
+     "value": "leather",
+     "label": "leather pants open"
+    },
+    {
+     "value": "track",
+     "label": "tracksuit pants down"
+    },
+    {
+     "value": "socks",
+     "label": "socks only"
+    },
+    {
+     "value": "apron",
+     "label": "apron only"
+    },
+    {
+     "value": "raincoat",
+     "label": "raincoat open, bare under"
+    },
+    {
+     "value": "uniform",
+     "label": "uniform shirt, fly open"
+    },
+    {
+     "value": "wettee",
+     "label": "wet tee clinging, bottom off"
+    },
+    {
+     "value": "coat",
+     "label": "coat on, nothing under"
+    },
+    {
+     "value": "tie",
+     "label": "shirt and tie, fly open"
+    }
+   ]
+  },
+  "mood": {
+   "dimension": "mood",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "calm",
+     "label": "calm"
+    },
+    {
+     "value": "shy",
+     "label": "shy"
+    },
+    {
+     "value": "eager",
+     "label": "eager"
+    },
+    {
+     "value": "hungry",
+     "label": "hungry"
+    },
+    {
+     "value": "playful",
+     "label": "playful"
+    },
+    {
+     "value": "needy",
+     "label": "needy"
+    },
+    {
+     "value": "intense",
+     "label": "intense"
+    },
+    {
+     "value": "spaced",
+     "label": "spaced out"
+    },
+    {
+     "value": "tired",
+     "label": "tired / used"
+    },
+    {
+     "value": "sweet",
+     "label": "sweet"
+    },
+    {
+     "value": "brat",
+     "label": "bratty"
+    },
+    {
+     "value": "focused",
+     "label": "focused"
+    },
+    {
+     "value": "drunk",
+     "label": "loose"
+    },
+    {
+     "value": "scared",
+     "label": "nervous"
+    },
+    {
+     "value": "proud",
+     "label": "show-off"
+    },
+    {
+     "value": "angry",
+     "label": "rough heat"
+    },
+    {
+     "value": "sleepy",
+     "label": "sleepy"
+    },
+    {
+     "value": "smug",
+     "label": "smug"
+    },
+    {
+     "value": "lost",
+     "label": "lost in it"
+    },
+    {
+     "value": "teary",
+     "label": "overwhelmed"
+    },
+    {
+     "value": "giggle",
+     "label": "giggle"
+    },
+    {
+     "value": "unwilling",
+     "label": "unwilling"
+    },
+    {
+     "value": "veryunwilling",
+     "label": "very unwilling"
+    }
+   ]
+  },
+  "stylePack": {
+   "dimension": "style pack",
+   "options": [
+    {
+     "value": "off",
+     "label": "off — use category cameras"
+    },
+    {
+     "value": "any",
+     "label": "any pack"
+    },
+    {
+     "value": "home",
+     "label": "homemade handheld"
+    },
+    {
+     "value": "set",
+     "label": "porn set / studio"
+    },
+    {
+     "value": "selfie",
+     "label": "phone selfie"
+    },
+    {
+     "value": "sec",
+     "label": "security cam"
+    },
+    {
+     "value": "webcam",
+     "label": "PC webcam livestream"
+    },
+    {
+     "value": "mirror",
+     "label": "mirror filming"
+    },
+    {
+     "value": "nightcam",
+     "label": "cheap camcorder night"
+    },
+    {
+     "value": "camcorder",
+     "label": "cheap camcorder"
+    },
+    {
+     "value": "vertical",
+     "label": "vertical story / TikTok crop"
+    },
+    {
+     "value": "cinematic",
+     "label": "cinematic coverage"
+    },
+    {
+     "value": "bodycam",
+     "label": "bodycam / chest GoPro"
+    },
+    {
+     "value": "gif",
+     "label": "porn GIF loop"
+    },
+    {
+     "value": "interview",
+     "label": "interview then drop"
+    },
+    {
+     "value": "flash",
+     "label": "club-phone flash"
+    },
+    {
+     "value": "hidden",
+     "label": "hidden cam"
+    }
+   ]
+  },
+  "sceneFormat": {
+   "dimension": "scene format",
+   "options": [
+    {
+     "value": "off",
+     "label": "off — no story wrapper"
+    },
+    {
+     "value": "any",
+     "label": "any format"
+    },
+    {
+     "value": "interview",
+     "label": "interview / casting"
+    },
+    {
+     "value": "bet",
+     "label": "lost bet / dare"
+    },
+    {
+     "value": "stuck",
+     "label": "stuck in this frame"
+    },
+    {
+     "value": "robbed",
+     "label": "robbed / held up"
+    },
+    {
+     "value": "webcam",
+     "label": "paid webcam"
+    },
+    {
+     "value": "walkin",
+     "label": "walk-in"
+    },
+    {
+     "value": "makeup",
+     "label": "make-up sex"
+    },
+    {
+     "value": "firstdeal",
+     "label": "first-time deal"
+    },
+    {
+     "value": "cuck",
+     "label": "someone watches"
+    },
+    {
+     "value": "blackmail",
+     "label": "blackmail pay"
+    }
+   ]
+  },
+  "artifactFix": {
+   "dimension": "artifact fix",
+   "options": [
+    {
+     "value": "off",
+     "label": "off"
+    },
+    {
+     "value": "light",
+     "label": "light — hands and limbs"
+    },
+    {
+     "value": "full",
+     "label": "full — hands, face, melt, blur"
+    }
+   ]
+  },
+  "talkTrack": {
+   "dimension": "dialogue",
+   "options": [
+    {
+     "value": "off",
+     "label": "silence"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "dirty",
+     "label": "dirty talk"
+    },
+    {
+     "value": "protest",
+     "label": "she protests"
+    },
+    {
+     "value": "orders",
+     "label": "he orders"
+    },
+    {
+     "value": "mix",
+     "label": "mix"
+    }
+   ]
+  },
+  "cutMode": {
+   "dimension": "cut mode",
+   "options": [
+    {
+     "value": "flow",
+     "label": "one take — no jump cuts"
+    },
+    {
+     "value": "cuts",
+     "label": "separate shots / jump cuts ok"
+    }
+   ]
+  },
+  "introDo": {
+   "dimension": "intro action",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "look",
+     "label": "looks at camera"
+    },
+    {
+     "value": "wave",
+     "label": "waves"
+    },
+    {
+     "value": "sit",
+     "label": "sits down"
+    },
+    {
+     "value": "walk",
+     "label": "walks in"
+    },
+    {
+     "value": "turn",
+     "label": "turns"
+    },
+    {
+     "value": "talk",
+     "label": "says hi"
+    },
+    {
+     "value": "lean",
+     "label": "leans in"
+    },
+    {
+     "value": "hair",
+     "label": "fixes hair"
+    },
+    {
+     "value": "smile",
+     "label": "smiles, no wave"
+    },
+    {
+     "value": "stand",
+     "label": "just stands"
+    },
+    {
+     "value": "sitedge",
+     "label": "sits on the edge"
+    },
+    {
+     "value": "cross",
+     "label": "crosses her legs"
+    },
+    {
+     "value": "stretch",
+     "label": "stretches"
+    },
+    {
+     "value": "yawn",
+     "label": "yawns, covers mouth"
+    },
+    {
+     "value": "phone",
+     "label": "holds a phone, then looks up"
+    },
+    {
+     "value": "door",
+     "label": "comes in and stops"
+    },
+    {
+     "value": "mirror",
+     "label": "checks herself in a mirror"
+    },
+    {
+     "value": "fixcloth",
+     "label": "straightens her clothes"
+    },
+    {
+     "value": "sitclose",
+     "label": "sits closer to him"
+    },
+    {
+     "value": "nod",
+     "label": "nods at camera"
+    },
+    {
+     "value": "point",
+     "label": "points at something off frame"
+    },
+    {
+     "value": "drink",
+     "label": "takes a sip, then looks up"
+    },
+    {
+     "value": "wait",
+     "label": "waits, shifts her weight"
+    },
+    {
+     "value": "kneelsoft",
+     "label": "kneels on the surface, still SFW"
+    },
+    {
+     "value": "tiehair",
+     "label": "ties her hair back"
+    },
+    {
+     "value": "kickshoes",
+     "label": "kicks off shoes"
+    },
+    {
+     "value": "sitfloor",
+     "label": "sits on the surface"
+    },
+    {
+     "value": "leanwall",
+     "label": "leans on the backdrop"
+    },
+    {
+     "value": "lookhim",
+     "label": "looks at him first"
+    },
+    {
+     "value": "shrug",
+     "label": "shrugs, then smiles"
+    },
+    {
+     "value": "adjustsit",
+     "label": "scoots back and sits proper"
+    },
+    {
+     "value": "foldhands",
+     "label": "folds her hands in her lap"
+    },
+    {
+     "value": "rubeyes",
+     "label": "rubs her eyes, then looks up"
+    },
+    {
+     "value": "comein",
+     "label": "comes in smiling"
+    },
+    {
+     "value": "takehand",
+     "label": "takes his hand"
+    },
+    {
+     "value": "sitwith",
+     "label": "sits with him on purpose"
+    },
+    {
+     "value": "leanhim",
+     "label": "leans on him, SFW"
+    },
+    {
+     "value": "kisscheek",
+     "label": "kisses his cheek, SFW"
+    },
+    {
+     "value": "callhim",
+     "label": "calls him over"
+    },
+    {
+     "value": "patseat",
+     "label": "pats the seat for him"
+    },
+    {
+     "value": "hugbrief",
+     "label": "short hug, then stays close"
+    },
+    {
+     "value": "turnaway",
+     "label": "turns her face away"
+    },
+    {
+     "value": "stepback",
+     "label": "steps back from him"
+    },
+    {
+     "value": "pushhand",
+     "label": "pushes his hand off"
+    },
+    {
+     "value": "armsx",
+     "label": "crosses her arms"
+    },
+    {
+     "value": "lookdoor",
+     "label": "looks toward the way out"
+    },
+    {
+     "value": "sitfar",
+     "label": "sits far from him"
+    },
+    {
+     "value": "shakehead",
+     "label": "shakes her head no"
+    },
+    {
+     "value": "holdcloth",
+     "label": "holds her clothes closed"
+    },
+    {
+     "value": "glare",
+     "label": "glares at him"
+    },
+    {
+     "value": "scoff",
+     "label": "scoffs"
+    },
+    {
+     "value": "snaptalk",
+     "label": "snaps at him"
+    },
+    {
+     "value": "argue",
+     "label": "argues, points at him"
+    },
+    {
+     "value": "shove",
+     "label": "shoves his chest"
+    },
+    {
+     "value": "slaphand",
+     "label": "slaps his hand away"
+    },
+    {
+     "value": "staredown",
+     "label": "stares him down"
+    },
+    {
+     "value": "block",
+     "label": "blocks his path"
+    },
+    {
+     "value": "turnback",
+     "label": "turns her back on him"
+    },
+    {
+     "value": "refusesit",
+     "label": "refuses to sit"
+    },
+    {
+     "value": "finger",
+     "label": "points him off"
+    },
+    {
+     "value": "jaw",
+     "label": "sets her jaw, hostile"
+    }
+   ]
+  },
+  "teaseDo": {
+   "dimension": "tease action",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "strap",
+     "label": "pulls a strap"
+    },
+    {
+     "value": "hem",
+     "label": "lifts a hem"
+    },
+    {
+     "value": "turn",
+     "label": "turns, shows back"
+    },
+    {
+     "value": "lift",
+     "label": "lifts the top"
+    },
+    {
+     "value": "bend",
+     "label": "bends, looks back"
+    },
+    {
+     "value": "touch",
+     "label": "hands over clothes"
+    },
+    {
+     "value": "unzip",
+     "label": "opens a zip / button"
+    },
+    {
+     "value": "thigh",
+     "label": "runs a hand on a thigh"
+    },
+    {
+     "value": "neck",
+     "label": "touches own neck / chest"
+    },
+    {
+     "value": "sitopen",
+     "label": "sits, opens knees"
+    },
+    {
+     "value": "flash",
+     "label": "quick chest flash"
+    },
+    {
+     "value": "waist",
+     "label": "thumbs the waistband"
+    },
+    {
+     "value": "asidep",
+     "label": "pulls fabric aside, no sex"
+    },
+    {
+     "value": "hips",
+     "label": "rolls her hips"
+    },
+    {
+     "value": "grind",
+     "label": "grinds clothed"
+    },
+    {
+     "value": "lap",
+     "label": "sits on his lap, clothed"
+    },
+    {
+     "value": "crawl",
+     "label": "crawls closer"
+    },
+    {
+     "value": "lieback",
+     "label": "lies back, knees up"
+    },
+    {
+     "value": "squeeze",
+     "label": "squeezes her breasts over clothes"
+    },
+    {
+     "value": "ass",
+     "label": "shows her ass, looks back"
+    },
+    {
+     "value": "licklips",
+     "label": "licks her lips"
+    },
+    {
+     "value": "hairtoss",
+     "label": "hair toss, chest forward"
+    },
+    {
+     "value": "pullhim",
+     "label": "pulls him in by the shirt"
+    },
+    {
+     "value": "trace",
+     "label": "traces his zipper, no oral"
+    },
+    {
+     "value": "kissneck",
+     "label": "kisses his neck, no sex"
+    },
+    {
+     "value": "ear",
+     "label": "mouth at his ear, no sex"
+    },
+    {
+     "value": "straddle",
+     "label": "straddles him, clothes on"
+    },
+    {
+     "value": "pushdown",
+     "label": "pushes him back onto the surface"
+    },
+    {
+     "value": "guidehand",
+     "label": "puts his hand on her waist"
+    },
+    {
+     "value": "bitelip",
+     "label": "bites her lip"
+    },
+    {
+     "value": "skirtup",
+     "label": "hikes her skirt and holds it"
+    },
+    {
+     "value": "braoff",
+     "label": "slides a strap, bra still on"
+    },
+    {
+     "value": "peek",
+     "label": "peeks under her own top"
+    },
+    {
+     "value": "spin",
+     "label": "slow spin, clothes on"
+    },
+    {
+     "value": "onallfours",
+     "label": "on all fours, looks back"
+    },
+    {
+     "value": "foot",
+     "label": "places a foot on his thigh"
+    },
+    {
+     "value": "undobelt",
+     "label": "undoes his belt, stops"
+    },
+    {
+     "value": "shirtuphim",
+     "label": "lifts his shirt, no oral"
+    },
+    {
+     "value": "closehips",
+     "label": "presses hips to him, clothed"
+    },
+    {
+     "value": "whisper",
+     "label": "leans in like she whispers"
+    },
+    {
+     "value": "mirrorpose",
+     "label": "poses for a mirror, teasing"
+    },
+    {
+     "value": "hippop",
+     "label": "pops one hip, holds"
+    },
+    {
+     "value": "slowundress",
+     "label": "takes one piece off, stops"
+    },
+    {
+     "value": "braopen",
+     "label": "opens her bra, keeps it on"
+    },
+    {
+     "value": "pantypeel",
+     "label": "peels underwear down an inch"
+    },
+    {
+     "value": "wetfinger",
+     "label": "wets a finger, traces her lip"
+    },
+    {
+     "value": "sitonthigh",
+     "label": "sits on his thigh, clothed"
+    },
+    {
+     "value": "handswalk",
+     "label": "walks her hands up his chest"
+    },
+    {
+     "value": "lookbackcrawl",
+     "label": "crawls away, looks back"
+    },
+    {
+     "value": "rubclothed",
+     "label": "rubs herself over clothes"
+    },
+    {
+     "value": "showpanties",
+     "label": "lifts hem and shows underwear"
+    },
+    {
+     "value": "kneesqueeze",
+     "label": "squeezes her knees together, then opens"
+    },
+    {
+     "value": "startundress",
+     "label": "starts undressing for him"
+    },
+    {
+     "value": "puthishand",
+     "label": "puts his hand on her chest"
+    },
+    {
+     "value": "openforhim",
+     "label": "opens her knees for him"
+    },
+    {
+     "value": "pullhip",
+     "label": "pulls his hips in, clothed"
+    },
+    {
+     "value": "showhim",
+     "label": "shows him her body on purpose"
+    },
+    {
+     "value": "kissdown",
+     "label": "kisses down his chest, stops"
+    },
+    {
+     "value": "climbhim",
+     "label": "climbs onto him, clothes on"
+    },
+    {
+     "value": "beglook",
+     "label": "looks at him like she wants it"
+    },
+    {
+     "value": "coverup",
+     "label": "covers herself, he keeps looking"
+    },
+    {
+     "value": "holdhem",
+     "label": "holds her hem down"
+    },
+    {
+     "value": "twistaway",
+     "label": "twists her body away"
+    },
+    {
+     "value": "pushchest",
+     "label": "pushes on his chest"
+    },
+    {
+     "value": "clampknees",
+     "label": "clamps her knees shut"
+    },
+    {
+     "value": "fixstrap",
+     "label": "puts a strap back on"
+    },
+    {
+     "value": "turnface",
+     "label": "turns her face away while he teases"
+    },
+    {
+     "value": "grabwrist",
+     "label": "grabs his wrist to stop a hand"
+    }
+   ]
+  },
+  "hjPos": {
+   "dimension": "handjob position",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "kneel",
+     "label": "kneeling at his hips"
+    },
+    {
+     "value": "lap",
+     "label": "beside him, hand in his lap"
+    },
+    {
+     "value": "sit",
+     "label": "she sits, he stands"
+    },
+    {
+     "value": "side",
+     "label": "at his hip from the side"
+    },
+    {
+     "value": "himlie",
+     "label": "he lies back, she over his hips"
+    },
+    {
+     "value": "stand",
+     "label": "both standing"
+    },
+    {
+     "value": "between",
+     "label": "between his knees"
+    },
+    {
+     "value": "proneglute",
+     "label": "on her stomach, glutes visible"
+    },
+    {
+     "value": "behind",
+     "label": "behind him, reach around"
+    },
+    {
+     "value": "spoon",
+     "label": "spooned, hand back on him"
+    },
+    {
+     "value": "sitspread",
+     "label": "he sits, she between his knees"
+    },
+    {
+     "value": "shestand",
+     "label": "he sits, she stands over his lap"
+    },
+    {
+     "value": "bothkneel",
+     "label": "both kneeling"
+    },
+    {
+     "value": "shelie",
+     "label": "she on her back, he kneels over her"
+    },
+    {
+     "value": "thighsit",
+     "label": "she sits on his thighs, strokes him"
+    },
+    {
+     "value": "fly",
+     "label": "through his open fly"
+    },
+    {
+     "value": "under",
+     "label": "from below, he standing"
+    },
+    {
+     "value": "overhand",
+     "label": "overhand stroke, she facing him"
+    }
+   ]
+  },
+  "hjGrip": {
+   "dimension": "handjob grip",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "one",
+     "label": "one fist"
+    },
+    {
+     "value": "two",
+     "label": "two hands"
+    },
+    {
+     "value": "twist",
+     "label": "twist on the upstroke"
+    },
+    {
+     "value": "head",
+     "label": "focus on the head"
+    },
+    {
+     "value": "balls",
+     "label": "shaft and balls"
+    }
+   ]
+  },
+  "bjPos": {
+   "dimension": "blowjob position",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "kneel",
+     "label": "kneeling"
+    },
+    {
+     "value": "edge",
+     "label": "on the edge"
+    },
+    {
+     "value": "stand",
+     "label": "standing / kneeling"
+    },
+    {
+     "value": "lap",
+     "label": "head in the lap"
+    },
+    {
+     "value": "floor",
+     "label": "on the floor between feet"
+    },
+    {
+     "value": "side",
+     "label": "side of the hip"
+    },
+    {
+     "value": "lyingback",
+     "label": "she on her back, head at his hips"
+    },
+    {
+     "value": "edgehead",
+     "label": "her head off the surface edge"
+    },
+    {
+     "value": "himlie",
+     "label": "he lies back, she over his hips"
+    },
+    {
+     "value": "sitbetween",
+     "label": "he sits, she between his knees"
+    },
+    {
+     "value": "wall",
+     "label": "he against the backdrop, she kneels"
+    },
+    {
+     "value": "bededge",
+     "label": "he at the surface edge, she kneels"
+    },
+    {
+     "value": "allfours",
+     "label": "she on all fours, mouth to him"
+    },
+    {
+     "value": "squat",
+     "label": "she squats in front of him"
+    },
+    {
+     "value": "sidelie",
+     "label": "both on their sides"
+    },
+    {
+     "value": "sixty",
+     "label": "69, her mouth on him only"
+    },
+    {
+     "value": "under",
+     "label": "she under him, he stands over"
+    },
+    {
+     "value": "chair",
+     "label": "he sits, she between his knees"
+    },
+    {
+     "value": "desk",
+     "label": "he sits at a surface, she under it"
+    },
+    {
+     "value": "coucharm",
+     "label": "she leans over a surface edge"
+    },
+    {
+     "value": "table",
+     "label": "she sits on a surface edge, he stands"
+    },
+    {
+     "value": "reverse",
+     "label": "she faces away, mouth back on him"
+    },
+    {
+     "value": "pronehim",
+     "label": "he on his stomach, she from the side"
+    },
+    {
+     "value": "liftleg",
+     "label": "one of her legs lifted, she kneels"
+    },
+    {
+     "value": "doublehand",
+     "label": "she kneels, both hands on the shaft"
+    },
+    {
+     "value": "betweenlegs",
+     "label": "he sits wide, she between his legs on the floor"
+    },
+    {
+     "value": "standing69",
+     "label": "he lifts her, her mouth on him"
+    },
+    {
+     "value": "proneglute",
+     "label": "on her stomach, glutes visible"
+    }
+   ]
+  },
+  "bjDepth": {
+   "dimension": "blowjob depth",
+   "options": [
+    {
+     "value": "lick",
+     "label": "licks only"
+    },
+    {
+     "value": "lips",
+     "label": "lips on the head"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "half",
+     "label": "half shaft"
+    },
+    {
+     "value": "full",
+     "label": "full stroke of the mouth"
+    },
+    {
+     "value": "deep",
+     "label": "deep hold"
+    }
+   ]
+  },
+  "brKind": {
+   "dimension": "breast action",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "titfuck",
+     "label": "between breasts"
+    },
+    {
+     "value": "worship",
+     "label": "mouth on breasts"
+    },
+    {
+     "value": "squeeze",
+     "label": "hands squeeze"
+    },
+    {
+     "value": "lick",
+     "label": "tongue on a nipple"
+    },
+    {
+     "value": "reverse",
+     "label": "she leans, he fucks down the cleavage"
+    },
+    {
+     "value": "under",
+     "label": "cock under her breasts, she presses down"
+    },
+    {
+     "value": "spit",
+     "label": "she spits in the cleavage, then slides"
+    },
+    {
+     "value": "slaphead",
+     "label": "head of his cock taps her sternum"
+    },
+    {
+     "value": "presswalk",
+     "label": "she walks her breasts up and down the shaft"
+    },
+    {
+     "value": "nipplesuck",
+     "label": "he sucks one nipple, hand on the other"
+    },
+    {
+     "value": "facepress",
+     "label": "he presses his face between her breasts"
+    },
+    {
+     "value": "oil",
+     "label": "slick breasts, slow slide, no oral"
+    },
+    {
+     "value": "holdout",
+     "label": "she holds her breasts out toward him"
+    },
+    {
+     "value": "sideboob",
+     "label": "side-on, shaft along one breast"
+    }
+   ]
+  },
+  "sxPos": {
+   "dimension": "sex position",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "missionary",
+     "label": "missionary"
+    },
+    {
+     "value": "doggy",
+     "label": "doggy"
+    },
+    {
+     "value": "cowgirl",
+     "label": "cowgirl"
+    },
+    {
+     "value": "standing",
+     "label": "standing"
+    },
+    {
+     "value": "side",
+     "label": "side / spoon"
+    },
+    {
+     "value": "seated",
+     "label": "seated / lap"
+    },
+    {
+     "value": "folded",
+     "label": "folded / press"
+    },
+    {
+     "value": "prone",
+     "label": "prone / flat"
+    }
+   ]
+  },
+  "sxKind": {
+   "dimension": "sex kind",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "vaginal",
+     "label": "vaginal"
+    },
+    {
+     "value": "anal",
+     "label": "anal"
+    }
+   ]
+  },
+  "sxBounce": {
+   "dimension": "bounce",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "none",
+     "label": "almost still"
+    },
+    {
+     "value": "small",
+     "label": "small bounce"
+    },
+    {
+     "value": "medium",
+     "label": "medium bounce"
+    },
+    {
+     "value": "hard",
+     "label": "hard bounce"
+    }
+   ]
+  },
+  "cumWhere": {
+   "dimension": "cum target",
+   "options": [
+    {
+     "value": "undef",
+     "label": "undefined — action only, no pose"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "mouth",
+     "label": "in her mouth"
+    },
+    {
+     "value": "swallow",
+     "label": "she swallows"
+    },
+    {
+     "value": "tongue",
+     "label": "on her tongue"
+    },
+    {
+     "value": "face",
+     "label": "on her face"
+    },
+    {
+     "value": "lips",
+     "label": "on her lips"
+    },
+    {
+     "value": "breasts",
+     "label": "on her breasts"
+    },
+    {
+     "value": "stomach",
+     "label": "on her stomach"
+    },
+    {
+     "value": "back",
+     "label": "on her back"
+    },
+    {
+     "value": "ass",
+     "label": "on her ass"
+    },
+    {
+     "value": "hand",
+     "label": "in her hand"
+    },
+    {
+     "value": "inside",
+     "label": "inside her"
+    },
+    {
+     "value": "pullout",
+     "label": "pull out then on her"
+    }
+   ]
+  },
+  "cuFinish": {
+   "dimension": "cum finish",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "pulse",
+     "label": "pulse / hitch"
+    },
+    {
+     "value": "leak",
+     "label": "slow leak / ooze"
+    },
+    {
+     "value": "dribble",
+     "label": "dribble / beads"
+    },
+    {
+     "value": "ropes",
+     "label": "thick ropes"
+    },
+    {
+     "value": "spray",
+     "label": "spray / burst"
+    }
+   ]
+  },
+  "cuQty": {
+   "dimension": "cum amount",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "drops",
+     "label": "small drops"
+    },
+    {
+     "value": "little",
+     "label": "a little"
+    },
+    {
+     "value": "normal",
+     "label": "normal load"
+    },
+    {
+     "value": "heavy",
+     "label": "heavy load"
+    },
+    {
+     "value": "huge",
+     "label": "huge load"
+    },
+    {
+     "value": "gallons",
+     "label": "gallons of cum"
+    }
+   ]
+  },
+  "distAll": {
+   "dimension": "camera distance",
+   "options": [
+    {
+     "value": "off",
+     "label": "off — use each block"
+    },
+    {
+     "value": "any",
+     "label": "any (all distances)"
+    },
+    {
+     "value": "ecu",
+     "label": "extreme close-up"
+    },
+    {
+     "value": "cu",
+     "label": "close-up"
+    },
+    {
+     "value": "mcu",
+     "label": "medium close-up"
+    },
+    {
+     "value": "ms",
+     "label": "medium"
+    },
+    {
+     "value": "loose",
+     "label": "loose / full body"
+    },
+    {
+     "value": "macro",
+     "label": "detail / macro"
+    }
+   ]
+  },
+  "heightAll": {
+   "dimension": "camera height",
+   "options": [
+    {
+     "value": "off",
+     "label": "off — use each block"
+    },
+    {
+     "value": "any",
+     "label": "any (all heights)"
+    },
+    {
+     "value": "floor",
+     "label": "floor"
+    },
+    {
+     "value": "hip",
+     "label": "hip"
+    },
+    {
+     "value": "chest",
+     "label": "chest"
+    },
+    {
+     "value": "eye",
+     "label": "eye"
+    },
+    {
+     "value": "above",
+     "label": "above"
+    }
+   ]
+  },
+  "inAngle": {
+   "dimension": "camera angle",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "front",
+     "label": "front"
+    },
+    {
+     "value": "profile",
+     "label": "profile"
+    },
+    {
+     "value": "3q",
+     "label": "three-quarter"
+    },
+    {
+     "value": "3qrear",
+     "label": "three-quarter rear"
+    },
+    {
+     "value": "behind",
+     "label": "behind"
+    },
+    {
+     "value": "ots",
+     "label": "over the shoulder"
+    },
+    {
+     "value": "ots2",
+     "label": "over her shoulder"
+    },
+    {
+     "value": "between",
+     "label": "between the bodies"
+    },
+    {
+     "value": "lowup",
+     "label": "low looking up"
+    },
+    {
+     "value": "highdown",
+     "label": "high looking down"
+    },
+    {
+     "value": "worm",
+     "label": "worm's-eye from below"
+    },
+    {
+     "value": "bird",
+     "label": "bird's-eye / top-down"
+    },
+    {
+     "value": "hip",
+     "label": "hip-level side"
+    },
+    {
+     "value": "dutch",
+     "label": "dutch / slight tilt"
+    },
+    {
+     "value": "throughlegs",
+     "label": "through the legs"
+    },
+    {
+     "value": "pov",
+     "label": "point of view"
+    }
+   ]
+  },
+  "inMove": {
+   "dimension": "camera move",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "static",
+     "label": "locked static"
+    },
+    {
+     "value": "push",
+     "label": "slow push-in"
+    },
+    {
+     "value": "pull",
+     "label": "slow pull-out"
+    },
+    {
+     "value": "arc",
+     "label": "slow arc"
+    },
+    {
+     "value": "orbit",
+     "label": "orbit around them"
+    },
+    {
+     "value": "pan",
+     "label": "slow pan"
+    },
+    {
+     "value": "tilt",
+     "label": "tilt face to body"
+    },
+    {
+     "value": "truck",
+     "label": "truck left / right"
+    },
+    {
+     "value": "boom",
+     "label": "boom up / down"
+    },
+    {
+     "value": "rise",
+     "label": "rise along the body"
+    },
+    {
+     "value": "drop",
+     "label": "drop along the body"
+    },
+    {
+     "value": "rack",
+     "label": "rack focus"
+    },
+    {
+     "value": "follow",
+     "label": "follow the motion"
+    },
+    {
+     "value": "creep",
+     "label": "creep in"
+    },
+    {
+     "value": "peek",
+     "label": "peek from behind a body"
+    },
+    {
+     "value": "hand",
+     "label": "handheld"
+    },
+    {
+     "value": "shake",
+     "label": "dirty handheld shake"
+    }
+   ]
+  },
+  "inSpeed": {
+   "dimension": "camera speed",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "vslow",
+     "label": "very slow"
+    },
+    {
+     "value": "slow",
+     "label": "slow"
+    },
+    {
+     "value": "medium",
+     "label": "medium"
+    },
+    {
+     "value": "fast",
+     "label": "fast"
+    },
+    {
+     "value": "vfast",
+     "label": "very fast"
+    },
+    {
+     "value": "absurd",
+     "label": "absurdly fast"
+    }
+   ]
+  },
+  "inFace": {
+   "dimension": "face",
+   "options": [
+    {
+     "value": "off",
+     "label": "off"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "cold",
+     "label": "cold / shut"
+    },
+    {
+     "value": "flat",
+     "label": "almost nothing"
+    },
+    {
+     "value": "held",
+     "label": "holding it in"
+    },
+    {
+     "value": "warm",
+     "label": "soft moan"
+    },
+    {
+     "value": "moan",
+     "label": "mouth open, moan"
+    },
+    {
+     "value": "loud",
+     "label": "loud moan"
+    },
+    {
+     "value": "gasp",
+     "label": "gasping"
+    },
+    {
+     "value": "cryout",
+     "label": "crying out"
+    },
+    {
+     "value": "scream",
+     "label": "screaming"
+    },
+    {
+     "value": "orgasm",
+     "label": "orgasming"
+    }
+   ]
+  },
+  "inLook": {
+   "dimension": "look",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "cam",
+     "label": "at camera"
+    },
+    {
+     "value": "him",
+     "label": "at him"
+    },
+    {
+     "value": "down",
+     "label": "down"
+    },
+    {
+     "value": "shut",
+     "label": "eyes shut"
+    },
+    {
+     "value": "side",
+     "label": "to the side"
+    },
+    {
+     "value": "body",
+     "label": "at her body"
+    }
+   ]
+  },
+  "inLH": {
+   "dimension": "left hand",
+   "options": [
+    {
+     "value": "off",
+     "label": "not present"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "none",
+     "label": "at his side"
+    },
+    {
+     "value": "hip",
+     "label": "on her hip"
+    },
+    {
+     "value": "waist",
+     "label": "on her waist"
+    },
+    {
+     "value": "ass",
+     "label": "on her ass"
+    },
+    {
+     "value": "breast",
+     "label": "on her breast"
+    },
+    {
+     "value": "thigh",
+     "label": "on her thigh"
+    },
+    {
+     "value": "head",
+     "label": "on her head"
+    },
+    {
+     "value": "hair",
+     "label": "in her hair"
+    },
+    {
+     "value": "face",
+     "label": "on her jaw"
+    },
+    {
+     "value": "shoulder",
+     "label": "on her shoulder"
+    },
+    {
+     "value": "back",
+     "label": "on her back"
+    },
+    {
+     "value": "cock",
+     "label": "on his cock"
+    },
+    {
+     "value": "surface",
+     "label": "on the surface"
+    }
+   ]
+  },
+  "inRH": {
+   "dimension": "right hand",
+   "options": [
+    {
+     "value": "off",
+     "label": "not present"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "none",
+     "label": "at his side"
+    },
+    {
+     "value": "hip",
+     "label": "on her hip"
+    },
+    {
+     "value": "waist",
+     "label": "on her waist"
+    },
+    {
+     "value": "ass",
+     "label": "on her ass"
+    },
+    {
+     "value": "breast",
+     "label": "on her breast"
+    },
+    {
+     "value": "thigh",
+     "label": "on her thigh"
+    },
+    {
+     "value": "head",
+     "label": "on her head"
+    },
+    {
+     "value": "hair",
+     "label": "in her hair"
+    },
+    {
+     "value": "face",
+     "label": "on her jaw"
+    },
+    {
+     "value": "shoulder",
+     "label": "on her shoulder"
+    },
+    {
+     "value": "back",
+     "label": "on her back"
+    },
+    {
+     "value": "cock",
+     "label": "on his cock"
+    },
+    {
+     "value": "surface",
+     "label": "on the surface"
+    }
+   ]
+  },
+  "fAge": {
+   "dimension": "her age",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "18",
+     "label": "18"
+    },
+    {
+     "value": "20",
+     "label": "early 20s"
+    },
+    {
+     "value": "25",
+     "label": "mid 20s"
+    },
+    {
+     "value": "30",
+     "label": "30s"
+    },
+    {
+     "value": "40",
+     "label": "40s"
+    },
+    {
+     "value": "50",
+     "label": "50s"
+    },
+    {
+     "value": "60",
+     "label": "60s"
+    },
+    {
+     "value": "70",
+     "label": "70s"
+    },
+    {
+     "value": "80",
+     "label": "80s"
+    },
+    {
+     "value": "90",
+     "label": "90, granny"
+    }
+   ]
+  },
+  "fFrame": {
+   "dimension": "her frame",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "petite",
+     "label": "very petite"
+    },
+    {
+     "value": "slim",
+     "label": "slim"
+    },
+    {
+     "value": "average",
+     "label": "average"
+    },
+    {
+     "value": "thick",
+     "label": "thick"
+    },
+    {
+     "value": "fat",
+     "label": "fat"
+    },
+    {
+     "value": "obese",
+     "label": "obese / heavy"
+    }
+   ]
+  },
+  "fHeight": {
+   "dimension": "her height",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "tiny",
+     "label": "very small / short"
+    },
+    {
+     "value": "short",
+     "label": "short"
+    },
+    {
+     "value": "average",
+     "label": "average height"
+    },
+    {
+     "value": "tall",
+     "label": "tall"
+    },
+    {
+     "value": "giant",
+     "label": "giant"
+    }
+   ]
+  },
+  "fBreast": {
+   "dimension": "her breasts",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "flat",
+     "label": "very small / flat"
+    },
+    {
+     "value": "small",
+     "label": "small"
+    },
+    {
+     "value": "medium",
+     "label": "medium"
+    },
+    {
+     "value": "large",
+     "label": "large"
+    },
+    {
+     "value": "huge",
+     "label": "huge"
+    }
+   ]
+  },
+  "fAss": {
+   "dimension": "her ass",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "flat",
+     "label": "flat"
+    },
+    {
+     "value": "small",
+     "label": "small"
+    },
+    {
+     "value": "round",
+     "label": "round"
+    },
+    {
+     "value": "big",
+     "label": "big"
+    },
+    {
+     "value": "huge",
+     "label": "huge"
+    }
+   ]
+  },
+  "manAge": {
+   "dimension": "his age",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "18",
+     "label": "18"
+    },
+    {
+     "value": "20",
+     "label": "early 20s"
+    },
+    {
+     "value": "25",
+     "label": "mid 20s"
+    },
+    {
+     "value": "30",
+     "label": "30s"
+    },
+    {
+     "value": "40",
+     "label": "40s"
+    },
+    {
+     "value": "50",
+     "label": "50s"
+    },
+    {
+     "value": "60",
+     "label": "60s"
+    },
+    {
+     "value": "70",
+     "label": "70s"
+    },
+    {
+     "value": "80",
+     "label": "80s"
+    },
+    {
+     "value": "90",
+     "label": "90, grandpa"
+    }
+   ]
+  },
+  "manBody": {
+   "dimension": "his body",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "skinny",
+     "label": "skinny, thin frame"
+    },
+    {
+     "value": "average",
+     "label": "average build"
+    },
+    {
+     "value": "fat",
+     "label": "fat, soft belly"
+    },
+    {
+     "value": "obese",
+     "label": "obese, heavy belly"
+    },
+    {
+     "value": "muscular",
+     "label": "muscular, defined"
+    },
+    {
+     "value": "stocky",
+     "label": "stocky, thick"
+    }
+   ]
+  },
+  "manLook": {
+   "dimension": "his look",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "normal",
+     "label": "normal"
+    },
+    {
+     "value": "ugly",
+     "label": "ugly"
+    },
+    {
+     "value": "handsome",
+     "label": "handsome"
+    },
+    {
+     "value": "rough",
+     "label": "rough face"
+    }
+   ]
+  },
+  "manMood": {
+   "dimension": "his mood",
+   "options": [
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "calm",
+     "label": "calm"
+    },
+    {
+     "value": "hungry",
+     "label": "hungry"
+    },
+    {
+     "value": "rough",
+     "label": "rough"
+    },
+    {
+     "value": "gentle",
+     "label": "gentle"
+    },
+    {
+     "value": "smug",
+     "label": "smug"
+    },
+    {
+     "value": "focused",
+     "label": "focused"
+    },
+    {
+     "value": "eager",
+     "label": "eager"
+    }
+   ]
+  },
+  "manSkin": {
+   "dimension": "his skin",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "pale",
+     "label": "pale"
+    },
+    {
+     "value": "fair",
+     "label": "fair"
+    },
+    {
+     "value": "light",
+     "label": "light"
+    },
+    {
+     "value": "olive",
+     "label": "olive"
+    },
+    {
+     "value": "tan",
+     "label": "tan"
+    },
+    {
+     "value": "brown",
+     "label": "brown"
+    },
+    {
+     "value": "dark",
+     "label": "dark"
+    },
+    {
+     "value": "deep",
+     "label": "deep dark"
+    }
+   ]
+  },
+  "manLen": {
+   "dimension": "his length",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "tiny",
+     "label": "very tiny"
+    },
+    {
+     "value": "short",
+     "label": "short"
+    },
+    {
+     "value": "average",
+     "label": "average"
+    },
+    {
+     "value": "long",
+     "label": "long"
+    },
+    {
+     "value": "verylong",
+     "label": "very long"
+    }
+   ]
+  },
+  "manGirth": {
+   "dimension": "his girth",
+   "options": [
+    {
+     "value": "asref",
+     "label": "like the reference"
+    },
+    {
+     "value": "any",
+     "label": "any"
+    },
+    {
+     "value": "thin",
+     "label": "very thin"
+    },
+    {
+     "value": "slim",
+     "label": "slim"
+    },
+    {
+     "value": "average",
+     "label": "average"
+    },
+    {
+     "value": "thick",
+     "label": "thick"
+    },
+    {
+     "value": "enormous",
+     "label": "enormous"
+    }
+   ]
+  }
+ },
+ "stage_order": [
+  "intro",
+  "tease",
+  "hj",
+  "bj",
+  "breast",
+  "sex",
+  "cum"
+ ],
+ "audio_stage": {
+  "intro": "Quiet ambient. Soft breath. Light cloth rustle when a hand moves. No sex wet. No mouths eating.",
+  "tease": "Quiet ambient. Fabric slide. A small exhale. Skin on cloth. No oral wet. No chew.",
+  "hj": "Close-mic hand on cock: skin slide, a wet fist, a soft stroke tick. Breath. No mouth on food. No chew. No crunch.",
+  "bj": "Close-mic blowjob foley only: wet lips sealing on skin, saliva strings, a soft suction release when her mouth slides, air through her nose, a muffled hum. The wet is spit on skin, not food. No chewing. No crunch. No biting. No eating. No chips. No jaw grinding. Teeth stay still except to hold a seal.",
+  "breast": "Skin on skin. Soft breast-flesh slide. Her breath. A faint wet smear, not a mouth on food.",
+  "sex": "Skin slap at the hips. Wet of a hole, not a mouth eating. Two breath patterns. A moan on the thrust. No chew. No crunch.",
+  "cum": "A held breath, then wet pulses and drip on skin. If her mouth is on him: saliva and swallow of fluid, not food. No chew. No crunch. Cum sound is a wet pulse and drip, not a gunshot, not a 50 cal."
+ },
+ "styles": {
+  "home": {
+   "label": "homemade handheld",
+   "d": "mcu",
+   "cam": "STYLE homemade handheld. Same cheap phone or camcorder for every shot. Dirty handheld, small shake. Autofocus hunts once. Frame is a little late. Not a studio. Not a trip to a new angle.",
+   "framing": "medium close-up on the female. About one arm away from her. Her face and chest fill the frame. The backdrop barely reads.",
+   "ang": "same homemade angle on her every shot: eye-level or a little high, slightly crooked, aimed at her face then her chest. Do not switch to a new side of her.",
+   "lock": "CAMERA LOCK: stay on the female. Same distance, about an arm away. Same high-or-eye homemade angle. Do not jump to a wide new backdrop.",
+   "stab": "dirty handheld, slight shake",
+   "move": "controlled handheld, no whip, keep her face in frame",
+   "speed": "camera speed slow",
+   "audio": "Phone mic close. Ambient hiss. Handling noise. Uneven level. No studio mix."
+  },
+  "set": {
+   "label": "porn set",
+   "d": "mcu",
+   "cam": "STYLE porn set. Same clean paid camera for every shot. Tripod or slider. Skin lit on purpose. Not a phone. Not security-cam.",
+   "framing": "medium close-up on the female. About two metres from her. Her torso and face composed in the center.",
+   "ang": "same set angle on her every shot: eye-level, straight-on or a mild three-quarter on her face. Do not drop the camera low unless written. Do not go behind her unless the act already faces that way.",
+   "lock": "CAMERA LOCK: stay on the female. Same medium-close distance. Same eye-level set angle. Do not change lens or side mid-take.",
+   "stab": "tripod-still",
+   "move": "locked-off static, only bodies move",
+   "speed": "camera speed slow",
+   "audio": "Clean close-mic. No extra hiss. No phone handling. Still no music."
+  },
+  "selfie": {
+   "label": "phone selfie",
+   "d": "cu",
+   "cam": "STYLE phone selfie. She holds the phone. Front camera. Arm-length. Same phone, same hand, every shot. Not a third-person crew.",
+   "framing": "close-up front camera on the female. Arm-length from her face. Her face is large. Her body falls off the bottom.",
+   "ang": "same selfie angle on her every shot: phone at her eye line or a little above, pointed back at her face. The lens stays in front of her. Do not flip to a rear crew shot.",
+   "lock": "CAMERA LOCK: stay on the female's face from the phone she holds. Arm-length. Front camera. Same angle every shot.",
+   "stab": "controlled handheld",
+   "move": "micro-sway only, keep her face centered",
+   "speed": "camera speed very slow",
+   "audio": "Phone mic at arm length. Voice and wet are close and clipped. No boom mic."
+  },
+  "sec": {
+   "label": "security cam",
+   "d": "loose",
+   "cam": "STYLE security camera. Same high corner for every shot. Wide, a little soft. Static lock. No HUD text invented. Not handheld. Not selfie.",
+   "framing": "loose wide from the high corner. The female is readable in the same backdrop, not a face close-up. Bodies small in the frame.",
+   "ang": "same security angle every shot: high corner looking down on her, about three to four metres away, slightly wide. Do not come down to her face. Do not move the box.",
+   "lock": "CAMERA LOCK: same high corner. Same distance from her. Looking down on the female. Static. No new camera.",
+   "stab": "tripod-still",
+   "move": "locked-off static, only bodies move",
+   "speed": "camera speed very slow",
+   "audio": "Thin distant mic. Bodies a bit far. No close spit. No music."
+  },
+  "webcam": {
+   "label": "PC webcam livestream",
+   "d": "mcu",
+   "cam": "STYLE PC webcam livestream. Same laptop webcam for every shot. Fixed laptop webcam. Do not invent furniture. No chat UI invented.",
+   "framing": "medium close-up from the laptop on the female. About an arm from her face. Face and torso.",
+   "ang": "same webcam angle on her every shot: slightly high, looking down at her face and chest. The lens stays in front of her. Do not walk around her.",
+   "lock": "CAMERA LOCK: stay on the female from the laptop. Same distance. Same slight-high front angle. Fixed cam.",
+   "stab": "webcam-still, cheap digital",
+   "move": "locked-off static, only bodies move",
+   "speed": "camera speed very slow",
+   "audio": "Laptop mic close. Room hiss. Keyboard click optional. Voice and wet close and thin. No studio mix. No music. No stream stinger."
+  },
+  "mirror": {
+   "label": "mirror filming",
+   "d": "mcu",
+   "cam": "STYLE mirror filming. Same phone filming the same mirror. The female is the reflection. Phone rectangle stays in the glass. Same backdrop as Picture 1.",
+   "framing": "medium close-up on the female in the mirror. About two arms from the glass. Phone rectangle visible. Her face and chest in the reflection.",
+   "ang": "same mirror angle every shot: straight into the glass at her chest height. The lens looks at her reflection, not a second camera behind her.",
+   "lock": "CAMERA LOCK: stay on the female in the mirror. Same distance to the glass. Same chest-height angle. Do not leave the mirror.",
+   "stab": "controlled handheld, the phone hand shakes a little",
+   "move": "micro-sway only, keep her reflection centered",
+   "speed": "camera speed very slow",
+   "audio": "Phone mic close. Room bounce. Voice and wet bounce. No music. No crew."
+  },
+  "nightcam": {
+   "label": "cheap camcorder night",
+   "d": "cu",
+   "cam": "STYLE cheap camcorder night. Same on-camera light. Near skin is hot. Background crushed black. Same camcorder every shot.",
+   "framing": "close-up on the female. About one metre from her. Hot face and chest. The backdrop falls off in the dark.",
+   "ang": "same nightcam angle on her every shot: slightly high from the light, aimed at her face. Do not swing around her. Do not go wide.",
+   "lock": "CAMERA LOCK: stay on the female. About one metre. Same slightly-high lit angle. Same camcorder.",
+   "stab": "dirty handheld, slight shake",
+   "move": "controlled handheld, no whip, keep her face in the light",
+   "speed": "camera speed slow",
+   "audio": "On-camera mic. Room hiss. Light handling noise. Wet and breath close. No music. No boom."
+  },
+  "camcorder": {
+   "label": "cheap camcorder",
+   "d": "cu",
+   "cam": "STYLE cheap camcorder. Same handheld camcorder every shot. Tape grain. Autofocus hunts once. White balance a little off. On-camera mic. Do not add extra light. Do not crush the image to night. Not a phone selfie. Not security-cam. Not cinema.",
+   "framing": "close-up on the female. About one metre from her. Face and chest.",
+   "ang": "same camcorder angle on her every shot: slightly high handheld, aimed at her face. Do not swing around her. Do not go wide.",
+   "lock": "CAMERA LOCK: stay on the female. About one metre. Same slightly-high camcorder angle. Same tape.",
+   "stab": "dirty handheld, slight shake",
+   "move": "controlled handheld, no whip, keep her face in frame",
+   "speed": "camera speed slow",
+   "audio": "On-camera mic. Room hiss. Handling noise. Wet and breath close. No music. No boom."
+  },
+  "vertical": {
+   "label": "vertical story crop",
+   "d": "cu",
+   "cam": "STYLE vertical story / TikTok crop. Same tall center column every shot. Head and torso first. No like count. No username. No sticker UI.",
+   "framing": "close-up tall crop on the female. About an arm from her. Face and torso stacked in the center. Sides empty or dark.",
+   "ang": "same story angle on her every shot: slightly high phone, pointed down a little at her face, center-weighted. Do not cut to a wide side view.",
+   "lock": "CAMERA LOCK: stay on the female in the tall center. Arm-length. Same slightly-high phone angle. Do not change crop.",
+   "stab": "controlled handheld",
+   "move": "micro-sway only, stay locked on her center stack",
+   "speed": "camera speed very slow",
+   "audio": "Phone mic close. Voice and wet clipped. Room small. No music. No UI sounds."
+  },
+  "cinematic": {
+   "label": "cinematic coverage",
+   "d": "ecu",
+   "cam": "STYLE cinematic coverage. Paid cinema camera. Soft key light. Shallow focus. Each shot is a new setup on the female. Not a phone. Not security-cam. Not a locked webcam.",
+   "framing": "extreme close-up on her mouth or eyes, skin fills the frame",
+   "ang": "eye-level, centimetres from her face",
+   "stab": "tripod-still",
+   "move": "locked-off static, only her skin moves",
+   "speed": "camera speed very slow",
+   "lock": "SHOT CAMERA: extreme close on her. Do not pull out.",
+   "audio": "Close boom. Clean breath and skin. Ambient low. No music. No phone hiss.",
+   "join": "Cut. Extreme close on her."
+  },
+  "bodycam": {
+   "label": "bodycam / chest GoPro",
+   "d": "mcu",
+   "cam": "STYLE bodycam. Chest-mounted action cam. Wide. Low. Shakes with his walk. Same mount every shot. Not a crew. Not a phone selfie.",
+   "framing": "wide bodycam on the female. She fills most of the frame. Horizon tilts with his chest.",
+   "ang": "same bodycam angle every shot: from his chest, looking slightly down at her. Lens close. Do not lift off his body.",
+   "lock": "CAMERA LOCK: stay on the female from the chest cam. Same wide close distance. Same down-angle. Mounted. Shake is his body.",
+   "stab": "dirty handheld, chest-mounted shake",
+   "move": "camera follows his chest, small bounce, no whip",
+   "speed": "camera speed medium",
+   "audio": "On-cam mic on his chest. Breath close. Bodies thud. Harsh. No music."
+  },
+  "gif": {
+   "label": "porn GIF loop",
+   "d": "cu",
+   "cam": "STYLE porn GIF. Tight crop. Tiny move. Same frame every shot like a loop. No new angle. Keep the same backdrop tight.",
+   "framing": "close-up on the join and her. Tight. Almost no background.",
+   "ang": "same GIF angle every shot: locked on her at the act. Do not reframe.",
+   "lock": "CAMERA LOCK: same tight crop on the female. Same distance. Same angle. Loop energy. Do not pull out.",
+   "stab": "tripod-still",
+   "move": "micro-sway only, keep the same crop",
+   "speed": "camera speed very slow",
+   "audio": "Close wet and breath only. Keep the same backdrop tight. No music."
+  },
+  "interview": {
+   "label": "interview then drop",
+   "d": "cu",
+   "cam": "STYLE interview then drop. Shot 1 is a talking-head on her. Later shots drop to the act. Same camera family. Same backdrop.",
+   "framing": "close-up on her face while the act continues below",
+   "ang": "eye-level on her eyes",
+   "stab": "tripod-still",
+   "move": "locked-off static, only her face moves",
+   "speed": "camera speed very slow",
+   "lock": "SHOT CAMERA: back to her face. Act still going.",
+   "audio": "Close voice first. Then close wet. No music.",
+   "join": "Back to her face."
+  },
+  "flash": {
+   "label": "club-phone flash",
+   "d": "mcu",
+   "cam": "STYLE club-phone flash. Phone camera. On-camera flash pops. Do not rewrite the place light. Flash is the phone, not a lamp, not a window.",
+   "framing": "medium close-up on the female. Phone distance. Harsh flash on her skin. Background falls.",
+   "ang": "same phone angle every shot: eye-level or a little high on her face. Front. Do not walk around her.",
+   "lock": "CAMERA LOCK: stay on the female from the phone. Same distance. Flash pops. Do not invent a new light.",
+   "stab": "dirty handheld, slight shake",
+   "move": "controlled handheld, no whip, keep her in frame",
+   "speed": "camera speed medium",
+   "audio": "Phone mic. Harsh. Ambient noise. Flash is picture only. No music."
+  },
+  "hidden": {
+   "label": "hidden cam",
+   "d": "ms",
+   "cam": "STYLE hidden cam. Low secret camera. Dirty. A bit of foreground blocks the edge. Same lock every shot. Not a high corner. Not a phone in a hand. Not security HUD.",
+   "framing": "medium shot from low, looking at the female. She is readable. A dark edge or object sits in the near foreground and does not move. Same backdrop.",
+   "ang": "same hidden angle every shot: low, slightly off to one side, looking up or level at her. Do not rise to her face as a new camera. Do not walk around her.",
+   "lock": "CAMERA LOCK: stay on the female from the hidden low cam. Same distance. Same side. Same obstruction. Do not replace the backdrop.",
+   "stab": "cheap static, tiny noise",
+   "move": "locked-off static, only bodies move",
+   "speed": "camera speed very slow",
+   "audio": "Thin distant mic. Bodies a bit far. No close spit. No music. No HUD beep."
+  }
+ },
+ "formats": {
+  "interview": {
+   "label": "interview / casting",
+   "spine": "FORMAT interview. She treats the lens as the person asking. Each act is her next answer. He is the other body in frame.",
+   "intro": "FORMAT interview. She faces the lens. She nods or talks a short line. Hands stay ordinary. SFW.",
+   "tease": "FORMAT interview. The question is her body. She opens or lifts cloth a little, then checks the lens.",
+   "hj": "FORMAT interview. She answers with her hands on his cock. She glances at the lens between strokes. No mouth.",
+   "bj": "FORMAT interview. She answers with her mouth on his cock. She looks up at the lens, then back to the work.",
+   "breast": "FORMAT interview. She answers with her chest on his cock. She still plays to the lens.",
+   "sex": "FORMAT interview. She answers by taking him. She throws one look at the lens on a thrust.",
+   "cum": "FORMAT interview. Last answer. He cums. She keeps a sliver of lens-awareness.",
+   "talk": "dirty",
+   "mood": "focused"
+  },
+  "bet": {
+   "label": "lost bet",
+   "spine": "FORMAT lost bet. She lost. He collects. Each act is the next piece of the debt.",
+   "intro": "FORMAT bet. She just lost. She scoffs, swallows, looks at him, looks away. SFW. She does not leave.",
+   "tease": "FORMAT bet. First pay is showing. She moves cloth like she hates that she has to, then keeps going.",
+   "hj": "FORMAT bet. Her fist on his cock is pay. She can glare or smirk. Stroke stays on him. No mouth.",
+   "bj": "FORMAT bet. Her mouth on his cock is pay. She can glare up while she works.",
+   "breast": "FORMAT bet. Her chest on his cock is pay. She presses because she owes it.",
+   "sex": "FORMAT bet. Taking him is pay. She can still look pissed while her hips move.",
+   "cum": "FORMAT bet. Last pay. He cums. She takes it because the bet said so.",
+   "talk": "orders",
+   "mood": "brat"
+  },
+  "stuck": {
+   "label": "stuck",
+   "spine": "FORMAT stuck. She cannot leave the Picture 1 stance. Acts happen from that hold.",
+   "intro": "FORMAT stuck. She tests the hold: a pull, a twist, a look down. She cannot step out. SFW.",
+   "tease": "FORMAT stuck. Cloth shifts because she twists in place. She cannot cover fully.",
+   "hj": "FORMAT stuck. Her hands reach what they can and stroke him from that hold. No mouth.",
+   "bj": "FORMAT stuck. Her mouth takes him from that hold. She cannot pull off and walk.",
+   "breast": "FORMAT stuck. Her chest is used from that hold. She cannot back out.",
+   "sex": "FORMAT stuck. He takes her in that hold. She stays pinned to the stance.",
+   "cum": "FORMAT stuck. He cums while she is still held. She cannot leave after.",
+   "talk": "protest",
+   "mood": "teary"
+  },
+  "robbed": {
+   "label": "robbed",
+   "spine": "FORMAT robbed. He has her. Acts happen because he keeps her in frame.",
+   "intro": "FORMAT robbed. She freezes, then tracks his hands. Breath short. SFW.",
+   "tease": "FORMAT robbed. He moves her cloth. She flinches, then holds still.",
+   "hj": "FORMAT robbed. He puts her hand on his cock. She strokes because he keeps it there. No mouth.",
+   "bj": "FORMAT robbed. He puts her mouth on his cock. She works because he holds her there.",
+   "breast": "FORMAT robbed. He uses her chest on his cock. She braces.",
+   "sex": "FORMAT robbed. He takes her. She stays in his grip.",
+   "cum": "FORMAT robbed. He cums on or in her. She stays where he put her.",
+   "talk": "protest",
+   "mood": "unwilling"
+  },
+  "webcam": {
+   "label": "paid webcam",
+   "spine": "FORMAT webcam. She sells the act to the lens. She angles work so the lens can read it.",
+   "intro": "FORMAT webcam. She greets the lens. A small wave or a practiced smile. SFW.",
+   "tease": "FORMAT webcam. She shows for the lens. Slow cloth, then a check that the frame still has her.",
+   "hj": "FORMAT webcam. She strokes him toward the lens. She looks at the work, then at the lens. No mouth.",
+   "bj": "FORMAT webcam. She sucks him for the lens. She turns just enough that the mouth-work reads.",
+   "breast": "FORMAT webcam. She puts her chest on him for the lens. She presents the squeeze.",
+   "sex": "FORMAT webcam. She takes him for the lens. She sells the bounce.",
+   "cum": "FORMAT webcam. He cums for the lens. She holds the finish where it can be seen.",
+   "talk": "dirty",
+   "mood": "proud"
+  },
+  "walkin": {
+   "label": "walk-in",
+   "spine": "FORMAT walk-in. He is already in her scene. She was not ready. The acts start from that shock.",
+   "intro": "FORMAT walk-in. She startles. Eyes go to him. A half-step or a held breath. SFW.",
+   "tease": "FORMAT walk-in. Hands find cloth because he is here. She covers, then the cloth still moves.",
+   "hj": "FORMAT walk-in. After the shock her hand is on his cock. The stroke starts clumsy, then holds. No mouth.",
+   "bj": "FORMAT walk-in. After the shock her mouth is on his cock. She commits mid-take.",
+   "breast": "FORMAT walk-in. After the shock her chest is on him. Close and sudden.",
+   "sex": "FORMAT walk-in. After the shock he is inside her. The take starts from the surprise.",
+   "cum": "FORMAT walk-in. He cums in the same surprise. She is still catching up.",
+   "talk": "dirty",
+   "mood": "shy"
+  },
+  "makeup": {
+   "label": "make-up sex",
+   "spine": "FORMAT make-up. The fight just ended. Heat is still on their faces. Acts are the make-up.",
+   "intro": "FORMAT make-up. Jaw tight. She looks at him like the last word is unfinished. SFW.",
+   "tease": "FORMAT make-up. Hands grab cloth, not gentle. She pulls him or he pulls her.",
+   "hj": "FORMAT make-up. Her fist on his cock is angry and hungry at once. No mouth.",
+   "bj": "FORMAT make-up. Her mouth on his cock is the first yield. Still sharp in the eyes.",
+   "breast": "FORMAT make-up. Her chest on him is rough press, not a show.",
+   "sex": "FORMAT make-up. He takes her hard to end the fight. She meets it.",
+   "cum": "FORMAT make-up. He cums. The fight ends on that pulse.",
+   "talk": "dirty",
+   "mood": "angry"
+  },
+  "firstdeal": {
+   "label": "first-time deal",
+   "spine": "FORMAT first deal. She agreed. She has not done these acts before. Motion stays unsure.",
+   "intro": "FORMAT first deal. She agreed. She looks at him, then down. Hands fidget. SFW.",
+   "tease": "FORMAT first deal. Cloth moves slow and awkward. She checks his face after each small reveal.",
+   "hj": "FORMAT first deal. First time her hands work his cock. Grip hunts a rhythm. She watches the fist. No mouth.",
+   "bj": "FORMAT first deal. First time her mouth is on his cock. Shallow, careful, she learns the depth.",
+   "breast": "FORMAT first deal. First time her chest is on him. She adjusts, unsure of the press.",
+   "sex": "FORMAT first deal. First time he is inside her. She takes him slow and reads the feeling.",
+   "cum": "FORMAT first deal. He cums. She startles at the pulse, then stays.",
+   "talk": "off",
+   "mood": "scared"
+  },
+  "cuck": {
+   "label": "someone watches",
+   "spine": "FORMAT watched. A third body already in this scene watches. She knows.",
+   "intro": "FORMAT watched. Her eyes flick to the watcher, then back. She knows she is seen. SFW.",
+   "tease": "FORMAT watched. She shows while being watched. A pause to see if the watcher is still looking.",
+   "hj": "FORMAT watched. She strokes him while being watched. She can look at the work or at the watcher. No mouth.",
+   "bj": "FORMAT watched. She sucks him while being watched. Shame or heat in the glance aside.",
+   "breast": "FORMAT watched. Her chest is on him while being watched. She presents and hides in the same beat.",
+   "sex": "FORMAT watched. He takes her while being watched. She feels the extra eyes.",
+   "cum": "FORMAT watched. He cums while being watched. She cannot hide the finish.",
+   "talk": "dirty",
+   "mood": "shy"
+  },
+  "blackmail": {
+   "label": "blackmail pay",
+   "spine": "FORMAT blackmail. She pays. Each act is the next piece of the pay.",
+   "intro": "FORMAT blackmail. She knows why she is here. Face goes flat or tight. SFW.",
+   "tease": "FORMAT blackmail. She starts to pay. Cloth moves because she has to, not because she wants to.",
+   "hj": "FORMAT blackmail. This stroke is pay. Her fist works. Her face stays elsewhere. No mouth.",
+   "bj": "FORMAT blackmail. This suck is pay. She keeps her mouth on him because the pay is due.",
+   "breast": "FORMAT blackmail. This chest work is pay. She presses because she was told.",
+   "sex": "FORMAT blackmail. This fuck is pay. She takes him to close the debt.",
+   "cum": "FORMAT blackmail. He cums. Last pay. She stays through it.",
+   "talk": "orders",
+   "mood": "unwilling"
+  }
+ },
+ "artifact_lock": {
+  "light": "ARTIFACT LOCK: Each person keeps two arms, two legs, one head. Hands stay attached to the same wrists. When a hand is readable: five separate fingers, a firm grip or a flat palm, knuckles bend. Weight on planted feet. Joints stay in normal range. Bodies do not melt into each other or into the furniture.",
+  "full_extra": "Faces stay the same count of eyes, one nose, one mouth. No extra limb growing mid-shot. No face smear. No motion-blur smear that turns a hand into a paddle. Skin stays skin, not wax. Hair stays hair, not a smear. If a hand reaches at the lens, keep it just off the near corners rather than a giant foreshortened claw."
+ }
+}

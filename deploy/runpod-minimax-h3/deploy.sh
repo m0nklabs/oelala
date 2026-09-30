@@ -146,6 +146,13 @@ else
     HF_ENV_STR="{ key: \"HF_TOKEN\", value: \"${HF_LORA_TOKEN}\" },"
 fi
 
+CIVITAI_TOKEN=$(grep -E '^CIVITAI_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
+if [[ -z "${CIVITAI_TOKEN:-}" ]]; then
+    CIVITAI_ENV_STR=""
+else
+    CIVITAI_ENV_STR="{ key: \"CIVITAI_TOKEN\", value: \"${CIVITAI_TOKEN}\" },"
+fi
+
 TEMPLATE_RESULT=$(python3 -c "
 import httpx, json, sys
 
@@ -163,6 +170,7 @@ resp = httpx.post(
                     dockerArgs: \"\"
                     env: [
                         ${HF_ENV_STR}
+                        ${CIVITAI_ENV_STR}
                         { key: \"COMFYUI_PATH\", value: \"/comfyui\" }
                     ]
                     containerRegistryAuthId: \"cmmbssf3a00anky07egrtupgt\"

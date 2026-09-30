@@ -56,6 +56,18 @@ const getModelType = (modelValue) => {
   return 'sdxl'
 }
 
+// Max LoRA slots per model type (mirrors backend adapter max_loras)
+const MAX_LORAS = { sdxl: 3, krea2: 1 }
+const getMaxLoras = (modelValue) => MAX_LORAS[getModelType(modelValue)] || 0
+
+// LoRA base-model families each T2I model type accepts (mirrors the backend
+// router's filter_loras compat check). Unknown base_model ('') stays available
+// to SDXL for backward compatibility with older catalog entries.
+const LORA_FAMILIES = {
+  krea2: ['krea2'],
+  sdxl: ['sdxl', 'pony', 'illustrious', 'noob', 'nai', ''],
+}
+
 const T2I_DEFAULTS = {
   prompt: '', negativePrompt: 'ugly, deformed, blurry, low quality, bad anatomy, watermark, signature, text',
   aspectRatio: '1:1', model: 'CyberRealistic_Pony_v14.1_FP16.safetensors', batchCount: 1,
@@ -196,11 +208,28 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
     fetchLoras()
   }, [])
 
-  // Filter LoRAs based on NSFW setting
+  // Filter LoRAs by NSFW setting and by base-model compatibility with the
+  // selected model (krea2 models only see krea2 LoRAs, etc.)
   const filteredLoras = useMemo(() => {
-    if (nsfwEnabled) return availableLoras
-    return availableLoras.filter(l => !l.nsfw)
-  }, [availableLoras, nsfwEnabled])
+    const family = LORA_FAMILIES[getModelType(model)] || []
+    const nsfwFiltered = nsfwEnabled ? availableLoras : availableLoras.filter(l => !l.nsfw)
+    return nsfwFiltered.filter(l => family.includes(l.base_model || ''))
+  }, [availableLoras, nsfwEnabled, model])
+
+  // Reset LoRA slots that are incompatible with the newly selected model,
+  // otherwise a stale selection would be sent and silently dropped server-side
+  useEffect(() => {
+    if (!availableLoras.length) return
+    const family = LORA_FAMILIES[getModelType(model)] || []
+    setSelectedLoras(prev => {
+      const next = prev.map(l => {
+        if (l.name === 'None') return l
+        const entry = availableLoras.find(a => a.name === l.name)
+        return entry && family.includes(entry.base_model || '') ? l : { ...l, name: 'None' }
+      })
+      return next.some((l, i) => l.name !== prev[i].name) ? next : prev
+    })
+  }, [model, availableLoras])
 
   // Update LoRA selection
   const updateLora = (index, field, value) => {
@@ -668,17 +697,20 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                     }}
                   />
                 </div>
+              </>
+            )}
 
-                {/* LoRA Settings (SDXL only) */}
-                {getModelType(model) === 'sdxl' && filteredLoras.length > 0 && (                  <div className="form-group">
+            {/* LoRA Settings (SDXL: 3 slots, Krea 2: 1 slot) */}
+            {getMaxLoras(model) > 0 && (
+                  <div className="form-group">
                     <label className="grok-section-label" style={{ marginBottom: '8px' }}>
-                      LoRAs (up to 3) <InfoTooltip text="LoRA (Low-Rank Adaptation) models add specific styles, characters, or concepts to your images. Stack up to 3 LoRAs. Adjust strength per LoRA — 0.5-0.8 is usually best." /> {!nsfwEnabled && availableLoras.length > filteredLoras.length && (
+                      LoRAs (up to {getMaxLoras(model)}) <InfoTooltip text="LoRA (Low-Rank Adaptation) models add specific styles, characters, or concepts to your images. Adjust strength per LoRA — 0.5-1.0 is usually best." /> {!nsfwEnabled && availableLoras.some(l => l.nsfw) && (
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                          ({availableLoras.length - filteredLoras.length} hidden)
+                          ({availableLoras.filter(l => l.nsfw).length} hidden by NSFW filter)
                         </span>
                       )}
                     </label>
-                    {selectedLoras.map((lora, idx) => {
+                    {selectedLoras.slice(0, getMaxLoras(model)).map((lora, idx) => {
                       const isActive = lora.name !== 'None'
                       return (
                         <div key={idx} style={{
@@ -748,8 +780,6 @@ export default function TextToImageTool({ onOutput, onJobSubmitted, pendingImpor
                     </div>
                   </div>
                 )}
-              </>
-            )}
 
             {/* Krea 2 settings (distilled: 8 steps, CFG 1.0) */}
             {getModelType(model) === 'krea2' && (

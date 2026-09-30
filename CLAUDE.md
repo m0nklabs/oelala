@@ -79,6 +79,11 @@ When touching an area, read its detail-skill:
 - Detailed operational rules: `@.github/copilot-instructions.md` (Copilot-native, source of the
   critical rules above; also covers MinIO, Cloudflare/CORS, RunPod endpoints, DisTorch2).
 - Architecture: `docs/ARCHITECTURE.md`; model inventory: `docs/COMFYUI_INVENTORY.md`.
+- Model catalog: `docs/model_catalog.yaml` (generated `docs/MODEL_CATALOG.md`) — every component
+  ComfyUI can load plus where it lives (local, Windows-PC, RunPod worker, HF mirrors, Civitai);
+  regenerate with `scripts/build_model_catalog.py`, verify drift with `--check`.
+- H3 prompt scene roll: `src/backend/generation/prompt_scene.py` + `h3_scene_vocab.json`
+  (vocabulary and stage/foley guards; re-extract with `scripts/extract_h3_scene_vocab.py`).
 - Compute backends inventory: `src/backend/generation/compute_backends.py` + `compute_backends.json`; admin UI under the Admin panel → "Compute".
 - Todo list: `docs/TODO_LIST.md`.
 

@@ -197,8 +197,16 @@ T2V Generation Modes
     │   Max frames: 362 | Default: 124 | Fixed 24fps
     │
     ├── ☁️ Cloud (RunPod 80GB+, nvfp4 text encoder)
-    │   ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors   [20.97GB]
+    │   ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors   [20.97GB]  official
     │   └── qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors      [15.69GB]
+    │
+    │   Model variants (model_variant + quality_mode, downloaded on demand):
+    │   ├── eros         h3ErosMax_beta5_3185144   [14.00GB] turbo fp8/w4a8  → draft 4 / standard 8
+    │   ├── eros_int8_turbo h3ErosMax_beta5_3178732 [20.97GB] turbo int8     → draft 4 / standard 8
+    │   ├── eros_int8    h3ErosMax_beta5_3185154   [20.97GB] non-turbo       → full 20
+    │   ├── dasiwa_turbo DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135 [20.97GB] → draft 4 / standard 8
+    │   └── dasiwa       DasiwaMinimaxH3_dasiwaHybridV2_3203130      [20.97GB] → full 20
+    │   Mirrors: bomehika/oelala-models (public) — Civitai URL is the fallback.
     │
     └── 🪟 Local (Windows PC ComfyUI, int8_convrot set, 16GB GPU)
         ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors
@@ -206,6 +214,12 @@ T2V Generation Modes
         ├── minimax_h3_video_vae_fp16.safetensors
         └── minimax_h3_audio_vae_fp32.safetensors
 ```
+
+> Measured on an A40 (768×1344, 124 frames): official full 20 steps ≈ 689 s,
+> official standard (8 steps + turbo LoRA) ≈ 327 s, eros draft 4 steps ≈ 205 s,
+> eros standard 8 steps ≈ 325 s. The turbo-LoRA route also came out soft with
+> near-silent audio; the Eros turbo files keep audio at a normal level.
+
 
 ### T2V Alternative Models (Swappable)
 
@@ -224,7 +238,21 @@ T2V Generation Modes
 > All benchmarks tested 2026-01-16 on RTX 5060 Ti 16GB.
 
 ```
-T2I Model Categories (Kept: Flux + Flux 2 + SDXL-Pony) (Krea 2 / Flux 2 zie hieronder)
+T2I Model Categories (Kept: Flux + Flux 2 + SDXL-Pony + Krea 2)
+│
+├── ⚡ KREA 2 TURBO (snel, expressief — verified 2026-09-24)
+│   │   "Krea 2 Turbo INT8 ConvRot - distilled, 8 steps, CFG 1.0"
+│   │   832×1216 @ 8 steps: ~80-120s | dynamische VRAM-loading (aimdo/DisTorch)
+│   │   Let op: guardian-LLM wordt vóór de run uit VRAM gezet (queue_prompt)
+│   │
+│   └── krea2_turbo_int8_convrot.safetensors
+│       ├── Text encoder: qwen3vl_4b_bf16.safetensors (CLIPLoader type=krea2)
+│       ├── VAE: qwen_image_vae.safetensors
+│       ├── Sampler: euler + simple, CFG 1.0 (distilled — hoger = slechter)
+│       ├── Steps: 4-20 (default 8)
+│       └── LoRA: 1 slot (LoraLoaderModelOnly, /mnt/ssd/loras/krea2/)
+│           ├── krea2/snofs_krea_v1_4.safetensors  [1.5GB] SNOFS v1.4 — GPU-verified
+│           └── krea2/KNP_000003000.safetensors    [436MB] Krea 2 NSFW V4 — GPU-verified
 │
 ├── 👑 MAX QUALITY (200-300 sec, multi-GPU)
 │   │

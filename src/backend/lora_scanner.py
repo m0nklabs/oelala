@@ -190,6 +190,11 @@ def _derive_base_model(filename: str) -> str:
         return "minimax_h3"
     if "minimax" in lower or "fl2va" in lower:
         return "minimax_h3"
+    # Krea 2 — subdirectory first, then filename markers.
+    if lower.startswith("krea2/") or lower.startswith("krea2\\"):
+        return "krea2"
+    if "krea" in lower:
+        return "krea2"
     # I2V/T2V without ltx → wan2.2 (only Wan uses these LoRA modes)
     if ("i2v" in lower or "t2v" in lower) and "ltx" not in lower:
         return "wan2.2"

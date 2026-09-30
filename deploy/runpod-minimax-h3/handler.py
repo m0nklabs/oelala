@@ -30,7 +30,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 import runpod
@@ -77,7 +77,7 @@ MINIMAX_H3_MODELS = [
         "target_dir": "diffusion_models",
         "size_gb": 20.97,
         "description": "MiniMax-H3 FL2VA diffusion model (int8+convrot, t2v + i2v keyframes)",
-        "startup_required": True,
+        "startup_required": False,
     },
     {
         "filename": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
@@ -105,6 +105,79 @@ MINIMAX_H3_MODELS = [
         "size_gb": 0.61,
         "description": "MiniMax-H3 audio VAE (fp32)",
         "startup_required": True,
+    },
+    {
+        "filename": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+        "repo": "Comfy-Org/MiniMax-H3",
+        "hf_path": "loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+        "target_dir": "loras",
+        "size_gb": 1.96,
+        "description": "MiniMax-H3 FL2VA turbo LoRA 4-step 768p (draft quality mode)",
+        "startup_required": False,
+    },
+    {
+        "filename": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "repo": "Comfy-Org/MiniMax-H3",
+        "hf_path": "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "target_dir": "loras",
+        "size_gb": 1.96,
+        "description": "MiniMax-H3 FL2VA turbo LoRA 8-step (standard quality mode)",
+        "startup_required": False,
+    },
+    {
+        "filename": "h3ErosMax_beta5_3185144.safetensors",
+        "repo": "bomehika/oelala-models",
+        "hf_path": "diffusion_models/h3ErosMax_beta5_3185144.safetensors",
+        "url": "https://civitai.com/api/download/models/3294059",
+        "token_env": "CIVITAI_TOKEN",
+        "target_dir": "diffusion_models",
+        "size_gb": 13.67,
+        "description": "H3 Eros Max beta5 TURBO-hybrid (NSFW finetune, turbo fused, model_variant='eros'; HF mirror primary, Civitai fallback)",
+        "startup_required": False,
+    },
+    {
+        "filename": "h3ErosMax_beta5_3185154.safetensors",
+        "repo": "bomehika/oelala-models",
+        "hf_path": "diffusion_models/h3ErosMax_beta5_3185154.safetensors",
+        "url": "https://civitai.com/api/download/models/3294059?fileId=3185154",
+        "token_env": "CIVITAI_TOKEN",
+        "target_dir": "diffusion_models",
+        "size_gb": 20.97,
+        "description": "H3 Eros Max beta5 non-turbo int8 (all 200 quantized layers 8-bit; model_variant='eros_int8')",
+        "startup_required": False,
+    },
+    {
+        "filename": "h3ErosMax_beta5_3178732.safetensors",
+        "repo": "bomehika/oelala-models",
+        "hf_path": "diffusion_models/h3ErosMax_beta5_3178732.safetensors",
+        "url": "https://civitai.com/api/download/models/3294059?fileId=3178732",
+        "token_env": "CIVITAI_TOKEN",
+        "target_dir": "diffusion_models",
+        "size_gb": 20.97,
+        "description": "H3 Eros Max beta5 turbo int8 (model_variant='eros_int8_turbo')",
+        "startup_required": False,
+    },
+    {
+        "filename": "DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors",
+        "repo": "bomehika/oelala-models",
+        "hf_path": "diffusion_models/DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors",
+        "url": "https://civitai.com/api/download/models/3314686?fileId=3203135",
+        "token_env": "CIVITAI_TOKEN",
+        "target_dir": "diffusion_models",
+        "size_gb": 20.97,
+        "description": "DaSiWa Hybrid Turbo v2 int8 (4-8 step distillation; model_variant='dasiwa_turbo')",
+        "startup_required": False,
+    },
+    {
+        "filename": "DasiwaMinimaxH3_dasiwaHybridV2_3203130.safetensors",
+        "repo": "bomehika/oelala-models",
+        "hf_path": "diffusion_models/DasiwaMinimaxH3_dasiwaHybridV2_3203130.safetensors",
+        "url": "https://civitai.com/api/download/models/3314675?fileId=3203130",
+        "token_env": "CIVITAI_TOKEN",
+        "target_dir": "diffusion_models",
+        "size_gb": 20.97,
+        "description": "DaSiWa Hybrid v2 int8 non-turbo (full step count; model_variant='dasiwa')",
+        "startup_required": False,
     },
 ]
 
@@ -210,11 +283,44 @@ def _find_cached_model(filename: str) -> Optional[Path]:
     return None
 
 
-def download_model(model: Dict[str, Any]) -> bool:
-    """Download a single model file from HuggingFace Hub."""
+def _download_from_url(model: Dict[str, Any], target: Path) -> bool:
+    """Stream a model file from a direct URL (e.g. Civitai). Token never logged."""
     filename = model["filename"]
-    repo = model["repo"]
-    hf_path = model["hf_path"]
+    target_dir = model["target_dir"]
+    size_gb = model["size_gb"]
+    url = model["url"]
+    token_env = model.get("token_env", "")
+    token = os.getenv(token_env, "") if token_env else ""
+    if token:
+        url = f"{url}{'&' if '?' in url else '?'}token={token}"
+    logger.info(f"⬇️  Downloading {filename} ({size_gb:.1f} GB) from URL source...")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(".download")
+        resp = requests.get(url, stream=True, timeout=600)
+        resp.raise_for_status()
+        with open(tmp, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
+                f.write(chunk)
+        if tmp.stat().st_size < 1_000_000:
+            logger.error(
+                f"❌ Download too small ({tmp.stat().st_size} bytes), likely an auth page"
+            )
+            tmp.unlink()
+            return False
+        tmp.rename(target)
+        logger.info(f"✅ Downloaded: {target_dir}/{filename}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to download {filename}: {e}")
+        return False
+
+
+def download_model(model: Dict[str, Any]) -> bool:
+    """Download a single model file from HuggingFace Hub (or a direct URL)."""
+    filename = model["filename"]
+    repo = model.get("repo", "")
+    hf_path = model.get("hf_path", "")
     target_dir = model["target_dir"]
     size_gb = model["size_gb"]
 
@@ -238,6 +344,12 @@ def download_model(model: Dict[str, Any]) -> bool:
     if not _check_download_capacity(size_gb):
         logger.error(f"❌ Not enough disk space for {filename} ({size_gb:.1f} GB)")
         return False
+
+    # Direct-URL source when the entry has no HF repo (e.g. Civitai-only
+    # entries). Entries with both repo and url download from HF first and fall
+    # back to the URL in the except handler below.
+    if model.get("url", "") and not repo:
+        return _download_from_url(model, target)
 
     # Download from HuggingFace
     logger.info(f"⬇️  Downloading {filename} ({size_gb:.1f} GB) from {repo}...")
@@ -271,12 +383,20 @@ def download_model(model: Dict[str, Any]) -> bool:
             return False
 
     except Exception as e:
-        logger.error(f"❌ Failed to download {filename}: {e}")
+        logger.error(f"❌ Failed to download {filename} from HF: {e}")
+        if model.get("url", ""):
+            logger.info(f"↩️ Falling back to URL source for {filename}...")
+            return _download_from_url(model, target)
         return False
 
 
 def ensure_models() -> WorkflowModelPrepResult:
-    """Download all required models and return preparation result."""
+    """Download the always-needed core models and return preparation result.
+
+    Checkpoints and turbo LoRAs are NOT downloaded here: they are fetched on
+    demand by ensure_workflow_models() for the files a job actually uses, so a
+    job that runs one variant never pays the download time or disk for another.
+    """
     result = WorkflowModelPrepResult()
     start = time.time()
 
@@ -284,9 +404,11 @@ def ensure_models() -> WorkflowModelPrepResult:
     setup_model_links()
 
     for model in MINIMAX_H3_MODELS:
+        if not model.get("startup_required", False):
+            continue
         if download_model(model):
             result.models_downloaded.append(model["filename"])
-        elif model.get("startup_required", False):
+        else:
             result.error = f"Required model missing: {model['filename']}"
             result.download_time_s = time.time() - start
             return result
@@ -294,10 +416,62 @@ def ensure_models() -> WorkflowModelPrepResult:
     result.models_ready = True
     result.download_time_s = time.time() - start
     logger.info(
-        f"✅ All models ready in {result.download_time_s:.1f}s "
+        f"✅ Core models ready in {result.download_time_s:.1f}s "
         f"({len(result.models_downloaded)} files)"
     )
     return result
+
+
+# Loader-node input names that reference a model file, mapped to the ComfyUI
+# models subdirectory they resolve against.
+_WORKFLOW_MODEL_INPUTS = {
+    "unet_name": "diffusion_models",
+    "lora_name": "loras",
+    "clip_name": "text_encoders",
+    "vae_name": "vae",
+    "ckpt_name": "checkpoints",
+}
+
+
+def _workflow_model_names(workflow: Dict[str, Any]) -> Dict[str, str]:
+    """Map every model filename referenced by a loader node to its models subdir."""
+    found: Dict[str, str] = {}
+    for node in (workflow or {}).values():
+        if not isinstance(node, dict):
+            continue
+        for key, value in (node.get("inputs") or {}).items():
+            if key in _WORKFLOW_MODEL_INPUTS and isinstance(value, str) and value:
+                found[value] = _WORKFLOW_MODEL_INPUTS[key]
+    return found
+
+
+def ensure_workflow_models(workflow: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    """Download registry models referenced by this workflow; report what is missing.
+
+    Returns (downloaded, missing) filenames. Unregistered names (user LoRAs,
+    files baked into the image) are ignored here — job LoRAs are handled by
+    download_loras().
+    """
+    registry = {m["filename"]: m for m in MINIMAX_H3_MODELS}
+    downloaded: List[str] = []
+    missing: List[str] = []
+    for filename, subdir in _workflow_model_names(workflow).items():
+        model = registry.get(filename)
+        if not model:
+            continue
+        target = Path(COMFYUI_PATH) / "models" / subdir / filename
+        if target.exists() and target.stat().st_size > 1_000_000:
+            continue
+        logger.info(f"📥 Workflow needs {filename} — fetching on demand...")
+        if download_model(model):
+            downloaded.append(filename)
+        else:
+            missing.append(filename)
+    if downloaded:
+        logger.info(f"✅ On-demand models: {', '.join(downloaded)}")
+    if missing:
+        logger.error(f"❌ Workflow models unavailable: {', '.join(missing)}")
+    return downloaded, missing
 
 
 # ---- ComfyUI Process Management ----
@@ -328,6 +502,13 @@ def start_comfyui() -> bool:
         "--port", str(COMFYUI_PORT),
         "--disable-auto-launch",
         "--disable-metadata",
+        # Force disk-backed weight streaming: the auto-detection only enables
+        # fast_disk when the model file's backing device is a real NVMe
+        # (>= Gen4 x4) AND every file agrees — on RunPod hosts where the
+        # container disk is not exposed as NVMe this would silently disable
+        # streaming, pinning 42.5 GB of weights in host RAM (50 GB on
+        # A6000/A40 hosts) and slowing large jobs to a crawl.
+        "--fast-disk",
     ]
     _comfyui_process = subprocess.Popen(
         cmd,
@@ -358,6 +539,18 @@ def start_comfyui() -> bool:
 
     logger.error(f"❌ ComfyUI did not start within {COMFYUI_STARTUP_TIMEOUT}s")
     return False
+
+
+def get_cuda_device() -> Optional[str]:
+    """Return the CUDA device name for per-job cost attribution in job output."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_name(0)
+    except Exception:
+        pass
+    return None
 
 
 def wait_for_cuda() -> bool:
@@ -432,9 +625,13 @@ def download_loras(lora_downloads: List[Dict[str, Any]]) -> bool:
 
     for lora in lora_downloads:
         filename = lora.get("filename", "")
-        url = lora.get("url", "")
+        # Primary source + optional fallback (e.g. HF mirror first, then the
+        # signed self-hosted backend URL).
+        candidate_urls = [
+            u for u in (lora.get("url", ""), lora.get("fallback_url", "")) if u
+        ]
 
-        if not filename or not url:
+        if not filename or not candidate_urls:
             logger.warning(f"⚠️ Skipping LoRA entry with missing filename/url: {lora}")
             continue
 
@@ -444,35 +641,44 @@ def download_loras(lora_downloads: List[Dict[str, Any]]) -> bool:
             continue
 
         logger.info(f"⬇️  Downloading LoRA: {filename}...")
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            headers = {}
-            hf_token = lora.get("hf_token", "")
-            if hf_token:
-                headers["Authorization"] = f"Bearer {hf_token}"
-            resp = requests.get(url, stream=True, timeout=600, headers=headers)
-            resp.raise_for_status()
-
+        downloaded = False
+        last_error = None
+        for url in candidate_urls:
             tmp = target.with_suffix(".download")
-            total = int(resp.headers.get("content-length", 0))
-            received = 0
-            with open(tmp, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
-                    f.write(chunk)
-                    received += len(chunk)
-            tmp.rename(target)
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                headers = {}
+                hf_token = lora.get("hf_token", "")
+                if hf_token and "huggingface.co" in url:
+                    # Only send the HF token to huggingface.co hosts
+                    headers["Authorization"] = f"Bearer {hf_token}"
+                resp = requests.get(url, stream=True, timeout=600, headers=headers)
+                resp.raise_for_status()
 
-            size_mb = target.stat().st_size / (1024 * 1024)
-            logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
-        except Exception as e:
-            logger.error(f"❌ Failed to download LoRA {filename}: {e}")
+                with open(tmp, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
+                        f.write(chunk)
+                tmp.rename(target)
+
+                size_mb = target.stat().st_size / (1024 * 1024)
+                logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
+                downloaded = True
+                break
+            except Exception as e:
+                last_error = e
+                if tmp.exists():
+                    tmp.unlink()
+                if len(candidate_urls) > 1:
+                    logger.warning(f"⚠️ LoRA source failed ({url}), trying next: {e}")
+        if not downloaded:
+            logger.error(f"❌ Failed to download LoRA {filename}: {last_error}")
             return False
 
     return True
 
 
-def queue_workflow(workflow: Dict[str, Any]) -> Optional[str]:
-    """Queue a workflow on ComfyUI and return the prompt_id."""
+def queue_workflow(workflow: Dict[str, Any]) -> Tuple[Optional[str], str]:
+    """Queue a workflow on ComfyUI; return (prompt_id, validation detail)."""
     client_id = uuid.uuid4().hex
     payload = {"prompt": workflow, "client_id": client_id}
 
@@ -481,14 +687,39 @@ def queue_workflow(workflow: Dict[str, Any]) -> Optional[str]:
         if resp.status_code == 200:
             prompt_id = resp.json().get("prompt_id")
             logger.info(f"📋 Workflow queued: {prompt_id}")
-            return prompt_id
-        else:
-            error_text = resp.text[:500]
-            logger.error(f"❌ Queue failed ({resp.status_code}): {error_text}")
-            return None
+            return prompt_id, ""
+        detail = _summarize_comfy_error(resp)
+        logger.error(f"❌ Queue failed ({resp.status_code}): {detail}")
+        return None, f"HTTP {resp.status_code} {detail}"
     except Exception as e:
         logger.error(f"❌ Queue request failed: {e}")
-        return None
+        return None, str(e)
+
+
+def _summarize_comfy_error(resp: Any) -> str:
+    """Condense ComfyUI's validation payload into a short, loggable string."""
+    try:
+        body = resp.json()
+    except Exception:
+        return resp.text[:300]
+    parts = []
+    for node_id, err in (body.get("node_errors") or {}).items():
+        for item in err.get("errors", []) or []:
+            detail = item.get("details") or item.get("message") or ""
+            parts.append(f"node {node_id} ({err.get('class_type')}): {detail}")
+    if not parts:
+        parts.append(json.dumps(body)[:300])
+    return " | ".join(parts)[:600]
+
+
+def verify_workflow_models(workflow: Dict[str, Any]) -> List[str]:
+    """Return the workflow model files that are not present on this worker."""
+    missing = []
+    for filename, subdir in _workflow_model_names(workflow).items():
+        target = Path(COMFYUI_PATH) / "models" / subdir / filename
+        if not target.exists():
+            missing.append(f"{subdir}/{filename}")
+    return missing
 
 
 def wait_for_completion(prompt_id: str, timeout: int = 2400) -> bool:
@@ -625,6 +856,11 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     job_input = event.get("input", {})
     log_lines = []
 
+    def _fail(message: str) -> Dict[str, Any]:
+        """Return an error payload carrying the worker log tail for debugging."""
+        logger.error(f"❌ Job failed: {message}")
+        return {"ok": False, "error_message": message, "log": log_lines[-30:]}
+
     logger.info(f"🎬 Job started: {job_id}")
     job_start = time.time()
 
@@ -632,26 +868,28 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Extract inputs
         workflow = job_input.get("workflow")
         if not workflow:
-            return {"error": "No workflow provided"}
+            return _fail("No workflow provided")
 
         images = job_input.get("images", {})
         lora_downloads = job_input.get("lora_downloads", [])
 
         # 2. Check CUDA
         if not wait_for_cuda():
-            return {"error": "No CUDA device available"}
+            return _fail("No CUDA device available")
+        gpu_name = get_cuda_device()
+        log_lines.append(f"GPU: {gpu_name}")
 
         # 3. Ensure models are downloaded
         model_result = ensure_models()
         if not model_result.models_ready:
-            return {"error": f"Model setup failed: {model_result.error}"}
+            return _fail(f"Model setup failed: {model_result.error}")
         log_lines.append(
             f"Models ready in {model_result.download_time_s:.1f}s"
         )
 
         # 4. Start ComfyUI
         if not start_comfyui():
-            return {"error": "Failed to start ComfyUI"}
+            return _fail("Failed to start ComfyUI")
 
         # 5. Save input images
         if images:
@@ -666,22 +904,39 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
         # 6. Download LoRAs
         if lora_downloads:
             if not download_loras(lora_downloads):
-                return {"error": "Failed to download required LoRAs"}
+                return _fail("Failed to download required LoRAs")
             log_lines.append(f"Downloaded {len(lora_downloads)} LoRA(s)")
 
-        # 7. Queue workflow
-        prompt_id = queue_workflow(workflow)
-        if not prompt_id:
-            return {"error": "Failed to queue workflow"}
+        # 7. Fetch any checkpoint/turbo-LoRA this workflow references but the
+        #    worker does not have yet (variants are downloaded on demand).
+        fetched, missing_models = ensure_workflow_models(workflow)
+        if fetched:
+            log_lines.append(f"On-demand models: {', '.join(fetched)}")
+        if missing_models:
+            return _fail(f"Workflow models unavailable: {', '.join(missing_models)}")
 
-        # 8. Wait for completion
+        # 8. Confirm every referenced model file is actually on disk
+        absent = verify_workflow_models(workflow)
+        log_lines.append(
+            f"Models on disk: {len(_workflow_model_names(workflow)) - len(absent)}"
+            f"/{len(_workflow_model_names(workflow))}"
+        )
+        if absent:
+            return _fail(f"Models missing on worker: {', '.join(absent)}")
+
+        # 9. Queue workflow
+        prompt_id, queue_detail = queue_workflow(workflow)
+        if not prompt_id:
+            return _fail(f"Failed to queue workflow — {queue_detail}")
+
+        # 10. Wait for completion
         if not wait_for_completion(prompt_id, timeout=2400):
-            return {"error": "Workflow execution failed or timed out"}
+            return _fail("Workflow execution failed or timed out")
 
         # 9. Collect outputs
         outputs = collect_outputs(prompt_id)
         if not outputs:
-            return {"error": "No outputs produced"}
+            return _fail("No outputs produced")
 
         elapsed = time.time() - job_start
         log_lines.append(f"Completed in {elapsed:.1f}s")
@@ -693,12 +948,13 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
             "files": outputs,
             "job_time_s": round(elapsed, 1),
             "model_time_s": round(model_result.download_time_s, 1),
+            "gpu": gpu_name,
             "log": log_lines,
         }
 
     except Exception as e:
         logger.exception(f"❌ Job {job_id} failed: {e}")
-        return {"error": str(e)}
+        return _fail(str(e))
 
 
 # ---- Entrypoint ----

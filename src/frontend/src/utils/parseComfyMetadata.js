@@ -137,18 +137,50 @@ export function parseComfyWorkflow(workflow) {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // 2b. H3-style graphs: no KSampler node — steps live in BasicScheduler,
+  //     the seed in RandomNoise (consumed by SamplerCustomAdvanced).
+  // ─────────────────────────────────────────────────────────────────
+  if (result.steps == null) {
+    for (const [, node] of Object.entries(nodes)) {
+      if (node.class_type === 'BasicScheduler' && typeof node.inputs?.steps === 'number') {
+        result.steps = node.inputs.steps
+        if (typeof node.inputs.scheduler === 'string') result.scheduler = node.inputs.scheduler
+        break
+      }
+    }
+  }
+  if (result.seed == null) {
+    for (const [, node] of Object.entries(nodes)) {
+      if (node.class_type === 'RandomNoise' && typeof node.inputs?.noise_seed === 'number') {
+        result.seed = node.inputs.noise_seed
+        break
+      }
+    }
+  }
+
+  // Frame rate — from the video combine node (video tools only)
+  for (const [, node] of Object.entries(nodes)) {
+    if (node.class_type === 'VHS_VideoCombine' && typeof node.inputs?.frame_rate === 'number') {
+      result.fps = node.inputs.frame_rate
+      break
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // 3. Dimensions — from latent / video nodes
   // ─────────────────────────────────────────────────────────────────
   const LATENT_TYPES = new Set([
     'EmptyLatentImage', 'EmptySD3LatentImage', 'EmptyHunyuanLatentVideo',
     'EmptyMochiLatentVideo', 'EmptyLTXVLatentVideo', 'WanImageToVideo',
     'WanFirstAndLastFrameToVideo', 'WanVideoImageToVideoEncodeMultiGPU',
+    'MiniMaxH3ImageToVideo',
   ])
   for (const [, node] of Object.entries(nodes)) {
     if (!LATENT_TYPES.has(node.class_type)) continue
     const inp = node.inputs || {}
     if (typeof inp.width === 'number')  result.width  = inp.width
     if (typeof inp.height === 'number') result.height = inp.height
+    if (typeof inp.length === 'number') result.length = inp.length
     break
   }
 
@@ -373,6 +405,20 @@ function _extractLoras(nodes) {
       if (highName || lowName) {
         loras.push({ high: highName, low: lowName || highName, strength })
       }
+    }
+
+    // Strategy B2: generic single-stage chains (e.g. MiniMax-H3, node ids
+    // outside the 170-189 high/low ranges). Each loader becomes one entry on
+    // the high slot; known model-bundled turbo LoRAs are skipped — they come
+    // back via the quality-mode preset, not as user LoRAs.
+    const pairedIds = new Set([...highNodes, ...lowNodes].map(n => n.id))
+    const extraNodes = loraModelOnlyNodes
+      .filter(n => !pairedIds.has(n.id))
+      .filter(n => !/^minimax_h3_fl2v_turbo_/.test(n.inputs?.lora_name || ''))
+      .sort((a, b) => a.id - b.id)
+    for (const n of extraNodes) {
+      const name = n.inputs?.lora_name || ''
+      if (name) loras.push({ high: name, low: '', strength: n.inputs?.strength_model ?? 1.0 })
     }
   }
 

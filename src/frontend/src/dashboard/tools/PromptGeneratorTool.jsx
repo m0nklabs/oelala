@@ -52,7 +52,7 @@ const ENHANCEMENT_MODES = [
 const PROMPTGEN_DEFAULTS = {
   input: '', style: '', enhanceMode: 'expand', includeNegative: true,
   includeMotion: false, cameraMotion: '', nsfwMode: false, nsfwIntensity: 3, enhanceModel: DEFAULT_PROMPT_LLM,
-  targetModel: '', h3I2v: false,
+  targetModel: '', h3I2v: false, sceneRoll: false,
 }
 
 export default function PromptGeneratorTool({ onSendToTool }) {
@@ -69,6 +69,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)
   const [targetModel, setTargetModel] = useState(initial.targetModel || '')
   const [h3I2v, setH3I2v] = useState(initial.h3I2v || false)
+  const [sceneRoll, setSceneRoll] = useState(initial.sceneRoll || false)
 
   const targetIsH3 = targetModel === MINIMAX_H3_TARGET
 
@@ -80,9 +81,9 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
     input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
-    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v,
+    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v, sceneRoll,
   }), [input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
-    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v])
+    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v, sceneRoll])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
@@ -91,7 +92,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     setIncludeNegative(d.includeNegative); setIncludeMotion(d.includeMotion)
     setCameraMotion(d.cameraMotion || '')
     setNsfwMode(d.nsfwMode); setNsfwIntensity(d.nsfwIntensity); setEnhanceModel(d.enhanceModel)
-    setTargetModel(d.targetModel || ''); setH3I2v(d.h3I2v || false)
+    setTargetModel(d.targetModel || ''); setH3I2v(d.h3I2v || false); setSceneRoll(!!d.sceneRoll)
   }, [resetDefaults])
 
   // Auto-switch model list when toggling NSFW
@@ -135,6 +136,7 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       model: enhanceModel,
       ...(nsfwMode && { nsfw_intensity: nsfwIntensity }),
       ...(targetIsH3 && { target_model: MINIMAX_H3_TARGET, target_i2v: h3I2v }),
+      ...(targetIsH3 && sceneRoll && { randomize: true }),
     })
 
     if (result) {
@@ -327,9 +329,18 @@ export default function PromptGeneratorTool({ onSendToTool }) {
               />
               Use as first keyframe (image-to-video)
             </label>
+            <label className="checkbox-label" style={{ marginTop: '6px' }}>
+              <input
+                type="checkbox"
+                checked={sceneRoll}
+                onChange={(e) => setSceneRoll(e.target.checked)}
+              />
+              🎲 Roll a scene (structured randomiser)
+            </label>
             <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
               Official H3-Context-IR format: one prompt drives video and its synchronized
               soundtrack (shots, camera moves, soundscape, music). No negative prompt — H3 ignores them.
+              {sceneRoll && ' The roll picks place, light, wardrobe, act arc and per-shot camera, then the model writes the shots.'}
             </p>
           </div>
         )}
@@ -420,6 +431,27 @@ export default function PromptGeneratorTool({ onSendToTool }) {
             </div>
             <p className="result-text">{result.prompt}</p>
           </div>
+
+          {result.scene && (
+            <div className="result-card">
+              <div className="result-header">
+                <h4>🎲 Rolled scene</h4>
+              </div>
+              <p className="result-text muted" style={{ fontSize: '12px' }}>
+                {[result.scene.place, result.scene.lighting, result.scene.clothes, result.scene.style_pack]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+              <ul style={{ margin: '6px 0 0', paddingLeft: '18px', fontSize: '12px' }}>
+                {(result.scene.shots || []).map((shot) => (
+                  <li key={shot.index}>
+                    <strong>{shot.stage}</strong> {shot.start_s}–{shot.end_s}s:{' '}
+                    {(shot.actions || []).join('; ') || 'hold the moment'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {result.negative_prompt && (
             <div className="result-card">

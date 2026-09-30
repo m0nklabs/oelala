@@ -16,10 +16,8 @@
 #   files are also small enough to experiment on 48 GB tiers.
 # Container disk: 100 GB
 #
-# ComfyUI: cloned from the official Comfy-Org/ComfyUI master branch — the
-# MiniMax-H3 core nodes (MiniMaxH3ImageToVideo, VAEDecodeAudio, ...) landed
-# there with the H3 release (July 2026). CACHE_DATE busts the clone when the
-# checkout needs refreshing.
+# ComfyUI: cloned from the official Comfy-Org/ComfyUI repo, pinned to a release
+# tag via COMFYUI_VERSION. CACHE_DATE busts the clone when the tag needs a rebuild.
 #
 # Deploy:  ./deploy.sh  (builds, tags, pushes, AND updates RunPod template)
 #
@@ -37,10 +35,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git git-lfs ffmpeg libgl1 libglib2.0-0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ---- ComfyUI (official master — required for MiniMax-H3 core nodes) ----
-ARG CACHE_DATE=2026-08-16
+# ---- ComfyUI (pinned release tag) ----
+# v0.37.2 (2026-09) replaces the 2026-08-16 master snapshot and unlocks the same
+# memory tricks the Windows-PC install (0.33.1) already benefits from:
+#   - H3 peak-memory fix (#15486) + memory-estimation fix (#15983)
+#   - comfy-aimdo 0.5.5 DynamicVRAM with auto --fast-disk (#16333)
+#   - int8_convrot VAE kernels via comfy-kitchen (0.31+)
+#   - turbo-ready: MiniMaxH3SigmaShift node requires ComfyUI 0.31+
+# requirements.txt does not pin torch, so the base image keeps torch 2.9.1/cu1300
+# (comfy-kitchen needs CUDA >= 13 runtime).
+ARG CACHE_DATE=2026-09-24
+ARG COMFYUI_VERSION=v0.37.2
 WORKDIR /comfyui
-RUN git clone --depth 1 https://github.com/Comfy-Org/ComfyUI.git . && \
+RUN git clone --depth 1 --branch "${COMFYUI_VERSION}" https://github.com/Comfy-Org/ComfyUI.git . && \
     pip install --no-cache-dir -r requirements.txt
 
 # ---- Custom Nodes ----

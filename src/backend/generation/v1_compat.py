@@ -136,6 +136,8 @@ _PASSTHROUGH_FIELDS = {
     "clip_count",
     "unet_high_noise",
     "unet_low_noise",
+    "quality_mode",
+    "model_variant",
 }
 
 

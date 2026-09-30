@@ -2,6 +2,33 @@ import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video, Wand2, ChevronDown, Folder, FolderInput } from 'lucide-react'
 import { BACKEND_BASE, getMediaUrl } from '../../config'
 import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
+
+/**
+ * Fetch embedded workflow metadata for a user media item.
+ * Cloud generations never live in the local ComfyUI output dir, so the
+ * user-bucket workflow endpoint is the reliable source; the local
+ * /comfyui-metadata route only works for files still in ComfyUI/output.
+ */
+const fetchMediaWorkflow = async (apiFetch, item) => {
+  try {
+    const typeSegment = item.type === 'video' ? 'videos' : item.type === 'audio' ? 'audio' : 'images'
+    const res = await apiFetch(`/user/media/${typeSegment}/${item.filename}/workflow`)
+    if (res.ok) {
+      const json = await res.json()
+      return parseComfyWorkflow(json.workflow || json.metadata || {})
+    }
+  } catch (_) { /* no metadata in user bucket */ }
+  // Fallback: local ComfyUI output dir (older local-only items)
+  try {
+    const res = await apiFetch(`/comfyui-metadata/${item.filename}`)
+    if (res.ok) {
+      const json = await res.json()
+      return parseComfyWorkflow(json.metadata || {})
+    }
+  } catch (_) { /* no metadata */ }
+  return {}
+}
+
 import { listUserMedia, listUnifiedMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
@@ -2316,11 +2343,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                           try {
                             let workflowData = {}
                             try {
-                              const res = await apiFetch(`/comfyui-metadata/${item.filename}`)
-                              if (res.ok) {
-                                const json = await res.json()
-                                workflowData = parseComfyWorkflow(json.metadata || {})
-                              }
+                              workflowData = await fetchMediaWorkflow(apiFetch, item)
                             } catch (_) { /* no metadata */ }
                             // If only one applicable tool, send directly — no dropdown
                             if (tools.length <= 1) {
@@ -2572,11 +2595,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                         try {
                           let workflowData = {}
                           try {
-                            const res = await apiFetch(`/comfyui-metadata/${selectedItem.filename}`)
-                            if (res.ok) {
-                              const json = await res.json()
-                              workflowData = parseComfyWorkflow(json.metadata || {})
-                            }
+                            workflowData = await fetchMediaWorkflow(apiFetch, selectedItem)
                           } catch (_) { /* no metadata */ }
                           onSendToTool(tools[0].id, { item: selectedItem, workflow: workflowData })
                           setSelectedIndex(null)
@@ -2621,11 +2640,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                             try {
                               let workflowData = {}
                               try {
-                                const res = await apiFetch(`/comfyui-metadata/${selectedItem.filename}`)
-                                if (res.ok) {
-                                  const json = await res.json()
-                                  workflowData = parseComfyWorkflow(json.metadata || {})
-                                }
+                                workflowData = await fetchMediaWorkflow(apiFetch, selectedItem)
                               } catch (_) { /* no metadata, that's fine */ }
                               onSendToTool(tool.id, { item: selectedItem, workflow: workflowData })
                               setSelectedIndex(null)

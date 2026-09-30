@@ -103,6 +103,8 @@ class MiniMaxH3CloudT2VAdapter(GenerationAdapter):
             aspect_ratio=req.aspect_ratio or "16:9",
             megapixels=req.megapixels,
             lora_configs=lora_dicts,
+            quality_mode=req.quality_mode or "full",
+            model_variant=req.model_variant or "official",
         )
 
     def cost(self, req: GenerationRequest) -> int:

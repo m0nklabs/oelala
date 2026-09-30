@@ -1101,7 +1101,11 @@ def download_loras(lora_downloads: list, job=None):
     downloaded = 0
     for lora in lora_downloads:
         filename = lora["filename"]
-        url = lora["url"]
+        # Primary source + optional fallback (e.g. HF mirror first, then the
+        # signed self-hosted backend URL).
+        candidate_urls = [
+            u for u in (lora.get("url", ""), lora.get("fallback_url", "")) if u
+        ]
         target = target_dir / filename
 
         # Check if already present (volume cache or comfyui dir)
@@ -1110,53 +1114,69 @@ def download_loras(lora_downloads: list, job=None):
             logger.info(f"✅ LoRA cached: {filename}")
             continue
 
+        if not candidate_urls:
+            logger.warning(f"⚠️ Skipping LoRA entry with missing url: {lora}")
+            continue
+
         logger.info(f"⬇️ Downloading LoRA: {filename}...")
         if job:
             _progress(job, f"Downloading LoRA: {filename}...")
 
-        try:
-            # Ensure parent dirs exist for LoRAs in subdirectories (e.g. "wan 2.2/file.safetensors")
-            target.parent.mkdir(parents=True, exist_ok=True)
-
-            headers = {}
-            hf_token = lora.get("hf_token", "")
-            if hf_token:
-                headers["Authorization"] = f"Bearer {hf_token}"
-            resp = requests.get(url, stream=True, timeout=600, headers=headers)
-            resp.raise_for_status()
-
-            total = int(resp.headers.get("content-length", 0))
+        downloaded_file = False
+        last_error = None
+        for url in candidate_urls:
             tmp = target.with_suffix(".download")
-            received = 0
-            last_pct = -1
-            with open(tmp, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):  # 8MB chunks
-                    f.write(chunk)
-                    received += len(chunk)
-                    if total > 0:
-                        pct = int(received / total * 100)
-                        # Report progress every 25%
-                        if pct >= last_pct + 25:
-                            last_pct = pct
-                            if job:
-                                _progress(job, f"Downloading LoRA {filename}: {pct}%")
-            tmp.rename(target)
-            size_mb = target.stat().st_size / (1024 * 1024)
-            logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
+            try:
+                # Ensure parent dirs exist for LoRAs in subdirectories (e.g. "wan 2.2/file.safetensors")
+                target.parent.mkdir(parents=True, exist_ok=True)
 
-            # If saved to volume, also symlink into comfyui dir so ComfyUI finds it
-            if volume_loras is not None and target_dir == volume_loras and not comfyui_target.exists():
-                comfyui_target.parent.mkdir(parents=True, exist_ok=True)
-                comfyui_target.symlink_to(target)
-                logger.info(f"🔗 Symlinked LoRA: {filename}")
+                headers = {}
+                hf_token = lora.get("hf_token", "")
+                if hf_token and "huggingface.co" in url:
+                    # Only send the HF token to huggingface.co hosts
+                    headers["Authorization"] = f"Bearer {hf_token}"
+                resp = requests.get(url, stream=True, timeout=600, headers=headers)
+                resp.raise_for_status()
 
-            downloaded += 1
-        except Exception as e:
-            logger.error(f"❌ Failed to download LoRA {filename}: {e}")
-            tmp = target.with_suffix(".download")
-            if tmp.exists():
-                tmp.unlink()
-            raise RuntimeError(f"Failed to download LoRA {filename}: {e}")
+                total = int(resp.headers.get("content-length", 0))
+                received = 0
+                last_pct = -1
+                with open(tmp, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):  # 8MB chunks
+                        f.write(chunk)
+                        received += len(chunk)
+                        if total > 0:
+                            pct = int(received / total * 100)
+                            # Report progress every 25%
+                            if pct >= last_pct + 25:
+                                last_pct = pct
+                                if job:
+                                    _progress(job, f"Downloading LoRA {filename}: {pct}%")
+                tmp.rename(target)
+                size_mb = target.stat().st_size / (1024 * 1024)
+                logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
+                downloaded_file = True
+                break
+            except Exception as e:
+                last_error = e
+                tmp = target.with_suffix(".download")
+                if tmp.exists():
+                    tmp.unlink()
+                if len(candidate_urls) > 1:
+                    logger.warning(f"⚠️ LoRA source failed ({url}), trying next: {e}")
+        if not downloaded_file:
+            logger.error(f"❌ Failed to download LoRA {filename}: {last_error}")
+            if job:
+                _progress(job, f"Failed to download LoRA: {filename}")
+            raise RuntimeError(f"Failed to download LoRA {filename}: {last_error}")
+
+        # If saved to volume, also symlink into comfyui dir so ComfyUI finds it
+        if volume_loras is not None and target_dir == volume_loras and not comfyui_target.exists():
+            comfyui_target.parent.mkdir(parents=True, exist_ok=True)
+            comfyui_target.symlink_to(target)
+            logger.info(f"🔗 Symlinked LoRA: {filename}")
+
+        downloaded += 1
 
     if downloaded > 0:
         logger.info(f"✅ Downloaded {downloaded} LoRA(s) on demand")

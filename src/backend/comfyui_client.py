@@ -43,6 +43,72 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# MiniMax-H3 turbo presets (ModelTC/Minimax-H3-Turbo, Comfy-Org mirrored files).
+# lora + steps + sigma shift must be set together to match the model table:
+#  - 4-step v1.0 768p is trained at 1344x768 with sigma shift 6/3 (the base
+#    checkpoint bakes 12/3), so it needs the MiniMaxH3SigmaShift node override.
+#  - 8-step v1.0 (544p-trained) uses the base shift 12/3 — no override node.
+# Turbo graphs use the euler sampler (ModelTC reference workflows).
+MINIMAX_H3_TURBO_PRESETS = {
+    "draft": {
+        "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+        "steps": 4,
+        "shift_video": 6.0,
+        "shift_audio": 3.0,
+    },
+    "standard": {
+        "lora": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "steps": 8,
+        "shift_video": None,
+        "shift_audio": None,
+    },
+}
+
+# MiniMax-H3 checkpoint variants: the official Comfy-Org release plus community
+# finetunes mirrored from Civitai into the private HF model repo.
+#
+# Filenames are the upstream Civitai names — the trailing number is the Civitai
+# file id — so a manual download and a worker download produce the same file.
+#
+#   h3ErosMax_beta5_3185144  turbo-hybrid fp8/w4a8 (14.0 GB, 180 layers 4-bit)
+#   h3ErosMax_beta5_3178732  turbo int8        (21.0 GB, every layer 8-bit)
+#   h3ErosMax_beta5_3185154  non-turbo int8    (21.0 GB, every layer 8-bit)
+#   DasiwaMinimaxH3_..._3203135  DaSiWa Hybrid Turbo v2 int8
+#   DasiwaMinimaxH3_..._3203130  DaSiWa Hybrid v2 int8 (non-turbo)
+#
+# "turbo" variants carry a baked distillation and are sampled with few steps;
+# non-turbo variants need the caller's full step count.
+MINIMAX_H3_VARIANTS = {
+    "official": {
+        "checkpoint": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "turbo": False,
+    },
+    "eros": {
+        "checkpoint": "h3ErosMax_beta5_3185144.safetensors",
+        "turbo": True,
+    },
+    "eros_int8_turbo": {
+        "checkpoint": "h3ErosMax_beta5_3178732.safetensors",
+        "turbo": True,
+    },
+    "eros_int8": {
+        "checkpoint": "h3ErosMax_beta5_3185154.safetensors",
+        "turbo": False,
+    },
+    "dasiwa_turbo": {
+        "checkpoint": "DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors",
+        "turbo": True,
+    },
+    "dasiwa": {
+        "checkpoint": "DasiwaMinimaxH3_dasiwaHybridV2_3203130.safetensors",
+        "turbo": False,
+    },
+}
+
+MINIMAX_H3_CHECKPOINTS = {
+    name: spec["checkpoint"] for name, spec in MINIMAX_H3_VARIANTS.items()
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Workflow Directory and Dynamic Loading
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1105,6 +1171,27 @@ WAN22_I2V_Q5_WORKFLOW = {
 }
 
 
+def _match_lora_name(requested: str, available: List[str]) -> Optional[str]:
+    """Map a requested LoRA name onto a filename the target server actually has.
+
+    Workflow JSON carries forward-slash paths (`minimax-h3/x.safetensors`) while
+    Windows ComfyUI servers enumerate files with backslashes
+    (`minimax-h3\\x.safetensors`), and prompt validation does an exact string
+    match against that list. Returns the matching server-side name, a unique
+    basename match, or None when the server does not have the LoRA.
+    """
+    if requested in available:
+        return requested
+    for candidate in (requested.replace("/", "\\"), requested.replace("\\", "/")):
+        if candidate in available:
+            return candidate
+    basename = requested.replace("\\", "/").rsplit("/", 1)[-1]
+    matches = [
+        a for a in available if a.replace("\\", "/").rsplit("/", 1)[-1] == basename
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 class ComfyUIClient:
     """Client for ComfyUI API integration"""
 
@@ -1118,10 +1205,15 @@ class ComfyUIClient:
         # Thread-safe lock for job_metadata access
         self._metadata_lock = threading.Lock()
 
-    def is_available(self) -> bool:
-        """Check if ComfyUI is running and accessible"""
+    def is_available(self, timeout: float = 5) -> bool:
+        """Check if ComfyUI is running and accessible.
+
+        *timeout* must cover lazy-start backends: a wake proxy (caretaker) may
+        need 1-2 minutes to cold-start ComfyUI before answering /system_stats.
+        Connection-refused fails fast regardless of the timeout.
+        """
         try:
-            resp = requests.get(f"{self.base_url}/system_stats", timeout=5)
+            resp = requests.get(f"{self.base_url}/system_stats", timeout=timeout)
             return resp.status_code == 200
         except Exception:
             return False
@@ -1137,6 +1229,25 @@ class ComfyUIClient:
                 return data[loader_type]["input"]["required"].get("unet_name", [[]])[0]
         except Exception as e:
             logger.error(f"Error fetching {loader_type} models: {e}")
+        return []
+
+    def get_lora_names(self) -> List[str]:
+        """Fetch the LoRA filenames exactly as this server enumerates them.
+
+        The list is what prompt validation matches `lora_name` against — on
+        Windows installs subfolder entries use backslash separators.
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/object_info/LoraLoaderModelOnly", timeout=5
+            )
+            data = resp.json()
+            if "LoraLoaderModelOnly" in data:
+                return data["LoraLoaderModelOnly"]["input"]["required"].get(
+                    "lora_name", [[]]
+                )[0]
+        except Exception as e:
+            logger.error(f"Error fetching LoRA list: {e}")
         return []
 
     def upload_image(self, image_path: str, subfolder: str = "") -> Optional[str]:
@@ -1264,43 +1375,6 @@ class ComfyUIClient:
                 return None
         except Exception as e:
             logger.error(f"🎬 Video upload error: {e}")
-            return None
-
-    def upload_lora(self, lora_path: str) -> Optional[str]:
-        """Upload a LoRA file to this ComfyUI server's loras folder.
-
-        Targets the modern ``/internal/models/upload`` endpoint (available on
-        current ComfyUI installs — including the Windows-PC portable), which
-        writes into ``models/loras`` so a subsequent ``LoraLoaderModelOnly``
-        node can load the file by name. Returns the uploaded filename (the
-        basename) on success, else ``None``.
-        """
-        try:
-            path = Path(lora_path)
-            if not path.exists():
-                logger.error(f"🎨 LoRA not found: {lora_path}")
-                return None
-            with open(path, "rb") as f:
-                files = {"file": (path.name, f)}
-                # type=loras routes the file into models/loras on the server.
-                data = {"type": "loras", "subfolder": "", "overwrite": "true"}
-                resp = requests.post(
-                    f"{self.base_url}/internal/models/upload",
-                    files=files,
-                    data=data,
-                    timeout=300,
-                )
-            if resp.status_code == 200:
-                result = resp.json() if resp.text else {}
-                name = result.get("name") or path.name
-                logger.info(f"🎨 LoRA uploaded to server: {name}")
-                return name
-            logger.error(
-                f"🎨 LoRA upload failed: {resp.status_code} - {resp.text[:200]}"
-            )
-            return None
-        except Exception as e:
-            logger.error(f"🎨 LoRA upload error: {e}")
             return None
 
     def get_resolution_dimensions(
@@ -4067,6 +4141,8 @@ class ComfyUIClient:
         last_frame_link: Optional[list] = None,
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         output_kind: str = "vhs",
+        quality_mode: str = "full",
+        model_variant: str = "official",
     ) -> Dict[str, Any]:
         """Shared MiniMax-H3 sampling graph (model load → AV decode → mp4).
 
@@ -4076,8 +4152,45 @@ class ComfyUIClient:
           - "savevideo" (local Windows PC): core `CreateVideo` + `SaveVideo`
             nodes, which exist on the Windows portable install where
             VideoHelperSuite (VHS_VideoCombine) is NOT installed.
+        *quality_mode* selects the turbo preset ("draft" = 4-step LoRA + shift
+        6/3, "standard" = 8-step LoRA, "full" = base 20-step behaviour).
+        *model_variant* selects the checkpoint ("official" = Comfy-Org,
+        "eros" = H3 Eros Max NSFW finetune with turbo baked in — draft/
+        standard only; "full" falls back to official).
         """
         workflow = {}
+
+        preset = MINIMAX_H3_TURBO_PRESETS.get(quality_mode or "full")
+        variant = MINIMAX_H3_VARIANTS.get(model_variant)
+        if variant and model_variant != "official":
+            # Community checkpoints: turbo variants carry a baked distillation,
+            # so draft/standard run them without the turbo LoRA or sigma-shift
+            # nodes. Non-turbo variants (and turbo variants asked for "full")
+            # keep the caller's step count and the base res_multistep sampler.
+            checkpoint = variant["checkpoint"]
+            if variant["turbo"] and quality_mode in ("draft", "standard"):
+                preset = {
+                    "lora": None,
+                    "steps": 4 if quality_mode == "draft" else 8,
+                    "shift_video": None,
+                    "shift_audio": None,
+                }
+                logger.info(
+                    f"🔥 MiniMax-H3 variant '{model_variant}' (turbo): "
+                    f"{preset['steps']} steps, distillation baked in"
+                )
+            else:
+                preset = None
+                logger.info(
+                    f"🔥 MiniMax-H3 variant '{model_variant}': "
+                    f"{steps} steps, base sampler"
+                )
+        if preset:
+            steps = preset["steps"]
+            logger.info(
+                f"⚡ MiniMax-H3 turbo mode '{quality_mode}': "
+                f"{preset['steps']} steps, lora={preset['lora']}"
+            )
 
         # Node 1: UNETLoader — FL2VA diffusion model (t2v + i2v keyframes)
         workflow["1"] = {
@@ -4132,29 +4245,51 @@ class ComfyUIClient:
             "inputs": h3_inputs,
         }
 
-        # Apply MiniMax-H3 LoRAs (single-stage) by chaining LoraLoaderModelOnly
-        # in front of the base model. The guider + scheduler already reference
-        # model_link, which now points at the last loader in the chain.
-        if lora_configs:
-            lora_node_id = 16
-            for i, cfg in enumerate(lora_configs):
-                if not cfg:
-                    continue
-                lora_name = cfg.get("name") or ""
-                strength = cfg.get("strength", 1.0)
-                if not lora_name:
-                    continue
-                workflow[str(lora_node_id)] = {
-                    "class_type": "LoraLoaderModelOnly",
-                    "inputs": {
-                        "model": model_link,
-                        "lora_name": lora_name,
-                        "strength_model": strength,
-                    },
-                }
-                model_link = [str(lora_node_id), 0]
-                logger.info(f"🎨 MiniMax-H3 LoRA #{i + 1}: {lora_name} @ {strength}")
-                lora_node_id += 1
+        # Apply LoRAs (single-stage) by chaining LoraLoaderModelOnly in front of
+        # the base model. With a turbo preset the turbo LoRA chains first, then
+        # any user LoRAs; the guider + scheduler reference model_link, which
+        # points at the last loader in the chain.
+        chain: List[Dict[str, Any]] = list(lora_configs or [])
+        if preset and preset.get("lora"):
+            chain = [{"name": preset["lora"], "strength": 1.0}] + chain
+
+        lora_node_id = 16
+        for i, cfg in enumerate(chain):
+            if not cfg:
+                continue
+            lora_name = cfg.get("name") or ""
+            strength = cfg.get("strength", 1.0)
+            if not lora_name:
+                continue
+            workflow[str(lora_node_id)] = {
+                "class_type": "LoraLoaderModelOnly",
+                "inputs": {
+                    "model": model_link,
+                    "lora_name": lora_name,
+                    "strength_model": strength,
+                },
+            }
+            model_link = [str(lora_node_id), 0]
+            logger.info(f"🎨 MiniMax-H3 LoRA #{i + 1}: {lora_name} @ {strength}")
+            lora_node_id += 1
+
+        # Turbo sigma-shift override: only the 768p-trained presets need it
+        # (shift 6/3 instead of the checkpoint-baked 12/3).
+        if preset and preset.get("shift_video") is not None:
+            workflow[str(lora_node_id)] = {
+                "class_type": "MiniMaxH3SigmaShift",
+                "inputs": {
+                    "model": model_link,
+                    "shift_video": preset["shift_video"],
+                    "shift_audio": preset["shift_audio"],
+                },
+            }
+            model_link = [str(lora_node_id), 0]
+            logger.info(
+                f"⚡ MiniMax-H3 turbo sigma shift: "
+                f"{preset['shift_video']}/{preset['shift_audio']}"
+            )
+            lora_node_id += 1
 
         # Node 6: BasicGuider — no CFG / no negative prompt for H3
         workflow["6"] = {
@@ -4165,10 +4300,11 @@ class ComfyUIClient:
             },
         }
 
-        # Node 7: KSamplerSelect — res_multistep (official template)
+        # Node 7: KSamplerSelect — res_multistep (official template); turbo
+        # presets use euler (ModelTC reference workflows).
         workflow["7"] = {
             "class_type": "KSamplerSelect",
-            "inputs": {"sampler_name": "res_multistep"},
+            "inputs": {"sampler_name": "euler" if preset else "res_multistep"},
         }
 
         # Node 8: BasicScheduler — simple schedule (official template)
@@ -4285,6 +4421,8 @@ class ComfyUIClient:
         long_edge: int = 768,
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         output_kind: str = "vhs",
+        quality_mode: str = "full",
+        model_variant: str = "official",
     ) -> Optional[Dict[str, Any]]:
         """
         Build MiniMax-H3 22B Cloud T2V workflow — text-to-video+audio.
@@ -4323,6 +4461,8 @@ class ComfyUIClient:
             audio_vae=audio_vae,
             lora_configs=lora_configs,
             output_kind=output_kind,
+            quality_mode=quality_mode,
+            model_variant=model_variant,
         )
 
     def build_cloud_minimax_h3_i2v_workflow(
@@ -4345,6 +4485,8 @@ class ComfyUIClient:
         long_edge: int = 768,
         lora_configs: Optional[List[Dict[str, Any]]] = None,
         output_kind: str = "vhs",
+        quality_mode: str = "full",
+        model_variant: str = "official",
     ) -> Optional[Dict[str, Any]]:
         """
         Build MiniMax-H3 22B Cloud I2V workflow — image-to-video+audio.
@@ -4381,6 +4523,8 @@ class ComfyUIClient:
             first_frame_link=["14", 0],
             lora_configs=lora_configs,
             output_kind=output_kind,
+            quality_mode=quality_mode,
+            model_variant=model_variant,
         )
 
         # Node 14: LoadImage — first-frame keyframe
@@ -4389,6 +4533,41 @@ class ComfyUIClient:
             "inputs": {"image": image_name},
         }
         return workflow
+
+    def _resolve_local_lora_configs(
+        self, lora_configs: Optional[List[Dict[str, Any]]]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Re-map requested LoRA names onto what the target server actually has.
+
+        The Windows-PC ComfyUI enumerates loras with backslash separators, so a
+        forward-slash registry name fails prompt validation ("Value not in
+        list"). Names the server does not have at all are dropped with a
+        warning instead of queueing a prompt that can never run.
+        """
+        if not lora_configs:
+            return lora_configs
+        available = self.get_lora_names()
+        if not available:
+            logger.warning(
+                "🎨 Could not read the server LoRA list — passing requested"
+                " LoRA names through unchanged"
+            )
+            return lora_configs
+        resolved = []
+        for cfg in lora_configs:
+            if not cfg:
+                continue
+            name = _match_lora_name(cfg.get("name") or "", available)
+            if name is None:
+                logger.warning(
+                    f"🎨 MiniMax-H3 LoRA not present on server, skipping:"
+                    f" {cfg.get('name')}"
+                )
+                continue
+            if name != cfg.get("name"):
+                logger.info(f"🎨 MiniMax-H3 LoRA resolved to server name: {name}")
+            resolved.append({**cfg, "name": name})
+        return resolved or None
 
     def build_local_minimax_h3_t2v_workflow(
         self,
@@ -4408,6 +4587,7 @@ class ComfyUIClient:
         megapixels: Optional[float] = None,
         long_edge: int = 768,
         lora_configs: Optional[List[Dict[str, Any]]] = None,
+        quality_mode: str = "full",
     ) -> Optional[Dict[str, Any]]:
         """
         Build MiniMax-H3 local (Windows PC ComfyUI) T2V workflow.
@@ -4433,8 +4613,9 @@ class ComfyUIClient:
             audio_vae=audio_vae,
             aspect_ratio=aspect_ratio,
             megapixels=megapixels,
-            lora_configs=lora_configs,
+            lora_configs=self._resolve_local_lora_configs(lora_configs),
             output_kind="savevideo",
+            quality_mode=quality_mode,
         )
 
     def build_local_minimax_h3_i2v_workflow(
@@ -4456,6 +4637,7 @@ class ComfyUIClient:
         megapixels: Optional[float] = None,
         long_edge: int = 768,
         lora_configs: Optional[List[Dict[str, Any]]] = None,
+        quality_mode: str = "full",
     ) -> Optional[Dict[str, Any]]:
         """
         Build MiniMax-H3 local (Windows PC ComfyUI) I2V workflow.
@@ -4478,8 +4660,9 @@ class ComfyUIClient:
             audio_vae=audio_vae,
             aspect_ratio=aspect_ratio,
             megapixels=megapixels,
-            lora_configs=lora_configs,
+            lora_configs=self._resolve_local_lora_configs(lora_configs),
             output_kind="savevideo",
+            quality_mode=quality_mode,
         )
 
     def queue_prompt(self, workflow: Dict[str, Any]) -> Optional[str]:

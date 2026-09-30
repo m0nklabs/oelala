@@ -2149,6 +2149,11 @@ async def list_loras():
             "by_category": {},
         }
 
+    # Base-model family per LoRA (krea2, sdxl, pony, ...) so the UI can filter
+    # the picker per selected model. Derivation lives in lora_scanner (single
+    # source of truth, covered by tests/test_lora_scanner_base_model.py).
+    from lora_scanner import _derive_base_model
+
     # NSFW keywords for detection
     NSFW_KEYWORDS = [
         "nsfw",
@@ -2218,12 +2223,21 @@ async def list_loras():
     # e.g., "LTXXX" is a stylized "LTX" model name, not adult "XXX"
     MODEL_NAME_STRIPS = ["ltxxx", "ltx-xxx"]
 
+    # Whole directories that are NSFW by content (documented in
+    # docs/lora_registry.yaml) even when filenames carry no NSFW keyword,
+    # e.g. "krea2/KNP_000003000.safetensors".
+    NSFW_PATH_PREFIXES = ("krea2/",)
+
     def is_nsfw(name: str, path: str) -> bool:
         """Check if a LoRA is NSFW based on name/path."""
         check_str = f"{name} {path}".lower()
         # Strip model name patterns that cause false positives
         for strip in MODEL_NAME_STRIPS:
             check_str = check_str.replace(strip, "ltx")
+        # Directories that are NSFW as a whole
+        for prefix in NSFW_PATH_PREFIXES:
+            if path.startswith(prefix):
+                return True
         # Check for NSFW keywords
         for kw in NSFW_KEYWORDS:
             if kw in check_str:
@@ -2253,6 +2267,7 @@ async def list_loras():
                 "path": rel_path,
                 "name": name,
                 "category": category,
+                "base_model": _derive_base_model(rel_path),
                 "size_mb": round(lora_path.stat().st_size / (1024 * 1024), 1),
                 "nsfw": nsfw,
             }
@@ -3262,6 +3277,10 @@ def track_v2_local_job(prompt_id: str, job_info: dict) -> None:
         "sampler": job_info.get("sampler"),
         "scheduler": job_info.get("scheduler"),
         "adapter_name": job_info.get("adapter_name"),
+        # The backend-scoped ComfyUI client holds the register_job metadata;
+        # completion polling (_resolve_local_job_result) needs backend_id to
+        # resolve the SAME client or the auto-upload is skipped (404 outputs).
+        "backend_id": job_info.get("backend_id"),
         "source": job_info.get("source", "v2"),
         "compute_target": "local",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -3391,11 +3410,9 @@ _local_poller_task: Optional[asyncio.Task] = None
 
 def _lora_download_token(filename: str) -> str:
     """Generate HMAC-SHA256 token for LoRA download URL validation."""
-    import hmac
-    import hashlib
+    from src.backend.generation.lora_utils import lora_download_token
 
-    key = os.getenv("RUNPOD_API_KEY", "fallback-lora-key").encode()
-    return hmac.new(key, filename.encode(), hashlib.sha256).hexdigest()[:32]
+    return lora_download_token(filename)
 
 
 def _resolve_lora_path(name: str) -> tuple[Path, str] | tuple[None, None]:
@@ -3766,29 +3783,32 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
         if not b64_data:
             continue
 
-        # Generate filename
+        # Generate filename — model-family aware. The legacy hardcode was
+        # "wan22" from the days it was the only cloud video model; job_info
+        # carries the actual family (e.g. "minimax_h3", "ltx23", "wan22").
         timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
         orig_name = _safe_filename(f.get("filename", f"output_{i:03d}.mp4"))
         ext = Path(orig_name).suffix or ".mp4"
-        save_name = f"cloud_wan22_{timestamp}_{i:03d}{ext}"
+        family = str(job_info.get("model") or "wan22").replace("_", "")
+        save_name = f"cloud_{family}_{timestamp}_{i:03d}{ext}"
 
         try:
             file_bytes = base64.b64decode(b64_data)
 
             # Save to MinIO instead of local disk
             storage = get_storage_client()
-            storage.put("generated", f"cloud-wan22/{save_name}", file_bytes)
+            storage.put("generated", f"cloud-{family}/{save_name}", file_bytes)
             logger.info(
-                f"☁️ Saved cloud output to storage: generated/cloud-wan22/{save_name} ({len(file_bytes)} bytes)"
+                f"☁️ Saved cloud output to storage: generated/cloud-{family}/{save_name} ({len(file_bytes)} bytes)"
             )
 
             mime = f.get("type", "video/mp4")
             if "video" in mime:
-                output_video = f"/media/generated/cloud-wan22/{save_name}"
-                saved_path = f"generated/cloud-wan22/{save_name}"
+                output_video = f"/media/generated/cloud-{family}/{save_name}"
+                saved_path = f"generated/cloud-{family}/{save_name}"
             elif "image" in mime:
-                output_image = f"/media/generated/cloud-wan22/{save_name}"
-                saved_path = f"generated/cloud-wan22/{save_name}"
+                output_image = f"/media/generated/cloud-{family}/{save_name}"
+                saved_path = f"generated/cloud-{family}/{save_name}"
         except Exception as e:
             logger.error(f"☁️ Failed to save cloud output file {i}: {e}")
 
@@ -4403,6 +4423,18 @@ async def get_cloud_max_media_legacy(filename: str, request: Request):
     """Backwards-compat: serve old cloud-max output files."""
     safe_filename = _safe_filename(filename)
     return _storage_proxy_response("generated", f"cloud-max/{safe_filename}", request)
+
+
+@app.get("/media/generated/cloud-{family}/{filename}")
+async def get_cloud_family_media(family: str, filename: str, request: Request):
+    """Serve cloud output files for any model family
+    (cloud-wan22, cloud-minimaxh3, cloud-ltx23, ...)."""
+    import re as _re
+
+    if not _re.fullmatch(r"[a-z0-9]+", family or ""):
+        raise HTTPException(status_code=404, detail="Not found")
+    safe_filename = _safe_filename(filename)
+    return _storage_proxy_response("generated", f"cloud-{family}/{safe_filename}", request)
 
 
 @app.get("/loras/download/{filename:path}")
@@ -5624,6 +5656,21 @@ async def list_user_media(type: str = "all", user: User = Depends(get_current_us
         raise HTTPException(status_code=500, detail="Failed to retrieve user media")
 
 
+# NOTE: must be registered BEFORE the generic route below — Starlette matches
+# routes in registration order, and the generic {filename:path} route would
+# otherwise swallow ".../workflow" URLs (its _safe_filename basename turns the
+# tail into "workflow" -> NoSuchKey -> 404). This route was unreachable until
+# this shim was added.
+@app.get("/user/media/{media_type}/{filename:path}/workflow")
+async def get_user_media_workflow_route(
+    media_type: str,
+    filename: str,
+    user: User = Depends(get_current_user),
+):
+    """Serve the ComfyUI workflow embedded in a user's media file."""
+    return await get_user_media_workflow(media_type, filename, user)
+
+
 @app.get("/user/media/{media_type}/{filename:path}")
 async def get_user_media(
     media_type: str,
@@ -5739,7 +5786,8 @@ async def get_user_media(
         raise HTTPException(status_code=404, detail="Media not found")
 
 
-@app.get("/user/media/{media_type}/{filename:path}/workflow")
+# URL registration for this handler lives in the get_user_media_workflow_route
+# shim above (must precede the generic {filename:path} route — see note there).
 async def get_user_media_workflow(
     media_type: str, filename: str, user: User = Depends(get_current_user)
 ):
@@ -5787,12 +5835,12 @@ async def get_user_media_workflow(
                     import json as json_module
 
                     probe_data = json_module.loads(result.stdout)
-                    comment = (
-                        probe_data.get("format", {}).get("tags", {}).get("comment", "")
-                    )
-                    if comment and comment.startswith("{"):
-                        # ComfyUI stores {"prompt": "..."} where prompt is a JSON string
-                        workflow_data = json_module.loads(comment)
+                    tags = probe_data.get("format", {}).get("tags", {})
+                    # ComfyUI/VHS embeds the API-format graph in the "prompt"
+                    # tag; "comment" / "workflow" are used by other writers.
+                    raw = tags.get("prompt") or tags.get("comment") or tags.get("workflow") or ""
+                    if raw and raw.strip().startswith("{"):
+                        workflow_data = json_module.loads(raw)
                         prompt = workflow_data.get("prompt", workflow_data)
                         # Handle double-encoded JSON (prompt might be a string)
                         if isinstance(prompt, str):
@@ -8556,6 +8604,9 @@ class PromptGenerateRequest(BaseModel):
         None  # Target generation model, e.g. "minimax_h3" → H3-Context-IR skill
     )
     target_i2v: bool = False  # H3 skill: prompt anchors an input image (I2VA first frame)
+    randomize: bool = False  # H3 skill: roll a structured scene (place/light/arc/camera)
+    scene_seed: Optional[int] = None  # Reproducible scene roll; None = fresh roll
+    duration: Optional[float] = None  # Target clip length in seconds (drives the shot count)
 
 
 # Style keywords mapping (used for both template and LLM modes)
@@ -8637,6 +8688,12 @@ RULES:
 - Write everything in English.
 - NSFW content is allowed — do NOT censor or sanitize; write adult scenes explicitly and anatomically when requested.
 
+SOUND AND BODY GUARDS (H3-specific failure modes — always apply):
+- Sound is diegetic foley, described by its physical source. H3 misreads wet, close-mic sounds as eating: never let wet sound read as chewing, crunching, biting, chips or jaw grinding, and never describe food in an intimate scene. State what is wet and where it comes from.
+- Bodies stay intact: each person keeps two arms, two legs and one head; hands keep five separate fingers and stay attached to the same wrists; joints stay in normal range; bodies never melt into each other or into furniture; faces keep one nose and one mouth with no smear; skin stays skin, not wax.
+- Continuity carries between shots: clothes, hair and appearance stay as the previous shot ended — do not reset the look at a cut.
+- One camera move per shot, written once with type, amplitude and speed. When the input is an image, keep the reference camera (same distance, angle and height, only bodies move) unless a cut is explicit.
+
 OUTPUT — return strict JSON only, no markdown:
 {"prompt": "<integrated_multimodal_description> ... <overall_soundscape> ... <non_diegetic_music> (the three sections verbatim as plain text)", "negative_prompt": "", "motion_prompt": ""}
 
@@ -8659,6 +8716,9 @@ async def generate_prompt_with_llm(
     nsfw_intensity: Optional[int] = None,
     target_model: Optional[str] = None,
     target_i2v: bool = False,
+    randomize: bool = False,
+    scene_seed: Optional[int] = None,
+    duration_s: float = 5.0,
 ) -> dict:
     """Use Guardian LLM proxy to generate enhanced prompts."""
     import random
@@ -8688,6 +8748,8 @@ async def generate_prompt_with_llm(
 
     # Add randomness to make each generation unique
     random_seed = random.randint(1, 99999)
+
+    rolled_scene: Optional[dict] = None
 
     # Use different system prompt and user prompt based on mode
     if is_h3:
@@ -8726,13 +8788,31 @@ Generate as JSON."""
                     "referenced.\" — followed by a blank line, then develop the action "
                     "from that anchor."
                 )
+            scene_block = ""
+            if randomize:
+                try:
+                    from generation.prompt_scene import roll_scene, scene_brief
+
+                    rolled_scene = roll_scene(seed=scene_seed, duration_s=duration_s)
+                    scene_block = (
+                        "\n\n" + scene_brief(rolled_scene) + "\n"
+                        "Follow this structure shot for shot; write it in "
+                        "H3-Context-IR with the three sections in fixed order."
+                    )
+                    logger.info(
+                        f"🎲 Rolled H3 scene: {len(rolled_scene['shots'])} shots, "
+                        f"place={rolled_scene['place']!r}, style={rolled_scene['style_pack']!r}"
+                    )
+                except Exception as exc:  # noqa: BLE001 - randomizing must never break the call
+                    logger.warning(f"⚠️ Scene roll failed, continuing without it: {exc}")
+
             user_prompt = f"""Create a UNIQUE MiniMax-H3 video+audio prompt in H3-Context-IR format. Seed: {random_seed}
 
 Input/idea: "{base_input}"
 {style_context}
 {motion_context}
-Requested duration: about 5 seconds — the described timeline must exactly cover the duration (4-15 s range).
-{i2v_instruction}
+Requested duration: about {duration_s:.0f} seconds — the described timeline must exactly cover the duration (4-15 s range).
+{i2v_instruction}{scene_block}
 
 Generate as JSON."""
     elif nsfw_intensity and nsfw_intensity >= 1:
@@ -8883,6 +8963,7 @@ Generate as JSON."""
                     "motion_prompt": parsed.get("motion_prompt", ""),
                     "llm_model": model,
                     "llm_used": True,
+                    "scene": rolled_scene,
                 }
 
         except httpx.ConnectError:
@@ -8966,6 +9047,8 @@ async def _process_llm_job(request_data: dict) -> dict | None:
     nsfw_intensity = request_data.get("nsfw_intensity")
     target_model = request_data.get("target_model")
     target_i2v = request_data.get("target_i2v", False)
+    randomize = bool(request_data.get("randomize"))
+    scene_seed = request_data.get("scene_seed")
 
     if use_llm:
         result = await generate_prompt_with_llm(
@@ -8978,6 +9061,9 @@ async def _process_llm_job(request_data: dict) -> dict | None:
             nsfw_intensity=nsfw_intensity,
             target_model=target_model,
             target_i2v=target_i2v,
+            randomize=randomize,
+            scene_seed=scene_seed,
+            duration_s=float(request_data.get("duration") or 5.0),
         )
 
     # Fall back to template mode
@@ -9056,6 +9142,9 @@ async def generate_prompt(request: Request, user: User = Depends(get_current_use
         "nsfw_intensity": req.nsfw_intensity,
         "target_model": req.target_model,
         "target_i2v": req.target_i2v,
+        "randomize": req.randomize,
+        "scene_seed": req.scene_seed,
+        "duration": req.duration,
     }
 
     # Async queue path (preferred)

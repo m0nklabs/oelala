@@ -11,9 +11,9 @@ pre-upload.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
-from pathlib import Path
 from typing import Any
 
 from ...adapter import GenerationAdapter, ProgressCallback
@@ -28,36 +28,6 @@ from ...types import (
 )
 
 logger = logging.getLogger(__name__)
-
-# LoRAs for the local MiniMax-H3 (Windows-PC ComfyUI) live here on this
-# server and are uploaded to the Windows-PC on demand before dispatch.
-_MINIMAX_H3_LORA_DIR = Path("/mnt/ssd/loras/minimax-h3")
-
-
-def _upload_minimax_loras(client: Any, req: GenerationRequest) -> None:
-    """Upload any requested MiniMax-H3 LoRAs to the Windows-PC ComfyUI server.
-
-    ``LoraStackItem.name`` is the LoRA filename as the server knows it, so each
-    requested LoRA is uploaded from the local ``minimax-h3`` folder (by that
-    basename) before the workflow runs. Missing files are warned about and
-    skipped; the run proceeds without them rather than failing the whole job.
-    """
-    if not req.loras:
-        return
-    for lora in req.loras:
-        name = (lora.name or "").strip()
-        if not name or name == "None":
-            continue
-        src = _MINIMAX_H3_LORA_DIR / name
-        if not src.resolve().is_relative_to(_MINIMAX_H3_LORA_DIR.resolve()):
-            logger.warning(f"🎨 Refusing out-of-directory LoRA path: {name}")
-            continue
-        if not src.is_file():
-            logger.warning(f"🎨 MiniMax-H3 LoRA not found, skipping: {src}")
-            continue
-        uploaded = client.upload_lora(str(src))
-        if not uploaded:
-            logger.warning(f"🎨 MiniMax-H3 LoRA upload failed, skipping: {name}")
 
 
 class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
@@ -148,6 +118,7 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
             aspect_ratio=req.aspect_ratio or "16:9",
             megapixels=req.megapixels,
             lora_configs=lora_configs,
+            quality_mode=req.quality_mode or "full",
         )
 
     def cost(self, req: GenerationRequest) -> int:
@@ -173,7 +144,12 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         if not req.input_images:
             raise ValueError("MiniMax-H3 local I2V requires an input image")
 
-        if not client.is_available():
+        # Windows ComfyUI is lazy-started behind the caretaker wake proxy: the
+        # first request may wait ~2 minutes for the cold boot, so give the
+        # preflight a generous timeout (connection-refused still fails fast).
+        # All blocking client calls run in a thread: they must not freeze the
+        # backend's async event loop while the wake proxy cold-starts ComfyUI.
+        if not await asyncio.to_thread(client.is_available, timeout=300):
             raise RuntimeError(
                 f"ComfyUI backend at {client.host}:{client.port} is not reachable — "
                 "is the configured compute backend running on that machine?"
@@ -182,8 +158,10 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         # Upload the input image to the resolved server (router pre-upload skipped).
         try:
             img_bytes = self._to_png_bytes(req.input_images[0])
-            uploaded_name = client.upload_image_from_bytes(
-                img_bytes, filename="v2_minimax_i2v_input.png"
+            uploaded_name = await asyncio.to_thread(
+                client.upload_image_from_bytes,
+                img_bytes,
+                filename="v2_minimax_i2v_input.png",
             )
         except Exception as e:
             logger.exception("❌ Failed to decode/upload MiniMax-H3 I2V image")
@@ -192,13 +170,11 @@ class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
         if not uploaded_name:
             raise RuntimeError("ComfyUI image upload failed on Windows server")
 
-        _upload_minimax_loras(client, req)
-
         workflow = self.build_workflow(req, image_name=uploaded_name)
         if not workflow:
             raise RuntimeError("Failed to build MiniMax-H3 local I2V workflow")
 
-        prompt_id = client.queue_prompt(workflow)
+        prompt_id = await asyncio.to_thread(client.queue_prompt, workflow)
         if not prompt_id:
             raise RuntimeError("Failed to queue MiniMax-H3 local I2V to ComfyUI")
 

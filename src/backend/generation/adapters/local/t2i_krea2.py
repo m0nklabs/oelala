@@ -15,6 +15,13 @@ Notes:
 - Requires the qwen_image_vae VAE (shared with Qwen Image).
 - Distilled model: CFG must stay ~1.0 (higher degrades output).
 - ComfyUI >= v0.27 for the INT8 ConvRot fix (v0.33.x recommended).
+- LoRA: single slot via the core LoraLoaderModelOnly node (UNet weights only).
+  The available Krea 2 LoRAs carry only `diffusion_model` keys (no text
+  encoder weights), and routing CLIP through the full LoraLoader materialises
+  the patched CLIP and blew the VRAM budget on text encode (VRAM grow failed).
+  LoRA files live under /mnt/ssd/loras/krea2 (exposed to ComfyUI through
+  extra_model_paths.yaml); names are resolved server-side so the workflow
+  always references the full relative path (e.g. "krea2/foo.safetensors").
 """
 
 from __future__ import annotations
@@ -34,6 +41,11 @@ from ...types import (
     Operation,
 )
 
+try:  # Canonical package path (running as src.backend.app) …
+    from src.backend.generation.lora_utils import resolve_lora_path
+except ImportError:  # … or src/backend on sys.path (tests, service layout).
+    from generation.lora_utils import resolve_lora_path
+
 logger = logging.getLogger(__name__)
 
 # Krea 2 native resolutions (1K–2K, 16:9/9:16 supported)
@@ -51,6 +63,8 @@ KREA2_RESOLUTIONS = {
 class Krea2LocalT2IAdapter(GenerationAdapter):
     """
     Krea 2 Turbo text-to-image on local ComfyUI (INT8 ConvRot variant).
+
+    Supports one optional LoRA via the core LoraLoader node.
     """
 
     name = "krea2-local-t2i"
@@ -59,7 +73,7 @@ class Krea2LocalT2IAdapter(GenerationAdapter):
     input_types = {MediaType.TEXT}
     output_type = MediaType.IMAGE
     compute = ComputeTarget.LOCAL
-    lora_format = LoraFormat.NONE
+    lora_format = LoraFormat.SINGLE_STAGE
 
     def __init__(self, comfyui_client_fn: Any = None) -> None:
         self._get_comfyui = comfyui_client_fn
@@ -95,57 +109,88 @@ class Krea2LocalT2IAdapter(GenerationAdapter):
         steps = req.steps or 8
         cfg = req.cfg or 1.0
 
-        workflow = {
-            "1": {
+        # LoRA wiring: route the model through LoraLoaderModelOnly when a LoRA
+        # is selected. The available Krea 2 LoRAs only carry diffusion_model
+        # weights, so CLIP is left untouched (a full LoraLoader CLIP patch
+        # caused VRAM exhaustion during text encode). Without a LoRA the graph
+        # stays identical to the plain flow.
+        loras = [
+            lora
+            for lora in (req.loras or [])[:1]
+            if lora.name and lora.name != "None"
+        ]
+        model_source = ["1", 0]
+        clip_source = ["2", 0]
+        workflow: dict = {}
+
+        if loras:
+            lora = loras[0]
+            # Resolve the user-facing (stem) name to the full relative path
+            # ComfyUI lists (e.g. "krea2/KNP_000003000.safetensors").
+            _, resolved_name = resolve_lora_path(lora.name)
+            workflow["9"] = {
                 "inputs": {
-                    "unet_name": "krea2_turbo_int8_convrot.safetensors",
-                    "weight_dtype": "default",
+                    "lora_name": resolved_name or lora.name,
+                    "strength_model": lora.strength,
+                    "model": model_source,
                 },
-                "class_type": "UNETLoader",
-            },
-            "2": {
-                "inputs": {
-                    "clip_name": "qwen3vl_4b_bf16.safetensors",
-                    "type": "krea2",
+                "class_type": "LoraLoaderModelOnly",
+            }
+            model_source = ["9", 0]
+
+        workflow.update(
+            {
+                "1": {
+                    "inputs": {
+                        "unet_name": "krea2_turbo_int8_convrot.safetensors",
+                        "weight_dtype": "default",
+                    },
+                    "class_type": "UNETLoader",
                 },
-                "class_type": "CLIPLoader",
-            },
-            "3": {
-                "inputs": {"text": req.prompt, "clip": ["2", 0]},
-                "class_type": "CLIPTextEncode",
-            },
-            "4": {
-                "inputs": {"width": width, "height": height, "batch_size": 1},
-                "class_type": "EmptyLatentImage",
-            },
-            "5": {
-                "inputs": {
-                    "seed": seed,
-                    "steps": steps,
-                    "cfg": cfg,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "denoise": 1.0,
-                    "model": ["1", 0],
-                    "positive": ["3", 0],
-                    "negative": ["3", 0],  # Krea 2: distilled, no negative prompt
-                    "latent_image": ["4", 0],
+                "2": {
+                    "inputs": {
+                        "clip_name": "qwen3vl_4b_bf16.safetensors",
+                        "type": "krea2",
+                    },
+                    "class_type": "CLIPLoader",
                 },
-                "class_type": "KSampler",
-            },
-            "6": {
-                "inputs": {"vae_name": "qwen_image_vae.safetensors"},
-                "class_type": "VAELoader",
-            },
-            "7": {
-                "inputs": {"samples": ["5", 0], "vae": ["6", 0]},
-                "class_type": "VAEDecode",
-            },
-            "8": {
-                "inputs": {"filename_prefix": "oelala_krea2", "images": ["7", 0]},
-                "class_type": "SaveImage",
-            },
-        }
+                "3": {
+                    "inputs": {"text": req.prompt, "clip": clip_source},
+                    "class_type": "CLIPTextEncode",
+                },
+                "4": {
+                    "inputs": {"width": width, "height": height, "batch_size": 1},
+                    "class_type": "EmptyLatentImage",
+                },
+                "5": {
+                    "inputs": {
+                        "seed": seed,
+                        "steps": steps,
+                        "cfg": cfg,
+                        "sampler_name": "euler",
+                        "scheduler": "simple",
+                        "denoise": 1.0,
+                        "model": model_source,
+                        "positive": ["3", 0],
+                        "negative": ["3", 0],  # Krea 2: distilled, no negative prompt
+                        "latent_image": ["4", 0],
+                    },
+                    "class_type": "KSampler",
+                },
+                "6": {
+                    "inputs": {"vae_name": "qwen_image_vae.safetensors"},
+                    "class_type": "VAELoader",
+                },
+                "7": {
+                    "inputs": {"samples": ["5", 0], "vae": ["6", 0]},
+                    "class_type": "VAEDecode",
+                },
+                "8": {
+                    "inputs": {"filename_prefix": "oelala_krea2", "images": ["7", 0]},
+                    "class_type": "SaveImage",
+                },
+            }
+        )
 
         return workflow
 

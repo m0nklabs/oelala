@@ -496,9 +496,13 @@ def download_loras(lora_downloads: List[Dict[str, Any]]) -> bool:
 
     for lora in lora_downloads:
         filename = lora.get("filename", "")
-        url = lora.get("url", "")
+        # Primary source + optional fallback (e.g. HF mirror first, then the
+        # signed self-hosted backend URL).
+        candidate_urls = [
+            u for u in (lora.get("url", ""), lora.get("fallback_url", "")) if u
+        ]
 
-        if not filename or not url:
+        if not filename or not candidate_urls:
             logger.warning(f"⚠️ Skipping LoRA entry with missing filename/url: {lora}")
             continue
 
@@ -508,25 +512,37 @@ def download_loras(lora_downloads: List[Dict[str, Any]]) -> bool:
             continue
 
         logger.info(f"⬇️  Downloading LoRA: {filename}...")
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            headers = {}
-            hf_token = lora.get("hf_token", "")
-            if hf_token:
-                headers["Authorization"] = f"Bearer {hf_token}"
-            resp = requests.get(url, stream=True, timeout=600, headers=headers)
-            resp.raise_for_status()
-
+        downloaded = False
+        last_error = None
+        for url in candidate_urls:
             tmp = target.with_suffix(".download")
-            with open(tmp, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
-                    f.write(chunk)
-            tmp.rename(target)
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                headers = {}
+                hf_token = lora.get("hf_token", "")
+                if hf_token and "huggingface.co" in url:
+                    # Only send the HF token to huggingface.co hosts
+                    headers["Authorization"] = f"Bearer {hf_token}"
+                resp = requests.get(url, stream=True, timeout=600, headers=headers)
+                resp.raise_for_status()
 
-            size_mb = target.stat().st_size / (1024 * 1024)
-            logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
-        except Exception as e:
-            logger.error(f"❌ Failed to download LoRA {filename}: {e}")
+                with open(tmp, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
+                        f.write(chunk)
+                tmp.rename(target)
+
+                size_mb = target.stat().st_size / (1024 * 1024)
+                logger.info(f"✅ LoRA downloaded: {filename} ({size_mb:.0f}MB)")
+                downloaded = True
+                break
+            except Exception as e:
+                last_error = e
+                if tmp.exists():
+                    tmp.unlink()
+                if len(candidate_urls) > 1:
+                    logger.warning(f"⚠️ LoRA source failed ({url}), trying next: {e}")
+        if not downloaded:
+            logger.error(f"❌ Failed to download LoRA {filename}: {last_error}")
             return False
 
     return True

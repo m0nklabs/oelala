@@ -13,6 +13,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -124,24 +125,50 @@ def filter_loras_by_model_compat(
     return compatible
 
 
+def lora_download_token(filename: str) -> str:
+    """
+    Generate HMAC-SHA256 token for LoRA download URL validation.
+
+    Must match the check performed by app.py's /loras/download endpoint:
+    same key (RUNPOD_API_KEY), same digest truncation (first 32 hex chars),
+    computed over the same (normalized) filename that appears in the URL path.
+    """
+    import hashlib
+    import hmac
+
+    key = os.getenv("RUNPOD_API_KEY", "fallback-lora-key").encode()
+    return hmac.new(key, filename.encode(), hashlib.sha256).hexdigest()[:32]
+
+
 def build_lora_download_list(
     lora_configs: list[dict],
     *,
     backend_public_url: Optional[str] = None,
     hf_sources: Optional[dict] = None,
     hf_token: Optional[str] = None,
-    lora_download_token_fn: Optional[object] = None,
 ) -> list[dict]:
     """
     Build download URLs for LoRAs needed by a cloud job.
 
-    This is a thin wrapper — the actual implementation in app.py
-    has access to LORA_HF_SOURCES and _lora_download_token.
-    For Phase 1, cloud adapters call the original app.py function directly.
+    Source priority per LoRA:
+      1. explicit `hf_sources` mapping (curated public HF repos)
+      2. the flat mirror repo (LORA_HF_FLAT_MIRROR_REPO env, basename-mapped)
+      3. the subdir mirror repo (LORA_HF_MIRROR_REPO env, layout-preserving)
+      4. the backend's signed /loras/download endpoint
+    A non-HF primary URL always carries the signed self-hosted URL as
+    `fallback_url`, so workers can recover when the file is missing on HF.
     """
     base_url = backend_public_url or os.getenv(
         "BACKEND_PUBLIC_URL", "https://api.oelala.xyz"
     )
+    # HuggingFace mirror options, tried before the self-hosted download:
+    #  - flat mirror (LORA_HF_FLAT_MIRROR_REPO): public repo whose files are
+    #    stored by basename (no subdirs) — e.g. a shared dump repo.
+    #  - subdir mirror (LORA_HF_MIRROR_REPO): private repo preserving the
+    #    local subdirectory layout, populated by scripts/sync_loras_hf.py.
+    hf_flat_mirror_repo = os.getenv("LORA_HF_FLAT_MIRROR_REPO", "")
+    hf_mirror_repo = os.getenv("LORA_HF_MIRROR_REPO", "")
+    hf_mirror_token = os.getenv("HF_LORA_TOKEN", "")
     downloads: list[dict] = []
     seen: set[str] = set()
 
@@ -158,20 +185,58 @@ def build_lora_download_list(
                 continue
             config[key] = resolved_name
 
+            # HuggingFace CDN first (much faster than the self-hosted home
+            # uplink); the signed self-hosted URL rides along as fallback_url
+            # so workers can recover when the file is missing on HF (404/401).
+            signed_url = (
+                f"{base_url}/loras/download/{resolved_name}"
+                f"?token={lora_download_token(resolved_name)}"
+            )
             if hf_sources and resolved_name in hf_sources:
                 hf_source = hf_sources[resolved_name]
                 hf_repo = hf_source["repo"]
                 hf_path = hf_source.get("path", resolved_name)
                 hf_url = f"https://huggingface.co/{hf_repo}/resolve/main/{hf_path}"
-                entry: dict = {"filename": resolved_name, "url": hf_url}
+                entry: dict = {
+                    "filename": resolved_name,
+                    "url": hf_url,
+                    "fallback_url": signed_url,
+                }
                 if hf_token:
                     entry["hf_token"] = hf_token
+                downloads.append(entry)
+            elif hf_flat_mirror_repo:
+                # Flat mirror repo: files stored by basename (no subdirs).
+                # Public repos need no token.
+                flat_url = (
+                    f"https://huggingface.co/{hf_flat_mirror_repo}"
+                    f"/resolve/main/{quote(resolved_name.split('/')[-1])}"
+                )
+                downloads.append(
+                    {
+                        "filename": resolved_name,
+                        "url": flat_url,
+                        "fallback_url": signed_url,
+                    }
+                )
+            elif hf_mirror_repo:
+                mirror_url = (
+                    f"https://huggingface.co/{hf_mirror_repo}"
+                    f"/resolve/main/{resolved_name}"
+                )
+                entry = {
+                    "filename": resolved_name,
+                    "url": mirror_url,
+                    "fallback_url": signed_url,
+                }
+                if hf_mirror_token:
+                    entry["hf_token"] = hf_mirror_token
                 downloads.append(entry)
             else:
                 downloads.append(
                     {
                         "filename": resolved_name,
-                        "url": f"{base_url}/loras/download/{resolved_name}",
+                        "url": signed_url,
                     }
                 )
     return downloads

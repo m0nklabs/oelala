@@ -110,6 +110,8 @@ class GenerationRequest(BaseModel):
     scheduler: Optional[str] = None
     loras: list[LoraStackItem] = Field(default_factory=list)
     lightning: bool = False
+    quality_mode: Optional[str] = None  # MiniMax-H3: "draft" | "standard" | "full" (turbo LoRA presets)
+    model_variant: Optional[str] = None  # MiniMax-H3: "official" | "eros" (NSFW finetune)
     denoise: Optional[float] = None
     strength: Optional[float] = None  # I2V conditioning strength
     # Wan2.2 cloud-specific

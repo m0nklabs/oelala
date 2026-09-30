@@ -1373,3 +1373,48 @@
   modes: ["t2v", "i2v"]
   usage_notes: "Vagina anatomy LoRA for MiniMax-H3 FL2VA, single-stage, 20 epochs."
   last_checked: "2026-08-23"
+
+# ─── Krea 2 LoRAs ────────────────────────────────────────────────────────────
+
+- filename: "krea2/snofs_krea_v1_4.safetensors"
+  display_name: "SNOFS — Sex, Nudes, Other Fun Stuff v1.4 (Krea 2)"
+  base_model: "krea2"
+  creator: "Ashen3"
+  version: "v1.4"
+  source_url: "https://civitai.com/models/1972981"
+  civitai_model_id: 1972981
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.6, 1.2]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i"]
+  usage_notes: >
+    NSFW concept LoRA (LoKr) for Krea 2: nudity and sex concepts, no trigger
+    words needed. Trained on the full Krea 2 base; our runtime uses the Krea 2
+    Turbo INT8 distill, so start at strength 1.0 and adjust (0.6-1.2).
+    Large file (~1.5 GB) — first load per ComfyUI start is slower.
+  last_checked: "2026-09-24"
+
+- filename: "krea2/KNP_000003000.safetensors"
+  display_name: "Krea 2 NSFW V4 — v4.3_EXP (Krea 2)"
+  base_model: "krea2"
+  creator: "19doorsside884"
+  version: "v4.3_EXP (step 3000)"
+  source_url: "https://civitai.com/models/2725430"
+  civitai_model_id: 2725430
+  trigger_words: []
+  trigger_mode: "none"
+  recommended_strength: 1.0
+  strength_range: [0.8, 2.0]
+  noise_type: "single"
+  paired_with: null
+  modes: ["t2i"]
+  usage_notes: >
+    Realism-focused NSFW LoRA for Krea 2: better skin, face expressions and
+    prompt adherence (creator guidance: strength 0.8 → 1 → 1.2 → 2, higher
+    values push the effect harder). Masturbation concept is incomplete per
+    creator. Trained on the full Krea 2 base; our runtime uses the Krea 2
+    Turbo INT8 distill, so treat the upper strength range as experimental.
+  last_checked: "2026-09-24"

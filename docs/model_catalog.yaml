@@ -1,0 +1,4251 @@
+meta:
+  generated_by: scripts/build_model_catalog.py
+  generator: --check regenerates this file; hand-edits are drift
+  local_comfyui_root_resolved: systemctl show comfyui -p WorkingDirectory (or LOCAL_COMFYUI_DIR env)
+  hf_private_models_repo: m0nk111/oelala-models
+  hf_private_loras_repo: m0nk111/oelala-loras
+  hf_public_lora_dump_repo: Serenak/chilloutmix
+  mirror_env_names_from_app_py:
+  - HF_LORA_TOKEN
+  - LORA_HF_FLAT_MIRROR_REPO
+  - LORA_HF_MIRROR_REPO
+  windows_pc_probe: unreachable during generation (marked unverified)
+  counts:
+    entries: 249
+    by_role:
+      checkpoint: 7
+      diffusion_model: 31
+      lora: 131
+      other: 50
+      text_encoder: 17
+      upscaler: 4
+      vae: 9
+    by_family:
+      flux: 3
+      flux2: 4
+      krea2: 1
+      ltx23: 18
+      minimax_h3: 13
+      qwen_image_edit: 4
+      sdxl: 20
+      unknown: 123
+      wan21: 1
+      wan22: 41
+      wan2_2: 21
+entries:
+- filename: ToriiGate-v0.4-7B-Q6_K.gguf
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 10.8
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: llama-joycaption-beta-one-hf-llava.Q6_K.gguf
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 6.6
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: llama-joycaption-beta-one-llava-mmproj-model-f16.gguf
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.88
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: mmproj-Qwen2-VL-7B-Instruct-f16.gguf
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.35
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00001-of-00005.safetensors
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 3.9
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00002-of-00005.safetensors
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 3.86
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00003-of-00005.safetensors
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 3.86
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00004-of-00005.safetensors
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 3.86
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00005-of-00005.safetensors
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.09
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model.safetensors
+  role: other
+  target_dir: LLM
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 4.26
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ema_vae_fp16.safetensors
+  role: other
+  target_dir: SEEDVR2
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 0.5
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: seedvr2_ema_3b_fp8_e4m3fn.safetensors
+  role: other
+  target_dir: SEEDVR2
+  family: unknown
+  base_model: unknown
+  quantization: fp8_e4m3fn
+  size_gb: 3.39
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: conds.pt
+  role: other
+  target_dir: TTS
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: s3gen.pt
+  role: other
+  target_dir: TTS
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.06
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: t3_cfg.pt
+  role: other
+  target_dir: TTS
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.06
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ve.pt
+  role: other
+  target_dir: TTS
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: CyberRealistic_Pony_v14.1_FP16.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 6.94
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: flux1-dev-fp8.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: flux
+  base_model: FLUX
+  quantization: fp8
+  size_gb: 17.25
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: juggernautXL_ragnarok.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 6.8
+  sources:
+    civitai:
+      version_id: '691060'
+      file_id: null
+  available_on:
+    runpod_i2i_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_i2i_worker registry (deploy/runpod-i2i/handler.py)
+  notes:
+  - Juggernaut XL Ragnarok
+  - family unverified (no registry source, no pattern match)
+- filename: ltx-2.3-22b-distilled.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: bf16
+  size_gb: 46.1
+  sources:
+    hf_upstream:
+      repo: Lightricks/LTX-2.3
+      path: ltx-2.3-22b-distilled.safetensors
+  available_on:
+    runpod_ltx23_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_ltx23_worker registry (deploy/runpod-ltx23/handler.py)
+  notes:
+  - LTX-2.3 22B distilled checkpoint (bf16)
+- filename: ltx2_audio_vae.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: bf16
+  size_gb: 0.22
+  sources:
+    hf_upstream:
+      repo: novoluz/ltx2_audio_vae_bf16
+      path: LTX2_audio_vae_bf16.safetensors
+  available_on:
+    runpod_ltx23_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_ltx23_worker registry (deploy/runpod-ltx23/handler.py)
+  notes:
+  - LTX-2 Audio VAE (bf16)
+- filename: ponyDiffusionV6XL_v6StartWithThisOne.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 6.8
+  sources:
+    civitai:
+      version_id: '290640'
+      file_id: null
+  available_on:
+    runpod_i2i_worker: on_demand_download
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_i2i_worker registry (deploy/runpod-i2i/handler.py)
+  notes:
+  - Pony Diffusion V6 XL
+  - family unverified (no registry source, no pattern match)
+- filename: reapony_v90.safetensors
+  role: checkpoint
+  target_dir: checkpoints
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 6.94
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: clip_l.safetensors
+  role: other
+  target_dir: clip
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.25
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: t5xxl_fp8_e4m3fn.safetensors
+  role: other
+  target_dir: clip
+  family: unknown
+  base_model: unknown
+  quantization: fp8_e4m3fn
+  size_gb: 4.89
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: umt5-xxl-enc-bf16.safetensors
+  role: other
+  target_dir: clip
+  family: unknown
+  base_model: unknown
+  quantization: bf16
+  size_gb: 11.36
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: umt5-xxl-enc-bf16.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: umt5_xxl_fp16.safetensors
+  role: other
+  target_dir: clip
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp16
+  size_gb: 11.4
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+      path: split_files/text_encoders/umt5_xxl_fp16.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - UMT5-XXL fp16 text encoder
+- filename: clip-vit-large.safetensors
+  role: other
+  target_dir: clip_vision
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.71
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: clip_vision_h.safetensors
+  role: other
+  target_dir: clip_vision
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 1.26
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.1_ComfyUI_repackaged
+      path: split_files/clip_vision/clip_vision_h.safetensors
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: clip_vision_h.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - CLIP Vision H (I2V conditioning)
+- filename: pytorch_model.bin
+  role: other
+  target_dir: clip_vision
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.71
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: connectors.safetensors
+  role: other
+  target_dir: connectors
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 2.86
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: int8
+  size_gb: 20.97
+  sources:
+    hf_upstream:
+      repo: bomehika/oelala-models
+      path: diffusion_models/DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors
+    civitai:
+      version_id: '3314686'
+      file_id: '3203135'
+    private_mirror:
+      repo: m0nk111/oelala-models
+      path: diffusion_models/DasiwaMinimaxH3_dasiwaHybridTurboV2_3203135.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+    hf_mirror_private: true
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - 'minimax_h3 adapters: model_variant=dasiwa_turbo (turbo)'
+  notes:
+  - DaSiWa Hybrid Turbo v2 int8 (4-8 step distillation; model_variant='dasiwa_turbo')
+- filename: DasiwaMinimaxH3_dasiwaHybridV2_3203130.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: int8
+  size_gb: 20.97
+  sources:
+    hf_upstream:
+      repo: bomehika/oelala-models
+      path: diffusion_models/DasiwaMinimaxH3_dasiwaHybridV2_3203130.safetensors
+    civitai:
+      version_id: '3314675'
+      file_id: '3203130'
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - 'minimax_h3 adapters: model_variant=dasiwa (non-turbo)'
+  notes:
+  - DaSiWa Hybrid v2 int8 non-turbo (full step count; model_variant='dasiwa')
+- filename: Wan2_1-T2V-14B-Lynx_lite_ip_layers_fp16.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 0.84
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: fluxedUpFluxNSFW_51FP8.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: flux
+  base_model: FLUX
+  quantization: fp8
+  size_gb: 11.9
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: h3ErosMax_beta5_3178732.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: int8
+  size_gb: 20.97
+  sources:
+    hf_upstream:
+      repo: bomehika/oelala-models
+      path: diffusion_models/h3ErosMax_beta5_3178732.safetensors
+    civitai:
+      version_id: '3294059'
+      file_id: '3178732'
+    private_mirror:
+      repo: m0nk111/oelala-models
+      path: diffusion_models/h3ErosMax_beta5_3178732.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+    hf_mirror_private: true
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - 'minimax_h3 adapters: model_variant=eros_int8_turbo (turbo)'
+  notes:
+  - H3 Eros Max beta5 turbo int8 (model_variant='eros_int8_turbo')
+- filename: h3ErosMax_beta5_3185144.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: unknown
+  size_gb: 13.67
+  sources:
+    hf_upstream:
+      repo: bomehika/oelala-models
+      path: diffusion_models/h3ErosMax_beta5_3185144.safetensors
+    civitai:
+      version_id: '3294059'
+      file_id: null
+    private_mirror:
+      repo: m0nk111/oelala-models
+      path: diffusion_models/h3ErosMax_beta5_3185144.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+    hf_mirror_private: true
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - 'minimax_h3 adapters: model_variant=eros (turbo)'
+  notes:
+  - H3 Eros Max beta5 TURBO-hybrid (NSFW finetune, turbo fused, model_variant='eros'; HF mirror primary, Civitai fallback)
+- filename: h3ErosMax_beta5_3185154.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: int8
+  size_gb: 20.97
+  sources:
+    hf_upstream:
+      repo: bomehika/oelala-models
+      path: diffusion_models/h3ErosMax_beta5_3185154.safetensors
+    civitai:
+      version_id: '3294059'
+      file_id: '3185154'
+    private_mirror:
+      repo: m0nk111/oelala-models
+      path: diffusion_models/h3ErosMax_beta5_3185154.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+    hf_mirror_private: true
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - 'minimax_h3 adapters: model_variant=eros_int8 (non-turbo)'
+  notes:
+  - H3 Eros Max beta5 non-turbo int8 (all 200 quantized layers 8-bit; model_variant='eros_int8')
+- filename: krea2_turbo_int8_convrot.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: krea2
+  base_model: Krea 2
+  quantization: int8_convrot
+  size_gb: 13.49
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: lynx_lite_resampler_fp32.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: unknown
+  base_model: unknown
+  quantization: fp32
+  size_gb: 0.33
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: int8_convrot
+  size_gb: 20.97
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/MiniMax-H3
+      path: diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - 'minimax_h3 adapters: model_variant=official (non-turbo)'
+  notes:
+  - MiniMax-H3 FL2VA diffusion model (int8+convrot, t2v + i2v keyframes)
+- filename: persephoneFluxNSFWSFW_11FP8.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: flux
+  base_model: FLUX
+  quantization: fp8
+  size_gb: 11.9
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: qwen_image_edit_2511_fp8mixed.safetensors
+  role: diffusion_model
+  target_dir: diffusion_models
+  family: qwen_image_edit
+  base_model: Qwen-Image-Edit 2511
+  quantization: fp8_mixed
+  size_gb: 19.1
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Qwen-Image-Edit_ComfyUI
+      path: split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors
+  available_on:
+    runpod_i2i_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_i2i_worker registry (deploy/runpod-i2i/handler.py)
+  notes:
+  - Qwen Image Edit 2511 UNET (fp8 mixed precision)
+- filename: CyberRealistic_Negative_PONY_V2-neg.safetensors
+  role: other
+  target_dir: embeddings
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: GFPGANv1.4.pth
+  role: other
+  target_dir: face_restore
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.35
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ip-adapter-faceid-plusv2_sdxl.bin
+  role: other
+  target_dir: ipadapter
+  family: sdxl
+  base_model: SDXL
+  quantization: unknown
+  size_gb: 1.49
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: ip-adapter-faceid-plusv2_sdxl_lora.safetensors
+  role: other
+  target_dir: ipadapter
+  family: sdxl
+  base_model: SDXL
+  quantization: unknown
+  size_gb: 0.37
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Qwen2.5-VL-7B-NSFW-Caption-V3-Q6_K.gguf
+  role: other
+  target_dir: llm
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 6.25
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ToriiGate-v0.4-7B-Q6_K.gguf
+  role: other
+  target_dir: llm
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 10.8
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: mmproj-Qwen2-VL-7B-Instruct-f16.gguf
+  role: other
+  target_dir: llm
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.35
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: 23High noise-Cumshot Aesthetics.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: 56Low noise-Cumshot Aesthetics.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Add_Details_v1.2(1).safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Add_Details_v1.2.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: BUT_SDXL_SHS.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: SDXL
+  quantization: unknown
+  size_gb: 0.34
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: BounceHighWan2_2.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: BounceHighWan2_2.safetensors
+    civitai:
+      model_id: '1343431'
+    civitai_page:
+      url: https://civitai.com/models/1343431
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: BounceLowWan2_2.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: BounceLowWan2_2.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Concept_UrethralSounding-PONY.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Cumtube-000020.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.11
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: DR34M15H_T2V_HD_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.15
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DR34M1SH_I2V_V1.420.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.18
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DR34MJOB_I2V_14b_HighNoise.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    civitai:
+      model_id: '1811313'
+    civitai_page:
+      url: https://civitai.com/models/1811313
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: DR34MJOB_I2V_14b_LowNoise.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DR34ML4Y_I2V_14B_HIGH.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DR34ML4Y_I2V_14B_LOW.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DR34ML4Y_LTXXX_PREVIEW_RC1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: DildosoundV1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.05
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Dramatic Lighting Slider.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Expressive_H-000001.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Femdom_Sounding_-_Urethral_Insertion.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Furry_urethral_label_ver-000007.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: HMCumshot_V1.0.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Illustrious_Urethral_Fingering.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.21
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: JAV_GTJ130_IL_V1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: JAV_GTJ130_Pony_V1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.11
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: KNP_000003000.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.46
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: LTX-2.3 - Ahegao Face v1.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.62
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: LTX-2.3 - Dildo Ride.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: LTX-2.3 - Orgasm.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.81
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: LUT_slider_xxXL_V1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ManAndHisLivingCocksleeve_v1_5750H.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: ManAndHisLivingCocksleeve_v1_5750L.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: NSFW-22-H-e8.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: NSFW-22-L-e8.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: NsfwPovAllInOneLoraSdxl-000009.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: SDXL
+  quantization: unknown
+  size_gb: 1.82
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: PenisV2_minimax-h3_epoch60.safetensors
+  role: lora
+  target_dir: loras
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: unknown
+  size_gb: 0.08
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: PenisV2_minimax-h3_epoch60.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: Penis_Pump (1).safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Pony Realism Slider.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: bf16
+  size_gb: 0.85
+  sources:
+    hf_upstream:
+      repo: lightx2v/Qwen-Image-Edit-2511-Lightning
+      path: Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors
+  available_on:
+    runpod_i2i_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_i2i_worker registry (deploy/runpod-i2i/handler.py)
+  - generation API user loras (no usage metadata)
+  notes:
+  - Lightning LoRA for 4-step fast generation
+  - family unverified (no registry source, no pattern match)
+- filename: Qwen-NSFW-Beta5.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.59
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Qwen4Play-2512.1_e10.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.59
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: RealSkin_xxXL_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Real_Beauty.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Realism Lora By Stable Yogi_V3_Lite.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.68
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Realism_Lora_By_Stable_Yogi_Pony_V2.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.04
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: SexGod_Nudity_LTX23_v2_0.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: ShinySkinSlider3.0_800steps.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.17
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Skin Color_alpha1.0_rank4_noxattn_250steps.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Skin Color_alpha1.0_rank4_noxattn_last.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: SmoothXXXAnimation_High.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: SmoothXXXAnimation_Low.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Sounding_Rod_Urethral_Insertion_Concept_LoRA.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.2
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: The_Ultimate_Urethral_Sounding_LORA_for_Pony.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Uncensored_PonyXL_cpt_v03.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.11
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Urethral_sounding.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.02
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Vagina_minimax-h3_epoch20.safetensors
+  role: lora
+  target_dir: loras
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: unknown
+  size_gb: 0.08
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: Vagina_minimax-h3_epoch20.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: W22_POV_Cowgirl_Insertion_i2v_HN_v1A.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: W22_POV_Cowgirl_Insertion_i2v_HN_v1B.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: W22_POV_Cowgirl_Insertion_i2v_LN_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: WAN-2.2-I2V-BreastPlay-HIGH-v2.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: WAN-2.2-I2V-BreastPlay-LOW-v2.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: WAN-2.2-I2V-HandjobBlowjobCombo-HIGH-v1.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: WAN-2.2-I2V-HandjobBlowjobCombo-LOW-v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: WAN-2.2-I2V-POV-Cowgirl-HIGH-v1.0-fixed.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: WAN-2.2-I2V-POV-Cowgirl-HIGH-v1.0-fixed.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: WAN-2.2-I2V-POV-Cowgirl-LOW-v1.0-fixed.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: WAN-2.2-I2V-POV-Titfuck-Paizuri-HIGH-v1.0.safetensors
+    civitai:
+      model_id: '2070335'
+    civitai_page:
+      url: https://civitai.com/models/2070335
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: WAN-2.2-I2V-POV-Titfuck-Paizuri-LOW-v1.0.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Wan2.2 - T2V - Cum Shot - HIGH 14B.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Wan2.2 - T2V - Cum Shot - LOW 14B.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: Wan2.2_I2V_Lightning_4steps_Seko_HIGH.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Wan2.2_I2V_Lightning_4steps_Seko_LOW.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: Wan22_CumV2_High.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: Wan22_CumV2_High.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: Wan22_CumV2_Low.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: Wan22_CumV2_Low.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: Wan22_ThroatV3_High.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: Wan22_ThroatV3_Low.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: amateur_style_v1_pony(1).safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: amateur_style_v1_pony.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: anal_insertion_HIGH_V01.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: anal_insertion_LOW_V01.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: bbcRide_wan22_I2V_high_e30.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    civitai:
+      model_id: '1452829'
+    civitai_page:
+      url: https://civitai.com/models/1452829
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: bbcRide_wan22_I2V_low_e30.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: bfs_head_swap_v4.safetensors
+  role: lora
+  target_dir: loras
+  family: qwen_image_edit
+  base_model: qwen_image_edit
+  quantization: unknown
+  size_gb: 0.15
+  sources:
+    civitai:
+      model_id: '2027766'
+    civitai_page:
+      url: https://civitai.com/models/2027766
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: body_weight_slider_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: bounceV07_fl2va-000230_Intense.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.6
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: bounceV2_LTX23_I2V.comfy.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.4
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: bounce_test_HighNoise-000005.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: bounce_test_LowNoise-000005.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: checkpoint-e100_s1100.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.26
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: cum_through_XLP_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.26
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: futanari_urethral_penetration.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.11
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: head_swap_v3_rank_adaptive_fro_098.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.36
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: high_noise_model.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: igbaddie-PN.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: incase_style_v3-1_ponyxl_ilff.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.26
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: jfj-deepthroat-W22-T2V-HN-v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: jfj-deepthroat-W22-T2V-LN-v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: bf16
+  size_gb: 2.5
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: low_noise_model.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ltx2.3_nsfw_furry.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: ltxdeepthroat_v01.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.16
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: masturbation_cumshot_v1.1_e310.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.36
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors
+  role: lora
+  target_dir: loras
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: bf16
+  size_gb: 1.96
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/MiniMax-H3
+      path: loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - generation API user loras (no usage metadata)
+  - minimax_h3 turbo preset 'draft' (4 steps, shift 6.0/3.0)
+  notes:
+  - MiniMax-H3 FL2VA turbo LoRA 4-step 768p (draft quality mode)
+- filename: minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+  role: lora
+  target_dir: loras
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: bf16
+  size_gb: 1.96
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/MiniMax-H3
+      path: loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+  available_on:
+    runpod_h3_worker: on_demand_download
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  - generation API user loras (no usage metadata)
+  - minimax_h3 turbo preset 'standard' (8 steps, shift None/None)
+  notes:
+  - MiniMax-H3 FL2VA turbo LoRA 8-step (standard quality mode)
+- filename: natural_breasts_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: ohwx_lydia.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.09
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: penis_in_penis-NOOB-VPRED1.0-V1.0-loha-32-drop0.1-2025-03-06_17-25-51-save-4378-11-0.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.34
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: penis_in_penis_full-NAI-VPRED1.0-V1-loha-dim16conv8alpha1-drop0.1-SNR5-000025.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.24
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: realcumv5_final.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.46
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: realcumv6.55.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.72
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: sfbehind_LTX2_3_v0_1.safetensors
+  role: lora
+  target_dir: loras
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.43
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: sfbehind_v2.1_high_noise.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    civitai:
+      model_id: '2227622'
+    civitai_page:
+      url: https://civitai.com/models/2227622
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: sfbehind_v2.1_low_noise.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: skindentation_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: sdxl
+  base_model: sdxl
+  quantization: unknown
+  size_gb: 0.01
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: snofs_krea_v1_4.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.56
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: tattoogirls-PN.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.23
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ui_sounding_ilxl_v1.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.17
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: urethral insertion 2 epoch.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.15
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: wan-nsfw-e14-fixed.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan-nsfw-e14-fixed.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: wan2.2_i2v_highnoise_pov_missionary_v1.0.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan2.2_i2v_highnoise_pov_missionary_v1.0.safetensors
+    civitai:
+      model_id: '1331682'
+    civitai_page:
+      url: https://civitai.com/models/1331682
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: wan2.2_i2v_lownoise_pov_missionary_v1.0.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan2.2_i2v_lownoise_pov_missionary_v1.0.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: wan22-f4c3spl4sh-100epoc-high-k3nk.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.32
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan22-f4c3spl4sh-100epoc-high-k3nk.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan22-f4c3spl4sh-154epoc-low-k3nk.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: wan22-ultimatedeepthroat-I2V-101epoc-low-k3nk.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan22-ultimatedeepthroat-I2V-101epoc-low-k3nk.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: wan22-ultimatedeepthroat-i2v-102epoc-high-k3nk.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: wan22.r3v3rs3_c0wg1rl-14b-High-i2v_e70.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan22.r3v3rs3_c0wg1rl-14b-High-i2v_e70.safetensors
+    civitai:
+      model_id: '1428098'
+    civitai_page:
+      url: https://civitai.com/models/1428098
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors
+  role: lora
+  target_dir: loras
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.61
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - —
+- filename: wan_2.2_i2v_slap_high_v2.0.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan_2.2_i2v_slap_high_v2.0.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: wan_2.2_i2v_slap_low_v2.0.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan_2.2_i2v_slap_low_v2.0.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: wan_2.2_t2v_slap_high_v2.0.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: wan_2.2_t2v_slap_low_v2.0.safetensors
+  role: lora
+  target_dir: loras
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.31
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - generation API user loras (no usage metadata)
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: wan_cumshot_i2v.safetensors
+  role: lora
+  target_dir: loras
+  family: wan2_2
+  base_model: wan2.2
+  quantization: unknown
+  size_gb: 0.36
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan_cumshot_i2v.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - curated usage metadata in docs/lora_registry.yaml
+  notes:
+  - —
+- filename: DR34ML4Y_LTXXX_PREVIEW_RC1.safetensors
+  role: other
+  target_dir: ltx
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/DR34ML4Y_LTXXX_PREVIEW_RC1.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: LTX-2.3 - Ahegao Face v1.safetensors
+  role: other
+  target_dir: ltx
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.62
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/LTX-2.3 - Ahegao Face v1.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: SexGod_Nudity_LTX23_v2_0.safetensors
+  role: other
+  target_dir: ltx
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/SexGod_Nudity_LTX23_v2_0.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: bounceV2_LTX23_I2V.comfy.safetensors
+  role: other
+  target_dir: ltx
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.4
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/bounceV2_LTX23_I2V.comfy.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: head_swap_v3_rank_adaptive_fro_098.safetensors
+  role: other
+  target_dir: ltx
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 1.36
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/head_swap_v3_rank_adaptive_fro_098.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: ltx2.3_nsfw_furry.safetensors
+  role: other
+  target_dir: ltx
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.23
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/ltx2.3_nsfw_furry.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: ltxdeepthroat_v01.safetensors
+  role: other
+  target_dir: ltx
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 1.16
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/ltxdeepthroat_v01.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: sfbehind_LTX2_3_v0_1.safetensors
+  role: other
+  target_dir: ltx
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: unknown
+  size_gb: 0.43
+  sources:
+    private_mirror:
+      repo: m0nk111/oelala-loras
+      path: ltx/sfbehind_LTX2_3_v0_1.safetensors
+  available_on:
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors
+  role: other
+  target_dir: mmaudio
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 1.97
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: mmaudio_large_44k_v2_fp16.safetensors
+  role: other
+  target_dir: mmaudio
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 2.06
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: mmaudio_synchformer_fp16.safetensors
+  role: other
+  target_dir: mmaudio
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 0.47
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: mmaudio_vae_44k_fp16.safetensors
+  role: other
+  target_dir: mmaudio
+  family: unknown
+  base_model: unknown
+  quantization: fp16
+  size_gb: 0.61
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: sam_vit_b_01ec64.pth
+  role: other
+  target_dir: sams
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.38
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model.safetensors
+  role: other
+  target_dir: smol
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 3.42
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: training_args.bin
+  role: other
+  target_dir: smol
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: gemma-3-12b-it-q4_0.gguf
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: q4_0
+  size_gb: 8.07
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: gemma_3_12B_it_fp8_scaled.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: fp8_scaled
+  size_gb: 13.2
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/ltx-2
+      path: split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
+  available_on:
+    runpod_ltx23_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_ltx23_worker registry (deploy/runpod-ltx23/handler.py)
+  notes:
+  - Gemma 3 12B text encoder (fp8 scaled)
+- filename: gemma_3_12B_it_nvfp4.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: ltx23
+  base_model: LTX-2.3
+  quantization: nvfp4
+  size_gb: 8.32
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: mistral_3_small_flux2_fp8.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: flux2
+  base_model: FLUX.2
+  quantization: fp8
+  size_gb: 18.03
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: model-00001-of-00005.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 4.98
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00002-of-00005.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 4.93
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00003-of-00005.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 4.93
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00004-of-00005.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 4.93
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: model-00005-of-00005.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 4.6
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: nvfp4_awq
+  size_gb: 15.69
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/MiniMax-H3
+      path: text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+  available_on:
+    runpod_h3_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  notes:
+  - MiniMax-H3 Qwen3-VL-32B text encoder (nvfp4_awq, no Blackwell needed)
+- filename: qwen3vl_4b_bf16.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: bf16
+  size_gb: 8.88
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: qwen_2.5_vl_7b_fp8_scaled.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: qwen_image_edit
+  base_model: Qwen-Image-Edit 2511
+  quantization: fp8_scaled
+  size_gb: 8.8
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Qwen-Image_ComfyUI
+      path: split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: qwen_2.5_vl_7b_fp8_scaled.safetensors
+  available_on:
+    runpod_i2i_worker: startup_required
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - runpod_i2i_worker registry (deploy/runpod-i2i/handler.py)
+  notes:
+  - Qwen 2.5 VL 7B CLIP/text encoder (fp8 scaled)
+- filename: t5-v1_1-xxl-encoder-bf16.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: bf16
+  size_gb: 9.52
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: t5-v1_1-xxl-encoder-f16.gguf
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 9.53
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: umt5-xxl-enc-bf16.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: bf16
+  size_gb: 11.37
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: umt5-xxl-enc-bf16.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: umt5_xxl_fp8_e4m3fn.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: fp8_e4m3fn
+  size_gb: 5.68
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: umt5_xxl_fp8_e4m3fn_scaled.safetensors
+  role: text_encoder
+  target_dir: text_encoders
+  family: unknown
+  base_model: unknown
+  quantization: fp8_e4m3fn
+  size_gb: 6.74
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: umt5_xxl_fp8_e4m3fn_scaled.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: face_yolov8m.pt
+  role: other
+  target_dir: ultralytics
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.05
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Wan2.2-I2V-A14B-HighNoise-Q5_K_S.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 15.41
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2.2-I2V-A14B-LowNoise-Q5_K_S.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 15.41
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan22-I2V_A14B-Lightning-H-Q6_K.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan22-I2V_A14B-Lightning-L-Q6_K.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp8_e4m3fn
+  size_gb: 14.29
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp8_e4m3fn
+  size_gb: 14.29
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: flux2-dev-Q4_K_M.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: flux2
+  base_model: FLUX.2
+  quantization: unknown
+  size_gb: 19.96
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan2.2_i2v_high_noise_14B_Q6_K.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp8_scaled
+  size_gb: 14.3
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+      path: split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - Wan 2.2 I2V high noise 14B fp8_scaled
+- filename: wan2.2_i2v_low_noise_14B_Q6_K.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp8_scaled
+  size_gb: 14.3
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+      path: split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - Wan 2.2 I2V low noise 14B fp8_scaled
+- filename: wan2.2_t2v_high_noise_14B_Q6_K.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp8_scaled
+  size_gb: 14.3
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+      path: split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - Wan 2.2 T2V high noise 14B fp8_scaled
+- filename: wan2.2_t2v_low_noise_14B_Q6_K.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: fp8_scaled
+  size_gb: 14.3
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+      path: split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - Wan 2.2 T2V low noise 14B fp8_scaled
+- filename: wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan22EnhancedNSFW_V2_Q6K_LOW.gguf
+  role: diffusion_model
+  target_dir: unet
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 12.0
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+  role: other
+  target_dir: unet_gguf
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 15.41
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+  role: other
+  target_dir: unet_gguf
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 15.41
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: 4x-UltraSharp.pth
+  role: upscaler
+  target_dir: upscale_models
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.07
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: 4x_foolhardy_Remacri.pth
+  role: upscaler
+  target_dir: upscale_models
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.07
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: RealESRGAN_x4plus.pth
+  role: upscaler
+  target_dir: upscale_models
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.07
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: RealESRGAN_x4plus_anime_6B.pth
+  role: upscaler
+  target_dir: upscale_models
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.02
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: Wan2.1_VAE.safetensors
+  role: vae
+  target_dir: vae
+  family: wan21
+  base_model: Wan 2.1
+  quantization: unknown
+  size_gb: 0.25
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: ae.safetensors
+  role: vae
+  target_dir: vae
+  family: flux2
+  base_model: FLUX.2
+  quantization: unknown
+  size_gb: 0.34
+  sources:
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: ae.safetensors
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - —
+  notes:
+  - —
+- filename: audio_vae.safetensors
+  role: vae
+  target_dir: vae
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.11
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)
+- filename: flux2-vae.safetensors
+  role: vae
+  target_dir: vae
+  family: flux2
+  base_model: FLUX.2
+  quantization: unknown
+  size_gb: 0.34
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: minimax_h3_audio_vae_fp32.safetensors
+  role: vae
+  target_dir: vae
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: fp32
+  size_gb: 0.61
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/MiniMax-H3
+      path: vae/minimax_h3_audio_vae_fp32.safetensors
+  available_on:
+    runpod_h3_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  notes:
+  - MiniMax-H3 audio VAE (fp32)
+- filename: minimax_h3_video_vae_fp16.safetensors
+  role: vae
+  target_dir: vae
+  family: minimax_h3
+  base_model: MiniMax-H3
+  quantization: fp16
+  size_gb: 5.21
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/MiniMax-H3
+      path: vae/minimax_h3_video_vae_fp16.safetensors
+  available_on:
+    runpod_h3_worker: startup_required
+    windows_pc_comfyui: unverified
+  used_by:
+  - runpod_h3_worker registry (deploy/runpod-minimax-h3/handler.py)
+  notes:
+  - MiniMax-H3 video VAE (fp16)
+- filename: qwen_image_vae.safetensors
+  role: vae
+  target_dir: vae
+  family: qwen_image_edit
+  base_model: Qwen-Image-Edit 2511
+  quantization: unknown
+  size_gb: 0.24
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Qwen-Image_ComfyUI
+      path: split_files/vae/qwen_image_vae.safetensors
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: qwen_image_vae.safetensors
+  available_on:
+    runpod_i2i_worker: startup_required
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - runpod_i2i_worker registry (deploy/runpod-i2i/handler.py)
+  notes:
+  - Qwen Image VAE
+- filename: sdxl_vae.safetensors
+  role: vae
+  target_dir: vae
+  family: sdxl
+  base_model: SDXL
+  quantization: unknown
+  size_gb: 0.33
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - —
+- filename: wan_2.1_vae.safetensors
+  role: vae
+  target_dir: vae
+  family: wan22
+  base_model: Wan 2.2
+  quantization: unknown
+  size_gb: 0.4
+  sources:
+    hf_upstream:
+      repo: Comfy-Org/Wan_2.1_ComfyUI_repackaged
+      path: split_files/vae/wan_2.1_vae.safetensors
+    public_dump:
+      repo: Serenak/chilloutmix
+      path: wan_2.1_vae.safetensors
+  available_on:
+    runpod_wan22_worker: startup_required
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+    hf_public_dump: true
+  used_by:
+  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  notes:
+  - Wan 2.1 VAE — required for 14B models (wan2.2_vae is 5B only)
+- filename: diffusion_pytorch_model.safetensors
+  role: other
+  target_dir: vocoder
+  family: unknown
+  base_model: unknown
+  quantization: unknown
+  size_gb: 0.11
+  sources:
+    none: local file only, upstream unknown
+  available_on:
+    local_comfyui_ai_kvm2: true
+    windows_pc_comfyui: unverified
+  used_by:
+  - —
+  notes:
+  - family unverified (no registry source, no pattern match)

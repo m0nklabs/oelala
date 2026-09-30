@@ -130,7 +130,13 @@ RUNPOD_ENDPOINT_DEFAULTS: dict[str, RunPodEndpointDefaults] = {
         template_env_var="RUNPOD_MINIMAX_H3_TEMPLATE_ID",
         fallback_endpoint_id="5xuvnvyww4ujnc",
         fallback_template_id="fpfo4gmnrw",
-        gpu_ids="AMPERE_80,ADA_80_PRO,HOPPER_141,BLACKWELL_96,BLACKWELL_180",
+        # 48 GB minimum, enforced the hard way: RunPod's scheduler places
+        # ADA_48_PRO jobs on the RTX PRO 6000 MIG 1g.24gb slice (24 GB,
+        # cheapest available) even though docs/validator do not list that SKU
+        # in the pool, and the config API refuses to exclude it ("does not
+        # belong to any selected GPU pool"). The only deterministic floor is
+        # the discrete-card AMPERE pools (A6000/A40 + A100).
+        gpu_ids="AMPERE_48,AMPERE_80",
         workers_min=0,
         workers_max=2,
         idle_timeout=120,

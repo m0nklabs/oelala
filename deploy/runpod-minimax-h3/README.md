@@ -48,9 +48,10 @@ Key facts:
 - No negative prompts, no CFG — `BasicGuider`.
 - Sigma shift video 12.0 / audio 3.0 is baked into the checkpoint config
   (`supported_models.MiniMaxH3.sampling_settings`) — no extra node needed.
-- ComfyUI is cloned from **official `Comfy-Org/ComfyUI` master**: the H3 core
-  nodes live in `comfy_extras/nodes_minimax_h3.py` (landed with the H3 release,
-  July 2026). Bump `CACHE_DATE` in the Dockerfile to refresh the checkout.
+- ComfyUI is cloned from **official `Comfy-Org/ComfyUI`**, pinned to a release tag
+  via the `COMFYUI_VERSION` build arg (currently **v0.37.2**): the H3 core nodes
+  live in `comfy_extras/nodes_minimax_h3.py` (landed with the H3 release,
+  July 2026). Bump `COMFYUI_VERSION` (+ `CACHE_DATE`) in the Dockerfile to upgrade.
 
 ## Best settings — resolutie & duur (officiële bronnen)
 

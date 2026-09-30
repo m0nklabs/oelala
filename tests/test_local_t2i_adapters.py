@@ -199,6 +199,7 @@ class TestKrea2LocalT2I:
         assert a.name == "krea2-local-t2i"
         assert a.model_family == "krea2"
         assert a.compute == ComputeTarget.LOCAL
+        assert a.lora_format == LoraFormat.SINGLE_STAGE
 
     def test_constraints(self):
         c = Krea2LocalT2IAdapter().constraints()
@@ -206,6 +207,7 @@ class TestKrea2LocalT2I:
         assert c.default_cfg == 1.0
         assert c.supports_negative_prompt is False
         assert "euler" in c.supported_samplers
+        assert c.max_loras == 1
 
     def test_cost(self):
         a = Krea2LocalT2IAdapter()
@@ -228,6 +230,47 @@ class TestKrea2LocalT2I:
         assert wf["1"]["inputs"]["unet_name"] == "krea2_turbo_int8_convrot.safetensors"
         assert wf["5"]["inputs"]["cfg"] == 1.0
         assert wf["5"]["inputs"]["steps"] == 8
+        # No LoRA selected → plain graph, no LoraLoader node
+        assert "9" not in wf
+        assert wf["5"]["inputs"]["model"] == ["1", 0]
+        assert wf["3"]["inputs"]["clip"] == ["2", 0]
+
+    def test_build_workflow_with_loras(self):
+        a = Krea2LocalT2IAdapter()
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            prompt="a cat",
+            loras=[
+                LoraStackItem(name="krea2/KNP_000003000.safetensors", strength=0.9)
+            ],
+        )
+        wf = a.build_workflow(req)
+        # Model-only LoraLoader present, correct strength; CLIP untouched
+        assert wf["9"]["class_type"] == "LoraLoaderModelOnly"
+        assert wf["9"]["inputs"]["strength_model"] == 0.9
+        assert "strength_clip" not in wf["9"]["inputs"]
+        assert wf["9"]["inputs"]["model"] == ["1", 0]
+        # Sampler consumes the LoRA output, text encoder stays on the CLIPLoader
+        assert wf["5"]["inputs"]["model"] == ["9", 0]
+        assert wf["3"]["inputs"]["clip"] == ["2", 0]
+        # Full relative path preserved (resolved server-side or passed through)
+        assert wf["9"]["inputs"]["lora_name"].endswith(
+            "krea2/KNP_000003000.safetensors"
+        )
+
+    def test_build_workflow_ignores_none_loras(self):
+        """'None' selections from the UI must not add a LoraLoader node."""
+        a = Krea2LocalT2IAdapter()
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            prompt="a cat",
+            loras=[LoraStackItem(name="None", strength=1.0)],
+        )
+        wf = a.build_workflow(req)
+        assert "9" not in wf
+        assert wf["5"]["inputs"]["model"] == ["1", 0]
 
     @pytest.mark.asyncio
     async def test_execute_success(self):

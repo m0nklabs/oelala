@@ -12,7 +12,6 @@ including the adapter-level image upload for i2v).
 import os
 import sys
 import base64
-from pathlib import Path
 
 import pytest
 from unittest.mock import MagicMock
@@ -114,18 +113,24 @@ class TestMiniMaxH3LocalT2V:
         ]
 
     @pytest.mark.asyncio
-    async def test_execute_uploads_loras_before_queue(self):
+    async def test_execute_loras_queue_without_upload(self):
         mock = MagicMock()
         mock.is_available.return_value = True
         mock.queue_prompt.return_value = "p123"
-        mock.upload_lora.return_value = "bounce.safetensors"
         mock.host = "windows-comfy.test.internal"
         mock.port = 8188
-        minimax_h3_t2v._MINIMAX_H3_LORA_DIR = Path("/definitely/missing/dir")
         a = minimax_h3_t2v.MiniMaxH3LocalT2VAdapter(comfyui_client_fn=lambda: mock)
-        req = _req(loras=[LoraStackItem(name="missing.safetensors", strength=0.8)])
+        req = _req(
+            loras=[
+                LoraStackItem(
+                    name="minimax-h3/PenisV2_minimax-h3_epoch60.safetensors",
+                    strength=0.8,
+                )
+            ]
+        )
         await a.execute(req)
-        # missing lora file -> skipped, upload never called, but job still runs
+        # LoRA staging is out-of-band; the adapter itself never uploads and
+        # the server-side name resolution happens inside the builder.
         mock.upload_lora.assert_not_called()
         mock.queue_prompt.assert_called_once()
 
