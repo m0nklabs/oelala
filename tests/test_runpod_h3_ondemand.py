@@ -119,3 +119,45 @@ def test_ensure_models_skips_on_demand_entries(handler_module, monkeypatch):
         "minimax_h3_video_vae_fp16.safetensors",
         "minimax_h3_audio_vae_fp32.safetensors",
     }
+
+
+def test_hf_local_dir_lands_every_registry_entry_on_target(handler_module, tmp_path):
+    """The download must land on the target, so no move (and no nesting) is needed."""
+    handler_module.COMFYUI_PATH = str(tmp_path)
+    for model in handler_module.MINIMAX_H3_MODELS:
+        target = tmp_path / "models" / model["target_dir"] / model["filename"]
+        local_dir = handler_module._hf_local_dir(model["hf_path"], target)
+        assert local_dir / model["hf_path"] == target, (
+            f"{model['filename']}: hf_hub_download would nest it under {local_dir}"
+        )
+
+
+def test_hf_local_dir_without_repo_folder_uses_target_parent(handler_module, tmp_path):
+    handler_module.COMFYUI_PATH = str(tmp_path)
+    target = tmp_path / "models" / "loras" / "flat.safetensors"
+    assert handler_module._hf_local_dir("flat.safetensors", target) == target.parent
+
+
+def test_prune_empty_parents_stops_at_the_models_root(handler_module, tmp_path):
+    """Real sequence: the file was moved into the target dir, the nesting is empty."""
+    models_root = tmp_path / "models"
+    target_dir = models_root / "diffusion_models"
+    nested = target_dir / "diffusion_models"
+    nested.mkdir(parents=True)
+    (target_dir / "moved.safetensors").write_bytes(b"x")  # the completed move
+
+    handler_module._prune_empty_parents(nested, models_root)
+
+    assert not nested.exists(), "the empty nesting should be removed"
+    assert (target_dir / "moved.safetensors").exists(), "the moved file must survive"
+    assert target_dir.exists(), "the target folder must survive"
+    assert models_root.exists()
+
+
+def test_prune_empty_parents_keeps_directories_with_content(handler_module, tmp_path):
+    models_root = tmp_path / "models"
+    nested = models_root / "vae" / "vae"
+    nested.mkdir(parents=True)
+    (nested / "keep.safetensors").write_bytes(b"x")
+    handler_module._prune_empty_parents(nested, models_root)
+    assert nested.exists() and (nested / "keep.safetensors").exists()
