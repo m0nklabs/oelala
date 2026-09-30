@@ -75,22 +75,6 @@ class RunPodEndpointDefaults:
 
 
 RUNPOD_ENDPOINT_DEFAULTS: dict[str, RunPodEndpointDefaults] = {
-    "wan22": RunPodEndpointDefaults(
-        profile="wan22",
-        name="oelala-wan22",
-        endpoint_env_vars=("RUNPOD_WAN22_ENDPOINT_ID", "RUNPOD_ENDPOINT_ID"),
-        template_env_var="RUNPOD_WAN22_TEMPLATE_ID",
-        fallback_endpoint_id="x2x496ymkidl3m",
-        fallback_template_id="tkpy0pi8gt",
-        gpu_ids="AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180",
-        workers_min=0,
-        workers_max=2,
-        idle_timeout=120,
-        scaler_type="QUEUE_DELAY",
-        scaler_value=4,
-        execution_timeout_ms=60 * MILLISECONDS_PER_MINUTE,
-        ttl_ms=2 * 60 * MILLISECONDS_PER_MINUTE,
-    ),
     "ltx23": RunPodEndpointDefaults(
         profile="ltx23",
         name="oelala-ltx23",

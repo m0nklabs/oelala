@@ -52,7 +52,7 @@ Visual tree structure of all generation modes per tool type.
 │                                                                      │
 │   ├── 🗣️ SpeechToVideo        → TTS + I2V + LipSync                │
 │   ├── 📺 VideoToVideo         → Extract frames + I2V + Stitch      │
-│   ├── 🎬 T2I→I2V Pipeline     → T2I + I2V (Wan2.2 T2V method)      │
+│   ├── 🎬 T2I→I2V Pipeline     → T2I + I2V (MiniMax-H3 I2V)         │
 │   └── 🎵 Video+Audio          → I2V/T2V + Audio generation         │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -72,66 +72,39 @@ Visual tree structure of all generation modes per tool type.
 
 | Resolution | Model | Max Duration | Max Frames | VRAM Usage |
 |------------|-------|--------------|------------|------------|
-| **480p** | Wan2.2 | **20 sec** | 321 | ~26GB |
-| 576p | Wan2.2 | 7 sec | 113 | ~24GB |
-| 720p | Wan2.2 | 4 sec | 65 | ~27GB |
+| 768p | MiniMax-H3 (cloud, leading) | ~15 sec | 362 | RunPod 80GB+ |
 | **480p** | LTX-2 | **12 sec** | 97 | ~18GB |
 | 576p | LTX-2 | 8 sec | 97 | ~20GB |
 | 720p | LTX-2 | 5 sec | 65 | ~22GB |
 
+MiniMax-H3 (leading I2V/T2V model) also runs on the local Windows-PC ComfyUI
+(16GB GPU); A40 duration benchmarks are in the T2V section below.
+
 ```
 I2V Generation Modes
 │
-├── 📦 wan2.2 (default)
-│   │   "Wan2.2 14B Q6_K DisTorch2"
-│   │   Dual-pass (high/low noise) • Best quality
+├── 📦 minimax_h3 (default, leading)
+│   │   "MiniMax-H3 FL2VA 22B (joint video+audio)"
+│   │   Single model • Native stereo audio • Cloud + local Windows-PC
 │   │
-│   ├── 🧠 Diffusion Models (Dual-Pass)
-│   │   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf  [12GB]
-│   │   └── wan2.2_i2v_low_noise_14B_Q6_K.gguf   [12GB]
+│   ├── ☁️ Cloud (RunPod 80GB+, nvfp4 text encoder)
+│   │   ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors  [20.97GB]
+│   │   └── qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors      [15.69GB]
 │   │
-│   ├── 📝 Text Encoder
-│   │   └── umt5-xxl-enc-bf16.safetensors        [11GB]
+│   ├── 🪟 Local (Windows-PC ComfyUI, int8_convrot set, 16GB GPU)
+│   │   ├── minimax_h3_fl2va_pruned_int8_convrot.safetensors
+│   │   ├── qwen3vl_32b_minimax_h3_int8_convrot.safetensors
+│   │   ├── minimax_h3_video_vae_fp16.safetensors
+│   │   └── minimax_h3_audio_vae_fp32.safetensors
 │   │
-│   ├── 👁️ CLIP Vision
-│   │   └── clip_vision_h.safetensors            [2.5GB]
-│   │
-│   └── 🎨 VAE
-│       └── wan_2.1_vae.safetensors              [242MB]
+│   └── ✨ LoRA Support
+│       └── Single-stage (MiniMax-H3 section in docs/lora_registry.yaml)
 │
-├── 📦 ltx2 (NEW - 2026-01-17)
-│   │   "LTX-2 19B Q4_K_M"
-│   │   Single model • Faster inference • Uses Gemma encoder
-│   │
-│   ├── 🧠 Diffusion Model (Single)
-│   │   └── ltx-2-19b-dev-Q4_K_M.gguf            [12GB]
-│   │       OR ltx-2-19b-distilled_Q4_K_M.gguf   [12GB] (faster)
-│   │
-│   ├── 📝 Text Encoder (Gemma 3)
-│   │   ├── gemma_3_12B_it_nvfp4.safetensors     [8GB]
-│   │   └── ltx-2-19b-embeddings_connector_bf16  [2.9GB]
-│   │
-│   └── 🎨 VAE
-│       └── LTX2_video_vae_bf16.safetensors      [2.5GB]
-│
-└── 📦 nsfw_lora
-    │   "Wan2.2 Enhanced NSFW with LoRAs"
+└── 📦 ltx2 (second choice - cloud-only)
+    │   "LTX-2.3 (RunPod)"
+    │   Single model • Faster inference • Uses Gemma encoder
     │
-    ├── 🧠 Diffusion Models (Dual-Pass)
-    │   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf  [12GB]
-    │   └── wan2.2_i2v_low_noise_14B_Q6_K.gguf   [12GB]
-    │
-    ├── 📝 Text Encoder
-    │   └── umt5-xxl-enc-bf16.safetensors        [11GB]
-    │
-    ├── 👁️ CLIP Vision
-    │   └── clip_vision_h.safetensors            [2.5GB]
-    │
-    ├── 🎨 VAE
-    │   └── wan_2.1_vae.safetensors              [242MB]
-    │
-    └── ✨ LoRAs (pre-configured)
-        └── [NSFW LoRAs as defined in workflow]
+    └── ☁️ Cloud-only — local LTX-2 19B files were removed (see T2V section)
 ```
 
 ### I2V Model Comparison
@@ -139,37 +112,18 @@ I2V Generation Modes
 Main UI modes are intentionally simplified. See `docs/LOCAL_GENERATION_DEFAULTS.md`
 for the product-facing local-vs-cloud mode policy.
 
-| Feature | Wan2.2 Local Q6 | Wan2.2 Cloud Max | LTX-2.3 Cloud |
-|---------|-----------------|------------------|---------------|
-| Pass Type | Dual (high/low noise) | Dual (high/low noise) | Single |
-| Default Steps | 6 | 15 | 8 |
-| Default CFG | 1.0 | 3.0 | 1.0 |
-| Text Encoder | UMT5-XXL | UMT5-XXL | Gemma 3 |
-| Best For | Local quality/control | Full-precision quality | Speed, shorter clips |
-| LoRA Support | ✅ Yes | ✅ Yes | ✅ Single-stage |
-| Default Worker | Local dual GPU | RunPod 48GB+ | RunPod 80GB+ |
+| Feature | MiniMax-H3 Cloud | MiniMax-H3 Local (Windows-PC) | LTX-2.3 Cloud |
+|---------|------------------|-------------------------------|---------------|
+| Pass Type | Single (joint video+audio) | Single (joint video+audio) | Single |
+| Default Steps | 20 full / 8 standard / 4 draft | 20 full / 8 standard / 4 draft | 8 |
+| Default CFG | — (turbo presets use shift) | — (turbo presets use shift) | 1.0 |
+| Text Encoder | Qwen3-VL 32B (nvfp4 AWQ) | Qwen3-VL 32B (int8 convrot) | Gemma 3 |
+| Best For | Leading quality, native audio | Local generation, no cloud cost | Fast cloud iterations |
+| LoRA Support | ✅ Single-stage | ✅ Single-stage | ✅ Single-stage |
+| Default Worker | RunPod 80GB+ | Windows-PC ComfyUI (16GB GPU) | RunPod 80GB+ |
 
-The promoted local I2V modes are **Stable Local — Wan2.2 Q6** and
-**Quality Local — Wan2.2 Q8**. BlockSwap and Ultra Q8 remain available for
-saved profiles/backward compatibility, but are no longer promoted as primary
-mode choices.
-
-### I2V Alternative Models (Swappable - Wan2.2 only)
-
-```
-Alternative High/Low Noise Pairs
-│
-├── ⚡ Lightning (faster inference)
-│   ├── Wan22-I2V_A14B-Lightning-H-Q6_K.gguf
-│   └── Wan22-I2V_A14B-Lightning-L-Q6_K.gguf
-│
-└── 🔞 Enhanced NSFW V2
-    ├── wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
-    └── wan22EnhancedNSFW_V2_Q6K_LOW.gguf
-
-# Removed in cleanup (unused/duplicated): smoothMixWan22GGUF_high/lowQ6K.gguf,
-# wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH/L.gguf, LTX-2-dev-Q2_K.gguf
-```
+The promoted I2V modes are **MiniMax-H3** (leading/default — cloud and local
+Windows-PC) with **LTX-2.3** (cloud) as the alternative.
 
 ---
 
@@ -178,21 +132,7 @@ Alternative High/Low Noise Pairs
 ```
 T2V Generation Modes
 │
-├── 📦 wan22 (default)
-│   │   "Wan2.2 14B T2V (T2I → I2V pipeline)"
-│   │   Max frames: 81 | Default: 41
-│   │
-│   ├── 🧠 Diffusion Models (FP8)
-│   │   ├── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors  [14GB]
-│   │   └── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors   [14GB]
-│   │
-│   ├── 📝 Text Encoder
-│   │   └── umt5-xxl-enc-bf16.safetensors                     [11GB]
-│   │
-│   └── 🎨 VAE
-│       └── wan_2.1_vae.safetensors                           [242MB]
-│
-└── 📦 minimax_h3
+├── 📦 minimax_h3 (default, leading)
     │   "MiniMax-H3 FL2VA 22B (joint video+audio) — cloud + local"
     │   Max frames: 362 | Default: 124 | Fixed 24fps
     │
@@ -213,6 +153,11 @@ T2V Generation Modes
         ├── qwen3vl_32b_minimax_h3_int8_convrot.safetensors
         ├── minimax_h3_video_vae_fp16.safetensors
         └── minimax_h3_audio_vae_fp32.safetensors
+│
+└── 📦 ltx2 (second choice - cloud-only)
+    │   "LTX-2.3 (RunPod)"
+    │
+    └── ☁️ Cloud-only — local LTX-2 19B files were removed
 ```
 
 > Measured on an A40 (768×1344, 124 frames): official full 20 steps ≈ 689 s,
@@ -371,7 +316,7 @@ Sub-Models (Shared Components)
 │
 ├── 📝 Text Encoders
 │   │
-│   ├── UMT5 Family (Wan2.2)
+│   ├── UMT5 Family (parked — Wan 2.2 retired; kept on disk for a possible future Wan 3)
 │   │   ├── umt5-xxl-enc-bf16.safetensors                   [11GB] ★ Primary
 │   │   ├── umt5_xxl_fp8_e4m3fn.safetensors                 [5.7GB] Low VRAM
 │   │   └── umt5_xxl_fp8_e4m3fn_scaled.safetensors          [6.7GB]
@@ -386,7 +331,7 @@ Sub-Models (Shared Components)
 │
 ├── 🎨 VAE Models
 │   │
-│   ├── wan_2.1_vae.safetensors                             [242MB] → Wan2.2
+│   ├── wan_2.1_vae.safetensors                             [242MB] (parked — Wan 2.2 retired; kept on disk for a possible future Wan 3)
 │   ├── sdxl_vae.safetensors                                [335MB] → SDXL
 │   ├── ae.safetensors                                      [335MB] → Flux
 │   └── qwen_image_vae.safetensors                          [254MB] → Qwen
@@ -514,27 +459,19 @@ GENERATION TIMES (6 steps, uni_pc sampler):
 ComfyUI/models/
 │
 ├── unet/
-│   ├── wan2.2_i2v_high_noise_14B_Q6_K.gguf
-│   ├── wan2.2_i2v_low_noise_14B_Q6_K.gguf
-│   ├── wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors
-│   ├── wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors
-│   ├── Wan22-I2V_A14B-Lightning-H-Q6_K.gguf
-│   ├── Wan22-I2V_A14B-Lightning-L-Q6_K.gguf
-│   ├── wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
-│   ├── wan22EnhancedNSFW_V2_Q6K_LOW.gguf
-│   └── ...
+│   └── (Wan 2.2 files removed — model retired from the product)
 │
 ├── diffusion_models/
 │   └── flux2-dev-Q4_K_M.gguf  (MiniMax-H3 local modellen draaien op de Windows-PC server)
 │
 ├── text_encoders/
-│   ├── umt5-xxl-enc-bf16.safetensors
+│   ├── umt5-xxl-enc-bf16.safetensors  (parked — Wan 2.2 retired; kept for a possible future Wan 3)
 │   ├── gemma-3-12b-it-qat-q4_0-unquantized/
 │   ├── qwen3vl_4b_bf16.safetensors
 │   └── ...
 │
 ├── vae/
-│   ├── wan_2.1_vae.safetensors
+│   ├── wan_2.1_vae.safetensors  (parked — Wan 2.2 retired; kept on disk for a possible future Wan 3)
 │   ├── sdxl_vae.safetensors
 │   ├── ae.safetensors
 │   └── flux2-vae.safetensors
@@ -753,7 +690,7 @@ Status: 📋 PLANNED
 Workflow: Uses I2V pipeline with frame extraction
 ```
 
-### 🎬 T2I→I2V Pipeline (Wan2.2 T2V Method)
+### 🎬 T2I→I2V Pipeline (MiniMax-H3 I2V)
 
 ```
 T2I→I2V Pipeline (PRODUCTION)
@@ -765,10 +702,10 @@ T2I→I2V Pipeline (PRODUCTION)
 │   └── Flux/SDXL generates starting frame
 │
 └── Step 2: ImageToVideo (I2V)
-    └── Wan2.2 animates the image
+    └── MiniMax-H3 (leading/default) or LTX-2.3 animates the image
 
 Status: ✅ PRODUCTION
-Workflow: reapony_t2i_wan22_i2v_multigpu.json
+Workflow: T2I workflow → I2V mode (minimax_h3 cloud/local, ltx2 cloud)
 ```
 
 ---
@@ -866,80 +803,19 @@ TTS Modes
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
-│ 🎬 IMAGE-TO-VIDEO (I2V) - WAN2.2 14B GGUF                          │
+│ 🎬 VIDEO (I2V/T2V) - MINIMAX-H3 FL2VA (LEADING - CLOUD + LOCAL)    │
 │ ═══════════════════════════════════════════════════════════════════ │
 │                                                                      │
-│ [RECOMMENDED] 480×848 Portrait - MAX LENGTH                          │
+│ 768×1344 Cloud Benchmark (A40)                                       │
 │ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 321 (~20 sec) | VRAM: ~26GB | Time: ~23 min               │
-│   Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*                         │
+│   Frames: 124 (~5 sec @ 24fps) | Max: 362 frames                    │
 │   Models:                                                            │
-│     - wan2.2_i2v_high_noise_14B_Q6_K.gguf                           │
-│     - wan2.2_i2v_low_noise_14B_Q6_K.gguf                            │
-│   CLIP: umt5-xxl-enc-bf16.safetensors                               │
-│   VAE: wan_2.1_vae.safetensors                                      │
-│   Workflow: WAN22-I2V-DISTORCH2-LATEST-api.json                     │
-│   Sampler: uni_pc | Steps: 6 | CFG: 1.0                             │
-│   Tested: 2026-01-16 ✅                                              │
-│                                                                      │
-│ 480×848 Portrait - SAFE PRODUCTION                                   │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 161 (~10 sec) | VRAM: ~22GB | Time: ~12 min               │
-│   Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*                         │
-│   Same models as above                                               │
-│   Tested: 2026-01-16 ✅                                              │
-│                                                                      │
-│ 576×1024 Standard Portrait                                           │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 81 (~5 sec) | VRAM: ~24GB | Time: ~6 min                  │
-│   Allocation: cuda:0,11gb;cuda:1,15gb;cpu,*                         │
-│   Same models as above                                               │
-│   Tested: 2026-01-12 ✅                                              │
-│                                                                      │
-│ 720×1280 HD Portrait - ❌ UNACCEPTABLE (under 5 sec)                 │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Max possible: 41 frames (~2.5 sec) - TOO SHORT FOR PRODUCTION     │
-│   DO NOT USE for video generation - use 480p or 576p instead        │
-│                                                                      │
-│ ═══════════════════════════════════════════════════════════════════ │
-│ � IMAGE-TO-VIDEO (I2V) - WAN2.2 14B Q8_0 GGUF (DisTorch2)        │
-│ ═══════════════════════════════════════════════════════════════════ │
-│                                                                      │
-│ 480×848 Portrait - Q8 EXPERIMENTAL                                   │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 81 (~5 sec) | VRAM: ~26GB | Time: ~24 min                 │
-│   Allocation: cuda:0,11gb;cuda:1,14.5gb;cpu,*                       │
-│   Models:                                                            │
-│     - wan2.2_i2v_high_noise_14B_Q8_0.gguf                           │
-│     - wan2.2_i2v_low_noise_14B_Q8_0.gguf                            │
-│   CLIP: umt5_xxl_fp8_e4m3fn_scaled.safetensors                      │
-│   VAE: wan_2.1_vae.safetensors                                      │
-│   Workflow: wan22_i2v_distorch2_q8_api.json                         │
-│   Sampler: uni_pc | Steps: 8 | CFG: 1.0                             │
-│   ⚠️ CLIP must use device=cuda:1 (5060 Ti), NOT cuda:0!             │
-│   Previously OOM'd due to reversed CLIP device/donor (fixed 2026-03) │
-│   Tested: 2026-03-01 ✅                                              │
-│                                                                      │
-│ ═══════════════════════════════════════════════════════════════════ │
-│ ☁️ IMAGE-TO-VIDEO (I2V) - CLOUD MAX RUNPOD FP8_SCALED               │
-│ ═══════════════════════════════════════════════════════════════════ │
-│                                                                      │
-│ 256×256 Smoke Validation                                             │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 5 | FPS: 8 | Steps: 2 | CFG: 1.0                          │
-│   Endpoint: x2x496ymkidl3m | Template: tkpy0pi8gt                   │
-│   GPU Tiers: 48GB+ only (AMPERE_48, ADA_48_PRO, AMPERE_80,          │
-│              ADA_80_PRO, BLACKWELL_96, HOPPER_141, BLACKWELL_180)   │
-│   Models:                                                            │
-│     - wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors              │
-│     - wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors               │
-│   CLIP: umt5_xxl_fp16.safetensors                                    │
-│   VAE: wan_2.1_vae.safetensors                                       │
-│   CLIP Vision: clip_vision_h.safetensors                             │
-│   Worker Image: ghcr.io/m0nklabs/oelala-comfyui-worker:latest       │
-│   Cold Start Delay: ~447s | Execution: ~12s                          │
-│   Warm Start Delay: ~39s | Execution: ~12s                           │
-│   Result: ✅ COMPLETED on RunPod serverless (2026-03-07)            │
+│     - minimax_h3_fl2va_pruned_int8_convrot.safetensors              │
+│     - qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors                  │
+│   Timing: official 20 steps ≈ 689s | standard 8 ≈ 327s |            │
+│   eros draft 4 ≈ 205s (variant-dependent, see T2V section)          │
+│   Worker: RunPod 80GB+ (local: Windows-PC ComfyUI, 16GB GPU)        │
+│   Tested: ✅ (A40 cloud benchmark)                                   │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
 │ 🎥 TEXT-TO-VIDEO (T2V) - LTX-2 19B (LOKALE MODUS VERWIJDERD — zie hieronder)│
@@ -958,16 +834,6 @@ TTS Modes
 │   Connector: ltx-2-19b-embeddings_connector_bf16.safetensors        │
 │   Workflow: ltx2_distorch2_multigpu_api.json                        │
 │   Tested: 2026-01-12 ✅                                              │
-│                                                                      │
-│ ═══════════════════════════════════════════════════════════════════ │
-│ 🎥 TEXT-TO-VIDEO (T2V) - WAN2.2 (T2I→I2V Pipeline)                  │
-│ ═══════════════════════════════════════════════════════════════════ │
-│                                                                      │
-│ 848×480 Landscape                                                    │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Frames: 41 (~2.5 sec) | VRAM: ~20GB | Time: ~8 min                │
-│   Pipeline: Flux T2I → Wan2.2 I2V                                   │
-│   Tested: 2026-01-10 ✅                                              │
 │                                                                      │
 │ ═══════════════════════════════════════════════════════════════════ │
 │ 🖼️ TEXT-TO-IMAGE (T2I) - FLUX (Benchmarked 2026-01-16)              │
@@ -1022,21 +888,6 @@ TTS Modes
 │ 🔬 EXPERIMENTAL / NEEDS MORE TESTING                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│ I2V Lightning Models (faster but lower quality)                      │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Models: Wan22-I2V_A14B-Lightning-H/L-Q6_K.gguf                    │
-│   Status: 🔨 Untested with optimal allocation                        │
-│                                                                      │
-│ I2V Enhanced NSFW V2                                                 │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Models: wan22EnhancedNSFW_V2_Q6K_HIGH/LOW.gguf                    │
-│   Status: 🔨 Untested with optimal allocation                        │
-│                                                                      │
-│ LTX-2 with Audio                                                     │
-│ ─────────────────────────────────────────────────────────────────── │
-│   Workflow: wan22_i2v_ltx2_audio_api.json                           │
-│   Status: 🔨 Audio sync issues                                       │
-│                                                                      │
 │ 576×1024 Extended (121+ frames)                                      │
 │ ─────────────────────────────────────────────────────────────────── │
 │   Status: 🔨 NEEDS TESTING - expected ~27GB VRAM                     │
@@ -1074,11 +925,12 @@ TTS Modes
 
 | Tool | Mode | Resolution | Frames | Duration | Time | Status |
 |------|------|------------|--------|----------|------|--------|
-| I2V | wan22 | 480×848 | 321 | **20 sec** | 23min | ✅ BEST |
-| I2V | wan22 | 480×848 | 161 | **10 sec** | 12min | ✅ SAFE |
-| I2V | wan22 | 480×848 | 81 | **5 sec** | 6min | ✅ MIN |
-| I2V | wan22 | 576×1024 | 81 | **5 sec** | 6min | ✅ |
-| T2V | ltx2 | 768×512 | 97 | **6 sec** | 8min | ✅ |
+| I2V/T2V | minimax_h3 (cloud, leading) | 768×1344 | 124 | **~5 sec** | ~3.5-11.5 min | ✅ DEFAULT |
+| I2V/T2V | minimax_h3 (local Windows-PC) | — | — | — | — | ✅ |
+| I2V/T2V | ltx2 (cloud, second choice) | — | — | — | — | ✅ |
+
+MiniMax-H3 cloud timing (A40): draft 4 ≈ 205s, standard 8 ≈ 327s,
+official 20 ≈ 689s — see the T2V section and Tested Configurations Log.
 
 #### 🖼️ Image Generation (Benchmarked 2026-01-16)
 
@@ -1164,5 +1016,5 @@ TTS Modes
 
 ---
 
-**Last Updated**: 2026-01-16
+**Last Updated**: 2026-09-30
 **Maintainer**: @copilot (auto-update on generation complete - FUTURE)

@@ -130,7 +130,7 @@ This means: **EACH MODEL HAS ITS OWN LICENSE!**
 
 | Model | License | Commercial | Notes |
 |-------|---------|------------|-------|
-| **WAN 2.2 14B** | ? | ? | Need to check |
+| **WAN 2.2 14B** | ? | ? | Not applicable — family retired 2026-10-01 (`docs/LEGACY.md`); no licence check needed |
 | **LTX-2** | LTX-2 Community License | ✅ <$10M revenue | Free for <$10M annual revenue |
 | **SDXL** | SDXL License | ✅ Yes* | Can't compete with Stability |
 | **Flux** | ? | ? | Need to check |

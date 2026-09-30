@@ -23,7 +23,6 @@ def create_registry(
     submit_to_runpod_fn: Any = None,
     face_service_mod: Any = None,
     guardian_base_url: Optional[str] = None,
-    runpod_endpoint_wan22: Optional[str] = None,
     runpod_endpoint_ltx23: Optional[str] = None,
     runpod_endpoint_i2i: Optional[str] = None,
 ) -> AdapterRegistry:
@@ -38,7 +37,6 @@ def create_registry(
         submit_to_runpod_fn: Async function for RunPod job submission.
         face_service_mod: The face_service module (InsightFace).
         guardian_base_url: Guardian LLM base URL for captioning.
-        runpod_endpoint_wan22: RunPod endpoint ID for Wan2.2 jobs.
         runpod_endpoint_ltx23: RunPod endpoint ID for LTX-2.3 jobs.
         runpod_endpoint_i2i: RunPod endpoint ID for I2I edit jobs.
 
@@ -61,8 +59,6 @@ def create_registry(
 
     # ── Cloud adapters ──────────────────────────────────────────
     if submit_to_runpod_fn:
-        from .adapters.cloud.wan22_i2v import Wan22CloudI2VAdapter
-        from .adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
         from .adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
         from .adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
         from .adapters.cloud.minimax_h3_i2v import MiniMaxH3CloudI2VAdapter
@@ -72,18 +68,6 @@ def create_registry(
             CloudI2ITransformAdapter,
         )
 
-        _register(
-            Wan22CloudI2VAdapter,
-            submit_to_runpod_fn=submit_to_runpod_fn,
-            comfyui_client_fn=comfyui_client_fn,
-            endpoint_id=runpod_endpoint_wan22,
-        )
-        _register(
-            Wan22CloudT2VAdapter,
-            submit_to_runpod_fn=submit_to_runpod_fn,
-            comfyui_client_fn=comfyui_client_fn,
-            endpoint_id=runpod_endpoint_wan22,
-        )
         _register(
             LTX23CloudI2VAdapter,
             submit_to_runpod_fn=submit_to_runpod_fn,
@@ -123,7 +107,6 @@ def create_registry(
         flux_client_fn = client_fn_for_model("flux")
         flux2_client_fn = client_fn_for_model("flux2")
         krea2_client_fn = client_fn_for_model("krea2")
-        wan22_client_fn = client_fn_for_model("wan2.2")
         utility_client_fn = client_fn_for_utility()
 
         from .adapters.local.t2i_sdxl import SDXLLocalT2IAdapter
@@ -135,22 +118,6 @@ def create_registry(
         _register(FluxLocalT2IAdapter, comfyui_client_fn=flux_client_fn)
         _register(Krea2LocalT2IAdapter, comfyui_client_fn=krea2_client_fn)
         _register(Flux2LocalT2IAdapter, comfyui_client_fn=flux2_client_fn)
-
-        # ── Local I2V adapters ──────────────────────────────────
-        from .adapters.local.i2v_wan22 import (
-            Wan22LocalI2VQ6Adapter,
-            Wan22LocalI2VDisTorch2Adapter,
-        )
-        from .adapters.local.i2v_wan22_lightning import Wan22LocalI2VLightningAdapter
-
-        _register(Wan22LocalI2VQ6Adapter, comfyui_client_fn=wan22_client_fn)
-        _register(Wan22LocalI2VDisTorch2Adapter, comfyui_client_fn=wan22_client_fn)
-        _register(Wan22LocalI2VLightningAdapter, comfyui_client_fn=wan22_client_fn)
-
-        # ── Local T2V adapter ──────────────────────────────────
-        from .adapters.local.t2v_wan22 import Wan22LocalT2VQ6Adapter
-
-        _register(Wan22LocalT2VQ6Adapter, comfyui_client_fn=wan22_client_fn)
 
         # ── Local MiniMax-H3 (remote ComfyUI node) ──────────────
         # Resolved through the Compute Backend Inventory instead of a hardcoded
@@ -176,7 +143,6 @@ def create_registry(
 
         # ── Utility adapters ───────────────────────────────────
         from .adapters.local.i2i_transform import I2ITransformAdapter
-        from .adapters.local.v2v import V2VStyleTransferAdapter
         from .adapters.local.upscale_image import ImageUpscaleAdapter
         from .adapters.local.upscale_video import VideoUpscaleAdapter
         from .adapters.local.interpolate import InterpolateAdapter
@@ -188,8 +154,6 @@ def create_registry(
         # I2I/inpaint are SDXL workflows (model_family="sdxl"), so they follow
         # SDXL backend routing instead of utility routing.
         _register(I2ITransformAdapter, comfyui_client_fn=sdxl_client_fn)
-        # V2V style-transfer runs Wan2.2 video workflows.
-        _register(V2VStyleTransferAdapter, comfyui_client_fn=wan22_client_fn)
         _register(ImageUpscaleAdapter, comfyui_client_fn=utility_client_fn)
         _register(VideoUpscaleAdapter, comfyui_client_fn=utility_client_fn)
         _register(InterpolateAdapter, comfyui_client_fn=utility_client_fn)

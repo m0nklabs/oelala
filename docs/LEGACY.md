@@ -87,6 +87,13 @@ lists them; recording a source per file is the fix.
 
 ## Cleanup log
 
-- 2026-09-30 — Wan 2.2 retired from the product (adapters, UI, workflows, RunPod
-  endpoint) and its local runtime weights deleted; LoRAs parked. See
+- 2026-09-30 — Wan 2.2 retired from the product: cloud + local adapters, registry and
+  factory registrations, `types.py` high/low-noise fields, the `oelala-wan22` RunPod
+  endpoint (deleted via GraphQL), `deploy/runpod/`, 9 workflow JSONs and their registry
+  presets, the video-tool modes and presets, and the Wan-only tests. A request naming the
+  retired family now returns HTTP 400 naming the successor models instead of failing
+  silently (`RETIRED_MODEL_FAMILIES` in `generation/router.py`). See
   `changelog/20261001-retire-wan22.md`.
+- 2026-09-30 — Wan 2.2 runtime weights deleted from local disk (the two Q8_0 GGUF
+  transformers, the umt5-xxl text encoder and both Wan VAEs, ≈ 42.7 GB); the 36 Wan LoRAs
+  stay parked. Re-fetch sources are recorded in the table above.

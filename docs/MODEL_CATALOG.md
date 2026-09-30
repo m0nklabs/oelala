@@ -4,9 +4,9 @@
 > run the generator or `--check`. Local root resolved via systemd,
 > mirrors read via the HuggingFace API (read-only).
 
-Entries: **249** — checkpoint: 7, diffusion_model: 31, lora: 131, other: 50, text_encoder: 17, upscaler: 4, vae: 9
+Entries: **245** — checkpoint: 7, diffusion_model: 29, lora: 131, other: 48, text_encoder: 17, upscaler: 4, vae: 9
 
-Families: flux: 3, flux2: 4, krea2: 1, ltx23: 18, minimax_h3: 13, qwen_image_edit: 4, sdxl: 20, unknown: 123, wan21: 1, wan22: 41, wan2_2: 21
+Families: flux: 3, flux2: 4, krea2: 1, ltx23: 18, minimax_h3: 13, qwen_image_edit: 4, sdxl: 20, unknown: 123, wan21: 1, wan22: 37, wan2_2: 21
 
 Windows-PC probe during generation: unreachable during generation (marked unverified).
 
@@ -255,13 +255,11 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors | diffusion_model | unet | 14.29 | fp8_e4m3fn | — | yes | unverified | — |
 | Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors | diffusion_model | unet | 14.29 | fp8_e4m3fn | — | yes | unverified | — |
 | wan2.2_i2v_high_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.30 | fp8_scaled | startup_required | — | unverified | — |
 | wan2.2_i2v_low_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.30 | fp8_scaled | startup_required | — | unverified | — |
 | wan2.2_t2v_high_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.30 | fp8_scaled | startup_required | yes | unverified | — |
+| wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.29 | fp8_scaled | — | yes | unverified | — |
 | wan2.2_t2v_low_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.30 | fp8_scaled | startup_required | yes | unverified | — |
+| wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.29 | fp8_scaled | — | yes | unverified | — |
 | wan22EnhancedNSFW_V2_Q6K_HIGH.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
 | wan22EnhancedNSFW_V2_Q6K_LOW.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
 | Wan2.2 - T2V - Cum Shot - HIGH 14B.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | — |
@@ -284,9 +282,7 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors | lora | loras | 0.61 | unknown | — | yes | unverified | dump |
 | Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf | other | unet_gguf | 15.41 | unknown | — | yes | unverified | — |
 | Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf | other | unet_gguf | 15.41 | unknown | — | yes | unverified | — |
-| clip_vision_h.safetensors | other | clip_vision | 1.26 | unknown | startup_required | — | unverified | dump |
-| umt5_xxl_fp16.safetensors | other | clip | 11.40 | fp16 | startup_required | — | unverified | — |
-| wan_2.1_vae.safetensors | vae | vae | 0.40 | unknown | startup_required | yes | unverified | dump |
+| wan_2.1_vae.safetensors | vae | vae | 0.25 | unknown | — | yes | unverified | dump |
 
 ## wan2_2
 

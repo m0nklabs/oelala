@@ -1,5 +1,5 @@
 {
-  "$comment": "Compute Backend Inventory — configurable sources of compute for generation. Managed via the Admin panel → Compute tab (CRUD over this file) and read at backend startup. Each backend declares which model_family capabilities it can run; the registry/router resolve the enabled backend per request. `type` is 'comfyui' (any headless/desktop ComfyUI server reachable by base_url) or 'runpod' (serverless container with an ephemeral ComfyUI — submit via the RunPod client). Secrets (RunPod endpoint IDs, API keys) stay in .env; this file only references them by name. COPY THIS FILE TO `compute_backends.json` (gitignored) and set the real per-server addresses there — never commit private IPs/hosts.",
+  "$comment": "Compute Backend Inventory — configurable sources of compute for generation. Managed via the Admin panel → Compute tab (CRUD over this file) and read at backend startup. Each backend declares which model_family capabilities it can run; the registry/router resolve the enabled backend per request. `type` is 'comfyui' (any headless/desktop ComfyUI server reachable by base_url) or 'runpod' (serverless container with an ephemeral ComfyUI — submit via the RunPod client). Secrets (RunPod endpoint IDs, API keys) stay in .env; this file only references them by name. This file is GITIGNORED: it holds the real per-server addresses. COPY instead from compute_backends.json.example for a fresh install.",
   "backends": [
     {
       "id": "ai-kvm2-comfyui",
@@ -7,7 +7,7 @@
       "type": "comfyui",
       "base_url": "http://localhost:8188",
       "enabled": true,
-      "model_families": ["wan2.2", "sdxl", "flux", "flux2", "krea2", "utility"],
+      "model_families": ["sdxl", "flux", "flux2", "krea2", "utility"],
       "notes": "Default local server. systemd comfyui, always_on."
     },
     {
@@ -25,7 +25,7 @@
       "type": "runpod",
       "base_url": "",
       "enabled": true,
-      "model_families": ["wan2.2", "ltx", "minimax_h3", "qwen_image_edit", "i2i_edit_model"],
+      "model_families": ["ltx", "minimax_h3", "qwen_image_edit", "i2i_edit_model"],
       "notes": "Serverless containers, each an ephemeral ComfyUI. Endpoint IDs in .env."
     }
   ]

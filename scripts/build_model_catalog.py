@@ -99,7 +99,6 @@ FAMILY_PATTERNS = [
 
 # Worker handler file -> worker label used in available_on / used_by fields.
 WORKER_REGISTRIES = [
-    ("deploy/runpod/handler.py", "CLOUD_WAN22_MODELS", "runpod_wan22_worker"),
     ("deploy/runpod-i2i/handler.py", "CLOUD_I2I_MODELS", "runpod_i2i_worker"),
     ("deploy/runpod-ltx23/handler.py", "LTX23_MODELS", "runpod_ltx23_worker"),
     ("deploy/runpod-minimax-h3/handler.py", "MINIMAX_H3_MODELS", "runpod_h3_worker"),

@@ -29,8 +29,9 @@ source of truth.
     **RTX 3060 first**. Managed by systemd `comfyui`; **`always_on`** (monifuse must not idle-stop it).
   - **Second ComfyUI server** (e.g. a Windows-PC) — hosts local MiniMax-H3; resolved purely through
     the inventory like any other `comfyui` backend (no bespoke `get_windows_comfyui_client`).
-  - **RunPod cloud** — headless = a container with an ephemeral ComfyUI server (Wan2.2, LTX-2.3,
-    MiniMax-H3, Qwen I2I). Submit via `submit_to_runpod_fn`.
+  - **RunPod cloud** — headless = a container with an ephemeral ComfyUI server (LTX-2.3,
+    MiniMax-H3, Qwen I2I). Submit via `submit_to_runpod_fn`. (Wan 2.2 retired 2026-10-01;
+    its LoRAs stay parked on disk for a possible future open-weight "Wan 3".)
   Adapters live in `src/backend/generation/adapters/{cloud,local}/`; the registry + router resolve
   the enabled backend per request by model-family capability.
 - **Storage** — MinIO (S3). Canonical dirs: `media/generated/`, `ComfyUI/output/`, `uploads/`.

@@ -11,12 +11,12 @@ meta:
   - LORA_HF_MIRROR_REPO
   windows_pc_probe: unreachable during generation (marked unverified)
   counts:
-    entries: 249
+    entries: 245
     by_role:
       checkpoint: 7
-      diffusion_model: 31
+      diffusion_model: 29
       lora: 131
-      other: 50
+      other: 48
       text_encoder: 17
       upscaler: 4
       vae: 9
@@ -30,7 +30,7 @@ meta:
       sdxl: 20
       unknown: 123
       wan21: 1
-      wan22: 41
+      wan22: 37
       wan2_2: 21
 entries:
 - filename: ToriiGate-v0.4-7B-Q6_K.gguf
@@ -463,24 +463,6 @@ entries:
   - —
   notes:
   - family unverified (no registry source, no pattern match)
-- filename: umt5_xxl_fp16.safetensors
-  role: other
-  target_dir: clip
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp16
-  size_gb: 11.4
-  sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
-      path: split_files/text_encoders/umt5_xxl_fp16.safetensors
-  available_on:
-    runpod_wan22_worker: startup_required
-    windows_pc_comfyui: unverified
-  used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
-  notes:
-  - UMT5-XXL fp16 text encoder
 - filename: clip-vit-large.safetensors
   role: other
   target_dir: clip_vision
@@ -497,28 +479,6 @@ entries:
   - —
   notes:
   - family unverified (no registry source, no pattern match)
-- filename: clip_vision_h.safetensors
-  role: other
-  target_dir: clip_vision
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 1.26
-  sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.1_ComfyUI_repackaged
-      path: split_files/clip_vision/clip_vision_h.safetensors
-    public_dump:
-      repo: Serenak/chilloutmix
-      path: clip_vision_h.safetensors
-  available_on:
-    runpod_wan22_worker: startup_required
-    windows_pc_comfyui: unverified
-    hf_public_dump: true
-  used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
-  notes:
-  - CLIP Vision H (I2V conditioning)
 - filename: pytorch_model.bin
   role: other
   target_dir: clip_vision
@@ -3802,24 +3762,6 @@ entries:
   - —
   notes:
   - —
-- filename: wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp8_scaled
-  size_gb: 14.3
-  sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
-      path: split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors
-  available_on:
-    runpod_wan22_worker: startup_required
-    windows_pc_comfyui: unverified
-  used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
-  notes:
-  - Wan 2.2 I2V high noise 14B fp8_scaled
 - filename: wan2.2_i2v_low_noise_14B_Q6_K.gguf
   role: diffusion_model
   target_dir: unet
@@ -3836,24 +3778,6 @@ entries:
   - —
   notes:
   - —
-- filename: wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp8_scaled
-  size_gb: 14.3
-  sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
-      path: split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
-  available_on:
-    runpod_wan22_worker: startup_required
-    windows_pc_comfyui: unverified
-  used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
-  notes:
-  - Wan 2.2 I2V low noise 14B fp8_scaled
 - filename: wan2.2_t2v_high_noise_14B_Q6_K.gguf
   role: diffusion_model
   target_dir: unet
@@ -3876,19 +3800,16 @@ entries:
   family: wan22
   base_model: Wan 2.2
   quantization: fp8_scaled
-  size_gb: 14.3
+  size_gb: 14.29
   sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
-      path: split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors
+    none: local file only, upstream unknown
   available_on:
-    runpod_wan22_worker: startup_required
     local_comfyui_ai_kvm2: true
     windows_pc_comfyui: unverified
   used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  - —
   notes:
-  - Wan 2.2 T2V high noise 14B fp8_scaled
+  - —
 - filename: wan2.2_t2v_low_noise_14B_Q6_K.gguf
   role: diffusion_model
   target_dir: unet
@@ -3911,19 +3832,16 @@ entries:
   family: wan22
   base_model: Wan 2.2
   quantization: fp8_scaled
-  size_gb: 14.3
+  size_gb: 14.29
   sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.2_ComfyUI_Repackaged
-      path: split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors
+    none: local file only, upstream unknown
   available_on:
-    runpod_wan22_worker: startup_required
     local_comfyui_ai_kvm2: true
     windows_pc_comfyui: unverified
   used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  - —
   notes:
-  - Wan 2.2 T2V low noise 14B fp8_scaled
+  - —
 - filename: wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
   role: diffusion_model
   target_dir: unet
@@ -4200,23 +4118,19 @@ entries:
   family: wan22
   base_model: Wan 2.2
   quantization: unknown
-  size_gb: 0.4
+  size_gb: 0.25
   sources:
-    hf_upstream:
-      repo: Comfy-Org/Wan_2.1_ComfyUI_repackaged
-      path: split_files/vae/wan_2.1_vae.safetensors
     public_dump:
       repo: Serenak/chilloutmix
       path: wan_2.1_vae.safetensors
   available_on:
-    runpod_wan22_worker: startup_required
     local_comfyui_ai_kvm2: true
     windows_pc_comfyui: unverified
     hf_public_dump: true
   used_by:
-  - runpod_wan22_worker registry (deploy/runpod/handler.py)
+  - —
   notes:
-  - Wan 2.1 VAE — required for 14B models (wan2.2_vae is 5B only)
+  - —
 - filename: diffusion_pytorch_model.safetensors
   role: other
   target_dir: vocoder

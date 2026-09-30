@@ -800,7 +800,7 @@ mutation; ensure the value never reaches the console or the RunPod job logs.
 |---|---|---|---|
 | **C1** | Add `build_cloud_ltx25_t2v_workflow()` per §6.3 (W1-W7, W9). | `src/backend/comfyui_client.py` | **[verified against official workflow]** |
 | **C2** | Add `build_cloud_ltx25_i2v_workflow()` per §6.3. | `src/backend/comfyui_client.py` | **[verified against official workflow]** |
-| **C3** | Add a `T2V_GENERATION_MODES["ltx25"]` entry (currently only `wan22`, `ltx2`). | `comfyui_client.py` | **[verified]** |
+| **C3** | Add a `T2V_GENERATION_MODES["ltx25"]` entry (currently only `wan22`, `ltx2` — dated 2026-10-01: `wan22` has since been removed, the family was retired; see `docs/LEGACY.md`). | `comfyui_client.py` | **[verified]** |
 | **C4** | Add adapters `ltx25_t2v.py` / `ltx25_i2v.py` (clone the 2.3 adapters; new `name`, `RUNPOD_LTX25_ENDPOINT_ID`). | `src/backend/generation/adapters/cloud/` | **[verified]** |
 | **C5** | Register the adapters in the cloud `__init__.py` and `factory.py`; add the endpoint default in `runpod_defaults.py`; wire the family mapping in `app.py` (`"ltx23": "ltx"` currently). | several | **[verified]** |
 | **C6** | Decide the LoRA story. 2.5 ships `ltx-2.5-22b-distilled-lora-450-bf16.safetensors` (8.9 GB); our 2.3 LoRAs are **not** assumed compatible. Verify against the LoRA registry before exposing LoRA UI for 2.5. | `docs/lora_registry.yaml` | **[needs runtime confirmation]** |

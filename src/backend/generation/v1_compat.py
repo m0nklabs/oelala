@@ -357,14 +357,21 @@ async def dispatch_v1(
         adapter_hint=adapter_hint,
     )
 
-    # 2. Dispatch through V2 router (handles credits, validation, execution)
-    result = await _router.dispatch(
-        gen_req,
-        user,
-        check_credits_fn=_check_credits_fn,
-        deduct_credits_fn=_deduct_credits_fn,
-        progress_callback=progress_callback,
-    )
+    # 2. Dispatch through V2 router (handles credits, validation, execution).
+    # ValueErrors (retired model families, invalid requests) surface as clean
+    # 400s instead of unhandled 500s.
+    try:
+        result = await _router.dispatch(
+            gen_req,
+            user,
+            check_credits_fn=_check_credits_fn,
+            deduct_credits_fn=_deduct_credits_fn,
+            progress_callback=progress_callback,
+        )
+    except ValueError as e:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # 3. Register job for auto-upload (V1 behaviour)
     if register_job_settings and result.prompt_id and _get_comfyui_client_fn:

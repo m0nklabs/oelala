@@ -41,7 +41,7 @@
 - [ ] Check of oelala content policy nodig heeft
 - [ ] Audit alle LoRAs voor licenties
 - [ ] Audit alle base models voor licenties
-- [ ] Check WAN 2.2 license
+- [x] Check WAN 2.2 license — not applicable: family retired 2026-10-01 (`docs/LEGACY.md`)
 - [ ] Check Flux license
 - [ ] Bepaal of ToS nodig is voor launch
 

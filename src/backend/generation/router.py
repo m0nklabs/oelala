@@ -2,15 +2,15 @@
 GenerationRouter — dispatches GenerationRequests to the correct adapter.
 
 Handles:
-1. Adapter resolution (by hint or auto-match)
+1. Adapter resolution (by hint or auto-match), incl. clear errors for
+   retired model families
 2. Resolution string → pixel mapping
-3. Frame count normalization (4k+1 for Wan2.2)
-4. ComfyUI image pre-upload for local adapters
-5. Control validation against adapter.constraints()
-6. LoRA filtering by model compatibility
-7. Credit check + deduction
-8. Adapter execution
-9. Job tracking
+3. ComfyUI image pre-upload for local adapters
+4. Control validation against adapter.constraints()
+5. LoRA filtering by model compatibility
+6. Credit check + deduction
+7. Adapter execution
+8. Job tracking
 """
 
 from __future__ import annotations
@@ -51,6 +51,24 @@ _ASPECT_RATIOS = {
     "auto": (1, 1),
 }
 
+# Model families retired from the product. Requests naming them fail clearly
+# instead of silently falling back to another model.
+RETIRED_MODEL_FAMILIES = {
+    "wan22": "Wan 2.2",
+    "wan2.2": "Wan 2.2",
+    "wan2_2": "Wan 2.2",
+    "wan-2-2": "Wan 2.2",
+}
+
+
+def retired_family_error(requested: str, family: str) -> ValueError:
+    """Build the clear error raised for a retired model family."""
+    return ValueError(
+        f"Model family '{family}' has been retired and is no longer available "
+        f"(requested: '{requested}'). Leading video model: MiniMax-H3; "
+        f"alternative: LTX-2.3."
+    )
+
 
 def resolve_resolution(
     resolution: Optional[str],
@@ -79,17 +97,6 @@ def resolve_resolution(
     width = (width // step) * step
     height = (height // step) * step
     return width, height
-
-
-def normalize_frame_count(frames: int) -> int:
-    """
-    Snap *frames* to the nearest Wan2.2 valid count (4k+1).
-
-    Wan2.2 requires frame counts of 5, 9, 13, … , 321.
-    """
-    k = round((frames - 1) / 4)
-    k = max(1, k)  # minimum 5 frames
-    return 4 * k + 1
 
 
 def _is_base64_image(data: str) -> bool:
@@ -221,6 +228,17 @@ class GenerationRouter:
         """
         # 1. Explicit adapter hint
         if req.adapter_hint:
+            hint_key = req.adapter_hint.strip().lower().replace("_", "").replace(
+                "-", ""
+            ).replace(".", "")
+            # Match retired families on the squashed hint so every wan22
+            # spelling ('wan22-local-i2v-q6', 'wan2.2', 'Wan22-Cloud-T2V', …)
+            # gets the explicit retirement error.
+            for key, family in RETIRED_MODEL_FAMILIES.items():
+                squashed = key.replace("_", "").replace("-", "").replace(".", "")
+                if squashed in hint_key:
+                    raise retired_family_error(req.adapter_hint, family)
+
             adapter = self.registry.get(req.adapter_hint)
             if adapter is None:
                 raise ValueError(
@@ -290,25 +308,6 @@ class GenerationRouter:
         if req.height is None:
             updates["height"] = h
         return req.model_copy(update=updates) if updates else req
-
-    def normalize_frames(
-        self, req: GenerationRequest, adapter: GenerationAdapter
-    ) -> GenerationRequest:
-        """
-        Snap frame count to 4k+1 for Wan2.2 adapters.
-        """
-        if req.frames is None:
-            return req
-        if "wan2" not in adapter.model_family.lower():
-            return req
-
-        normalised = normalize_frame_count(req.frames)
-        if normalised != req.frames:
-            logger.debug(
-                f"🎞️ Frame count normalised: {req.frames} → {normalised} (4k+1)"
-            )
-            return req.model_copy(update={"frames": normalised})
-        return req
 
     async def upload_local_images(
         self, req: GenerationRequest, adapter: GenerationAdapter
@@ -476,30 +475,27 @@ class GenerationRouter:
         # 3. Validate controls (clamp, defaults)
         req = self.validate_controls(req, adapter)
 
-        # 4. Normalize frames (4k+1 for Wan2.2)
-        req = self.normalize_frames(req, adapter)
-
-        # 5. Filter LoRAs
+        # 4. Filter LoRAs
         req = self.filter_loras(req, adapter)
 
-        # 6. Upload images to ComfyUI for local adapters
+        # 5. Upload images to ComfyUI for local adapters
         req = await self.upload_local_images(req, adapter)
 
-        # 7. Calculate + check credits
+        # 6. Calculate + check credits
         credits_required = adapter.cost(req)
         if check_credits_fn:
             await check_credits_fn(user, credits_required)
 
-        # 8. Execute
+        # 7. Execute
         result = await adapter.execute(req, progress_callback=progress_callback)
         result = result.model_copy(
             update={"credits_used": credits_required, "adapter_name": adapter.name}
         )
 
-        # 8b. Register queued local ComfyUI jobs for auto-upload into user media.
+        # 7b. Register queued local ComfyUI jobs for auto-upload into user media.
         self._register_local_job(req, result, adapter)
 
-        # 9. Deduct credits
+        # 8. Deduct credits
         if deduct_credits_fn:
             await deduct_credits_fn(
                 user, credits_required, result.prompt_id, adapter.name

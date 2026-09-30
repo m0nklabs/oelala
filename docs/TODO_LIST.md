@@ -188,7 +188,9 @@ Based on project priorities:
 > **When**: When traffic volume justifies it (multiple concurrent users)
 > **Why**: Current single endpoint downloads ALL models (~70GB) at startup even though each job only needs ~30GB
 
-**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
+**Current** (low traffic): 1 endpoint `x2x496ymkidl3m` with all Wan 2.2 I2V + T2V models — **gone**: this endpoint was deleted 2026-10-01 when the Wan 2.2 family was retired (see `docs/LEGACY.md`)
 **Future** (higher traffic): Split into dedicated endpoints per workflow family
 
 | Endpoint | Models | Startup Download |

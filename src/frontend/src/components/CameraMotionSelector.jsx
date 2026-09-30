@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 
-// Camera motion presets for Wan2.2 video generation
+// Camera motion presets for video generation (prepended to the user prompt)
 export const CAMERA_MOTIONS = [
   { value: '', label: 'None', desc: 'No camera motion', prefix: '' },
   { value: 'static', label: '📷 Static', desc: 'Camera stays still', prefix: 'static camera shot, ' },

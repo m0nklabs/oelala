@@ -126,7 +126,7 @@ def _default_backends() -> List[ComputeBackend]:
             type="comfyui",
             base_url="http://localhost:8188",
             enabled=True,
-            model_families=["wan2.2", "sdxl", "flux", "flux2", "krea2", UTILITY_FAMILY],
+            model_families=["sdxl", "flux", "flux2", "krea2", UTILITY_FAMILY],
         ),
         ComputeBackend(
             id="runpod-cloud",
@@ -135,7 +135,6 @@ def _default_backends() -> List[ComputeBackend]:
             base_url="",
             enabled=True,
             model_families=[
-                "wan2.2",
                 "ltx",
                 "minimax_h3",
                 "qwen_image_edit",

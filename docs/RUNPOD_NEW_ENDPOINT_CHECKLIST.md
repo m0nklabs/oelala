@@ -182,7 +182,7 @@ sudo systemctl restart oelala-backend
 
 | Name | Endpoint ID | Template ID | Image | GPU Tiers |
 |------|-------------|-------------|-------|-----------|
-| oelala-wan22 | `x2x496ymkidl3m` | `tkpy0pi8gt` | `ghcr.io/m0nklabs/oelala-comfyui-worker` | 48GB+ |
+| oelala-wan22 — **retired 2026-10-01; endpoint deleted** (`docs/LEGACY.md`) | `x2x496ymkidl3m` | `tkpy0pi8gt` | `ghcr.io/m0nklabs/oelala-comfyui-worker` | 48GB+ |
 | oelala-ltx23 | `ctpoa610dva4ww` | `c1fz26l07d` | `ghcr.io/m0nklabs/oelala-ltx23-worker` | 80GB+ |
 | oelala-i2i | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-i2i-worker` | 48GB+ |
 | oelala-minimax-h3 | `5xuvnvyww4ujnc` | `fpfo4gmnrw` | `ghcr.io/m0nklabs/oelala-minimax-h3-worker` | 80GB+ |

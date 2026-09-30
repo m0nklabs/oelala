@@ -1,5 +1,5 @@
 """
-Tests for Phase 3 cloud adapters: Wan22 I2V/T2V + LTX-2.3 I2V/T2V.
+Tests for Phase 3 cloud adapters: LTX-2.3 I2V/T2V + MiniMax-H3 I2V/T2V.
 
 Tests cover:
 - Adapter metadata (name, model_family, ops, types, compute, LoRA format)
@@ -25,215 +25,10 @@ from generation.types import (
     MediaType,
     Operation,
 )
-from generation.adapters.cloud.wan22_i2v import Wan22CloudI2VAdapter
-from generation.adapters.cloud.wan22_t2v import Wan22CloudT2VAdapter
 from generation.adapters.cloud.ltx23_i2v import LTX23CloudI2VAdapter
 from generation.adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
 from generation.adapters.cloud.minimax_h3_i2v import MiniMaxH3CloudI2VAdapter
 from generation.adapters.cloud.minimax_h3_t2v import MiniMaxH3CloudT2VAdapter
-
-
-# ── Wan22 Cloud I2V ─────────────────────────────────────────────────
-
-
-class TestWan22CloudI2V:
-    def test_metadata(self):
-        adapter = Wan22CloudI2VAdapter()
-        assert adapter.name == "wan22-cloud-i2v"
-        assert adapter.model_family == "wan2.2"
-        assert Operation.GENERATE in adapter.supported_ops
-        assert MediaType.IMAGE in adapter.input_types
-        assert adapter.output_type == MediaType.VIDEO
-        assert adapter.compute == ComputeTarget.CLOUD
-        assert adapter.lora_format == LoraFormat.DUAL_STAGE
-
-    def test_constraints(self):
-        adapter = Wan22CloudI2VAdapter()
-        c = adapter.constraints()
-        assert c.max_frames == 321
-        assert "480p" in c.resolution_presets
-        assert "720p" in c.resolution_presets
-        assert c.default_steps == 15
-        assert c.default_cfg == 3.0
-        assert 16 in c.allowed_fps
-
-    @pytest.mark.parametrize("frames,expected_cost", [
-        (81, 10),    # 5 base × 2 cloud
-        (161, 16),   # 8 base × 2 cloud
-        (321, 30),   # 15 base × 2 cloud
-    ])
-    def test_cost(self, frames, expected_cost):
-        adapter = Wan22CloudI2VAdapter()
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="test",
-            frames=frames,
-        )
-        assert adapter.cost(req) == expected_cost
-
-    def test_build_workflow_delegates_to_comfyui(self):
-        mock_comfyui = MagicMock()
-        mock_comfyui.build_cloud_wan22_i2v_workflow.return_value = {"workflow": True}
-
-        adapter = Wan22CloudI2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="a cat",
-            input_images=["img.png"],
-            frames=81,
-            fps=16,
-        )
-        result = adapter.build_workflow(req)
-        assert result == {"workflow": True}
-        mock_comfyui.build_cloud_wan22_i2v_workflow.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_execute_success(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "test-id",
-            "runpod_job_id": "rp-123",
-        })
-        mock_comfyui = MagicMock()
-        mock_comfyui.build_cloud_wan22_i2v_workflow.return_value = {"workflow": True}
-
-        adapter = Wan22CloudI2VAdapter(
-            submit_to_runpod_fn=mock_submit,
-            comfyui_client_fn=lambda: mock_comfyui,
-        )
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="test motion",
-            input_images=["base64data"],
-            frames=81,
-        )
-        result = await adapter.execute(req)
-        assert result.status == "queued_cloud"
-        assert result.adapter_name == "wan22-cloud-i2v"
-        assert result.runpod_job_id == "rp-123"
-        mock_submit.assert_called_once()
-        # Verify images dict uses a proper filename key, not base64 data
-        call_kwargs = mock_submit.call_args
-        images = call_kwargs.kwargs.get("images") or call_kwargs[1].get("images")
-        assert images is not None
-        for key in images:
-            assert key == "input.png", f"Expected filename key, got base64 data: {key[:20]}..."
-
-    @pytest.mark.asyncio
-    async def test_execute_no_image_raises(self):
-        adapter = Wan22CloudI2VAdapter(submit_to_runpod_fn=AsyncMock())
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="test",
-        )
-        with pytest.raises(ValueError, match="requires an input image"):
-            await adapter.execute(req)
-
-    def test_to_dict(self):
-        adapter = Wan22CloudI2VAdapter()
-        d = adapter.to_dict()
-        assert d["name"] == "wan22-cloud-i2v"
-        assert d["compute"] == "cloud"
-        assert d["lora_format"] == "dual"
-
-
-# ── Wan22 Cloud T2V ─────────────────────────────────────────────────
-
-
-class TestWan22CloudT2V:
-    def test_metadata(self):
-        adapter = Wan22CloudT2VAdapter()
-        assert adapter.name == "wan22-cloud-t2v"
-        assert adapter.model_family == "wan2.2"
-        assert MediaType.TEXT in adapter.input_types
-        assert adapter.output_type == MediaType.VIDEO
-        assert adapter.compute == ComputeTarget.CLOUD
-        assert adapter.lora_format == LoraFormat.DUAL_STAGE
-
-    def test_constraints(self):
-        adapter = Wan22CloudT2VAdapter()
-        c = adapter.constraints()
-        assert c.max_frames == 161
-        assert c.default_steps == 15
-        assert "dpmpp_2m" in c.supported_samplers
-
-    @pytest.mark.parametrize("frames,expected_cost", [
-        (81, 16),    # 8 base × 2 cloud
-        (161, 24),   # 12 base × 2 cloud
-    ])
-    def test_cost(self, frames, expected_cost):
-        adapter = Wan22CloudT2VAdapter()
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="test",
-            frames=frames,
-        )
-        assert adapter.cost(req) == expected_cost
-
-    def test_build_workflow_delegates(self):
-        mock_comfyui = MagicMock()
-        mock_comfyui.build_cloud_wan22_t2v_workflow.return_value = {"t2v": True}
-
-        adapter = Wan22CloudT2VAdapter(comfyui_client_fn=lambda: mock_comfyui)
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="a dancing robot",
-            frames=81,
-        )
-        result = adapter.build_workflow(req)
-        assert result == {"t2v": True}
-        mock_comfyui.build_cloud_wan22_t2v_workflow.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_execute_success(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "t2v-id",
-            "runpod_job_id": "rp-t2v",
-        })
-        mock_comfyui = MagicMock()
-        mock_comfyui.build_cloud_wan22_t2v_workflow.return_value = {"t2v": True}
-
-        adapter = Wan22CloudT2VAdapter(
-            submit_to_runpod_fn=mock_submit,
-            comfyui_client_fn=lambda: mock_comfyui,
-        )
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="test",
-            frames=81,
-        )
-        result = await adapter.execute(req)
-        assert result.status == "queued_cloud"
-        assert result.adapter_name == "wan22-cloud-t2v"
-
-    @pytest.mark.asyncio
-    async def test_execute_budget_exceeded_raises(self):
-        mock_comfyui = MagicMock()
-        mock_comfyui.build_cloud_wan22_t2v_workflow.return_value = {"t2v": True}
-
-        adapter = Wan22CloudT2VAdapter(
-            submit_to_runpod_fn=AsyncMock(),
-            comfyui_client_fn=lambda: mock_comfyui,
-        )
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            prompt="test",
-            width=1920,
-            height=1080,
-            frames=161,  # 1920*1080*161 = ~333M > 100M
-        )
-        with pytest.raises(ValueError, match="exceeds safety budget"):
-            await adapter.execute(req)
-
-
-# ── LTX-2.3 Cloud I2V ──────────────────────────────────────────────
 
 
 class TestLTX23CloudI2V:
@@ -818,16 +613,12 @@ class TestCloudAdaptersRegistry:
         from generation.registry import AdapterRegistry
 
         registry = AdapterRegistry()
-        registry.register(Wan22CloudI2VAdapter())
-        registry.register(Wan22CloudT2VAdapter())
         registry.register(LTX23CloudI2VAdapter())
         registry.register(LTX23CloudT2VAdapter())
         registry.register(MiniMaxH3CloudI2VAdapter())
         registry.register(MiniMaxH3CloudT2VAdapter())
 
-        assert len(registry) == 6
-        assert "wan22-cloud-i2v" in registry
-        assert "wan22-cloud-t2v" in registry
+        assert len(registry) == 4
         assert "ltx23-cloud-i2v" in registry
         assert "ltx23-cloud-t2v" in registry
         assert "minimax-h3-cloud-i2v" in registry
@@ -837,7 +628,6 @@ class TestCloudAdaptersRegistry:
         from generation.registry import AdapterRegistry
 
         registry = AdapterRegistry()
-        registry.register(Wan22CloudI2VAdapter())
         registry.register(LTX23CloudI2VAdapter())
         registry.register(MiniMaxH3CloudI2VAdapter())
 
@@ -847,13 +637,12 @@ class TestCloudAdaptersRegistry:
             target_type=MediaType.VIDEO,
             compute=ComputeTarget.CLOUD,
         )
-        assert len(results) == 3
+        assert len(results) == 2
 
     def test_find_cloud_t2v_adapters(self):
         from generation.registry import AdapterRegistry
 
         registry = AdapterRegistry()
-        registry.register(Wan22CloudT2VAdapter())
         registry.register(LTX23CloudT2VAdapter())
         registry.register(MiniMaxH3CloudT2VAdapter())
 
@@ -863,7 +652,7 @@ class TestCloudAdaptersRegistry:
             target_type=MediaType.VIDEO,
             compute=ComputeTarget.CLOUD,
         )
-        assert len(results) == 3
+        assert len(results) == 2
 
 
 # ── MiniMax-H3 canvas helper ────────────────────────────────────────

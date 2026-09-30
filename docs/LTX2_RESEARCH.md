@@ -3,6 +3,8 @@
 > Research date: January 2026
 > Status: **Very Promising** - Native audio+video in one model!
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ## NSFW Status: ✅ NOT EXPLICITLY RESTRICTED
 
 After reviewing the full LTX-2 Community License Agreement (Attachment A: Use Restrictions), **there is NO explicit prohibition on adult/NSFW content**.
@@ -36,7 +38,7 @@ LTX-2 is Lightricks' next-generation video foundation model with **native synchr
 
 ### Key Differentiators from WAN 2.2
 
-| Feature | LTX-2 | WAN 2.2 (Current) |
+| Feature | LTX-2 | Wan 2.2 (then-current, retired 2026-10-01) |
 |---------|-------|-------------------|
 | Audio Generation | ✅ Native, synchronized | ❌ Requires separate model |
 | Model Size | 19B parameters | 14B parameters |

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, ChevronDown, Layers, Sliders, Clock, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
+import { Upload, X, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, ChevronDown, Clock, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, STORAGE_BASE, getMediaUrl } from '../../config'
 import { apiFetch, uploadUserMedia } from '../../api'
@@ -10,7 +10,6 @@ import { useNSFW } from '../../contexts/NSFWContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
 import { estimateI2VTime } from '../../utils/timeEstimates'
-import PresetSelector from '../../components/PresetSelector'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import MediaImportModal from '../../components/MediaImportModal'
 import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
@@ -19,26 +18,17 @@ import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, DEFAULT_PROMPT_LLM } from '../../constants/llmModels'
 import AISuggestPanel from '../../components/AISuggestPanel'
-import '../../components/PresetSelector.css'
 
 const FPS_OPTIONS = [8, 12, 16, 24]
 
-// Model mode options for I2V
+// Model mode options for I2V. MiniMax-H3 leads, LTX-2.3 is the second choice.
 const MODEL_MODES = [
-  { value: 'cloud_wan22', label: '☁️ Cloud Wan22 — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
-  { value: 'wan2.2', label: '✅ Stable Local — Wan2.2 Q6', desc: 'Reliable local dual-pass via ComfyUI' },
-  { value: 'distorch2_q8', label: '🏆 Quality Local — Wan2.2 Q8', desc: 'Q8 quality + DisTorch2 multi-GPU' },
-  { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
   { value: 'minimax_h3', label: '🎥 MiniMax H3 — Cloud Video+Audio', desc: '24fps cloud I2V with native stereo audio (80GB+ GPU)' },
   { value: 'minimax_h3_local', label: '🪟 MiniMax H3 — Lokaal (Windows PC)', desc: '24fps lokal op je Windows-PC ComfyUI met native stereo audio' },
+  { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
 
 const I2V_ADAPTER_BY_MODE = {
-  'wan2.2': 'wan22-local-i2v-q6',
-  blockswap_q8: 'wan22-local-i2v-blockswap',
-  distorch2_q8: 'wan22-local-i2v-distorch2',
-  ultra_q8: 'wan22-local-i2v-ultra',
-  cloud_wan22: 'wan22-cloud-i2v',
   ltx2: 'ltx23-cloud-i2v',
   minimax_h3: 'minimax-h3-cloud-i2v',
   minimax_h3_local: 'minimax-h3-local-i2v',
@@ -50,7 +40,11 @@ const I2V_ADAPTER_BY_MODE = {
 const H3_MODES = new Set(['minimax_h3', 'minimax_h3_local'])
 const isH3Mode = (m) => H3_MODES.has(m)
 
-const I2V_CLOUD_ONLY_MODES = new Set(['cloud_wan22', 'ltx2', 'minimax_h3'])
+const I2V_CLOUD_ONLY_MODES = new Set(['ltx2', 'minimax_h3'])
+
+// Model modes retired together with the Wan 2.2 family; saved profiles may
+// still carry one of these values and are coerced to MiniMax-H3 on restore.
+const RETIRED_WAN22_MODES = new Set(['wan2.2', 'cloud_wan22', 'blockswap_q8', 'distorch2_q8', 'ultra_q8'])
 
 // MiniMax-H3 quality levels (official ResolutionSelector: target MP at the
 // chosen aspect ratio, rounded to a multiple of 32). 0.98 MP @16:9 = H3's
@@ -133,7 +127,7 @@ const getSafePreviewUrl = (value) => {
 }
 
 // Resolution presets with dimensions per aspect ratio
-// Includes max_duration based on tested VRAM limits (28GB dual GPU)
+// Includes max_duration based on tested VRAM limits
 const RESOLUTION_PRESETS = {
   '480p': {
     label: '480p',
@@ -145,12 +139,7 @@ const RESOLUTION_PRESETS = {
       '3:4': '480×640',
     },
     // Max 30s for all models (VRAM will be the practical limit)
-    max_duration_wan22: 30,
     max_duration_ltx2: 30,
-    max_duration_blockswap_q8: 30,
-    max_duration_distorch2_q8: 30,
-    max_duration_ultra_q8: 30,
-    max_duration_cloud_wan22: 30,
   },
   '576p': {
     label: '576p',
@@ -162,12 +151,7 @@ const RESOLUTION_PRESETS = {
       '3:4': '576×768',
     },
     // Max 30s for all models (VRAM will be the practical limit)
-    max_duration_wan22: 30,
     max_duration_ltx2: 30,
-    max_duration_blockswap_q8: 30,
-    max_duration_distorch2_q8: 30,
-    max_duration_ultra_q8: 30,
-    max_duration_cloud_wan22: 30,
   },
   '720p': {
     label: '720p',
@@ -179,12 +163,7 @@ const RESOLUTION_PRESETS = {
       '3:4': '720×960',
     },
     // Max 30s for all models (VRAM will be the practical limit)
-    max_duration_wan22: 30,
     max_duration_ltx2: 30,
-    max_duration_blockswap_q8: 30,
-    max_duration_distorch2_q8: 30,
-    max_duration_ultra_q8: 8,  // 720p: 15.4GB peak@161f OOM, 14.5GB@129f safe with LoRAs
-    max_duration_cloud_wan22: 30,  // 48GB VRAM on cloud, no limit
   },
 }
 
@@ -197,7 +176,7 @@ const I2V_DEFAULT_SETTINGS = {
   negativePrompt: 'low quality, blurry, out of focus, unstable camera, artifacts, distortion, low resolution, overexposed, underexposed, color banding, missing details, unrealistic lighting, flickering shadows, frame stutter, ghosting, bad reflections, unrealistic motion, pixelated textures, wrong physics, broken animation, rendering artifacts, compression noise, jitter, unnatural sand behavior, visual glitches',
   duration: 8,
   resolution: '480p',
-  modelMode: 'wan2.2',
+  modelMode: 'minimax_h3',
   modelVersion: 'v2',
   aspectRatio: '9:16',
   fps: 16,
@@ -208,17 +187,7 @@ const I2V_DEFAULT_SETTINGS = {
   cfg: 1.0,
   seed: -1,
   cameraMotion: '',
-  bsShift: 9.0,
-  bsNagScale: 11.0,
-  bsEnableFlorence2: true,
-  bsEnableUpscale: false,
-  bsEnableInterpolation: false,
-  bsHighNoiseSteps: 4,
   loraConfigs: [],
-  unetHighNoise: 'wan2.2_i2v_high_noise_14B_Q6_K.gguf',
-  unetLowNoise: 'wan2.2_i2v_low_noise_14B_Q6_K.gguf',
-  extendMode: false,
-  clipCount: 1,
   postUpscale: false,
   postUpscaleScale: 2,
   postInterpolate: false,
@@ -239,7 +208,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
     if (s.negativePrompt !== undefined) setNegativePrompt(s.negativePrompt)
     if (s.duration !== undefined) setDuration(s.duration)
     if (s.resolution) setResolution(s.resolution)
-    if (s.modelMode) setModelMode(s.modelMode)
+    // Retired Wan 2.2 mode values from old profiles fall back to MiniMax-H3
+    if (s.modelMode) setModelMode(RETIRED_WAN22_MODES.has(s.modelMode) ? 'minimax_h3' : s.modelMode)
     if (s.modelVersion) setModelVersion(s.modelVersion)
     if (s.aspectRatio) setAspectRatio(s.aspectRatio)
     if (s.fps !== undefined) setFps(s.fps)
@@ -250,17 +220,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
     if (s.cfg !== undefined) setCfg(s.cfg)
     if (s.seed !== undefined) setSeed(s.seed)
     if (s.cameraMotion !== undefined) setCameraMotion(s.cameraMotion)
-    if (s.bsShift !== undefined) setBsShift(s.bsShift)
-    if (s.bsNagScale !== undefined) setBsNagScale(s.bsNagScale)
-    if (s.bsEnableFlorence2 !== undefined) setBsEnableFlorence2(s.bsEnableFlorence2)
-    if (s.bsEnableUpscale !== undefined) setBsEnableUpscale(s.bsEnableUpscale)
-    if (s.bsEnableInterpolation !== undefined) setBsEnableInterpolation(s.bsEnableInterpolation)
-    if (s.bsHighNoiseSteps !== undefined) setBsHighNoiseSteps(s.bsHighNoiseSteps)
     if (s.loraConfigs !== undefined) setLoraConfigs(s.loraConfigs)
-    if (s.unetHighNoise) setUnetHighNoise(s.unetHighNoise)
-    if (s.unetLowNoise) setUnetLowNoise(s.unetLowNoise)
-    if (s.extendMode !== undefined) setExtendMode(s.extendMode)
-    if (s.clipCount !== undefined) setClipCount(s.clipCount)
     if (s.postUpscale !== undefined) setPostUpscale(s.postUpscale)
     if (s.postUpscaleScale !== undefined) setPostUpscaleScale(s.postUpscaleScale)
     if (s.postInterpolate !== undefined) setPostInterpolate(s.postInterpolate)
@@ -308,7 +268,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
   const [showPromptTips, setShowPromptTips] = useState(false)
   const [duration, setDuration] = useState(8) // seconds, 3-15 range
   const [resolution, setResolution] = useState('480p')
-  const [modelMode, setModelMode] = useState('wan2.2')  // default to Wan2.2 for quality
+  const [modelMode, setModelMode] = useState('minimax_h3')
   const [modelVersion, setModelVersion] = useState('v2')
   const [usePose] = useState(false)
   const [computeTarget, setComputeTarget] = useState('local')
@@ -328,14 +288,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
       setComputeTarget(desiredComputeTarget)
     }
   }, [modelMode, computeTarget])
-
-  // BlockSwap Q8 Experimental mode settings
-  const [bsShift, setBsShift] = useState(9.0)
-  const [bsNagScale, setBsNagScale] = useState(11.0)
-  const [bsEnableFlorence2, setBsEnableFlorence2] = useState(true)
-  const [bsEnableUpscale, setBsEnableUpscale] = useState(false)
-  const [bsEnableInterpolation, setBsEnableInterpolation] = useState(false)
-  const [bsHighNoiseSteps, setBsHighNoiseSteps] = useState(4)
 
   // Camera motion preset
   const [cameraMotion, setCameraMotion] = useState('')
@@ -427,33 +379,12 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
   // Array of {high: string, low: string, strength: number}
   const [loraConfigs, setLoraConfigs] = useState([])
   const [showLoraPanel, setShowLoraPanel] = useState(false)
-  const [loraSearchHigh, setLoraSearchHigh] = useState({})  // {idx: string} per LoRA slot
-  const [loraSearchLow, setLoraSearchLow] = useState({})    // {idx: string} per LoRA slot
-  const [loraDropdownOpen, setLoraDropdownOpen] = useState(null)  // 'high-0', 'low-2', etc.
-
-  // Unet model state
-  const [availableUnets, setAvailableUnets] = useState({ high_noise: [], low_noise: [], pairs: [] })
-  const [unetHighNoise, setUnetHighNoise] = useState('wan2.2_i2v_high_noise_14B_Q6_K.gguf')
-  const [unetLowNoise, setUnetLowNoise] = useState('wan2.2_i2v_low_noise_14B_Q6_K.gguf')
-  const [showUnetPanel, setShowUnetPanel] = useState(false)
-
-  // Extend Duration - Sequential clip generation
-  const [extendMode, setExtendMode] = useState(false)
-  const [clipCount, setClipCount] = useState(1)
 
   // Post-processing options (chained jobs)
   const [postUpscale, setPostUpscale] = useState(false)
   const [postUpscaleScale, setPostUpscaleScale] = useState(2)
   const [postInterpolate, setPostInterpolate] = useState(false)
   const [postInterpolateFps, setPostInterpolateFps] = useState(60)
-  const [postAudio, setPostAudio] = useState(false)
-  const [postAudioFile, setPostAudioFile] = useState(null)
-  const [showPostProcessing, setShowPostProcessing] = useState(false)
-
-  // Preset mode
-  const [usePresets, setUsePresets] = useState(false)
-  const [selectedPreset, setSelectedPreset] = useState(null)
-  const [, setPresetParameters] = useState({})
 
   const [busy] = useState(false)
   const [error, setError] = useState('')
@@ -494,20 +425,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
   const settingsSnapshot = useMemo(() => ({
     prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
     aspectRatio, fps, h3Quality, h3Variant, h3QualityMode, steps, cfg, seed, cameraMotion,
-    bsShift, bsNagScale, bsEnableFlorence2, bsEnableUpscale,
-    bsEnableInterpolation, bsHighNoiseSteps,
-    loraConfigs, unetHighNoise, unetLowNoise,
-    extendMode, clipCount,
+    loraConfigs,
     postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
     enhanceModel,
     sourceImageName: file?.name || null,
   }), [
     prompt, negativePrompt, duration, resolution, modelMode, modelVersion,
     aspectRatio, fps, h3Quality, h3Variant, h3QualityMode, steps, cfg, seed, cameraMotion,
-    bsShift, bsNagScale, bsEnableFlorence2, bsEnableUpscale,
-    bsEnableInterpolation, bsHighNoiseSteps,
-    loraConfigs, unetHighNoise, unetLowNoise,
-    extendMode, clipCount,
+    loraConfigs,
     postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
     enhanceModel, file,
   ])
@@ -642,19 +567,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
     if (modelMode === 'ltx2') {
       return preset.max_duration_ltx2 || 30
     }
-    if (modelMode === 'blockswap_q8') {
-      return preset.max_duration_blockswap_q8 || 30
-    }
-    if (modelMode === 'distorch2_q8') {
-      return preset.max_duration_distorch2_q8 || 30
-    }
-    if (modelMode === 'ultra_q8') {
-      return preset.max_duration_ultra_q8 || 30
-    }
-    if (modelMode === 'cloud_wan22') {
-      return preset.max_duration_cloud_wan22 || 30
-    }
-    return preset.max_duration_wan22 || 30
+    return 30
   }, [resolution, modelMode])
 
   // Clamp duration when max changes
@@ -694,7 +607,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
       return items
     }
     // Model-type category filter: LTX only sees ltx/, MiniMax-H3 only sees
-    // minimax-h3/, Wan sees everything else
+    // minimax-h3/
     const isLtx = modelMode === 'ltx2'
     const isH3 = H3_MODES.has(modelMode)
     const categoryFilter = (cat) => isLtx ? cat === 'ltx' : isH3 ? cat === 'minimax-h3' : cat !== 'ltx'
@@ -716,23 +629,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
       by_category: filteredByCategory,
     }
   }, [availableLoras, nsfwEnabled, modelMode])
-
-  // Fetch available unet models on mount
-  useEffect(() => {
-    const fetchUnets = async () => {
-      try {
-        const res = await apiFetch('/unet-models')
-        if (res.ok) {
-          const data = await res.json()
-          setAvailableUnets(data)
-          if (DEBUG) console.debug('🐛 loaded Unet models:', data.count)
-        }
-      } catch (e) {
-        console.error('Failed to fetch Unet models:', e)
-      }
-    }
-    fetchUnets()
-  }, [])
 
   // Persist prompt to localStorage on change
   useEffect(() => {
@@ -1072,7 +968,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
         finalPrompt = motionPrefix + (prompt || 'Motion, subject moving naturally')
       }
 
-      const adapterHint = usePose ? 'pose-i2v' : (I2V_ADAPTER_BY_MODE[modelMode] || I2V_ADAPTER_BY_MODE['wan2.2'])
+      const adapterHint = usePose ? 'pose-i2v' : (I2V_ADAPTER_BY_MODE[modelMode] || I2V_ADAPTER_BY_MODE.minimax_h3)
       const resolvedComputeTarget = getI2VComputeTarget(modelMode)
 
       // Build V2 request payload
@@ -1109,36 +1005,10 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
       }
 
       // Add model-specific parameters
-      if (!usePose && (modelMode === 'blockswap_q8' || modelMode === 'distorch2_q8' || modelMode === 'ultra_q8' || modelMode === 'wan22')) {
-        reqPayload.shift = bsShift
-        reqPayload.nag_scale = bsNagScale
-        reqPayload.high_noise_steps = bsHighNoiseSteps
-        reqPayload.enable_florence2 = bsEnableFlorence2
-        reqPayload.enable_upscale = bsEnableUpscale
-        reqPayload.enable_interpolation = bsEnableInterpolation
-      }
-
-      if (modelMode === 'cloud_wan22') {
-        reqPayload.sampler = 'dpmpp_2m'
-        reqPayload.scheduler = 'beta'
-      }
-
       if (modelMode === 'ltx2') {
         if (audioPromptImported && audioPromptImported.trim()) {
           reqPayload.audio_prompt = audioPromptImported.trim()
         }
-      }
-
-      // Add extend mode parameters for Wan2.2 Q6
-      if (!usePose && modelMode === 'wan2.2' && extendMode && clipCount > 1) {
-        reqPayload.extend_mode = true
-        reqPayload.clip_count = clipCount
-      }
-
-      // Add Unet parameters
-      if (!usePose && modelMode === 'wan2.2') {
-        if (unetHighNoise) reqPayload.unet_high_noise = unetHighNoise
-        if (unetLowNoise) reqPayload.unet_low_noise = unetLowNoise
       }
 
       // Add LoRAs
@@ -1153,17 +1023,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
       }
       if (postInterpolate) {
         postProcessing.push({ type: 'interpolate', target_fps: postInterpolateFps })
-      }
-      if (postAudio && postAudioFile) {
-        // Read audio file as base64
-        const audioBase64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = (e) => resolve(e.target.result)
-          reader.onerror = reject
-          reader.readAsDataURL(postAudioFile)
-        })
-        reqPayload.input_audio = audioBase64
-        postProcessing.push({ type: 'add_audio' })
       }
       if (postProcessing.length > 0) {
         reqPayload.post_processing = postProcessing
@@ -1388,7 +1247,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Wan22 uses full precision on a cloud GPU for best quality. Local modes use your GPU with quantized models for faster/cheaper generation. LTX-2.3 is optimized for fast, cinematic video." /></label>
+          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model. MiniMax-H3 generates 24 fps video with native stereo audio (cloud or local on your Windows PC). LTX-2.3 is optimized for fast, cinematic video." /></label>
           <div style={{ position: 'relative' }}>
             <select
               value={modelMode}
@@ -1398,49 +1257,13 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
                 // Clear LoRA configs when switching model architecture (incompatible)
                 setLoraConfigs([])
                 // Adjust defaults per model
-                if (newMode === 'wan2.2') {
-                  setResolution('480p')  // Best quality/length ratio for Wan2.2
-                  setAspectRatio('9:16')
-                  setDuration(8)
-                  setSteps(6)
-                  setCfg(1.0)
-                  setComputeTarget('local')
-                } else if (newMode === 'ltx2') {
+                if (newMode === 'ltx2') {
                   setResolution('576p')  // LTX-2.3 distilled handles higher res efficiently on the 80GB worker
                   setAspectRatio('9:16')
                   setDuration(5)
                   setSteps(8)
                   setCfg(1.0)
                   setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
-                } else if (newMode === 'blockswap_q8' || newMode === 'distorch2_q8') {
-                  setResolution('480p')
-                  setAspectRatio('9:16')
-                  setDuration(10)
-                  setSteps(8)
-                  setCfg(1.0)
-                  setBsShift(9.0)
-                  setBsHighNoiseSteps(4)
-                  setBsNagScale(11.0)
-                  setComputeTarget('local')
-                } else if (newMode === 'ultra_q8') {
-                  setResolution('576p')
-                  setAspectRatio('9:16')
-                  setDuration(10)
-                  setSteps(8)
-                  setCfg(1.0)
-                  setBsShift(9.0)
-                  setBsHighNoiseSteps(4)
-                  setBsNagScale(11.0)
-                  setComputeTarget('local')
-                } else if (newMode === 'cloud_wan22') {
-                  setResolution('720p')
-                  setAspectRatio('9:16')
-                  setDuration(8)
-                  setSteps(15)
-                  setCfg(3.0)
-                  setBsShift(8.0)
-                  setBsHighNoiseSteps(8)
-                  setComputeTarget('cloud')  // Cloud Wan22 is cloud-only
                 } else if (newMode === 'minimax_h3' || newMode === 'minimax_h3_local') {
                   setResolution('720p')  // unused for H3 — canvas comes from MP selector
                   setAspectRatio('9:16')
@@ -1486,54 +1309,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
               }}
             />
           </div>
-          {modelMode === 'cloud_wan22' ? (
-            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f472b6' }}>
-              <span style={{ fontWeight: 600 }}>☁️ Cloud Wan22 — bf16 Full Precision</span> • <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Unquantized bf16 • 48GB VRAM • Dual-pass high/low LoRA • 25 steps • Maximum quality
-              </div>
-              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                ~$1.22/hr • Cloud-only • Up to 720p 30s
-              </div>
-            </div>
-          ) : modelMode === 'wan2.2' ? (
-            <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>✅ Stable Local — Wan2.2 Q6</span> • <span style={{ color: '#93c5fd' }}>DisTorch2 Multi-GPU</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Reliable dual-pass default • 480p/576p first • 720p only for shorter clips
-              </div>
-            </div>
-          ) : modelMode === 'blockswap_q8' ? (
-            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f59e0b' }}>
-              <span style={{ fontWeight: 600 }}>🧪 BlockSwap Q8 Experimental</span> • <span style={{ color: '#fbbf24' }}>Q8_0 Single-GPU</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Lightning LoRA + NAG + TorchCompile + EnhanceAVideo • Florence2 captioning • BlockSwap VRAM swap
-              </div>
-              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                Single GPU • All resolutions up to 30s
-              </div>
-            </div>
-          ) : modelMode === 'distorch2_q8' ? (
-            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#a78bfa' }}>
-              <span style={{ fontWeight: 600 }}>🏆 Quality Local — Wan2.2 Q8</span> • <span style={{ color: '#c4b5fd' }}>Q8_0 Multi-GPU</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                Higher-quality local path • DisTorch2 Dual-GPU • NAG + EnhanceAVideo • Selectable LoRAs
-              </div>
-              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                Safer default: 480p 10s; raise resolution only after a good seed
-              </div>
-            </div>
-          ) : modelMode === 'ultra_q8' ? (
-            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#22d3ee' }}>
-              <span style={{ fontWeight: 600 }}>⚡ Ultra Q8 — Max VRAM</span> • <span style={{ color: '#67e8f9' }}>Dual-GPU + CPU</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>
-                3060 = model cache (11GB) • 5060 Ti = pure compute (15.5GB free) • CPU = overflow
-              </div>
-              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>
-                NAG + EnhanceAVideo + TorchCompile + Florence2 • All resolutions up to 30s
-              </div>
-            </div>
-          ) : isH3Mode(modelMode) ? (
+          {isH3Mode(modelMode) ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#22d3ee' }}>
               <span style={{ fontWeight: 600 }}>🎥 MiniMax H3 — FL2VA (pruned int8)</span> • <span style={{ color: '#67e8f9' }}>{modelMode === 'minimax_h3_local' ? 'Windows PC (lokaal)' : 'RunPod 80GB+ GPU'}</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
@@ -1607,125 +1383,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
           </div>
         </div>
 
-        {/* Unet Model Selection - Only for Wan2.2 */}
-        {modelMode === 'wan2.2' && (
-        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
-          <div
-            onClick={() => setShowUnetPanel(!showUnetPanel)}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer',
-              padding: '4px 0'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Settings2 size={16} />
-              <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Unet Model</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                ({unetHighNoise.replace('.gguf', '').replace('wan2.2_i2v_', '')})
-              </span>
-            </div>
-            <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showUnetPanel ? '▼' : '▶'}</span>
-          </div>
-
-          {showUnetPanel && (
-            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Model Pair Selector - Easy mode */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Model Pair (recommended)
-                </label>
-                <select
-                  onChange={(e) => {
-                    const pair = availableUnets.pairs?.find(p => p.name === e.target.value)
-                    if (pair) {
-                      setUnetHighNoise(pair.high.path)
-                      setUnetLowNoise(pair.low.path)
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '6px',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem'
-                  }}
-                  value={availableUnets.pairs?.find(p => p.high.path === unetHighNoise && p.low.path === unetLowNoise)?.name || ''}
-                >
-                  {availableUnets.pairs?.map((pair) => (
-                    <option key={pair.name} value={pair.name}>
-                      {pair.name} ({pair.high.size_gb}GB)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <details style={{ fontSize: '0.8rem' }}>
-                <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                  ⚙️ Advanced: Select models separately
-                </summary>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
-                  {/* High Noise Model */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                      High Noise Model (steps 0-3)
-                    </label>
-                    <select
-                      value={unetHighNoise}
-                      onChange={(e) => setUnetHighNoise(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {availableUnets.high_noise?.map((model) => (
-                        <option key={model.path} value={model.path}>
-                          {model.name} ({model.size_gb}GB)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Low Noise Model */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                      Low Noise Model (steps 3+)
-                    </label>
-                    <select
-                      value={unetLowNoise}
-                      onChange={(e) => setUnetLowNoise(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {availableUnets.low_noise?.map((model) => (
-                        <option key={model.path} value={model.path}>
-                          {model.name} ({model.size_gb}GB)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </details>
-            </div>
-          )}
-        </div>
-        )}
       </div>
 
       {/* Positive Prompt */}
@@ -2682,8 +2339,8 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
           </div>
         )}
 
-        {/* Model Version - only for non-Wan2.2, non-Cloud modes */}
-        {modelMode !== 'wan2.2' && modelMode !== 'cloud_wan22' && !isH3Mode(modelMode) && (
+        {/* Model Version - only for non-H3 modes */}
+        {!isH3Mode(modelMode) && (
           <div className="form-group">
             <label className="grok-section-label">Model Version <InfoTooltip text="V1 is the original model. V2 (Enhanced) features improved video quality, smoother motion, and optional audio generation capabilities." /></label>
             <div className="grok-toggle-group">
@@ -2706,1340 +2363,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
           </div>
         )}
 
-        {/* Workflow Presets - Quick configuration */}
-        {modelMode === 'wan2.2' && (
-          <div style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginTop: '8px'
-          }}>
-            <div
-              onClick={() => setUsePresets(!usePresets)}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sliders size={16} />
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Workflow Presets</span>
-                {selectedPreset && (
-                  <span style={{
-                    fontSize: '0.7rem',
-                    backgroundColor: 'var(--accent-color)',
-                    color: 'white',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    marginLeft: '4px'
-                  }}>
-                    {selectedPreset.name}
-                  </span>
-                )}
-              </div>
-              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{usePresets ? '▼' : '▶'}</span>
-            </div>
-
-            {usePresets && (
-              <div style={{ marginTop: '12px' }}>
-                <PresetSelector
-                  onPresetChange={(preset) => {
-                    setSelectedPreset(preset)
-                    // Apply preset parameters to local state
-                    if (preset?.parameters) {
-                      const params = preset.parameters
-                      if (params.steps?.default) setSteps(params.steps.default)
-                      if (params.cfg?.default) setCfg(params.cfg.default)
-                      if (params.seed?.default !== undefined) setSeed(params.seed.default)
-                      if (params.frame_rate?.default) setFps(params.frame_rate.default)
-                    }
-                  }}
-                  onParametersChange={(params) => {
-                    setPresetParameters(params)
-                    // Sync with local state
-                    if (params.steps !== undefined) setSteps(params.steps)
-                    if (params.cfg !== undefined) setCfg(params.cfg)
-                    if (params.seed !== undefined) setSeed(params.seed)
-                    if (params.frame_rate !== undefined) setFps(params.frame_rate)
-                  }}
-                  currentParameters={{ steps, cfg, seed, frame_rate: fps }}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Advanced Settings for BlockSwap Q8 / DisTorch2 Q8 Experimental */}
-        {(modelMode === 'blockswap_q8' || modelMode === 'distorch2_q8' || modelMode === 'ultra_q8') && (
-          <div style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginTop: '8px'
-          }}>
-            <div
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)'
-              }}>
-                {modelMode === 'blockswap_q8' ? '🧪 BlockSwap Q8 Settings' : modelMode === 'ultra_q8' ? '⚡ Ultra Q8 Settings' : '🧪 DisTorch2 Q8 Settings'}
-              </div>
-              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
-            </div>
-
-            {showAdvanced && (
-              <div style={{ marginTop: '12px' }}>
-                {/* Steps */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. More steps = better quality but slower. 4-6 is fast; 8 is recommended; 15-20 for maximum detail." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
-                  </div>
-                  <input
-                    type="range" min="4" max="20" step="1"
-                    value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>4 (fast)</span><span>8 (rec)</span><span>20 (quality)</span>
-                  </div>
-                </div>
-
-                {/* High Noise Steps */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">High Noise Steps <InfoTooltip text="How many of the total steps use the high-noise model before switching to the low-noise model. More high-noise steps = stronger composition." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsHighNoiseSteps} of {steps}</span>
-                  </div>
-                  <input
-                    type="range" min="1" max={Math.max(steps - 1, 2)} step="1"
-                    value={bsHighNoiseSteps}
-                    onChange={(e) => setBsHighNoiseSteps(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Steps using high-noise Q8 model before switching to low-noise
-                  </div>
-                </div>
-
-                {/* Shift */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Model Shift <InfoTooltip text="Controls the noise schedule shift for diffusion. Higher = more aggressive denoising early on. Default 8-9 works for most cases." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsShift.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range" min="1.0" max="20.0" step="0.5"
-                    value={bsShift}
-                    onChange={(e) => setBsShift(parseFloat(e.target.value))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>1.0</span><span>8.0 (rec)</span><span>20.0</span>
-                  </div>
-                </div>
-
-                {/* NAG Scale */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">NAG Scale <InfoTooltip text="Normalized Attention Guidance — controls how strongly the model follows your prompt. Higher values (10-15) = more prompt adherence but possible artifacts. Lower (3-5) = more natural but less controlled. Recommended: 11." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsNagScale.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range" min="1.0" max="20.0" step="0.5"
-                    value={bsNagScale}
-                    onChange={(e) => setBsNagScale(parseFloat(e.target.value))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Normalized Attention Guidance — higher = more prompt adherence
-                  </div>
-                </div>
-
-                {/* Seed */}
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for random. Set a specific number to get the exact same result with identical settings." /></label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number" value={seed}
-                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
-                      placeholder="-1 for random"
-                      style={{
-                        flex: 1, padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.9rem'
-                      }}
-                    />
-                    <button className="btn ghost sm" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap' }}>Random</button>
-                  </div>
-                </div>
-
-                {/* Feature Toggles */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px' }}>Features</div>
-                  {/* Florence2 auto-captioning */}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={bsEnableFlorence2} onChange={(e) => setBsEnableFlorence2(e.target.checked)} style={{ width: '16px', height: '16px' }} />
-                    <span>🔍 Florence2 Auto-Caption</span>
-                    <InfoTooltip text="Uses Florence2 vision model to automatically analyze your source image and generate a detailed description. This description supplements your prompt for better scene understanding and motion coherence." size={12} />
-                  </label>
-
-                  {/* RIFE Interpolation */}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={bsEnableInterpolation} onChange={(e) => setBsEnableInterpolation(e.target.checked)} style={{ width: '16px', height: '16px' }} />
-                    <span>🎞 RIFE 2x Frame Interpolation</span>
-                    <InfoTooltip text="Doubles the frame count after generation using RIFE optical flow interpolation. Turns 16fps into 32fps for silky smooth motion. Adds minimal processing time but can introduce ghosting on fast motion." size={12} />
-                  </label>
-                </div>
-
-                {/* LoRA Settings for BS/DT2 Q8 */}
-                <div style={{
-                  marginTop: '16px',
-                  paddingTop: '16px',
-                  borderTop: '1px solid var(--border-color)'
-                }}>
-                  <div
-                    onClick={() => setShowLoraPanel(!showLoraPanel)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      marginBottom: showLoraPanel ? '12px' : 0
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>🎨 LoRA Stack</span>
-                      {loraConfigs.length > 0 && (
-                        <span style={{
-                          fontSize: '0.7rem',
-                          padding: '2px 6px',
-                          backgroundColor: 'rgba(var(--accent-rgb), 0.2)',
-                          borderRadius: '10px',
-                          color: 'var(--accent-color)'
-                        }}>
-                          {loraConfigs.length} active
-                        </span>
-                      )}
-                    </div>
-                    <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
-                  </div>
-
-                  {showLoraPanel && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {loraConfigs.map((config, idx) => (
-                        <div key={idx} style={{
-                          padding: '10px',
-                          backgroundColor: 'var(--bg-secondary)',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border-color)'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>LoRA #{idx + 1}</span>
-                            <button
-                              onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
-                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem' }}
-                            >×</button>
-                          </div>
-
-                          {/* High Noise LoRA */}
-                          <div style={{ marginBottom: '8px', position: 'relative' }}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                              High Noise (first pass)
-                            </label>
-                            {config.high ? (
-                              <div style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '6px 10px', backgroundColor: 'var(--bg-secondary)',
-                                border: '1px solid var(--border-color)', borderRadius: '4px',
-                                fontSize: '0.8rem', color: 'var(--text-primary)'
-                              }}>
-                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{config.high}</span>
-                                <button onClick={() => {
-                                  const newConfigs = [...loraConfigs]
-                                  newConfigs[idx] = { ...config, high: '' }
-                                  setLoraConfigs(newConfigs)
-                                }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}>×</button>
-                              </div>
-                            ) : (
-                              <div style={{ position: 'relative' }}>
-                                <input
-                                  type="text"
-                                  placeholder="🔍 Search LoRA..."
-                                  value={loraSearchHigh[idx] || ''}
-                                  onChange={(e) => setLoraSearchHigh({ ...loraSearchHigh, [idx]: e.target.value })}
-                                  onFocus={() => setLoraDropdownOpen(`high-${idx}`)}
-                                  onBlur={() => setTimeout(() => setLoraDropdownOpen((prev) => prev === `high-${idx}` ? null : prev), 200)}
-                                  style={{
-                                    width: '100%', padding: '6px 10px',
-                                    backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--accent-color, #3b82f6)',
-                                    borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem',
-                                    outline: 'none', boxSizing: 'border-box'
-                                  }}
-                                />
-                                {loraDropdownOpen === `high-${idx}` && (
-                                  <div style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                                    maxHeight: '200px', overflowY: 'auto',
-                                    backgroundColor: 'var(--bg-secondary, #1a1a1a)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '0 0 4px 4px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                                  }}>
-                                    {filteredLoras.by_category && (() => {
-                                      const searchTerm = (loraSearchHigh[idx] || '').toLowerCase()
-                                      let totalMatches = 0
-                                      const elements = Object.keys(filteredLoras.by_category).sort().map((category) => {
-                                        const matches = filteredLoras.by_category[category].filter(l =>
-                                          !searchTerm || l.name.toLowerCase().includes(searchTerm)
-                                        )
-                                        if (matches.length === 0) return null
-                                        totalMatches += matches.length
-                                        return (
-                                          <div key={category}>
-                                            <div style={{ padding: '4px 10px', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.03)', position: 'sticky', top: 0 }}>
-                                              📁 {category === 'root' ? 'Root' : category}
-                                            </div>
-                                            {matches.map((lora) => (
-                                              <div key={lora.path}
-                                                onMouseDown={(e) => {
-                                                  e.preventDefault()
-                                                  const newConfigs = [...loraConfigs]
-                                                  newConfigs[idx] = { ...config, high: lora.path }
-                                                  setLoraConfigs(newConfigs)
-                                                  setLoraSearchHigh({ ...loraSearchHigh, [idx]: '' })
-                                                  setLoraDropdownOpen(null)
-                                                }}
-                                                style={{
-                                                  padding: '6px 14px', fontSize: '0.8rem', cursor: 'pointer',
-                                                  color: 'var(--text-primary)', transition: 'background-color 0.1s',
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(59,130,246, 0.15)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                              >
-                                                {lora.name}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )
-                                      })
-                                      if (totalMatches === 0) return <div style={{ padding: '10px 14px', fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No matches</div>
-                                      return elements
-                                    })()}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Low Noise LoRA */}
-                          <div style={{ marginBottom: '8px', position: 'relative' }}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                              Low Noise (steps 3+)
-                            </label>
-                            {config.low ? (
-                              <div style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '6px 10px', backgroundColor: 'var(--bg-secondary)',
-                                border: '1px solid var(--border-color)', borderRadius: '4px',
-                                fontSize: '0.8rem', color: 'var(--text-primary)'
-                              }}>
-                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{config.low}</span>
-                                <button onClick={() => {
-                                  const newConfigs = [...loraConfigs]
-                                  newConfigs[idx] = { ...config, low: '' }
-                                  setLoraConfigs(newConfigs)
-                                }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}>×</button>
-                              </div>
-                            ) : (
-                              <div style={{ position: 'relative' }}>
-                                <input
-                                  type="text"
-                                  placeholder="🔍 Search LoRA... (optional)"
-                                  value={loraSearchLow[idx] || ''}
-                                  onChange={(e) => setLoraSearchLow({ ...loraSearchLow, [idx]: e.target.value })}
-                                  onFocus={() => setLoraDropdownOpen(`low-${idx}`)}
-                                  onBlur={() => setTimeout(() => setLoraDropdownOpen((prev) => prev === `low-${idx}` ? null : prev), 200)}
-                                  style={{
-                                    width: '100%', padding: '6px 10px',
-                                    backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-                                    borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem',
-                                    outline: 'none', boxSizing: 'border-box'
-                                  }}
-                                />
-                                {loraDropdownOpen === `low-${idx}` && (
-                                  <div style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                                    maxHeight: '200px', overflowY: 'auto',
-                                    backgroundColor: 'var(--bg-secondary, #1a1a1a)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '0 0 4px 4px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                                  }}>
-                                    {filteredLoras.by_category && (() => {
-                                      const searchTerm = (loraSearchLow[idx] || '').toLowerCase()
-                                      let totalMatches = 0
-                                      const elements = Object.keys(filteredLoras.by_category).sort().map((category) => {
-                                        const matches = filteredLoras.by_category[category].filter(l =>
-                                          !searchTerm || l.name.toLowerCase().includes(searchTerm)
-                                        )
-                                        if (matches.length === 0) return null
-                                        totalMatches += matches.length
-                                        return (
-                                          <div key={category}>
-                                            <div style={{ padding: '4px 10px', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.03)', position: 'sticky', top: 0 }}>
-                                              📁 {category === 'root' ? 'Root' : category}
-                                            </div>
-                                            {matches.map((lora) => (
-                                              <div key={lora.path}
-                                                onMouseDown={(e) => {
-                                                  e.preventDefault()
-                                                  const newConfigs = [...loraConfigs]
-                                                  newConfigs[idx] = { ...config, low: lora.path }
-                                                  setLoraConfigs(newConfigs)
-                                                  setLoraSearchLow({ ...loraSearchLow, [idx]: '' })
-                                                  setLoraDropdownOpen(null)
-                                                }}
-                                                style={{
-                                                  padding: '6px 14px', fontSize: '0.8rem', cursor: 'pointer',
-                                                  color: 'var(--text-primary)', transition: 'background-color 0.1s',
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(59,130,246, 0.15)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                              >
-                                                {lora.name}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )
-                                      })
-                                      if (totalMatches === 0) return <div style={{ padding: '10px 14px', fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No matches</div>
-                                      return elements
-                                    })()}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Strength slider */}
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
-                            </div>
-                            <input
-                              type="range" min="0" max="2" step="0.05"
-                              value={config.strength || 1.0}
-                              onChange={(e) => {
-                                const newConfigs = [...loraConfigs]
-                                newConfigs[idx] = { ...config, strength: parseFloat(e.target.value) }
-                                setLoraConfigs(newConfigs)
-                              }}
-                              style={{ width: '100%', cursor: 'pointer' }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Add LoRA button */}
-                      <button
-                        onClick={() => setLoraConfigs([...loraConfigs, { high: '', low: '', strength: 1.0 }])}
-                        style={{
-                          padding: '8px 12px',
-                          backgroundColor: 'transparent',
-                          border: '1px dashed var(--border-color)',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        + Add LoRA
-                      </button>
-
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        💡 Stack multiple LoRAs for combined effects. Each LoRA has its own strength.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Advanced Settings for Cloud Wan22 — bf16 on RunPod */}
-        {modelMode === 'cloud_wan22' && (
-          <div style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginTop: '8px'
-          }}>
-            <div
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)'
-              }}>
-                ☁️ Cloud Wan22 Settings
-              </div>
-              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
-            </div>
-
-            {showAdvanced && (
-              <div style={{ marginTop: '12px' }}>
-                {/* Steps */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. Cloud Wan22 supports higher step counts (10-40) for best quality. 25 is recommended for production. More steps = better detail but longer render." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
-                  </div>
-                  <input
-                    type="range" min="10" max="40" step="1"
-                    value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>10 (fast)</span><span>25 (rec)</span><span>40 (quality)</span>
-                  </div>
-                </div>
-
-                {/* CFG */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">CFG Scale <InfoTooltip text="Classifier-Free Guidance — how strictly the model follows your prompt. Low (1-2) = creative freedom. Medium (3-5) = balanced. High (6-10) = strict adherence but may over-saturate. Recommended: 3.0 for Cloud Wan22." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{cfg.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range" min="1.0" max="10.0" step="0.5"
-                    value={cfg}
-                    onChange={(e) => setCfg(parseFloat(e.target.value))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>1.0</span><span>3.0 (rec)</span><span>10.0</span>
-                  </div>
-                </div>
-
-                {/* High Noise Steps */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">High Noise Steps <InfoTooltip text="Steps using high-noise LoRA before switching to low-noise LoRA. More high-noise steps = stronger composition/structure." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsHighNoiseSteps} of {steps}</span>
-                  </div>
-                  <input
-                    type="range" min="1" max={Math.max(steps - 1, 2)} step="1"
-                    value={bsHighNoiseSteps}
-                    onChange={(e) => setBsHighNoiseSteps(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Steps using high-noise LoRA before switching to low-noise LoRA
-                  </div>
-                </div>
-
-                {/* Shift */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Model Shift <InfoTooltip text="Controls the noise schedule shift. Higher = more aggressive denoising early. Default 8-9 for most cases." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{bsShift.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range" min="1.0" max="20.0" step="0.5"
-                    value={bsShift}
-                    onChange={(e) => setBsShift(parseFloat(e.target.value))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>1.0</span><span>8.0 (rec)</span><span>20.0</span>
-                  </div>
-                </div>
-
-                {/* Seed */}
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for random each time. Set a specific number to reproduce the exact same result." /></label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number" value={seed}
-                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
-                      placeholder="-1 for random"
-                      style={{
-                        flex: 1, padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.9rem'
-                      }}
-                    />
-                    <button className="btn ghost sm" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap' }}>Random</button>
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    -1 = random seed each generation
-                  </div>
-                </div>
-
-                {/* Cloud Wan22 LoRA Settings */}
-                <div style={{
-                  paddingTop: '16px',
-                  borderTop: '1px solid var(--border-color)'
-                }}>
-                  <div
-                    onClick={() => setShowLoraPanel(!showLoraPanel)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      marginBottom: showLoraPanel ? '12px' : 0
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>🎨 LoRA Stack</span>
-                      {loraConfigs.length > 0 && (
-                        <span style={{
-                          fontSize: '0.7rem',
-                          padding: '2px 6px',
-                          backgroundColor: 'rgba(var(--accent-rgb), 0.2)',
-                          borderRadius: '10px',
-                          color: 'var(--accent-color)'
-                        }}>
-                          {loraConfigs.length} active
-                        </span>
-                      )}
-                    </div>
-                    <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
-                  </div>
-
-                  {showLoraPanel && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {loraConfigs.map((config, idx) => (
-                        <div key={idx} style={{
-                          padding: '10px',
-                          backgroundColor: 'var(--bg-secondary)',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border-color)'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>LoRA #{idx + 1}</span>
-                            <button
-                              onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
-                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem' }}
-                            >×</button>
-                          </div>
-
-                          {/* High Noise LoRA */}
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>High Noise LoRA</label>
-                            <select
-                              value={config.high || ''}
-                              onChange={(e) => {
-                                const newConfigs = [...loraConfigs]
-                                newConfigs[idx] = { ...newConfigs[idx], high: e.target.value }
-                                setLoraConfigs(newConfigs)
-                              }}
-                              style={{
-                                width: '100%', padding: '6px 8px',
-                                backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-                                borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem'
-                              }}
-                            >
-                              <option value="">-- None --</option>
-                              {(availableLoras.high_noise || []).map(l => (
-                                <option key={l.path || l} value={l.path || l}>{l.name || l}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Low Noise LoRA */}
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Low Noise LoRA</label>
-                            <select
-                              value={config.low || ''}
-                              onChange={(e) => {
-                                const newConfigs = [...loraConfigs]
-                                newConfigs[idx] = { ...newConfigs[idx], low: e.target.value }
-                                setLoraConfigs(newConfigs)
-                              }}
-                              style={{
-                                width: '100%', padding: '6px 8px',
-                                backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-                                borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem'
-                              }}
-                            >
-                              <option value="">-- None --</option>
-                              {(availableLoras.low_noise || []).map(l => (
-                                <option key={l.path || l} value={l.path || l}>{l.name || l}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Strength */}
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              <span>Strength</span>
-                              <span>{(config.strength || 1.0).toFixed(2)}</span>
-                            </div>
-                            <input
-                              type="range" min="0" max="2" step="0.05"
-                              value={config.strength || 1.0}
-                              onChange={(e) => {
-                                const newConfigs = [...loraConfigs]
-                                newConfigs[idx] = { ...newConfigs[idx], strength: parseFloat(e.target.value) }
-                                setLoraConfigs(newConfigs)
-                              }}
-                              style={{ width: '100%', cursor: 'pointer' }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Add LoRA button */}
-                      <button
-                        onClick={() => setLoraConfigs([...loraConfigs, { high: '', low: '', strength: 1.0 }])}
-                        style={{
-                          padding: '8px 12px',
-                          backgroundColor: 'transparent',
-                          border: '1px dashed var(--border-color)',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        + Add LoRA
-                      </button>
-
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        💡 Dual-pass LoRAs: high noise LoRA → first {bsHighNoiseSteps} steps, low noise LoRA → remaining {steps - bsHighNoiseSteps} steps
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Cloud Wan22 cost estimate */}
-                <div style={{
-                  marginTop: '16px',
-                  padding: '10px 12px',
-                  backgroundColor: 'rgba(244, 114, 182, 0.08)',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(244, 114, 182, 0.2)',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-muted)'
-                }}>
-                  💰 Cloud Wan22 uses 2× credits • GPU: A6000/A40 ($1.22/hr) • No local GPU needed
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Advanced Settings for MiniMax-H3 — steps + seed only */}
-        {isH3Mode(modelMode) && (
-          <div style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginTop: '8px'
-          }}>
-            <div
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)'
-              }}>
-                🎥 MiniMax H3 Settings
-              </div>
-              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
-            </div>
-
-            {showAdvanced && (
-              <div style={{ marginTop: '12px' }}>
-                {/* Steps */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising steps (simple schedule). The base model is tuned for 20; the official template uses 20. Fewer steps = faster but softer, more = sharper but slower." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
-                  </div>
-                  <input
-                    type="range" min="8" max="50" step="1"
-                    value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>8 (snel)</span><span>20 (rec)</span><span>50 (kwaliteit)</span>
-                  </div>
-                </div>
-
-                {/* Seed */}
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. Use -1 for random each time. Set a specific number to reproduce the exact same result." /></label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number" value={seed}
-                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
-                      placeholder="-1 for random"
-                      style={{
-                        flex: 1, padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.9rem'
-                      }}
-                    />
-                    <button className="btn ghost sm" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap' }}>Random</button>
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    -1 = random seed each generation
-                  </div>
-                </div>
-
-                {/* LoRA Stack — single-stage (cloud worker downloads LoRAs, the
-                    local adapter uploads them to the Windows-PC ComfyUI) */}
-                <div style={{
-                  marginTop: '4px',
-                  paddingTop: '12px',
-                  borderTop: '1px solid var(--border-color)'
-                }}>
-                  <div
-                    onClick={() => setShowLoraPanel(!showLoraPanel)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      marginBottom: showLoraPanel ? '12px' : 0
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>🎨 LoRA Stack</span>
-                      {loraConfigs.length > 0 && (
-                        <span style={{
-                          fontSize: '0.7rem',
-                          padding: '2px 6px',
-                          backgroundColor: 'rgba(var(--accent-rgb), 0.2)',
-                          borderRadius: '10px',
-                          color: 'var(--accent-color)'
-                        }}>
-                          {loraConfigs.length} active
-                        </span>
-                      )}
-                    </div>
-                    <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
-                  </div>
-
-                  {showLoraPanel && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {loraConfigs.map((config, idx) => (
-                        <div key={idx} style={{
-                          padding: '10px',
-                          backgroundColor: 'var(--bg-secondary)',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border-color)'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>LoRA #{idx + 1}</span>
-                            <button
-                              onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
-                              style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem' }}
-                            >✕ Remove</button>
-                          </div>
-
-                          {/* Single LoRA selector — H3 is a single-stage model */}
-                          <div style={{ marginBottom: '8px' }}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>LoRA</label>
-                            <select
-                              value={config.name || ''}
-                              onChange={(e) => {
-                                const nc = [...loraConfigs]
-                                nc[idx] = { ...config, name: e.target.value }
-                                setLoraConfigs(nc)
-                              }}
-                              style={{ width: '100%', padding: '6px 10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem' }}
-                            >
-                              <option value="">None</option>
-                              {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
-                                <optgroup key={category} label={category === 'root' ? 'Root' : category}>
-                                  {filteredLoras.by_category[category].map((lora) => (
-                                    <option key={lora.path} value={lora.path}>{lora.name} ({lora.size_mb}MB)</option>
-                                  ))}
-                                </optgroup>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Strength */}
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
-                            </div>
-                            <input
-                              type="range" min="0" max="2" step="0.05" value={config.strength || 1.0}
-                              onChange={(e) => { const nc = [...loraConfigs]; nc[idx] = { ...config, strength: parseFloat(e.target.value) }; setLoraConfigs(nc) }}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-
-                      <button
-                        onClick={() => setLoraConfigs([...loraConfigs, { name: '', strength: 1.0 }])}
-                        style={{
-                          padding: '8px',
-                          backgroundColor: 'transparent',
-                          border: '1px dashed var(--border-color)',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem'
-                        }}
-                      >+ Add LoRA</button>
-
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        💡 Single-stage model — one LoRA selector per slot. Max 5 LoRA's.
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Cost estimate */}
-                <div style={{
-                  marginTop: '16px',
-                  padding: '10px 12px',
-                  backgroundColor: 'rgba(34, 211, 238, 0.08)',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(34, 211, 238, 0.2)',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-muted)'
-                }}>
-                  {modelMode === 'minimax_h3_local'
-                    ? '🪟 MiniMax H3 draait lokaal op je Windows-PC ComfyUI • 24 fps • native stereo audio • LoRA\u2032s worden automatisch geüpload naar die server'
-                    : '💰 MiniMax H3 draait op de RunPod 80GB+ worker • 24 fps • native stereo audio • LoRA\u2032s worden automatisch naar de worker gedownload'}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Advanced Settings for Wan2.2 - Always visible, collapsible */}
-        {modelMode === 'wan2.2' && (
-          <div style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginTop: '8px'
-          }}>
-            <div
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)'
-              }}>
-                ⚙️ Sampling Settings
-              </div>
-              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showAdvanced ? '▼' : '▶'}</span>
-            </div>
-
-            {showAdvanced && (
-              <div style={{ marginTop: '12px' }}>
-                {/* Steps */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label className="grok-section-label">Sampling Steps <InfoTooltip text="Number of denoising iterations. 4-6 is fast, 6 is recommended for Wan2.2. Higher = better quality but slower." /></label>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{steps}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="4"
-                    max="20"
-                    step="1"
-                    value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span>4 (fast)</span>
-                    <span>6 (rec)</span>
-                    <span>20 (quality)</span>
-                  </div>
-                </div>
-
-                {/* Seed */}
-                <div className="form-group">
-                  <label className="grok-section-label">Seed <InfoTooltip text="Random seed for reproducibility. -1 = random each generation. Set a specific number to reproduce results." /></label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number"
-                      value={seed}
-                      onChange={(e) => setSeed(parseInt(e.target.value, 10))}
-                      placeholder="-1 for random"
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '6px',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.9rem'
-                      }}
-                    />
-                    <button
-                      className="btn ghost sm"
-                      onClick={() => setSeed(-1)}
-                      style={{ whiteSpace: 'nowrap' }}
-                    >
-                      Random
-                    </button>
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    -1 = random seed each generation
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Post-Processing Settings */}
-            <div style={{
-              marginTop: '16px',
-              paddingTop: '16px',
-              borderTop: '1px solid var(--border-color)'
-            }}>
-              <div
-                onClick={() => setShowPostProcessing(!showPostProcessing)}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  marginBottom: showPostProcessing ? '12px' : 0
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={16} />
-                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Post-Processing</span>
-                  {(postInterpolate || postAudio) && (
-                    <span style={{
-                      fontSize: '0.7rem',
-                      backgroundColor: 'var(--success-color)',
-                      color: 'white',
-                      padding: '2px 6px',
-                      borderRadius: '4px'
-                    }}>
-                      {[postInterpolate && 'RIFE', postAudio && 'Audio'].filter(Boolean).join(' + ')}
-                    </span>
-                  )}
-                </div>
-                <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showPostProcessing ? '▼' : '▶'}</span>
-              </div>
-
-              {showPostProcessing && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Frame Interpolation option */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    backgroundColor: postInterpolate ? 'rgba(var(--success-rgb), 0.1)' : 'var(--bg-secondary)',
-                    borderRadius: '8px',
-                    border: postInterpolate ? '1px solid var(--success-color)' : '1px solid var(--border-color)'
-                  }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
-                      <input
-                        type="checkbox"
-                        checked={postInterpolate}
-                        onChange={(e) => setPostInterpolate(e.target.checked)}
-                        style={{ width: '16px', height: '16px' }}
-                      />
-                      <span>🔄 Smooth Motion (RIFE)</span>
-                    </label>
-                    {postInterpolate && (
-                      <select
-                        value={postInterpolateFps}
-                        onChange={(e) => setPostInterpolateFps(parseInt(e.target.value))}
-                        style={{
-                          padding: '4px 8px',
-                          backgroundColor: 'var(--bg-tertiary)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '4px',
-                          color: 'var(--text-primary)'
-                        }}
-                      >
-                        <option value={30}>30 fps</option>
-                        <option value={60}>60 fps</option>
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Add Audio option */}
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    padding: '8px 12px',
-                    backgroundColor: postAudio ? 'rgba(var(--success-rgb), 0.1)' : 'var(--bg-secondary)',
-                    borderRadius: '8px',
-                    border: postAudio ? '1px solid var(--success-color)' : '1px solid var(--border-color)'
-                  }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={postAudio}
-                        onChange={(e) => {
-                          setPostAudio(e.target.checked)
-                          if (!e.target.checked) setPostAudioFile(null)
-                        }}
-                        style={{ width: '16px', height: '16px' }}
-                      />
-                      <span>🔊 Add Audio Track</span>
-                    </label>
-                    {postAudio && (
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        onChange={(e) => setPostAudioFile(e.target.files?.[0] || null)}
-                        style={{
-                          fontSize: '0.8rem',
-                          color: 'var(--text-muted)'
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    💡 Post-processing runs as chained jobs after video generation completes
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* LoRA Settings */}
-            <div style={{
-              marginTop: '16px',
-              paddingTop: '16px',
-              borderTop: '1px solid var(--border-color)'
-            }}>
-              <div
-                onClick={() => setShowLoraPanel(!showLoraPanel)}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  marginBottom: showLoraPanel ? '12px' : 0
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Layers size={16} />
-                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>LoRA Models</span>
-                  {loraConfigs.length > 0 && (
-                    <span style={{
-                      fontSize: '0.7rem',
-                      backgroundColor: 'var(--accent-color)',
-                      color: 'white',
-                      padding: '2px 6px',
-                      borderRadius: '4px'
-                    }}>
-                      {loraConfigs.length} active
-                    </span>
-                  )}
-                </div>
-                <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showLoraPanel ? '▼' : '▶'}</span>
-              </div>
-
-              {showLoraPanel && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Existing LoRAs */}
-                  {loraConfigs.map((config, idx) => (
-                    <div key={idx} style={{
-                      backgroundColor: 'var(--bg-input)',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      border: '1px solid var(--border-color)'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>LoRA #{idx + 1}</span>
-                        <button
-                          onClick={() => setLoraConfigs(loraConfigs.filter((_, i) => i !== idx))}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#ef4444',
-                            cursor: 'pointer',
-                            padding: '2px 6px',
-                            fontSize: '0.8rem'
-                          }}
-                        >
-                          ✕ Remove
-                        </button>
-                      </div>
-
-                      {/* High Noise LoRA */}
-                      <div style={{ marginBottom: '8px' }}>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          High Noise (steps 0-3)
-                        </label>
-                        <select
-                          value={config.high || ''}
-                          onChange={(e) => {
-                            const newConfigs = [...loraConfigs]
-                            newConfigs[idx] = { ...config, high: e.target.value }
-                            setLoraConfigs(newConfigs)
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '6px 10px',
-                            backgroundColor: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--text-primary)',
-                            fontSize: '0.8rem'
-                          }}
-                        >
-                          <option value="">None</option>
-                          {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
-                            <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
-                              {filteredLoras.by_category[category].map((lora) => (
-                                <option key={lora.path} value={lora.path}>
-                                  {lora.name} ({lora.size_mb}MB)
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Low Noise LoRA */}
-                      <div style={{ marginBottom: '8px' }}>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          Low Noise (steps 3+)
-                        </label>
-                        <select
-                          value={config.low || ''}
-                          onChange={(e) => {
-                            const newConfigs = [...loraConfigs]
-                            newConfigs[idx] = { ...config, low: e.target.value }
-                            setLoraConfigs(newConfigs)
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '6px 10px',
-                            backgroundColor: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            color: 'var(--text-primary)',
-                            fontSize: '0.8rem'
-                          }}
-                        >
-                          <option value="">None (uses High Noise)</option>
-                          {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
-                            <optgroup key={category} label={category === 'root' ? '📁 Root' : `📁 ${category}`}>
-                              {filteredLoras.by_category[category].map((lora) => (
-                                <option key={lora.path} value={lora.path}>
-                                  {lora.name} ({lora.size_mb}MB)
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Strength slider */}
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="2"
-                          step="0.05"
-                          value={config.strength || 1.0}
-                          onChange={(e) => {
-                            const newConfigs = [...loraConfigs]
-                            newConfigs[idx] = { ...config, strength: parseFloat(e.target.value) }
-                            setLoraConfigs(newConfigs)
-                          }}
-                          style={{ width: '100%', cursor: 'pointer' }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Add LoRA button */}
-                  <button
-                    onClick={() => setLoraConfigs([...loraConfigs, { high: '', low: '', strength: 1.0 }])}
-                    style={{
-                      padding: '8px 12px',
-                      backgroundColor: 'transparent',
-                      border: '1px dashed var(--border-color)',
-                      borderRadius: '6px',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    + Add LoRA
-                  </button>
-
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    💡 Stack multiple LoRAs for combined effects. Each LoRA has its own strength.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Advanced Settings for LTX-2.3 — single-stage LoRA */}
         {modelMode === 'ltx2' && (
@@ -4217,71 +2540,6 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
             <span className="grok-slider"></span>
           </label>
         </div>
-
-        {/* Extend Duration - Sequential Clips */}
-        <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div className="grok-section-label" style={{ marginBottom: '4px' }}>🎬 Extend Duration</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Chain multiple clips sequentially</div>
-          </div>
-          <label className="grok-switch">
-            <input
-              type="checkbox"
-              checked={extendMode}
-              onChange={(e) => {
-                setExtendMode(e.target.checked)
-                if (!e.target.checked) setClipCount(1)
-              }}
-            />
-            <span className="grok-slider"></span>
-          </label>
-        </div>
-
-        {/* Clip Count Slider - Only visible when extendMode is on */}
-        {extendMode && (
-          <div className="form-group" style={{
-            background: 'linear-gradient(135deg, rgba(233, 69, 96, 0.1) 0%, rgba(233, 69, 96, 0.05) 100%)',
-            borderRadius: '8px',
-            padding: '12px',
-            marginTop: '-8px',
-            border: '1px solid rgba(233, 69, 96, 0.2)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div className="grok-section-label">Number of Clips: {clipCount}</div>
-              <div style={{
-                fontSize: '0.75rem',
-                color: '#e94560',
-                background: 'rgba(233, 69, 96, 0.15)',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontWeight: '600'
-              }}>
-                ≈ {(duration * clipCount).toFixed(0)}s total
-              </div>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              value={clipCount}
-              onChange={(e) => setClipCount(parseInt(e.target.value))}
-              style={{
-                width: '100%',
-                accentColor: '#e94560'
-              }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              <span>1</span>
-              <span>2</span>
-              <span>3</span>
-              <span>4</span>
-              <span>5</span>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px', fontStyle: 'italic' }}>
-              🔗 Each clip continues from the last frame of the previous clip
-            </div>
-          </div>
-        )}
 
       </div>
 

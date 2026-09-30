@@ -444,10 +444,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
     }
   }, [availableLoras, nsfwEnabled, modelType])
 
-  // Single-stage LoRA models: one {name, strength} selector per slot
-  // (Wan2.2 uses dual high/low noise slots instead)
-  const isSingleStageLora = modelType === 'ltx2' || H3_MODES.has(modelType)
-
   const handlePromptChange = (value) => {
     setPrompt(value)
   }
@@ -1670,20 +1666,16 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
                           Remove
                         </button>
                       </div>
-                      {/* LoRA selector — single for LTX-2.3 / MiniMax-H3, dual high/low for Wan2.2 */}
+                      {/* Single-stage LoRA selector (all remaining models) */}
                       <div style={{ marginBottom: '8px' }}>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          {isSingleStageLora ? 'LoRA' : 'High Noise (steps 0-3)'}
+                          LoRA
                         </label>
                         <select
                           value={config.name || config.high || ''}
                           onChange={(e) => {
                             const nc = [...loraConfigs]
-                            if (isSingleStageLora) {
-                              nc[idx] = { ...config, name: e.target.value }
-                            } else {
-                              nc[idx] = { ...config, high: e.target.value }
-                            }
+                            nc[idx] = { ...config, name: e.target.value }
                             setLoraConfigs(nc)
                           }}
                           style={{ width: '100%', padding: '6px 10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem' }}
@@ -1698,28 +1690,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
                           ))}
                         </select>
                       </div>
-                      {/* Low Noise LoRA — only for Wan2.2 dual-pass */}
-                      {!isSingleStageLora && (
-                      <div style={{ marginBottom: '8px' }}>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          Low Noise (steps 3+)
-                        </label>
-                        <select
-                          value={config.low || ''}
-                          onChange={(e) => { const nc = [...loraConfigs]; nc[idx] = { ...config, low: e.target.value }; setLoraConfigs(nc) }}
-                          style={{ width: '100%', padding: '6px 10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.8rem' }}
-                        >
-                          <option value="">None (uses High Noise)</option>
-                          {filteredLoras.by_category && Object.keys(filteredLoras.by_category).sort().map((category) => (
-                            <optgroup key={category} label={category === 'root' ? 'Root' : category}>
-                              {filteredLoras.by_category[category].map((lora) => (
-                                <option key={lora.path} value={lora.path}>{lora.name} ({lora.size_mb}MB)</option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-                      )}
                       {/* Strength slider */}
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
@@ -1736,7 +1706,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
                   ))}
 
                   <button
-                    onClick={() => setLoraConfigs([...loraConfigs, isSingleStageLora ? { name: '', strength: 1.0 } : { high: '', low: '', strength: 1.0 }])}
+                    onClick={() => setLoraConfigs([...loraConfigs, { name: '', strength: 1.0 }])}
                     style={{
                       padding: '8px 12px', backgroundColor: 'transparent', border: '1px dashed var(--border-color)',
                       borderRadius: '6px', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem',
@@ -1883,7 +1853,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)', color: 'white'
           }}
-          title="Generate a random premium T2V with LLM prompt + best Cloud Wan22 settings"
+          title="Generate a random premium T2V with LLM prompt + best MiniMax-H3 cloud settings"
         >
           {isRandomGenerating ? (
             <>
@@ -1924,17 +1894,13 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
       </div>
 
       <div className="info-badge" style={{ marginTop: '8px', textAlign: 'center', borderColor: 'rgba(236, 72, 153, 0.35)' }}>
-        Random Pro T2V uses Guardian to invent a fresh motion-heavy prompt, then queues it with the safe Cloud Wan22 preset for the current RunPod worker.
+        Random Pro T2V uses Guardian to invent a fresh motion-heavy prompt, then queues it with the safe MiniMax-H3 cloud preset for the current RunPod worker.
       </div>
 
       <div className="info-badge" style={{ marginTop: '12px', textAlign: 'center' }}>
         {modelType === 'ltx2'
           ? 'LTX-2.3 22B — fast 8-step distilled generation on cloud GPU'
-          : modelType === 'cloud_wan22'
-            ? 'Cloud Wan22 uses full bf16 precision on cloud GPU (highest quality)'
-            : isH3Mode(modelType)
-              ? 'MiniMax H3 — video mét native stereo audio in één doorgang (24 fps, geen negative prompt/CFG)'
-              : 'Wan2.2 first generates an image, then animates it (higher quality)'}
+          : 'MiniMax H3 — video mét native stereo audio in één doorgang (24 fps, geen negative prompt/CFG)'}
       </div>
     </div>
   )

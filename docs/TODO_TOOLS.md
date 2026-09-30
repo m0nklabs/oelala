@@ -494,6 +494,9 @@ Separate vocals, drums, bass, other from audio.
 ## 📋 Technical Requirements
 
 ### ComfyUI Custom Nodes Needed
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 - [x] Wan2.2 video nodes
 - [x] GGUF support
 - [x] ComfyUI-MMAudio (video-to-audio)

@@ -1,7 +1,7 @@
 """
 Tests for Phase 6 adapters — remaining local adapters.
 
-14 adapters: Lightning I2V, I2I, V2V, upscale image/video, interpolate,
+12 adapters: I2I, upscale image/video, interpolate,
 face swap image/video, MMAudio, voice clone, lipsync, inpaint,
 caption image/video.
 """
@@ -17,18 +17,12 @@ from unittest.mock import MagicMock, AsyncMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "backend"))
 
 from generation.types import (
-    AdapterConstraints,
-    ComputeTarget,
     GenerationRequest,
-    GenerationResult,
-    LoraFormat,
     MediaType,
     Operation,
 )
 
-from generation.adapters.local.i2v_wan22_lightning import Wan22LocalI2VLightningAdapter
 from generation.adapters.local.i2i_transform import I2ITransformAdapter
-from generation.adapters.local.v2v import V2VStyleTransferAdapter
 from generation.adapters.local.upscale_image import ImageUpscaleAdapter
 from generation.adapters.local.upscale_video import VideoUpscaleAdapter
 from generation.adapters.local.interpolate import InterpolateAdapter
@@ -71,49 +65,6 @@ def _mock_guardian():
     return lambda: guardian
 
 
-# ── Lightning I2V ────────────────────────────────────────────
-
-
-class TestWan22LightningI2V(unittest.TestCase):
-    def test_identity(self):
-        a = Wan22LocalI2VLightningAdapter()
-        assert a.name == "wan22-local-i2v-lightning"
-        assert a.model_family == "wan2.2"
-        assert a.lora_format == LoraFormat.DUAL_STAGE
-        assert a.output_type == MediaType.VIDEO
-
-    def test_constraints(self):
-        a = Wan22LocalI2VLightningAdapter()
-        c = a.constraints()
-        assert c.max_frames == 41
-        assert c.default_steps == 4
-        assert c.default_cfg == 1.0
-
-    def test_quant_config(self):
-        a = Wan22LocalI2VLightningAdapter()
-        qc = a._get_quant_config()
-        assert qc.builder_method == "build_enhanced_workflow"
-        assert qc.name == "Q4KM_lightning"
-
-    def test_cost(self):
-        a = Wan22LocalI2VLightningAdapter()
-        req = _make_req(operation=Operation.GENERATE, target_type=MediaType.VIDEO, frames=41)
-        assert a.cost(req) == 5
-
-    def test_build_workflow(self):
-        mock_comfyui = MagicMock()
-        mock_comfyui.build_enhanced_workflow.return_value = {"nodes": []}
-        a = Wan22LocalI2VLightningAdapter(comfyui_client_fn=lambda: mock_comfyui)
-        req = _make_req(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            input_images=["test.png"],
-            frames=41,
-        )
-        wf = a.build_workflow(req)
-        mock_comfyui.build_enhanced_workflow.assert_called_once()
-
-
 # ── I2I Transform ────────────────────────────────────────────
 
 
@@ -151,34 +102,6 @@ class TestI2ITransform(unittest.TestCase):
         a = I2ITransformAdapter()
         req = _make_req(operation=Operation.TRANSFORM, face_id=True)
         assert a.cost(req) == 5  # 2 + 3
-
-
-# ── V2V ──────────────────────────────────────────────────────
-
-
-class TestV2V(unittest.TestCase):
-    def test_identity(self):
-        a = V2VStyleTransferAdapter()
-        assert a.name == "local-v2v"
-        assert a.model_family == "wan2.2"
-        assert Operation.TRANSFORM in a.supported_ops
-        assert MediaType.VIDEO in a.input_types
-        assert a.output_type == MediaType.VIDEO
-
-    def test_constraints(self):
-        c = V2VStyleTransferAdapter().constraints()
-        assert c.max_frames == 161
-        assert 16 in c.allowed_fps
-
-    def test_cost_short(self):
-        a = V2VStyleTransferAdapter()
-        req = _make_req(operation=Operation.TRANSFORM, target_type=MediaType.VIDEO, frames=41)
-        assert a.cost(req) == 5
-
-    def test_cost_medium(self):
-        a = V2VStyleTransferAdapter()
-        req = _make_req(operation=Operation.TRANSFORM, target_type=MediaType.VIDEO, frames=121)
-        assert a.cost(req) == 8
 
 
 # ── Image Upscale ────────────────────────────────────────────
@@ -483,31 +406,10 @@ class TestVideoCaption(unittest.TestCase):
 
 
 class TestAsyncExecute(unittest.IsolatedAsyncioTestCase):
-    async def test_lightning_i2v_execute(self):
-        mock = MagicMock()
-        mock.queue_prompt.return_value = "p-1"
-        mock.build_enhanced_workflow.return_value = {"nodes": []}
-        a = Wan22LocalI2VLightningAdapter(comfyui_client_fn=lambda: mock)
-        req = _make_req(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            input_images=["img.png"],
-            frames=41,
-        )
-        result = await a.execute(req)
-        assert result.prompt_id == "p-1"
-        assert result.status == "queued_local"
-
     async def test_i2i_execute_no_image_raises(self):
         a = I2ITransformAdapter(comfyui_client_fn=_mock_comfyui())
         req = _make_req(operation=Operation.TRANSFORM)
         with self.assertRaises(ValueError, msg="requires an input image"):
-            await a.execute(req)
-
-    async def test_v2v_execute_no_video_raises(self):
-        a = V2VStyleTransferAdapter(comfyui_client_fn=_mock_comfyui())
-        req = _make_req(operation=Operation.TRANSFORM, target_type=MediaType.VIDEO)
-        with self.assertRaises(ValueError, msg="requires an input video"):
             await a.execute(req)
 
     async def test_upscale_image_execute(self):
@@ -678,7 +580,6 @@ class TestAsyncExecute(unittest.IsolatedAsyncioTestCase):
         """All adapters without service fn should raise RuntimeError."""
         adapters_and_reqs = [
             (I2ITransformAdapter(), _make_req(operation=Operation.TRANSFORM, input_images=["x"])),
-            (V2VStyleTransferAdapter(), _make_req(operation=Operation.TRANSFORM, input_video="v")),
             (ImageUpscaleAdapter(), _make_req(operation=Operation.UPSCALE, input_images=["x"])),
             (VideoUpscaleAdapter(), _make_req(operation=Operation.UPSCALE, input_video="v")),
             (InterpolateAdapter(), _make_req(operation=Operation.INTERPOLATE, input_video="v")),
@@ -704,9 +605,7 @@ class TestAllAdaptersRegistrable(unittest.TestCase):
 
     def test_all_to_dict(self):
         adapters = [
-            Wan22LocalI2VLightningAdapter(),
             I2ITransformAdapter(),
-            V2VStyleTransferAdapter(),
             ImageUpscaleAdapter(),
             VideoUpscaleAdapter(),
             InterpolateAdapter(),
@@ -726,7 +625,7 @@ class TestAllAdaptersRegistrable(unittest.TestCase):
             assert "constraints" in d
             assert d["name"] not in names, f"Duplicate adapter name: {d['name']}"
             names.add(d["name"])
-        assert len(names) == 14
+        assert len(names) == 12
 
 
 if __name__ == "__main__":

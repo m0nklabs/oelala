@@ -1,5 +1,7 @@
 # Project Plan: Oelala - AI Video and Avatar Generation
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ## Introduction
 This project plan is based on the keywords in KEYWORDS.md and the related projects that have been identified. The goal is to build an integrated system for AI-driven video generation, pose estimation, LoRA fine-tuning, and realistic avatar creation. The project is called "Oelala" and focuses on combining state-of-the-art models for consistent and realistic AI avatars in videos.
 

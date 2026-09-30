@@ -119,7 +119,7 @@ export default function useAdapterInfo() {
    * @param {string} [filters.operation] - Operation type ('generate', 'transform', etc.)
    * @param {string} [filters.output_type] - Output media type ('image', 'video', 'audio', 'text')
    * @param {string} [filters.compute] - Compute target ('local', 'cloud')
-   * @param {string} [filters.model_family] - Model family ('sdxl', 'wan2.2', 'flux', etc.)
+   * @param {string} [filters.model_family] - Model family ('sdxl', 'minimax_h3', 'flux', etc.)
    * @returns {Array} Matching adapters
    */
   const findAdapters = useCallback((filters = {}) => {

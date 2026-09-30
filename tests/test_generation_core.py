@@ -808,42 +808,12 @@ class TestQwenEditAdapter:
 # ═══════════════════════════════════════════════════════════════════
 
 
-from generation.router import resolve_resolution, normalize_frame_count, _is_base64_image
-
-
-class FakeWanAdapter(GenerationAdapter):
-    """Adapter with model_family='wan2.2' for frame normalization tests."""
-
-    name = "fake-wan-adapter"
-    model_family = "wan2.2"
-    supported_ops = {Operation.GENERATE}
-    input_types = {MediaType.TEXT}
-    output_type = MediaType.VIDEO
-    compute = ComputeTarget.LOCAL
-    lora_format = LoraFormat.SINGLE_STAGE
-
-    def constraints(self) -> AdapterConstraints:
-        return AdapterConstraints(
-            max_width=1280,
-            max_height=720,
-            max_frames=161,
-            allowed_fps=[8, 16, 24],
-        )
-
-    def build_workflow(self, req):
-        return {}
-
-    def cost(self, req):
-        return 10
-
-    async def execute(self, req, progress_callback=None):
-        return GenerationResult(
-            prompt_id="wan-id",
-            status="queued_local",
-            compute_target=ComputeTarget.LOCAL,
-            credits_used=10,
-            adapter_name=self.name,
-        )
+from generation.router import (
+    resolve_resolution,
+    _is_base64_image,
+    RETIRED_MODEL_FAMILIES,
+    retired_family_error,
+)
 
 
 class TestResolveResolution:
@@ -894,36 +864,54 @@ class TestResolveResolution:
                 assert h % 8 == 0, f"{res} {ar}: height {h} not multiple of 8"
 
 
-class TestNormalizeFrameCount:
-    """Tests for normalize_frame_count() — 4k+1 snapping."""
+class TestRetiredWan22Family:
+    """Requests naming the retired Wan 2.2 family fail clearly (no fallback)."""
 
     @pytest.mark.parametrize(
-        "input_frames,expected",
+        "hint",
         [
-            (5, 5),      # already valid (k=1)
-            (9, 9),      # already valid (k=2)
-            (81, 81),    # already valid (k=20)
-            (321, 321),  # already valid (k=80)
-            (80, 81),    # round up
-            (82, 81),    # round down
-            (83, 81),    # round to nearest (k=20.5 → 20 via banker's rounding)
-            (1, 5),      # clamp to minimum
-            (2, 5),      # clamp to minimum
-            (3, 5),      # clamp to minimum (k=0.5 rounds to 1)
-            (4, 5),      # clamp to minimum
-            (6, 5),      # round down (k=1.25 rounds to 1)
-            (7, 9),      # round up (k=1.5 rounds to 2)
-            (100, 101),  # (99/4=24.75, rounds to 25, 4*25+1=101)
+            "wan22-local-i2v-q6",
+            "wan22-cloud-t2v",
+            "wan2.2",
+            "Wan22-Cloud-T2V",
+            "wan2_2",
         ],
     )
-    def test_normalize(self, input_frames, expected):
-        assert normalize_frame_count(input_frames) == expected
+    def test_retired_adapter_hint_raises_clear_error(self, hint):
+        registry = AdapterRegistry()
+        registry.register(FakeAdapter())
+        r = GenerationRouter(registry)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.VIDEO,
+            adapter_hint=hint,
+        )
+        with pytest.raises(ValueError, match="Wan 2.2.*retired"):
+            r.resolve_adapter(req)
 
-    def test_result_is_always_4k_plus_1(self):
-        for f in range(1, 400):
-            result = normalize_frame_count(f)
-            assert (result - 1) % 4 == 0, f"normalize({f})={result} not 4k+1"
-            assert result >= 5, f"normalize({f})={result} below minimum"
+    def test_error_message_names_leading_models(self):
+        err = retired_family_error("wan22-local-t2v-q6", "Wan 2.2")
+        assert "MiniMax-H3" in str(err)
+        assert "LTX-2.3" in str(err)
+
+    def test_retired_families_registry_content(self):
+        assert RETIRED_MODEL_FAMILIES == {
+            "wan22": "Wan 2.2",
+            "wan2.2": "Wan 2.2",
+            "wan2_2": "Wan 2.2",
+            "wan-2-2": "Wan 2.2",
+        }
+
+    def test_active_adapter_hint_still_resolves(self):
+        registry = AdapterRegistry()
+        registry.register(FakeAdapter())
+        r = GenerationRouter(registry)
+        req = GenerationRequest(
+            operation=Operation.GENERATE,
+            target_type=MediaType.IMAGE,
+            adapter_hint="fake-adapter",
+        )
+        assert r.resolve_adapter(req).name == "fake-adapter"
 
 
 class TestIsBase64Image:
@@ -979,49 +967,20 @@ class TestRouterResolveResolutionFields:
         assert result.height is None
 
 
-class TestRouterNormalizeFrames:
-    """Tests for router.normalize_frames() with Wan2.2 adapters."""
+class TestRouterValidateControls:
+    """Tests for router.validate_controls() clamping."""
 
-    @pytest.fixture
-    def wan_adapter(self):
-        return FakeWanAdapter()
-
-    def test_wan_adapter_normalizes(self, router, wan_adapter):
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-            frames=80,
-        )
-        result = router.normalize_frames(req, wan_adapter)
-        assert result.frames == 81
-
-    def test_non_wan_adapter_skips(self, router, fake_adapter):
+    def test_validate_no_clamps_when_unconstrained(self, router, fake_adapter):
+        """FakeAdapter defines no frame/fps limits — values pass through."""
         req = GenerationRequest(
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
-            frames=80,
-        )
-        result = router.normalize_frames(req, fake_adapter)
-        assert result.frames == 80  # unchanged — model_family is "test"
-
-    def test_none_frames_skips(self, router, wan_adapter):
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
-        )
-        result = router.normalize_frames(req, wan_adapter)
-        assert result.frames is None
-
-    def test_validate_clamps_frames_and_fps(self, router, wan_adapter):
-        req = GenerationRequest(
-            operation=Operation.GENERATE,
-            target_type=MediaType.VIDEO,
             frames=999,
             fps=15,
         )
-        result = router.validate_controls(req, wan_adapter)
-        assert result.frames == 161
-        assert result.fps == 16
+        result = router.validate_controls(req, fake_adapter)
+        assert result.frames == 999
+        assert result.fps == 15
 
 
 class TestRouterUploadLocalImages:

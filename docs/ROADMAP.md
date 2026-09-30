@@ -3,6 +3,8 @@
 > **Last Updated**: 2026-07-14
 > **Version**: 0.11.x (Alpha)
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ## Vision
 
 Oelala is an AI media platform for creators who want one place for prompt generation, image creation, video generation, audio workflows, gallery publishing, and hybrid local/cloud execution.

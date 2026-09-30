@@ -362,40 +362,10 @@ function PresetSelector({ onPresetChange, onParametersChange, _currentParameters
   )
 }
 
-// Default presets fallback if API fails
+// Default presets fallback if API fails. The legacy Wan 2.2 presets were
+// removed together with the retired Wan 2.2 model family.
 function getDefaultPresets() {
-  return [
-    {
-      id: 'wan22_enhanced_q4km',
-      name: 'WAN 2.2 Enhanced NSFW FastMove',
-      category: 'ImageToVideo',
-      description: 'Lightning-fast I2V with NSFW FastMove LoRAs. 4 steps, cfg=1.',
-      parameters: {
-        prompt: { type: 'string', default: 'motion, smooth camera movement', label: 'Prompt' },
-        steps: { type: 'integer', default: 4, min: 2, max: 12, label: 'Steps' },
-        cfg: { type: 'float', default: 1.0, min: 1.0, max: 3.0, step: 0.1, label: 'CFG Scale' },
-        seed: { type: 'integer', default: -1, label: 'Seed', description: '-1 for random' },
-        width: { type: 'integer', default: 480, min: 256, max: 1280, step: 16, label: 'Width' },
-        height: { type: 'integer', default: 480, min: 256, max: 1280, step: 16, label: 'Height' },
-        num_frames: { type: 'integer', default: 41, min: 17, max: 81, step: 8, label: 'Frames' }
-      }
-    },
-    {
-      id: 'wan22_q6_quality',
-      name: 'WAN 2.2 Q6 Quality',
-      category: 'ImageToVideo',
-      description: 'Higher quality 6-bit model with DPM++ scheduler. Best visual quality.',
-      parameters: {
-        prompt: { type: 'string', default: 'cinematic motion', label: 'Prompt' },
-        steps: { type: 'integer', default: 8, min: 4, max: 20, label: 'Steps' },
-        cfg: { type: 'float', default: 2.5, min: 1.0, max: 5.0, step: 0.1, label: 'CFG Scale' },
-        seed: { type: 'integer', default: -1, label: 'Seed' },
-        width: { type: 'integer', default: 512, min: 256, max: 1280, step: 16, label: 'Width' },
-        height: { type: 'integer', default: 512, min: 256, max: 1280, step: 16, label: 'Height' },
-        num_frames: { type: 'integer', default: 49, min: 17, max: 97, step: 8, label: 'Frames' }
-      }
-    }
-  ]
+  return []
 }
 
 export default PresetSelector

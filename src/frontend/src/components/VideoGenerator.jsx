@@ -12,7 +12,7 @@ function VideoGenerator() {
   const [preview, setPreview] = useState(null)
   const [prompt, setPrompt] = useState('')
   const [numFrames, setNumFrames] = useState(16)
-  const [modelType, setModelType] = useState('light') // 'light', 'svd', 'wan2.2'
+  const [modelType, setModelType] = useState('light') // 'light', 'svd'
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedVideo, setGeneratedVideo] = useState(null)
   const [error, setError] = useState('')
@@ -103,12 +103,6 @@ function VideoGenerator() {
       // Select endpoint based on model type
       if (usePoseGuidance) {
         endpoint = `${BACKEND_BASE}/generate-pose`
-      } else if (modelType === 'wan2.2-q6') {
-        endpoint = `${BACKEND_BASE}/generate-wan22-q6-comfyui`
-      } else if (modelType === 'wan2.2-enhanced') {
-        endpoint = `${BACKEND_BASE}/generate-wan22-enhanced-comfyui`
-      } else if (modelType === 'wan2.2') {
-        endpoint = `${BACKEND_BASE}/generate-wan22-comfyui`
       } else {
         endpoint = `${BACKEND_BASE}/generate`
       }
@@ -333,9 +327,6 @@ function VideoGenerator() {
           >
             <option value="light">🚀 Lightweight (3.5GB - Fast & Stable)</option>
             <option value="svd">🎬 Stable Video Diffusion (7GB+ - High Quality)</option>
-            <option value="wan2.2">⚡ Wan2.2 Q5 DisTorch (Fast - 4 steps)</option>
-            <option value="wan2.2-q6">💎 Wan2.2 Q6 Quality (Best - 8 steps)</option>
-            <option value="wan2.2-enhanced">🔥 Wan2.2 Enhanced NSFW (Lightning - 4 steps)</option>
           </select>
           <div className="model-description">
             {modelType === 'light' && (
@@ -343,15 +334,6 @@ function VideoGenerator() {
             )}
             {modelType === 'svd' && (
               <small>💡 <strong>SVD:</strong> High-quality video from images, requires more GPU memory</small>
-            )}
-            {modelType === 'wan2.2' && (
-              <small>💡 <strong>Wan2.2 Q5:</strong> Fast DisTorch workflow, 4 steps, good balance of speed/quality</small>
-            )}
-            {modelType === 'wan2.2-q6' && (
-              <small>💎 <strong>Wan2.2 Q6:</strong> Higher quality 6-bit model, 8 steps, dpm++ scheduler - best visual quality</small>
-            )}
-            {modelType === 'wan2.2-enhanced' && (
-              <small>🔥 <strong>Enhanced NSFW:</strong> Lightning-fast 4 steps, optimized for adult content with Q4KM model</small>
             )}
           </div>
         </div>
@@ -385,12 +367,12 @@ function VideoGenerator() {
             {activeTab === 'text' ? (
               <small>
                 💡 <strong>Text-to-Video:</strong> Uses AI to generate both image and motion from your description.
-                Higher frames = longer, more detailed videos. Wan2.1 supports up to 32 frames.
+                Higher frames = longer, more detailed videos. Most models support up to 32 frames.
               </small>
             ) : (
               <small>
                 💡 <strong>Image-to-Video:</strong> Animates your uploaded image.
-                SVD model generates exactly 25 frames. Wan2.2 supports 8-32 frames.
+                SVD model generates exactly 25 frames. Other models support 8-32 frames.
               </small>
             )}
           </div>

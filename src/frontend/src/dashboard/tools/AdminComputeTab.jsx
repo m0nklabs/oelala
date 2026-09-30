@@ -30,7 +30,7 @@ export default function AdminComputeTab() {
 
   // Known model families for checklist
   const KNOWN_FAMILIES = [
-    'wan2.2', 'sdxl', 'flux', 'flux2', 'krea2', 'minimax_h3', 'ltx',
+    'sdxl', 'flux', 'flux2', 'krea2', 'minimax_h3', 'ltx',
     'qwen_image_edit', 'i2i_edit_model', 'utility',
   ]
 

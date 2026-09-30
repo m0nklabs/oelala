@@ -1408,7 +1408,6 @@ async def startup_event():
             comfyui_client_fn=get_comfyui_client,
             submit_to_runpod_fn=_submit_to_runpod if _runpod else None,
             face_service_mod=face_service,
-            runpod_endpoint_wan22=os.getenv("RUNPOD_ENDPOINT_ID"),
             runpod_endpoint_ltx23=os.getenv("RUNPOD_LTX23_ENDPOINT_ID"),
             runpod_endpoint_i2i=os.getenv("RUNPOD_I2I_ENDPOINT_ID"),
         )
@@ -6534,13 +6533,17 @@ async def get_i2v_generation_modes():
 async def get_t2v_generation_modes():
     """
     Get available T2V (Text-to-Video) generation modes.
-    Different base models: wan22 (Wan2.2 14B), ltx2 (LTX-2 19B).
+
+    Wan 2.2 was retired 2026-10-01; LTX-2.3 is the remaining cloud T2V family and
+    MiniMax-H3 (joint video+audio) is the leading video model.
     """
     from src.backend.comfyui_client import get_available_t2v_modes
 
+    modes = get_available_t2v_modes()
+    # get_available_t2v_modes() returns a mapping of mode id -> config.
     return {
-        "modes": get_available_t2v_modes(),
-        "default": "wan22",
+        "modes": modes,
+        "default": next(iter(modes), None),
     }
 
 

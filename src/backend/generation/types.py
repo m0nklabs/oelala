@@ -49,7 +49,8 @@ class LoraFormat(str, Enum):
 
     NONE = "none"
     SINGLE_STAGE = "single"  # {name, strength}
-    DUAL_STAGE = "dual"  # {high, low, strength} (Wan2.2 only)
+    DUAL_STAGE = "dual"  # {high, low, strength} — Wan-family dual-noise pairs;
+    # kept so parked Wan LoRAs stay representable (no active adapter uses it)
 
 
 class AdapterConstraints(BaseModel):
@@ -82,7 +83,8 @@ class LoraStackItem(BaseModel):
 
     name: str = ""
     strength: float = 1.0
-    # Dual-stage fields (Wan2.2 only, adapter handles internally)
+    # Dual-stage fields (Wan-family high/low noise pairs; no active adapter
+    # consumes them — kept for parked Wan LoRA compatibility)
     high: Optional[str] = None
     low: Optional[str] = None
 
@@ -114,9 +116,6 @@ class GenerationRequest(BaseModel):
     model_variant: Optional[str] = None  # MiniMax-H3: "official" | "eros" (NSFW finetune)
     denoise: Optional[float] = None
     strength: Optional[float] = None  # I2V conditioning strength
-    # Wan2.2 cloud-specific
-    high_noise_steps: Optional[int] = None  # Steps for high noise pass
-    shift: Optional[float] = None  # ModelSamplingSD3 shift
     # Input media
     input_images: list[str] = Field(default_factory=list)  # base64 encoded
     input_video: Optional[str] = None  # base64 encoded
