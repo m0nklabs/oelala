@@ -24,9 +24,11 @@
 | Cold start vs today | **~60 s faster** than the current 2.3 set (38.71 GB vs 59.57 GB at ~350 MB/s) **[verified sizes; transfer rate is an assumption]** |
 | Cost of the acceptance test | **≈ USD 0.10 (A40) – 0.23 (A100)** for one 121-frame test including cold start **[needs runtime confirmation]** |
 
-**The one thing that must happen first:** the operator accepts the gate on
-`https://huggingface.co/Lightricks/LTX-2.5` while logged in with the HuggingFace
-account whose token the worker uses. Until then no worker can pull the weights.
+**Status of the gate: ACCEPTED (2026-09-30) on the HuggingFace account `bomehika`.**
+Weight access is confirmed (HTTP 206). **The next blocking item is not the licence but the
+token wiring:** the deployed template currently carries `HF_LORA_TOKEN` (m0nk111), which is
+**403** on this repo — deploying 2.5 as-is would fail the cold-start download. Fix per §A3
+before any GPU spend.
 
 ---
 
@@ -126,9 +128,9 @@ Relevant clauses of `LICENSE-2_x` (LTX-2.x Community License, retrieved
   all of Attachment A "MUST be included as an enforceable provision by you in any
   type of legal agreement … governing the use and/or distribution of LTX-2.x", and
   §3.2 requires passing the agreement to recipients.
-- **No attribution or "powered by" requirement** was found in the license. §3.4 does
-  require retaining "copyright, patent, trademark, and attribution notices", and §8
-  forbids using Lightricks trademarks or implying endorsement.
+- **No attribution or "powered by" requirement** was found in the license. Section 3.4
+  *of the licence* does require retaining "copyright, patent, trademark, and attribution
+  notices", and Section 8 forbids using Lightricks trademarks or implying endorsement.
   **[verified]**
 
 ### 3.2.1 What legally *changes* when moving 2.3 → 2.5
@@ -198,10 +200,57 @@ recorded here as an operator/legal question, not as a migration blocker.
 
 ---
 
-## 4. Exact file set for a 48 GB-class worker
+### 3.4 Direct-pull vs mirroring — a good instinct, with three caveats
+
+**Recommended architecture: the worker pulls weights directly from
+`Lightricks/LTX-2.5` with the `bomehika` token. Do not mirror the official weights into
+our own public repo.** This is the right call and the plan adopts it. It keeps us out of
+the redistribution path for the official files and avoids publishing gated weights under
+our own name.
+
+Two caveats, because the reasoning "then we are not a distributor and need not enforce
+anything" is **too strong**:
+
+**Caveat 1 — §3's trigger phrase is hosting, not copying.** §3 reads: *"You may **host
+for third parties remote access purposes (e.g. software-as-a-service)**, reproduce and
+distribute copies … provided that you meet the following conditions: 3.1 Use-based
+restrictions … MUST be included as an enforceable provision by you in any type of legal
+agreement governing the use and/or distribution of LTX-2.x."* Oelala is precisely a
+service that hosts model capability for third parties. On the plain reading, **the §3.1
+obligation attaches to the hosting itself**, not only to shipping weight files — so
+direct-pull may not remove it. Whether "we never hand over the weights" is enough to
+escape §3.1 is a **legal judgement, not a technical one**, and it should be confirmed
+rather than assumed. The low-risk posture is to put the use restrictions in our ToS
+either way; the cost of doing so is small and the downside of being wrong is a material
+breach with fee exposure.
+
+**Caveat 2 — some obligations do not depend on distribution at all.**
+- **Attachment A** applies to *use*: *"When using the Outputs, LTX-2.x and any
+  Derivatives thereof, you agree to comply with the Acceptable Use Policy."* That binds
+  us as a user regardless of how the weights arrive.
+- **§6** (AI regulations) applies to our *"use, deployment, or distribution"* — deployment
+  is enough. The output-disclosure and anti-circumvention duties stand on their own.
+- **§3.2** requires passing the agreement to recipients; if we never distribute, this
+  simply does not arise.
+
+**Caveat 3 — we already are a distributor for the mirror's contents.** The public mirror
+`bomehika/oelala-models` hosts the community **REDGraft checkpoint, which is a
+Derivative**. For that file we are distributing, so §3.1 (embed the restrictions),
+§3.2 (supply a copy of the agreement) and §3.5 (the recipient gains no additional
+rights) apply to it. Adding `README.md` + `LICENSE-LTX-2.x.txt` alongside it is the
+correct practice and satisfies §3.2's "provide a copy" condition for that file. The
+"we are not a distributor" framing therefore does not hold globally — only for the
+official files we choose not to mirror.
+
+**Net recommendation:** pull official weights directly (as proposed), keep the licence
+text with anything we do mirror, and **still put the use restrictions in our own ToS** —
+that is the position that is defensible under every reading. **[verified: all quoted
+clause text; the legal conclusion is flagged for review, not asserted]**
 
 Sizes below are **bytes from the HuggingFace API** (`?blobs=true`), converted as
 GB = 10⁹ bytes. Retrieved unauthenticated on 2026-09-30. **[verified]**
+
+## 4. Exact file set for a 48 GB-class worker
 
 ### 4.1 `Lightricks/LTX-2.5` — complete listing (17 files, 200.85 GB)
 
@@ -345,7 +394,7 @@ alike. **[verified]**
 platform standardises on a Blackwell tier (`BLACKWELL_96` / `BLACKWELL_180`). The
 ~3 GB saving is not worth a hardware migration on its own.
 
-### 4.5 The community-checkpoint shortcut — technically real, legally not a shortcut
+### 4.4 The community-checkpoint shortcut — technically real, legally not a shortcut
 
 The public mirror `bomehika/oelala-models` (**ungated**, 9 files, last modified
 2026-09-30) contains a community LTX-2.5 int8 checkpoint:
@@ -394,7 +443,7 @@ not as the production path. If the gate is accepted (Phase A), use the official 
 files; they are the ones the vendor's workflows target and the ones whose licence
 position is unambiguous.
 
-### 4.4 Cold-start download size
+### 4.5 Cold-start download size
 
 | Set | Total GB | Cold start @ ~350 MB/s |
 |---|---:|---:|
@@ -686,13 +735,50 @@ production.
 
 ### Phase A — operator actions (no code, no GPU)
 
+> **STATUS 2026-09-30: A1 is DONE.** The licence has been accepted, on the HuggingFace
+> account **`bomehika`**. Access was confirmed with ranged requests against
+> `Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors`:
+> **`HF_PUBLIC_TOKEN` (bomehika) → HTTP 206 ✓**, **`HF_LORA_TOKEN` (m0nk111) → HTTP 403 ✗**.
+> This empirically confirms that HF grants gated access **per user, not per organisation**.
+> **[operator-reported; consistent with the HF gated-models documentation]**
+
 | Step | Action | Status |
 |---|---|---|
-| **A1** | Log into `https://huggingface.co` **with the account whose token the worker uses**, open `https://huggingface.co/Lightricks/LTX-2.5`, click **"Agree and Access"**. Approval is automatic — no queue. | **[verified: button text + `gated: auto`]** |
-| **A2** | Confirm the acceptance took: re-open the model page and check the gate banner is gone; the Files tab should now be downloadable. | **[verified method]** |
-| **A3** | Ensure the RunPod template `c1fz26l07d` passes a **`read`-scope HF token** as `HF_TOKEN` (the handler reads exactly that name: `HF_TOKEN = os.environ.get("HF_TOKEN", "")`). The token **must belong to the account from A1** — HF grants gated access per user, not per organisation. | **[verified: handler code; token ownership is HF behaviour — needs runtime confirmation]** |
-| **A4** | **Decide on the NSFW question** (§3.3). The AUP prohibits sexually explicit content and the license requires us to make it enforceable in our own terms. This is pre-existing on 2.3, but a migration is the natural moment to settle it. | **[verified: policy text; decision is the operator's]** |
-| **A5** | Confirm the target GPU tiers. Recommended 2.5 int8 set needs ~39 GB of VRAM with the text encoder resident; an A40 48 GB is tight, so keep the 2.3 worker alive (see §9). | **[needs runtime confirmation]** |
+| **A1** | ~~Accept the gate~~ — **DONE on `bomehika`.** | **[done]** |
+| **A2** | Confirm the acceptance took: the model page's gate banner is gone and weight files download. | **[done — verified via 206 ranged request]** |
+| **A3** | **⛔ HARD PRECONDITION — the worker template must carry the `bomehika` token, and today it does not.** See the defect below. | **[verified defect; fix required]** |
+| **A4** | **Decide on the NSFW question** (§3.3). The AUP prohibits sexually explicit content and the licence requires us to make it enforceable in our own terms. Pre-existing on 2.3, but a migration is the natural moment to settle it. | **[verified: policy text; decision is the operator's]** |
+| **A5** | **Decide on AI-transparency compliance** (§3.2.1). New obligation introduced by the 2.5 licence: output disclosure, no circumvention of provenance features, and equivalent clauses in our own ToS. | **[verified: licence text; implementation is the operator's]** |
+| **A6** | Confirm the target GPU tiers. Recommended 2.5 int8 set needs ~39 GB with the text encoder resident; an A40 48 GB is tight, so keep the 2.3 worker alive (§9). | **[needs runtime confirmation]** |
+
+#### ⛔ A3 in detail — the deployed template carries the *wrong* token
+
+`deploy/runpod-ltx23/deploy.sh` lines 136-140 hardwire the template's `HF_TOKEN` to
+`HF_LORA_TOKEN`:
+
+```bash
+HF_LORA_TOKEN=$(grep -E '^HF_LORA_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
+if [[ -z "${HF_LORA_TOKEN:-}" ]]; then
+    HF_ENV_STR=""
+else
+    HF_ENV_STR="{ key: \"HF_TOKEN\", value: \"${HF_LORA_TOKEN}\" },"
+fi
+```
+
+`HF_LORA_TOKEN` belongs to **m0nk111**, which the operator measured as **403 (no gate
+access)** on LTX-2.5. **Deploying a 2.5 worker with the current script would therefore
+fail its cold-start download with HTTP 403** — not a hypothetical, a defect already in
+the repository. It has gone unnoticed because LTX-2.3 is ungated, so that token works
+there.
+
+**Required change (Phase B):** point the template's `HF_TOKEN` at `HF_PUBLIC_TOKEN`
+(`bomehika`) — either by editing `deploy.sh` to read the right variable, or by accepting
+the gate on m0nk111 as well. Note this is a **deployment-script change, not a code
+change**, and it is the kind of thing that must not be discovered during a paid GPU run.
+**[verified]**
+
+**Do not log the token.** `deploy.sh` interpolates it into a Python heredoc and a GraphQL
+mutation; ensure the value never reaches the console or the RunPod job logs.
 
 ### Phase B — image and registry (no GPU spend)
 
@@ -706,6 +792,7 @@ production.
 | **B6** | Confirm `PUBLIC_MODEL_FILENAMES` is derived from the registry (it is: `{m["filename"] for m in LTX23_MODELS}`) so volume assets are not shadowed. | `handler.py` | **[verified]** |
 | **B7** | Pin `huggingface_hub` in the Dockerfile (currently unpinned `pip install runpod requests httpx huggingface_hub`). Note the handler passes the deprecated `local_dir_use_symlinks=False` kwarg, which newer `huggingface_hub` versions warn about or reject — pin a known-good version and verify the download path. | `Dockerfile`, `handler.py` | **[verified: unpinned + deprecated kwarg; exact breakage needs runtime confirmation]** |
 | **B8** | Build the image with a new dated tag; do **not** push `:latest`. Use `deploy.sh` (it updates the template consistently). | `deploy/runpod-ltx23/deploy.sh` | **[verified: documented in the Dockerfile header]** |
+| **B9** | **⛔ Fix the token wiring before deploying 2.5** (§A3): `deploy.sh` lines 136-140 set the template's `HF_TOKEN` from `HF_LORA_TOKEN` (m0nk111 → **403** on LTX-2.5). Point it at `HF_PUBLIC_TOKEN` (bomehika), or accept the gate on m0nk111 too. Also ensure the token is never echoed into console output or job logs. | `deploy/runpod-ltx23/deploy.sh` | **[verified defect]** |
 
 ### Phase C — workflows and adapters (no GPU spend)
 
@@ -750,8 +837,10 @@ ComfyUI `/object_info` call, which costs nothing.
 **Expected outcome (all must hold):**
 
 1. Cold start logs show all four files downloaded from `Lightricks/LTX-2.5` and
-   `ensure_models()` returns no error. A **401/403 here means the gate was not
-   accepted by the token's account** — stop, do not retry blindly.
+   `ensure_models()` returns no error. **A 403 here means the template is carrying the
+   wrong account's token** (§A3 — the most likely failure, since the current `deploy.sh`
+   wires `HF_LORA_TOKEN`, which is measured as 403 on this repo). A 401 means no token
+   reached the worker at all. **Either way: stop, do not retry blindly.**
 2. ComfyUI starts without an import error in `comfy/ldm/lightricks/`.
 3. The job produces a playable MP4 with 121 frames at 25 fps.
 4. **The output is not noise** — i.e. the model actually loaded rather than falling
@@ -808,7 +897,9 @@ it grants access to a separate repo and does not affect the 2.3 worker.
    already applies to the deployed 2.3 worker. Does the platform keep serving
    NSFW on LTX at all, or does the second slot become SFW-only? **This is the only
    question that can block the migration on grounds other than engineering.**
-2. **Which HF account holds the worker token?** A1 must be performed on that account.
+2. ~~**Which HF account holds the worker token?**~~ **Answered: `bomehika`.** The gate is
+   accepted there and that account has access (206); m0nk111 does not (403). The template
+   must carry the `bomehika` token — see §A3, which is a **required fix** before deploying.
 3. **GPU tier.** Is a Blackwell tier (`BLACKWELL_96`) in reach? If yes, the 18.7 GB
    nvfp4 transformer is worth evaluating; if no, int8 is the target.
 4. **Single-stage or two-stage?** Single-stage is the minimal path (§4.2, 38.7 GB).
@@ -843,7 +934,7 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 - **Whether the official 2.5 two-stage or IC-LoRA workflows add further required
   models** — only the single-stage distilled graph was analysed in depth.
 - **"code v1.4.x"** for `ComfyUI-LTXVideo` — no such version string exists in the pack.
-- **The community checkpoint's provenance and behaviour** (§4.5) — the REDGraft int8 file
+- **The community checkpoint's provenance and behaviour** (§4.4) — the REDGraft int8 file
   exists on the public mirror at 17.026 GB, but its quant format, tensor layout,
   `UNETLoader` compatibility and output quality were not validated, and the Civitai
   model/version/file IDs it is attributed to were not independently checked.

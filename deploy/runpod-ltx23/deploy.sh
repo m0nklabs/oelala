@@ -133,11 +133,19 @@ echo "✅ Pushed :latest"
 echo ""
 echo "🔄 Step 5/6: Updating RunPod template ${TEMPLATE_ID} → ${FULL_IMAGE}..."
 
-HF_LORA_TOKEN=$(grep -E '^HF_LORA_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
-if [[ -z "${HF_LORA_TOKEN:-}" ]]; then
+# The worker's HF_TOKEN must belong to an account that has accepted the model
+# licence. Lightricks/LTX-2.5 is gated (gated: auto) and HF grants that access per
+# user, so the LTX-2.3-era HF_LORA_TOKEN returns 403 there. Prefer HF_PUBLIC_TOKEN
+# (the account that accepted the gate) and fall back to HF_LORA_TOKEN for installs
+# that only have the older token.
+HF_WORKER_TOKEN=$(grep -E '^HF_PUBLIC_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
+if [[ -z "${HF_WORKER_TOKEN:-}" ]]; then
+    HF_WORKER_TOKEN=$(grep -E '^HF_LORA_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'") || true
+fi
+if [[ -z "${HF_WORKER_TOKEN:-}" ]]; then
     HF_ENV_STR=""
 else
-    HF_ENV_STR="{ key: \"HF_TOKEN\", value: \"${HF_LORA_TOKEN}\" },"
+    HF_ENV_STR="{ key: \"HF_TOKEN\", value: \"${HF_WORKER_TOKEN}\" },"
 fi
 
 TEMPLATE_RESULT=$(python3 -c "
