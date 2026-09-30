@@ -155,6 +155,10 @@ jobs:
         working-directory: src/frontend
         run: npm ci
 
+      - name: Lint
+        working-directory: src/frontend
+        run: npm run lint
+
       - name: Run tests
         working-directory: src/frontend
         run: npm test -- --run || true
