@@ -35,6 +35,11 @@ possible successor may stay parked, clearly marked.
   Use Policy, which forbids generating sexually explicit content. Free commercial use is allowed
   below USD 10M annual revenue. Operator decision: keep NSFW on H3 (whose licence allows it) and
   treat the LTX slot as SFW/cinematic, or accept the exposure.
+- **nvfp4 is a dead end on our tiers** (verified in ComfyUI v0.38.0 `model_management.py`:
+  `supports_nvfp4_compute()` requires compute capability ≥ 10, i.e. Blackwell only — A40 is 8.6,
+  A100 8.0, L40S 8.9, so nvfp4 is disabled there and the model would load without any speed or
+  memory benefit). `int8` has no such gate and the `comfy-int8-convrot` files load on every tier
+  we use, so the 38.7 GB int8 set is the target.
 - **Wan 2.2 stays retired.** There is no open-weight successor: Wan 2.5 / 2.6 / 2.7 / 3.0 are
   API-only, and the newest open Wan models are 2.2 derivatives (Wan-Animate-2, Wan-Dancer).
   That also means the parked Wan 2.2 LoRAs cannot be validated against a future Wan 3 — keep
