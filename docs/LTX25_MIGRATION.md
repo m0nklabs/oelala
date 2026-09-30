@@ -383,11 +383,37 @@ RUN git clone --depth 1 https://github.com/kijai/ComfyUI-KJNodes.git          # 
 | Component | Version in the deployed image | Evidence |
 |---|---|---|
 | ComfyUI | **0.18.1** | HEAD at 2026-04-12 = `31283d28…`; `comfyui_version.py` **and** `pyproject.toml` both `0.18.1` |
-| ComfyUI-LTXVideo | some commit around 2026-04-12 (unknown) | cloned at HEAD, never recorded |
-| VHS / KJNodes | HEAD around 2026-04-12 (unknown) | same |
+| ComfyUI-LTXVideo | **`531512f728…` (2026-03-06)** | last pack commit before the image build; the pack syncs on a `pr-YYYY-MM-DD` bot branch, so HEAD was a month old at build time |
+| VHS / KJNodes | HEAD around 2026-04-12 (not recorded) | cloned at HEAD, never pinned |
 | torch | 2.9.1 (cu130) | base image tag |
 
-**Answer: NO — our image cannot run LTX-2.5 as-is.** **[verified]**
+**Answer: NO — our image cannot run LTX-2.5 as-is, and this is now *observed at the code
+level*, not inferred from release notes.** Probed at our exact build commit
+`31283d2892f54caf9bfdf6edb9c98cbfa88c5f0c`:
+
+```bash
+C=31283d2892f54caf9bfdf6edb9c98cbfa88c5f0c
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/$C/comfy/text_encoders/gemma4.py"
+# -> 404          (the file does not exist at all)
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/$C/comfy/ldm/lightricks/duration_head.py"
+# -> 404
+curl -s "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/$C/comfy/sd.py" | grep -c gemma4
+# -> 0            (v0.32.0: 21)
+```
+
+**LTX-2.5's text encoder is Gemma-4-based, and our build has no Gemma-4 text-encoder
+module and no `gemma4` path in `sd.py` at all.** The conditioning path for 2.5 simply
+does not exist in the image. **[verified — file existence and symbol counts, both
+observed]**
+
+A second gap: seven pack nodes the 2.5 graphs use were not in the 2026-03-06 pack either
+— `LTXFloatToInt`, `LTXVAudioOnlyModel`, `LTXVAudioOnlyEmptyVideoLatent`,
+`LTXVGetTilingSizes`, `LTXVTiledFusionSampler`, `LTXVLaplacianPyramidBlend`,
+`LTXVSetAudioRefTokens`. (Only `LTXFloatToInt` matters for the single-stage path we
+target; the others serve T2A, tiled-fusion and audio-reference workflows.)
+**[verified]**
 
 ### 5.2 Minimum versions required for 2.5
 
@@ -423,6 +449,7 @@ Recommended pins for the migration:
 | ComfyUI (fallback) | tag **v0.38.0** = `6b747c0428c343e1417219641db93a4fb7cb69ae` (2026-09-29) | the release with published notes |
 | ComfyUI-LTXVideo | commit **`bf2ca0264f706db64cb8931155695ca481fc9d91`** (master, 2026-09-30) | latest |
 | ComfyUI-LTXVideo (minimum) | commit **`9d1672beb6c606cde771228927044b78ecc7db8a`** (2026-08-11) | first commit adding `example_workflows/2.5` |
+| ComfyUI-LTXVideo (currently in our image) | commit **`531512f7286963dc7aff1fd8bf5556e95eae03af`** (2026-03-06) | last sync before our 2026-04-12 build |
 
 **[verified]** Note the release/tag asymmetry in this repo: many ComfyUI versions exist
 as git tags **without** a GitHub release (v0.37.2, v0.38.1), so verify a pin by tag
@@ -445,6 +472,13 @@ resize path still works]**
 I extracted the node classes from the official 2.5 single-stage distilled workflow
 (`example_workflows/2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled.json`, subgraphs
 flattened) and checked each against the pack and against core at 0.18.1.
+
+> **Pin the right thing.** Eight of the nine LTX nodes our 2.3 builders use are
+> **ComfyUI *core*** nodes (`comfy_extras/nodes_lt.py`, `nodes_lt_audio.py`), not
+> LTXVideo-pack nodes. Pinning the pack to a commit does **not** pin them — they move
+> with ComfyUI itself. The pack only owns `LTXVImgToVideoConditionOnly`, `LTXFloatToInt`,
+> `MultimodalGuider`, `GuiderParameters`, `GemmaAPITextEncode` and friends. This is why
+> the ComfyUI core pin (Phase B1) is the load-bearing one. **[verified]**
 
 | Node class | In pack (latest)? | In core 0.18.1? | Needed by 2.5? |
 |---|---|---|---|
@@ -747,9 +781,10 @@ it grants access to a separate repo and does not affect the 2.3 worker.
   inference time and therefore the exact test cost; whether the int8
   `comfy-int8-convrot` files load through `UNETLoader`/`CLIPLoader` unaided; whether
   the official 2.5 graph we adopt uses `CFGGuider` or `LTXVDualCFGGuider`.
-- **That ComfyUI 0.18.1 actually *fails* on 2.5 weights** — not observed. The floor
-  (0.32.0) is verified by code inspection of v0.31.0 vs v0.32.0, so failure at 0.18.1
-  is a very safe inference, but it has not been run.
+- **That ComfyUI 0.18.1 actually *fails* on 2.5 weights at runtime** — the *cause* is
+  now observed (no Gemma-4 text-encoder module and no `gemma4` path in `sd.py` at our
+  build commit, §5.1), but the concrete error message has not been seen. No GPU run was
+  performed, so this is a code-level certainty rather than a reproduced failure.
 - **The 350 MB/s transfer assumption** — taken from the brief, not measured.
 - **Token ownership semantics for gated repos** — HF documents gated access per user,
   but I did not test a token belonging to a different account.
@@ -797,6 +832,9 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 - `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/v0.32.0/comfy_extras/nodes_lt.py` — 3 × `LTXVDualCFGGuider` (at the floor)
 - `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/v0.31.0/comfy/text_encoders/gemma4.py` — no `gemma4_text_encoder_model`
 - `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/31283d2892f54caf9bfdf6edb9c98cbfa88c5f0c/comfyui_version.py` — our build = 0.18.1
+- `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/31283d2892f54caf9bfdf6edb9c98cbfa88c5f0c/comfy/text_encoders/gemma4.py` — **404** at our build (2.5 TE path absent)
+- `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/31283d2892f54caf9bfdf6edb9c98cbfa88c5f0c/comfy/sd.py` — 0 × `gemma4` (v0.32.0: 21)
+- `https://github.com/Comfy-Org/ComfyUI/pull/15499` — "Add support for LTX 2.5", merged 2026-08-11
 - `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/v0.38.0/folder_paths.py` — model folder names
 - `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/v0.38.0/comfy/model_management.py` — `supports_nvfp4_compute` (CC ≥ 10) vs `supports_int8_compute` (no CC gate)
 - `https://raw.githubusercontent.com/Comfy-Org/ComfyUI/v0.38.0/comfy/ops.py` — `get_disabled_quant_formats`, `int8_tensorwise` + `convrot`
