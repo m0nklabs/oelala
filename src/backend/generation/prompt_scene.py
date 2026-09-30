@@ -87,6 +87,57 @@ def stage_arc(
     return stages[-shots:]
 
 
+def shortlist(
+    vocab: Dict[str, Any], select_id: str, count: int = 10, seed: Optional[int] = None
+) -> List[str]:
+    """Return up to *count* labels for a dimension, for an LLM to choose from."""
+    options = [option["label"] for option in _options(vocab, select_id)]
+    if len(options) <= count:
+        return options
+    return random.Random(seed).sample(options, count)
+
+
+# Dimensions the "LLM picks the scene" mode asks about:
+# vocab select id -> (scene key, label shown to the model).
+PICK_DIMENSIONS = {
+    "place": ("place", "place"),
+    "placeLight": ("lighting", "lighting"),
+    "clothes": ("clothes", "her clothes"),
+    "mood": ("mood", "mood"),
+    "stylePack": ("style_pack", "camera/format style"),
+    "sceneFormat": ("scene_format", "story wrapper"),
+}
+
+
+def scene_from_picks(
+    picks: Dict[str, str],
+    seed: Optional[int] = None,
+    duration_s: float = 5.0,
+    main_act: Optional[str] = None,
+    artifact: str = "light",
+) -> Dict[str, Any]:
+    """Build a scene around values the prompt model chose (creative mode)."""
+    vocab = load_vocab()
+    scene = roll_scene(
+        seed=seed, duration_s=duration_s, main_act=main_act, artifact=artifact
+    )
+    for dimension, (scene_key, _label) in PICK_DIMENSIONS.items():
+        chosen = (picks or {}).get(dimension)
+        if not chosen:
+            continue
+        scene[scene_key] = chosen
+    scene["style_camera"] = (
+        vocab.get("styles", {}).get(scene["style_pack"], {}) if scene.get("style_pack") else {}
+    )
+    scene["format_spine"] = (
+        vocab.get("formats", {}).get(scene["scene_format"], {})
+        if scene.get("scene_format")
+        else {}
+    )
+    scene["picked_by"] = "llm"
+    return scene
+
+
 def roll_scene(
     seed: Optional[int] = None,
     duration_s: float = 5.0,

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send, Flame } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
+import { apiFetch } from '../../api'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
 import { PROMPT_LLM_MODELS, NSFW_LLM_MODELS, DEFAULT_PROMPT_LLM, DEFAULT_NSFW_LLM, MINIMAX_H3_PROMPT_LLM, MINIMAX_H3_TARGET } from '../../constants/llmModels'
@@ -52,7 +53,7 @@ const ENHANCEMENT_MODES = [
 const PROMPTGEN_DEFAULTS = {
   input: '', style: '', enhanceMode: 'expand', includeNegative: true,
   includeMotion: false, cameraMotion: '', nsfwMode: false, nsfwIntensity: 3, enhanceModel: DEFAULT_PROMPT_LLM,
-  targetModel: '', h3I2v: false, sceneRoll: false,
+  targetModel: '', h3I2v: false, sceneMode: 'off', temperature: 1.2,
 }
 
 export default function PromptGeneratorTool({ onSendToTool }) {
@@ -69,7 +70,11 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)
   const [targetModel, setTargetModel] = useState(initial.targetModel || '')
   const [h3I2v, setH3I2v] = useState(initial.h3I2v || false)
-  const [sceneRoll, setSceneRoll] = useState(initial.sceneRoll || false)
+  const [sceneMode, setSceneMode] = useState(initial.sceneMode || 'off')
+  const [temperature, setTemperature] = useState(initial.temperature ?? 1.2)
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareModels, setCompareModels] = useState([])
+  const [compareResults, setCompareResults] = useState(null)
 
   const targetIsH3 = targetModel === MINIMAX_H3_TARGET
 
@@ -81,9 +86,9 @@ export default function PromptGeneratorTool({ onSendToTool }) {
   // ── Auto-save settings ──────────────────────────────────────────
   const settingsSnapshot = useMemo(() => ({
     input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
-    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v, sceneRoll,
+    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v, sceneMode, temperature,
   }), [input, style, enhanceMode, includeNegative, includeMotion, cameraMotion,
-    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v, sceneRoll])
+    nsfwMode, nsfwIntensity, enhanceModel, targetModel, h3I2v, sceneMode, temperature])
   useEffect(() => { saveSettings(settingsSnapshot) }, [settingsSnapshot, saveSettings])
 
   const handleResetDefaults = useCallback(() => {
@@ -92,7 +97,8 @@ export default function PromptGeneratorTool({ onSendToTool }) {
     setIncludeNegative(d.includeNegative); setIncludeMotion(d.includeMotion)
     setCameraMotion(d.cameraMotion || '')
     setNsfwMode(d.nsfwMode); setNsfwIntensity(d.nsfwIntensity); setEnhanceModel(d.enhanceModel)
-    setTargetModel(d.targetModel || ''); setH3I2v(d.h3I2v || false); setSceneRoll(!!d.sceneRoll)
+    setTargetModel(d.targetModel || ''); setH3I2v(d.h3I2v || false)
+    setSceneMode(d.sceneMode || 'off'); setTemperature(d.temperature ?? 1.2)
   }, [resetDefaults])
 
   // Auto-switch model list when toggling NSFW
@@ -136,7 +142,8 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       model: enhanceModel,
       ...(nsfwMode && { nsfw_intensity: nsfwIntensity }),
       ...(targetIsH3 && { target_model: MINIMAX_H3_TARGET, target_i2v: h3I2v }),
-      ...(targetIsH3 && sceneRoll && { randomize: true }),
+      ...(targetIsH3 && sceneMode !== 'off' && { scene_mode: sceneMode, randomize: sceneMode === 'random' }),
+      ...(temperature !== 1.2 && { temperature }),
     })
 
     if (result) {
@@ -149,6 +156,48 @@ export default function PromptGeneratorTool({ onSendToTool }) {
       if (DEBUG) console.log('✨ Prompt result:', result)
     } else if (llm.error) {
       setError(llm.error)
+    }
+    setLoading(false)
+  }
+
+  const handleCompare = async () => {
+    if (!user) { requestLogin('Log in om prompts te vergelijken'); return }
+    if (!input.trim()) return
+    const models = compareModels.length >= 2 ? compareModels : [enhanceModel, MINIMAX_H3_PROMPT_LLM]
+    setLoading(true); setError(null); setCompareResults(null)
+    try {
+      const res = await apiFetch('/generate-prompt/compare', {
+        method: 'POST',
+        body: JSON.stringify({
+          input: input.trim(),
+          models,
+          style: style || null,
+          mode: enhanceMode,
+          include_motion: includeMotion,
+          target_model: targetIsH3 ? MINIMAX_H3_TARGET : null,
+          target_i2v: targetIsH3 ? h3I2v : false,
+          ...(nsfwMode && { nsfw_intensity: nsfwIntensity }),
+          ...(targetIsH3 && sceneMode !== 'off' && { scene_mode: sceneMode }),
+          ...(temperature !== 1.2 && { temperature }),
+        }),
+      })
+      const data = await res.json()
+      const jobs = data.jobs || []
+      const settled = await Promise.all(jobs.map(async (job) => {
+        if (!job.job_id) return { model: job.model, result: job.result, error: null }
+        for (let attempt = 0; attempt < 400; attempt += 1) {
+          await new Promise((r) => setTimeout(r, 3000))
+          const poll = await apiFetch(`/llm-job/${job.job_id}`)
+          if (!poll.ok) return { model: job.model, error: `HTTP ${poll.status}` }
+          const status = await poll.json()
+          if (status.status === 'completed') return { model: job.model, result: status.result, error: null }
+          if (status.status === 'failed') return { model: job.model, error: status.error || 'failed' }
+        }
+        return { model: job.model, error: 'timeout' }
+      }))
+      setCompareResults(settled)
+    } catch (err) {
+      setError(`Compare failed: ${err.message}`)
     }
     setLoading(false)
   }
@@ -330,17 +379,23 @@ export default function PromptGeneratorTool({ onSendToTool }) {
               Use as first keyframe (image-to-video)
             </label>
             <label className="checkbox-label" style={{ marginTop: '6px' }}>
-              <input
-                type="checkbox"
-                checked={sceneRoll}
-                onChange={(e) => setSceneRoll(e.target.checked)}
-              />
-              🎲 Roll a scene (structured randomiser)
+              Scene
+              <select
+                value={sceneMode}
+                onChange={(e) => setSceneMode(e.target.value)}
+                className="form-select"
+                style={{ marginLeft: '8px', display: 'inline-block', width: 'auto' }}
+              >
+                <option value="off">off — model invents the scene</option>
+                <option value="random">🎲 dice roll — random concrete scene</option>
+                <option value="creative">🧠 model picks — guided by my idea</option>
+              </select>
             </label>
             <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted, #666)' }}>
               Official H3-Context-IR format: one prompt drives video and its synchronized
               soundtrack (shots, camera moves, soundscape, music). No negative prompt — H3 ignores them.
-              {sceneRoll && ' The roll picks place, light, wardrobe, act arc and per-shot camera, then the model writes the shots.'}
+              {sceneMode === 'random' && ' The dice picks place, light, wardrobe, act arc and per-shot camera, then the model writes the shots.'}
+              {sceneMode === 'creative' && ' The model chooses the setting from the vocabulary first, then writes the shots around it.'}
             </p>
           </div>
         )}
@@ -376,7 +431,93 @@ export default function PromptGeneratorTool({ onSendToTool }) {
         <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-muted, #888)' }}>
           {activeModels.find((m) => m.id === enhanceModel)?.description}
         </p>
+        <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label className="checkbox-label" style={{ minWidth: '110px' }}>
+            Temperature {temperature.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0.2"
+            max="1.6"
+            step="0.05"
+            value={temperature}
+            onChange={(e) => setTemperature(parseFloat(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setTemperature(1.2)}
+            title="Back to the H3 skill default"
+          >
+            reset
+          </button>
+        </div>
+        <label className="checkbox-label" style={{ marginTop: '10px' }}>
+          <input
+            type="checkbox"
+            checked={compareMode}
+            onChange={(e) => {
+              setCompareMode(e.target.checked)
+              setCompareResults(null)
+              if (e.target.checked && compareModels.length === 0) setCompareModels([enhanceModel, MINIMAX_H3_PROMPT_LLM])
+            }}
+          />
+          ⚖️ Compare models (2–3 side by side)
+        </label>
+        {compareMode && (
+          <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {activeModels.map((m) => (
+              <label key={m.id} className="checkbox-label" style={{ fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={compareModels.includes(m.id)}
+                  onChange={(e) => {
+                    setCompareModels((prev) => (
+                      e.target.checked
+                        ? (prev.length >= 3 ? prev : [...prev, m.id])
+                        : prev.filter((id) => id !== m.id)
+                    ))
+                  }}
+                />
+                {m.label}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
+
+      {compareMode && (
+        <div className="button-row">
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleCompare}
+            disabled={loading || !input.trim()}
+          >
+            ⚖️ Compare {compareModels.length >= 2 ? compareModels.length : 2} models
+          </button>
+        </div>
+      )}
+
+      {compareResults && (
+        <div className="results-section">
+          {compareResults.map((entry) => (
+            <div className="result-card" key={entry.model}>
+              <div className="result-header">
+                <h4>{entry.model}</h4>
+                {entry.result?.prompt && (
+                  <button className="btn-icon" onClick={() => handleCopy(entry.result.prompt)}>
+                    <Copy size={16} />
+                  </button>
+                )}
+              </div>
+              {entry.error && <p className="result-text muted">⚠️ {entry.error}</p>}
+              {entry.result?.prompt && <p className="result-text">{entry.result.prompt}</p>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="button-row">
         <button

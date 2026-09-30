@@ -8607,6 +8607,27 @@ class PromptGenerateRequest(BaseModel):
     randomize: bool = False  # H3 skill: roll a structured scene (place/light/arc/camera)
     scene_seed: Optional[int] = None  # Reproducible scene roll; None = fresh roll
     duration: Optional[float] = None  # Target clip length in seconds (drives the shot count)
+    scene_mode: Optional[str] = None  # "random" (dice) | "creative" (model picks the scene)
+    temperature: Optional[float] = None  # LLM sampling temperature (default 1.2)
+    llm_seed: Optional[int] = None  # LLM sampling seed; None = fresh each call
+
+
+class PromptCompareRequest(BaseModel):
+    """JSON body for running the same prompt request through several models."""
+
+    input: str
+    models: List[str]
+    style: Optional[str] = None
+    mode: str = "expand"
+    include_motion: bool = False
+    nsfw_intensity: Optional[int] = None
+    target_model: Optional[str] = None
+    target_i2v: bool = False
+    randomize: bool = False
+    scene_mode: Optional[str] = None
+    scene_seed: Optional[int] = None
+    duration: Optional[float] = None
+    temperature: Optional[float] = None
 
 
 # Style keywords mapping (used for both template and LLM modes)
@@ -8706,6 +8727,86 @@ DEFAULT_H3_NSFW_ADDENDUM = """
 NSFW INTENSITY MODE (level {level}/5): write the scene at this explicitness — {level_desc}. Keep the H3-Context-IR format intact: explicit actions belong in the integrated_multimodal_description (with matching sounds in overall_soundscape); never break the three-section structure."""
 
 
+async def _pick_scene_values(
+    idea: str, model: str, style_context: str
+) -> Optional[dict]:
+    """Ask the prompt model to choose scene values from shortlists.
+
+    Creative scene mode: instead of a dice roll the model picks place, lighting,
+    wardrobe, mood, style and story wrapper, guided by the user's idea. Returns a
+    dict keyed by vocabulary dimension, or None when the answer is unusable.
+    """
+    from generation.prompt_scene import PICK_DIMENSIONS, load_vocab, shortlist
+
+    vocab = load_vocab()
+    shortlists = {
+        dimension: shortlist(vocab, dimension, 12)
+        for dimension in PICK_DIMENSIONS
+    }
+    if not any(shortlists.values()):
+        return None
+
+    categories = "\n".join(
+        f"- {dimension} ({label}): " + " | ".join(options)
+        for dimension, (_scene_key, label), options in (
+            (dimension, PICK_DIMENSIONS[dimension], shortlists[dimension])
+            for dimension in PICK_DIMENSIONS
+            if shortlists[dimension]
+        )
+    )
+    body = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You cast scenes for short adult video clips. Choose exactly one "
+                    "option per category, guided by the idea. Answer with strict JSON "
+                    "only, no markdown, using the category keys verbatim."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Idea: {idea}\n{style_context}\n\nCategories:\n{categories}\n\n"
+                    'Return {"' + '": "...", "'.join(shortlists.keys()) + '": "..."}'
+                ),
+            },
+        ],
+        "temperature": 0.9,
+        "top_p": 0.95,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
+            response = await client.post(
+                f"{GUARDIAN_BASE}/v1/chat/completions", json=body
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"].get("content") or ""
+    except Exception as exc:  # noqa: BLE001 - creative mode is best-effort
+        logger.warning(f"⚠️ Scene picker call failed: {exc}")
+        return None
+
+    decoder = json.JSONDecoder()
+    for index in range(len(content) - 1, -1, -1):
+        if content[index] != "{":
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(content[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict) and any(
+            key in candidate for key in PICK_DIMENSIONS
+        ):
+            return {
+                key: value
+                for key, value in candidate.items()
+                if key in PICK_DIMENSIONS and isinstance(value, str)
+            }
+    logger.warning("⚠️ Scene picker returned no usable JSON")
+    return None
+
+
 async def generate_prompt_with_llm(
     base_input: str,
     style: Optional[str],
@@ -8719,6 +8820,9 @@ async def generate_prompt_with_llm(
     randomize: bool = False,
     scene_seed: Optional[int] = None,
     duration_s: float = 5.0,
+    temperature: Optional[float] = None,
+    llm_seed: Optional[int] = None,
+    scene_mode: Optional[str] = None,
 ) -> dict:
     """Use Guardian LLM proxy to generate enhanced prompts."""
     import random
@@ -8789,11 +8893,32 @@ Generate as JSON."""
                     "from that anchor."
                 )
             scene_block = ""
-            if randomize:
+            want_scene = randomize or scene_mode in ("random", "creative")
+            if want_scene:
                 try:
-                    from generation.prompt_scene import roll_scene, scene_brief
+                    from generation.prompt_scene import (
+                        roll_scene,
+                        scene_brief,
+                        scene_from_picks,
+                    )
 
-                    rolled_scene = roll_scene(seed=scene_seed, duration_s=duration_s)
+                    if scene_mode == "creative":
+                        picks = await _pick_scene_values(
+                            base_input, model, style_context
+                        )
+                        rolled_scene = (
+                            scene_from_picks(
+                                picks, seed=scene_seed, duration_s=duration_s
+                            )
+                            if picks
+                            else None
+                        )
+                        if rolled_scene is None:
+                            logger.warning(
+                                "⚠️ Creative scene pick failed, falling back to a dice roll"
+                            )
+                    if rolled_scene is None:
+                        rolled_scene = roll_scene(seed=scene_seed, duration_s=duration_s)
                     scene_block = (
                         "\n\n" + scene_brief(rolled_scene) + "\n"
                         "Follow this structure shot for shot; write it in "
@@ -8888,8 +9013,8 @@ Generate as JSON."""
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 1.2,
-        "seed": random_seed,
+        "temperature": temperature if temperature is not None else 1.2,
+        "seed": llm_seed if llm_seed is not None else random_seed,
         "top_p": 0.95,
     }
 
@@ -9049,6 +9174,9 @@ async def _process_llm_job(request_data: dict) -> dict | None:
     target_i2v = request_data.get("target_i2v", False)
     randomize = bool(request_data.get("randomize"))
     scene_seed = request_data.get("scene_seed")
+    scene_mode = request_data.get("scene_mode")
+    temperature = request_data.get("temperature")
+    llm_seed = request_data.get("llm_seed")
 
     if use_llm:
         result = await generate_prompt_with_llm(
@@ -9064,6 +9192,9 @@ async def _process_llm_job(request_data: dict) -> dict | None:
             randomize=randomize,
             scene_seed=scene_seed,
             duration_s=float(request_data.get("duration") or 5.0),
+            temperature=temperature,
+            llm_seed=llm_seed,
+            scene_mode=scene_mode,
         )
 
     # Fall back to template mode
@@ -9145,6 +9276,9 @@ async def generate_prompt(request: Request, user: User = Depends(get_current_use
         "randomize": req.randomize,
         "scene_seed": req.scene_seed,
         "duration": req.duration,
+        "scene_mode": req.scene_mode,
+        "temperature": req.temperature,
+        "llm_seed": req.llm_seed,
     }
 
     # Async queue path (preferred)
@@ -9161,6 +9295,61 @@ async def generate_prompt(request: Request, user: User = Depends(get_current_use
     result = await _process_llm_job(request_data)
     if result is None:
         raise HTTPException(status_code=500, detail="Prompt generation failed")
+
+
+@app.post("/generate-prompt/compare")
+async def generate_prompt_compare(
+    req: PromptCompareRequest, user: User = Depends(get_current_user)
+):
+    """Run the same prompt request through up to three models.
+
+    Jobs go through the LLM queue (the H3 skill can take minutes per model), so
+    the response carries job ids the client polls via /llm-job/{id}.
+    """
+    if not req.input or not req.input.strip():
+        raise HTTPException(status_code=400, detail="Input is required")
+    models = [m for m in (req.models or []) if m]
+    if not models:
+        raise HTTPException(status_code=400, detail="At least one model is required")
+    if len(models) > 3:
+        raise HTTPException(status_code=400, detail="At most three models per comparison")
+
+    base_request = {
+        "input": req.input.strip(),
+        "style": req.style,
+        "mode": req.mode,
+        "include_negative": not (req.target_model == TARGET_MINIMAX_H3),
+        "include_motion": req.include_motion,
+        "use_llm": True,
+        "refine_instruction": None,
+        "nsfw_intensity": req.nsfw_intensity,
+        "target_model": req.target_model,
+        "target_i2v": req.target_i2v,
+        "randomize": req.randomize,
+        "scene_seed": req.scene_seed,
+        "duration": req.duration,
+        "scene_mode": req.scene_mode,
+        "temperature": req.temperature,
+    }
+
+    results = []
+    if llm_queue_manager:
+        for model in models:
+            job = llm_queue_manager.submit({**base_request, "model": model})
+            results.append(
+                {
+                    "model": model,
+                    "job_id": job.job_id,
+                    "queue_position": job.queue_position,
+                }
+            )
+        return {"status": "queued", "jobs": results}
+
+    logger.warning("LLM queue not available, running the comparison synchronously")
+    for model in models:
+        result = await _process_llm_job({**base_request, "model": model})
+        results.append({"model": model, "result": result})
+    return {"status": "done", "jobs": results}
     return {"status": "completed", "job_id": "sync", "queue_position": 0, **result}
 
 

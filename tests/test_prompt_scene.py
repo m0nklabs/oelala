@@ -145,3 +145,57 @@ def test_h3_skill_carries_the_guards():
         "One camera move per shot",
     ):
         assert phrase in source, f"H3 guard missing: {phrase}"
+
+
+def test_shortlist_is_bounded_and_deterministic():
+    from generation.prompt_scene import shortlist
+
+    vocab = load_vocab()
+    first = shortlist(vocab, "place", 6, seed=11)
+    assert first == shortlist(vocab, "place", 6, seed=11)
+    assert len(first) <= 6
+    assert all(isinstance(label, str) and label for label in first)
+
+
+def test_scene_from_picks_lands_on_the_scene_keys():
+    """Creative mode picks must overwrite the scene values, not add new keys."""
+    from generation.prompt_scene import PICK_DIMENSIONS, scene_from_picks
+
+    picks = {
+        "place": "rooftop at night",
+        "placeLight": "cheap neon / sign spill",
+        "clothes": "open robe",
+        "mood": "eager",
+        "stylePack": "phone selfie",
+        "sceneFormat": "paid webcam",
+    }
+    scene = scene_from_picks(picks, seed=3, duration_s=5.0)
+    for dimension, (scene_key, _label) in PICK_DIMENSIONS.items():
+        assert scene[scene_key] == picks[dimension], f"{dimension} did not reach {scene_key}"
+        if scene_key != dimension:
+            assert dimension not in scene, f"{dimension} leaked in as its own key"
+    assert scene["picked_by"] == "llm"
+    assert scene["shots"], "creative scene still needs a rolled act arc"
+
+
+def test_scene_from_picks_survives_empty_picks():
+    from generation.prompt_scene import scene_from_picks
+
+    scene = scene_from_picks({}, seed=9, duration_s=5.0)
+    assert scene["place"] and scene["shots"]
+
+
+def test_prompt_requests_accept_the_new_controls():
+    """The API models must carry the new knobs, or they vanish silently."""
+    import importlib.util
+
+    app_path = PROJECT_ROOT / "src" / "backend" / "app.py"
+    source = app_path.read_text(encoding="utf-8")
+    for field in ("scene_mode", "temperature", "llm_seed"):
+        assert f"{field}:" in source, f"PromptGenerateRequest is missing {field}"
+    assert "class PromptCompareRequest" in source
+    assert '"/generate-prompt/compare"' in source
+    # the new fields must reach the job dict, not just the request model
+    for forwarded in ('"scene_mode": req.scene_mode', '"temperature": req.temperature', '"llm_seed": req.llm_seed'):
+        assert forwarded in source, f"not forwarded to the LLM job: {forwarded}"
+    assert "importlib" in importlib.util.__name__ or True

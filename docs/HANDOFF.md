@@ -105,23 +105,30 @@ import `app.py`, which loads `.env` and set the mirror variables).
 5. **AGENTS.md maintenance** (other repo): `guardian docs/HANDOFF.md` and
    `docs/AGENT_JOURNAL.md` are over budget — offer a batched archive-first pass.
 
-## 6. Next task — LLM options for the prompt generator (approved, not built)
+## 6. LLM options for the prompt generator — built
 
-The operator approved all four; none are started:
+All four landed (see `changelog/20261001-prompt-llm-options.md`):
 
-1. **Model choice for the H3 skill** — the skill is pinned to `MINIMAX_H3_PROMPT_LLM`
-   (Huihui-Qwen3.5-9B); expose an override in the Prompt Generator UI (backend already
-   accepts `model`).
-2. **"LLM picks the scene"** next to random — let the model choose from
-   `h3_scene_vocab.json` based on the user's idea (creative) instead of a pure dice roll;
-   a hybrid (we roll the frame, the model fills it) is also on the table.
-3. **Multi-model compare** — run 2–3 prompt models on the same input and show them side
-   by side (serialize through the LLM queue).
-4. **Per-call controls** — expose temperature/seed and a "re-roll with the same scene"
-   (reuse `scene_seed`).
+1. **Model choice for the H3 skill** — the pinned Huihui-Qwen3.5-9B is the default, but any
+   model in the list can be selected for H3 targets (the backend already accepted `model`).
+2. **Scene mode** — `scene_mode` on `/generate-prompt`: `random` (dice roll), `creative`
+   (the model picks place/lighting/wardrobe/mood/style/format from shortlists first, then
+   writes the shots; falls back to a dice roll when the picker answer is unusable) or off.
+3. **Model comparison** — `POST /generate-prompt/compare` (max 3 models) submits one queued
+   job per model and returns job ids; the Prompt Generator polls `/llm-job/{id}` and shows
+   the prompts side by side. Queue-based on purpose: one H3 skill run can take minutes.
+4. **Per-call controls** — `temperature` (default 1.2) and `llm_seed` are request fields,
+   with a temperature slider plus reset in the UI; `scene_seed` re-rolls the same scene.
 
-Acceptance for each: works through `/generate-prompt`, visible in the Prompt Generator,
-covered by a test, changelog fragment, `ruff` clean, backend restarted and verified.
+Not yet verified end-to-end:
+
+- No live call has gone through the creative picker or the comparison endpoint. The queue
+  path and the JSON parsing are unit-tested; watch the first real run (an unusable picker
+  answer falls back to a dice roll by design, so a bad run is still a valid prompt).
+- Provenance of the randomizer page is still open (vocabulary phrases were extracted;
+  porting its *code* would need the source).
+- Private mirror cleanup (`m0nk111/oelala-models`, 77 GB of the private quota) and the
+  `unverified` Windows-PC column in the model catalog are still pending.
 
 ## 7. Key commands
 
