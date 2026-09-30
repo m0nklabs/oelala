@@ -25,11 +25,16 @@ possible successor may stay parked, clearly marked.
   keeps shipping H3 work (v0.38.0), and its ecosystem (turbo distills, ControlNet-Union,
   community finetunes) keeps growing. Nothing open challenges it.
 - **Upgrade the second slot LTX-2.3 → LTX-2.5** (released 2026-08-11, weights 2026-09-01).
-  Same vendor and license family, ComfyUI-native (`ComfyUI-LTXVideo` ships 2.5 workflows),
-  int8 path ≈ 40 GB and fits an A40-48GB with text-encoder offload. Code v1.4.x adds chunked
-  long-video generation, keyframe-aware decode and multi-GPU runners; the nvfp4 checkpoint
-  (18.7 GB) is the Blackwell fit. The HF repo is **gated** — the license must be accepted on
-  the HuggingFace account before a worker can pull it.
+  Same vendor, ComfyUI-native, int8 set ≈ 38.7 GB and fits an A40-48GB. The LTX-2 *code* repo
+  (v1.4.x) adds chunked long-video generation, keyframe-aware decode and multi-GPU runners; the
+  `ComfyUI-LTXVideo` node pack has **no releases or tags at all**, so it must be pinned by commit.
+  The HF repo is **gated** (`gated: auto`) — the licence must be accepted on the HuggingFace
+  account whose token the worker uses. Full plan: `docs/LTX25_MIGRATION.md`.
+- **Licence note that matters for the product**: the LTX-2.x Community License (2.5) — and the
+  LTX-2 Community License (2.3) that is already deployed — incorporate the Lightricks Acceptable
+  Use Policy, which forbids generating sexually explicit content. Free commercial use is allowed
+  below USD 10M annual revenue. Operator decision: keep NSFW on H3 (whose licence allows it) and
+  treat the LTX slot as SFW/cinematic, or accept the exposure.
 - **Wan 2.2 stays retired.** There is no open-weight successor: Wan 2.5 / 2.6 / 2.7 / 3.0 are
   API-only, and the newest open Wan models are 2.2 derivatives (Wan-Animate-2, Wan-Dancer).
   That also means the parked Wan 2.2 LoRAs cannot be validated against a future Wan 3 — keep
