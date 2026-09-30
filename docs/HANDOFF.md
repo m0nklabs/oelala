@@ -94,15 +94,15 @@ import `app.py`, which loads `.env` and set the mirror variables).
 ## 5. Open questions and carry-overs
 
 1. **Provenance of the randomizer page** (`~/scratch/h3_porn_scene_randomizer (62).html`)
-   — vocabulary phrases were extracted (low risk); porting its *code* would need to know
-   whether it is the operator's own, community or AI-generated.
-2. **Private mirror cleanup** — `m0nk111/oelala-models` still holds the same 5 checkpoints
-   (77 GB of the private quota). Public mirror is authoritative; deleting frees the quota.
-3. **Windows-PC column in the catalog is `unverified`** for all 249 entries (probe
-   unreachable during generation). Re-run `scripts/build_model_catalog.py` when awake.
-4. **Cold-start cost** — each cold worker still downloads the core set (text encoder +
+   — the file carries no author, generator marker or links, so it cannot be determined from
+   the artifact. Vocabulary phrases were extracted (factual, low risk); porting its *code*
+   would need the source.
+2. **Windows-PC column in the catalog is `unverified`** for all 249 entries. The backend
+   points at `windows-pc-comfyui` (`http://192.168.1.245:8188`, enabled) but the box did not
+   answer within 55 s — re-run `scripts/build_model_catalog.py` when it is awake.
+3. **Cold-start cost** — each cold worker still downloads the core set (text encoder +
    VAEs ≈ 21.5 GB) per job variant; a network volume would remove it (costs storage).
-5. **AGENTS.md maintenance** (other repo): `guardian docs/HANDOFF.md` and
+4. **AGENTS.md maintenance** (other repo): `guardian docs/HANDOFF.md` and
    `docs/AGENT_JOURNAL.md` are over budget — offer a batched archive-first pass.
 
 ## 6. LLM options for the prompt generator — built
