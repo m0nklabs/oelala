@@ -223,6 +223,17 @@ GB = 10⁹ bytes. Retrieved unauthenticated on 2026-09-30. **[verified]**
 | `model_patches/ltx-2.5-duration-head-bf16.safetensors` | 0.004 | duration head |
 | `.gitattributes`, `README.md`, `hf-hero-web.webp` | ~0 | — |
 
+**Two sibling repos exist but are not usable here** (both also `gated: auto`):
+
+| Repo | Contents | Why not |
+|---|---|---|
+| `Lightricks/LTX-2.5-Diffusers` | 66 files, diffusers layout (`transformer/diffusion_pytorch_model-0000N-of-00004.safetensors`, `connectors/…`) | not ComfyUI-native — our worker loads safetensors via `UNETLoader` |
+| `Lightricks/LTX-2.5-Pre-Trained` | 10 files, `ltx-2.5-22b-pt-bf16.safetensors` 46.17 GB, `ltx-2.5-22b-gemma4-12b/model.safetensors` 23.92 GB | fine-tuning base, not an inference checkpoint |
+
+Also confirmed absent: `Lightricks/LTX-2.5-{fp8,nvfp4,distilled}` — 2.5 ships its
+quantizations **inside** the main repo (unlike 2.3, which has separate `-fp8` and
+`-nvfp4` repos). **[verified]**
+
 ### 4.2 Recommended set — distilled int8 I2V + T2V, 48 GB class
 
 This is the minimal set that satisfies the official single-stage distilled workflow
@@ -259,6 +270,22 @@ loads:
 **The int8 path is the official default**, which is a strong confirmation that §4.2 is
 the right target for a 48 GB-class worker. **[verified]**
 
+**One qualification: that built-in template is *two-stage*.** It carries
+`LatentUpscaleModelLoader` + `LTXVLatentUpsampler`, two `ManualSigmas`, two
+`SamplerCustomAdvanced` and two `LTXVDualCFGGuider` nodes, and loads the
+`ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` (0.996 GB). So the faithful
+"official default" set is **39.710 GB**, while our minimal single-stage target — which
+mirrors the pack's `LTX-2.5_T2V_I2V_Single_Stage_Distilled.json`, the closer analogue of
+our existing 2.3 builders — is **38.714 GB**. Both are official; the 1 GB difference is
+the upscaler. Pick per the single-vs-two-stage decision in §10.
+
+**One non-issue, for the record:** the audio VAE's HF path is
+`LTX2_audio_vae_bf16.safetensors` (capital L/T) while our registry stores it locally as
+`ltx2_audio_vae.safetensors`. That is **correct as written** — `handler.py` pairs
+`"filename": "ltx2_audio_vae.safetensors"` with
+`"hf_path": "LTX2_audio_vae_bf16.safetensors"`, and `hf_hub_download` is called with the
+`hf_path`. No change needed. **[verified]**
+
 **There is no official ungated Comfy-Org mirror of LTX-2.5.** `Comfy-Org/LTX-2.5`
 does not resolve (401). Comfy-Org publishes the 2.3-era repacks only — `Comfy-Org/ltx-2`
 (9 files) and `Comfy-Org/ltx-2.3` (6 files), both ungated — and an HF-wide search for
@@ -289,9 +316,17 @@ def supports_nvfp4_compute(device=None):
 and `comfy/ops.py::get_disabled_quant_formats()` adds `"nvfp4"` to the disabled set
 when that check fails. `major < 10` excludes **A40 (8.6), A100 (8.0), L40S (8.9)** and
 every other Ampere/Ada tier — only Blackwell (CC 10.x+) qualifies. On an unsupported
-device the format is disabled rather than used, so the model still loads correctly but
-you get **none** of the speed or memory benefit of the quantization. **[verified: both
-functions read directly from v0.38.0 source]**
+device the format is **disabled rather than used**, so the model still loads correctly
+but you get **none** of the speed or memory benefit of the quantization. **[verified:
+both functions read directly from v0.38.0 source]**
+
+This matches the hardware documentation independently: native FP4 tensor-core support
+appears at compute capability 10.x/11.0/12.x and is absent at 8.0/8.6/9.0 (CUDA
+Programming Guide, compute-capabilities table; TensorRT-LLM's quantization hardware
+matrix marks Blackwell `Y` and Hopper/Ada/Ampere `.`). Some community documentation
+describes the fallback as "silently dequantizing"; the source shows an explicit
+capability check that disables the format, so the practical outcome is the same but the
+mechanism is deliberate, not silent. **[verified: source is authoritative here]**
 
 **By contrast, int8 has no such gate** — and this is what makes the recommended set
 safe:
@@ -365,7 +400,8 @@ position is unambiguous.
 |---|---:|---:|
 | **LTX-2.3 today** (`ltx-2.3-22b-distilled` 46.149 + `gemma_3_12B_it_fp8_scaled` 13.205 + `LTX2_audio_vae_bf16` 0.218) | **59.572** | **170 s** |
 | **LTX-2.5 int8 (recommended)** | **38.714** | **111 s** |
-| LTX-2.5 int8 + both upscalers (two-stage) | 39.972 | 114 s |
+| LTX-2.5 int8 + spatial upscaler (official built-in two-stage default) | 39.710 | 113 s |
+| LTX-2.5 int8 + both upscalers (two-stage, temporal optional) | 39.972 | 114 s |
 | LTX-2.5 nvfp4 + int8 TE | 35.932 | 103 s |
 | LTX-2.5 bf16 distilled | 70.119 | 200 s |
 
