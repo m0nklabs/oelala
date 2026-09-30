@@ -17,7 +17,8 @@
 | Question | Answer |
 |---|---|
 | Is `Lightricks/LTX-2.5` gated? | **Yes — `gated: "auto"`** (automatic approval). LTX-2.3 is **not** gated. **[verified]** |
-| Same license as 2.3? | **No.** 2.5 uses the *LTX-2.x Community License*; 2.3 uses the *LTX-2 Community License*. Both permit commercial use below **USD 10,000,000** annual revenue. **[verified]** |
+| Same license as 2.3? | **No.** 2.5 uses the *LTX-2.x Community License* (dated 2026-08-11); 2.3 uses the *LTX-2 Community License* (dated 2026-01-05). Both permit commercial use below **USD 10,000,000** annual revenue. | **[verified]** |
+| What the new license adds | **AI-regulation obligations** — EU AI Act + California AI Transparency Act compliance, no removal of watermarking/provenance features, output disclosure, and indemnity. **Absent from the 2.3 license.** See §3.2.1. | **[verified]** |
 | Can our worker image run 2.5 as-is? | **No.** Our image carries **ComfyUI 0.18.1**; LTX-2.5 core support landed in **ComfyUI 0.32.0**. **[verified]** |
 | Recommended 2.5 file set (48 GB class) | int8 distilled transformer + int8 LTX-projected Gemma 4 12B + video VAE + audio VAE = **38.71 GB** **[verified]** |
 | Cold start vs today | **~60 s faster** than the current 2.3 set (38.71 GB vs 59.57 GB at ~350 MB/s) **[verified sizes; transfer rate is an assumption]** |
@@ -94,10 +95,15 @@ listing in §4 does.) **[verified]**
 | `license` | `other` | `other` |
 | `license_name` | `ltx-2.x-community-license-agreement` | `ltx-2-community-license-agreement` |
 | `license_link` | `github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x` | `github.com/Lightricks/LTX-2/blob/main/LICENSE-2` |
+| Dated | **August 11, 2026** | **January 5, 2026** |
 
 **These are two different documents**, so the license does change with the migration.
-The 2.5 repo itself ships **no license file** (only weights + `README.md`); the license
-lives in the `LTX-2` GitHub repo. **[verified]**
+Per the `LICENSE` pointer file: the LTX-2.x agreement applies to "all LTX-2.5 versions
+released since August 11, 2026, and all future releases of LTX-2.x", while the LTX-2
+agreement covers "LTX-2 versions released since January 5, 2026, **including LTX-2.3
+until August 11, 2026**". The 2.5 HF repo itself ships **no license file** (only weights
++ `README.md`), and the model card's licence link is broken (see §11). The license lives
+in the `LTX-2` GitHub repo. **[verified]**
 
 Relevant clauses of `LICENSE-2_x` (LTX-2.x Community License, retrieved
 2026-09-30, 30 399 bytes):
@@ -120,8 +126,59 @@ Relevant clauses of `LICENSE-2_x` (LTX-2.x Community License, retrieved
   all of Attachment A "MUST be included as an enforceable provision by you in any
   type of legal agreement … governing the use and/or distribution of LTX-2.x", and
   §3.2 requires passing the agreement to recipients.
-- **No attribution or "powered by" requirement** was found in the license. **[verified —
-  absence of a clause, not presence of a permission]**
+- **No attribution or "powered by" requirement** was found in the license. §3.4 does
+  require retaining "copyright, patent, trademark, and attribution notices", and §8
+  forbids using Lightricks trademarks or implying endorsement.
+  **[verified]**
+
+### 3.2.1 What legally *changes* when moving 2.3 → 2.5
+
+This is not a cosmetic license refresh. Verified by diffing `LICENSE-2` against
+`LICENSE-2_x` (grep counts are decisive here):
+
+| Clause | LTX-2.3 (`LICENSE-2`) | LTX-2.5 (`LICENSE-2_x`) |
+|---|---|---|
+| USD 10 M revenue threshold | present | present (**unchanged**) |
+| Royalty-free grant below threshold | present | present (**unchanged**) |
+| SaaS / hosted use allowed | present (§3) | present (§3) |
+| AUP incorporated (NSFW restriction) | present | present (**unchanged**) |
+| "Non-Commercial Purpose" carve-out (§2.2) | **absent** (0 hits) | **added** (4 hits) |
+| Liquidated damages on breach | "**double** the amount" (1 hit) | **removed** (0 hits) — replaced by standard commercial rates |
+| §3.5 Transfer of Derivatives | absent | **added** |
+| **AI-regulation obligations (§6)** | **absent (0 hits)** | **added** — EU AI Act + California AI Transparency Act |
+| EU AI Act Art. 53(2) FOSS statement | absent | **added** |
+
+**The §6 addition is the one that matters most for this platform.** `LICENSE-2_x`
+§6 requires that you:
+
+- comply with **Regulation (EU) 2024/1689 (the EU AI Act)** and the **California AI
+  Transparency Act** (Cal. Bus. & Prof. Code § 22757 et seq.) as they apply to your
+  use, deployment or distribution;
+- **not remove, disable, alter or circumvent** any safety measure, disclosure, metadata,
+  watermarking, content-provenance or latent-disclosure feature — and **include
+  equivalent obligations in your own downstream agreements**;
+- accept sole responsibility as a **provider or deployer**, *including any obligation to
+  disclose that content is artificially generated or manipulated*;
+- indemnify Lightricks against claims arising from your non-compliance.
+
+Licensor may also **revoke the license immediately** if you modify the model such that
+it can no longer emit required disclosures. §6 further states: *"You shall undertake
+reasonable efforts to use the latest version of LTX-2.x. Any use of the non-current
+version of LTX-2.x is done solely at your own risk."*
+
+**[verified: all quotes read directly from the retrieved license texts]**
+
+**Consequences the operator should weigh:**
+
+1. Migrating to 2.5 **adds** AI-transparency obligations that the currently deployed
+   2.3 worker does not carry. Output disclosure ("this is AI-generated") becomes a
+   licence condition, not merely a product choice.
+2. The prohibition on circumventing content filters / provenance features sits
+   awkwardly beside an NSFW-capable product — this sharpens the §3.3 question below.
+3. The "use the latest version" clause mildly complicates the version-pinning this plan
+   recommends (Phase B1/B2). Pinning is still the right engineering call — the clause
+   allocates *risk*, it does not forbid pinning — but it is worth recording that
+   staying on an old LTX-2.x build is at our own risk under the 2.5 license.
 
 ### 3.3 The NSFW point the operator must decide on
 
@@ -707,7 +764,12 @@ it grants access to a separate repo and does not affect the 2.3 worker.
   deployed image — the Dockerfile records no pins and the image tag only gives a date.
 - **Whether LTX-2.5's `Lightricks/LTX-2.5` repo has a `LICENSE` file** — it does not
   (the file listing shows only `.gitattributes`, `README.md`, `hf-hero-web.webp` and
-  weights), and the model card's license link points at the GitHub repo instead.
+  weights). Note also that the model card's licence link is **broken**: it points at
+  `Lightricks/LTX-2/blob/main/LICENSE.md`, which returns **404**. The real file is
+  `LICENSE` — a 537-byte pointer that names both agreements and their dates:
+  *LTX-2.x Community License Agreement*, **dated August 11, 2026** (applies to 2.5 and
+  all future 2.x); *LTX-2 Community License Agreement*, **dated January 5, 2026**
+  (applies to 2.3 until August 11, 2026). **[verified]**
 
 ---
 
@@ -723,9 +785,11 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 - `https://huggingface.co/Lightricks/LTX-2.5` — gating banner
 
 **License**
-- `https://raw.githubusercontent.com/Lightricks/LTX-2/main/LICENSE-2_x` — LTX-2.x Community License (2.5)
-- `https://raw.githubusercontent.com/Lightricks/LTX-2/main/LICENSE-2` — LTX-2 Community License (2.3)
-- `https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf` — Acceptable Use Policy (5 pages)
+- `https://raw.githubusercontent.com/Lightricks/LTX-2/main/LICENSE-2_x` — LTX-2.x Community License (2.5), 30 399 B, dated 2026-08-11
+- `https://raw.githubusercontent.com/Lightricks/LTX-2/main/LICENSE-2` — LTX-2 Community License (2.3), 19 197 B, dated 2026-01-05
+- `https://raw.githubusercontent.com/Lightricks/LTX-2/main/LICENSE` — 537 B pointer naming both agreements and their dates
+- `https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf` — Acceptable Use Policy (5 pages, revision dated 2026-03-30)
+- `https://huggingface.co/docs/hub/en/models-gated` — `auto` vs manual gate approval semantics
 
 **ComfyUI core**
 - `https://github.com/Comfy-Org/ComfyUI/releases/tag/v0.32.0` — "Add support for LTX 2.5" (PR #15499), min torch 2.7
