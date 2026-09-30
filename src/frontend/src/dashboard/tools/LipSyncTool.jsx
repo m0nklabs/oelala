@@ -1,7 +1,7 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
-  Video, Upload, Play, Pause, Download, Loader2, X,
-  FileAudio, FileVideo, Volume2, Trash2, Sliders
+  Video, Upload, Download, Loader2, X,
+  FileAudio, FileVideo, Trash2, Sliders
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm, postJson } from '../../api'
@@ -14,7 +14,7 @@ const SUPPORTED_AUDIO_FORMATS = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/
 
 const LS_DEFAULTS = { lipsExpression: 1.5, inferenceSteps: 20, seed: -1 }
 
-export default function LipSyncTool({ onOutput, onJobSubmitted }) {
+export default function LipSyncTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('lip_sync', LS_DEFAULTS)
 

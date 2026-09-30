@@ -52,7 +52,7 @@ const getMediaUrl = (url, signedUrl = null) => {
         fullUrl += (fullUrl.includes('?') ? '&' : '?') + `token=${token}`
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore localStorage access errors
   }
 

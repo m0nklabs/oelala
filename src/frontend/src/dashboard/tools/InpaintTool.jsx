@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Paintbrush, Eraser, Undo2, Redo2, Loader2, Upload, Wand2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
@@ -21,7 +21,7 @@ const INPAINT_DEFAULTS = {
   showAdvanced: false, zoom: 1,
 }
 
-export default function InpaintTool({ onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
+export default function InpaintTool({ onOutput: _onOutput, onJobSubmitted, pendingImport, onImportConsumed }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('inpaint', INPAINT_DEFAULTS)
 

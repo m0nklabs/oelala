@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { X, Wand2, Image as ImageIcon, FileText, Settings2 } from 'lucide-react'
 import './MediaImportModal.css'
 

@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { Frame, Upload, Loader2, Download, Copy, Move, ChevronDown } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { Frame, Upload, Loader2, Download, Move, ChevronDown } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, getJson, apiFetch } from '../../api'
+import { postForm, apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
@@ -577,7 +577,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
                 setFile(null)
                 setPreview(null)
                 setResult(null)
-                const blob = apiFetch(result.url).then(r => r.blob()).then(b => {
+                const _blob = apiFetch(result.url).then(r => r.blob()).then(b => {
                   const f = new File([b], 'reframed.png', { type: 'image/png' })
                   setFile(f)
                   setPreview(result.url)

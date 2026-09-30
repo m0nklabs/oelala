@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Clock, Loader2, TrendingUp } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../config'
 
@@ -162,7 +162,6 @@ export default function ProgressTracker({ promptId, onComplete }) {
   const isRunning = jobStatus.status === 'running'
   const isQueued = jobStatus.status === 'queued' || jobStatus.status === 'pending'
   const isCompleted = jobStatus.status === 'completed'
-  const isFailed = jobStatus.status === 'failed'
   const isCloud = jobStatus.compute_target === 'cloud'
 
   return (

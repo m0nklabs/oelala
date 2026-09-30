@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react'
-import { Wand2, Loader2, Check, X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Wand2, Loader2, Check, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import { apiFetch } from '../api'
 import { DEBUG } from '../config'
 
@@ -21,7 +21,7 @@ export default function AISuggestPanel({
   fps = 16,
   duration = 5,
   loras = [],             // [{high, low, strength}]
-  availableLoras = {},     // {high_noise: [], low_noise: [], general: []}
+  _availableLoras = {},    // {high_noise: [], low_noise: [], general: []}
   onApply,                 // ({prompt, negativePrompt, loras, steps, cfg, fps, resolution}) => void
 }) {
   const [loading, setLoading] = useState(false)

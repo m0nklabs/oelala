@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback, lazy, Suspense } from 'react'
 import { Download, CheckCircle, XCircle, Settings2, ChevronUp, Menu, X, Loader2, PanelRightClose, PanelRight } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import Sidebar from './Sidebar'
@@ -43,7 +43,6 @@ const APIKeysTool = lazy(() => import('./tools/APIKeysTool'))
 const ProfileTool = lazy(() => import('./tools/ProfileTool'))
 const UserProfilePage = lazy(() => import('../pages/UserProfilePage'))
 import LogViewer from '../components/LogViewer'
-import { sendClientLog } from '../logging'
 
 // Loading fallback component
 function ToolLoader() {
@@ -539,17 +538,18 @@ export default function Dashboard() {
         {/* User Profile overlay */}
         {viewingProfile ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {wrapWithSuspense(
+            {/* wrapWithSuspense is scoped to renderControls(); wrap inline here */}
+            <Suspense fallback={<ToolLoader />}>
               <UserProfilePage
                 userId={viewingProfile}
                 onBack={() => setViewingProfile(null)}
-                onOpenItem={(item) => {
+                onOpenItem={(_item) => {
                   // Return to gallery and open the item
                   setViewingProfile(null)
                   setActiveToolId(TOOL_IDS.GALLERY)
                 }}
               />
-            )}
+            </Suspense>
           </div>
         ) : /* Full-width layout for My Media tools and Gallery */
         (activeToolId === TOOL_IDS.MY_MEDIA_ALL ||

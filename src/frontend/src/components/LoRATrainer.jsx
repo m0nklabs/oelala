@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import BACKEND_BASE from '../config'
 import { postForm } from '../api'
-import { Upload, Play, Download, Loader, BookOpen } from 'lucide-react'
+import { Upload, Play, Loader, BookOpen } from 'lucide-react'
 import './LoRATrainer.css'
 
 function LoRATrainer() {
@@ -50,7 +50,7 @@ function LoRATrainer() {
     setTrainingStatus(null)
 
     const formData = new FormData()
-    selectedFiles.forEach((file, index) => {
+    selectedFiles.forEach((file) => {
       formData.append(`files`, file)
     })
     formData.append('model_name', modelName)

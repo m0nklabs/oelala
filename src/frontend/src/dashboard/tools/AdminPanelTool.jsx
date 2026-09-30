@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { BACKEND_BASE } from '../../config'
 import { apiFetch } from '../../api'
 import {
   Users, Search, Coins, Shield, Crown,

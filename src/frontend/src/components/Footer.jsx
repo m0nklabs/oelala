@@ -3,8 +3,6 @@
  * Compact legal links bar
  */
 
-import React from 'react'
-
 export default function Footer({ onShowLegal }) {
   return (
     <footer

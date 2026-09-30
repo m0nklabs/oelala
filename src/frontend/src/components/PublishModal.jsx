@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { X, Upload, Tag, AlertCircle } from 'lucide-react'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'
@@ -83,13 +83,13 @@ export default function PublishModal({ mediaItem, onClose, onPublished }) {
           } else if (errorData?.message) {
             message = errorData.message
           }
-        } catch (_parseErr) {
+        } catch {
           try {
             const text = await response.text()
             if (text && text.trim()) {
               message = text
             }
-          } catch (_textErr) {
+          } catch {
             // Use default message
           }
         }

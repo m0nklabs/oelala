@@ -3,7 +3,7 @@
  * Shown when user tries to generate but doesn't have enough credits
  */
 
-import React, { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { AlertCircle, Coins, X } from 'lucide-react'
 
 export default function InsufficientCreditsModal({

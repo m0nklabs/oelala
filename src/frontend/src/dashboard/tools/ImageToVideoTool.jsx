@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, Film, Type, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, Info, ChevronDown, Layers, FileSearch, Sliders, Clock, HelpCircle, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Upload, X, Settings2, Image as ImageIcon, Link, FolderOpen, Sparkles, ChevronDown, Layers, Sliders, Clock, Wand2, Loader2, Save, Check, Grid, Trash2, Pencil } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { BACKEND_BASE, DEBUG, STORAGE_BASE, getMediaUrl } from '../../config'
-import { apiFetch, uploadUserMedia, getUserMediaUrl } from '../../api'
+import { apiFetch, uploadUserMedia } from '../../api'
 import useGeneration from '../../hooks/useGeneration'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { sendClientLog } from '../../logging'
@@ -104,6 +104,8 @@ const getI2VComputeTarget = (modelMode) => (
 const sanitizeFilename = (value, fallback = 'image.png') => {
   const raw = String(value || fallback)
   const basename = raw.split(/[\\/]/).pop() || fallback
+  // Control chars are intentionally matched: they are stripped from filenames.
+  // eslint-disable-next-line no-control-regex
   const sanitized = basename.replace(/[<>:"|?*\u0000-\u001F]/g, '_').slice(0, 180)
   return sanitized || fallback
 }
@@ -225,7 +227,7 @@ const I2V_DEFAULT_SETTINGS = {
   sourceImageName: null,
 }
 
-export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
+export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefreshHistory, onCreationsModeChange, onParamsChange, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { nsfwEnabled } = useNSFW()
   const { user, requestLogin } = useAuth()
   const fileInputRef = useRef(null)
@@ -271,7 +273,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   }, [])
 
   const {
-    settings: profileSettings,
+    settings: _profileSettings,
     updateSettings: updateProfile,
     saveAs: saveProfileAs,
     profiles: profileList,
@@ -308,7 +310,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   const [resolution, setResolution] = useState('480p')
   const [modelMode, setModelMode] = useState('wan2.2')  // default to Wan2.2 for quality
   const [modelVersion, setModelVersion] = useState('v2')
-  const [usePose, setUsePose] = useState(false)
+  const [usePose] = useState(false)
   const [computeTarget, setComputeTarget] = useState('local')
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [fps, setFps] = useState(16)
@@ -451,14 +453,14 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
   // Preset mode
   const [usePresets, setUsePresets] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState(null)
-  const [presetParameters, setPresetParameters] = useState({})
+  const [, setPresetParameters] = useState({})
 
-  const [busy, setBusy] = useState(false)
+  const [busy] = useState(false)
   const [error, setError] = useState('')
-  const { generate, loading } = useGeneration()
+  const { generate, loading: _loading } = useGeneration()
 
   // Selected creation from MyMediaTool picker
-  const [selectedCreation, setSelectedCreation] = useState(null)
+  const [, setSelectedCreation] = useState(null)
 
   const canSubmit = useMemo(() => !!file && !busy, [file, busy])
 
@@ -814,7 +816,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
             setImportModal({ item, workflow: workflowData })
           }
         }
-      } catch (_) { /* no metadata — silently skip */ }
+      } catch { /* no metadata — silently skip */ }
     } catch (e) {
       setError('Failed to load selected image')
       console.error('Error selecting creation:', e)
@@ -1819,7 +1821,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory, onCreatio
                   })
                   const data = await res.json()
                   if (data.positive_prompt) setPrompt(data.positive_prompt)
-                  if (data.negative_prompt) setNegPrompt(data.negative_prompt)
+                  if (data.negative_prompt) setNegativePrompt(data.negative_prompt)
                 } catch (e) {
                   console.error('Extract metadata failed:', e)
                 }

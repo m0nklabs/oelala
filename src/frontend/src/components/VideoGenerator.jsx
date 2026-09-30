@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import BACKEND_BASE, { getMediaUrl } from '../config'
 import { postForm } from '../api'
 import { Upload, Play, Download, Loader, FileText, Image, Sliders } from 'lucide-react'

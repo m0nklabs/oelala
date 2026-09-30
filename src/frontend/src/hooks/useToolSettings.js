@@ -35,7 +35,6 @@ export function useToolSettings(toolName, defaults) {
 
   // Load from localStorage on first render — merged with defaults so new
   // fields added later are automatically picked up.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const initial = useMemo(() => {
     try {
       const raw = localStorage.getItem(key)
@@ -45,7 +44,7 @@ export function useToolSettings(toolName, defaults) {
       }
     } catch { /* corrupt data — ignore */ }
     return { ...defaults }
-  }, []) // intentionally empty — only on mount
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally empty, mount-only read // intentionally empty — only on mount
 
   const debounceRef = useRef(null)
 

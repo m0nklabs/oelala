@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, ZoomIn, X, Loader2, Image as ImageIcon, Video, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Upload, ZoomIn, X, Loader2, Sparkles } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { DEBUG } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'

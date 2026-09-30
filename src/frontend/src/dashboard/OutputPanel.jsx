@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useRef } from 'react'
-import { BACKEND_BASE, getMediaUrl } from '../config'
+import { useMemo, useState } from 'react'
+import { getMediaUrl } from '../config'
 import { useVideoHistory } from './useVideoHistory'
-import { Download, ExternalLink, History, Film, X, RefreshCw, Check, Image as ImageIcon, Clock } from 'lucide-react'
+import { Download, ExternalLink, History, Film, X, Clock } from 'lucide-react'
 
 function formatDuration(seconds) {
   const mins = Math.floor(seconds / 60)

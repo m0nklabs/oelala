@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "h3_scene_vocab.json"
 
@@ -136,6 +137,96 @@ def scene_from_picks(
     )
     scene["picked_by"] = "llm"
     return scene
+
+
+# Alternative keys the picker model answers with instead of the vocabulary ids:
+# the friendlier label from the prompt ("lighting", "her clothes", "story
+# wrapper") or a close variant. Keys are normalized via _normalize_pick_key.
+_PICK_KEY_ALIASES = {
+    # vocabulary ids, case/spacing tolerant
+    "place": "place",
+    "placelight": "placeLight",
+    "place_light": "placeLight",
+    "clothes": "clothes",
+    "mood": "mood",
+    "stylepack": "stylePack",
+    "style_pack": "stylePack",
+    "sceneformat": "sceneFormat",
+    "scene_format": "sceneFormat",
+    # scene/label variants seen from the model
+    "light": "placeLight",
+    "lighting": "placeLight",
+    "clothing": "clothes",
+    "her_clothes": "clothes",
+    "outfit": "clothes",
+    "wardrobe": "clothes",
+    "vibe": "mood",
+    "atmosphere": "mood",
+    "style": "stylePack",
+    "camera_style": "stylePack",
+    "camera_format_style": "stylePack",
+    "format": "sceneFormat",
+    "wrapper": "sceneFormat",
+    "story_wrapper": "sceneFormat",
+}
+
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+
+def _normalize_pick_key(key: str) -> str:
+    """Fold a key to its comparable form: lowercase, non-alnum runs to '_'."""
+    return re.sub(r"[^a-z0-9]+", "_", key.strip().lower()).strip("_")
+
+
+def _picks_from_object(candidate: Any) -> Optional[Dict[str, str]]:
+    """Keep known scene keys from a decoded object, mapped to vocabulary ids.
+
+    Values must be non-empty strings; unknown keys and other types are dropped.
+    """
+    if not isinstance(candidate, dict):
+        return None
+    picks: Dict[str, str] = {}
+    for raw_key, raw_value in candidate.items():
+        if not isinstance(raw_key, str) or not isinstance(raw_value, str):
+            continue
+        dimension = _PICK_KEY_ALIASES.get(_normalize_pick_key(raw_key))
+        value = raw_value.strip()
+        if dimension and value:
+            picks[dimension] = value
+    return picks or None
+
+
+def _scan_json_objects(text: str) -> Iterator[dict]:
+    """Yield dicts from a tolerant right-to-left scan for parseable JSON."""
+    decoder = json.JSONDecoder()
+    for index in range(len(text) - 1, -1, -1):
+        if text[index] != "{":
+            continue
+        try:
+            candidate, _end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict):
+            yield candidate
+
+
+def parse_scene_picks(text: Optional[str]) -> Optional[Dict[str, str]]:
+    """Extract creative-mode picks from a raw picker answer.
+
+    Tolerant by design: the JSON may sit after reasoning prose or inside a
+    ```json fence, and the model may answer with scene labels instead of the
+    vocabulary ids (mapped back). Returns picks keyed by PICK_DIMENSIONS ids
+    with non-empty string values, or None when nothing usable was found.
+    """
+    if not text or "{" not in text:
+        return None
+    fenced = [match.group(1) for match in _FENCE_RE.finditer(text)]
+    for source in [text] + fenced:
+        for candidate in _scan_json_objects(source):
+            picks = _picks_from_object(candidate)
+            if picks:
+                return picks
+    return None
 
 
 def roll_scene(

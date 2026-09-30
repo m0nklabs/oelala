@@ -137,7 +137,7 @@ export async function postForm(url, formData, headers = {}) {
   let data
   try {
     data = text ? JSON.parse(text) : null
-  } catch (e) {
+  } catch {
     // Fallback: return raw text when JSON parsing fails
     data = text
   }
@@ -180,7 +180,7 @@ export async function getJson(url) {
   try {
     const data = text ? JSON.parse(text) : null
     return { ok: res.ok, status: res.status, data }
-  } catch (e) {
+  } catch {
     return { ok: res.ok, status: res.status, data: text }
   }
 }
@@ -218,7 +218,7 @@ export async function postJson(url, body = {}) {
     }
 
     return { ok: res.ok, status: res.status, data }
-  } catch (e) {
+  } catch {
     return { ok: res.ok, status: res.status, data: text }
   }
 }

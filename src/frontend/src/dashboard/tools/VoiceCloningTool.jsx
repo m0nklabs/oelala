@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   Mic, Upload, Play, Pause, Download, Loader2, X,
   FileAudio, Volume2, Trash2, Check
@@ -24,7 +24,7 @@ const F5_MODELS = [
 
 const VC_DEFAULTS = { text: '', model: 'F5v1', speed: 1.0 }
 
-export default function VoiceCloningTool({ onOutput, onJobSubmitted }) {
+export default function VoiceCloningTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('voice_cloning', VC_DEFAULTS)
 

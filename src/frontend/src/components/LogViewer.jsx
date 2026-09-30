@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Terminal, X, Maximize2, Minimize2, Wifi, WifiOff } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 
@@ -54,7 +54,7 @@ export default function LogViewer() {
           // Keep last 500 logs to prevent memory bloat
           return newLogs.slice(-500)
         })
-      } catch (e) {
+      } catch {
         // Silently ignore parse errors
       }
     }

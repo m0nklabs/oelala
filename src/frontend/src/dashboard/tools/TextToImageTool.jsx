@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { Settings2, Image as ImageIcon, Info, ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { ChevronDown, Wand2, Loader2, Sparkles } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'

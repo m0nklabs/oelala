@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { BACKEND_BASE } from '../../config'
 import { apiFetch } from '../../api'
 import {
   Cpu, HardDrive, Server, Activity,
-  RefreshCw, Thermometer, MemoryStick,
+  RefreshCw, Thermometer,
   FileText, AlertCircle, CheckCircle,
   Clock, XCircle
 } from 'lucide-react'
@@ -33,7 +32,7 @@ export default function AdminSystemTab() {
   const [editedOllamaModel, setEditedOllamaModel] = useState('')
 
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(null)
+  const [, setError] = useState(null)
 
   // Fetch all system data
   const fetchSystemData = useCallback(async () => {
@@ -482,7 +481,7 @@ function StatCard({ label, value, color }) {
 // Queue Tab
 // =============================================================================
 
-function QueueTab({ queueData, onRefresh }) {
+function QueueTab({ queueData, onRefresh: _onRefresh }) {
   if (!queueData) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -603,7 +602,7 @@ function JobCard({ job, status }) {
 // Logs Tab
 // =============================================================================
 
-function LogsTab({ logsData, selectedService, onServiceChange, onRefresh }) {
+function LogsTab({ logsData, selectedService, onServiceChange, onRefresh: _onRefresh }) {
   const services = ['oelala-backend', 'comfyui', 'minio', 'oelala-frontend']
 
   return (

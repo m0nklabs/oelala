@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
 import { Loader2, X } from 'lucide-react'
 
 const MyMediaTool = lazy(() => import('../dashboard/tools/MyMediaTool'))

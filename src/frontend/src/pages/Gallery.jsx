@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Filter, Image as ImageIcon, Video, RefreshCw, Eye, Heart, Check, Download, CheckSquare, Square, X as XIcon } from 'lucide-react'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'
@@ -323,7 +323,7 @@ export default function Gallery({ onRemix = null, onViewProfile = null }) {
     const url = new URL(window.location.href)
     url.searchParams.delete('openItem')
     window.history.replaceState({}, '', url.toString())
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false)

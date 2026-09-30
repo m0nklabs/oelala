@@ -19,6 +19,7 @@ from generation.prompt_scene import (  # noqa: E402
     artifact_lock,
     foley_guard,
     load_vocab,
+    parse_scene_picks,
     roll_scene,
     scene_brief,
     stage_arc,
@@ -183,6 +184,95 @@ def test_scene_from_picks_survives_empty_picks():
 
     scene = scene_from_picks({}, seed=9, duration_s=5.0)
     assert scene["place"] and scene["shots"]
+
+
+# ── Creative-mode picker answer parsing ──────────────────────────────────────
+
+
+def test_parse_scene_picks_plain_json():
+    picks = parse_scene_picks('{"place": "rooftop at night", "mood": "eager"}')
+    assert picks == {"place": "rooftop at night", "mood": "eager"}
+
+
+def test_parse_scene_picks_after_reasoning_inside_fence():
+    """The thinking model wraps its answer in prose and a ```json fence."""
+    text = (
+        "Thinking Process:\n\n1. Analyze the idea...\n2. Choose options...\n\n"
+        "Here is my answer:\n"
+        "```json\n"
+        "{\n"
+        '  "place": "rooftop at night",\n'
+        '  "placeLight": "cheap neon / sign spill",\n'
+        '  "clothes": "open robe",\n'
+        '  "mood": "eager",\n'
+        '  "stylePack": "phone selfie",\n'
+        '  "sceneFormat": "paid webcam"\n'
+        "}\n"
+        "```\n"
+        "That covers every category."
+    )
+    picks = parse_scene_picks(text)
+    assert picks == {
+        "place": "rooftop at night",
+        "placeLight": "cheap neon / sign spill",
+        "clothes": "open robe",
+        "mood": "eager",
+        "stylePack": "phone selfie",
+        "sceneFormat": "paid webcam",
+    }
+
+
+def test_parse_scene_picks_maps_scene_keys_back():
+    """Answers keyed by the friendly labels land on the vocabulary ids."""
+    text = json.dumps(
+        {
+            "place": "rooftop at night",
+            "lighting": "warm lamps",
+            "her clothes": "open robe",
+            "mood": "eager",
+            "camera/format style": "phone selfie",
+            "story wrapper": "paid webcam",
+        }
+    )
+    picks = parse_scene_picks(text)
+    assert set(picks) == {"place", "placeLight", "clothes", "mood", "stylePack", "sceneFormat"}
+    assert picks["placeLight"] == "warm lamps"
+    assert picks["clothes"] == "open robe"
+    assert picks["stylePack"] == "phone selfie"
+    assert picks["sceneFormat"] == "paid webcam"
+
+
+def test_parse_scene_picks_is_tolerant_of_key_noise():
+    """Case, spacing and underscores in ids must not break the mapping."""
+    picks = parse_scene_picks(
+        '{"Place": "bed", "PLACE_LIGHT": "daylight, window", "Scene Format": "paid webcam"}'
+    )
+    assert picks == {
+        "place": "bed",
+        "placeLight": "daylight, window",
+        "sceneFormat": "paid webcam",
+    }
+
+
+def test_parse_scene_picks_rejects_unusable_answers():
+    assert parse_scene_picks("") is None
+    assert parse_scene_picks("no json here at all") is None
+    assert parse_scene_picks('{"idea": "x", "notes": "y"}') is None
+    # non-string / empty values are dropped, usable ones survive
+    picks = parse_scene_picks('{"place": "bed", "shots": 3, "mood": ""}')
+    assert picks == {"place": "bed"}
+    # a complete answer wins over a later truncated one
+    text = '{"place": "bed"} trailing junk {"mood": "eager", "clothes": "robe'
+    assert parse_scene_picks(text) == {"place": "bed"}
+
+
+def test_picker_wiring_uses_the_pure_parser():
+    """The live picker must parse through parse_scene_picks, with fallbacks."""
+    source = (PROJECT_ROOT / "src" / "backend" / "app.py").read_text(encoding="utf-8")
+    assert "parse_scene_picks(content)" in source
+    assert "reasoning_content" in source, "picker must also scan the thinking field"
+    assert "Scene picker gave no usable JSON" in source, "failure needs a greppable warning"
+    assert "_SCENE_PICK_TIMEOUT_S" in source
 
 
 def test_prompt_requests_accept_the_new_controls():

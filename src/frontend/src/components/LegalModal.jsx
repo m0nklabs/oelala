@@ -3,8 +3,8 @@
  * Displays Privacy Policy, Terms of Service, or DMCA Policy
  */
 
-import React, { useState, useEffect } from 'react'
-import { X, Shield, FileText, Scale, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Shield, FileText, Scale } from 'lucide-react'
 
 // Legal content embedded as constants
 // In production, you might fetch these from markdown files or an API

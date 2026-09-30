@@ -3,7 +3,7 @@
  * Manages user credit balance and purchase flow
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import { apiFetch } from '../api'
 import { DEBUG } from '../config'

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   User, Users, Upload, Loader2, Download, AlertCircle,
   Smile, RefreshCw, Trash2, Plus, Check, Image as ImageIcon,
@@ -110,7 +110,7 @@ const FACESWAP_DEFAULTS = {
   sourceMode: 'upload', swapAllFaces: false, faceIndex: 0,
 }
 
-function SwapPanel({ user, requestLogin, onJobSubmitted, pendingImport, onImportConsumed }) {
+function SwapPanel({ user, requestLogin, onJobSubmitted: _onJobSubmitted, pendingImport, onImportConsumed }) {
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('face_swap', FACESWAP_DEFAULTS)
   const [sourceMode, setSourceMode] = useState(initial.sourceMode) // 'upload' | 'profile'
   const [profiles, setProfiles] = useState([])

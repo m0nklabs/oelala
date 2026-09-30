@@ -1,7 +1,6 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react'
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { Volume2, Music, Mic, Loader2, Play, Pause, Download, Settings, ChevronDown } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
-import { postForm } from '../../api'
+import { DEBUG } from '../../config'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import useGeneration from '../../hooks/useGeneration'
@@ -40,7 +39,7 @@ const AUDIO_DEFAULTS = {
   duration: 10, speed: 1.0, pitch: 1.0,
 }
 
-export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
+export default function AudioGenerationTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('audio_generation', AUDIO_DEFAULTS)
 
@@ -57,7 +56,7 @@ export default function AudioGenerationTool({ onOutput, onJobSubmitted }) {
 
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)   // Track last queued job
-  const [result, setResult] = useState(null)
+  const [result] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
 
   const { generate, loading: submitting } = useGeneration({

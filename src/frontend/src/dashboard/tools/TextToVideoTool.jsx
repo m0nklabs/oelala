@@ -1,10 +1,9 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { useMemo, useState, useEffect, useCallback } from 'react'
+import { DEBUG } from '../../config'
 import {  apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNSFW } from '../../contexts/NSFWContext'
-import { sendClientLog } from '../../logging'
-import { Settings, Wand2, Loader2, Video, ChevronDown, Sparkles, Clock, Cpu, Zap, Pencil, Settings2, Save, Check, X, Layers, HelpCircle, Sliders, Dice5 } from 'lucide-react'
+import { Settings, Wand2, Loader2, ChevronDown, Sparkles, Clock, Zap, Pencil, Settings2, Save, Check, X, Layers, HelpCircle, Dice5 } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import { getDefaultPrompt, getRandomPrompt } from '../../data/defaultPrompts'
@@ -199,7 +198,7 @@ const RANDOM_T2V_BEST_SETTINGS = {
   postInterpolateFps: 60,
 }
 
-export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
+export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory: _onRefreshHistory, onJobSubmitted, pendingImport = null, onImportConsumed = null }) {
   const { user, requestLogin } = useAuth()
   const { nsfwEnabled } = useNSFW()
 
@@ -235,7 +234,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   }, [])
 
   const {
-    settings: profileSettings,
+    settings: _profileSettings,
     updateSettings: updateProfile,
     saveAs: saveProfileAs,
     profiles: profileList,
@@ -313,7 +312,7 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
     onError: (err) => setError(err)
   })
 
-  const [availableModels, setAvailableModels] = useState({})
+  const [, setAvailableModels] = useState({})
 
   // LoRA state - multi-LoRA with individual strengths
   const [availableLoras, setAvailableLoras] = useState({ high_noise: [], low_noise: [], general: [] })
@@ -560,7 +559,6 @@ export default function TextToVideoTool({ onOutput, onRefreshHistory, onJobSubmi
   const canSubmit = useMemo(() => prompt.trim().length > 0 && !submitting && !isRandomGenerating, [prompt, submitting, isRandomGenerating])
 
   // Calculate estimated generation time
-  const numFrames = duration * fps
   const timeEstimate = useMemo(() => {
     return estimateT2VTime({ resolution, numFrames: duration * fps, steps, t2iSteps })
   }, [resolution, duration, fps, steps, t2iSteps])

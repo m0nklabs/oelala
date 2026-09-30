@@ -1,4 +1,3 @@
-import React from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { X } from 'lucide-react'
 import './LoginModal.css'

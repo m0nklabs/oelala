@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, Video, Loader2, Settings, ChevronDown, Wand2 } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
-import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
-import { postForm, apiFetch } from '../../api'
+import { DEBUG, getMediaUrl } from '../../config'
+import { apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import useGeneration from '../../hooks/useGeneration'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -38,7 +38,7 @@ const V2V_DEFAULTS = {
   denoise: 0.5, fps: 8, maxFrames: 32, steps: 20, cfg: 7.5, seed: -1,
 }
 
-export default function VideoToVideoTool({ onOutput, onJobSubmitted }) {
+export default function VideoToVideoTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('video_to_video', V2V_DEFAULTS)
 

@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
-import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil, ChevronDown, RotateCcw, Search, Volume2, MessageCircle, Video, Plus, X, Sparkles } from 'lucide-react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil, ChevronDown, RotateCcw, Search, Video, Plus, X, Sparkles } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'

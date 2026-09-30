@@ -1,13 +1,12 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
-import { Type, Image as ImageIcon, Film, ArrowRight, Sparkles } from 'lucide-react'
-import { BACKEND_BASE } from '../../config'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Image as ImageIcon, Film, Sparkles } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
 const T2I2V_DEFAULTS = { t2iPrompt: '', aspectRatio: '16:9', i2vPrompt: '', numFrames: 16 }
 
-export default function TextToImageToVideoTool({ onOutput }) {
+export default function TextToImageToVideoTool({ onOutput: _onOutput }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('t2i2v', T2I2V_DEFAULTS)
 
@@ -15,7 +14,7 @@ export default function TextToImageToVideoTool({ onOutput }) {
   const [t2iPrompt, setT2iPrompt] = useState(initial.t2iPrompt)
   const [aspectRatio, setAspectRatio] = useState(initial.aspectRatio)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
-  const [generatedImage, setGeneratedImage] = useState(null)
+  const [generatedImage] = useState(null)
 
   // Step 2: Image to Video
   const [i2vPrompt, setI2vPrompt] = useState(initial.i2vPrompt)

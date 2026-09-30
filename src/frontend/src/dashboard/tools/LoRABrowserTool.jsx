@@ -1,4 +1,3 @@
-import React from 'react'
 import LoraBrowser from '../../components/LoraBrowser'
 
 /**

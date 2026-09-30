@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase, isAuthEnabled } from '../lib/supabase'
 import { BACKEND_BASE } from '../config'
 

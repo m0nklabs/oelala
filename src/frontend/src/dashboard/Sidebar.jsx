@@ -1,6 +1,5 @@
-import React from 'react'
 import { NAV_GROUPS } from './nav'
-import { ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 // Emoji icons for reliable cross-browser display

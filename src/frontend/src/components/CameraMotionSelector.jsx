@@ -1,4 +1,3 @@
-import React from 'react'
 import { ChevronDown } from 'lucide-react'
 
 // Camera motion presets for Wan2.2 video generation

@@ -4,7 +4,7 @@
  * Stores verification in localStorage; cleared on logout.
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { ShieldCheck, AlertTriangle, X } from 'lucide-react'
 import './AgeVerificationModal.css'
 

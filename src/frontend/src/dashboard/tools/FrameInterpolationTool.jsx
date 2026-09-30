@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { Upload, Zap, Loader2, Settings, ChevronDown } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Upload, Zap, Loader2 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
@@ -30,7 +30,7 @@ const SLOW_MOTION_PRESETS = [
 
 const INTERP_DEFAULTS = { model: 'rife', mode: 'fps', fpsPreset: '30fps → 60fps (2x)', slowMoPreset: '2x' }
 
-export default function FrameInterpolationTool({ onOutput, onJobSubmitted }) {
+export default function FrameInterpolationTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('frame_interpolation', INTERP_DEFAULTS)
 

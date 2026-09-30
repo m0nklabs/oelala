@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, Download, FileJson, Shuffle, User, Flag, ZoomIn } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Heart, Eye, Share2, Copy, Check, AlertCircle, FileJson, Shuffle, User, Flag, ZoomIn } from 'lucide-react'
 import { BACKEND_BASE } from '../config'
 import { apiFetch } from '../api'
 import { useAuth } from '../contexts/AuthContext'
@@ -41,7 +41,7 @@ export default function MediaDetailModal({ item, onClose, onRemix = null, onView
       }
     }
     fetchFresh()
-  }, [item.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [item.id])
 
   // Download workflow JSON from media file via backend API
   const handleDownloadWorkflow = async () => {

@@ -6,7 +6,7 @@
  *   label    — optional tooltip text (default: "Reset to defaults")
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 
 export default function ResetDefaultsButton({ onReset, label = 'Reset to defaults' }) {

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Clock, Play, Loader2, X, CheckCircle, RefreshCw, Brain, AlertTriangle } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Clock, Loader2, X, CheckCircle, RefreshCw, Brain, AlertTriangle } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../config'
 import { apiFetch } from '../api'
 import ProgressTracker from './ProgressTracker'
@@ -40,7 +40,7 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
       const res = await apiFetch(`/comfyui/job/${promptId}`)
       if (!res.ok) return null
       return await res.json()
-    } catch (e) {
+    } catch {
       return null
     }
   }, [])
@@ -67,7 +67,7 @@ export default function QueueIndicator({ onJobComplete, refreshToken }) {
     let cancelled = false
 
     // Detect jobs that were running but disappeared from the queue (completed between polls)
-    const prevIds = new Set(prevRunningRef.current.map(j => j.prompt_id))
+    const _prevIds = new Set(prevRunningRef.current.map(j => j.prompt_id))
     const currIds = new Set(queue.running.map(j => j.prompt_id))
     const disappeared = prevRunningRef.current.filter(j => !currIds.has(j.prompt_id))
     prevRunningRef.current = [...queue.running]

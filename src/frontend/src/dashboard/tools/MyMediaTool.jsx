@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video, Wand2, ChevronDown, Folder, FolderInput } from 'lucide-react'
+import { RefreshCw, Download, X, ChevronLeft, ChevronRight, Trash2, Check, FileJson, Image as ImageIcon, Heart, ArrowUpDown, Filter, HelpCircle, Clock, MessageCircle, Copy, Search, Upload, Video, Wand2, ChevronDown, Folder } from 'lucide-react'
 import { BACKEND_BASE, getMediaUrl } from '../../config'
 import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
 
@@ -17,7 +17,7 @@ const fetchMediaWorkflow = async (apiFetch, item) => {
       const json = await res.json()
       return parseComfyWorkflow(json.workflow || json.metadata || {})
     }
-  } catch (_) { /* no metadata in user bucket */ }
+  } catch { /* no metadata in user bucket */ }
   // Fallback: local ComfyUI output dir (older local-only items)
   try {
     const res = await apiFetch(`/comfyui-metadata/${item.filename}`)
@@ -25,14 +25,13 @@ const fetchMediaWorkflow = async (apiFetch, item) => {
       const json = await res.json()
       return parseComfyWorkflow(json.metadata || {})
     }
-  } catch (_) { /* no metadata */ }
+  } catch { /* no metadata */ }
   return {}
 }
 
-import { listUserMedia, listUnifiedMedia, deleteUserMedia, apiFetch } from '../../api'
+import { listUnifiedMedia, deleteUserMedia, apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import PublishModal from '../../components/PublishModal'
-import { getAccessToken } from '../../api'
 import { getMediaType } from '../../utils/mediaUtils'
 
 // Lazy loading media component - only loads when in viewport
@@ -312,7 +311,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   const gridSize = profileSettings.cols
   const [showHelp, setShowHelp] = useState(false)
   const [visibleCount, setVisibleCount] = useState(100)
-  const [thumbHeight, setThumbHeight] = useState(320)
+  const [, setThumbHeight] = useState(320)
   const [videoDurations, setVideoDurations] = useState({}) // filename -> duration in seconds
   const [mediaResolutions, setMediaResolutions] = useState({}) // filename -> { w, h }
   const containerRef = useRef(null)
@@ -444,16 +443,18 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
         case 'size':
           comparison = (a.size || 0) - (b.size || 0)
           break
-        case 'favorites':
+        case 'favorites': {
           const aFav = favorites.has(a.filename) ? 1 : 0
           const bFav = favorites.has(b.filename) ? 1 : 0
           comparison = aFav - bFav // Lower = non-fav, higher = fav
           break
-        case 'non-favorites':
+        }
+        case 'non-favorites': {
           const aNotFav = favorites.has(a.filename) ? 0 : 1
           const bNotFav = favorites.has(b.filename) ? 0 : 1
           comparison = aNotFav - bNotFav // Lower = fav, higher = non-fav
           break
+        }
         case 'date':
         default:
           comparison = (a.mtime || 0) - (b.mtime || 0) // Lower = older, higher = newer
@@ -2344,7 +2345,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                             let workflowData = {}
                             try {
                               workflowData = await fetchMediaWorkflow(apiFetch, item)
-                            } catch (_) { /* no metadata */ }
+                            } catch { /* no metadata */ }
                             // If only one applicable tool, send directly — no dropdown
                             if (tools.length <= 1) {
                               const target = tools[0] || SEND_TO_TOOLS[0]
@@ -2596,7 +2597,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                           let workflowData = {}
                           try {
                             workflowData = await fetchMediaWorkflow(apiFetch, selectedItem)
-                          } catch (_) { /* no metadata */ }
+                          } catch { /* no metadata */ }
                           onSendToTool(tools[0].id, { item: selectedItem, workflow: workflowData })
                           setSelectedIndex(null)
                         } finally {
@@ -2641,7 +2642,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
                               let workflowData = {}
                               try {
                                 workflowData = await fetchMediaWorkflow(apiFetch, selectedItem)
-                              } catch (_) { /* no metadata, that's fine */ }
+                              } catch { /* no metadata, that's fine */ }
                               onSendToTool(tool.id, { item: selectedItem, workflow: workflowData })
                               setSelectedIndex(null)
                             } finally {

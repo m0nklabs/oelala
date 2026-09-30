@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { Search, RefreshCw, Filter, X, ChevronDown, ChevronUp, Layers, HardDrive, Tag } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Search, RefreshCw, Filter, X, Layers, HardDrive } from 'lucide-react'
 import { apiFetch } from '../api'
 
 /**

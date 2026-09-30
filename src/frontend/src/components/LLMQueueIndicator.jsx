@@ -1,5 +1,3 @@
-import React from 'react'
-
 /**
  * Small inline indicator showing LLM queue position.
  * Shows "Queue #N" when waiting, "Processing..." when active.

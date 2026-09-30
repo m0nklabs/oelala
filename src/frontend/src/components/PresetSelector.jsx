@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Settings, ChevronDown, ChevronUp, Sliders, Sparkles, Zap, Film } from 'lucide-react'
 import BACKEND_BASE from '../config'
 import './PresetSelector.css'
@@ -9,7 +9,7 @@ import './PresetSelector.css'
  * Presets are workflow configurations that can be loaded to customize
  * video generation parameters like steps, CFG, seed, dimensions, etc.
  */
-function PresetSelector({ onPresetChange, onParametersChange, currentParameters }) {
+function PresetSelector({ onPresetChange, onParametersChange, _currentParameters }) {
   const [presets, setPresets] = useState([])
   const [selectedPreset, setSelectedPreset] = useState(null)
   const [parameters, setParameters] = useState({})

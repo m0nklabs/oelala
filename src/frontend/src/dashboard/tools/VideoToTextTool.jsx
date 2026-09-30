@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, Video, FileText, Loader2, Copy, Check, Settings, ChevronDown, Link, Youtube, Download } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, postJson, apiFetch } from '../../api'

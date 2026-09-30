@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { User, UserPlus, UserMinus, ArrowLeft, Heart, Eye, Image as ImageIcon } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { User, UserPlus, UserMinus, ArrowLeft, Heart, Eye } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { apiFetch } from '../api'
 import { BACKEND_BASE } from '../config'

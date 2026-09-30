@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
-  Video, Upload, Play, Pause, Download, Loader2, X,
+  Video, Loader2, X,
   MessageSquare, Volume2, Mic, Settings2, ChevronDown
 } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
@@ -30,7 +30,7 @@ const VOICE_PRESETS = [
 
 const S2V_DEFAULTS = { text: '', ttsModel: 'f5v1', voicePreset: 'nova', lipsExpression: 1.5, inferenceSteps: 20, showAdvanced: false }
 
-export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
+export default function SpeechToVideoTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('speech_to_video', S2V_DEFAULTS)
 
@@ -53,7 +53,7 @@ export default function SpeechToVideoTool({ onOutput, onJobSubmitted }) {
   // UI state
   const [showAdvanced, setShowAdvanced] = useState(initial.showAdvanced)
   const [submitting, setSubmitting] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [, setUploading] = useState(false)
   const [currentStep, setCurrentStep] = useState(null)
   const [error, setError] = useState(null)
   const [lastQueued, setLastQueued] = useState(null)

@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { BACKEND_BASE } from '../../config'
 import { apiFetch } from '../../api'
 import {
   Key, Plus, Copy, Trash2, Eye, EyeOff,
@@ -12,7 +11,7 @@ import {
  * Allows users to create, view, and revoke their API keys
  */
 export default function APIKeysTool() {
-  const { session, user } = useAuth()
+  const { session } = useAuth()
   const [loading, setLoading] = useState(true)
   const [keys, setKeys] = useState([])
   const [error, setError] = useState(null)

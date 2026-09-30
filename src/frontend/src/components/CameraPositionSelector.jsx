@@ -1,4 +1,3 @@
-import React from 'react'
 import { ChevronDown } from 'lucide-react'
 
 // Camera position/angle presets for T2I image generation

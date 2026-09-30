@@ -8727,6 +8727,24 @@ DEFAULT_H3_NSFW_ADDENDUM = """
 NSFW INTENSITY MODE (level {level}/5): write the scene at this explicitness — {level_desc}. Keep the H3-Context-IR format intact: explicit actions belong in the integrated_multimodal_description (with matching sounds in overall_soundscape); never break the three-section structure."""
 
 
+# Creative-mode picker tuning. The H3 prompt model is a thinking model (its
+# reasoning alone can run 3-4.5k completion tokens and successful picker calls
+# measured 67-290 s), so the shortlists stay small and the timeout generous —
+# the main generation call already allows 600 s. Not env-configurable on
+# purpose: both keep the picker inside the model's reliable-instruction window
+# and below the user-visible patience budget.
+_SCENE_PICK_SHORTLIST_SIZE = 8
+_SCENE_PICK_TIMEOUT_S = 300.0
+
+# Example used only to pin the exact JSON answer shape (values are real
+# vocabulary labels so the model cannot claim they were invalid).
+_SCENE_PICK_EXAMPLE = (
+    '{"place": "bedroom, rumpled bed", "placeLight": "warm lamps", '
+    '"clothes": "tee and jeans, closed", "mood": "calm", '
+    '"stylePack": "homemade handheld", "sceneFormat": "lost bet / dare"}'
+)
+
+
 async def _pick_scene_values(
     idea: str, model: str, style_context: str
 ) -> Optional[dict]:
@@ -8736,23 +8754,28 @@ async def _pick_scene_values(
     wardrobe, mood, style and story wrapper, guided by the user's idea. Returns a
     dict keyed by vocabulary dimension, or None when the answer is unusable.
     """
-    from generation.prompt_scene import PICK_DIMENSIONS, load_vocab, shortlist
+    from generation.prompt_scene import (
+        PICK_DIMENSIONS,
+        load_vocab,
+        parse_scene_picks,
+        shortlist,
+    )
 
     vocab = load_vocab()
     shortlists = {
-        dimension: shortlist(vocab, dimension, 12)
+        dimension: shortlist(vocab, dimension, _SCENE_PICK_SHORTLIST_SIZE)
         for dimension in PICK_DIMENSIONS
     }
     if not any(shortlists.values()):
         return None
 
     categories = "\n".join(
-        f"- {dimension} ({label}): " + " | ".join(options)
-        for dimension, (_scene_key, label), options in (
-            (dimension, PICK_DIMENSIONS[dimension], shortlists[dimension])
-            for dimension in PICK_DIMENSIONS
-            if shortlists[dimension]
-        )
+        f"- {dimension}: " + " | ".join(options)
+        for dimension, options in shortlists.items()
+        if options
+    )
+    answer_shape = json.dumps(
+        {dimension: "..." for dimension in shortlists if shortlists[dimension]}
     )
     body = {
         "model": model,
@@ -8760,50 +8783,56 @@ async def _pick_scene_values(
             {
                 "role": "system",
                 "content": (
-                    "You cast scenes for short adult video clips. Choose exactly one "
-                    "option per category, guided by the idea. Answer with strict JSON "
-                    "only, no markdown, using the category keys verbatim."
+                    "You cast one scene for a short adult video clip. From the "
+                    "lists in the user message choose exactly one option per "
+                    "category, best fit for the idea. Reply with ONLY one JSON "
+                    f"object using these exact keys: {answer_shape} — no "
+                    "markdown, no notes, values copied verbatim from the lists."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Idea: {idea}\n{style_context}\n\nCategories:\n{categories}\n\n"
-                    'Return {"' + '": "...", "'.join(shortlists.keys()) + '": "..."}'
+                    f"Idea: {idea}\n{style_context}\n\n"
+                    f"Choose one per category:\n{categories}\n\n"
+                    "Answer shape (do NOT reuse these values): "
+                    f"{_SCENE_PICK_EXAMPLE}\n"
+                    "Reply with only the JSON object."
                 ),
             },
         ],
-        "temperature": 0.9,
-        "top_p": 0.95,
+        "temperature": 0.8,
+        "top_p": 0.9,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0, headers=_guardian_headers()) as client:
+        async with httpx.AsyncClient(
+            timeout=_SCENE_PICK_TIMEOUT_S, headers=_guardian_headers()
+        ) as client:
             response = await client.post(
                 f"{GUARDIAN_BASE}/v1/chat/completions", json=body
             )
             response.raise_for_status()
-            content = response.json()["choices"][0]["message"].get("content") or ""
+            message = response.json()["choices"][0]["message"]
     except Exception as exc:  # noqa: BLE001 - creative mode is best-effort
         logger.warning(f"⚠️ Scene picker call failed: {exc}")
         return None
 
-    decoder = json.JSONDecoder()
-    for index in range(len(content) - 1, -1, -1):
-        if content[index] != "{":
-            continue
-        try:
-            candidate, _ = decoder.raw_decode(content[index:])
-        except json.JSONDecodeError:
-            continue
-        if isinstance(candidate, dict) and any(
-            key in candidate for key in PICK_DIMENSIONS
-        ):
-            return {
-                key: value
-                for key, value in candidate.items()
-                if key in PICK_DIMENSIONS and isinstance(value, str)
-            }
-    logger.warning("⚠️ Scene picker returned no usable JSON")
+    content = message.get("content") or ""
+    picks = parse_scene_picks(content)
+    if picks is None:
+        # Thinking models may leave the final answer inside the reasoning
+        # field, or never emit it in content at all.
+        picks = parse_scene_picks(message.get("reasoning_content") or "")
+    if picks:
+        missing = [key for key in PICK_DIMENSIONS if key not in picks]
+        if missing:
+            logger.info(
+                "🎲 Scene picker answered without %s; dice fills the rest",
+                ", ".join(missing),
+            )
+        return picks
+    excerpt = content.strip()[:240] or (message.get("reasoning_content") or "").strip()[-240:]
+    logger.warning("⚠️ Scene picker gave no usable JSON (excerpt): %r", excerpt)
     return None
 
 

@@ -1,4 +1,3 @@
-import React from 'react'
 import * as Sentry from '@sentry/react'
 import Dashboard from './dashboard/Dashboard'
 import { NSFWProvider } from './contexts/NSFWContext'

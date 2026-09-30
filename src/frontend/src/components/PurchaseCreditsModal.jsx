@@ -3,7 +3,7 @@
  * Shows available credit packages and handles Stripe checkout
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useCredits } from '../contexts/CreditsContext'
 import { X, Coins, Sparkles, Check, Loader2, ExternalLink } from 'lucide-react'
 

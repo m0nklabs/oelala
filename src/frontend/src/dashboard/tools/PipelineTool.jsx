@@ -1,15 +1,15 @@
-import React, { useState } from 'react'
-import { Workflow, ArrowRight, CheckCircle2, Circle, Play } from 'lucide-react'
+import { useState } from 'react'
+import { Workflow, ArrowRight, CheckCircle2, Play } from 'lucide-react'
 
 export default function PipelineTool() {
-  const [steps, setSteps] = useState([
+  const [steps] = useState([
     { id: 1, name: 'Text Generation', status: 'completed', description: 'Generate prompt from keywords' },
     { id: 2, name: 'Text to Image', status: 'ready', description: 'Create base image' },
     { id: 3, name: 'Image to Video', status: 'pending', description: 'Animate the image' },
     { id: 4, name: 'Upscale', status: 'pending', description: 'Enhance resolution' },
   ])
 
-  const [activeStep, setActiveStep] = useState(2)
+  const [activeStep] = useState(2)
 
   return (
     <div className="tool-container">

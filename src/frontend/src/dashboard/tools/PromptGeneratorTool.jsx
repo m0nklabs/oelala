@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { Sparkles, Copy, RefreshCw, Loader2, Wand2, Send, Flame } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Sparkles, Copy, Loader2, Wand2, Send, Flame } from 'lucide-react'
+import { DEBUG } from '../../config'
 import { apiFetch } from '../../api'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
@@ -40,12 +40,6 @@ const NSFW_INTENSITY_LABELS = [
   '🔞 Nude',
   '💥 Hardcore',
   '⚡ Extreme',
-]
-
-const ENHANCEMENT_MODES = [
-  { id: 'expand', label: 'Expand', description: 'Add more details and context' },
-  { id: 'refine', label: 'Refine', description: 'Improve grammar and structure' },
-  { id: 'variations', label: 'Variations', description: 'Generate 3 alternatives' },
 ]
 
 // PROMPT_LLM_MODELS imported from shared constants/llmModels.js

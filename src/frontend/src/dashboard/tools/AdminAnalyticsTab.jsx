@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { BarChart3, Users, Coins, TrendingUp, Clock, Activity, RefreshCw, Zap, HardDrive } from 'lucide-react'
-import { BACKEND_BASE, DEBUG } from '../../config'
+import { useState, useEffect, useMemo } from 'react'
+import { BarChart3, Users, Coins, TrendingUp, Activity, RefreshCw, Zap } from 'lucide-react'
 import { apiFetch } from '../../api'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
-  LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
 } from 'recharts'

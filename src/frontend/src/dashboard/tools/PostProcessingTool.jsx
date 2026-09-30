@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Upload, ZoomIn, Zap, Film, Loader2, Trash2, Plus, GripVertical, Play, Settings } from 'lucide-react'
 import { BACKEND_BASE, DEBUG } from '../../config'
 import { postForm } from '../../api'
@@ -44,7 +44,7 @@ const FPS_PRESETS = [
 
 const PP_DEFAULTS = { mode: 'upscale', upscaleModel: 'realesrgan-x4plus', upscaleScale: 2, targetFps: 60 }
 
-export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
+export default function PostProcessingTool({ onOutput: _onOutput, onJobSubmitted }) {
   const { user, requestLogin } = useAuth()
   const { initial, save: saveSettings, resetDefaults } = useToolSettings('post_processing', PP_DEFAULTS)
 
@@ -132,7 +132,7 @@ export default function PostProcessingTool({ onOutput, onJobSubmitted }) {
   }, [])
 
   // Reorder files (for concat mode)
-  const moveFile = useCallback((fromIndex, toIndex) => {
+  const _moveFile = useCallback((fromIndex, toIndex) => {
     setFiles(prev => {
       const newFiles = [...prev]
       const [removed] = newFiles.splice(fromIndex, 1)

@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { BACKEND_BASE } from '../../config'
 import { apiFetch } from '../../api'
 import {
-  Flag, Shield, Eye, EyeOff, Check, X, AlertTriangle,
+  Flag, Shield, EyeOff, Check, X, AlertTriangle,
   ChevronDown, ChevronUp, Clock, User, FileText, RefreshCw
 } from 'lucide-react'
 

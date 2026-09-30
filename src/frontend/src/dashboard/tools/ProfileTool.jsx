@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { User, Save, RefreshCw, CheckCircle, AlertCircle, Twitter, Instagram, Youtube, Github, Globe, Link2, Camera, Bell } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { BACKEND_BASE } from '../../config'
 import { apiFetch } from '../../api'
 
 /**
@@ -408,7 +407,7 @@ export default function ProfileTool() {
               Social Links
             </h3>
 
-            {socialPlatforms.map(({ key, label, icon: Icon, placeholder }) => (
+            {socialPlatforms.map(({ key, label: _label, icon: Icon, placeholder }) => (
               <div key={key} style={styles.socialRow}>
                 <Icon size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
                 <input

@@ -1,5 +1,3 @@
-import React from 'react'
-
 export default function ComingSoonTool({ title }) {
   return (
     <div className="tool-coming-soon">
