@@ -6,10 +6,8 @@ Tests the StorageClient with mocked MinIO SDK calls so they run
 without a live MinIO instance.
 """
 
-import io
 import hashlib
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 from pathlib import Path
 import sys
 
@@ -19,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "backend"))
 from storage_client import (
     StorageClient,
     _resolve_bucket,
-    _BUCKET_MAP,
     get_client,
     get_storage_client,
 )
@@ -288,7 +285,6 @@ class TestHeadAndExists:
         )
 
     def test_head_existing(self):
-        from minio.error import S3Error
 
         mock_minio = MagicMock()
         mock_stat = MagicMock()

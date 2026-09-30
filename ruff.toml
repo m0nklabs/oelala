@@ -1,8 +1,10 @@
 # Ruff configuration for oelala
 # https://docs.astral.sh/ruff/
 
-# Only check src/ directory
-include = ["src/**/*.py"]
+# Lint the code we actually edit: backend source, workers, tests and scripts.
+# tests/manual/ holds ad-hoc scratch scripts that pytest ignores.
+include = ["src/**/*.py", "deploy/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
+extend-exclude = ["tests/manual"]
 
 [lint]
 # Rules to ignore (legacy code exceptions)

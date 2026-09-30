@@ -59,12 +59,12 @@ def main():
         import psycopg2
     
     try:
-        print(f"🔌 Connecting to database...")
+        print("🔌 Connecting to database...")
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         cursor = conn.cursor()
         
-        print(f"🚀 Running migration...")
+        print("🚀 Running migration...")
         cursor.execute(sql)
         
         print("✅ Migration completed successfully!")

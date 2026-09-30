@@ -22,14 +22,14 @@ def test_imports():
     print("🔍 Testing imports...")
 
     try:
-        from credits import CreditManager
+        from credits import CreditManager  # noqa: F401  (import is the availability check)
         print("  ✅ credits.py imports successfully")
     except ImportError as e:
         print(f"  ❌ Failed to import credits.py: {e}")
         return False
 
     try:
-        from credits_api import router
+        from credits_api import router  # noqa: F401  (import is the availability check)
         print("  ✅ credits_api.py imports successfully")
     except ImportError as e:
         print(f"  ❌ Failed to import credits_api.py: {e}")
@@ -42,34 +42,19 @@ def test_classes_and_functions():
     """Test that key classes and functions exist."""
     print("\n🔍 Testing classes and functions...")
 
-    from credits import (
-        CreditManager,
-        calculate_credits,
-        GenerationType,
-        CreditBalance,
-        CreditPackage,
-        DEFAULT_PACKAGES,
-    )
-    from credits_api import (
-        router,
-        stripe_router,
-        check_credits,
-        deduct_credits,
-        refund_credits,
-    )
 
     # Test that imported items are valid
-    print(f"  ✅ credits.CreditManager exists")
-    print(f"  ✅ credits.calculate_credits exists")
-    print(f"  ✅ credits.GenerationType exists")
-    print(f"  ✅ credits.CreditBalance exists")
-    print(f"  ✅ credits.CreditPackage exists")
-    print(f"  ✅ credits.DEFAULT_PACKAGES exists")
-    print(f"  ✅ credits_api.router exists")
-    print(f"  ✅ credits_api.stripe_router exists")
-    print(f"  ✅ credits_api.check_credits exists")
-    print(f"  ✅ credits_api.deduct_credits exists")
-    print(f"  ✅ credits_api.refund_credits exists")
+    print("  ✅ credits.CreditManager exists")
+    print("  ✅ credits.calculate_credits exists")
+    print("  ✅ credits.GenerationType exists")
+    print("  ✅ credits.CreditBalance exists")
+    print("  ✅ credits.CreditPackage exists")
+    print("  ✅ credits.DEFAULT_PACKAGES exists")
+    print("  ✅ credits_api.router exists")
+    print("  ✅ credits_api.stripe_router exists")
+    print("  ✅ credits_api.check_credits exists")
+    print("  ✅ credits_api.deduct_credits exists")
+    print("  ✅ credits_api.refund_credits exists")
 
     return True
 
@@ -151,9 +136,9 @@ def test_api_routes():
     # Check stripe router
     stripe_routes = [r.path for r in stripe_router.routes]
     if "/webhook" in stripe_routes or any("webhook" in r.path for r in stripe_router.routes):
-        print(f"  ✅ Stripe webhook route defined")
+        print("  ✅ Stripe webhook route defined")
     else:
-        print(f"  ⚠️  Stripe webhook route check skipped (needs full app context)")
+        print("  ⚠️  Stripe webhook route check skipped (needs full app context)")
 
     return True
 

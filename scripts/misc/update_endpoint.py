@@ -1,4 +1,5 @@
-import os, httpx, json
+import httpx
+import json
 with open('.env') as f:
     key = [line.strip().split('=')[1].replace('"', '').replace("'", '') for line in f if line.startswith('RUNPOD_API_KEY=')][0]
 

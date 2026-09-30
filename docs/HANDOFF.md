@@ -105,6 +105,14 @@ import `app.py`, which loads `.env` and set the mirror variables).
 4. **AGENTS.md maintenance** (other repo): `guardian docs/HANDOFF.md` and
    `docs/AGENT_JOURNAL.md` are over budget — offer a batched archive-first pass.
 
+## 5b. Legacy cleanup (in progress)
+
+`docs/LEGACY.md` holds the inventory: which families are retired, what was deleted, what
+is parked and where a parked file can be fetched again. Wan 2.2 is retired — the product
+surface (adapters, UI, workflows, RunPod endpoint) is being removed and its 43.4 GB of
+local runtime weights are deleted afterwards; the ~13 GB LoRA set stays parked for a
+possible open-weight Wan 3. Local re-fetch sources are recorded there before deletion.
+
 ## 6. LLM options for the prompt generator — built
 
 All four landed (see `changelog/20261001-prompt-llm-options.md`):

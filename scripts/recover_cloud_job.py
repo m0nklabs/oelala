@@ -15,7 +15,6 @@ import asyncio
 import base64
 import os
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -179,7 +178,7 @@ async def main():
         prompt=args.prompt,
     )
 
-    print(f"\n🎉 Recovery complete!")
+    print("\n🎉 Recovery complete!")
     print(f"   Storage path : {storage_path}")
     print(f"   Supabase ID  : {record.get('id')}")
     print(f"   User         : {args.user_id}")

@@ -12,10 +12,8 @@ Options to make this work:
 Usage:
     python scripts/test_ltx2_umt5.py
 """
-import json
 import time
 import requests
-import uuid
 
 COMFYUI_URL = "http://localhost:8188"
 
@@ -180,7 +178,7 @@ def main():
     # Check ComfyUI is running
     try:
         resp = requests.get(f"{COMFYUI_URL}/system_stats", timeout=5)
-        print(f"✅ ComfyUI is running")
+        print("✅ ComfyUI is running")
     except:
         print("❌ ComfyUI is not running!")
         return

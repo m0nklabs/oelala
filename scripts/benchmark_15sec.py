@@ -312,7 +312,7 @@ def run_benchmark(config: tuple) -> dict:
             error = completion.get("error", "Unknown error")
             result["error"] = error
             if "oom" in error.lower() or "memory" in error.lower():
-                print(f"   💥 OOM ERROR")
+                print("   💥 OOM ERROR")
             else:
                 print(f"   ❌ Failed: {error[:60]}")
             
@@ -353,7 +353,7 @@ def print_summary(results: list):
     print(f"❌ Failed: {len(failed)}")
     
     if successful:
-        print(f"\n🎉 WORKING 15-SEC CONFIGURATIONS:")
+        print("\n🎉 WORKING 15-SEC CONFIGURATIONS:")
         print("-"*70)
         print(f"{'Name':<30} {'Resolution':<12} {'FPS':<6} {'Gen Time':<10}")
         print("-"*70)
@@ -370,7 +370,7 @@ def print_summary(results: list):
         print(f"   Generation time: {best.get('generation_minutes', 0):.1f} min")
     
     if failed:
-        print(f"\n❌ Failed Configurations:")
+        print("\n❌ Failed Configurations:")
         for r in failed:
             print(f"  {r['name']}: {r.get('error', '?')[:30]}")
     
@@ -381,7 +381,7 @@ def main():
     print("="*70)
     print("  15 SECOND VIDEO BENCHMARK")
     print("="*70)
-    print(f"\n🎯 Goal: Find settings for 15-second videos")
+    print("\n🎯 Goal: Find settings for 15-second videos")
     print(f"📋 Configurations: {len(BENCHMARK_CONFIGS)}")
     print(f"🖼️  Image: {SFW_IMAGE}")
     print()

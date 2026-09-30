@@ -15,7 +15,6 @@ Models:
 """
 
 import base64
-import io
 import json
 import logging
 import os
@@ -26,7 +25,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import requests
 import runpod
@@ -243,6 +242,33 @@ def _find_cached_model(filename: str) -> Optional[Path]:
     return None
 
 
+def _hf_local_dir(hf_path: str, target: Path) -> Path:
+    """Pick the local_dir that lands the download exactly on *target*.
+
+    hf_hub_download writes to ``local_dir/<hf_path>``. Passing the target's own
+    directory while hf_path already repeats that folder (``split_files/...``)
+    nests the file one level too deep and forces a move afterwards, so a path
+    with a directory component downloads into the models root instead.
+    """
+    if "/" in hf_path:
+        return Path(COMFYUI_PATH) / "models"
+    return target.parent
+
+
+def _prune_empty_parents(start: Path, stop: Path) -> None:
+    """Remove empty directories left behind by a moved download."""
+    current = start
+    stop = stop.resolve()
+    while current.exists() and current.resolve() != stop:
+        try:
+            if any(current.iterdir()):
+                return
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
+
+
 def download_model(model: Dict[str, Any]) -> bool:
     """Download a single model file from HuggingFace Hub."""
     filename = model["filename"]
@@ -307,10 +333,11 @@ def download_model(model: Dict[str, Any]) -> bool:
     try:
         from huggingface_hub import hf_hub_download
 
+        local_dir = _hf_local_dir(hf_path, target)
         kwargs = {
             "repo_id": repo,
             "filename": hf_path,
-            "local_dir": str(target.parent),
+            "local_dir": str(local_dir),
             "local_dir_use_symlinks": False,
         }
         if HF_TOKEN:
@@ -318,13 +345,15 @@ def download_model(model: Dict[str, Any]) -> bool:
 
         downloaded_path = hf_hub_download(**kwargs)
 
-        # hf_hub_download may put it in a subdir — move it
+        # A repo path that carries its own folder structure can still land
+        # beside the target — move it and clean up the empty parents.
         downloaded = Path(downloaded_path)
         if downloaded != target and downloaded.exists():
             if not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(downloaded), str(target))
                 logger.info(f"📂 Moved {downloaded} → {target}")
+                _prune_empty_parents(downloaded.parent, Path(COMFYUI_PATH) / "models")
 
         if target.exists() and target.stat().st_size > 1_000_000:
             logger.info(f"✅ Downloaded: {target_dir}/{filename}")

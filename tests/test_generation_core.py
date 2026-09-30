@@ -615,7 +615,6 @@ class TestLoraUtils:
         assert len(result) == 0
 
     def test_filter_compat_with_mock(self):
-        from generation.lora_utils import filter_loras_by_model_compat
 
         configs = [
             {"name": "wan22_lora.safetensors", "strength": 1.0},
@@ -636,7 +635,6 @@ class TestLoraUtils:
         assert result[0]["name"] == "wan22_lora.safetensors"
 
     def test_filter_compat_generic_passes(self):
-        from generation.lora_utils import filter_loras_by_model_compat
 
         configs = [{"name": "generic_lora.safetensors", "strength": 1.0}]
 

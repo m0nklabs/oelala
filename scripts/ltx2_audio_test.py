@@ -15,7 +15,6 @@ import json
 import requests
 import time
 import uuid
-import os
 
 COMFYUI_URL = "http://localhost:8188"
 
@@ -240,7 +239,7 @@ def main():
     
     print("🎬 LTX-2 Audio+Video Test")
     print(f"📝 Prompt: {prompt}")
-    print(f"📦 Model: ltx-2-19b-dev-Q4_K_M.gguf (12GB with audio support)")
+    print("📦 Model: ltx-2-19b-dev-Q4_K_M.gguf (12GB with audio support)")
     print()
     
     # Create workflow

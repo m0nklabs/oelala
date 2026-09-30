@@ -357,7 +357,7 @@ def print_summary(results: list):
     print(f"❌ Failed: {len(failed)} (OOM: {len(oom)})")
     
     if successful:
-        print(f"\n📊 Successful Configurations:")
+        print("\n📊 Successful Configurations:")
         print("-"*70)
         print(f"{'Name':<25} {'Resolution':<12} {'Video':<8} {'Gen Time':<10} {'MP/s':<8}")
         print("-"*70)
@@ -369,7 +369,7 @@ def print_summary(results: list):
             print(f"{r['name']:<25} {r['width']}x{r['height']:<5} {video_dur:>5.1f}s   {gen_min:>6.1f}min   {mps:>6.3f}")
     
     if failed:
-        print(f"\n❌ Failed Configurations:")
+        print("\n❌ Failed Configurations:")
         print("-"*70)
         for r in failed:
             error_short = r.get("error", "?")[:40]

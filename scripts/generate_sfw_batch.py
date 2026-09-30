@@ -15,7 +15,6 @@ Usage:
 
 import argparse
 import json
-import random
 import requests
 import time
 import shutil
@@ -235,7 +234,6 @@ def create_t2i_workflow(prompt: str, seed: int, prefix: str) -> dict:
 
 def create_i2v_workflow(image_filename: str, animation_prompt: str, seed: int, prefix: str) -> dict:
     """Load and customize the working I2V workflow with DisTorch2 + LoRAs."""
-    import copy
     
     # Load the working workflow template
     workflow_path = Path("/home/flip/oelala/workflows/ImageToVideo/sfw_i2v_distorch2_api.json")
@@ -331,7 +329,7 @@ def generate_single(index: int, dry_run: bool = False) -> dict:
     shutil.copy(src, dst)
     
     # Step 2: I2V
-    print(f"  🎬 I2V: animating...", end=" ", flush=True)
+    print("  🎬 I2V: animating...", end=" ", flush=True)
     i2v_start = time.time()
     i2v_workflow = create_i2v_workflow(files[0], animation, seed, f"{prefix}_i2v")
     success, _, files = queue_and_wait(i2v_workflow, timeout=600)
@@ -387,7 +385,7 @@ def main():
         if result["success"]:
             print(f"  ✅ Total: {result['t2i_time'] + result['i2v_time']:.0f}s")
         else:
-            print(f"  ❌ Failed")
+            print("  ❌ Failed")
     
     # Summary
     elapsed = time.time() - start_time
