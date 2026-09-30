@@ -89,18 +89,15 @@ const snapH3Frames = (n) => {
   return f
 }
 
-// T2V Model modes (aligned with I2V MODEL_MODES format)
+// T2V Model modes (aligned with I2V MODEL_MODES format). MiniMax-H3 leads,
+// LTX-2.3 is the second choice.
 const MODEL_MODES = [
-  { value: 'cloud_wan22', label: '☁️ Cloud Wan22 — bf16 Full Precision', desc: 'Cloud GPU • bf16 unquantized • 15 steps • Maximum quality' },
-  { value: 'wan22', label: '🎬 Wan2.2 14B Q6 DisTorch2', desc: 'High quality dual-pass T2V via ComfyUI' },
-  { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
   { value: 'minimax_h3', label: '🎥 MiniMax H3 — Cloud Video+Audio', desc: '24fps cloud T2V with native stereo audio (80GB+ GPU)' },
   { value: 'minimax_h3_local', label: '🪟 MiniMax H3 — Lokaal (Windows PC)', desc: '24fps lokal op je Windows-PC ComfyUI met native stereo audio' },
+  { value: 'ltx2', label: '⚡ LTX-2.3 22B Distilled', desc: 'Fast 8-step cloud generation (80GB GPU)' },
 ]
 
 const T2V_ADAPTER_BY_MODE = {
-  wan22: 'wan22-local-t2v-q6',
-  cloud_wan22: 'wan22-cloud-t2v',
   ltx2: 'ltx23-cloud-t2v',
   minimax_h3: 'minimax-h3-cloud-t2v',
   minimax_h3_local: 'minimax-h3-local-t2v',
@@ -112,18 +109,22 @@ const T2V_ADAPTER_BY_MODE = {
 const H3_MODES = new Set(['minimax_h3', 'minimax_h3_local'])
 const isH3Mode = (m) => H3_MODES.has(m)
 
-const T2V_CLOUD_ONLY_MODES = new Set(['cloud_wan22', 'ltx2', 'minimax_h3'])
+const T2V_CLOUD_ONLY_MODES = new Set(['ltx2', 'minimax_h3'])
+
+// Model modes retired together with the Wan 2.2 family; saved profiles may
+// still carry one of these values and are coerced to MiniMax-H3 on restore.
+const RETIRED_WAN22_MODES = new Set(['wan22', 'cloud_wan22'])
 
 const getT2VComputeTarget = (modelType) => (
   T2V_CLOUD_ONLY_MODES.has(modelType) ? 'cloud' : 'local'
 )
 
-const getT2VAdapterHint = (modelType) => T2V_ADAPTER_BY_MODE[modelType] || T2V_ADAPTER_BY_MODE.wan22
+const getT2VAdapterHint = (modelType) => T2V_ADAPTER_BY_MODE[modelType] || T2V_ADAPTER_BY_MODE.minimax_h3
 
 const T2V_DEFAULTS = {
   prompt: '',
   negativePrompt: 'blurry, low quality, distorted, ugly, artifacts, overexposed, underexposed, flickering, jitter',
-  modelType: 'wan22',
+  modelType: 'minimax_h3',
   duration: 5,
   aspectRatio: '9:16',
   resolution: '480p',
@@ -144,8 +145,6 @@ const T2V_DEFAULTS = {
   postInterpolate: false,
   postInterpolateFps: 60,
   loraConfigs: [],
-  unetHighNoise: 'wan2.2_t2v_14B_Q6_K.gguf',
-  unetLowNoise: '',
   extendMode: false,
   clipCount: 1,
 }
@@ -178,18 +177,16 @@ const RANDOM_T2V_RECIPES = [
 ]
 
 const RANDOM_T2V_BEST_SETTINGS = {
-  modelType: 'cloud_wan22',
+  modelType: 'minimax_h3',
   duration: 5,
   resolution: '720p',
-  fps: 16,
+  fps: 24,
   cameraMotion: '',
-  steps: 25,
-  cfg: 3.0,
+  steps: 8,
+  cfg: 1.0,
   seed: -1,
   computeTarget: 'cloud',
   loraConfigs: [],
-  unetHighNoise: 'wan2.2_t2v_14B_Q6_K.gguf',
-  unetLowNoise: '',
   extendMode: false,
   clipCount: 1,
   postUpscale: false,
@@ -208,7 +205,8 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
     if (s.negativePrompt !== undefined) setNegativePrompt(s.negativePrompt)
     if (s.duration !== undefined) setDuration(s.duration)
     if (s.resolution) setResolution(s.resolution)
-    if (s.modelType) setModelType(s.modelType)
+    // Retired Wan 2.2 mode values from old profiles fall back to MiniMax-H3
+    if (s.modelType) setModelType(RETIRED_WAN22_MODES.has(s.modelType) ? 'minimax_h3' : s.modelType)
     if (s.aspectRatio) setAspectRatio(s.aspectRatio)
     if (s.fps !== undefined) setFps(s.fps)
     if (s.h3Quality) setH3Quality(s.h3Quality)
@@ -223,8 +221,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
     if (s.enhanceModel) setEnhanceModel(s.enhanceModel)
     if (s.computeTarget) setComputeTarget(s.computeTarget)
     if (s.loraConfigs !== undefined) setLoraConfigs(s.loraConfigs)
-    if (s.unetHighNoise) setUnetHighNoise(s.unetHighNoise)
-    if (s.unetLowNoise !== undefined) setUnetLowNoise(s.unetLowNoise)
     if (s.extendMode !== undefined) setExtendMode(s.extendMode)
     if (s.clipCount !== undefined) setClipCount(s.clipCount)
     if (s.postUpscale !== undefined) setPostUpscale(s.postUpscale)
@@ -256,7 +252,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
   const [negativePrompt, setNegativePrompt] = useState(T2V_DEFAULTS.negativePrompt)
   const [showNegativePrompt, setShowNegativePrompt] = useState(false)
   const [showPromptTips, setShowPromptTips] = useState(false)
-  const [modelType, setModelType] = useState('wan22')
+  const [modelType, setModelType] = useState('minimax_h3')
   const [duration, setDuration] = useState(5) // seconds, 3-30 range
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [resolution, setResolution] = useState('480p')
@@ -319,12 +315,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
   const [loraConfigs, setLoraConfigs] = useState([])
   const [showLoraPanel, setShowLoraPanel] = useState(false)
 
-  // Unet model state
-  const [availableUnets, setAvailableUnets] = useState({ high_noise: [], low_noise: [], pairs: [] })
-  const [unetHighNoise, setUnetHighNoise] = useState('wan2.2_t2v_14B_Q6_K.gguf')
-  const [unetLowNoise, setUnetLowNoise] = useState('')
-  const [showUnetPanel, setShowUnetPanel] = useState(false)
-
   // Extend Duration - Sequential clip generation
   const [extendMode, setExtendMode] = useState(false)
   const [clipCount, setClipCount] = useState(1)
@@ -368,15 +358,10 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
     setImportModal(null)
   }
 
-  // Cloud Wan22 T2V times out on the current RunPod profile once pixel-frame count
-  // gets too high, so cap duration more aggressively than local presets.
+  // Max duration: MiniMax-H3 is capped to its trained frame range, other
+  // models follow the resolution preset limits.
   const maxDuration = useMemo(() => {
     if (isH3Mode(modelType)) return 15 // 362f @24fps ≈ 15.1s — trained range ~124–362
-    if (modelType === 'cloud_wan22') {
-      if (resolution === '720p') return 5
-      if (resolution === '576p') return 8
-      if (resolution === '480p') return 12
-    }
     const preset = RESOLUTION_PRESETS[resolution]
     return preset?.max_duration || 30
   }, [modelType, resolution])
@@ -438,7 +423,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
       return items
     }
     // Model-type category filter: LTX only sees ltx/, MiniMax-H3 only sees
-    // minimax-h3/, Wan sees everything else
+    // minimax-h3/
     const isLtx = modelType === 'ltx2'
     const isH3 = H3_MODES.has(modelType)
     const categoryFilter = (cat) => isLtx ? cat === 'ltx' : isH3 ? cat === 'minimax-h3' : cat !== 'ltx'
@@ -463,23 +448,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
   // (Wan2.2 uses dual high/low noise slots instead)
   const isSingleStageLora = modelType === 'ltx2' || H3_MODES.has(modelType)
 
-  // Fetch available unet models on mount
-  useEffect(() => {
-    const fetchUnets = async () => {
-      try {
-        const res = await apiFetch('/unet-models')
-        if (res.ok) {
-          const data = await res.json()
-          setAvailableUnets(data)
-          if (DEBUG) console.debug('🐛 T2V loaded Unet models:', data.count)
-        }
-      } catch (e) {
-        console.error('Failed to fetch Unet models:', e)
-      }
-    }
-    fetchUnets()
-  }, [])
-
   const handlePromptChange = (value) => {
     setPrompt(value)
   }
@@ -488,13 +456,13 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
   const settingsSnapshot = useMemo(() => ({
     prompt, negativePrompt, modelType, duration, aspectRatio, resolution,
     fps, h3Quality, cameraMotion, enhanceModel, steps, cfg, seed, t2iSteps, t2iCfg,
-    computeTarget, loraConfigs, unetHighNoise, unetLowNoise,
+    computeTarget, loraConfigs,
     extendMode, clipCount,
     postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
   }), [
     prompt, negativePrompt, modelType, duration, aspectRatio, resolution,
     fps, h3Quality, cameraMotion, enhanceModel, steps, cfg, seed, t2iSteps, t2iCfg,
-    computeTarget, loraConfigs, unetHighNoise, unetLowNoise,
+    computeTarget, loraConfigs,
     extendMode, clipCount,
     postUpscale, postUpscaleScale, postInterpolate, postInterpolateFps,
   ])
@@ -577,8 +545,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
     if (settings.seed !== undefined) setSeed(settings.seed)
     if (settings.computeTarget !== undefined) setComputeTarget(settings.computeTarget)
     if (settings.loraConfigs !== undefined) setLoraConfigs(settings.loraConfigs)
-    if (settings.unetHighNoise !== undefined) setUnetHighNoise(settings.unetHighNoise)
-    if (settings.unetLowNoise !== undefined) setUnetLowNoise(settings.unetLowNoise)
     if (settings.extendMode !== undefined) setExtendMode(settings.extendMode)
     if (settings.clipCount !== undefined) setClipCount(settings.clipCount)
     if (settings.postUpscale !== undefined) setPostUpscale(settings.postUpscale)
@@ -1020,7 +986,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
         </div>
 
         <div className="form-group">
-          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model and quality level. Cloud Wan22 uses full precision on a cloud GPU. Wan2.2 uses local dual-GPU with quantized models. LTX-2.3 is optimized for fast cinematic video on cloud GPUs." /></label>
+          <label className="grok-section-label">Generation Mode <InfoTooltip text="Choose the AI model. MiniMax-H3 generates 24 fps video with native stereo audio (cloud or local on your Windows PC). LTX-2.3 is optimized for fast cinematic video on cloud GPUs." /></label>
           <div style={{ position: 'relative' }}>
             <select
               value={modelType}
@@ -1029,27 +995,13 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
                 setModelType(newMode)
                 // Clear LoRA configs when switching model architecture (incompatible)
                 setLoraConfigs([])
-                if (newMode === 'wan22') {
-                  setResolution('480p')
-                  setAspectRatio('9:16')
-                  setDuration(5)
-                  setSteps(6)
-                  setCfg(1.0)
-                  setComputeTarget('local')
-                } else if (newMode === 'ltx2') {
+                if (newMode === 'ltx2') {
                   setResolution('576p')
                   setAspectRatio('9:16')
                   setDuration(5)
                   setSteps(8)
                   setCfg(1.0)
                   setComputeTarget('cloud')  // LTX-2.3 22B is cloud-only (80GB GPU)
-                } else if (newMode === 'cloud_wan22') {
-                  setResolution('720p')
-                  setAspectRatio('9:16')
-                  setDuration(5)
-                  setSteps(15)
-                  setCfg(3.0)
-                  setComputeTarget('cloud')
                 } else if (newMode === 'minimax_h3' || newMode === 'minimax_h3_local') {
                   setResolution('720p')  // unused for H3 — canvas comes from MP selector
                   setAspectRatio('9:16')
@@ -1083,20 +1035,9 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
           </div>
 
           {/* Model info badges */}
-          {modelType === 'cloud_wan22' ? (
-            <div className="info-badge" style={{ marginTop: '8px', borderColor: '#f472b6' }}>
-              <span style={{ fontWeight: 600 }}>Cloud Wan22 — bf16 Full Precision</span> | <span style={{ color: '#f9a8d4' }}>RunPod A6000/A40</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>Unquantized bf16 | 48GB VRAM | 25 steps | Maximum quality</div>
-              <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>~$1.22/hr | Cloud-only | Safe default: 720p 5s on current serverless worker</div>
-            </div>
-          ) : modelType === 'wan22' ? (
-            <div className="info-badge" style={{ marginTop: '8px' }}>
-              <span style={{ fontWeight: 600 }}>Wan2.2 14B Q6</span> | <span style={{ color: '#93c5fd' }}>{computeTarget === 'cloud' ? 'Cloud GPU (fp8)' : 'DisTorch2 Multi-GPU'}</span>
-              <div style={{ marginTop: '4px', opacity: 0.8 }}>{computeTarget === 'cloud' ? 'Cloud fp8 precision | RunPod GPU | All resolutions up to 30s' : 'T2I first pass + I2V animation | All resolutions up to 30s'}</div>
-            </div>
-          ) : isH3Mode(modelType) ? (
+          {isH3Mode(modelType) ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#22d3ee' }}>
-              <span style={{ fontWeight: 600 }}>🎥 MiniMax H3 — FL2VA 22B</span> | <span style={{ color: '#67e8f9' }}>{modelType === 'minimax_h3_local' ? 'Windows PC (lokaal)' : 'RunPod 80GB+ GPU'}</span>
+              <span style={{ fontWeight: 600 }}>🎥 MiniMax H3 — FL2VA (pruned int8)</span> | <span style={{ color: '#67e8f9' }}>{modelType === 'minimax_h3_local' ? 'Windows PC (lokaal)' : 'RunPod 80GB+ GPU'}</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>24 fps • native stereo audio (geen aparte audio-stap nodig) • geen negative prompt / CFG • simple/20-step</div>
               <div style={{ marginTop: '2px', opacity: 0.6, fontSize: '0.75rem' }}>Canvas: 768px short edge (cap 768×1344) — kwaliteit kies je via de MP-selector • tot ~15s per clip</div>
             </div>
@@ -1129,13 +1070,13 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
               <button
                 type="button"
                 onClick={() => setComputeTarget('cloud')}
-                disabled={modelType === 'wan22' || modelType === 'minimax_h3_local'}
+                disabled={modelType === 'minimax_h3_local'}
                 style={{
                   padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: '1px solid',
                   borderColor: computeTarget === 'cloud' ? '#10b981' : 'var(--border-color, #333)',
                   background: computeTarget === 'cloud' ? '#10b981' : 'transparent',
                   color: computeTarget === 'cloud' ? '#fff' : 'var(--text-secondary, #888)',
-                  cursor: (modelType === 'wan22' || modelType === 'minimax_h3_local') ? 'not-allowed' : 'pointer', opacity: (modelType === 'wan22' || modelType === 'minimax_h3_local') ? 0.4 : 1, transition: 'all 0.15s ease',
+                  cursor: (modelType === 'minimax_h3_local') ? 'not-allowed' : 'pointer', opacity: (modelType === 'minimax_h3_local') ? 0.4 : 1, transition: 'all 0.15s ease',
                 }}
               >
                 Cloud
@@ -1146,85 +1087,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
             )}
           </div>
         </div>
-
-        {/* Unet Model Selection - Only for Wan2.2 */}
-        {modelType === 'wan22' && (
-          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
-            <div
-              onClick={() => setShowUnetPanel(!showUnetPanel)}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '4px 0' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Settings2 size={16} />
-                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Unet Model</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  ({unetHighNoise.replace('.gguf', '').replace('wan2.2_', '')})
-                </span>
-              </div>
-              <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>{showUnetPanel ? '▼' : '▶'}</span>
-            </div>
-
-            {showUnetPanel && (
-              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {/* Model Pair Selector */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                    Model Pair (recommended)
-                  </label>
-                  <select
-                    onChange={(e) => {
-                      const pair = availableUnets.pairs?.find(p => p.name === e.target.value)
-                      if (pair) {
-                        setUnetHighNoise(pair.high.path)
-                        setUnetLowNoise(pair.low?.path || '')
-                      }
-                    }}
-                    style={{
-                      width: '100%', padding: '8px 12px', backgroundColor: 'var(--bg-secondary)',
-                      border: '1px solid var(--border-color)', borderRadius: '6px',
-                      color: 'var(--text-primary)', fontSize: '0.85rem'
-                    }}
-                    value={availableUnets.pairs?.find(p => p.high.path === unetHighNoise)?.name || ''}
-                  >
-                    {availableUnets.pairs?.map((pair) => (
-                      <option key={pair.name} value={pair.name}>
-                        {pair.name} ({pair.high.size_gb}GB)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <details style={{ fontSize: '0.8rem' }}>
-                  <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    Advanced: Select model separately
-                  </summary>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                        T2V Model
-                      </label>
-                      <select
-                        value={unetHighNoise}
-                        onChange={(e) => setUnetHighNoise(e.target.value)}
-                        style={{
-                          width: '100%', padding: '8px 12px', backgroundColor: 'var(--bg-secondary)',
-                          border: '1px solid var(--border-color)', borderRadius: '6px',
-                          color: 'var(--text-primary)', fontSize: '0.85rem'
-                        }}
-                      >
-                        {availableUnets.high_noise?.map((model) => (
-                          <option key={model.path} value={model.path}>
-                            {model.name} ({model.size_gb}GB)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Prompt Card */}
@@ -1775,20 +1637,6 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
                 </div>
               </div>
             </div>
-
-            {/* T2I settings (only for Wan2.2 which does T2I→I2V) */}
-            {modelType === 'wan22' && (
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="grok-section-label">T2I Steps <InfoTooltip text="Steps for the initial text-to-image phase (Wan2.2 generates an image first, then animates it). Higher = better starting image. 20 recommended." /></label>
-                  <input className="form-input" type="number" value={t2iSteps} onChange={(e) => setT2iSteps(parseInt(e.target.value) || 20)} min="1" max="50" />
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="grok-section-label">T2I CFG <InfoTooltip text="Classifier-Free Guidance for the text-to-image phase. Controls how strictly the initial image follows your prompt. 6.0 is a good default." /></label>
-                  <input className="form-input" type="number" value={t2iCfg} onChange={(e) => setT2iCfg(parseFloat(e.target.value) || 6.0)} min="1" max="20" step="0.5" />
-                </div>
-              </div>
-            )}
 
             {/* LoRA Settings — MiniMax-H3 (cloud + local) and LTX use single-stage
                 LoRAs; the cloud worker downloads them, the local H3 adapter

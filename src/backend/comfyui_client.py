@@ -4425,7 +4425,7 @@ class ComfyUIClient:
         model_variant: str = "official",
     ) -> Optional[Dict[str, Any]]:
         """
-        Build MiniMax-H3 22B Cloud T2V workflow — text-to-video+audio.
+        Build MiniMax-H3 (full DiT ~33B; we run the ~21B pruned int8) Cloud T2V workflow — text-to-video+audio.
 
         Matches Comfy-Org's official MiniMax-H3 template (simple/20-step
         schedule, res_multistep sampler, BasicGuider — no negative prompt).
@@ -4489,7 +4489,7 @@ class ComfyUIClient:
         model_variant: str = "official",
     ) -> Optional[Dict[str, Any]]:
         """
-        Build MiniMax-H3 22B Cloud I2V workflow — image-to-video+audio.
+        Build MiniMax-H3 (full DiT ~33B; we run the ~21B pruned int8) Cloud I2V workflow — image-to-video+audio.
 
         Uses the same FL2VA checkpoint as T2V: the input image is anchored
         as the first keyframe of the video (MiniMaxH3ImageToVideo.first_frame).

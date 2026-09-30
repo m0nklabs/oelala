@@ -1535,7 +1535,7 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
             </div>
           ) : isH3Mode(modelMode) ? (
             <div className="info-badge" style={{ marginTop: '8px', borderColor: '#22d3ee' }}>
-              <span style={{ fontWeight: 600 }}>🎥 MiniMax H3 — FL2VA 22B</span> • <span style={{ color: '#67e8f9' }}>{modelMode === 'minimax_h3_local' ? 'Windows PC (lokaal)' : 'RunPod 80GB+ GPU'}</span>
+              <span style={{ fontWeight: 600 }}>🎥 MiniMax H3 — FL2VA (pruned int8)</span> • <span style={{ color: '#67e8f9' }}>{modelMode === 'minimax_h3_local' ? 'Windows PC (lokaal)' : 'RunPod 80GB+ GPU'}</span>
               <div style={{ marginTop: '4px', opacity: 0.8 }}>
                 24 fps • native stereo audio (geen aparte audio-stap nodig) • geen negative prompt / CFG • simple/20-step
               </div>

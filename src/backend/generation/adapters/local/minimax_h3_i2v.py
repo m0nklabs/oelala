@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 class MiniMaxH3LocalI2VAdapter(GenerationAdapter):
     """
-    MiniMax-H3 22B Image-to-Video on the Windows PC ComfyUI.
+    MiniMax-H3 (full DiT ~33B; we run the ~21B pruned int8) Image-to-Video on the Windows PC ComfyUI.
 
     Same FL2VA checkpoint as T2V; the input image becomes the first keyframe.
     24 fps, 17k+5 frame grid. Audio is generated unconditionally.

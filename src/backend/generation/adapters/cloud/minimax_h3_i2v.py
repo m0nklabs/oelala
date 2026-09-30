@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class MiniMaxH3CloudI2VAdapter(GenerationAdapter):
     """
-    MiniMax-H3 22B Image-to-Video on RunPod (80GB+ GPU).
+    MiniMax-H3 (full DiT ~33B; we run the ~21B pruned int8) Image-to-Video on RunPod (80GB+ GPU).
 
     Same FL2VA checkpoint as T2V; the input image becomes the first
     keyframe. 24 fps, 17k+5 frame grid. Audio is generated unconditionally.

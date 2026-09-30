@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class MiniMaxH3CloudT2VAdapter(GenerationAdapter):
     """
-    MiniMax-H3 22B Text-to-Video on RunPod (80GB+ GPU).
+    MiniMax-H3 (full DiT ~33B; we run the ~21B pruned int8) Text-to-Video on RunPod (80GB+ GPU).
 
     Joint video+audio DiT. 24 fps, 17k+5 frame grid (~5s at 124 frames).
     int8+convrot diffusion checkpoint + nvfp4 Qwen3-VL-32B text encoder.
