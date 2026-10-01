@@ -3,6 +3,8 @@
 > **Last Updated:** 2026-01-16
 > **Hardware:** RTX 5060 Ti 16GB (cuda:1) + RTX 3060 12GB (cuda:0) = 28GB Total VRAM
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01. DisTorch2 itself is still the local multi-GPU mechanism and the technique below still applies, but every measurement in this document was taken on the retired family, so the numbers are a historical record rather than current guidance. See `docs/LEGACY.md`.
+
 ## Overview
 
 DisTorch2 is a multi-GPU model distribution system for ComfyUI that allows splitting large models across multiple GPUs and optionally CPU RAM. This document describes the optimal settings discovered through extensive testing.
@@ -70,7 +72,7 @@ cuda:1,8gb;cpu,*                 # 8GB on GPU0, rest on CPU (single GPU + offloa
 
 ## Optimal Settings for This Hardware
 
-### Wan2.2 14B Q6_K Model (~11.5GB)
+### Wan2.2 14B Q6_K Model (~11.5GB) — retired family, historical example
 
 #### Maximum Video Length (480p Portrait)
 
@@ -307,7 +309,7 @@ Based on tested 480p limits, extrapolated for other resolutions:
 ```
 VRAM_needed ≈ base_vram + (pixels × frames × constant)
 
-For Wan2.2 14B Q6_K:
+For Wan2.2 14B Q6_K (retired family — historical example):
 - Base VRAM (model): ~11.5GB
 - Per-frame overhead: ~50MB at 480p
 - Scaling: quadratic with resolution

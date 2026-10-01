@@ -10,19 +10,22 @@ How to add, test, and document AI generation on oelala.
 
 ## Multi-GPU (DisTorch2)
 - Allocation string: `cuda:0,10gb;cuda:1,15gb;cpu,*` with **RTX 3060 first** (cuda:0).
-- Use DisTorch2 loader nodes for Wan2.2:
+- Use DisTorch2 loader nodes for local multi-GPU workflows:
   `UnetLoaderGGUFAdvancedDisTorch2MultiGPU`, `VAELoaderDisTorch2MultiGPU`, `CLIPLoaderDisTorch2MultiGPU`.
 - Include `expert_mode_allocations` on ALL loader nodes. Check `[MultiGPU DisTorch V2]` in ComfyUI logs.
 - Full guide: `docs/DISTORCH2_MULTI_GPU_SETTINGS.md`. Model/VRAM inventory: `docs/COMFYUI_INVENTORY.md`.
 
-## VRAM budget (WAN 2.2 14B, tested)
+## VRAM budget (retired family — historical record)
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; the numbers below were measured on it and are historical, not current guidance. Current video models: **MiniMax-H3** (leading) and **LTX-2.3** (second). See `docs/LEGACY.md`.
+
 - 480×848 @ 321 frames ≈ 26GB (SAFE production max)
 - 576×1024 @ 81–121 frames ≈ 24–27GB (standard)
 - 720×1280 @ 41–61 frames ≈ 27GB (tight)
 - Always use `PatchSageAttentionKJ` to save 15–20% VRAM.
 
 ## Cloud (RunPod)
-- Cloud workers: Wan2.2, LTX-2.3, MiniMax-H3, Qwen I2I — see `.github/copilot-instructions.md` for endpoint/template IDs.
+- Cloud workers: MiniMax-H3 (leading video), LTX-2.3 (second), Qwen I2I — see `.github/copilot-instructions.md` for endpoint/template IDs.
 - Deploy with `deploy/runpod*/deploy.sh` (dated tags). NEVER `docker push :latest`.
 
 ## DOCUMENT EVERY SUCCESSFUL RUN (MANDATORY)

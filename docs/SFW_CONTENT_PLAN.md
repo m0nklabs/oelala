@@ -34,7 +34,7 @@ Estimated: ~3.5 hours (100 × 124s)
 ### Generation Method: Text-to-Image → Image-to-Video
 Since we don't have pure T2V, we'll use a 2-step pipeline:
 1. **T2I**: Generate diverse SFW images with SDXL/Flux
-2. **I2V**: Animate with Wan 2.2 14B Q6_K
+2. **I2V**: Animate with MiniMax-H3 (leading) or LTX-2.3 — the local Wan 2.2 I2V path was retired on 2026-10-01; see `docs/LEGACY.md`
 
 ### Prompt Diversity Strategy
 Use categories to ensure variety:
@@ -58,7 +58,7 @@ Use categories to ensure variety:
 |---------|------------|-------|
 | Resolution | 480p (848x480) | Balance quality/speed |
 | Frames | 41 | ~2.5 sec @ 16fps |
-| Model | Wan 2.2 14B Q6_K | Best quality available |
+| Model | MiniMax-H3 | Best quality available |
 | GPU | DisTorch2 multi-GPU | cuda:1+cuda:0 |
 
 ### SFW Prompt Template
@@ -79,6 +79,8 @@ Motion types: panning, zooming, floating, flowing, drifting, swaying
 ---
 
 ## Test Results
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
 
 ### Test 1: 2026-01-06 (Aurora Borealis)
 - **T2I Prompt**: aurora borealis over frozen lake, green and purple lights dancing, masterpiece, highly detailed, professional photography, 8k uhd, cinematic lighting, safe for work

@@ -58,6 +58,7 @@ Local disk before cleanup: **43.4 GB in 36 files**.
 | `clip/umt5-xxl-enc-bf16.safetensors` | 11.4 GB | `Comfy-Org/Wan_2.2_ComfyUI_Repackaged` (also on the public flat dump) |
 | `vae/Wan2.1_VAE.safetensors`, `vae/wan_2.1_vae.safetensors` | 0.5 GB | `Comfy-Org/Wan_2.2_ComfyUI_Repackaged` |
 | Wan2.2 LoRAs (36 files, incl. T2V/I2V high+low pairs, lightning 4-step) | ~13 GB | **Parked** — kept for a possible open-weight Wan 3, see below |
+| Runtime weights on the second model store (`/mnt/ali_nvme_500gb/comfy_models`, via `extra_model_paths.yaml`) | 149.2 GB / 36 files | `Comfy-Org/Wan_2.2_ComfyUI_Repackaged`, `QuantStack/Wan2.2-I2V-A14B-GGUF` (deleted 2026-10-01) |
 
 Catalog totals for the family were higher (288.5 GB over 41 entries) because the catalog
 also counts the cloud worker's copies and the T2V/quants that only ever existed there.
@@ -94,6 +95,13 @@ lists them; recording a source per file is the fix.
   retired family now returns HTTP 400 naming the successor models instead of failing
   silently (`RETIRED_MODEL_FAMILIES` in `generation/router.py`). See
   `changelog/20261001-retire-wan22.md`.
-- 2026-09-30 — Wan 2.2 runtime weights deleted from local disk (the two Q8_0 GGUF
-  transformers, the umt5-xxl text encoder and both Wan VAEs, ≈ 42.7 GB); the 36 Wan LoRAs
-  stay parked. Re-fetch sources are recorded in the table above.
+- 2026-10-01 — Wan 2.2 runtime weights deleted from **both** local model stores. The first
+  pass only covered the repo tree (`ComfyUI/models`, ≈ 42.7 GB: two Q8_0 GGUFs, the
+  umt5-xxl encoder, both Wan VAEs); a documentation sweep then found a second, active
+  ComfyUI model path declared in `ComfyUI/extra_model_paths.yaml` —
+  `/mnt/ali_nvme_500gb/comfy_models` — holding **149.2 GB in 36 files** (10 unet models
+  including the T2V fp8 pair, the Q6_K I2V/T2V pairs, the Lightning pair and the
+  `wan22EnhancedNSFW_V2` pair, three umt5 encoders and a Wan2.1 Lynx IP layer), plus two
+  symlinks that dangled at the files removed in the first pass. Both stores are now clean:
+  **≈ 192 GB freed** (root filesystem 94% → 89%, NVMe store 74% → 43%) and no dangling
+  symlinks remain. The 36 Wan LoRAs stay parked; re-fetch sources are in the table above.

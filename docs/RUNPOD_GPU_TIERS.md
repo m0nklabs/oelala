@@ -32,17 +32,9 @@ RunPod's API `gpuIds` field expects **architecture-tier IDs**, NOT GPU model nam
 | `BLACKWELL_96` | Blackwell | 96 GB | B200 | Next-gen |
 | `BLACKWELL_180` | Blackwell | 180 GB | GB200 / B300 | Low supply |
 
-## oelala-cloud-wan22 Endpoint Config
+## Endpoint Config
 
-**Endpoint ID**: `x2x496ymkidl3m`
-
-**Template**: `tkpy0pi8gt` with `containerDiskInGb=100`
-
-Currently configured with **48GB+ tiers only** on the active endpoint (for 20 sec / 321 frame WAN 2.2 video @ ~26GB VRAM):
-
-```
-AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180
-```
+> Current endpoint ids live in `.github/copilot-instructions.md`.
 
 ### Current Production Defaults
 
@@ -56,13 +48,12 @@ Current per-job policies from `src/backend/runpod_defaults.py`:
 
 | Endpoint | executionTimeout | TTL | Notes |
 |----------|------------------|-----|-------|
-| Wan2.2 Cloud Max | 60 min | 120 min | Long 48GB+ video jobs |
+| MiniMax-H3 | 45 min | 120 min | Leading video model, 48GB+ tiers |
 | LTX-2.3 | 45 min | 120 min | 80GB+ distilled 8-step jobs |
 | I2I/Qwen Edit | 15 min | 60 min | Image edit jobs, Lightning optional |
 
 ### Why 48GB minimum?
-- WAN 2.2 14B Q6_K at 480×848 @ 321 frames needs ~26GB VRAM
-- 24GB GPUs (3090, 4090) can't fit the model + activations for long videos
+- 24GB GPUs (3090, 4090) can't fit a large video model + activations for long videos
 - 48GB gives comfortable headroom for higher resolutions
 
 ## API Usage Example

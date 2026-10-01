@@ -123,7 +123,7 @@ Generation is split across local and cloud execution paths.
 
 Current local characteristics:
 
-- Wan 2.2 workflows for video generation
+- MiniMax-H3 workflows for video generation
 - Flux, SDXL, SD1.5, and related image-generation paths
 - dedicated endpoints for I2I, T2I, T2V, V2V, upscale, interpolation, reframe, inpaint, and face workflows
 - DisTorch2 multi-GPU distribution for large models
@@ -133,7 +133,7 @@ Current local characteristics:
 
 Current cloud characteristics:
 
-- asynchronous cloud generation for Wan 2.2 workloads
+- asynchronous cloud generation for MiniMax-H3 and LTX-2.3 workloads
 - persisted cloud job state and queue age tracking
 - worker-side LoRA download support
 - timeout handling when workers never provision

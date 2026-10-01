@@ -1,6 +1,8 @@
-# Multi-GPU Setup Guide for WAN 2.2 with ComfyUI
+# Multi-GPU Setup Guide for WAN 2.2 with ComfyUI — retired family, historical record
 
-This guide explains how to run WAN 2.2 14B across multiple GPUs using ComfyUI-MultiGPU DisTorch2.
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
+This guide explains how WAN 2.2 14B ran across multiple GPUs using ComfyUI-MultiGPU DisTorch2, which is still the local multi-GPU mechanism.
 
 ## Hardware Requirements
 - 2+ NVIDIA GPUs with combined 24GB+ VRAM

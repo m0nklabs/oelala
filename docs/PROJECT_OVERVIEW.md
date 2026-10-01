@@ -23,7 +23,7 @@
 | **Face Workflows** | IP-Adapter FaceID, FaceDetailer, GFPGAN, face swap, face LoRA training queue integration |
 | **User System** | Supabase auth, credits, Stripe, profile system, gallery publishing, likes, NSFW gating |
 | **Storage** | MinIO-backed object storage (S3 API), storage proxy routes, presigned URL support, admin MinIO health dashboard |
-| **Cloud Compute** | RunPod Cloud Max integration for Wan 2.2 T2V/I2V workloads with queue polling and persistence |
+| **Cloud Compute** | RunPod Cloud Max integration for MiniMax-H3 and LTX-2.3 T2V/I2V workloads with queue polling and persistence |
 | **Operations** | systemd services, Cloudflare tunnels, WebSocket progress, admin storage cluster dashboard |
 
 ### 🔄 Active Work
@@ -65,7 +65,7 @@
 |-----------|------------|
 | Frontend | React, Vite, tool-based dashboard UI |
 | Backend | FastAPI, Python, Supabase integration |
-| AI Engine | ComfyUI, DisTorch2, Wan 2.2, Flux, SDXL |
+| AI Engine | ComfyUI, DisTorch2, MiniMax-H3, LTX-2.3, Flux, SDXL |
 | Cloud GPU | RunPod serverless endpoint + custom worker image |
 | Storage | MinIO (S3-compatible object storage), presigned URLs, bucket lifecycle |
 | Auth | Supabase Auth (Google/GitHub OAuth + JWT) |

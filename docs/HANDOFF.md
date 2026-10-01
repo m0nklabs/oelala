@@ -15,7 +15,7 @@
 | Frontend | `oelala-frontend` (systemd, vite preview :5174) — rebuilt and restarted |
 | Local ComfyUI | `comfyui` (systemd, :8188), always-on, DisTorch2 multi-GPU |
 | H3 cloud worker | RunPod endpoint `oelala-minimax-h3`, template `fpfo4gmnrw`, image `20260930-*`, gpuIds `AMPERE_48,AMPERE_80` |
-| Other workers | `oelala-wan22`, `oelala-ltx23`, `oelala-i2i` — deployed with the same download-fallback loop |
+| Other workers | `oelala-ltx23`, `oelala-i2i` — deployed with the same download-fallback loop |
 | Model mirror (checkpoints) | **public** HF repo `bomehika/oelala-models` (5 H3 finetunes, 97.9 GB) |
 | LoRA mirrors | private `m0nk111/oelala-loras`, flat public dump `Serenak/chilloutmix` |
 
@@ -109,9 +109,12 @@ import `app.py`, which loads `.env` and set the mirror variables).
 
 `docs/LEGACY.md` holds the inventory: which families are retired, what was deleted, what
 is parked and where a parked file can be fetched again. Wan 2.2 is retired — the product
-surface (adapters, UI, workflows, RunPod endpoint) is being removed and its 43.4 GB of
-local runtime weights are deleted afterwards; the ~13 GB LoRA set stays parked for a
-possible open-weight Wan 3. Local re-fetch sources are recorded there before deletion.
+surface (adapters, UI, workflows, RunPod endpoint) has been removed and 43.4 GB of local
+runtime weights deleted. The family is not fully off disk: ~116 GB of Wan 2.2 GGUF/fp8
+weights and the umt5 encoders still sit on the ComfyUI extra model path declared in
+`ComfyUI/extra_model_paths.yaml` (two dangling `Wan2.2-I2V-A14B-*Q8_0.gguf` symlinks point
+at the deleted local files), and the ~13 GB LoRA set stays parked for a
+possible open-weight Wan 3. Local re-fetch sources are recorded there.
 
 ## 6. LLM options for the prompt generator — built
 

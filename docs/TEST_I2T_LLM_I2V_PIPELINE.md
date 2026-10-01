@@ -62,12 +62,12 @@ prompt that instructs it to:
 2. Add cinematic motion descriptions (camera movements, subject actions)
 3. Add quality boosters for video generation
 4. Keep the prompt focused and concise (under 200 tokens)
-5. Format it as a Wan2.2-optimized I2V prompt
+5. Format it as a MiniMax-H3-optimized I2V prompt
 
 **System prompt template**:
 ```
 You are a cinematic video prompt engineer. Given an image description,
-create an enhanced prompt for AI video generation (Wan2.2 model).
+create an enhanced prompt for AI video generation (MiniMax-H3 model).
 
 Rules:
 - Start with the main subject and action
@@ -80,6 +80,8 @@ Rules:
 ```
 
 ### Step 4: I2V — Image-to-Video Generation
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
 
 | Property | Value |
 |----------|-------|

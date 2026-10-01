@@ -14,7 +14,7 @@ Advanced video processing for Oelala: upscaling, frame interpolation, and I2V en
 ### 1. Image-to-Video (I2V)
 - 16 camera motion presets (pan, tilt, zoom, dolly, orbit, crane, tracking, handheld)
 - Duration: 3-15 seconds slider
-- Full WAN 2.2 integration
+- MiniMax-H3 (leading) and LTX-2.3 (second) models
 - **Frontend**: `src/frontend/src/dashboard/tools/ImageToVideoTool.jsx`
 - **Component**: `src/frontend/src/components/CameraMotionSelector.jsx`
 
@@ -37,7 +37,7 @@ Advanced video processing for Oelala: upscaling, frame interpolation, and I2V en
 ### 4. Video Extension (Template Only)
 - Extend forwards/backwards
 - Seamless loops
-- **Workflow**: `workflows/VideoExtension/extend_video_wan22.json`
+- **Workflow**: none yet — `workflows/VideoExtension/` is empty
 
 ---
 

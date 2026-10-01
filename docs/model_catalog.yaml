@@ -11,15 +11,15 @@ meta:
   - LORA_HF_MIRROR_REPO
   windows_pc_probe: unreachable during generation (marked unverified)
   counts:
-    entries: 245
+    entries: 220
     by_role:
       checkpoint: 7
-      diffusion_model: 29
+      diffusion_model: 12
       lora: 131
-      other: 48
-      text_encoder: 17
+      other: 45
+      text_encoder: 14
       upscaler: 4
-      vae: 9
+      vae: 7
     by_family:
       flux: 3
       flux2: 4
@@ -28,9 +28,8 @@ meta:
       minimax_h3: 13
       qwen_image_edit: 4
       sdxl: 20
-      unknown: 123
-      wan21: 1
-      wan22: 37
+      unknown: 118
+      wan22: 18
       wan2_2: 21
 entries:
 - filename: ToriiGate-v0.4-7B-Q6_K.gguf
@@ -444,25 +443,6 @@ entries:
   - —
   notes:
   - family unverified (no registry source, no pattern match)
-- filename: umt5-xxl-enc-bf16.safetensors
-  role: other
-  target_dir: clip
-  family: unknown
-  base_model: unknown
-  quantization: bf16
-  size_gb: 11.36
-  sources:
-    public_dump:
-      repo: Serenak/chilloutmix
-      path: umt5-xxl-enc-bf16.safetensors
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-    hf_public_dump: true
-  used_by:
-  - —
-  notes:
-  - family unverified (no registry source, no pattern match)
 - filename: clip-vit-large.safetensors
   role: other
   target_dir: clip_vision
@@ -555,22 +535,6 @@ entries:
   - 'minimax_h3 adapters: model_variant=dasiwa (non-turbo)'
   notes:
   - DaSiWa Hybrid v2 int8 non-turbo (full step count; model_variant='dasiwa')
-- filename: Wan2_1-T2V-14B-Lynx_lite_ip_layers_fp16.safetensors
-  role: diffusion_model
-  target_dir: diffusion_models
-  family: unknown
-  base_model: unknown
-  quantization: fp16
-  size_gb: 0.84
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - family unverified (no registry source, no pattern match)
 - filename: fluxedUpFluxNSFW_51FP8.safetensors
   role: diffusion_model
   target_dir: diffusion_models
@@ -3532,60 +3496,6 @@ entries:
   - —
   notes:
   - family unverified (no registry source, no pattern match)
-- filename: umt5-xxl-enc-bf16.safetensors
-  role: text_encoder
-  target_dir: text_encoders
-  family: unknown
-  base_model: unknown
-  quantization: bf16
-  size_gb: 11.37
-  sources:
-    public_dump:
-      repo: Serenak/chilloutmix
-      path: umt5-xxl-enc-bf16.safetensors
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-    hf_public_dump: true
-  used_by:
-  - —
-  notes:
-  - family unverified (no registry source, no pattern match)
-- filename: umt5_xxl_fp8_e4m3fn.safetensors
-  role: text_encoder
-  target_dir: text_encoders
-  family: unknown
-  base_model: unknown
-  quantization: fp8_e4m3fn
-  size_gb: 5.68
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - family unverified (no registry source, no pattern match)
-- filename: umt5_xxl_fp8_e4m3fn_scaled.safetensors
-  role: text_encoder
-  target_dir: text_encoders
-  family: unknown
-  base_model: unknown
-  quantization: fp8_e4m3fn
-  size_gb: 6.74
-  sources:
-    public_dump:
-      repo: Serenak/chilloutmix
-      path: umt5_xxl_fp8_e4m3fn_scaled.safetensors
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-    hf_public_dump: true
-  used_by:
-  - —
-  notes:
-  - family unverified (no registry source, no pattern match)
 - filename: face_yolov8m.pt
   role: other
   target_dir: ultralytics
@@ -3602,134 +3512,6 @@ entries:
   - —
   notes:
   - family unverified (no registry source, no pattern match)
-- filename: Wan2.2-I2V-A14B-HighNoise-Q5_K_S.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 15.41
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2.2-I2V-A14B-LowNoise-Q5_K_S.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 15.41
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan22-I2V_A14B-Lightning-H-Q6_K.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan22-I2V_A14B-Lightning-L-Q6_K.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp8_e4m3fn
-  size_gb: 14.29
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp8_e4m3fn
-  size_gb: 14.29
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
 - filename: flux2-dev-Q4_K_M.gguf
   role: diffusion_model
   target_dir: unet
@@ -3737,166 +3519,6 @@ entries:
   base_model: FLUX.2
   quantization: unknown
   size_gb: 19.96
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan2.2_i2v_high_noise_14B_Q6_K.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan2.2_i2v_low_noise_14B_Q6_K.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan2.2_t2v_high_noise_14B_Q6_K.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp8_scaled
-  size_gb: 14.29
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan2.2_t2v_low_noise_14B_Q6_K.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: fp8_scaled
-  size_gb: 14.29
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan22EnhancedNSFW_V2_Q6K_HIGH.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan22EnhancedNSFW_V2_Q6K_LOW.gguf
-  role: diffusion_model
-  target_dir: unet
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 12.0
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
-  role: other
-  target_dir: unet_gguf
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 15.41
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
-  role: other
-  target_dir: unet_gguf
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 15.41
   sources:
     none: local file only, upstream unknown
   available_on:
@@ -3970,22 +3592,6 @@ entries:
   - —
   notes:
   - family unverified (no registry source, no pattern match)
-- filename: Wan2.1_VAE.safetensors
-  role: vae
-  target_dir: vae
-  family: wan21
-  base_model: Wan 2.1
-  quantization: unknown
-  size_gb: 0.25
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
 - filename: ae.safetensors
   role: vae
   target_dir: vae
@@ -4108,25 +3714,6 @@ entries:
   available_on:
     local_comfyui_ai_kvm2: true
     windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - —
-- filename: wan_2.1_vae.safetensors
-  role: vae
-  target_dir: vae
-  family: wan22
-  base_model: Wan 2.2
-  quantization: unknown
-  size_gb: 0.25
-  sources:
-    public_dump:
-      repo: Serenak/chilloutmix
-      path: wan_2.1_vae.safetensors
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-    hf_public_dump: true
   used_by:
   - —
   notes:

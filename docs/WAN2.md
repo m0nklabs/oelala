@@ -1,12 +1,14 @@
 # WAN 2.2 Image-to-Video
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 **Updated**: 2026-01-08
 
 ---
 
 ## Overview
 
-WAN 2.2 is the primary I2V model for Oelala. 14B parameters, supports text prompts.
+WAN 2.2 was the primary I2V model for Oelala until it was retired on 2026-10-01. 14B parameters, supports text prompts.
 
 ## Hardware Requirements
 
@@ -19,6 +21,7 @@ WAN 2.2 is the primary I2V model for Oelala. 14B parameters, supports text promp
 ## Quick Start
 
 ```python
+# Historical example — wan2_generator.py no longer exists (removed with the family).
 from wan2_generator import Wan2VideoGenerator
 
 generator = Wan2VideoGenerator()
@@ -96,8 +99,8 @@ transformer.enable_group_offload(
 
 | File | Purpose |
 |------|---------|
-| `wan2_generator.py` | Python generator class |
-| `workflows/ImageToVideo/wan22_*.json` | ComfyUI workflows |
+| `wan2_generator.py` | Python generator class (removed with the family) |
+| `workflows/ImageToVideo/wan22_*.json` | ComfyUI workflows (removed with the family) |
 | `docs/MULTI_GPU_SETUP.md` | Detailed multi-GPU guide |
 
 ---
@@ -116,8 +119,6 @@ transformer.enable_group_offload(
 
 ### Backend Endpoints
 - `/generate` - I2V with queue
-- `/generate-wan22-comfyui` - Dual-pass
-- `/generate-wan22-async` - Async queue
 
 ### Frontend
 - `ImageToVideoTool.jsx` - Main UI

@@ -1,5 +1,7 @@
 # Oelala UI v2 Plan (Grok-Imagine inspired)
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ## Status: IMPLEMENTED ✅
 
 The dashboard UI has been implemented with the following features:
@@ -51,7 +53,7 @@ The dashboard UI has been implemented with the following features:
 ### Generation Endpoints
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| \`/wan22/image-to-video\` | POST | ComfyUI-based I2V with DisTorch2 |
+| \`/wan22/image-to-video\` — **retired 2026-10-01, endpoint removed** | POST | ComfyUI-based I2V with DisTorch2 |
 | \`/health\` | GET | Backend + ComfyUI status |
 
 ### Media Endpoints

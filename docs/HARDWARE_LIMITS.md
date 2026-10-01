@@ -1,4 +1,6 @@
-# Hardware Limits - WAN 2.2 I2V on RTX 5060 Ti (16GB) + RTX 3060 (12GB)
+# Hardware Limits - WAN 2.2 I2V on RTX 5060 Ti (16GB) + RTX 3060 (12GB) — retired family, historical record
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
 
 ## Tested Configuration (December 2025)
 

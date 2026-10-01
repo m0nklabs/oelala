@@ -12,9 +12,8 @@ Oelala uses ComfyUI as backend. This guide maps endpoints to workflows.
 
 | Endpoint | Purpose | ComfyUI Workflow |
 |----------|---------|------------------|
-| `/generate` | I2V with image upload | `wan22_i2v_*.json` |
-| `/generate-text` | T2V generation | T2I + I2V pipeline |
-| `/generate-wan22-comfyui` | Dual-pass I2V | DisTorch2 multi-GPU |
+| `/generate` | I2V with image upload — legacy route still pinned to the retired `wan22-local-i2v-q6` adapter, so it returns HTTP 400 | use `POST /v2/generate` |
+| `/generate-text` | T2V generation (legacy; `model_type` is `ltx23` or `ltx2`) | `ltx23-cloud-t2v` adapter |
 | `/upscale-video` | Video upscaling | `video_upscale_realesrgan.json` |
 | `/interpolate-video` | Frame interpolation | `rife_interpolation.json` |
 
@@ -35,8 +34,11 @@ curl -X POST http://localhost:7998/generate \
 curl -X POST http://localhost:7998/generate-text \
   -F "prompt=A cat exploring forest" \
   -F "num_frames=49" \
-  -F "model_type=wan2.2"
+  -F "model_type=ltx23"
 ```
+
+> `model_type=ltx23` (or `ltx2`) is what this legacy route accepts; MiniMax-H3 T2V runs through
+> `POST /v2/generate` instead.
 
 ---
 
@@ -45,7 +47,7 @@ curl -X POST http://localhost:7998/generate-text \
 ### Oelala Workflows
 ```
 workflows/
-├── ImageToVideo/       # I2V with WAN 2.2
+├── ImageToVideo/       # Empty — I2V workflows are built by the adapters
 ├── TextToImage/        # SDXL, Flux
 ├── VideoUpscale/       # Real-ESRGAN
 ├── FrameInterpolation/ # RIFE
@@ -64,7 +66,9 @@ workflows/
 |-------|-------|---------|------|
 | `light` | ⚡ Fast | ⭐⭐ | 4GB |
 | `svd` | ⚖️ Balanced | ⭐⭐⭐ | 8GB |
-| `wan2.2` | 🐢 Slow | ⭐⭐⭐⭐⭐ | 16GB+ |
+
+Current video models are **MiniMax-H3** (leading) and **LTX-2.3** (second) — see
+`docs/GENERATION_MODES.md` for their modes and components.
 
 ---
 

@@ -331,7 +331,7 @@ Sub-Models (Shared Components)
 │
 ├── 🎨 VAE Models
 │   │
-│   ├── wan_2.1_vae.safetensors                             [242MB] (parked — Wan 2.2 retired; kept on disk for a possible future Wan 3)
+│   ├── wan_2.1_vae.safetensors                             [deleted 2026-10-01 — Wan 2.2 retired, weights removed]
 │   ├── sdxl_vae.safetensors                                [335MB] → SDXL
 │   ├── ae.safetensors                                      [335MB] → Flux
 │   └── qwen_image_vae.safetensors                          [254MB] → Qwen
@@ -471,7 +471,7 @@ ComfyUI/models/
 │   └── ...
 │
 ├── vae/
-│   ├── wan_2.1_vae.safetensors  (parked — Wan 2.2 retired; kept on disk for a possible future Wan 3)
+│   ├── wan_2.1_vae.safetensors  (deleted 2026-10-01 — Wan 2.2 retired, weights removed)
 │   ├── sdxl_vae.safetensors
 │   ├── ae.safetensors
 │   └── flux2-vae.safetensors

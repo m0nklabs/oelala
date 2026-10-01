@@ -5,6 +5,8 @@
 > **Created**: 2026-04-12
 > **Last Updated**: 2026-04-12
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ## TL;DR
 
 A tool that turns reference images + a story idea into a complete AI-generated movie.
@@ -97,7 +99,7 @@ No camera, no actors, no budget — just vision.
 | LLM-driven camera direction | ✅ Working (just shipped) | `suggested_camera` in concept schema |
 | Director's notes (motion, audio, dialogue, camera) | ✅ Working | Concept Studio UI |
 | Notes refinement via LLM | ✅ Working | `refinement_target=notes` |
-| I2V generation (Wan2.2, local multi-GPU) | ✅ Working | ComfyUI + DisTorch2 |
+| I2V generation (Wan2.2 — retired 2026-10-01, local multi-GPU) | ✅ Working | ComfyUI + DisTorch2 |
 | I2V generation (Cloud Max, RunPod) | ✅ Working | RunPod serverless |
 | LTX-2.3 generation (RunPod) | ✅ Working | RunPod LTX23 endpoint |
 | IP-Adapter FaceID (character consistency) | ✅ Working | I2I pipeline |

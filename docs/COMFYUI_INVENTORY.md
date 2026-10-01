@@ -40,6 +40,8 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 
 ### Video Generation (Wan 2.2 14B Q6_K)
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 | Resolution | Max Frames | Duration (16fps) | VRAM Usage |
 |------------|------------|------------------|------------|
 | 480p (848x480) | 81 | ~5 sec | ~24GB |
@@ -84,7 +86,7 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 |---------|------------|-------|
 | CLIP-L | ~1GB | SDXL text encoder |
 | T5-XXL FP8 | ~8GB | Wan/Flux text encoder |
-| UMT5-XXL | ~10GB | Wan 2.2 multilingual |
+| UMT5-XXL | ~10GB | Parked (Wan 2.2 retired) |
 
 **Tip**: T5/UMT5 can be offloaded after encoding to free VRAM for generation.
 
@@ -150,6 +152,8 @@ Compute op `cuda:1`, ~7.2GB model naar CPU-offload. De compute-kaart NIET >75% v
 
 ## 🎬 Video Models (Wan 2.2)
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ### UNET Models (GGUF - for DisTorch2)
 
 | Model | Type | Quality |
@@ -213,6 +217,8 @@ FL2VA genereert altijd een synchrone soundtrack (24 fps, 17k+5 frame grid, geen 
 
 ### Wan 2.2 Video LoRAs
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 **90+ motion and action LoRAs available** in dual high/low noise variants.
 
 All video LoRAs require BOTH versions loaded simultaneously:
@@ -263,7 +269,7 @@ Available categories:
 |-------|---------|
 | `clip_l.safetensors` | CLIP-L (SDXL) |
 | `t5xxl_fp8_e4m3fn.safetensors` | T5-XXL FP8 (Wan/Flux) |
-| `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (Wan 2.2) |
+| `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (parked — Wan 2.2 retired) |
 | `qwen3vl_4b_bf16.safetensors` | Qwen3-VL-4B (Krea 2, type krea2) |
 
 ---
@@ -282,7 +288,7 @@ Available categories:
 ## 🧩 Custom Nodes
 
 ### Video Generation
-- `ComfyUI-WanVideoWrapper` - Wan 2.2 workflow wrapper
+- `ComfyUI-WanVideoWrapper` - Wan 2.2 workflow wrapper (family retired 2026-10-01)
 - `ComfyUI-MultiGPU` - DisTorch2 multi-GPU distribution
 - `ComfyUI-GGUF` - GGUF model loading
 - `ComfyUI-gguf-vae` - GGUF VAE support
@@ -405,7 +411,7 @@ Path: `ComfyUI/models/SEEDVR2/`
 ```
 /home/flip/oelala/ComfyUI/models/
 ├── checkpoints/       # SDXL/Pony/Flux checkpoints
-├── unet/              # Wan 2.2 GGUF/FP8 models
+├── unet/              # GGUF diffusion models (Flux 2 Q4)
 ├── loras/             # All LoRAs
 ├── vae/               # VAE models
 ├── clip/              # CLIP/T5 text encoders

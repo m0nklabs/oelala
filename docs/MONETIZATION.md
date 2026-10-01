@@ -4,6 +4,8 @@
 > **Status**: Implementation Phase
 > **Model**: Credit-based (Pay-as-you-go)
 
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
+
 ## Business Model: Credits-Based Generation
 
 ### Waarom Credits?

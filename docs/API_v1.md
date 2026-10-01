@@ -107,8 +107,8 @@ POST /api/v1/generate
 
 **Credit Costs:**
 - Text-to-Image (SDXL): ~10 credits
-- Text-to-Video (Wan2.2, 3s): ~50 credits
-- Image-to-Video (Wan2.2, 3s): ~50 credits
+- Text-to-Video (MiniMax-H3): 8 / 12 / 15 credits by clip length
+- Image-to-Video (MiniMax-H3 or LTX-2.3): 5 / 8 / 15 credits by clip length
 
 ---
 

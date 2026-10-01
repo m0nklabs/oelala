@@ -93,7 +93,10 @@ Smooth frame interpolation using RIFE (Real-Time Intermediate Flow Estimation).
 
 ## 🎞️ Video Extension
 
-### extend_video_wan22.json
+### extend_video_wan22.json — retired 2026-10-01
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; this workflow JSON was deleted together with the family and no replacement extend workflow exists. The description below is a historical record. See `docs/LEGACY.md`.
+
 Extend videos forwards or backwards using WAN 2.2 video generation with DisTorch2 multi-GPU support.
 
 **Features:**
@@ -173,9 +176,7 @@ Download these models to `ComfyUI/models/`:
 - rife47.pth (RIFE)
 - film_net_fp32.pt (FILM)
 
-**Video Models** (`unet/` - already installed):
-- wan2.2_i2v_high_noise_14B_Q6_K.gguf
-- wan2.2_i2v_low_noise_14B_Q6_K.gguf
+**Video Models** (`unet/`): the Wan 2.2 GGUF weights were deleted from disk when the family was retired on 2026-10-01 (`docs/LEGACY.md`); current video models are MiniMax-H3 (leading) and LTX-2.3 (cloud).
 
 ## 📊 Technical Notes
 

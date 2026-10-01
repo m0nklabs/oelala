@@ -4,9 +4,9 @@
 > run the generator or `--check`. Local root resolved via systemd,
 > mirrors read via the HuggingFace API (read-only).
 
-Entries: **245** — checkpoint: 7, diffusion_model: 29, lora: 131, other: 48, text_encoder: 17, upscaler: 4, vae: 9
+Entries: **220** — checkpoint: 7, diffusion_model: 12, lora: 131, other: 45, text_encoder: 14, upscaler: 4, vae: 7
 
-Families: flux: 3, flux2: 4, krea2: 1, ltx23: 18, minimax_h3: 13, qwen_image_edit: 4, sdxl: 20, unknown: 123, wan21: 1, wan22: 37, wan2_2: 21
+Families: flux: 3, flux2: 4, krea2: 1, ltx23: 18, minimax_h3: 13, qwen_image_edit: 4, sdxl: 20, unknown: 118, wan22: 18, wan2_2: 21
 
 Windows-PC probe during generation: unreachable during generation (marked unverified).
 
@@ -116,7 +116,6 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | juggernautXL_ragnarok.safetensors | checkpoint | checkpoints | 6.80 | unknown | on_demand_download | — | unverified | — |
 | ponyDiffusionV6XL_v6StartWithThisOne.safetensors | checkpoint | checkpoints | 6.80 | unknown | on_demand_download | yes | unverified | — |
 | reapony_v90.safetensors | checkpoint | checkpoints | 6.94 | unknown | — | yes | unverified | — |
-| Wan2_1-T2V-14B-Lynx_lite_ip_layers_fp16.safetensors | diffusion_model | diffusion_models | 0.84 | fp16 | — | yes | unverified | — |
 | lynx_lite_resampler_fp32.safetensors | diffusion_model | diffusion_models | 0.33 | fp32 | — | yes | unverified | — |
 | 56Low noise-Cumshot Aesthetics.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | — |
 | BounceLowWan2_2.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | dump |
@@ -216,7 +215,6 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | t3_cfg.pt | other | TTS | 1.06 | unknown | — | yes | unverified | — |
 | t5xxl_fp8_e4m3fn.safetensors | other | clip | 4.89 | fp8_e4m3fn | — | yes | unverified | — |
 | training_args.bin | other | smol | ? | unknown | — | yes | unverified | — |
-| umt5-xxl-enc-bf16.safetensors | other | clip | 11.36 | bf16 | — | yes | unverified | dump |
 | ve.pt | other | TTS | 0.01 | unknown | — | yes | unverified | — |
 | gemma-3-12b-it-q4_0.gguf | text_encoder | text_encoders | 8.07 | q4_0 | — | yes | unverified | — |
 | model-00001-of-00005.safetensors | text_encoder | text_encoders | 4.98 | unknown | — | yes | unverified | — |
@@ -227,41 +225,16 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | qwen3vl_4b_bf16.safetensors | text_encoder | text_encoders | 8.88 | bf16 | — | yes | unverified | — |
 | t5-v1_1-xxl-encoder-bf16.safetensors | text_encoder | text_encoders | 9.52 | bf16 | — | yes | unverified | — |
 | t5-v1_1-xxl-encoder-f16.gguf | text_encoder | text_encoders | 9.53 | unknown | — | yes | unverified | — |
-| umt5-xxl-enc-bf16.safetensors | text_encoder | text_encoders | 11.37 | bf16 | — | yes | unverified | dump |
-| umt5_xxl_fp8_e4m3fn.safetensors | text_encoder | text_encoders | 5.68 | fp8_e4m3fn | — | yes | unverified | — |
-| umt5_xxl_fp8_e4m3fn_scaled.safetensors | text_encoder | text_encoders | 6.74 | fp8_e4m3fn | — | yes | unverified | dump |
 | 4x-UltraSharp.pth | upscaler | upscale_models | 0.07 | unknown | — | yes | unverified | — |
 | 4x_foolhardy_Remacri.pth | upscaler | upscale_models | 0.07 | unknown | — | yes | unverified | — |
 | RealESRGAN_x4plus.pth | upscaler | upscale_models | 0.07 | unknown | — | yes | unverified | — |
 | RealESRGAN_x4plus_anime_6B.pth | upscaler | upscale_models | 0.02 | unknown | — | yes | unverified | — |
 | audio_vae.safetensors | vae | vae | 0.11 | unknown | — | yes | unverified | — |
 
-## wan21
-
-| filename | role | dir | GB | quant | cloud | local | windows | mirror |
-|---|---|---|---|---|---|---|---|---|
-| Wan2.1_VAE.safetensors | vae | vae | 0.25 | unknown | — | yes | unverified | — |
-
 ## wan22
 
 | filename | role | dir | GB | quant | cloud | local | windows | mirror |
 |---|---|---|---|---|---|---|---|---|
-| Wan2.2-I2V-A14B-HighNoise-Q5_K_S.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf | diffusion_model | unet | 15.41 | unknown | — | yes | unverified | — |
-| Wan2.2-I2V-A14B-LowNoise-Q5_K_S.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf | diffusion_model | unet | 15.41 | unknown | — | yes | unverified | — |
-| Wan22-I2V_A14B-Lightning-H-Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| Wan22-I2V_A14B-Lightning-L-Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors | diffusion_model | unet | 14.29 | fp8_e4m3fn | — | yes | unverified | — |
-| Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors | diffusion_model | unet | 14.29 | fp8_e4m3fn | — | yes | unverified | — |
-| wan2.2_i2v_high_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_i2v_low_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_t2v_high_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.29 | fp8_scaled | — | yes | unverified | — |
-| wan2.2_t2v_low_noise_14B_Q6_K.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors | diffusion_model | unet | 14.29 | fp8_scaled | — | yes | unverified | — |
-| wan22EnhancedNSFW_V2_Q6K_HIGH.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
-| wan22EnhancedNSFW_V2_Q6K_LOW.gguf | diffusion_model | unet | 12.00 | unknown | — | yes | unverified | — |
 | Wan2.2 - T2V - Cum Shot - HIGH 14B.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | — |
 | Wan2.2 - T2V - Cum Shot - LOW 14B.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | — |
 | Wan2.2_I2V_Lightning_4steps_Seko_HIGH.safetensors | lora | loras | 1.23 | unknown | — | yes | unverified | — |
@@ -280,9 +253,6 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | wan22-ultimatedeepthroat-i2v-102epoc-high-k3nk.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | — |
 | wan22.r3v3rs3_c0wg1rl-14b-High-i2v_e70.safetensors | lora | loras | 0.61 | unknown | — | yes | unverified | dump |
 | wan22.r3v3rs3_c0wg1rl-14b-Low-i2v_e70.safetensors | lora | loras | 0.61 | unknown | — | yes | unverified | dump |
-| Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf | other | unet_gguf | 15.41 | unknown | — | yes | unverified | — |
-| Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf | other | unet_gguf | 15.41 | unknown | — | yes | unverified | — |
-| wan_2.1_vae.safetensors | vae | vae | 0.25 | unknown | — | yes | unverified | dump |
 
 ## wan2_2
 

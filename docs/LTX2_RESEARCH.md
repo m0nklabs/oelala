@@ -148,7 +148,7 @@ Based on HuggingFace tags:
 - ✅ Social media clips with music
 - ✅ Logo animations with sound effects
 
-### Current WAN 2.2 Workflow:
+### Then-current WAN 2.2 Workflow (retired 2026-10-01):
 1. Generate video (WAN 2.2)
 2. Separately generate audio (different model)
 3. Sync in post-processing

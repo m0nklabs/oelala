@@ -2,12 +2,12 @@
 
 ## AI Video Generation Web Application
 
-This web interface provides a modern dashboard for the Oelala AI video generation platform, powered by ComfyUI with Wan2.2 workflows.
+This web interface provides a modern dashboard for the Oelala AI video generation platform, powered by ComfyUI with MiniMax-H3 and LTX-2.3 workflows.
 
 ## Features
 
 ### Video Generation
-- 🎬 **Image to Video**: Transform images into videos with AI (Wan2.2 DisTorch2)
+- 🎬 **Image to Video**: Transform images into videos with AI (MiniMax-H3, LTX-2.3)
 - 📝 **Text Prompts**: Positive and negative prompts for guidance
 - ⚙️ **Advanced Controls**: Resolution, duration, FPS, aspect ratio
 - 🎛️ **Model Selection**: GGUF model pairs (high/low noise)
@@ -110,7 +110,7 @@ npm run dev
 | `/unet-models` | GET | List GGUF unet model pairs |
 | `/api/presets` | GET | List workflow presets |
 | `/extract-metadata` | POST | Extract prompt from image |
-| `/wan22/image-to-video` | POST | Generate video via ComfyUI |
+| `/v2/generate` | POST | Generate video via the unified generation API |
 
 ### Media Endpoints
 
@@ -150,7 +150,7 @@ When `include_metadata=true`, each item includes:
     "scheduler": "normal",
     "width": 576,
     "height": 1024,
-    "model": "wan2.2_i2v_14B_Q6_K.gguf",
+    "model": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
     "loras": [
       {"name": "style_lora.safetensors", "strength": 1.5}
     ]
@@ -215,7 +215,7 @@ When `include_metadata=true`, each item includes:
 1. **backend not starting**:
    - Ensure Python virtual environment is activated
    - Check if port 7999 is available
-   - Verify Wan2.2 model is accessible
+   - Verify the MiniMax-H3 model is accessible
 
 2. **frontend not loading**:
    - Check if port 3000 is available

@@ -3,7 +3,7 @@
 ## 🎯 Huidige Status
 - ✅ ComfyUI runs on `http://localhost:8188/`
 - ✅ Toegankelijk via Oelala sidebar link
-- ✅ Ondersteunt Wan2.2, Flux, SDXL, and vele andere modellen
+- ✅ Ondersteunt MiniMax-H3, Flux, SDXL, and vele andere modellen
 
 ## 🔗 Integratie Mogelijkheden
 
@@ -69,12 +69,12 @@ Bulk image processing → Video generation → Quality enhancement → Export
 
 ### **Basis Video Generatie:**
 ```
-Load Image → VAE Encode → Wan2.2 Model → Video Decode → Save
+Load Image → VAE Encode → MiniMax-H3 Model → Video Decode → Save
 ```
 
 ### **Enhanced Video Pipeline:**
 ```
-Load Image → ControlNet → Upscale → Wan2.2 → Post-process → Save
+Load Image → ControlNet → Upscale → MiniMax-H3 → Post-process → Save
 ```
 
 ### **Multi-Model Comparison:**

@@ -11,19 +11,20 @@ toggle override the selected mode.
 
 | Tool | Mode | Adapter | Compute | Default | Use for |
 |------|------|---------|---------|---------|---------|
-| I2V | Stable Local — Wan2.2 Q6 | `wan22-local-i2v-q6` | Local | 480p, 8s, 16fps, 6 steps, cfg 1.0 | Reliable local generations |
-| I2V | Quality Local — Wan2.2 Q8 | `wan22-local-i2v-distorch2` | Local | 480p, 10s, 16fps, 8 steps, cfg 1.0 | Higher quality after a good seed is found |
-| I2V | Cloud Wan2.2 | `wan22-cloud-i2v` | RunPod | 720p, 8s, 15 steps, cfg 3.0 | Full precision quality or local VRAM avoidance |
-| I2V | LTX-2.3 | `ltx23-cloud-i2v` | RunPod | 576p, 5s, 8 steps, cfg 1.0 | Fast cloud iterations |
-| T2V | Wan2.2 Q6 | `wan22-local-t2v-q6` | Local | 480p, 5s, 16fps, 6 steps, cfg 1.0 | Reliable local text-to-video |
-| T2V | Cloud Wan2.2 | `wan22-cloud-t2v` | RunPod | 720p, 5s, 15 steps, cfg 3.0 | Full precision quality |
-| T2V | LTX-2.3 | `ltx23-cloud-t2v` | RunPod | 576p, 5s, 8 steps, cfg 1.0 | Fast cloud text-to-video |
+| I2V | MiniMax-H3 — Cloud | `minimax-h3-cloud-i2v` | RunPod | 0.4 MP template default (0.98 MP recommended), 24fps, 20 steps, cfg 1.0 | Leading model: joint video+audio, 4-15s |
+| I2V | MiniMax-H3 — Local (Windows PC) | `minimax-h3-local-i2v` | Local | Same H3 defaults, 24fps | Local generations with native stereo audio |
+| I2V | LTX-2.3 | `ltx23-cloud-i2v` | RunPod | 576p, 5s, 25fps, 8 steps, cfg 1.0 | Fast cloud iterations (second choice) |
+| T2V | MiniMax-H3 — Cloud | `minimax-h3-cloud-t2v` | RunPod | 0.4 MP template default (0.98 MP recommended), 24fps, 20 steps, cfg 1.0 | Leading text-to-video with audio |
+| T2V | MiniMax-H3 — Local (Windows PC) | `minimax-h3-local-t2v` | Local | Same H3 defaults, 24fps | Local text-to-video with native stereo audio |
+| T2V | LTX-2.3 | `ltx23-cloud-t2v` | RunPod | 576p, 5s, 25fps, 8 steps, cfg 1.0 | Fast cloud text-to-video (second choice) |
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01 together with its local (`wan22-local-*`) and cloud (`wan22-cloud-*`) modes and adapters; references to it below are historical. See `docs/LEGACY.md`.
 
 ## Simplification Rules
 
-- Stable Local is the default local path.
-- Quality Local is the only promoted local quality upgrade in the main I2V selector.
-- BlockSwap and Ultra Q8 adapters stay available for saved profiles/backward compatibility, but they are not promoted in the main mode selector.
+- MiniMax-H3 is the leading path in both the cloud and local (Windows-PC ComfyUI) selectors.
+- LTX-2.3 is the second choice and cloud-only; LTX-2.5 is planned (`docs/LTX25_MIGRATION.md`).
+- Wan 2.2-era saved profiles (`wan2.2`, `cloud_wan22`, `blockswap_q8`, `distorch2_q8`, `ultra_q8`) no longer have adapters; the frontend coerces them to MiniMax-H3 on restore.
 - Cloud-only modes force `compute_target=cloud` in the request payload.
 - Local modes force `compute_target=local` in the request payload.
 - Backend validation clamps `frames` and `fps` against adapter constraints before queueing work in ComfyUI.

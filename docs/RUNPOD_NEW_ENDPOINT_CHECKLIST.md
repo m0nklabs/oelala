@@ -187,7 +187,7 @@ sudo systemctl restart oelala-backend
 | oelala-i2i | `8djiexluyybooj` | `ed2614hd8k` | `ghcr.io/m0nklabs/oelala-i2i-worker` | 48GB+ |
 | oelala-minimax-h3 | `5xuvnvyww4ujnc` | `fpfo4gmnrw` | `ghcr.io/m0nklabs/oelala-minimax-h3-worker` | 80GB+ |
 
-All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. Wan/I2I scale at `QUEUE_DELAY:4`; LTX-2.3 and MiniMax-H3 use `QUEUE_DELAY:1` because the big workers' cold starts are more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`; add every new endpoint profile there so requests get an explicit `executionTimeout` and `ttl` in milliseconds.
+All current endpoints use `workersMin=0`, `workersMax=2`, and `idleTimeout=120`. I2I scales at `QUEUE_DELAY:4` (the since-retired Wan worker used the same value); LTX-2.3 and MiniMax-H3 use `QUEUE_DELAY:1` because the big workers' cold starts are more expensive to wait on. Runtime job policies are applied by `src/backend/runpod_defaults.py`; add every new endpoint profile there so requests get an explicit `executionTimeout` and `ttl` in milliseconds.
 
 ### MiniMax-H3 endpoint notes (`deploy/runpod-minimax-h3/`)
 

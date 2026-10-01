@@ -46,7 +46,7 @@
 │                   ComfyUI (Python)                       │
 │                     Port 8188                            │
 │  ┌─────────────────────────────────────────────────┐    │
-│  │  3700+ nodes (Wan2.2, F5-TTS, LatentSync, etc)  │    │
+│  │  3700+ nodes (MiniMax-H3, F5-TTS, LatentSync)   │    │
 │  │  GPU inference (NVIDIA 5090, 32GB VRAM)         │    │
 │  │  Workflow execution via API                      │    │
 │  └─────────────────────────────────────────────────┘    │
@@ -123,7 +123,7 @@ journalctl -u oelala-backend -f
 ## ✅ Wat is AF (per 2026-01-04)
 
 ### Video Tools
-- [x] **Image to Video** - Wan2.2 480p/720p, LoRAs, camera motions
+- [x] **Image to Video** - MiniMax-H3 / LTX-2.3, LoRAs, camera motions
 - [x] **Text to Video** - Direct T2V
 - [x] **Text to Image to Video** - Combined T2I+I2V
 - [x] **Video to Video** - Style transfer, VHS nodes
@@ -248,7 +248,6 @@ export const NAV_GROUPS = [
 | Python venv | `/home/flip/venvs/gpu` → `torch-sm120` (CUDA 12.8) |
 
 ### GPU Memory Budget
-- Wan2.2 I2V 720p: ~24GB VRAM
 - SDXL: ~8GB VRAM
 - F5-TTS: ~4GB VRAM
 
@@ -285,7 +284,7 @@ refactor: description
 | `oelala` | Main app (this repo) |
 | `oelala-storage` | Go storage service (⚠️ deprecated, replaced by MinIO) |
 | `ComfyUI` | Submodule (m0nk-fixes branch) |
-| `Wan2.2` | Video model |
+| `MiniMax-H3` | Leading video model (LTX-2.3 second) |
 
 ---
 

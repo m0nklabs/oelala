@@ -365,7 +365,11 @@ cuda:0,10gb;cuda:1,15gb;cpu,*
 
 **⚠️ ORDER MATTERS!** First device in string gets model first. Put 3060 first!
 
-### Video Generation Limits (WAN 2.2 14B Q6_K, tested 2026-01-16)
+### Video Generation Limits (retired family — historical record)
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; the measurements below are a historical record, not current guidance. Current video models: **MiniMax-H3** (leading) and **LTX-2.3** (second) — see the RunPod sections below. See `docs/LEGACY.md`.
+
+#### WAN 2.2 14B Q6_K (tested 2026-01-16)
 | Resolution | Max Frames | Video Length | VRAM | Notes |
 |------------|------------|--------------|------|-------|
 | 480×848 | **321** | ~20 sec | ~26GB | SAFE production max |
@@ -373,7 +377,7 @@ cuda:0,10gb;cuda:1,15gb;cpu,*
 | 576×1024 | 81-121 | ~5-8 sec | ~24-27GB | Standard quality |
 | 720×1280 | 41-61 | ~2.5-4 sec | ~27GB | High quality |
 
-### Generation Times (6 steps, uni_pc sampler)
+### Generation Times (6 steps, uni_pc sampler — same retired family)
 | Frames | Time/Step | Total Time |
 |--------|-----------|------------|
 | 81 | ~50-60s | ~5-6 min |
@@ -385,10 +389,10 @@ cuda:0,10gb;cuda:1,15gb;cpu,*
 - `docs/COMFYUI_INVENTORY.md` - Complete inventory of all models, LoRAs, custom nodes
 - `docs/GENERATION_MODES_TREE.md` - **🌳 HOLY TREE - Visual tree of ALL tested generation modes**
 - `ComfyUI/custom_nodes/ComfyUI-MultiGPU/distorch_2.py` - DisTorch2 with local fixes
-- `workflows/ImageToVideo/WAN22-I2V-DISTORCH2-LATEST-api.json` - Optimal DisTorch2 API workflow
+- `workflows/MiniMax_H3_T2V_workflow.json` - Current video workflow (MiniMax-H3)
 
 ### When modifying video workflows:
-1. Always use DisTorch2 loader nodes for Wan2.2
+1. Always use DisTorch2 loader nodes for local multi-GPU workflows
 2. Use allocation: `cuda:0,10gb;cuda:1,15gb;cpu,*` (3060 FIRST!)
 3. Include `expert_mode_allocations` on ALL loader nodes
 4. Test with target resolution before production
@@ -414,9 +418,9 @@ After ANY successful ComfyUI generation run or new model/workflow test:
 
 Example log entry:
 ```
-│ 2026-01-12 | I2V | wan22 standard                                   │
-│   Resolution: 576x1024 | Frames: 81 | VRAM: ~24GB                   │
-│   Workflow: wan22_i2v_distorch2_api.json                            │
+│ 2026-09-30 | T2V | minimax_h3 (cloud)                               │
+│   Resolution: 768x1344 | Frames: 124 | Time: ~5.5 min (8 steps)     │
+│   Workflow: MiniMax_H3_T2V_workflow.json                            │
 │   Result: ✅ SUCCESS                                                 │
 ```
 
@@ -490,13 +494,11 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - Check `requirements.txt`, `pyproject.toml`, `package.json`, `CMakeLists.txt`, etc.
 - Follow the versions and libraries specified in the configuration files.
 
-## RunPod Serverless (Cloud Wan22 — Wan 2.2)
+## RunPod Serverless (Cloud Wan22 — retired)
 
-- **Endpoint**: `x2x496ymkidl3m` ("oelala-wan22")
-- **Template**: `tkpy0pi8gt` ("oelala-comfyui-worker"), containerDisk=100GB
-- **Image**: `ghcr.io/m0nklabs/oelala-comfyui-worker` (dated tags, e.g. `20260408-135917`)
-- **RunPod LoRA Volume**: `ochebt0xbq` (`oelala-runpod-lora-eu-cz`), `EU-CZ-1`, `50GB`
-- **GPU Tiers**: `AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180` (48GB+ only)
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; the `oelala-wan22` endpoint (id `x2x496ymkidl3m`), its template, its worker image and `deploy/runpod/` were all deleted. Only the shared LoRA volume below remains; current video endpoints are MiniMax-H3 and LTX-2.3 (below). See `docs/LEGACY.md`.
+
+- **RunPod LoRA Volume**: `ochebt0xbq` (`oelala-runpod-lora-eu-cz`), `EU-CZ-1`, `50GB` (shared by the current workers)
 
 ## RunPod Serverless (LTX-2.3 22B)
 
@@ -504,12 +506,12 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - **Template**: `c1fz26l07d` ("oelala-ltx23-worker"), containerDisk=100GB
 - **Image**: `ghcr.io/m0nklabs/oelala-ltx23-worker` (dated tags, e.g. `20260412-102222`)
 - **GPU Tiers**: `AMPERE_80,ADA_80_PRO,HOPPER_141,BLACKWELL_96,BLACKWELL_180` (80GB+ only — 22B model needs ~60GB VRAM)
-- **Deploy**: `deploy/runpod-ltx23/deploy.sh` (same pattern as Wan worker)
+- **Deploy**: `deploy/runpod-ltx23/deploy.sh` (same pattern as the other worker deploy scripts)
 - **Env var**: `RUNPOD_LTX23_ENDPOINT_ID=ctpoa610dva4ww` in `.env`
 - **⚠️ CRITICAL**: RunPod `gpuIds` expects architecture-tier IDs (e.g., `AMPERE_48`), NOT model names (e.g., `"NVIDIA RTX 4090"`). API silently accepts wrong names but scheduler never matches them.
 - **Full tier reference**: See `docs/RUNPOD_GPU_TIERS.md` for all 11 valid tier IDs.
 - **Config**: `workersMin=0`, `workersMax=1`, `idleTimeout=120` (keeps burst traffic warm without pinning a permanent worker)
-- **🚨 DEPLOY RULE**: ALWAYS use `deploy/runpod/deploy.sh` to deploy new worker images. NEVER manually `docker push :latest` — RunPod templates use explicit dated tags, not `:latest`. Pushing `:latest` alone means RunPod keeps pulling the old tag and your changes never reach production. This mistake wasted 3 deploys on 2026-04-08.
+- **🚨 DEPLOY RULE**: ALWAYS use the worker's own `deploy/runpod-*/deploy.sh` to deploy new worker images. NEVER manually `docker push :latest` — RunPod templates use explicit dated tags, not `:latest`. Pushing `:latest` alone means RunPod keeps pulling the old tag and your changes never reach production. This mistake wasted 3 deploys on 2026-04-08.
 - **Storage policy**: RunPod Network Volume is for LoRAs and hard-to-replace private/custom assets only. NEVER store general Hugging Face models, general model caches, or broad cold-start optimization payloads there.
 - **Population policy**: Upload local rare/private assets to the LoRA volume on demand. Do not prefill it with broad model libraries.
 - **Attachment policy**: Keep the LoRA volume detached by default. Attaching it to a serverless endpoint constrains scheduling to `EU-CZ-1`.
@@ -521,7 +523,7 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - **Template**: `ed2614hd8k` ("oelala-i2i-worker"), containerDisk=100GB
 - **Image**: `ghcr.io/m0nklabs/oelala-i2i-worker` (dated tags)
 - **GPU Tiers**: `AMPERE_48,ADA_48_PRO,AMPERE_80,ADA_80_PRO,BLACKWELL_96,HOPPER_141,BLACKWELL_180` (48GB+)
-- **Deploy**: `deploy/runpod-i2i/deploy.sh` (same pattern as Wan/LTX workers)
+- **Deploy**: `deploy/runpod-i2i/deploy.sh` (same pattern as the LTX worker)
 - **Env vars**: `RUNPOD_I2I_ENDPOINT_ID=8djiexluyybooj`, `RUNPOD_I2I_TEMPLATE_ID=ed2614hd8k` in `.env`
 - **Models** (fp8mixed/safetensors downloaded at runtime):
   - UNET: `qwen_image_edit_2511_fp8mixed.safetensors` (19.1 GB)
@@ -535,7 +537,7 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - **Template**: `fpfo4gmnrw` ("oelala-minimax-h3-worker"), containerDisk=100GB, serverless
 - **Image**: `ghcr.io/m0nklabs/oelala-minimax-h3-worker` (dated tags)
 - **GPU Tiers**: `AMPERE_80,ADA_80_PRO,HOPPER_141,BLACKWELL_96,BLACKWELL_180` (80GB+; int8/nvfp4 quants may fit 48GB, untested)
-- **Deploy**: `deploy/runpod-minimax-h3/deploy.sh` (same pattern as Wan/LTX workers)
+- **Deploy**: `deploy/runpod-minimax-h3/deploy.sh` (same pattern as the LTX worker)
 - **Models** (~42.5 GB downloaded at runtime from `Comfy-Org/MiniMax-H3`):
   - Diffusion: `minimax_h3_fl2va_pruned_int8_convrot.safetensors` (20.97 GB) — same checkpoint for t2v AND i2v (i2v anchors first-frame keyframe)
   - Text encoder: `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` (15.69 GB, Qwen3-VL-32B, no Blackwell needed)

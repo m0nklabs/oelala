@@ -129,7 +129,7 @@ HEAD   /{bucket}/{key}        → Get file metadata (S3 StatObject)
 ### Production (Current)
 - ✅ **Auto-upload implemented**: Generated content automatically uploads to user storage for synchronous endpoints
 - **Synchronous endpoints with auto-upload**:
-  - Image generation (SD1.5, Wan2.2 T2I) → `users/{user_id}/images/`
+  - Image generation (SDXL) → `users/{user_id}/images/`
   - These endpoints wait for ComfyUI completion before returning
 - **Async endpoints (queued, no auto-upload yet)**:
   - Video generation (I2V, T2V, Sequential) - queued but return immediately
@@ -158,12 +158,10 @@ HEAD   /{bucket}/{key}        → Get file metadata (S3 StatObject)
 
 **✅ Synchronous (auto-upload working)**
 - `/generate-sd15` - SD 1.5 image generation
-- `/generate-wan22-t2i` - Wan2.2 text-to-image
 
 **⏳ Async (queued, no auto-upload)**
 - `/generate-video` - I2V generation (returns immediately after queueing)
 - `/generate-text-video` - T2V generation (returns immediately after queueing)
-- `/generate-wan22-comfyui` - Main video generation with LoRAs (returns immediately after queueing)
 
 > **Note**: Async endpoints queue jobs and return immediately. Files remain in ComfyUI output directory.
 > Background auto-upload for async endpoints will be implemented in a future update.

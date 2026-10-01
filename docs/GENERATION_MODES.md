@@ -23,27 +23,15 @@ This document provides a comprehensive overview of all available generation mode
 
 | Mode | Model | Workflow File | VRAM Required | Notes |
 |------|-------|---------------|---------------|-------|
-| `standard` | Wan2.2 14B Q6_K DisTorch2 | `ImageToVideo/wan22_i2v_distorch2_api.json` | ~24GB | Default, high quality dual-noise |
-| `nsfw_lora` | Wan2.2 Enhanced NSFW | `ImageToVideo/wan22_i2v_ltx2_audio_api.json` | ~24GB | Pre-configured NSFW LoRAs |
+| `minimax_h3` | MiniMax-H3 FL2VA 22B | Cloud (RunPod) builder | Cloud 80GB | Default/leading, joint video+audio @24fps |
+| `minimax_h3_local` | MiniMax-H3 FL2VA 22B | `build_local_minimax_h3_i2v_workflow` | ~16GB (Windows PC) | Local on the second ComfyUI server |
+| `ltx2` | LTX-2.3 22B Distilled | Cloud (RunPod) builder | Cloud 80GB | Second choice, fast 8-step |
 
 ### I2V Model Components
 
-| Component | Model File | Size | Location |
-|-----------|------------|------|----------|
-| **High Noise GGUF** | `wan2.2_i2v_high_noise_14B_Q6_K.gguf` | 12GB | `models/unet/` |
-| **Low Noise GGUF** | `wan2.2_i2v_low_noise_14B_Q6_K.gguf` | 12GB | `models/unet/` |
-| **Text Encoder** | `umt5-xxl-enc-bf16.safetensors` | 11GB | `models/text_encoders/` |
-| **CLIP Vision** | `clip_vision_h.safetensors` | 2.5GB | `models/clip_vision/` |
-| **VAE** | `wan_2.1_vae.safetensors` | 242MB | `models/vae/` |
-
-### I2V Alternative Models (Untested/Experimental)
-
-| Model | File | Quantization | Notes |
-|-------|------|--------------|-------|
-| Lightning High | `Wan22-I2V_A14B-Lightning-H-Q6_K.gguf` | Q6_K | Faster, may need fewer steps |
-| Lightning Low | `Wan22-I2V_A14B-Lightning-L-Q6_K.gguf` | Q6_K | Faster, may need fewer steps |
-| Enhanced NSFW High | `wan22EnhancedNSFW_V2_Q6K_HIGH.gguf` | Q6_K | NSFW optimized |
-| Enhanced NSFW Low | `wan22EnhancedNSFW_V2_Q6K_LOW.gguf` | Q6_K | NSFW optimized |
+MiniMax-H3 I2V uses the same FL2VA component set as T2V (see the MiniMax-H3 table in the
+T2V section below) — the input image becomes the first keyframe. LTX-2.3 I2V runs
+cloud-only through the RunPod builder and has no local component set.
 
 > **Removed in cleanup** (unused/duplicated, freed ~98GB): `smoothMixWan22GGUF_high/lowQ6K.gguf`,
 > `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH/L.gguf`, `LTX-2-dev-Q2_K.gguf`, and the local LTX-2
@@ -58,20 +46,11 @@ This document provides a comprehensive overview of all available generation mode
 
 | Mode | Model | Workflow File | VRAM Required | Max Frames | Notes |
 |------|-------|---------------|---------------|------------|-------|
-| `wan22` | Wan2.2 14B | Built-in builder | ~24GB | 81 | T2I → I2V pipeline |
-| `ltx2` | LTX-2.3 22B Distilled | Cloud (RunPod) builder | Cloud 80GB | 97 | Cloud-only, fast 8-step |
 | `minimax_h3` | MiniMax-H3 FL2VA 22B | Cloud (RunPod) builder | Cloud 80GB | 362 | Cloud T2V+audio |
 | `minimax_h3_local` | MiniMax-H3 FL2VA 22B | `build_local_minimax_h3_t2v_workflow` | ~16GB (Windows PC) | 362 | **Lokaal** op Windows-PC ComfyUI (int8 set) |
+| `ltx2` | LTX-2.3 22B Distilled | Cloud (RunPod) builder | Cloud 80GB | 97 | Cloud-only, fast 8-step |
 
 ### T2V Model Components
-
-#### Wan2.2 T2V Components
-| Component | Model File | Size | Location |
-|-----------|------------|------|----------|
-| **High Noise FP8** | `wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors` | 14GB | `models/unet/` |
-| **Low Noise FP8** | `wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors` | 14GB | `models/unet/` |
-| **Text Encoder** | `umt5-xxl-enc-bf16.safetensors` | 11GB | `models/text_encoders/` |
-| **VAE** | `wan_2.1_vae.safetensors` | 242MB | `models/vae/` |
 
 #### MiniMax-H3 Local (Windows PC ComfyUI) Components
 | Component | Model File | Location (Windows PC) |
@@ -132,8 +111,8 @@ text-encoder past in 16GB VRAM
 
 | Encoder | File | Size | Used By |
 |---------|------|------|---------|
-| UMT5-XXL BF16 | `umt5-xxl-enc-bf16.safetensors` | 11GB | Wan2.2 I2V/T2V |
-| UMT5-XXL FP8 | `umt5_xxl_fp8_e4m3fn.safetensors` | 5.7GB | Wan2.2 (low VRAM) |
+| UMT5-XXL BF16 | `umt5-xxl-enc-bf16.safetensors` | 11GB | Parked (Wan 2.2 retired) |
+| UMT5-XXL FP8 | `umt5_xxl_fp8_e4m3fn.safetensors` | 5.7GB | Parked (Wan 2.2 retired) |
 | Gemma 3 12B QAT | `gemma-3-12b-it-qat-q4_0-unquantized/` | 8GB | LTX-2 |
 | Gemma 3 12B GGUF | `gemma-3-12b-it-q4_0.gguf` | 8GB | LTX-2 (alt) |
 | Qwen 2.5 VL 7B | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | 9.4GB | Qwen vision |
@@ -142,7 +121,6 @@ text-encoder past in 16GB VRAM
 
 | VAE | File | Size | Used By |
 |-----|------|------|---------|
-| Wan 2.1 VAE | `wan_2.1_vae.safetensors` | 242MB | Wan2.2 I2V/T2V |
 | LTX-2 VAE | `LTX2_video_vae_bf16.safetensors` | 2.5GB | LTX-2 |
 | SDXL VAE | `sdxl_vae.safetensors` | 335MB | SDXL checkpoints |
 | Flux AE | `ae.safetensors` | 335MB | Flux |
@@ -152,7 +130,6 @@ text-encoder past in 16GB VRAM
 
 | Model | Location | Used By |
 |-------|----------|---------|
-| CLIP Vision H | `models/clip_vision/` | Wan2.2 I2V |
 | SigLIP | `models/clip_vision/` | Alternative vision |
 
 ---
@@ -168,9 +145,7 @@ cuda:1,12gb;cuda:0,16gb
 
 | Model Type | Allocation | Notes |
 |------------|------------|-------|
-| Wan2.2 14B Q6_K | `cuda:1,11gb;cuda:0,15gb;cpu,2gb` | Allow CPU spillover |
 | LTX-2 19B Q4 | `cuda:1,10gb;cuda:0,14gb` | Lighter model |
-| UMT5-XXL | `cuda:1` | Keep on RTX 3060 |
 | VAE | `cuda:1,3gb` | Small, fast |
 
 ### DisTorch2 Loader Nodes
@@ -182,6 +157,8 @@ cuda:1,12gb;cuda:0,16gb
 | `CLIPLoaderDisTorch2MultiGPU` | T5/CLIP encoders |
 
 ### VRAM Budget by Resolution (Wan2.2)
+
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
 
 | Resolution | Max Frames | VRAM Used | Fits in 28GB? |
 |------------|------------|-----------|---------------|
@@ -195,19 +172,11 @@ cuda:1,12gb;cuda:0,16gb
 
 ## Workflow Compatibility Matrix
 
-### I2V Workflows
-
-| Workflow | DisTorch2 | Single GPU | Models Required |
-|----------|-----------|------------|-----------------|
-| `wan22_i2v_distorch2_api.json` | ✅ | ❌ | Q6_K H+L, UMT5, CLIP, VAE |
-| `wan22_i2v_ltx2_audio_api.json` | ✅ | ❌ | Q6_K H+L, UMT5, CLIP, VAE, LoRAs |
-
 ### T2V Workflows
 
 | Workflow | DisTorch2 | Single GPU | Models Required |
 |----------|-----------|------------|-----------------|
 | `ltx2_distorch2_multigpu_api.json` | ✅ | ❌ | LTX-2 Q4, Gemma, LTX VAE |
-| Built-in Wan2.2 T2V | ✅ | ⚠️ | FP8 H+L, UMT5, VAE |
 
 ### T2I Workflows
 

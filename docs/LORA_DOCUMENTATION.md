@@ -133,6 +133,8 @@
 
 ## Wan 2.2 LoRAs (11)
 
+> **Parked:** Wan 2.2 was retired from the product on 2026-10-01; these LoRAs stay on disk for a possible open-weight "Wan 3" and are not loadable by the current models. See `docs/LEGACY.md`.
+
 ### 9. wan_ahegao_v2
 
 | Field | Value |
