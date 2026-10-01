@@ -107,7 +107,7 @@ npm run dev
 |----------|--------|-------------|
 | `/health` | GET | Backend + ComfyUI health status |
 | `/loras` | GET | List available LoRA models |
-| `/unet-models` | GET | List GGUF unet model pairs |
+| `/unet-models` | GET | ~~List GGUF unet model pairs~~ (removed 2026-10-01 — Wan 2.2 retirement) |
 | `/api/presets` | GET | List workflow presets |
 | `/extract-metadata` | POST | Extract prompt from image |
 | `/v2/generate` | POST | Generate video via the unified generation API |

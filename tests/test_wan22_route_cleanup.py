@@ -187,6 +187,34 @@ class TestRetiredWan22Routes:
             assert path in registered, f"{path} disappeared from the v1 surface"
 
 
+class TestRemovedWanInventoryRoute:
+    """GET /unet-models was a Wan-era inventory route with nothing left to serve.
+
+    It listed GGUF unets in ComfyUI/models/unet, grouped into the high/low-noise
+    pairs a Wan 2.2 dual-pass workflow needed. The directory now holds no GGUF
+    file at all, no code called the endpoint, and every live family loads
+    safetensors checkpoints — so it was removed instead of kept empty.
+    """
+
+    def test_unet_models_route_is_gone(self, no_startup_client):
+        registered = {route.path for route in no_startup_client.app.routes}
+        assert "/unet-models" not in registered
+        assert no_startup_client.get("/unet-models").status_code == 404
+
+    def test_no_source_file_references_the_removed_route(self):
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parent.parent
+        hits = []
+        for root in (repo / "src" / "backend", repo / "scripts"):
+            for path in root.rglob("*.py"):
+                if "__pycache__" in path.parts:
+                    continue
+                if "unet-models" in path.read_text(errors="ignore"):
+                    hits.append(str(path.relative_to(repo)))
+        assert hits == [], hits
+
+
 class TestRepointedGenerateRoutes:
     """/generate and /generate-pose now run the leading local family."""
 

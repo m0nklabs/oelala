@@ -68,7 +68,7 @@ The dashboard UI has been implemented with the following features:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | \`/loras\` | GET | List LoRAs by category |
-| \`/unet-models\` | GET | List GGUF model pairs |
+| \`/unet-models\` | GET | ~~List GGUF model pairs~~ (route removed 2026-10-01 with Wan 2.2) |
 | \`/api/presets\` | GET | List workflow presets |
 
 ---

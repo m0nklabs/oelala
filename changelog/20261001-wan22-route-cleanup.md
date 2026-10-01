@@ -61,20 +61,29 @@
   the live `video_i2v` tier, and the endpoint docstring names MiniMax-H3 / LTX-2.3
   instead of Wan 2.2.
 
-- **Small residue fixes**: `GET /unet-models`'s docstring no longer presents Wan 2.2 I2V as
-  its purpose, `GET /loras` documents the high/low grouping as a legacy dual-pass
-  convention, generation stats default `model_mode` to `unknown` instead of `wan2.2`, cloud
-  outputs without a recorded family are saved under `cloud-unknown/` instead of
-  `cloud-wan22/`, and the RunPod workflow logging recognises the live
+- **`GET /unet-models` removed.** It was a Wan-era inventory route: it listed GGUF unets in
+  `ComfyUI/models/unet` and grouped them into the high/low-noise pairs a Wan 2.2 dual-pass
+  workflow needed. Checked before removing — no code in `src/`, `tests/` or `scripts/`
+  calls it, the directory now holds no GGUF file at all (only the `put_unet_files_here`
+  placeholder), and every live family loads safetensors checkpoints, so the route could
+  only ever answer `{"models": [], "high_noise": [], "low_noise": [], "pairs": []}`.
+  It is now a 404. **Follow-up for the docs owner:** `docs/UI_V2_PLAN.md` (line ~71) and
+  `docs/WEB_INTERFACE_README.md` (line ~110) still list it under "Model Endpoints" /
+  "Core Endpoints".
+
+- **Small residue fixes**: `GET /loras` documents the high/low grouping as a legacy
+  dual-pass convention, generation stats default `model_mode` to `unknown` instead of
+  `wan2.2`, cloud outputs without a recorded family are saved under `cloud-unknown/`
+  instead of `cloud-wan22/`, and the RunPod workflow logging recognises the live
   `EmptyLTXVLatentVideo` / `LTXVImgToVideoConditionOnly` / `MiniMaxH3ImageToVideo` nodes.
 
 ### Added
 
-- **`tests/test_wan22_route_cleanup.py`** (33 tests): every retired Wan route answers 400
+- **`tests/test_wan22_route_cleanup.py`** (35 tests): every retired Wan route answers 400
   with a message naming MiniMax-H3 and LTX-2.3; `/generate`, `/generate-pose` and
   `/generate-text` reach the real (execution-stubbed) live adapter instances; `/v2/generate`
-  still succeeds for a live hint and still rejects a retired one; and legacy/live credit
-  tiers price identically.
+  still succeeds for a live hint and still rejects a retired one; the removed
+  `/unet-models` route stays gone; and legacy/live credit tiers price identically.
 
 ### Notes
 
