@@ -8,8 +8,10 @@ They validate actual ComfyUI workflows and video generation.
 import pytest
 import requests
 import json
+import os
 from pathlib import Path
 import io
+import yaml
 
 # Local services
 BACKEND_URL = "http://localhost:7998"
@@ -82,27 +84,87 @@ class TestWorkflowValidation:
         assert "CheckpointLoaderSimple" in data
 
 
+# ComfyUI root: env override first (same variable as scripts/build_model_catalog.py),
+# otherwise derived from this file's location (tests/gpu/ -> repository root).
+COMFYUI_ROOT = Path(
+    os.environ.get("LOCAL_COMFYUI_DIR") or Path(__file__).resolve().parents[2] / "ComfyUI"
+)
+
+
+def _configured_model_dirs(kind: str) -> list[Path]:
+    """Resolve every directory ComfyUI searches for a model folder of the given kind.
+
+    Mirrors ComfyUI's own loading of extra_model_paths.yaml
+    (ComfyUI/utils/extra_config.py): the main tree's ``models/<kind>`` plus
+    ``<base_path>/<kind>`` for every YAML entry that defines that key.
+    Non-existent paths are returned as-is; callers filter and skip on them.
+    """
+    dirs = [COMFYUI_ROOT / "models" / kind]
+
+    config_file = COMFYUI_ROOT / "extra_model_paths.yaml"
+    if not config_file.is_file():
+        return dirs
+
+    try:
+        config = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return dirs
+
+    for entry in config.values():
+        if not isinstance(entry, dict) or kind not in entry:
+            continue
+        base_path = entry.get("base_path")
+        for rel in str(entry[kind]).splitlines():
+            rel = rel.strip()
+            if not rel:
+                continue
+            path = Path(os.path.expandvars(os.path.expanduser(rel)))
+            if not path.is_absolute():
+                if base_path:
+                    base = Path(
+                        os.path.expandvars(os.path.expanduser(str(base_path)))
+                    )
+                    path = base / path
+                else:
+                    path = config_file.parent / path
+            dirs.append(Path(os.path.normpath(path)))
+
+    return dirs
+
+
 @pytest.mark.gpu
 class TestModelsAvailable:
     """Test that required models are available."""
 
     def test_unet_models_exist(self):
-        """Should have at least one unet model for Wan2.2."""
-        models_dir = Path("/home/flip/oelala/ComfyUI/models/unet")
-        if not models_dir.exists():
-            pytest.skip("No unet models directory")
+        """Local ComfyUI has at least one loadable .gguf unet weight.
 
-        gguf_files = list(models_dir.glob("*.gguf"))
-        assert len(gguf_files) > 0, "No .gguf unet models found"
+        Scans the main models tree and every unet path configured in
+        extra_model_paths.yaml, so real weights on extra roots count too.
+        """
+        models_dirs = [d for d in _configured_model_dirs("unet") if d.is_dir()]
+        if not models_dirs:
+            pytest.skip("No unet model directories configured")
+
+        gguf_files = [f for d in models_dirs for f in d.glob("*.gguf")]
+        assert len(gguf_files) > 0, (
+            f"No .gguf unet models found in {[str(d) for d in models_dirs]}"
+        )
 
     def test_checkpoint_models_exist(self):
-        """Should have at least one checkpoint model."""
-        models_dir = Path("/home/flip/oelala/ComfyUI/models/checkpoints")
-        if not models_dir.exists():
-            pytest.skip("No checkpoints directory")
+        """Local ComfyUI has at least one loadable .safetensors checkpoint weight.
 
-        safetensor_files = list(models_dir.glob("*.safetensors"))
-        assert len(safetensor_files) > 0, "No .safetensors checkpoint models found"
+        Scans the main models tree and every checkpoints path configured in
+        extra_model_paths.yaml, so real weights on extra roots count too.
+        """
+        models_dirs = [d for d in _configured_model_dirs("checkpoints") if d.is_dir()]
+        if not models_dirs:
+            pytest.skip("No checkpoints directories configured")
+
+        safetensor_files = [f for d in models_dirs for f in d.glob("*.safetensors")]
+        assert len(safetensor_files) > 0, (
+            f"No .safetensors checkpoint models found in {[str(d) for d in models_dirs]}"
+        )
 
 
 @pytest.mark.gpu
