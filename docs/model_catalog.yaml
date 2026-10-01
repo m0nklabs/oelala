@@ -11,7 +11,7 @@ meta:
   - LORA_HF_MIRROR_REPO
   windows_pc_probe: unreachable during generation (marked unverified)
   counts:
-    entries: 220
+    entries: 219
     by_role:
       checkpoint: 7
       diffusion_model: 12
@@ -19,7 +19,7 @@ meta:
       other: 45
       text_encoder: 14
       upscaler: 4
-      vae: 7
+      vae: 6
     by_family:
       flux: 3
       flux2: 4
@@ -28,7 +28,7 @@ meta:
       minimax_h3: 13
       qwen_image_edit: 4
       sdxl: 20
-      unknown: 118
+      unknown: 117
       wan22: 18
       wan2_2: 21
 entries:
@@ -3611,22 +3611,6 @@ entries:
   - —
   notes:
   - —
-- filename: audio_vae.safetensors
-  role: vae
-  target_dir: vae
-  family: unknown
-  base_model: unknown
-  quantization: unknown
-  size_gb: 0.11
-  sources:
-    none: local file only, upstream unknown
-  available_on:
-    local_comfyui_ai_kvm2: true
-    windows_pc_comfyui: unverified
-  used_by:
-  - —
-  notes:
-  - family unverified (no registry source, no pattern match)
 - filename: flux2-vae.safetensors
   role: vae
   target_dir: vae

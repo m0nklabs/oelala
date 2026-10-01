@@ -1,5 +1,7 @@
 # LTX-2 GGUF CPU Gemma - WERKENDE OPLOSSING 🎉
 
+> **Removed 2026-08-23:** the local LTX-2 19B set was deleted (LTX-2.3 runs cloud-only via RunPod). See `changelog/minimax-h3-local-windows.md`.
+
 ## Status: OPGELOST ✅
 
 LTX-2 GGUF + Gemma-3 CPU encoding werkt nu volledig!
@@ -31,7 +33,9 @@ De encoder produceert nu:
 
 ## Werkende Workflow
 
-Bestand: `/home/flip/oelala/workflows/ltx2_cpu_gemma_api.json`
+*(Historical — this workflow file was removed on 2026-08-23 with the local LTX-2 19B set; LTX-2.3 runs cloud-only via RunPod.)*
+
+Bestand: `/home/flip/oelala/workflows/ltx2_cpu_gemma_api.json` (removed 2026-08-23)
 
 ```
 LTXVCPUGemmaEncode ─┬─→ LTXVConditioning ─→ BasicGuider ─→ SamplerCustomAdvanced
@@ -64,7 +68,7 @@ VAELoader ─→ VAEDecode
 ## Bestanden
 
 - `/home/flip/oelala/ComfyUI/custom_nodes/ComfyUI-LTXVideo/cpu_gemma_encoder.py` - CPU Gemma encoder
-- `/home/flip/oelala/workflows/ltx2_cpu_gemma_api.json` - Werkende workflow
+- `/home/flip/oelala/workflows/ltx2_cpu_gemma_api.json` - Werkende workflow (removed 2026-08-23)
 
 ## GPU Setup
 
@@ -76,6 +80,8 @@ VAELoader ─→ VAEDecode
 DisTorch2 allocation: `cuda:1,11gb;cuda:0,14gb;cpu,2gb`
 
 ## Test Commando
+
+*(Historical — this command posts the workflow that was removed on 2026-08-23; LTX-2.3 runs cloud-only via RunPod.)*
 
 ```bash
 cd /home/flip/oelala && python3 -c "

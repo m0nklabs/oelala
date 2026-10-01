@@ -4,9 +4,9 @@
 > run the generator or `--check`. Local root resolved via systemd,
 > mirrors read via the HuggingFace API (read-only).
 
-Entries: **220** — checkpoint: 7, diffusion_model: 12, lora: 131, other: 45, text_encoder: 14, upscaler: 4, vae: 7
+Entries: **219** — checkpoint: 7, diffusion_model: 12, lora: 131, other: 45, text_encoder: 14, upscaler: 4, vae: 6
 
-Families: flux: 3, flux2: 4, krea2: 1, ltx23: 18, minimax_h3: 13, qwen_image_edit: 4, sdxl: 20, unknown: 118, wan22: 18, wan2_2: 21
+Families: flux: 3, flux2: 4, krea2: 1, ltx23: 18, minimax_h3: 13, qwen_image_edit: 4, sdxl: 20, unknown: 117, wan22: 18, wan2_2: 21
 
 Windows-PC probe during generation: unreachable during generation (marked unverified).
 
@@ -229,7 +229,6 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | 4x_foolhardy_Remacri.pth | upscaler | upscale_models | 0.07 | unknown | — | yes | unverified | — |
 | RealESRGAN_x4plus.pth | upscaler | upscale_models | 0.07 | unknown | — | yes | unverified | — |
 | RealESRGAN_x4plus_anime_6B.pth | upscaler | upscale_models | 0.02 | unknown | — | yes | unverified | — |
-| audio_vae.safetensors | vae | vae | 0.11 | unknown | — | yes | unverified | — |
 
 ## wan22
 

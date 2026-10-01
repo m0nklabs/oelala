@@ -7,6 +7,9 @@
 ## 🔄 In Progress
 
 ### LTX-2 Video Model
+
+> **Superseded:** the local LTX-2 19B path was removed on 2026-08-23 and LTX-2.3 runs cloud-only via RunPod, so the open items below are historical. See `changelog/minimax-h3-local-windows.md`.
+
 - **Status**: Research phase
 - **Doc**: [LTX2_RESEARCH.md](LTX2_RESEARCH.md)
 - **Findings**:

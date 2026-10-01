@@ -70,12 +70,15 @@ Visual tree structure of all generation modes per tool type.
 
 ### Maximum Duration Settings (Tested 2026-01-17)
 
+> The LTX-2 rows are local LTX-2 19B measurements from that test run: the local set was removed
+> on 2026-08-23 and LTX-2.3 now runs cloud-only, so only the MiniMax-H3 row is current.
+
 | Resolution | Model | Max Duration | Max Frames | VRAM Usage |
 |------------|-------|--------------|------------|------------|
 | 768p | MiniMax-H3 (cloud, leading) | ~15 sec | 362 | RunPod 80GB+ |
-| **480p** | LTX-2 | **12 sec** | 97 | ~18GB |
-| 576p | LTX-2 | 8 sec | 97 | ~20GB |
-| 720p | LTX-2 | 5 sec | 65 | ~22GB |
+| **480p** | LTX-2 (local, removed 2026-08-23) | **12 sec** | 97 | ~18GB |
+| 576p | LTX-2 (local, removed 2026-08-23) | 8 sec | 97 | ~20GB |
+| 720p | LTX-2 (local, removed 2026-08-23) | 5 sec | 65 | ~22GB |
 
 MiniMax-H3 (leading I2V/T2V model) also runs on the local Windows-PC ComfyUI
 (16GB GPU); A40 duration benchmarks are in the T2V section below.
@@ -321,7 +324,7 @@ Sub-Models (Shared Components)
 │   │   ├── umt5_xxl_fp8_e4m3fn.safetensors                 [5.7GB] Low VRAM
 │   │   └── umt5_xxl_fp8_e4m3fn_scaled.safetensors          [6.7GB]
 │   │
-│   ├── Gemma Family (LTX-2)
+│   ├── Gemma Family (LTX-2.3, cloud-only — local copies unused)
 │   │   ├── gemma-3-12b-it-qat-q4_0-unquantized/            [8GB] ★ Primary
 │   │   ├── gemma-3-12b-it-q4_0.gguf                        [8GB] Alt GGUF
 │   │   └── gemma_3_12B_it_nvfp4.safetensors                [8.3GB]
@@ -339,7 +342,7 @@ Sub-Models (Shared Components)
 ├── 👁️ CLIP Vision
 │   │
 │   └── clip_vision/
-│       ├── clip_vision_h.safetensors                       [2.5GB] ★ Primary
+│       ├── clip_vision_h.safetensors                       [2.5GB] retired with Wan 2.2, not in a model path
 │       └── SigLIP variants                                 (Alternative)
 │
 └── 🔗 Connectors

@@ -3,6 +3,8 @@
 **Last Updated:** January 2026
 **Hardware:** RTX 5060 Ti (16GB) + RTX 3060 (12GB) = 28GB total VRAM
 
+> **Removed 2026-08-23:** the local LTX-2 19B set was deleted (LTX-2.3 runs cloud-only via RunPod). See `changelog/minimax-h3-local-windows.md`.
+
 ## Model Variants
 
 ### 1. LTX-2 19B Distilled (Video Only)
@@ -146,7 +148,7 @@ for k, v in vocoder_sd.items():
     combined_sd[f"vocoder.{k}"] = v
 
 # Create ComfyUI-compatible metadata
-# See ComfyUI/ltx2_audio_test.py for full config mapping
+# See scripts/ltx2_audio_test.py for full config mapping
 metadata = {"config": json.dumps({
     "model": {
         "params": {
@@ -163,8 +165,10 @@ save_file(combined_sd, "models/checkpoints/ltx2_audio_vae.safetensors", metadata
 
 ## Workflow Files
 
-- **Video-only API:** `workflows/ltx2_cpu_gemma_api.json`
-- **Audio+Video Test:** `ComfyUI/ltx2_audio_test.py`
+*(Historical — the API workflow below was removed on 2026-08-23 with the local LTX-2 19B set; LTX-2.3 runs cloud-only via RunPod.)*
+
+- **Video-only API:** `workflows/ltx2_cpu_gemma_api.json` (removed 2026-08-23)
+- **Audio+Video Test:** `scripts/ltx2_audio_test.py`
 - **Output Directory:** `ComfyUI/output/`
 
 ## Recommended Settings
@@ -179,7 +183,7 @@ save_file(combined_sd, "models/checkpoints/ltx2_audio_vae.safetensors", metadata
 ## Custom Nodes Required
 
 1. `ComfyUI-GGUF` - For GGUF model loading
-2. `ComfyUI-LTX-Video` - LTX-2 sampling, audio nodes
+2. `ComfyUI-LTXVideo` - LTX-2 sampling, audio nodes
 3. `ComfyUI-VideoHelperSuite` - VHS_VideoCombine for audio muxing
 
 ## Example Prompts

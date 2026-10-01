@@ -3,6 +3,8 @@
 > Research date: January 2026
 > Status: **Very Promising** - Native audio+video in one model!
 
+> **Removed 2026-08-23:** the local LTX-2 19B set was deleted (LTX-2.3 runs cloud-only via RunPod). See `changelog/minimax-h3-local-windows.md`.
+
 > **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
 
 ## NSFW Status: ✅ NOT EXPLICITLY RESTRICTED
@@ -56,7 +58,7 @@ LTX-2 is Lightricks' next-generation video foundation model with **native synchr
 | `ltx-2-19b-dev` | ~38GB | Full quality | ~48GB (multi-GPU required) |
 | `ltx-2-19b-dev-fp8` | ~19GB | Quantized full | ~24GB |
 | `ltx-2-19b-distilled` | ~38GB | Fast inference (8 steps) | ~48GB |
-| `ltx-2-19b-distilled-fp8` | ~19GB | **Recommended** | ~24GB |
+| `ltx-2-19b-distilled-fp8` | ~19GB | **Recommended then** (local set removed 2026-08-23) | ~24GB |
 
 ### Additional Components
 
@@ -158,6 +160,8 @@ Based on HuggingFace tags:
 
 ## Implementation Plan
 
+*(Historical — this plan targeted the local LTX-2 19B setup, removed on 2026-08-23; LTX-2.3 runs cloud-only via RunPod.)*
+
 ### Phase 1: Assessment
 1. [ ] Check if ComfyUI-LTXVideo supports LTX-2
 2. [ ] Download `ltx-2-19b-distilled-fp8` (~19GB)
@@ -184,6 +188,8 @@ Based on HuggingFace tags:
 - **Docs**: https://docs.ltx.video
 
 ## Next Steps
+
+*(Historical — superseded by the cloud-only LTX-2.3 path; the local LTX-2 19B set was removed on 2026-08-23.)*
 
 1. **Download FP8 distilled model** (smallest practical option)
 2. **Check ComfyUI node compatibility** for LTX-2

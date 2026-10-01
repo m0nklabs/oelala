@@ -140,7 +140,7 @@ referenced by `CLAUDE.md` and `.goosehints` via `scripts/sync-agent-docs.sh`.
 - Text-to-Video: `oelala_t2v_{YYYYMMDD}_{HHMMSS}_{index}.mp4`
 - Image-to-Video: `oelala_i2v_{YYYYMMDD}_{HHMMSS}_{index}.mp4`
 - Text-to-Image: `oelala_t2i_{index}_.png`
-- LTX-2 Audio: `ltx2_audio_{index}.mp4` (with `-audio` suffix for audio version)
+- LTX-2 Audio: `ltx2_audio_{index}.mp4` (with `-audio` suffix for audio version) — **removed 2026-08-23**: the local LTX-2 19B set was deleted, so this local audio pipeline no longer runs (LTX-2.3 runs cloud-only via RunPod). See `changelog/minimax-h3-local-windows.md`.
 - Benchmarks: `bench_{resolution}_{duration}_{vram}_{index}.mp4`
 
 ## External Storage (SSD) - Models Only

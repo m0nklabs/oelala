@@ -3,6 +3,8 @@
 **Last Updated**: 2026-01-09
 **Status**: ✅ GGUF Setup Ready! (via Kijai's GGUF quantizations)
 
+> **Removed 2026-08-23:** the local LTX-2 19B set was deleted (LTX-2.3 runs cloud-only via RunPod). See `changelog/minimax-h3-local-windows.md`.
+
 ---
 
 ## Summary
@@ -41,6 +43,9 @@ Provides nodes:
 - Various LTX-2 specific nodes
 
 ### Models Installed
+
+*(Historical inventory — the LTX-2 19B files below were deleted on 2026-08-23; the Gemma text encoder is still on disk. LTX-2.3 runs cloud-only via RunPod.)*
+
 | File | Location | Size |
 |------|----------|------|
 | **`ltx-2-19b-distilled_Q4_K_M.gguf`** | diffusion_models/ | **12 GB** ✅ |
@@ -51,8 +56,10 @@ Provides nodes:
 
 ## Workflow
 
+*(Historical — the workflow file and the model files it loads were removed on 2026-08-23; LTX-2.3 runs cloud-only via RunPod.)*
+
 Use Kijai's workflow for GGUF LTX-2:
-- Workflow file: `/home/flip/oelala/workflows/ltx2_gguf_kijai.json`
+- Workflow file: `/home/flip/oelala/workflows/ltx2_gguf_kijai.json` (removed 2026-08-23)
 - Source: https://huggingface.co/Kijai/LTXV2_comfy/discussions/2
 
 ### Key Nodes Setup

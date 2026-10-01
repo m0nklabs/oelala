@@ -33,10 +33,11 @@ MiniMax-H3 I2V uses the same FL2VA component set as T2V (see the MiniMax-H3 tabl
 T2V section below) — the input image becomes the first keyframe. LTX-2.3 I2V runs
 cloud-only through the RunPod builder and has no local component set.
 
-> **Removed in cleanup** (unused/duplicated, freed ~98GB): `smoothMixWan22GGUF_high/lowQ6K.gguf`,
+> **Removed in cleanup 2026-08-23** (unused/duplicated, freed ~98GB): `smoothMixWan22GGUF_high/lowQ6K.gguf`,
 > `wan22EnhancedNSFWCameraPrompt_nsfwV2Q6KH/L.gguf`, `LTX-2-dev-Q2_K.gguf`, and the local LTX-2
 > 19B set (`ltx-2-19b-dev-Q4_K_M`, `ltx-2-19b-distilled_Q4_K_M`, `ltx-2-19b-distilled-fp8`,
 > `ltx-2-19b-embeddings_connector_bf16`, `LTX2_video_vae_bf16`, `ltx2_audio_vae`).
+> LTX-2.3 runs cloud-only; see `changelog/minimax-h3-local-windows.md`.
 
 ---
 
@@ -66,9 +67,10 @@ als fresh-install fallback; Admin panel → Compute als bron van waarheid). De i
 text-encoder past in 16GB VRAM
 (zie `workflows/README_MiniMax_H3_workflow.md` en `scripts/download_minimax_h3.*`).
 
-### T2V Alternative Models (Untested/Experimental)
+### T2V Alternative Models (removed — no local LTX path)
 
-> Lokale LTX-2 19B-modellen zijn verwijderd (LTX-2.3 draait nu cloud-only).
+> Lokale LTX-2 19B-modellen zijn verwijderd op 2026-08-23 (LTX-2.3 draait nu cloud-only; zie
+> `changelog/minimax-h3-local-windows.md`).
 > Verwijderd: `ltx-2-19b-dev-Q4_K_M.gguf`, `ltx-2-19b-distilled_Q4_K_M.gguf`,
 > `ltx-2-19b-distilled-fp8.safetensors`, `LTX-2-dev-Q2_K.gguf`,
 > `ltx-2-19b-embeddings_connector_bf16.safetensors`, `LTX2_video_vae_bf16.safetensors`.
@@ -111,17 +113,17 @@ text-encoder past in 16GB VRAM
 
 | Encoder | File | Size | Used By |
 |---------|------|------|---------|
-| UMT5-XXL BF16 | `umt5-xxl-enc-bf16.safetensors` | 11GB | Parked (Wan 2.2 retired) |
-| UMT5-XXL FP8 | `umt5_xxl_fp8_e4m3fn.safetensors` | 5.7GB | Parked (Wan 2.2 retired) |
-| Gemma 3 12B QAT | `gemma-3-12b-it-qat-q4_0-unquantized/` | 8GB | LTX-2 |
-| Gemma 3 12B GGUF | `gemma-3-12b-it-q4_0.gguf` | 8GB | LTX-2 (alt) |
+| UMT5-XXL BF16 | `umt5-xxl-enc-bf16.safetensors` | 11GB | Removed 2026-10-01 with Wan 2.2 (see `docs/LEGACY.md`) |
+| UMT5-XXL FP8 | `umt5_xxl_fp8_e4m3fn.safetensors` | 5.7GB | Removed 2026-10-01 with Wan 2.2 (see `docs/LEGACY.md`) |
+| Gemma 3 12B QAT | `gemma-3-12b-it-qat-q4_0-unquantized/` | 8GB | LTX-2.3 (cloud — local copy has no local consumer) |
+| Gemma 3 12B GGUF | `gemma-3-12b-it-q4_0.gguf` | 8GB | LTX-2.3 (cloud, alt — local copy has no local consumer) |
 | Qwen 2.5 VL 7B | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | 9.4GB | Qwen vision |
 
 ### VAE Models
 
 | VAE | File | Size | Used By |
 |-----|------|------|---------|
-| LTX-2 VAE | `LTX2_video_vae_bf16.safetensors` | 2.5GB | LTX-2 |
+| LTX-2 VAE | `LTX2_video_vae_bf16.safetensors` | 2.5GB | Removed 2026-08-23 (LTX-2.3 is cloud-only) |
 | SDXL VAE | `sdxl_vae.safetensors` | 335MB | SDXL checkpoints |
 | Flux AE | `ae.safetensors` | 335MB | Flux |
 | Qwen Image VAE | `qwen_image_vae.safetensors` | 254MB | Qwen vision |
@@ -145,7 +147,7 @@ cuda:1,12gb;cuda:0,16gb
 
 | Model Type | Allocation | Notes |
 |------------|------------|-------|
-| LTX-2 19B Q4 | `cuda:1,10gb;cuda:0,14gb` | Lighter model |
+| LTX-2 19B Q4 | `cuda:1,10gb;cuda:0,14gb` | Removed 2026-08-23 — local LTX-2 is gone, LTX-2.3 runs cloud-only |
 | VAE | `cuda:1,3gb` | Small, fast |
 
 ### DisTorch2 Loader Nodes
@@ -176,7 +178,13 @@ cuda:1,12gb;cuda:0,16gb
 
 | Workflow | DisTorch2 | Single GPU | Models Required |
 |----------|-----------|------------|-----------------|
-| `ltx2_distorch2_multigpu_api.json` | ✅ | ❌ | LTX-2 Q4, Gemma, LTX VAE |
+| `build_cloud_minimax_h3_t2v_workflow` (RunPod) | — | — | MiniMax-H3 FL2VA (leading); worker downloads at runtime |
+| `build_local_minimax_h3_t2v_workflow` (Windows PC) | — | — | MiniMax-H3 int8 FL2VA set |
+| `build_cloud_ltx23_t2v_workflow` (RunPod) | — | — | LTX-2.3 22B; worker downloads at runtime |
+
+> No local video workflow JSON exists: the local LTX-2 workflows were removed on 2026-08-23 and
+> the Wan 2.2 workflows on 2026-10-01. Local DisTorch2 remains in use for the image models in
+> the T2I matrix below.
 
 ### T2I Workflows
 

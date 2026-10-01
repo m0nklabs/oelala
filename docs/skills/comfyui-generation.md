@@ -3,7 +3,8 @@
 How to add, test, and document AI generation on oelala.
 
 ## Where things live
-- API-format workflows: `workflows/` (organized by family: `ImageToVideo/`, `TextToImage/`, ...).
+- API-format workflows: `workflows/` (organized by family: `TextToImage/`, `VideoUpscale/`, ...).
+  `ImageToVideo/` is empty — the I2V graphs are built by the adapters.
 - ComfyUI install: `ComfyUI/` (models in `ComfyUI/models/`, custom nodes in `ComfyUI/custom_nodes/`).
 - Workflow builders live in `src/backend/comfyui_client.py` (`_build_*_workflow()`).
 - Backend orchestration: `src/backend/comfyui_client.py`, `runpod_client.py`, `job_queue.py`.
@@ -37,4 +38,4 @@ How to add, test, and document AI generation on oelala.
 
 ## Storage / naming
 - Save to canonical dirs only: `media/generated/`, `ComfyUI/output/`. Never create new output dirs.
-- Naming: `oelala_t2v_{YYYYMMDD}_{HHMMSS}_{index}.mp4`, `oelala_i2v_...`, `oelala_t2i_{index}_.png`, `ltx2_audio_{index}.mp4`.
+- Naming: `oelala_t2v_{YYYYMMDD}_{HHMMSS}_{index}.mp4`, `oelala_i2v_...`, `oelala_t2i_{index}_.png`, `ltx2_audio_{index}.mp4` (legacy LTX-2 audio mode).

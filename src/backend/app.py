@@ -6634,67 +6634,28 @@ async def generate_video_to_video(
     )
 
 
-@app.post("/generate-wan22-comfyui")
-async def generate_wan22_comfyui(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, subject moving naturally"),
-    num_frames: int = Form(41, description="Number of frames in video"),
-    output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 720p, 1080p"),
-    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
-    steps: int = Form(6, description="Sampling steps"),
-    cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    generation_mode: str = Form(
-        "standard", description="Generation mode: standard, nsfw_lora"
-    ),
-    unet_high_noise: str = Form(
-        "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
-        description="GGUF model for high noise pass",
-    ),
-    unet_low_noise: str = Form(
-        "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        description="GGUF model for low noise pass",
-    ),
-    lora_configs: str = Form(
-        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
-    ),
-    extend_mode: str = Form("false", description="Enable sequential clip extension"),
-    clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
-    user: User = Depends(get_current_user),  # Require authenticated user
-):
-    """Generate Wan2.2 I2V video via ComfyUI with DisTorch2 Dual-Pass workflow (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
+# =============================================================================
+# Retired Wan 2.2 endpoints
+# =============================================================================
+# The routes below only ever served the Wan 2.2 family, retired 2026-10-01 (see
+# generation/router.py::RETIRED_MODEL_FAMILIES). They stay registered as explicit
+# 400 stubs so a legacy caller gets the same clear retirement message as a V2
+# request naming the family, instead of a bare 404 or a confusing 500.
+# Current video families: MiniMax-H3 (leading) and LTX-2.3 (alternative).
+def _retired_wan22_endpoint(endpoint: str) -> None:
+    """Raise the canonical 'family retired' error for a removed Wan 2.2 route."""
+    from src.backend.generation.router import retired_family_error
 
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            num_frames=num_frames,
-            output_filename=output_filename,
-            resolution=resolution,
-            fps=fps,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            generation_mode=generation_mode,
-            unet_high_noise=unet_high_noise,
-            unet_low_noise=unet_low_noise,
-            lora_configs=lora_configs,
-            extend_mode=extend_mode,
-            clip_count=clip_count,
-        ),
-        files={"file": file},
-        operation=Operation.GENERATE,
-        target_type=MediaType.VIDEO,
-        adapter_hint="wan22-local-i2v-q6",
-        user=user,
-        register_job_settings={
-            "job_type": "i2v",
-        },
+    raise HTTPException(
+        status_code=400,
+        detail=str(retired_family_error(endpoint, "Wan 2.2")),
     )
+
+
+@app.post("/generate-wan22-comfyui")
+async def generate_wan22_comfyui(user: User = Depends(get_current_user)):
+    """Retired 2026-10-01: Wan 2.2 I2V via the local DisTorch2 dual-pass workflow."""
+    _retired_wan22_endpoint("/generate-wan22-comfyui")
 
 
 # -----------------------------------------------------------------------------
@@ -6736,7 +6697,11 @@ async def _submit_to_runpod(
                 f"{_lbl}: steps={_inp.get('steps')}, cfg={_inp.get('cfg')}, "
                 f"sampler={_inp.get('sampler_name')}, range={_inp.get('start_at_step')}-{_inp.get('end_at_step')}"
             )
-        elif _ct in ("WanImageToVideo", "EmptyWanLatentVideo"):
+        elif _ct in (
+            "EmptyLTXVLatentVideo",
+            "LTXVImgToVideoConditionOnly",
+            "MiniMaxH3ImageToVideo",
+        ):
             _wf_settings.append(
                 f"video: {_inp.get('width')}x{_inp.get('height')}, {_inp.get('length')}f"
             )
@@ -6784,361 +6749,44 @@ async def _submit_to_runpod(
         "message": f"Job submitted to RunPod cloud GPU. Poll /runpod/job/{job.id} for status.",
         **{k: v for k, v in job_info.items() if not k.startswith("_")},
     }
-
-
 @app.post("/generate-wan22-async")
-async def generate_wan22_async(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, subject moving naturally"),
-    num_frames: int = Form(41, description="Number of frames in video"),
-    output_filename: str = Form("", description="Custom output filename"),
-    resolution: str = Form(
-        "480p", description="Video resolution: 480p, 576p, 720p, 1080p"
-    ),
-    fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
-    aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
-    steps: int = Form(6, description="Sampling steps"),
-    cfg: float = Form(1.0, description="CFG guidance scale (1.0 for DisTorch2)"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    unet_high_noise: str = Form(
-        "wan2.2_i2v_high_noise_14B_Q6_K.gguf",
-        description="GGUF model for high noise pass",
-    ),
-    unet_low_noise: str = Form(
-        "wan2.2_i2v_low_noise_14B_Q6_K.gguf",
-        description="GGUF model for low noise pass",
-    ),
-    lora_configs: str = Form(
-        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
-    ),
-    extend_mode: str = Form("false", description="Enable sequential clip extension"),
-    clip_count: int = Form(1, description="Number of sequential clips (1-5)"),
-    post_processing: str = Form(
-        "", description="JSON array of post-processing steps [{type, ...}, ...]"
-    ),
-    post_audio_file: UploadFile = File(
-        None, description="Audio file for add_audio post-processing"
-    ),
-    compute_target: str = Form(
-        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
-    ),
-    user: User = Depends(get_current_user),  # Require authenticated user
-):
-    """Queue Wan2.2 I2V video generation and return immediately (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            num_frames=num_frames,
-            output_filename=output_filename,
-            resolution=resolution,
-            fps=fps,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            unet_high_noise=unet_high_noise,
-            unet_low_noise=unet_low_noise,
-            lora_configs=lora_configs,
-            extend_mode=extend_mode,
-            clip_count=clip_count,
-            post_processing=post_processing,
-            compute_target=compute_target,
-        ),
-        files={"file": file, "post_audio_file": post_audio_file},
-        operation=Operation.GENERATE,
-        target_type=MediaType.VIDEO,
-        adapter_hint="wan22-local-i2v-q6",
-        user=user,
-        register_job_settings={
-            "job_type": "i2v",
-        },
-    )
+async def generate_wan22_async(user: User = Depends(get_current_user)):
+    """Retired 2026-10-01: async Wan 2.2 I2V (local or cloud)."""
+    _retired_wan22_endpoint("/generate-wan22-async")
 
 
-# =============================================================================
-# BlockSwap Q8 Experimental I2V Async Endpoint
-# =============================================================================
 
 
 @app.post("/generate-blockswap-q8-async")
-async def generate_blockswap_q8_async(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, subject moving naturally"),
-    negative_prompt: str = Form(
-        "low quality, blurry, distorted, artifacts",
-        description="Negative prompt",
-    ),
-    num_frames: int = Form(121, description="Number of frames (4k+1 format)"),
-    resolution: str = Form("720p", description="Video resolution: 480p, 576p, 720p"),
-    fps: int = Form(16, description="Frames per second"),
-    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
-    steps: int = Form(8, description="Sampling steps (4-12)"),
-    cfg: float = Form(1.0, description="CFG guidance scale"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    high_noise_steps: int = Form(4, description="Steps for high noise model"),
-    shift: float = Form(9.0, description="ModelSamplingSD3 shift"),
-    nag_scale: float = Form(11.0, description="NAG guidance scale"),
-    enable_upscale: bool = Form(False, description="Enable 4x upscale"),
-    enable_interpolation: bool = Form(
-        False, description="Enable RIFE 2x interpolation"
-    ),
-    enable_florence2: bool = Form(True, description="Enable Florence2 auto-captioning"),
-    lora_configs: str = Form(
-        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
-    ),
-    compute_target: str = Form(
-        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
-    ),
-    user: User = Depends(get_current_user),
-):
-    """Queue BlockSwap Q8 experimental I2V video generation (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            resolution=resolution,
-            fps=fps,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            high_noise_steps=high_noise_steps,
-            shift=shift,
-            nag_scale=nag_scale,
-            enable_upscale=enable_upscale,
-            enable_interpolation=enable_interpolation,
-            enable_florence2=enable_florence2,
-            lora_configs=lora_configs,
-            compute_target=compute_target,
-        ),
-        files={"file": file},
-        operation=Operation.GENERATE,
-        target_type=MediaType.VIDEO,
-        adapter_hint="wan22-local-i2v-blockswap",
-        user=user,
-        register_job_settings={
-            "job_type": "i2v",
-        },
-    )
+async def generate_blockswap_q8_async(user: User = Depends(get_current_user)):
+    """Retired 2026-10-01: Wan 2.2 BlockSwap Q8 I2V (experimental)."""
+    _retired_wan22_endpoint("/generate-blockswap-q8-async")
 
 
-# =============================================================================
-# DisTorch2 Q8 Experimental I2V Async Endpoint
-# =============================================================================
 
 
 @app.post("/generate-distorch2-q8-async")
-async def generate_distorch2_q8_async(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, subject moving naturally"),
-    negative_prompt: str = Form(
-        "low quality, blurry, distorted, artifacts",
-        description="Negative prompt",
-    ),
-    num_frames: int = Form(161, description="Number of frames (4k+1 format)"),
-    resolution: str = Form("480p", description="Video resolution: 480p, 576p, 720p"),
-    fps: int = Form(16, description="Frames per second"),
-    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
-    steps: int = Form(8, description="Sampling steps (4-12)"),
-    cfg: float = Form(1.0, description="CFG guidance scale"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    high_noise_steps: int = Form(
-        4, description="Steps for high noise model (4+4 split tested)"
-    ),
-    shift: float = Form(9.0, description="ModelSamplingSD3 shift"),
-    nag_scale: float = Form(11.0, description="NAG guidance scale"),
-    enable_upscale: bool = Form(False, description="Enable 4x upscale"),
-    enable_interpolation: bool = Form(
-        False, description="Enable RIFE 2x interpolation"
-    ),
-    enable_florence2: bool = Form(True, description="Enable Florence2 auto-captioning"),
-    lora_configs: str = Form(
-        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
-    ),
-    compute_target: str = Form(
-        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
-    ),
-    user: User = Depends(get_current_user),
-):
-    """Queue DisTorch2 Q8 experimental I2V video generation (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            resolution=resolution,
-            fps=fps,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            high_noise_steps=high_noise_steps,
-            shift=shift,
-            nag_scale=nag_scale,
-            enable_upscale=enable_upscale,
-            enable_interpolation=enable_interpolation,
-            enable_florence2=enable_florence2,
-            lora_configs=lora_configs,
-            compute_target=compute_target,
-        ),
-        files={"file": file},
-        operation=Operation.GENERATE,
-        target_type=MediaType.VIDEO,
-        adapter_hint="wan22-local-i2v-distorch2",
-        user=user,
-        register_job_settings={
-            "job_type": "i2v",
-        },
-    )
+async def generate_distorch2_q8_async(user: User = Depends(get_current_user)):
+    """Retired 2026-10-01: Wan 2.2 DisTorch2 Q8 I2V (experimental)."""
+    _retired_wan22_endpoint("/generate-distorch2-q8-async")
 
 
-# =============================================================================
-# Ultra Q8 I2V Async Endpoint — Max VRAM + Unlimited CPU RAM
-# =============================================================================
 
 
 @app.post("/generate-ultra-q8-async")
-async def generate_ultra_q8_async(
-    file: UploadFile = File(...),
-    prompt: str = Form("Motion, subject moving naturally"),
-    negative_prompt: str = Form(
-        "low quality, blurry, distorted, artifacts",
-        description="Negative prompt",
-    ),
-    num_frames: int = Form(161, description="Number of frames (4k+1 format)"),
-    resolution: str = Form("576p", description="Video resolution: 480p, 576p, 720p"),
-    fps: int = Form(16, description="Frames per second"),
-    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
-    steps: int = Form(8, description="Sampling steps (4-12)"),
-    cfg: float = Form(1.0, description="CFG guidance scale"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    high_noise_steps: int = Form(4, description="Steps for high noise model"),
-    shift: float = Form(9.0, description="ModelSamplingSD3 shift"),
-    nag_scale: float = Form(11.0, description="NAG guidance scale"),
-    enable_upscale: bool = Form(False, description="Enable 4x upscale"),
-    enable_interpolation: bool = Form(
-        False, description="Enable RIFE 2x interpolation"
-    ),
-    enable_florence2: bool = Form(True, description="Enable Florence2 auto-captioning"),
-    lora_configs: str = Form(
-        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
-    ),
-    compute_target: str = Form(
-        "local", description="Compute target: 'local' or 'cloud' (RunPod)"
-    ),
-    user: User = Depends(get_current_user),
-):
-    """Queue Ultra Q8 I2V video generation — max VRAM + unlimited CPU RAM (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
-
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            resolution=resolution,
-            fps=fps,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            high_noise_steps=high_noise_steps,
-            shift=shift,
-            nag_scale=nag_scale,
-            enable_upscale=enable_upscale,
-            enable_interpolation=enable_interpolation,
-            enable_florence2=enable_florence2,
-            lora_configs=lora_configs,
-            compute_target=compute_target,
-        ),
-        files={"file": file},
-        operation=Operation.GENERATE,
-        target_type=MediaType.VIDEO,
-        adapter_hint="wan22-local-i2v-ultra",
-        user=user,
-        register_job_settings={
-            "job_type": "i2v",
-        },
-    )
+async def generate_ultra_q8_async(user: User = Depends(get_current_user)):
+    """Retired 2026-10-01: Wan 2.2 Ultra Q8 I2V (max VRAM + CPU RAM)."""
+    _retired_wan22_endpoint("/generate-ultra-q8-async")
 
 
-# =============================================================================
-# Cloud Wan22 Async Endpoint (RunPod bf16 — cloud-only)
-# =============================================================================
 
 
 @app.post("/generate-cloud-wan22-async")
-async def generate_cloud_wan22_async(
-    file: UploadFile = File(None),
-    prompt: str = Form("Motion, subject moving naturally, cinematic quality"),
-    negative_prompt: str = Form(
-        "low quality, blurry, distorted, artifacts, flickering, jitter",
-        description="Negative prompt",
-    ),
-    mode: str = Form("i2v", description="Generation mode: 'i2v' or 't2v'"),
-    num_frames: int = Form(81, description="Number of frames (4k+1 format)"),
-    resolution: str = Form(
-        "720p", description="Video resolution: 480p, 576p, 720p, 1080p"
-    ),
-    fps: int = Form(16, description="Frames per second"),
-    aspect_ratio: str = Form("9:16", description="Video aspect ratio"),
-    steps: int = Form(15, description="Sampling steps (15-25 recommended)"),
-    cfg: float = Form(3.0, description="CFG guidance scale (3.0-5.0 recommended)"),
-    seed: int = Form(-1, description="Random seed (-1 for random)"),
-    high_noise_steps: int = Form(8, description="Steps for high noise pass"),
-    shift: float = Form(8.0, description="ModelSamplingSD3 shift"),
-    sampler_name: str = Form(
-        "dpmpp_2m", description="Sampler: dpmpp_2m, euler, uni_pc"
-    ),
-    scheduler: str = Form("beta", description="Scheduler: beta, karras, normal"),
-    lora_configs: str = Form(
-        "", description="JSON array of LoRA configs [{high, low, strength}, ...]"
-    ),
-    user: User = Depends(get_current_user),
-):
-    """Queue Cloud Wan22 video generation on RunPod — bf16 full precision (V2 thin wrapper)"""
-    from src.backend.generation.v1_compat import dispatch_v1
-    from src.backend.generation.types import Operation, MediaType
+async def generate_cloud_wan22_async(user: User = Depends(get_current_user)):
+    """Retired 2026-10-01: Wan 2.2 bf16 I2V/T2V on RunPod."""
+    _retired_wan22_endpoint("/generate-cloud-wan22-async")
 
-    return await dispatch_v1(
-        form=dict(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            mode=mode,
-            num_frames=num_frames,
-            resolution=resolution,
-            fps=fps,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            cfg=cfg,
-            seed=seed,
-            high_noise_steps=high_noise_steps,
-            shift=shift,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            lora_configs=lora_configs,
-        ),
-        files={"file": file},
-        operation=Operation.GENERATE,
-        target_type=MediaType.VIDEO,
-        adapter_hint="wan22-cloud-i2v",
-        user=user,
-        register_job_settings={
-            "job_type": "i2v",
-        },
-        v1_format="cloud",
-    )
+
 
 
 # =============================================================================
@@ -7422,7 +7070,13 @@ async def comfyui_status():
 async def generate_text_video(
     prompt: str = Form(..., description="Text description of the video to generate"),
     num_frames: int = Form(41, description="Number of frames in video"),
-    model_type: str = Form("wan22", description="Model type: wan22, ltx2"),
+    model_type: str = Form(
+        "minimax_h3",
+        description=(
+            "Model type: minimax_h3, minimax_h3_local, ltx23, ltx2. "
+            "Wan 2.2 values are retired and answered with 400."
+        ),
+    ),
     output_filename: str = Form("", description="Custom output filename"),
     resolution: str = Form("480p", description="Video resolution: 480p, 720p"),
     fps: int = Form(16, description="Frames per second: 8, 12, 16, 24"),
@@ -7448,19 +7102,28 @@ async def generate_text_video(
     ),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """Generate video from text prompt via ComfyUI T2V workflow (V2 thin wrapper)"""
+    """
+    Generate video from a text prompt via ComfyUI T2V workflow (V2 thin wrapper).
+
+    Wan 2.2 was retired 2026-10-01 (see generation/router.py). A retired
+    ``model_type`` ('wan22', 'cloud_wan22', …) is forwarded to the router
+    verbatim so the retirement guard answers with an explicit 400 naming
+    MiniMax-H3 and LTX-2.3 instead of silently falling back to another model.
+    """
     from src.backend.generation.v1_compat import dispatch_v1
     from src.backend.generation.types import Operation, MediaType
 
-    # Map model_type + compute_target to adapter_hint
+    # Map model_type + compute_target to adapter_hint. Anything not in the map
+    # (including retired family spellings) is passed through unchanged.
     hint_map = {
-        "wan22": "wan22-local-t2v-q6",
+        "minimax_h3": "minimax-h3-cloud-t2v",
+        "minimax_h3_local": "minimax-h3-local-t2v",
         "ltx23": "ltx23-cloud-t2v",
         "ltx2": "ltx23-cloud-t2v",
     }
-    hint = hint_map.get(model_type, "wan22-local-t2v-q6")
-    if compute_target == "cloud" and model_type == "wan22":
-        hint = "wan22-cloud-t2v"
+    hint = hint_map.get(model_type, model_type)
+    if model_type == "minimax_h3" and compute_target == "local":
+        hint = "minimax-h3-local-t2v"
 
     return await dispatch_v1(
         form=dict(

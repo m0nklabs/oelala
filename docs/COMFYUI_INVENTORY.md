@@ -63,10 +63,11 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 
 **Note**: Image gen fits on single GPU. Use `cuda:0` (16GB) for headroom.
 
-### LTX-2 Video Generation (⚠️ Experimental)
+### LTX-2 Video Generation (removed — LTX-2.3 is cloud-only)
 
-> **Removed in cleanup** — de lokale LTX-2 19B-modellen zijn van de schijf
-> verwijderd (LTX-2.3 draait nu **cloud-only** via RunPod). Verwijderde files:
+> **Removed in cleanup 2026-08-23** — de lokale LTX-2 19B-modellen zijn van de schijf
+> verwijderd (LTX-2.3 draait nu **cloud-only** via RunPod; zie
+> `changelog/minimax-h3-local-windows.md`). Verwijderde files:
 > `ltx-2-19b-distilled-fp8.safetensors`, `ltx-2-19b-distilled_Q4_K_M.gguf`,
 > `ltx-2-19b-dev-Q4_K_M.gguf`, `ltx-2-19b-embeddings_connector_bf16.safetensors`,
 > `LTX2_video_vae_bf16.safetensors`, `ltx2_audio_vae.safetensors`.
@@ -86,7 +87,7 @@ DisTorch2 automatically distributes model layers across both GPUs. Use these nod
 |---------|------------|-------|
 | CLIP-L | ~1GB | SDXL text encoder |
 | T5-XXL FP8 | ~8GB | Wan/Flux text encoder |
-| UMT5-XXL | ~10GB | Parked (Wan 2.2 retired) |
+| UMT5-XXL | ~10GB | Removed 2026-10-01 with Wan 2.2 (see `docs/LEGACY.md`) |
 
 **Tip**: T5/UMT5 can be offloaded after encoding to free VRAM for generation.
 
@@ -269,7 +270,7 @@ Available categories:
 |-------|---------|
 | `clip_l.safetensors` | CLIP-L (SDXL) |
 | `t5xxl_fp8_e4m3fn.safetensors` | T5-XXL FP8 (Wan/Flux) |
-| `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (parked — Wan 2.2 retired) |
+| `umt5-xxl-enc-bf16.safetensors` | UMT5-XXL (removed 2026-10-01 with Wan 2.2) |
 | `qwen3vl_4b_bf16.safetensors` | Qwen3-VL-4B (Krea 2, type krea2) |
 
 ---
