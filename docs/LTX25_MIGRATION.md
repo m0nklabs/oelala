@@ -198,6 +198,41 @@ currently deployed 2.3 worker; the migration neither creates nor removes it. It 
 recorded here as an operator/legal question, not as a migration blocker.
 **[verified]**
 
+#### Operator decision (2026-10-01): NSFW stays available on LTX, AUP exposure accepted
+
+**Decision owner: the operator.** Asked whether the LTX slot should stay NSFW-capable or
+become SFW-only, the operator chose to **keep NSFW generation available on LTX and accept
+the resulting Acceptable Use Policy exposure**. LTX-2.5 therefore ships with the same
+content scope as the deployed 2.3 worker. **[decided]**
+
+What this decision does and does not mean:
+
+- It is a **knowing risk acceptance, not an oversight.** The exposure is documented in
+  this section, the operator has read it, and the choice is recorded here so that a later
+  reader does not mistake it for a compliance gap nobody noticed.
+- **§3.1 remains unfulfilled for that content class.** The licence requires the
+  Attachment A use restrictions to be "included as an enforceable provision by you in any
+  type of legal agreement … governing the use and/or distribution of LTX-2.x". Serving
+  sexually explicit LTX output while the AUP forbids it means we deliberately do not
+  embed that particular restriction. The practical consequence to be aware of: our own
+  terms must **not** be written to echo the AUP's prohibition verbatim, because a ToS that
+  forbids what the product demonstrably does is worse than the current state — it is an
+  internal contradiction that is trivially discoverable.
+- **§6 obligations are unaffected by this choice** and still stand: AI-content
+  disclosure, no circumvention of provenance features, and the related indemnity. See
+  §3.2.1 and decision A5 — those are separate and still open.
+- **The exposure predates the migration.** `LICENSE-2` (2.3) carries the identical AUP in
+  its Attachment A, so the deployed worker already runs on these terms. Migrating does
+  not increase it; it does make it worth revisiting deliberately.
+- **Mitigations stay available and are cheap to adopt later**, should the risk appetite
+  change: route NSFW traffic exclusively to MiniMax-H3 (which carries no such AUP
+  restriction) and keep LTX for cinematic/SFW work. That is a routing decision, not a
+  re-architecture, and can be made at any time without redeploying the LTX worker.
+
+**Open follow-up, not a blocker:** a legal read of §3.1 for SaaS hosting (decision A7)
+is still advisable. This decision settles the *product* question; it does not settle
+whether direct-pull removes the §3.1 hosting obligation.
+
 ---
 
 ### 3.4 Direct-pull vs mirroring — a good instinct, with three caveats
@@ -747,9 +782,10 @@ production.
 | **A1** | ~~Accept the gate~~ — **DONE on `bomehika`.** | **[done]** |
 | **A2** | Confirm the acceptance took: the model page's gate banner is gone and weight files download. | **[done — verified via 206 ranged request]** |
 | **A3** | **⛔ HARD PRECONDITION — the worker template must carry the `bomehika` token, and today it does not.** See the defect below. | **[verified defect; fix required]** |
-| **A4** | **Decide on the NSFW question** (§3.3). The AUP prohibits sexually explicit content and the licence requires us to make it enforceable in our own terms. Pre-existing on 2.3, but a migration is the natural moment to settle it. | **[verified: policy text; decision is the operator's]** |
+| **A4** | **Decide on the NSFW question** (§3.3). The AUP prohibits sexually explicit content and the licence requires us to make it enforceable in our own terms. Pre-existing on 2.3, but a migration is the natural moment to settle it. | **[DECIDED 2026-10-01 — NSFW stays on LTX, AUP exposure knowingly accepted; see §3.3]** |
 | **A5** | **Decide on AI-transparency compliance** (§3.2.1). New obligation introduced by the 2.5 licence: output disclosure, no circumvention of provenance features, and equivalent clauses in our own ToS. | **[verified: licence text; implementation is the operator's]** |
 | **A6** | Confirm the target GPU tiers. Recommended 2.5 int8 set needs ~39 GB with the text encoder resident; an A40 48 GB is tight, so keep the 2.3 worker alive (§9). | **[needs runtime confirmation]** |
+| **A7** | **Legal read of §3.1 for SaaS hosting** (§3.3, §3.4 caveat 1). §3.1 attaches to *hosting for third parties*, not only to distributing weight files, so direct-pull may not remove the obligation. Whether "we never hand over the weights" is sufficient is a legal judgement, not a technical one. | **[open — follow-up, does not block the migration]** |
 
 #### ⛔ A3 in detail — the deployed template carries the *wrong* token
 
@@ -892,11 +928,10 @@ it grants access to a separate repo and does not affect the 2.3 worker.
 
 ## 10. Open questions for the operator
 
-1. **NSFW scope (§3.3).** The Lightricks AUP prohibits sexually explicit content and
-   the license obliges us to make that restriction enforceable in our own terms. This
-   already applies to the deployed 2.3 worker. Does the platform keep serving
-   NSFW on LTX at all, or does the second slot become SFW-only? **This is the only
-   question that can block the migration on grounds other than engineering.**
+1. ~~**NSFW scope (§3.3).**~~ **ANSWERED 2026-10-01: NSFW stays available on LTX and the
+   AUP exposure is knowingly accepted.** The migration is therefore no longer blocked on
+   non-engineering grounds. The §3.1 hosting question (A7) stays open as a follow-up, and
+   the AI-transparency obligations (A5) are unaffected by this choice. See §3.3.
 2. ~~**Which HF account holds the worker token?**~~ **Answered: `bomehika`.** The gate is
    accepted there and that account has access (206); m0nk111 does not (403). The template
    must carry the `bomehika` token — see §A3, which is a **required fix** before deploying.

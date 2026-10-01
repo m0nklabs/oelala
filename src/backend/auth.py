@@ -39,6 +39,16 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://nsbjwhxdkxnyggtuxjjp.supabase.
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
+# Whether a token that failed signature verification may still be trusted.
+# Defaults to ON only so this change cannot lock anyone out before the ES256
+# JWKS path is confirmed in production; set AUTH_ALLOW_UNVERIFIED_JWT=0 to
+# close the authentication bypass described in decode_supabase_jwt().
+ALLOW_UNVERIFIED_JWT = os.getenv("AUTH_ALLOW_UNVERIFIED_JWT", "1").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 # JWT Key URL for Supabase (JWKS endpoint)
 JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 
@@ -73,8 +83,16 @@ def decode_jwt_with_jwks(token: str) -> Optional[dict]:
         return None
     try:
         signing_key = client.get_signing_key_from_jwt(token)
+        # Supabase issues ES256 (EC P-256) tokens. Restricting this list to
+        # RS256 made every legitimate token fail verification with
+        # InvalidAlgorithmError, which silently pushed all traffic onto the
+        # unverified fallback below and turned that fallback into the de-facto
+        # authentication path.
         return jwt.decode(
-            token, signing_key.key, algorithms=["RS256"], audience="authenticated"
+            token,
+            signing_key.key,
+            algorithms=["ES256", "ES384", "RS256", "RS384"],
+            audience="authenticated",
         )
     except (jwt.InvalidTokenError, jwt.exceptions.PyJWKClientError, Exception) as e:
         debug_log(f"JWT JWKS decode failed: {e}")
@@ -89,23 +107,38 @@ def decode_supabase_jwt(token: str) -> Optional[dict]:
         debug_log(f"JWT decoded with secret: user={payload.get('sub')}")
         return payload
 
-    # Fall back to JWKS (RS256)
+    # Fall back to JWKS (ES256 / RS256)
     payload = decode_jwt_with_jwks(token)
     if payload:
-        debug_log(f"JWT decoded with JWKS: user={payload.get('sub')}")
+        logger.info(f"🔐 AUTH: JWT verified via JWKS: user={payload.get('sub')}")
         return payload
 
-    # Last resort: decode without verification (dev mode)
-    # This is acceptable because Cloudflare Tunnel provides transport security
-    # and the token was issued by our trusted Supabase instance
+    if not ALLOW_UNVERIFIED_JWT:
+        logger.warning(
+            "🔐 AUTH: token failed signature verification and the unverified "
+            "fallback is disabled (AUTH_ALLOW_UNVERIFIED_JWT=0) — rejecting"
+        )
+        return None
+
+    # Last resort: decode without verification.
+    #
+    # SECURITY WARNING: this accepts ANY token whose payload merely carries a
+    # `sub`, with no signature check at all — anyone able to reach the API can
+    # impersonate any user id. It was justified by "Cloudflare Tunnel provides
+    # transport security", but a tunnel provides TLS and origin hiding, not
+    # issuer authentication: a forged token passes through it unchanged. The
+    # fallback used to be reached on EVERY request because the JWKS path only
+    # allowed RS256 while Supabase issues ES256, so this branch was the de-facto
+    # auth path rather than an emergency escape hatch. Keep it off.
+    logger.warning(
+        "🔐 AUTH: JWT decoded WITHOUT signature verification (unverified "
+        "fallback) — this accepts forged tokens; set AUTH_ALLOW_UNVERIFIED_JWT=0"
+    )
     try:
         # Decode without verification - we trust the token source
         payload = jwt.decode(token, options={"verify_signature": False})
         user_id = payload.get("sub")
         if user_id:
-            logger.info(
-                f"🔐 AUTH: JWT decoded (unverified): user={user_id}, email={payload.get('email')}"
-            )
             return payload
     except Exception as e:
         logger.warning(f"🔐 AUTH: JWT decode failed completely: {e}")
