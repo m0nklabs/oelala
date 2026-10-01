@@ -112,7 +112,15 @@ MINIMAX_H3_CHECKPOINTS = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Workflow Directory and Dynamic Loading
 # ─────────────────────────────────────────────────────────────────────────────
-WORKFLOWS_DIR = Path("/home/flip/oelala/workflows")
+# Workflow directory. Defaults to the repository's workflows/ folder resolved
+# relative to this file, so the backend is not tied to one machine's layout;
+# OELALA_WORKFLOWS_DIR overrides it for deployments that keep them elsewhere.
+WORKFLOWS_DIR = Path(
+    os.getenv(
+        "OELALA_WORKFLOWS_DIR",
+        str(Path(__file__).resolve().parents[2] / "workflows"),
+    )
+)
 
 # Available I2V generation modes with their workflow files
 # Wan2.2 I2V generation modes removed — model retired 2026-10-01 and

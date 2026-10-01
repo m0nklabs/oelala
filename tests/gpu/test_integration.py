@@ -57,8 +57,8 @@ class TestWorkflowValidation:
 
     @pytest.fixture
     def workflow_dir(self):
-        """Get the workflows directory."""
-        return Path("/home/flip/oelala/workflows")
+        """Get the workflows directory (repository root, not a machine path)."""
+        return Path(__file__).resolve().parents[2] / "workflows"
 
     def test_workflow_files_valid_json(self, workflow_dir):
         """All .json files in workflows/ should be valid JSON."""
