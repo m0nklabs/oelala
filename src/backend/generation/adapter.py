@@ -32,8 +32,8 @@ class GenerationAdapter(ABC):
     """
 
     # ── Identity (set in subclass) ──────────────────────────────
-    name: str  # e.g. "wan22-distorch2-q6-i2v"
-    model_family: str  # e.g. "wan2.2" — used for LoRA compat filtering
+    name: str  # e.g. "minimax-h3-local-i2v"
+    model_family: str  # e.g. "minimax_h3" — used for LoRA compat filtering
     supported_ops: set[Operation]
     input_types: set[MediaType]
     output_type: MediaType
