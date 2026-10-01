@@ -219,7 +219,7 @@ FL2VA genereert altijd een synchrone soundtrack (24 fps, 17k+5 frame grid, geen 
 
 > **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; references to it below are historical. See `docs/LEGACY.md`.
 
-**90+ motion and action LoRAs available** in dual high/low noise variants.
+**Wan 2.2 motion and action LoRAs parked** (32 files, ~10 GB, dual high/low noise pairs) — the family was retired 2026-10-01; the LoRAs stay on `/mnt/ssd/loras` for a possible future open-weight Wan 3 (see `docs/LEGACY.md`).
 
 All video LoRAs require BOTH versions loaded simultaneously:
 - High noise → affects early diffusion steps

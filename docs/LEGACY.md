@@ -57,7 +57,7 @@ Local disk before cleanup: **43.4 GB in 36 files**.
 | `unet_gguf/Wan2.2-I2V-A14B-{High,Low}Noise-Q8_0.gguf` | 30.8 GB | `QuantStack/Wan2.2-I2V-A14B-GGUF` (`HighNoise/`, `LowNoise/` — identical filenames) |
 | `clip/umt5-xxl-enc-bf16.safetensors` | 11.4 GB | `Comfy-Org/Wan_2.2_ComfyUI_Repackaged` (also on the public flat dump) |
 | `vae/Wan2.1_VAE.safetensors`, `vae/wan_2.1_vae.safetensors` | 0.5 GB | `Comfy-Org/Wan_2.2_ComfyUI_Repackaged` |
-| Wan2.2 LoRAs (36 files, incl. T2V/I2V high+low pairs, lightning 4-step) | ~13 GB | **Parked** — kept for a possible open-weight Wan 3, see below |
+| Wan2.2 LoRAs (32 files: T2V/I2V high+low pairs, lightning 4-step) | ~10 GB | **Parked** — kept for a possible open-weight Wan 3, see below |
 | Runtime weights on the second model store (`/mnt/ali_nvme_500gb/comfy_models`, via `extra_model_paths.yaml`) | 149.2 GB / 36 files | `Comfy-Org/Wan_2.2_ComfyUI_Repackaged`, `QuantStack/Wan2.2-I2V-A14B-GGUF` (deleted 2026-10-01) |
 
 Catalog totals for the family were higher (288.5 GB over 41 entries) because the catalog
@@ -104,4 +104,4 @@ lists them; recording a source per file is the fix.
   `wan22EnhancedNSFW_V2` pair, three umt5 encoders and a Wan2.1 Lynx IP layer), plus two
   symlinks that dangled at the files removed in the first pass. Both stores are now clean:
   **≈ 192 GB freed** (root filesystem 94% → 89%, NVMe store 74% → 43%) and no dangling
-  symlinks remain. The 36 Wan LoRAs stay parked; re-fetch sources are in the table above.
+  symlinks remain. The 32 Wan LoRAs (~10 GB, measured) stay parked; re-fetch sources are in the table above.

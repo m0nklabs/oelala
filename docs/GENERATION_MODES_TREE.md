@@ -316,7 +316,7 @@ Sub-Models (Shared Components)
 │
 ├── 📝 Text Encoders
 │   │
-│   ├── UMT5 Family (parked — Wan 2.2 retired; kept on disk for a possible future Wan 3)
+│   ├── UMT5 Family (deleted 2026-10-01 — Wan 2.2 retired; the text encoder went with the family)
 │   │   ├── umt5-xxl-enc-bf16.safetensors                   [11GB] ★ Primary
 │   │   ├── umt5_xxl_fp8_e4m3fn.safetensors                 [5.7GB] Low VRAM
 │   │   └── umt5_xxl_fp8_e4m3fn_scaled.safetensors          [6.7GB]
