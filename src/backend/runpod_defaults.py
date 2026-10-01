@@ -132,6 +132,52 @@ RUNPOD_ENDPOINT_DEFAULTS: dict[str, RunPodEndpointDefaults] = {
 }
 
 
+# Preference order for the *generic* default endpoint, used only when
+# RUNPOD_ENDPOINT_ID is unset. MiniMax-H3 leads the platform, LTX-2.3 is
+# second, i2i is image-only. Explicitly ordered so the choice does not depend
+# on dict insertion order.
+DEFAULT_ENDPOINT_PREFERENCE: tuple[str, ...] = ("minimax_h3", "ltx23", "i2i")
+
+
+def configured_endpoint_ids() -> list[str]:
+    """Return every endpoint ID that is explicitly configured via env vars.
+
+    Family endpoints live in their own variables (RUNPOD_MINIMAX_H3_ENDPOINT_ID
+    and friends), so a missing generic RUNPOD_ENDPOINT_ID does NOT mean cloud
+    compute is unavailable. Only env vars count here — the hardcoded fallbacks
+    are deploy-script mirrors, not evidence of a configured endpoint.
+    """
+    endpoint_ids: list[str] = []
+    for defaults in RUNPOD_ENDPOINT_DEFAULTS.values():
+        for env_var in defaults.endpoint_env_vars:
+            value = os.getenv(env_var, "").strip()
+            if value and value not in endpoint_ids:
+                endpoint_ids.append(value)
+    return endpoint_ids
+
+
+def default_endpoint_id() -> str | None:
+    """Resolve the generic default endpoint from the environment.
+
+    RUNPOD_ENDPOINT_ID wins. Otherwise the first configured endpoint in
+    DEFAULT_ENDPOINT_PREFERENCE order is used, so status/cancel/health calls
+    have a target even when no generic default is set.
+    """
+    explicit = os.getenv("RUNPOD_ENDPOINT_ID", "").strip()
+    if explicit:
+        return explicit
+
+    for profile in DEFAULT_ENDPOINT_PREFERENCE:
+        defaults = RUNPOD_ENDPOINT_DEFAULTS.get(profile)
+        if defaults is None:
+            continue
+        for env_var in defaults.endpoint_env_vars:
+            value = os.getenv(env_var, "").strip()
+            if value:
+                return value
+    return None
+
+
 def endpoint_profile_for_id(endpoint_id: str | None) -> str | None:
     """Resolve a RunPod endpoint ID to a known Oelala profile name."""
     if not endpoint_id:

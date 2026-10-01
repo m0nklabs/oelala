@@ -24,7 +24,7 @@ from enum import Enum
 
 import httpx
 
-from runpod_defaults import get_runpod_job_policy
+from runpod_defaults import default_endpoint_id, get_runpod_job_policy
 
 logger = logging.getLogger(__name__)
 
@@ -109,15 +109,25 @@ class RunPodClient:
         self._endpoints: Dict[str, RunPodEndpoint] = {}
         # Active jobs — job_id -> RunPodJob
         self._active_jobs: Dict[str, RunPodJob] = {}
+        # Explicitly listed endpoints (RUNPOD_ENDPOINT_IDS) are the failover
+        # set, in priority order. Family endpoints are deliberately NOT added
+        # here: a MiniMax-H3 job must never fail over to the LTX-2.3 worker.
         configured_endpoints = _parse_endpoint_ids(os.getenv("RUNPOD_ENDPOINT_IDS", ""))
         explicit_default = os.getenv("RUNPOD_ENDPOINT_ID", "").strip()
         if explicit_default and explicit_default not in configured_endpoints:
             configured_endpoints.insert(0, explicit_default)
 
         self.endpoint_ids: List[str] = configured_endpoints
-        # Default endpoint (set via env var, configure, or auto-detected)
-        self.default_endpoint_id: Optional[str] = explicit_default or (
-            configured_endpoints[0] if configured_endpoints else None
+        # Default endpoint: explicit env var, else the first explicitly listed
+        # endpoint, else the platform preference order (H3 -> LTX-2.3 -> i2i).
+        # The family variables live in their own env vars, so a missing generic
+        # RUNPOD_ENDPOINT_ID used to make has_endpoint() report "no cloud
+        # compute" while three endpoints were configured, and every cloud
+        # submission died with a 503.
+        self.default_endpoint_id: Optional[str] = (
+            explicit_default
+            or (configured_endpoints[0] if configured_endpoints else None)
+            or default_endpoint_id()
         )
 
     @property

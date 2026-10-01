@@ -6601,7 +6601,11 @@ async def _submit_to_runpod(
     endpoint_id: str = None,
 ) -> dict:
     """Submit a ComfyUI workflow to RunPod cloud GPU instead of local."""
-    if not _runpod or not _runpod.has_endpoint():
+    # An explicit endpoint_id is sufficient on its own: every cloud adapter
+    # resolves its own family endpoint (RUNPOD_MINIMAX_H3_ENDPOINT_ID etc.) and
+    # passes it in. Requiring the generic default here made those submissions
+    # fail with 503 whenever RUNPOD_ENDPOINT_ID was unset.
+    if not _runpod or not (endpoint_id or _runpod.has_endpoint()):
         raise HTTPException(
             status_code=503,
             detail="RunPod cloud GPU not available. Deploy an endpoint first.",
