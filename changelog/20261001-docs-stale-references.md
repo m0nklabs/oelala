@@ -57,3 +57,9 @@
   accepted `model_type` values (`minimax_h3`, `minimax_h3_local`, `ltx23`, `ltx2`; retired
   Wan 2.2 values are answered with 400), and the Wan-era `wan22-*` routes are documented as
   retired rather than missing.
+- **`docs/LTX2_PERFORMANCE.md` no longer points at files the LTX cleanup deleted.** The
+  same commit that carried the LTX sweep also removed `scripts/ltx2_audio_test.py`,
+  `scripts/test_ltx2_umt5.py` and `ComfyUI/models/vae/ltx2_audio/`, which left three
+  references dangling: the two script paths are now annotated "(removed 2026-08-23)", and
+  the "Preparing Audio VAE Checkpoint" section carries a dated note saying its snippet
+  consumes deleted artifacts and will not run as-is.

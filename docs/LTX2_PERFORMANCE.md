@@ -129,6 +129,11 @@ The HuggingFace audio components need to be combined into a single checkpoint wi
 
 ## Preparing Audio VAE Checkpoint
 
+> **Removed 2026-08-23:** the local LTX-2 audio artifacts this section consumes
+> (`ComfyUI/models/vae/ltx2_audio/`, 106 MB) were deleted with the rest of the local LTX-2
+> set; the snippet below is a historical record of how the checkpoint was built and will
+> not run as-is.
+
 The Audio VAE from HuggingFace needs to be combined into a ComfyUI-compatible format:
 
 ```python
@@ -148,7 +153,7 @@ for k, v in vocoder_sd.items():
     combined_sd[f"vocoder.{k}"] = v
 
 # Create ComfyUI-compatible metadata
-# See scripts/ltx2_audio_test.py for full config mapping
+# See scripts/ltx2_audio_test.py for full config mapping (script removed 2026-08-23)
 metadata = {"config": json.dumps({
     "model": {
         "params": {
@@ -168,7 +173,7 @@ save_file(combined_sd, "models/checkpoints/ltx2_audio_vae.safetensors", metadata
 *(Historical — the API workflow below was removed on 2026-08-23 with the local LTX-2 19B set; LTX-2.3 runs cloud-only via RunPod.)*
 
 - **Video-only API:** `workflows/ltx2_cpu_gemma_api.json` (removed 2026-08-23)
-- **Audio+Video Test:** `scripts/ltx2_audio_test.py`
+- **Audio+Video Test:** `scripts/ltx2_audio_test.py` (removed 2026-08-23)
 - **Output Directory:** `ComfyUI/output/`
 
 ## Recommended Settings
