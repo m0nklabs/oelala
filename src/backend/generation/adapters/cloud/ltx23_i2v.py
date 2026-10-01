@@ -109,7 +109,7 @@ class LTX23CloudI2VAdapter(GenerationAdapter):
 
     def cost(self, req: GenerationRequest) -> int:
         """
-        LTX-2.3 I2V — same credit formula as Wan22 I2V for now.
+        LTX-2.3 I2V — the shared video I2V tiers (5/8/15).
         """
         frames = req.frames or 97
         if frames <= 97:

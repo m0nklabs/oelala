@@ -116,7 +116,6 @@ from gen_artifacts import (
 )
 
 # Credits system
-from credits import calculate_credits
 from credits_api import (
     router as credits_router,
     stripe_router,
@@ -528,7 +527,8 @@ for noisy_logger in ["diffusers", "transformers", "accelerate"]:
 # Create FastAPI app
 app = FastAPI(
     title="Oelala AI Video Generator",
-    description="AI-powered video generation from images using Wan2.2",
+    description="AI-powered image, video and audio generation",
+
     version="1.0.0",
 )
 
@@ -1619,7 +1619,8 @@ async def list_comfyui_media(
                                     inputs = node.get("inputs", {})
                                     class_type = node.get("class_type", "")
 
-                                    # Wan2.2 / standard positive_prompt
+                                    # Legacy Wan 2.2 / standard positive_prompt
+                                    # (stored metadata of older generations)
                                     if "positive_prompt" in inputs and isinstance(
                                         inputs["positive_prompt"], str
                                     ):
@@ -1704,7 +1705,8 @@ async def list_comfyui_media(
                                                 }
                                             )
 
-                                    # Wan2.2 specific LoRA loader
+                                    # Legacy Wan 2.2 dual-noise LoRA loader
+                                    # (stored metadata of older generations)
                                     if (
                                         "WanVideoLoraSelect" in class_type
                                         or "lora_high" in inputs
@@ -1858,7 +1860,8 @@ async def list_comfyui_media(
                                 inputs = node.get("inputs", {})
                                 class_type = node.get("class_type", "")
 
-                                # Wan2.2 / standard positive_prompt
+                                # Legacy Wan 2.2 / standard positive_prompt
+                                # (stored metadata of older generations)
                                 if "positive_prompt" in inputs and isinstance(
                                     inputs["positive_prompt"], str
                                 ):
@@ -1934,7 +1937,8 @@ async def list_comfyui_media(
                                             }
                                         )
 
-                                # Wan2.2 LoRA loader
+                                # Legacy Wan 2.2 dual-noise LoRA loader
+                                # (stored metadata of older generations)
                                 if (
                                     "WanVideoLoraSelect" in class_type
                                     or "lora_high" in inputs
@@ -2131,7 +2135,10 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
 async def list_loras():
     """
     List available LoRA models from ComfyUI/models/loras folder.
-    Returns LoRAs grouped by noise type (high/low) for Wan2.2 dual-pass workflow.
+    LoRAs are grouped by noise type (high/low), a legacy dual-pass convention:
+    Wan 2.2 was retired 2026-10-01 and the live families (MiniMax-H3, LTX-2.3)
+    use single-stage LoRAs, so the high/low buckets only ever fill from the
+    parked Wan library.
     Includes NSFW detection based on filename patterns.
     """
     loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
@@ -2399,12 +2406,12 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
 
     all_loras = lora_cache.get_all()
 
-    # Map model_mode to base_model for LoRA filtering
+    # Map model_mode to base_model for LoRA filtering. Model modes are the live
+    # I2V/T2V families (MiniMax-H3, LTX-2.3); Wan 2.2 was retired 2026-10-01 and
+    # its parked LoRAs must not be offered as suggestions.
     BASE_MODEL_MAP = {
-        "wan2.2": "wan2.2",
-        "wan22_standard": "wan2.2",
-        "wan22_distorch": "wan2.2",
-        "cloud_wan22": "wan2.2",
+        "minimax_h3": "minimax_h3",
+        "minimax_h3_local": "minimax_h3",
         "ltx2": "ltx",
         "ltx23": "ltx",
     }
@@ -2476,20 +2483,15 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
 
     # Model-specific constraints for the LLM
     MODEL_CONSTRAINTS = {
-        "wan2.2": {
-            "cfg_range": "1.0-5.0 (default 1.0, higher = stronger prompt adherence but more artifacts)",
-            "steps_range": "4-30 (default 6, higher = better quality but slower)",
-            "notes": "Wan 2.2 supports CFG guidance. LoRAs are dual-noise (high+low pairs).",
+        "minimax_h3": {
+            "cfg_range": "1.0 ONLY — MiniMax-H3 samples with a BasicGuider, there is no classifier-free guidance. Do NOT suggest CFG changes.",
+            "steps_range": "4 (turbo draft), 8 (turbo standard) or 20 (non-turbo full) — fixed by the selected model variant",
+            "notes": "MiniMax-H3 renders video WITH native stereo audio in one pass at a fixed 24 fps and has no negative prompt; steer the result through the positive prompt (including the audio you want).",
         },
-        "wan22_standard": {
-            "cfg_range": "1.0-5.0 (default 1.0, higher = stronger prompt adherence but more artifacts)",
-            "steps_range": "4-30 (default 6, higher = better quality but slower)",
-            "notes": "Wan 2.2 supports CFG guidance. LoRAs are dual-noise (high+low pairs).",
-        },
-        "cloud_wan22": {
-            "cfg_range": "1.0-5.0 (default 1.0)",
-            "steps_range": "4-30 (default 6)",
-            "notes": "Wan 2.2 on cloud GPU. Same constraints as wan2.2.",
+        "minimax_h3_local": {
+            "cfg_range": "1.0 ONLY — MiniMax-H3 samples with a BasicGuider, there is no classifier-free guidance. Do NOT suggest CFG changes.",
+            "steps_range": "20 (the local backend always runs the official non-turbo weights)",
+            "notes": "MiniMax-H3 on the local ComfyUI node: fixed 24 fps, native stereo audio, no negative prompt.",
         },
         "ltx2": {
             "cfg_range": "1.0 ONLY — DO NOT suggest changing CFG. LTX 2.3 distilled is trained without classifier-free guidance. Any value above 1.0 DEGRADES quality.",
@@ -2513,7 +2515,7 @@ async def ai_suggest_settings(request: Request, user: User = Depends(get_current
 CRITICAL RULES:
 - ONLY suggest LoRAs from the "Available LoRAs" list. Do NOT invent LoRA filenames.
 - Each LoRA has a noise_level: "high", "low", or "single". Include it in lora_add suggestions.
-- For Wan2.2: LoRAs are dual-noise pairs (high+low). If suggesting a high-noise LoRA, also check if a matching low-noise LoRA exists and suggest both.
+- Live families (MiniMax-H3, LTX-2.3) use single-stage LoRAs. The dual-noise high+low pairing was specific to Wan 2.2, which is retired — never invent high/low pairs.
 - Do NOT suggest lora_trigger separately when lora_add already includes trigger_words — the frontend handles trigger word injection automatically.
 - Only suggest lora_trigger for LoRAs that are ALREADY active but missing trigger words in the prompt.
 
@@ -2710,8 +2712,12 @@ Focus on: missing trigger words, strength adjustments, matching LoRAs not yet ac
 @app.get("/unet-models")
 async def list_unet_models():
     """
-    List available GGUF unet models for Wan2.2 I2V.
-    Returns pairs of high/low noise models.
+    List the GGUF unet models present in the local ComfyUI models/unet directory.
+
+    Also groups them into high/low-noise candidates and best-effort pairs, which
+    is how a dual-pass (two-checkpoint) video workflow would be assembled. No
+    live adapter consumes this anymore — Wan 2.2, the only dual-noise family,
+    was retired 2026-10-01 — so treat the pairing output as informational.
     """
     unet_dir = Path("/home/flip/oelala/ComfyUI/models/unet")
 
@@ -3314,7 +3320,7 @@ def record_generation_complete(
         "num_frames": job_info.get("num_frames", 0),
         "fps": job_info.get("fps", 0),
         "steps": job_info.get("steps", 0),
-        "model_mode": job_info.get("model_mode", "wan2.2"),
+        "model_mode": job_info.get("model_mode", "unknown"),
         "extend_mode": job_info.get("extend_mode", False),
         "clip_count": job_info.get("clip_count", 1),
         "lora_count": job_info.get("lora_count", 0),
@@ -3567,7 +3573,7 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
 
     When the job completes, this function:
     1. Decodes the base64 video output from RunPod
-    2. Saves it locally to media/generated/cloud-wan22/
+    2. Saves it to MinIO under media/generated/cloud-<family>/
     3. Uploads to MinIO via MediaService
     4. Returns the same response format as local jobs
     5. Saves raw ComfyUI logs to logs/cloud/
@@ -3783,12 +3789,14 @@ async def _handle_cloud_job_status(prompt_id: str, job_info: dict) -> dict:
             continue
 
         # Generate filename — model-family aware. The legacy hardcode was
-        # "wan22" from the days it was the only cloud video model; job_info
-        # carries the actual family (e.g. "minimax_h3", "ltx23", "wan22").
+        # "wan22" from the days it was the only cloud video model (family
+        # retired 2026-10-01); job_info now carries the actual family
+        # (e.g. "minimax_h3", "ltx23") and an unknown one stays unknown
+        # instead of being mislabelled.
         timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
         orig_name = _safe_filename(f.get("filename", f"output_{i:03d}.mp4"))
         ext = Path(orig_name).suffix or ".mp4"
-        family = str(job_info.get("model") or "wan22").replace("_", "")
+        family = str(job_info.get("model") or "unknown").replace("_", "")
         save_name = f"cloud_{family}_{timestamp}_{i:03d}{ext}"
 
         try:
@@ -3944,7 +3952,7 @@ async def get_generation_stats(
 
     Parameters:
     - limit: Max number of records to return (default 100)
-    - job_type: Filter by job type (wan22_i2v, ltx2_i2v, post_process_*)
+    - job_type: Filter by job type (i2v, t2v, post_process_*, ...)
     - success_only: Only show successful generations
     """
     stats = load_generation_stats()
@@ -4273,7 +4281,7 @@ async def get_comfyui_queue(user: Optional[User] = Depends(get_optional_user)):
                 "resolution": info.get("resolution", ""),
                 "aspect_ratio": info.get("aspect_ratio", ""),
                 "num_frames": info.get("num_frames"),
-                "model_name": info.get("model_name", "Cloud Wan22"),
+                "model_name": info.get("model_name") or info.get("model") or "Cloud",
                 "queue_position": 0,
             }
             # Completed-successfully jobs are hidden from queue
@@ -4409,9 +4417,12 @@ async def get_comfyui_output(filename: str, request: Request):
     return _storage_proxy_response("comfyui-local", safe_filename, request)
 
 
+# Historical storage path: Wan 2.2 was retired 2026-10-01, but videos produced
+# while it was live are still stored under cloud-wan22/. Kept read-only so those
+# files stay downloadable.
 @app.get("/media/generated/cloud-wan22/{filename}")
 async def get_cloud_wan22_media(filename: str, request: Request):
-    """Serve Cloud Wan22 output files via MinIO proxy."""
+    """Backwards-compat: serve Cloud Wan 2.2 output files (retired family)."""
     safe_filename = _safe_filename(filename)
     return _storage_proxy_response("generated", f"cloud-wan22/{safe_filename}", request)
 
@@ -6476,7 +6487,7 @@ async def generate_flux_image(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Wan2.2 Text-to-Video via ComfyUI (next section)
+# Image-to-video via ComfyUI (next section)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -6491,7 +6502,13 @@ async def generate_video(
     aspect_ratio: str = Form("1:1", description="Video aspect ratio"),
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
-    """Generate video from uploaded image via ComfyUI (V2 thin wrapper)"""
+    """
+    Generate video from an uploaded image via ComfyUI (V2 thin wrapper).
+
+    Runs the leading local video family (MiniMax-H3 I2V). Wan 2.2 was retired
+    2026-10-01 (see generation/router.py::RETIRED_MODEL_FAMILIES); for cloud I2V
+    use POST /v2/generate with 'ltx23-cloud-i2v' or 'minimax-h3-cloud-i2v'.
+    """
     from src.backend.generation.v1_compat import dispatch_v1
     from src.backend.generation.types import Operation, MediaType
 
@@ -6507,7 +6524,7 @@ async def generate_video(
         files={"file": file},
         operation=Operation.GENERATE,
         target_type=MediaType.VIDEO,
-        adapter_hint="wan22-local-i2v-q6",
+        adapter_hint="minimax-h3-local-i2v",
         user=user,
         register_job_settings={
             "job_type": "i2v",
@@ -6599,7 +6616,7 @@ async def generate_video_to_video(
     strength: float = Form(
         0.5, description="Style strength (0.0-1.0, higher = more style change)"
     ),
-    num_frames: int = Form(41, description="Output frames (4k+1 format for Wan2.2)"),
+    num_frames: int = Form(41, description="Output frames"),
     resolution: str = Form("480p", description="Output resolution: 480p, 720p"),
     fps: int = Form(16, description="Output FPS"),
     preserve_motion: bool = Form(True, description="Try to preserve original motion"),
@@ -7048,7 +7065,6 @@ async def comfyui_status():
                 "host": comfyui.host,
                 "port": comfyui.port,
                 "devices": stats.get("devices", []),
-                "model": "wan2.2_i2v_low_noise_14B_Q5_K_S.gguf",
             }
         except Exception as e:
             return {
@@ -7166,95 +7182,31 @@ async def generate_pose_video(
     user: User = Depends(get_current_user),  # Require authenticated user
 ):
     """
-    Generate pose-guided video from uploaded image.
-    Note: Pose-guided generation is not yet implemented in ComfyUI workflows.
-    This endpoint will use the standard I2V workflow for now.
-    Requires authentication and credits.
+    Generate pose-guided video from an uploaded image.
+
+    Pose control is not implemented in any live ComfyUI workflow, so this route
+    runs the standard local I2V adapter (MiniMax-H3), exactly like /generate.
+    Wan 2.2 was retired 2026-10-01 — the old hand-built Wan GGUF workflow it
+    used here loaded model weights that no longer exist.
     """
-    if not get_comfyui_client:
-        raise HTTPException(status_code=503, detail="ComfyUI client not available")
+    from src.backend.generation.v1_compat import dispatch_v1
+    from src.backend.generation.types import Operation, MediaType
 
-    comfyui = get_comfyui_client()
-
-    if not comfyui.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ComfyUI not running. Start with: cd ~/oelala/ComfyUI && python main.py --listen",
-        )
-
-    # Adjust num_frames to Wan2.2 format (4k+1) before credit calculation
-    k = round((num_frames - 1) / 4)
-    k = max(1, k)
-    num_frames = 4 * k + 1
-
-    # Calculate duration for credit calculation
-    fps = 16
-    duration_seconds = num_frames / fps
-    width, height = 480, 480
-
-    # Calculate and check credits
-    credits_required = calculate_credits(
-        "wan22_i2v",
-        width=width,
-        height=height,
-        duration_seconds=int(duration_seconds),
+    return await dispatch_v1(
+        form=dict(
+            prompt="smooth motion, natural movement",
+            num_frames=num_frames,
+            output_filename=output_filename,
+        ),
+        files={"file": file},
+        operation=Operation.GENERATE,
+        target_type=MediaType.VIDEO,
+        adapter_hint="minimax-h3-local-i2v",
+        user=user,
+        register_job_settings={
+            "job_type": "i2v",
+        },
     )
-    logger.info(
-        f"💰 Pose-guided generation costs {credits_required} credits ({width}x{height}, {duration_seconds:.1f}s) [user={user.id}]"
-    )
-    await check_credits(user, credits_required)
-    job_id = str(uuid.uuid4())
-
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    # Save uploaded file
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_filename = _safe_filename(f"pose_{timestamp}_{file.filename}")
-    input_path = _safe_child_path(UPLOAD_DIR, input_filename)
-    await _save_upload(file, input_path)
-
-    # Upload to ComfyUI
-    comfyui_image_name = comfyui.upload_image(str(input_path))
-    if not comfyui_image_name:
-        raise HTTPException(status_code=500, detail="Failed to upload image to ComfyUI")
-
-    # Build I2V workflow (pose control not yet implemented in ComfyUI)
-    import random
-
-    seed = random.randint(0, 2**32 - 1)
-
-    workflow = comfyui.build_api_workflow(
-        image_name=comfyui_image_name,
-        prompt="smooth motion, natural movement",
-        width=width,
-        height=height,
-        num_frames=num_frames,
-        fps=fps,
-        steps=6,
-        cfg=1.0,
-        seed=seed,
-        output_prefix=f"oelala_pose_{timestamp}",
-    )
-
-    prompt_id = comfyui.queue_prompt(workflow)
-    if not prompt_id:
-        raise HTTPException(status_code=500, detail="Failed to queue workflow")
-
-    # Deduct credits after successful queue
-    await deduct_credits(user, credits_required, prompt_id, "Pose-guided I2V")
-    logger.info(f"📋 Pose video queued: {prompt_id} (💰 -{credits_required} credits)")
-
-    return {
-        "status": "queued",
-        "prompt_id": prompt_id,
-        "job_id": job_id,
-        "credits_used": credits_required,
-        "input_image": input_filename,
-        "note": "Using standard I2V workflow (pose control coming soon)",
-        "meta": {"num_frames": num_frames, "seed": seed, "type": "pose-guided"},
-    }
 
 
 # =============================================================================

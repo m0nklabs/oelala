@@ -20,7 +20,7 @@ Generate 100 diverse SFW videos for the frontpage gallery to welcome guest users
 python scripts/generate_sfw_batch.py --count 100
 ```
 
-Estimated: ~3.5 hours (100 × 124s)
+Estimated: ~6-19 hours at MiniMax-H3 cloud timings (100 × 3.5-11.5 min per 5 sec clip — see `docs/GENERATION_MODES_TREE.md`); retest once the H3 variant is chosen
 
 ### Phase 3: Upload & Display
 - [ ] Upload all to storage under admin account
@@ -32,7 +32,7 @@ Estimated: ~3.5 hours (100 × 124s)
 ## Technical Approach
 
 ### Generation Method: Text-to-Image → Image-to-Video
-Since we don't have pure T2V, we'll use a 2-step pipeline:
+MiniMax-H3 also does pure T2V (`minimax-h3-cloud-t2v` / `minimax-h3-local-t2v`, 24 fps with native audio), so the 2-step pipeline below is for image-controlled starting frames:
 1. **T2I**: Generate diverse SFW images with SDXL/Flux
 2. **I2V**: Animate with MiniMax-H3 (leading) or LTX-2.3 — the local Wan 2.2 I2V path was retired on 2026-10-01; see `docs/LEGACY.md`
 
@@ -54,12 +54,18 @@ Use categories to ensure variety:
 
 ### Video Settings (To Test)
 
+> MiniMax-H3 values, taken from the verified H3 configuration in
+> `docs/GENERATION_MODES_TREE.md` (768×1344 @ 124 frames) and the H3 adapters (24 fps,
+> megapixel canvas). The Wan-era values that stood here (480p, 41 frames @ 16 fps, local
+> DisTorch2) do not apply to H3.
+
 | Setting | Test Value | Notes |
 |---------|------------|-------|
-| Resolution | 480p (848x480) | Balance quality/speed |
-| Frames | 41 | ~2.5 sec @ 16fps |
-| Model | MiniMax-H3 | Best quality available |
-| GPU | DisTorch2 multi-GPU | cuda:1+cuda:0 |
+| Model | MiniMax-H3 (leading) | FL2VA, joint video+audio, no CFG/negative prompt |
+| Resolution | 0.98 MP → native 768×1344 | Template default is 0.4 MP; 0.98 MP is the recommended canvas |
+| Frames / fps | 124 frames @ 24 fps | ~5 sec; H3 supports 4-15 sec |
+| Compute | Cloud (RunPod `oelala-minimax-h3`, 48GB+ tiers / A40) or local Windows-PC ComfyUI | H3 does not use local DisTorch2 |
+| Expected time | ~3.5-11.5 min per clip (cloud) | draft 4 ≈ 205 s, standard 8 ≈ 327 s, official 20 ≈ 689 s |
 
 ### SFW Prompt Template
 ```
@@ -94,7 +100,9 @@ Motion types: panning, zooming, floating, flowing, drifting, swaying
 - **Output Size**: 529KB MP4
 - **Quality**: ✅ Good (needs visual review)
 
-### Optimal Settings Found
+### Optimal Settings Found (Wan-era measurement — retest for H3)
+
+> The values below were measured on the retired Wan 2.2 pipeline (16 fps, DisTorch2). They are kept as a record; the current video settings live in the section above.
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | T2I Model | DreamShaper XL Lightning | Fast, 8 steps |

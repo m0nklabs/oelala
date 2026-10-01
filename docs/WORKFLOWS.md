@@ -12,8 +12,8 @@ Oelala uses ComfyUI as backend. This guide maps endpoints to workflows.
 
 | Endpoint | Purpose | ComfyUI Workflow |
 |----------|---------|------------------|
-| `/generate` | I2V with image upload — legacy route still pinned to the retired `wan22-local-i2v-q6` adapter, so it returns HTTP 400 | use `POST /v2/generate` |
-| `/generate-text` | T2V generation (legacy; `model_type` is `ltx23` or `ltx2`) | `ltx23-cloud-t2v` adapter |
+| `/generate` | I2V with image upload (local MiniMax-H3, `minimax-h3-local-i2v`) | built-in FL2VA builder |
+| `/generate-text` | T2V generation (`model_type=minimax_h3`, `minimax_h3_local`, `ltx23` or `ltx2`) | cloud builder / `ltx23-cloud-t2v` |
 | `/upscale-video` | Video upscaling | `video_upscale_realesrgan.json` |
 | `/interpolate-video` | Frame interpolation | `rife_interpolation.json` |
 
@@ -34,11 +34,11 @@ curl -X POST http://localhost:7998/generate \
 curl -X POST http://localhost:7998/generate-text \
   -F "prompt=A cat exploring forest" \
   -F "num_frames=49" \
-  -F "model_type=ltx23"
+  -F "model_type=minimax_h3"
 ```
 
-> `model_type=ltx23` (or `ltx2`) is what this legacy route accepts; MiniMax-H3 T2V runs through
-> `POST /v2/generate` instead.
+> `model_type` accepts `minimax_h3` (default), `minimax_h3_local`, `ltx23` or `ltx2`; retired
+> Wan 2.2 values are answered with HTTP 400. `POST /v2/generate` is the unified path.
 
 ---
 

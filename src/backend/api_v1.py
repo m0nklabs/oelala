@@ -118,8 +118,8 @@ async def generate(
 
     **Credit Costs:**
     - Text-to-Image (SDXL): ~10 credits
-    - Text-to-Video (Wan2.2): ~50-200 credits depending on duration
-    - Image-to-Video (Wan2.2): ~50-200 credits depending on duration
+    - Text-to-Video (MiniMax-H3 / LTX-2.3): ~50-200 credits depending on duration
+    - Image-to-Video (MiniMax-H3 / LTX-2.3): ~50-200 credits depending on duration
 
     **Rate Limits:** TBD (per API key)
 
@@ -164,8 +164,10 @@ async def generate(
         generation_type = "T2I"
     elif request.type in ["text-to-video", "image-to-video"]:
         duration = request.duration_seconds or 3
+        # Live video families are MiniMax-H3 and LTX-2.3; both bill on the shared
+        # video tiers. Wan 2.2 was retired 2026-10-01.
         credits_required = calculate_credits(
-            "wan22_i2v",
+            "video_i2v",
             width=request.width or 512,
             height=request.height or 512,
             duration_seconds=duration,

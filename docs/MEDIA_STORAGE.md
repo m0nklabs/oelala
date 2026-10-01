@@ -157,11 +157,16 @@ HEAD   /{bucket}/{key}        → Get file metadata (S3 StatObject)
 ### Endpoints with Auto-Upload
 
 **✅ Synchronous (auto-upload working)**
-- `/generate-sd15` - SD 1.5 image generation
+- `/generate-sdxl` - SDXL image generation (local `sdxl-local-t2i` adapter)
 
 **⏳ Async (queued, no auto-upload)**
-- `/generate-video` - I2V generation (returns immediately after queueing)
-- `/generate-text-video` - T2V generation (returns immediately after queueing)
+- `/generate-ltx2-i2v-async` - I2V generation via LTX-2.3 cloud (`ltx23-cloud-i2v`)
+- `/generate-text` - T2V generation (`model_type=minimax_h3`, `minimax_h3_local`, `ltx23` or `ltx2`)
+- `POST /v2/generate` - current unified generation path for video
+
+> The previously listed `/generate-sd15`, `/generate-video` and `/generate-text-video` do not
+> exist in `src/`; image generation runs through `/generate-sdxl` and video through the
+> endpoints above.
 
 > **Note**: Async endpoints queue jobs and return immediately. Files remain in ComfyUI output directory.
 > Background auto-upload for async endpoints will be implemented in a future update.

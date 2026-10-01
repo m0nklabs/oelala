@@ -33,3 +33,27 @@
   left alone — the regenerated catalog already reports no local LTX model copies.
   `docs/LTX25_MIGRATION.md` was deliberately not touched: it describes the planned
   state and is owned by the operator.
+
+### Fixed
+
+- **Documented endpoints that do not exist in `src/`.** `docs/MEDIA_STORAGE.md` listed
+  `/generate-sd15`, `/generate-video` and `/generate-text-video` under "Endpoints with
+  Auto-Upload"; no such route exists anywhere in `src/`. The lists now name routes that do
+  exist: `/generate-sdxl` (synchronous image, `sdxl-local-t2i` adapter),
+  `/generate-ltx2-i2v-async` (LTX-2.3 cloud I2V), `/generate-text` (T2V) and
+  `POST /v2/generate` (current unified video path).
+- **`docs/SFW_CONTENT_PLAN.md` video settings retargeted to MiniMax-H3.** The "Video
+  Settings (To Test)" block still carried Wan-era values (480p, 41 frames at 16 fps, local
+  DisTorch2 `cuda:1+cuda:0`). It now uses the verified H3 configuration from
+  `docs/GENERATION_MODES_TREE.md` and the H3 adapters: 768×1344 (0.98 MP; template default
+  0.4 MP), 124 frames at 24 fps (~5 s), ~3.5-11.5 min per clip on the cloud worker, and it
+  records that H3 does not use local DisTorch2. The "~3.5 hours (100 × 124s)" batch estimate
+  became "~6-19 hours" from the same verified timings, and "Since we don't have pure T2V"
+  now names the H3 T2V adapters. No figure was invented.
+- **`docs/WORKFLOWS.md` re-synced with the repaired v1 routes.** The `/generate` row stated
+  that the route was still pinned to the retired `wan22-local-i2v-q6` adapter and returned
+  HTTP 400; `src/backend/app.py` now hints `minimax-h3-local-i2v`, so the row documents the
+  live local MiniMax-H3 I2V path. The `/generate-text` row and its curl example now list the
+  accepted `model_type` values (`minimax_h3`, `minimax_h3_local`, `ltx23`, `ltx2`; retired
+  Wan 2.2 values are answered with 400), and the Wan-era `wan22-*` routes are documented as
+  retired rather than missing.

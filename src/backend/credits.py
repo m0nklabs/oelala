@@ -58,7 +58,19 @@ class GenerationType(str, Enum):
     KREA2 = "krea2"
     KREA2_HD = "krea2_hd"
 
-    # Videos
+    # Videos — live families (MiniMax-H3, LTX-2.3)
+    VIDEO_I2V_SHORT = "video_i2v_short"  # 3 sec 720p
+    VIDEO_I2V_MEDIUM = "video_i2v_medium"  # 5 sec 720p
+    VIDEO_I2V_HD_SHORT = "video_i2v_hd_short"  # 3 sec 1080p
+    VIDEO_I2V_HD_MEDIUM = "video_i2v_hd_medium"  # 5 sec 1080p
+    VIDEO_T2V_SHORT = "video_t2v_short"  # 3 sec
+    VIDEO_T2V_MEDIUM = "video_t2v_medium"  # 5 sec
+
+    # Videos — legacy Wan 2.2 tiers, retired 2026-10-01.
+    # These members are NOT offered to users anymore. They stay because the
+    # generation_type string is persisted in credit_transactions.metadata (see
+    # credits_api.deduct_credits), so historical rows must keep resolving to the
+    # exact price they were charged. Do not reuse for new generations.
     WAN22_I2V_SHORT = "wan22_i2v_short"  # 3 sec 720p
     WAN22_I2V_MEDIUM = "wan22_i2v_medium"  # 5 sec 720p
     WAN22_I2V_HD_SHORT = "wan22_i2v_hd_short"  # 3 sec 1080p
@@ -81,7 +93,14 @@ CREDIT_COSTS: Dict[GenerationType, int] = {
     GenerationType.FLUX_HD: 3,
     GenerationType.KREA2: 1,
     GenerationType.KREA2_HD: 2,
-    # Videos (expensive)
+    # Videos (expensive) — live tiers
+    GenerationType.VIDEO_I2V_SHORT: 5,
+    GenerationType.VIDEO_I2V_MEDIUM: 8,
+    GenerationType.VIDEO_I2V_HD_SHORT: 10,
+    GenerationType.VIDEO_I2V_HD_MEDIUM: 15,
+    GenerationType.VIDEO_T2V_SHORT: 8,
+    GenerationType.VIDEO_T2V_MEDIUM: 12,
+    # Videos — legacy Wan 2.2 tiers (history only, see GenerationType)
     GenerationType.WAN22_I2V_SHORT: 5,
     GenerationType.WAN22_I2V_MEDIUM: 8,
     GenerationType.WAN22_I2V_HD_SHORT: 10,
@@ -106,7 +125,9 @@ def calculate_credits(
     Calculate credit cost for a generation job.
 
     Args:
-        generation_type: Type of generation (e.g., 'sdxl', 'wan22_i2v')
+        generation_type: Type of generation (e.g., 'sdxl', 'video_i2v').
+            Legacy 'wan22_i2v' / 'wan22_t2v' values still resolve, so historical
+            records keep their original price.
         width: Output width in pixels
         height: Output height in pixels
         duration_seconds: Video/audio duration
@@ -123,40 +144,74 @@ def calculate_credits(
         "generate_image": GenerationType.SDXL,
         "generate_sdxl": GenerationType.SDXL,
         "generate_flux": GenerationType.FLUX,
-        "generate": "wan22_i2v",  # Dynamic based on params
+        "generate": "video_i2v",  # Dynamic based on params
+        "generate_text": "video_t2v",
+        "generate_pose": "video_i2v",
+        "generate_audio": GenerationType.MMAUDIO_SHORT,
+        "mmaudio": GenerationType.MMAUDIO_SHORT,
+        # Live family aliases
+        "video_i2v": "video_i2v",
+        "video_t2v": "video_t2v",
+        "minimax_h3": "video_i2v",
+        "minimax_h3_i2v": "video_i2v",
+        "minimax_h3_t2v": "video_t2v",
+        "ltx2": "video_i2v",
+        "ltx23": "video_i2v",
+        # Legacy Wan 2.2 endpoint/type names. Retired 2026-10-01: kept so the
+        # generation_type strings stored on historical credit_transactions
+        # still price identically.
         "generate_wan22": "wan22_i2v",
         "generate_wan22_comfyui": "wan22_i2v",
         "generate_wan22_async": "wan22_i2v",
-        "generate_text": "wan22_t2v",
-        "generate_pose": "wan22_i2v",
-        "generate_audio": GenerationType.MMAUDIO_SHORT,
-        "mmaudio": GenerationType.MMAUDIO_SHORT,
-        "wan22_i2v": "wan22_i2v",  # Alias
+        "wan22_i2v": "wan22_i2v",
         "wan22_t2v": "wan22_t2v",
     }
 
     # Get base generation type
     mapped = type_mapping.get(gen_type, gen_type)
 
-    # Dynamic video type based on duration and resolution
-    if mapped in ("wan22_i2v", "wan22_t2v"):
-        is_hd = width > 1280 or height > 720
-        is_long = duration_seconds and duration_seconds > 3
+    # Dynamic video type based on duration and resolution.
+    # Each family maps to (hd_long, hd_short, sd_long, sd_short) for I2V and
+    # (long, short) for T2V.
+    video_tiers = {
+        "video_i2v": (
+            GenerationType.VIDEO_I2V_HD_MEDIUM,
+            GenerationType.VIDEO_I2V_HD_SHORT,
+            GenerationType.VIDEO_I2V_MEDIUM,
+            GenerationType.VIDEO_I2V_SHORT,
+        ),
+        "wan22_i2v": (
+            GenerationType.WAN22_I2V_HD_MEDIUM,
+            GenerationType.WAN22_I2V_HD_SHORT,
+            GenerationType.WAN22_I2V_MEDIUM,
+            GenerationType.WAN22_I2V_SHORT,
+        ),
+        "video_t2v": (
+            GenerationType.VIDEO_T2V_MEDIUM,
+            GenerationType.VIDEO_T2V_SHORT,
+        ),
+        "wan22_t2v": (
+            GenerationType.WAN22_T2V_MEDIUM,
+            GenerationType.WAN22_T2V_SHORT,
+        ),
+    }
 
-        if mapped == "wan22_i2v":
+    if mapped in video_tiers:
+        tiers = video_tiers[mapped]
+        is_hd = width > 1280 or height > 720
+        is_long = bool(duration_seconds and duration_seconds > 3)
+
+        if len(tiers) == 4:
             if is_hd and is_long:
-                base_type = GenerationType.WAN22_I2V_HD_MEDIUM
+                base_type = tiers[0]
             elif is_hd:
-                base_type = GenerationType.WAN22_I2V_HD_SHORT
+                base_type = tiers[1]
             elif is_long:
-                base_type = GenerationType.WAN22_I2V_MEDIUM
+                base_type = tiers[2]
             else:
-                base_type = GenerationType.WAN22_I2V_SHORT
-        else:  # wan22_t2v
-            if is_long:
-                base_type = GenerationType.WAN22_T2V_MEDIUM
-            else:
-                base_type = GenerationType.WAN22_T2V_SHORT
+                base_type = tiers[3]
+        else:
+            base_type = tiers[0] if is_long else tiers[1]
     elif isinstance(mapped, GenerationType):
         base_type = mapped
     else:
