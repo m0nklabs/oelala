@@ -1222,7 +1222,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
             }}
           />
           <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            {prompt.length}/2048
+            {prompt.length}
           </div>
         </div>
 
@@ -1255,7 +1255,7 @@ export default function TextToVideoTool({ onOutput: _onOutput, onRefreshHistory:
                   }}
                 />
                 <div style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                  {negativePrompt.length}/2048
+                  {negativePrompt.length}
                 </div>
               </div>
             )}
