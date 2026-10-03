@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Sync the local LoRA store to the private HuggingFace mirror repo.
+"""Sync the local LoRA store to a HuggingFace mirror repo.
 
 Cloud workers try the HF mirror (fast CDN) first and fall back to the signed
-self-hosted download, so the mirror only needs to hold the frequently used
-files — anything missing simply falls back.
+self-hosted download, so anything missing on the mirror simply falls back.
+
+Two targets are supported:
+  * public delivery mirror (`bomehika/oelala-loras`, no worker token needed)
+  * private mirror (`m0nk111/oelala-loras`) for files the exclusion policy keeps
+    out of public view
 
 Usage:
   python scripts/sync_loras_hf.py --dry-run          # list what would upload
   python scripts/sync_loras_hf.py                    # upload everything new
   python scripts/sync_loras_hf.py --include minimax-h3/   # one subdir only
+  python scripts/sync_loras_hf.py --repo bomehika/oelala-loras \
+      --token-env HF_PUBLIC_TOKEN --allow-public       # public delivery mirror
 
-Config (from .env): HF_LORA_TOKEN (needs write access), LORA_HF_MIRROR_REPO.
-The script refuses to upload unless the target repo is PRIVATE.
+Config (from .env): the token named by --token-env (write access), plus
+LORA_HF_MIRROR_REPO for the default repo. A PUBLIC repo needs --allow-public;
+files listed in scripts/lora_public_exclusions.txt are never uploaded to one.
 """
 
 import argparse
@@ -63,31 +70,76 @@ def main() -> None:
     parser.add_argument("--repo", default=os.getenv("LORA_HF_MIRROR_REPO", ""))
     parser.add_argument("--include", default="", help="only relpaths starting with this prefix")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--allow-public",
+        action="store_true",
+        help="permit a PUBLIC mirror repo (exclusion policy still applies)",
+    )
+    parser.add_argument(
+        "--token-env",
+        default="HF_LORA_TOKEN",
+        help="env var holding the HF token for this repo (bomehika repos use HF_PUBLIC_TOKEN)",
+    )
+    parser.add_argument(
+        "--exclusions",
+        default="",
+        help="exclusion list path (default: scripts/lora_public_exclusions.txt)",
+    )
+    parser.add_argument(
+        "--only-excluded",
+        action="store_true",
+        help="upload ONLY the exclusion-list files (for a private mirror)",
+    )
     args = parser.parse_args()
 
     env = load_env(REPO_ROOT / ".env")
-    token = env.get("HF_LORA_TOKEN", "") or os.getenv("HF_LORA_TOKEN", "")
+    token = env.get(args.token_env, "") or os.getenv(args.token_env, "")
     repo = args.repo or env.get("LORA_HF_MIRROR_REPO", "")
     if not repo:
         raise SystemExit("❌ No mirror repo: pass --repo or set LORA_HF_MIRROR_REPO in .env")
     if not token:
-        raise SystemExit("❌ No HF token: set HF_LORA_TOKEN in .env")
+        raise SystemExit(f"❌ No HF token: set {args.token_env} in .env")
 
     from huggingface_hub import HfApi
+
+    sys.path.insert(0, str(REPO_ROOT / "src" / "backend"))
+    from generation.lora_public_policy import load_exclusions, partition
 
     api = HfApi(token=token)
     repo_type = detect_repo_type(api, repo)
     info = api.repo_info(repo, repo_type=repo_type)
-    if not getattr(info, "private", False):
+    is_public = not getattr(info, "private", False)
+    if is_public and not args.allow_public:
         raise SystemExit(
             "🚫 Refusing to upload: mirror repo is PUBLIC. LoRAs may contain "
-            "NSFW content — make the repo private first (or pass --allow-public)."
+            "NSFW content — make the repo private first (or pass --allow-public "
+            "to accept the public-mirror policy)."
         )
 
     files = collect_files()
     if args.include:
         files = {k: v for k, v in files.items() if k.startswith(args.include)}
     print(f"📂 {len(files)} local LoRA file(s) under consideration")
+
+    patterns = load_exclusions(args.exclusions or None)
+    allowed, excluded = partition(files, patterns)
+    print(f"🔒 Exclusion policy: {len(patterns)} pattern(s) — "
+          f"{len(excluded)} local file(s) held back")
+    if args.only_excluded:
+        if is_public:
+            raise SystemExit(
+                "🚫 --only-excluded targets a PRIVATE mirror: excluded files "
+                "must not go to a public repo."
+            )
+        files = excluded
+        print(f"🔐 Private-mirror mode: uploading only the {len(files)} excluded file(s)")
+    elif is_public:
+        for rel in sorted(excluded):
+            print(f"  ⛔ not for public mirror: {rel}")
+        files = allowed
+    elif excluded:
+        for rel in sorted(excluded):
+            print(f"  ⚠️  excluded file allowed on this PRIVATE mirror: {rel}")
 
     try:
         repo_files = set(api.list_repo_files(repo, repo_type=repo_type))

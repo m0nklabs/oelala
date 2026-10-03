@@ -496,9 +496,17 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 
 ## RunPod Serverless (Cloud Wan22 — retired)
 
-> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; the `oelala-wan22` endpoint (id `x2x496ymkidl3m`), its template, its worker image and `deploy/runpod/` were all deleted. Only the shared LoRA volume below remains; current video endpoints are MiniMax-H3 and LTX-2.3 (below). See `docs/LEGACY.md`.
+> **Retired 2026-10-01:** Wan 2.2 was retired from the product on 2026-10-01; the `oelala-wan22` endpoint (id `x2x496ymkidl3m`), its template, its worker image and `deploy/runpod/` were all deleted. The RunPod LoRA Network Volume `ochebt0xbq` (`oelala-runpod-lora-eu-cz`, `EU-CZ-1`, 50GB) was **decommissioned on 2026-10-01** as well: all 91 of its objects were byte-identical to files in the local LoRA store, and no endpoint had it attached (`networkVolumeId` was null on every serverless endpoint). LoRA delivery now runs through the HuggingFace mirrors below. Current video endpoints are MiniMax-H3 and LTX-2.3. See `docs/LEGACY.md`.
 
-- **RunPod LoRA Volume**: `ochebt0xbq` (`oelala-runpod-lora-eu-cz`), `EU-CZ-1`, `50GB` (shared by the current workers)
+- **LoRA storage policy (current)**: the local store (`/mnt/ssd/loras` + `ComfyUI/models/loras`) is the source of truth; everything else is a delivery copy.
+  - Download priority is deliberately third-party-first: a public dump (e.g. `Serenak/chilloutmix`, `LORA_HF_FLAT_MIRROR_REPO`) is tried before our own mirrors, so the download traffic and exposure land on someone else's account. Which dump holds which file comes from `data/lora_source_index.json` (rebuild with `scripts/build_lora_source_index.py`), so the backend does not fire a guaranteed 404 per file.
+  - Only size-verified files count as dump sources: the index builder compares byte sizes against the local store, because a same-named file in a dump can be a different revision. Do not hand-edit the index.
+  - Files in `scripts/lora_public_exclusions.txt` (face-swap, real-person likeness) are never routed to a public URL, on upload or on download — they go straight to the signed self-hosted URL.
+  - Our own mirrors are the fallback copy: public `bomehika/oelala-loras` (`LORA_HF_MIRROR_REPO`, anonymous access) and private `m0nk111/oelala-loras` for the excluded files.
+  - Keeping `bomehika/oelala-loras` PUBLIC is a deliberate, operator-approved trade-off (fast, free, no token in the worker path). Do not make it private or delete it without asking first — a private fallback was considered and rejected on 2026-10-01.
+  - Signed `api.oelala.xyz/loras/download/<name>?token=…` from the local store is the last fallback and always rides along as `fallback_url`.
+  - Sync our mirrors with `scripts/sync_loras_hf.py` (`--repo`, `--token-env`, `--allow-public`, `--only-excluded`); `--dry-run` first.
+- **No RunPod network volume any more.** Do not reintroduce one for LoRAs: it bills per provisioned GB, pins scheduling to a single datacenter, and duplicates data that already lives locally and on HF.
 
 ## RunPod Serverless (LTX-2.3 22B)
 
@@ -512,9 +520,7 @@ All Copilot-style agents **MUST** use structured todo lists for planning, tracki
 - **Full tier reference**: See `docs/RUNPOD_GPU_TIERS.md` for all 11 valid tier IDs.
 - **Config**: `workersMin=0`, `workersMax=1`, `idleTimeout=120` (keeps burst traffic warm without pinning a permanent worker)
 - **🚨 DEPLOY RULE**: ALWAYS use the worker's own `deploy/runpod-*/deploy.sh` to deploy new worker images. NEVER manually `docker push :latest` — RunPod templates use explicit dated tags, not `:latest`. Pushing `:latest` alone means RunPod keeps pulling the old tag and your changes never reach production. This mistake wasted 3 deploys on 2026-04-08.
-- **Storage policy**: RunPod Network Volume is for LoRAs and hard-to-replace private/custom assets only. NEVER store general Hugging Face models, general model caches, or broad cold-start optimization payloads there.
-- **Population policy**: Upload local rare/private assets to the LoRA volume on demand. Do not prefill it with broad model libraries.
-- **Attachment policy**: Keep the LoRA volume detached by default. Attaching it to a serverless endpoint constrains scheduling to `EU-CZ-1`.
+- **Storage policy**: LoRAs live in the local store and the HuggingFace mirrors (see the LTX-2.3 section above). NEVER put general Hugging Face models or model caches in a paid storage volume — public models come from HF Hub or container disk.
 - **Account**: `mark.op.mobiel@gmail.com`, spend limit $80
 
 ## RunPod Serverless (Cloud I2I — SDXL/Pony/Qwen)

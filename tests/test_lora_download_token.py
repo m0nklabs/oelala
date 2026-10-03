@@ -11,6 +11,7 @@ download failed with HTTP 422.
 
 import hashlib
 import hmac
+import json
 import os
 import sys
 from pathlib import Path
@@ -28,15 +29,30 @@ TEST_RUNPOD_KEY = "test-runpod-key"
 
 
 @pytest.fixture(autouse=True)
-def _hermetic_lora_env(monkeypatch):
+def _hermetic_lora_env(monkeypatch, tmp_path):
     for name in (
         "LORA_HF_FLAT_MIRROR_REPO",
         "LORA_HF_MIRROR_REPO",
+        "LORA_HF_MIRROR_TOKEN",
         "HF_LORA_TOKEN",
     ):
         monkeypatch.delenv(name, raising=False)
+    # Never read the real generated index: tests pin their own file or none.
+    monkeypatch.setenv("LORA_SOURCE_INDEX", str(tmp_path / "absent-index.json"))
     monkeypatch.setenv("BACKEND_PUBLIC_URL", TEST_BACKEND_URL)
     monkeypatch.setenv("RUNPOD_API_KEY", TEST_RUNPOD_KEY)
+
+
+def _write_index(tmp_path, repos, name="index.json"):
+    """Write a source index; `repos` is [(repo, [basenames])] stored flat."""
+    path = tmp_path / name
+    path.write_text(
+        json.dumps({
+            "repos": [{"repo": r, "files": {n: n for n in names}} for r, names in repos]
+        }),
+        encoding="utf-8",
+    )
+    return path
 
 from generation.lora_utils import build_lora_download_list, lora_download_token  # noqa: E402
 
@@ -194,11 +210,16 @@ def test_flat_mirror_encodes_special_filenames():
 
 
 def test_flat_mirror_wins_over_subdir_mirror():
-    """Priority: curated hf_sources > flat mirror > subdir mirror."""
+    """Priority: curated hf_sources > third-party flat mirror > our subdir mirror.
+
+    The flat mirror is a third-party public dump and is preferred on purpose:
+    the download traffic stays on that account instead of ours. Our own mirror
+    only serves what the dump lacks.
+    """
     resolved = "a/file.safetensors"
     env = {
         "LORA_HF_FLAT_MIRROR_REPO": "flat/repo",
-        "LORA_HF_MIRROR_REPO": "m0nk111/oelala-loras",
+        "LORA_HF_MIRROR_REPO": "bomehika/oelala-loras",
         "HF_LORA_TOKEN": "hf_test_token",
     }
     with patch(
@@ -208,6 +229,39 @@ def test_flat_mirror_wins_over_subdir_mirror():
         downloads = build_lora_download_list([{"name": "file"}])
     assert downloads[0]["url"] == "https://huggingface.co/flat/repo/resolve/main/file.safetensors"
     assert "hf_token" not in downloads[0]  # flat mirror is public
+    # our own mirror still rides along as the signed self-hosted fallback
+    assert downloads[0]["fallback_url"].startswith(TEST_BACKEND_URL)
+
+
+def test_subdir_mirror_encodes_spaces_in_path():
+    """Layout-preserving mirror paths may contain spaces — percent-encode them."""
+    resolved = "wan 2.2/NSFW-22-H-e8.safetensors"
+    env = {"LORA_HF_MIRROR_REPO": "bomehika/oelala-loras"}
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ), patch.dict(os.environ, env):
+        downloads = build_lora_download_list([{"name": "NSFW-22-H-e8"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/bomehika/oelala-loras/resolve/main/"
+        "wan%202.2/NSFW-22-H-e8.safetensors"
+    )
+
+
+def test_public_mirror_sends_no_token_when_override_is_empty():
+    """LORA_HF_MIRROR_TOKEN='' keeps a public mirror anonymous (no token sent)."""
+    resolved = "a/file.safetensors"
+    env = {
+        "LORA_HF_MIRROR_REPO": "bomehika/oelala-loras",
+        "LORA_HF_MIRROR_TOKEN": "",
+        "HF_LORA_TOKEN": "hf_test_token",
+    }
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ), patch.dict(os.environ, env):
+        downloads = build_lora_download_list([{"name": "file"}])
+    assert "hf_token" not in downloads[0]
 
 
 def test_no_mirror_single_signed_url_without_fallback():
@@ -228,3 +282,142 @@ def test_no_mirror_single_signed_url_without_fallback():
             ),
         }
     ]
+
+
+def test_source_index_routes_listed_file_to_third_party_dump(tmp_path, monkeypatch):
+    """A file the dump is known to hold goes to the dump, not to our mirror."""
+    monkeypatch.setenv(
+        "LORA_SOURCE_INDEX",
+        str(_write_index(tmp_path, [("third/party", ["listed.safetensors"])])),
+    )
+    monkeypatch.setenv("LORA_HF_MIRROR_REPO", "bomehika/oelala-loras")
+    monkeypatch.setenv("LORA_HF_FLAT_MIRROR_REPO", "Serenak/chilloutmix")
+    resolved = "some/dir/listed.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "listed"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/third/party/resolve/main/listed.safetensors"
+    )
+    assert downloads[0]["fallback_url"].startswith(TEST_BACKEND_URL)
+
+
+def test_source_index_sends_unlisted_file_to_our_mirror(tmp_path, monkeypatch):
+    """A file the dump does not hold skips it entirely and uses our own mirror."""
+    monkeypatch.setenv(
+        "LORA_SOURCE_INDEX",
+        str(_write_index(tmp_path, [("third/party", ["listed.safetensors"])])),
+    )
+    monkeypatch.setenv("LORA_HF_MIRROR_REPO", "bomehika/oelala-loras")
+    monkeypatch.setenv("LORA_HF_FLAT_MIRROR_REPO", "Serenak/chilloutmix")
+    resolved = "some/dir/other.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "other"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/bomehika/oelala-loras/resolve/main/some/dir/other.safetensors"
+    )
+    assert "hf_token" not in downloads[0]  # public mirror, anonymous
+
+
+def test_source_index_first_matching_dump_wins(tmp_path, monkeypatch):
+    """Dump order in the index is the priority order."""
+    monkeypatch.setenv(
+        "LORA_SOURCE_INDEX",
+        str(_write_index(tmp_path, [
+            ("first/dump", ["shared.safetensors"]),
+            ("second/dump", ["shared.safetensors"]),
+        ])),
+    )
+    resolved = "shared.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "shared"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/first/dump/resolve/main/shared.safetensors"
+    )
+
+
+def test_sensitive_lora_never_gets_a_public_url(tmp_path, monkeypatch):
+    """Excluded files (face-swap, real-person likeness) go straight to the
+    signed self-hosted URL, even when a dump and our mirror both exist."""
+    monkeypatch.setenv(
+        "LORA_SOURCE_INDEX",
+        str(_write_index(tmp_path, [("third/party", ["bfs_head_swap_v4.safetensors"])])),
+    )
+    monkeypatch.setenv("LORA_HF_MIRROR_REPO", "bomehika/oelala-loras")
+    monkeypatch.setenv("LORA_HF_FLAT_MIRROR_REPO", "Serenak/chilloutmix")
+    resolved = "bfs_head_swap_v4.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "bfs_head_swap_v4"}])
+    assert downloads == [
+        {
+            "filename": resolved,
+            "url": (
+                TEST_BACKEND_URL +
+                f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+            ),
+        }
+    ]
+
+
+def test_source_index_uses_recorded_subdir_path(tmp_path, monkeypatch):
+    """A dump that keeps files in a subdirectory must still resolve."""
+    path = tmp_path / "subdir-index.json"
+    path.write_text(json.dumps({"repos": [
+        {"repo": "jaysowen/wan2.2-nsfw-loras",
+         "files": {"NSFW-22-H-e8.safetensors": "high/NSFW-22-H-e8.safetensors"}}
+    ]}), encoding="utf-8")
+    monkeypatch.setenv("LORA_SOURCE_INDEX", str(path))
+    resolved = "wan 2.2/NSFW-22-H-e8.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "NSFW-22-H-e8"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/jaysowen/wan2.2-nsfw-loras/resolve/main/"
+        "high/NSFW-22-H-e8.safetensors"
+    )
+
+
+def test_source_index_legacy_basenames_format(tmp_path, monkeypatch):
+    """An index written in the older basenames-only format keeps working."""
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps({"repos": [
+        {"repo": "third/party", "basenames": ["legacy.safetensors"]}
+    ]}), encoding="utf-8")
+    monkeypatch.setenv("LORA_SOURCE_INDEX", str(path))
+    resolved = "legacy.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "legacy"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/third/party/resolve/main/legacy.safetensors"
+    )
+
+
+def test_source_index_absent_keeps_flat_mirror_first(monkeypatch):
+    """Without an index the legacy chain still applies: flat mirror first."""
+    monkeypatch.setenv("LORA_HF_FLAT_MIRROR_REPO", "Serenak/chilloutmix")
+    monkeypatch.setenv("LORA_HF_MIRROR_REPO", "bomehika/oelala-loras")
+    resolved = "unlisted.safetensors"
+    with patch(
+        "generation.lora_utils.resolve_lora_path",
+        return_value=(Path("/tmp/loras") / resolved, resolved),
+    ):
+        downloads = build_lora_download_list([{"name": "unlisted"}])
+    assert downloads[0]["url"] == (
+        "https://huggingface.co/Serenak/chilloutmix/resolve/main/unlisted.safetensors"
+    )

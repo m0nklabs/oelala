@@ -9,11 +9,14 @@ The originals in app.py are kept as re-exports so nothing breaks.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
+
+from .lora_public_policy import is_excluded, load_exclusions
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,58 @@ logger = logging.getLogger(__name__)
 # These match the paths used in app.py
 LORA_DIR = Path(os.getenv("LORA_DIR", "/home/flip/oelala/ComfyUI/models/loras"))
 LORA_SSD_DIR = Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras"))
+
+# ── Third-party LoRA source index ──────────────────────────────────
+# Third-party public dumps are preferred over our own mirrors so download
+# traffic and exposure stay on someone else's account. A flat dump is matched
+# by basename, so the backend needs to know which files it actually holds;
+# scripts/build_lora_source_index.py writes that list. Without the file the
+# simpler `LORA_HF_FLAT_MIRROR_REPO`-first chain still applies.
+_SOURCE_INDEX_CACHE: dict[str, tuple[float, list[tuple[str, dict[str, str]]]]] = {}
+
+
+def default_source_index_path() -> Path:
+    """`LORA_SOURCE_INDEX` if set, else `<repo>/data/lora_source_index.json`."""
+    configured = os.getenv("LORA_SOURCE_INDEX", "")
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parents[3] / "data" / "lora_source_index.json"
+
+
+def load_source_index(path: Optional[Path] = None) -> list[tuple[str, dict[str, str]]]:
+    """
+    Load `[(repo, {basename: path_in_repo})]` in priority order; `[]` when unavailable.
+
+    Cached per (path, mtime) so a rebuild is picked up without a restart.
+    """
+    index_path = Path(path) if path else default_source_index_path()
+    key = str(index_path)
+    try:
+        mtime = index_path.stat().st_mtime
+    except OSError:
+        _SOURCE_INDEX_CACHE.pop(key, None)
+        return []
+    cached = _SOURCE_INDEX_CACHE.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+        entries: list[tuple[str, dict[str, str]]] = []
+        for entry in payload.get("repos", []):
+            repo = entry.get("repo")
+            if not repo:
+                continue
+            files = entry.get("files")
+            if files:
+                mapping = {name: path for name, path in files.items() if name and path}
+            else:  # legacy format: basenames only, stored flat
+                mapping = {name: name for name in entry.get("basenames", [])}
+            entries.append((repo, mapping))
+    except Exception as exc:
+        logger.warning(f"⚠️ LoRA source index unreadable ({index_path}): {exc}")
+        return []
+    _SOURCE_INDEX_CACHE[key] = (mtime, entries)
+    return entries
 
 
 def resolve_lora_path(name: str) -> tuple[Optional[Path], Optional[str]]:
@@ -151,9 +206,12 @@ def build_lora_download_list(
     Build download URLs for LoRAs needed by a cloud job.
 
     Source priority per LoRA:
-      1. explicit `hf_sources` mapping (curated public HF repos)
-      2. the flat mirror repo (LORA_HF_FLAT_MIRROR_REPO env, basename-mapped)
-      3. the subdir mirror repo (LORA_HF_MIRROR_REPO env, layout-preserving)
+      1. explicit `hf_sources` mapping (curated HF repos)
+      2. a third-party public dump that is known to hold the file (per-file match
+         against the source index, then `LORA_HF_FLAT_MIRROR_REPO` when no index
+         exists) — preferred so traffic and exposure stay on another account
+      3. the subdir mirror repo (LORA_HF_MIRROR_REPO env, layout-preserving) —
+         our own copy, serving whatever the dumps do not have
       4. the backend's signed /loras/download endpoint
     A non-HF primary URL always carries the signed self-hosted URL as
     `fallback_url`, so workers can recover when the file is missing on HF.
@@ -162,13 +220,20 @@ def build_lora_download_list(
         "BACKEND_PUBLIC_URL", "https://api.oelala.xyz"
     )
     # HuggingFace mirror options, tried before the self-hosted download:
-    #  - flat mirror (LORA_HF_FLAT_MIRROR_REPO): public repo whose files are
-    #    stored by basename (no subdirs) — e.g. a shared dump repo.
-    #  - subdir mirror (LORA_HF_MIRROR_REPO): private repo preserving the
-    #    local subdirectory layout, populated by scripts/sync_loras_hf.py.
+    #  - flat mirror (LORA_HF_FLAT_MIRROR_REPO): third-party public repo whose
+    #    files are stored by basename (no subdirs). Tried FIRST on purpose: the
+    #    download traffic stays on someone else's account, which is cheaper and
+    #    keeps our own accounts out of the hot path.
+    #  - subdir mirror (LORA_HF_MIRROR_REPO): our own repo preserving the local
+    #    subdirectory layout, populated by scripts/sync_loras_hf.py. Fallback for
+    #    files the dump does not carry (and the copy we control).
+    # LORA_HF_MIRROR_TOKEN overrides the token sent for the subdir mirror; set it
+    # to an empty value for a PUBLIC mirror (anonymous access needs no token).
     hf_flat_mirror_repo = os.getenv("LORA_HF_FLAT_MIRROR_REPO", "")
     hf_mirror_repo = os.getenv("LORA_HF_MIRROR_REPO", "")
-    hf_mirror_token = os.getenv("HF_LORA_TOKEN", "")
+    hf_mirror_token = os.getenv("LORA_HF_MIRROR_TOKEN", os.getenv("HF_LORA_TOKEN", ""))
+    source_index = load_source_index()
+    exclusion_patterns = load_exclusions()
     downloads: list[dict] = []
     seen: set[str] = set()
 
@@ -205,12 +270,33 @@ def build_lora_download_list(
                 if hf_token:
                     entry["hf_token"] = hf_token
                 downloads.append(entry)
-            elif hf_flat_mirror_repo:
-                # Flat mirror repo: files stored by basename (no subdirs).
-                # Public repos need no token.
+                continue
+
+            basename = resolved_name.split("/")[-1]
+            # Sensitive files (face-swap, real-person likeness) must never be
+            # handed out from a public source: straight to the signed URL.
+            sensitive = is_excluded(resolved_name, exclusion_patterns)
+            # Third-party dumps first: cheapest for us and keeps the traffic (and
+            # the exposure) on someone else's account. The index tells us which
+            # dump actually holds this basename, so we do not fire a 404 first.
+            dump_repo = ""
+            dump_path = ""
+            if not sensitive:
+                dump = next(
+                    ((repo, files[basename]) for repo, files in source_index if basename in files),
+                    None,
+                )
+                if dump:
+                    dump_repo, dump_path = dump
+                elif not source_index:
+                    # No index available: keep the simple flat-mirror-first chain.
+                    dump_repo, dump_path = hf_flat_mirror_repo, basename
+            if dump_repo:
+                # Dumps may keep files in subdirectories (e.g. `high/`), so use
+                # the path recorded in the index rather than the bare basename.
                 flat_url = (
-                    f"https://huggingface.co/{hf_flat_mirror_repo}"
-                    f"/resolve/main/{quote(resolved_name.split('/')[-1])}"
+                    f"https://huggingface.co/{dump_repo}"
+                    f"/resolve/main/{quote(dump_path, safe='/')}"
                 )
                 downloads.append(
                     {
@@ -219,10 +305,12 @@ def build_lora_download_list(
                         "fallback_url": signed_url,
                     }
                 )
-            elif hf_mirror_repo:
+            elif hf_mirror_repo and not sensitive:
+                # Our own mirror, layout-preserving. Fallback for anything the
+                # dumps lack; paths carry subdirs and spaces, so percent-encode.
                 mirror_url = (
                     f"https://huggingface.co/{hf_mirror_repo}"
-                    f"/resolve/main/{resolved_name}"
+                    f"/resolve/main/{quote(resolved_name, safe='/')}"
                 )
                 entry = {
                     "filename": resolved_name,

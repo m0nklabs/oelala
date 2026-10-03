@@ -1,0 +1,29 @@
+# LoRA files that must NEVER be uploaded to a PUBLIC HuggingFace mirror.
+#
+# Policy: the public mirror (bomehika/oelala-loras) is the delivery source for
+# cloud workers, but files that carry face-swap capability or a real person's
+# likeness stay out of it. Those live on the private mirror
+# (m0nk111/oelala-loras) and in the local store; cloud workers fetch them
+# through the signed self-hosted /loras/download fallback.
+#
+# Patterns are shell globs, matched against both the repo-relative path and the
+# bare basename. Keep the reason next to each group, not next to each file.
+#
+# Enforced by src/backend/generation/lora_public_policy.py, used by
+# scripts/sync_loras_hf.py and build_lora_download_list().
+# Tests: tests/test_lora_public_exclusions.py
+
+# Trained likeness of an identified real person (DreamBooth "ohwx" token,
+# dataset dir naming a single individual).
+face_loras/*
+*ohwx_*
+igbaddie-PN.safetensors
+
+# Face / head swap capability.
+*head_swap*
+*headswap*
+*face_swap*
+*faceswap*
+
+# Trained on an identified adult performer (JAV catalogue code in the name).
+*JAV_*
