@@ -43,20 +43,28 @@ class TestMediaRecord:
 class TestMediaServiceInit:
     """Test MediaService initialisation."""
 
-    @patch.dict("os.environ", {
-        "MINIO_ENDPOINT": "http://test-minio:9000",
-        "SUPABASE_URL": "https://test.supabase.co",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "MINIO_ENDPOINT": "http://test-minio:9000",
+            "SUPABASE_URL": "https://test.supabase.co",
+        },
+    )
     def test_reads_minio_endpoint(self):
         service = MediaService()
         assert service.storage_url == "http://test-minio:9000"
 
-    @patch.dict("os.environ", {
-        "STORAGE_URL": "http://fallback:7990",
-    }, clear=False)
+    @patch.dict(
+        "os.environ",
+        {
+            "STORAGE_URL": "http://fallback:7990",
+        },
+        clear=False,
+    )
     def test_falls_back_to_storage_url(self):
         """When MINIO_ENDPOINT not set, falls back to STORAGE_URL."""
         import os
+
         os.environ.pop("MINIO_ENDPOINT", None)
         service = MediaService()
         assert service.storage_url == "http://fallback:7990"
@@ -77,7 +85,9 @@ class TestMediaServiceSignedUrl:
         )
 
         assert "X-Amz-Signature" in url
-        mock_client.public_url.assert_called_once_with("users/user-abc", "videos/test.mp4")
+        mock_client.public_url.assert_called_once_with(
+            "users/user-abc", "videos/test.mp4"
+        )
         mock_client.presigned_get.assert_called_once_with(
             "users/user-abc", "videos/test.mp4", expires=3600
         )
@@ -85,7 +95,9 @@ class TestMediaServiceSignedUrl:
     def test_generate_signed_url_simple_path(self):
         service = MediaService()
         mock_client = MagicMock()
-        mock_client.public_url.return_value = "https://storage.oelala.xyz/generated/video.mp4"
+        mock_client.public_url.return_value = (
+            "https://storage.oelala.xyz/generated/video.mp4"
+        )
         service._storage_client = mock_client
 
         url = service.generate_signed_url("generated/video.mp4", expires_in=7200)
@@ -161,7 +173,9 @@ class TestMediaServiceUpload:
 
         insert_resp = MagicMock()
         insert_resp.status_code = 201
-        insert_resp.json.return_value = [{"id": "record-1", "created_at": "2026-01-01T00:00:00Z"}]
+        insert_resp.json.return_value = [
+            {"id": "record-1", "created_at": "2026-01-01T00:00:00Z"}
+        ]
 
         mock_http.get = AsyncMock(return_value=tier_resp)
         mock_http.post = AsyncMock(return_value=insert_resp)
@@ -198,12 +212,14 @@ class TestMediaServiceDelete:
         mock_http = AsyncMock()
         get_resp = MagicMock()
         get_resp.status_code = 200
-        get_resp.json.return_value = [{
-            "id": "record-1",
-            "user_id": "user-abc",
-            "storage_path": "users/user-abc/videos/test.mp4",
-            "media_type": "video",
-        }]
+        get_resp.json.return_value = [
+            {
+                "id": "record-1",
+                "user_id": "user-abc",
+                "storage_path": "users/user-abc/videos/test.mp4",
+                "media_type": "video",
+            }
+        ]
 
         delete_resp = MagicMock()
         delete_resp.status_code = 204

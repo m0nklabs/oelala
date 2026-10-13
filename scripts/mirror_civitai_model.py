@@ -51,9 +51,11 @@ def env_value(name: str) -> str:
 
 def resolve_file(version_id: int, file_id: int) -> dict:
     """Look up one file of a Civitai model version (name, size, download URL)."""
-    model_id = requests.get(
-        f"{CIVITAI_API}/model-versions/{version_id}", timeout=30
-    ).json().get("modelId")
+    model_id = (
+        requests.get(f"{CIVITAI_API}/model-versions/{version_id}", timeout=30)
+        .json()
+        .get("modelId")
+    )
     if not model_id:
         raise SystemExit(f"❌ version {version_id} not found")
     model = requests.get(f"{CIVITAI_API}/models/{model_id}", timeout=30).json()
@@ -92,7 +94,9 @@ def download(url: str, target: Path, expected_bytes: int, token: str) -> None:
     speed = size / max(time.time() - started, 1) / 1e6
     print(f"   downloaded {size / 1e9:.2f} GB at {speed:.1f} MB/s")
     if expected_bytes and abs(size - expected_bytes) > expected_bytes * 0.01:
-        print(f"   ⚠️  size differs from Civitai metadata ({expected_bytes / 1e9:.2f} GB)")
+        print(
+            f"   ⚠️  size differs from Civitai metadata ({expected_bytes / 1e9:.2f} GB)"
+        )
     tmp.rename(target)
 
 
@@ -115,13 +119,23 @@ def header_summary(path: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", type=int, required=True, help="Civitai model version id")
+    parser.add_argument(
+        "--version", type=int, required=True, help="Civitai model version id"
+    )
     parser.add_argument("--file-id", type=int, required=True, help="Civitai file id")
     parser.add_argument("--repo", default=DEFAULT_REPO, help="target HF model repo")
-    parser.add_argument("--subdir", default=DEFAULT_SUBDIR, help="folder inside the repo")
-    parser.add_argument("--staging", default=str(DEFAULT_STAGING), help="local download dir")
-    parser.add_argument("--keep-local", action="store_true", help="keep the downloaded file")
-    parser.add_argument("--dry-run", action="store_true", help="resolve and report only")
+    parser.add_argument(
+        "--subdir", default=DEFAULT_SUBDIR, help="folder inside the repo"
+    )
+    parser.add_argument(
+        "--staging", default=str(DEFAULT_STAGING), help="local download dir"
+    )
+    parser.add_argument(
+        "--keep-local", action="store_true", help="keep the downloaded file"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="resolve and report only"
+    )
     args = parser.parse_args()
 
     civitai_token = env_value("CIVITAI_TOKEN")
@@ -132,14 +146,19 @@ def main() -> int:
 
     info = resolve_file(args.version, args.file_id)
     print(f"📦 {info['model']} — {info['version']}")
-    print(f"   file: {info['filename']} ({info['size_bytes'] / 1e9:.2f} GB, fp={info['fp']})")
+    print(
+        f"   file: {info['filename']} ({info['size_bytes'] / 1e9:.2f} GB, fp={info['fp']})"
+    )
     if args.dry_run:
         print(f"   would upload to {args.repo}:{args.subdir}/{info['filename']}")
         return 0
 
     staging = Path(args.staging)
     target = staging / info["filename"]
-    if target.exists() and abs(target.stat().st_size - info["size_bytes"]) <= info["size_bytes"] * 0.01:
+    if (
+        target.exists()
+        and abs(target.stat().st_size - info["size_bytes"]) <= info["size_bytes"] * 0.01
+    ):
         print("   already staged locally, skipping download")
     else:
         print("⬇️  downloading from Civitai...")

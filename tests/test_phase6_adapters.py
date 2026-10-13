@@ -40,7 +40,11 @@ from generation.adapters.local.caption_video import VideoCaptionAdapter
 
 
 def _make_req(**kwargs) -> GenerationRequest:
-    defaults = {"operation": Operation.GENERATE, "target_type": MediaType.IMAGE, "prompt": "test"}
+    defaults = {
+        "operation": Operation.GENERATE,
+        "target_type": MediaType.IMAGE,
+        "prompt": "test",
+    }
     defaults.update(kwargs)
     return GenerationRequest(**defaults)
 
@@ -151,12 +155,20 @@ class TestVideoUpscale(unittest.TestCase):
 
     def test_cost_lanczos(self):
         a = VideoUpscaleAdapter()
-        req = _make_req(operation=Operation.UPSCALE, target_type=MediaType.VIDEO, upscale_preset="fast")
+        req = _make_req(
+            operation=Operation.UPSCALE,
+            target_type=MediaType.VIDEO,
+            upscale_preset="fast",
+        )
         assert a.cost(req) == 2
 
     def test_cost_seedvr2(self):
         a = VideoUpscaleAdapter()
-        req = _make_req(operation=Operation.UPSCALE, target_type=MediaType.VIDEO, upscale_preset="quality")
+        req = _make_req(
+            operation=Operation.UPSCALE,
+            target_type=MediaType.VIDEO,
+            upscale_preset="quality",
+        )
         assert a.cost(req) == 10
 
     def test_resolve_model_preset(self):
@@ -180,7 +192,9 @@ class TestInterpolate(unittest.TestCase):
         assert a.output_type == MediaType.VIDEO
 
     def test_cost(self):
-        assert InterpolateAdapter().cost(_make_req(operation=Operation.INTERPOLATE)) == 3
+        assert (
+            InterpolateAdapter().cost(_make_req(operation=Operation.INTERPOLATE)) == 3
+        )
 
     def test_constraints_fps(self):
         c = InterpolateAdapter().constraints()
@@ -478,7 +492,11 @@ class TestAsyncExecute(unittest.IsolatedAsyncioTestCase):
 
     async def test_faceswap_video_no_video_raises(self):
         a = FaceSwapVideoAdapter(face_service_fn=_mock_face_service())
-        req = _make_req(operation=Operation.SWAP, target_type=MediaType.VIDEO, input_images=["s.png"])
+        req = _make_req(
+            operation=Operation.SWAP,
+            target_type=MediaType.VIDEO,
+            input_images=["s.png"],
+        )
         with self.assertRaises(ValueError, msg="requires an input video"):
             await a.execute(req)
 
@@ -579,21 +597,59 @@ class TestAsyncExecute(unittest.IsolatedAsyncioTestCase):
     async def test_no_service_raises_runtime_error(self):
         """All adapters without service fn should raise RuntimeError."""
         adapters_and_reqs = [
-            (I2ITransformAdapter(), _make_req(operation=Operation.TRANSFORM, input_images=["x"])),
-            (ImageUpscaleAdapter(), _make_req(operation=Operation.UPSCALE, input_images=["x"])),
-            (VideoUpscaleAdapter(), _make_req(operation=Operation.UPSCALE, input_video="v")),
-            (InterpolateAdapter(), _make_req(operation=Operation.INTERPOLATE, input_video="v")),
-            (FaceSwapImageAdapter(), _make_req(operation=Operation.SWAP, input_images=["t", "s"])),
-            (FaceSwapVideoAdapter(), _make_req(operation=Operation.SWAP, input_video="v", input_images=["s"])),
+            (
+                I2ITransformAdapter(),
+                _make_req(operation=Operation.TRANSFORM, input_images=["x"]),
+            ),
+            (
+                ImageUpscaleAdapter(),
+                _make_req(operation=Operation.UPSCALE, input_images=["x"]),
+            ),
+            (
+                VideoUpscaleAdapter(),
+                _make_req(operation=Operation.UPSCALE, input_video="v"),
+            ),
+            (
+                InterpolateAdapter(),
+                _make_req(operation=Operation.INTERPOLATE, input_video="v"),
+            ),
+            (
+                FaceSwapImageAdapter(),
+                _make_req(operation=Operation.SWAP, input_images=["t", "s"]),
+            ),
+            (
+                FaceSwapVideoAdapter(),
+                _make_req(
+                    operation=Operation.SWAP, input_video="v", input_images=["s"]
+                ),
+            ),
             (MMAudioAdapter(), _make_req(prompt="music")),
             (VoiceCloneAdapter(), _make_req(prompt="text")),
-            (LipSyncAdapter(), _make_req(operation=Operation.LIPSYNC, input_video="v", input_audio="a")),
-            (InpaintAdapter(), _make_req(operation=Operation.INPAINT, input_images=["i"], input_mask="m")),
-            (ImageCaptionAdapter(), _make_req(operation=Operation.CAPTION, input_images=["i"])),
-            (VideoCaptionAdapter(), _make_req(operation=Operation.CAPTION, input_video="v")),
+            (
+                LipSyncAdapter(),
+                _make_req(
+                    operation=Operation.LIPSYNC, input_video="v", input_audio="a"
+                ),
+            ),
+            (
+                InpaintAdapter(),
+                _make_req(
+                    operation=Operation.INPAINT, input_images=["i"], input_mask="m"
+                ),
+            ),
+            (
+                ImageCaptionAdapter(),
+                _make_req(operation=Operation.CAPTION, input_images=["i"]),
+            ),
+            (
+                VideoCaptionAdapter(),
+                _make_req(operation=Operation.CAPTION, input_video="v"),
+            ),
         ]
         for adapter, req in adapters_and_reqs:
-            with self.assertRaises(RuntimeError, msg=f"{adapter.name} should raise RuntimeError"):
+            with self.assertRaises(
+                RuntimeError, msg=f"{adapter.name} should raise RuntimeError"
+            ):
                 await adapter.execute(req)
 
 

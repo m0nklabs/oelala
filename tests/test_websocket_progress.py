@@ -89,7 +89,10 @@ class TestWebSocketManager:
 
         # Broadcast progress
         await manager.broadcast_progress(
-            job_id="job456", progress=45, message="Processing...", node_name="VAE Encode"
+            job_id="job456",
+            progress=45,
+            message="Processing...",
+            node_name="VAE Encode",
         )
 
         mock_ws.send_text.assert_called()
@@ -126,7 +129,9 @@ class TestWebSocketManager:
         assert message["data"]["job_id"] == "job789"
         assert message["data"]["status"] == "completed"
         assert message["data"]["output_url"] == "/comfyui-output/video.mp4"
-        assert "job789" not in manager.job_ownership  # Job unregistered after completion
+        assert (
+            "job789" not in manager.job_ownership
+        )  # Job unregistered after completion
 
     @pytest.mark.asyncio
     async def test_broadcast_job_failed(self):
@@ -309,7 +314,9 @@ class TestJobQueueManager:
         history = {
             "outputs": {
                 "12": {
-                    "gifs": [{"filename": "video.mp4", "type": "output", "subfolder": ""}]
+                    "gifs": [
+                        {"filename": "video.mp4", "type": "output", "subfolder": ""}
+                    ]
                 }
             }
         }
@@ -343,7 +350,10 @@ class TestWebSocketAuthentication:
         mock_ws.send_json = AsyncMock()
 
         with patch("auth.decode_jwt_with_secret") as mock_decode_secret:
-            mock_decode_secret.return_value = {"sub": "user123", "email": "test@example.com"}
+            mock_decode_secret.return_value = {
+                "sub": "user123",
+                "email": "test@example.com",
+            }
 
             # Simulate the auth flow from app.py
             auth_message = await asyncio.wait_for(mock_ws.receive_text(), timeout=5.0)
@@ -366,8 +376,10 @@ class TestWebSocketAuthentication:
         )
         mock_ws.close = AsyncMock()
 
-        with patch("auth.decode_jwt_with_secret") as mock_decode_secret, \
-             patch("auth.decode_jwt_with_jwks") as mock_decode_jwks:
+        with (
+            patch("auth.decode_jwt_with_secret") as mock_decode_secret,
+            patch("auth.decode_jwt_with_jwks") as mock_decode_jwks,
+        ):
             # Both verification methods fail
             mock_decode_secret.return_value = None
             mock_decode_jwks.return_value = None
@@ -405,7 +417,7 @@ class TestWebSocketAuthentication:
     async def test_auth_malformed_json(self):
         """Test authentication rejection with malformed JSON"""
         mock_ws = AsyncMock()
-        mock_ws.receive_text = AsyncMock(return_value='invalid json{')
+        mock_ws.receive_text = AsyncMock(return_value="invalid json{")
         mock_ws.close = AsyncMock()
 
         # Simulate the auth flow from app.py

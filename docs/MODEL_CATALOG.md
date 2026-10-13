@@ -278,4 +278,3 @@ Windows-PC probe during generation: unreachable during generation (marked unveri
 | wan-nsfw-e14-fixed.safetensors | lora | loras | 0.61 | unknown | — | yes | unverified | dump |
 | wan_2.2_i2v_slap_high_v2.0.safetensors | lora | loras | 0.31 | unknown | — | yes | unverified | dump |
 | wan_cumshot_i2v.safetensors | lora | loras | 0.36 | unknown | — | yes | unverified | dump |
-

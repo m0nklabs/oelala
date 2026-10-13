@@ -85,7 +85,9 @@ def post_graphql(api_key: str, query: str) -> dict[str, object]:
     except httpx.HTTPError as exc:
         raise RuntimeError(f"RunPod GraphQL request failed: {exc}") from exc
     if response.status_code >= 400:
-        raise RuntimeError(f"RunPod GraphQL HTTP {response.status_code}: {response.text}")
+        raise RuntimeError(
+            f"RunPod GraphQL HTTP {response.status_code}: {response.text}"
+        )
 
     data = response.json()
     if "errors" in data:

@@ -87,10 +87,14 @@ def strip_tags(raw: str) -> str:
 def parse_selects(source: str) -> dict[str, list[dict[str, str]]]:
     """Return {select_id: [{value, label}, ...]} for every <select> in the page."""
     out: dict[str, list[dict[str, str]]] = {}
-    for match in re.finditer(r'<select id="([A-Za-z]+)"[^>]*>(.*?)</select>', source, re.S):
+    for match in re.finditer(
+        r'<select id="([A-Za-z]+)"[^>]*>(.*?)</select>', source, re.S
+    ):
         select_id, body = match.group(1), match.group(2)
         options = []
-        for opt in re.finditer(r'<option value="([^"]*)"[^>]*>(.*?)</option>', body, re.S):
+        for opt in re.finditer(
+            r'<option value="([^"]*)"[^>]*>(.*?)</option>', body, re.S
+        ):
             value, label = opt.group(1), strip_tags(opt.group(2))
             if value:
                 options.append({"value": value, "label": label})
@@ -224,9 +228,13 @@ def build(source_path: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", required=True, help="path to the randomizer HTML page")
+    parser.add_argument(
+        "--source", required=True, help="path to the randomizer HTML page"
+    )
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="output JSON path")
-    parser.add_argument("--dry-run", action="store_true", help="report only, write nothing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="report only, write nothing"
+    )
     args = parser.parse_args()
 
     source_path = Path(args.source)
@@ -237,14 +245,20 @@ def main() -> int:
     data = build(source_path)
     meta = data["meta"]
     print(f"📚 {meta['dimensions']} dimensions, {meta['options']} options")
-    print(f"   audio stages: {len(data['audio_stage'])} | styles: {len(data['styles'])} | formats: {len(data['formats'])}")
+    print(
+        f"   audio stages: {len(data['audio_stage'])} | styles: {len(data['styles'])} | formats: {len(data['formats'])}"
+    )
     print(f"   artifact lock: {'yes' if data['artifact_lock'] else 'no'}")
     if args.dry_run:
         return 0
 
     out_path = Path(args.out)
-    out_path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"✅ wrote {out_path.relative_to(PROJECT_ROOT) if out_path.is_relative_to(PROJECT_ROOT) else out_path}")
+    out_path.write_text(
+        json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(
+        f"✅ wrote {out_path.relative_to(PROJECT_ROOT) if out_path.is_relative_to(PROJECT_ROOT) else out_path}"
+    )
     return 0
 
 

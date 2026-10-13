@@ -62,7 +62,9 @@ def test_t2v_no_loras_keeps_base_model_link():
 
 
 def test_i2v_chains_multiple_loras_and_keeps_image_node():
-    wf = _client(["A.safetensors", "B.safetensors"]).build_local_minimax_h3_i2v_workflow(
+    wf = _client(
+        ["A.safetensors", "B.safetensors"]
+    ).build_local_minimax_h3_i2v_workflow(
         image_name="first.png",
         prompt="test",
         num_frames=124,
@@ -92,9 +94,7 @@ def test_t2v_output_kind_savevideo_uses_savevideo_node():
     )
     # local output is SaveVideo (node 13/15); lora node 16 collides with none
     assert wf["16"]["class_type"] == "LoraLoaderModelOnly"
-    assert "SaveVideo" in {
-        wf[k]["class_type"] for k in wf if k in ("13", "15")
-    }
+    assert "SaveVideo" in {wf[k]["class_type"] for k in wf if k in ("13", "15")}
 
 
 # --- server-side LoRA name resolution (Windows backslash / missing loras) ---
@@ -105,11 +105,30 @@ def test_match_lora_name_variants():
         "minimax-h3\\PenisV2_minimax-h3_epoch60.safetensors",
         "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
     ]
-    assert _match_lora_name("minimax-h3\\PenisV2_minimax-h3_epoch60.safetensors", available) == available[0]
-    assert _match_lora_name("minimax-h3/PenisV2_minimax-h3_epoch60.safetensors", available) == available[0]
-    assert _match_lora_name("PenisV2_minimax-h3_epoch60.safetensors", available) == available[0]
-    assert _match_lora_name("minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors", available) == available[1]
-    assert _match_lora_name("minimax-h3/Vagina_minimax-h3_epoch20.safetensors", available) is None
+    assert (
+        _match_lora_name(
+            "minimax-h3\\PenisV2_minimax-h3_epoch60.safetensors", available
+        )
+        == available[0]
+    )
+    assert (
+        _match_lora_name("minimax-h3/PenisV2_minimax-h3_epoch60.safetensors", available)
+        == available[0]
+    )
+    assert (
+        _match_lora_name("PenisV2_minimax-h3_epoch60.safetensors", available)
+        == available[0]
+    )
+    assert (
+        _match_lora_name(
+            "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors", available
+        )
+        == available[1]
+    )
+    assert (
+        _match_lora_name("minimax-h3/Vagina_minimax-h3_epoch20.safetensors", available)
+        is None
+    )
 
 
 def test_local_builder_maps_forward_slash_to_server_form():
@@ -125,18 +144,32 @@ def test_local_builder_maps_forward_slash_to_server_form():
         seed=1,
         steps=20,
         lora_configs=[
-            {"name": "minimax-h3/PenisV2_minimax-h3_epoch60.safetensors", "strength": 0.8},
-            {"name": "minimax-h3/Vagina_minimax-h3_epoch20.safetensors", "strength": 0.8},
+            {
+                "name": "minimax-h3/PenisV2_minimax-h3_epoch60.safetensors",
+                "strength": 0.8,
+            },
+            {
+                "name": "minimax-h3/Vagina_minimax-h3_epoch20.safetensors",
+                "strength": 0.8,
+            },
         ],
     )
     # exact strings the Windows server validates lora_name against
-    assert wf["16"]["inputs"]["lora_name"] == "minimax-h3\\PenisV2_minimax-h3_epoch60.safetensors"
-    assert wf["17"]["inputs"]["lora_name"] == "minimax-h3\\Vagina_minimax-h3_epoch20.safetensors"
+    assert (
+        wf["16"]["inputs"]["lora_name"]
+        == "minimax-h3\\PenisV2_minimax-h3_epoch60.safetensors"
+    )
+    assert (
+        wf["17"]["inputs"]["lora_name"]
+        == "minimax-h3\\Vagina_minimax-h3_epoch20.safetensors"
+    )
     assert wf["6"]["inputs"]["model"] == ["17", 0]
 
 
 def test_local_builder_drops_lora_missing_on_server():
-    wf = _client(["minimax-h3\\Bounce.safetensors"]).build_local_minimax_h3_t2v_workflow(
+    wf = _client(
+        ["minimax-h3\\Bounce.safetensors"]
+    ).build_local_minimax_h3_t2v_workflow(
         prompt="test",
         num_frames=124,
         fps=24,

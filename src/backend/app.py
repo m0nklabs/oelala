@@ -528,7 +528,6 @@ for noisy_logger in ["diffusers", "transformers", "accelerate"]:
 app = FastAPI(
     title="Oelala AI Video Generator",
     description="AI-powered image, video and audio generation",
-
     version="1.0.0",
 )
 
@@ -4355,7 +4354,9 @@ async def get_cloud_family_media(family: str, filename: str, request: Request):
     if not _re.fullmatch(r"[a-z0-9]+", family or ""):
         raise HTTPException(status_code=404, detail="Not found")
     safe_filename = _safe_filename(filename)
-    return _storage_proxy_response("generated", f"cloud-{family}/{safe_filename}", request)
+    return _storage_proxy_response(
+        "generated", f"cloud-{family}/{safe_filename}", request
+    )
 
 
 @app.get("/loras/download/{filename:path}")
@@ -5759,7 +5760,12 @@ async def get_user_media_workflow(
                     tags = probe_data.get("format", {}).get("tags", {})
                     # ComfyUI/VHS embeds the API-format graph in the "prompt"
                     # tag; "comment" / "workflow" are used by other writers.
-                    raw = tags.get("prompt") or tags.get("comment") or tags.get("workflow") or ""
+                    raw = (
+                        tags.get("prompt")
+                        or tags.get("comment")
+                        or tags.get("workflow")
+                        or ""
+                    )
                     if raw and raw.strip().startswith("{"):
                         workflow_data = json_module.loads(raw)
                         prompt = workflow_data.get("prompt", workflow_data)
@@ -6681,12 +6687,12 @@ async def _submit_to_runpod(
         "message": f"Job submitted to RunPod cloud GPU. Poll /runpod/job/{job.id} for status.",
         **{k: v for k, v in job_info.items() if not k.startswith("_")},
     }
+
+
 @app.post("/generate-wan22-async")
 async def generate_wan22_async(user: User = Depends(get_current_user)):
     """Retired 2026-10-01: async Wan 2.2 I2V (local or cloud)."""
     _retired_wan22_endpoint("/generate-wan22-async")
-
-
 
 
 @app.post("/generate-blockswap-q8-async")
@@ -6695,14 +6701,10 @@ async def generate_blockswap_q8_async(user: User = Depends(get_current_user)):
     _retired_wan22_endpoint("/generate-blockswap-q8-async")
 
 
-
-
 @app.post("/generate-distorch2-q8-async")
 async def generate_distorch2_q8_async(user: User = Depends(get_current_user)):
     """Retired 2026-10-01: Wan 2.2 DisTorch2 Q8 I2V (experimental)."""
     _retired_wan22_endpoint("/generate-distorch2-q8-async")
-
-
 
 
 @app.post("/generate-ultra-q8-async")
@@ -6711,14 +6713,10 @@ async def generate_ultra_q8_async(user: User = Depends(get_current_user)):
     _retired_wan22_endpoint("/generate-ultra-q8-async")
 
 
-
-
 @app.post("/generate-cloud-wan22-async")
 async def generate_cloud_wan22_async(user: User = Depends(get_current_user)):
     """Retired 2026-10-01: Wan 2.2 bf16 I2V/T2V on RunPod."""
     _retired_wan22_endpoint("/generate-cloud-wan22-async")
-
-
 
 
 # =============================================================================
@@ -8136,11 +8134,19 @@ class PromptGenerateRequest(BaseModel):
     target_model: Optional[str] = (
         None  # Target generation model, e.g. "minimax_h3" → H3-Context-IR skill
     )
-    target_i2v: bool = False  # H3 skill: prompt anchors an input image (I2VA first frame)
-    randomize: bool = False  # H3 skill: roll a structured scene (place/light/arc/camera)
+    target_i2v: bool = (
+        False  # H3 skill: prompt anchors an input image (I2VA first frame)
+    )
+    randomize: bool = (
+        False  # H3 skill: roll a structured scene (place/light/arc/camera)
+    )
     scene_seed: Optional[int] = None  # Reproducible scene roll; None = fresh roll
-    duration: Optional[float] = None  # Target clip length in seconds (drives the shot count)
-    scene_mode: Optional[str] = None  # "random" (dice) | "creative" (model picks the scene)
+    duration: Optional[float] = (
+        None  # Target clip length in seconds (drives the shot count)
+    )
+    scene_mode: Optional[str] = (
+        None  # "random" (dice) | "creative" (model picks the scene)
+    )
     temperature: Optional[float] = None  # LLM sampling temperature (default 1.2)
     llm_seed: Optional[int] = None  # LLM sampling seed; None = fresh each call
 
@@ -8364,7 +8370,9 @@ async def _pick_scene_values(
                 ", ".join(missing),
             )
         return picks
-    excerpt = content.strip()[:240] or (message.get("reasoning_content") or "").strip()[-240:]
+    excerpt = (
+        content.strip()[:240] or (message.get("reasoning_content") or "").strip()[-240:]
+    )
     logger.warning("⚠️ Scene picker gave no usable JSON (excerpt): %r", excerpt)
     return None
 
@@ -8423,10 +8431,14 @@ async def generate_prompt_with_llm(
         if nsfw_intensity and nsfw_intensity >= 1:
             nsfw_level = max(1, min(5, nsfw_intensity))
             level_desc = (
-                "suggestive/sensual" if nsfw_level == 1
-                else "softcore erotic" if nsfw_level == 2
-                else "full nudity" if nsfw_level == 3
-                else "hardcore explicit" if nsfw_level == 4
+                "suggestive/sensual"
+                if nsfw_level == 1
+                else "softcore erotic"
+                if nsfw_level == 2
+                else "full nudity"
+                if nsfw_level == 3
+                else "hardcore explicit"
+                if nsfw_level == 4
                 else "extreme/no limits"
             )
             system_prompt += DEFAULT_H3_NSFW_ADDENDUM.format(
@@ -8449,9 +8461,9 @@ Generate as JSON."""
             if target_i2v:
                 i2v_instruction = (
                     "IMAGE-TO-VIDEO: the input image is the first keyframe of the video. "
-                    "Prepend the mandatory first line — \"For the target video, at 0.00 "
+                    'Prepend the mandatory first line — "For the target video, at 0.00 '
                     "seconds into the target video, <Picture 1> (from [Shot 1]) is fully "
-                    "referenced.\" — followed by a blank line, then develop the action "
+                    'referenced." — followed by a blank line, then develop the action '
                     "from that anchor."
                 )
             scene_block = ""
@@ -8480,7 +8492,9 @@ Generate as JSON."""
                                 "⚠️ Creative scene pick failed, falling back to a dice roll"
                             )
                     if rolled_scene is None:
-                        rolled_scene = roll_scene(seed=scene_seed, duration_s=duration_s)
+                        rolled_scene = roll_scene(
+                            seed=scene_seed, duration_s=duration_s
+                        )
                     scene_block = (
                         "\n\n" + scene_brief(rolled_scene) + "\n"
                         "Follow this structure shot for shot; write it in "
@@ -8590,14 +8604,18 @@ Generate as JSON."""
                 # Generous timeout: reasoning models without a max_tokens cap
                 # can think for minutes (measured ~150s for the H3 skill on
                 # the 9B Guardian route) before their answer arrives.
-                timeout=600.0, headers=_guardian_headers()
+                timeout=600.0,
+                headers=_guardian_headers(),
             ) as client:
                 response = await client.post(
                     f"{GUARDIAN_BASE}/v1/chat/completions",
                     json=llm_request_body,
                 )
 
-                if response.status_code in (502, 503, 504) and attempt < max_retries - 1:
+                if (
+                    response.status_code in (502, 503, 504)
+                    and attempt < max_retries - 1
+                ):
                     logger.info(
                         f"⏳ Guardian {response.status_code} (proxy/model hiccup or loading), "
                         f"retry {attempt + 1}/{max_retries} in {retry_delay}s..."
@@ -8660,7 +8678,10 @@ Generate as JSON."""
             logger.warning(f"LLM returned invalid JSON: {e}")
             return None
         except Exception as e:
-            if any(f"{code}" in str(e) for code in (502, 503, 504)) and attempt < max_retries - 1:
+            if (
+                any(f"{code}" in str(e) for code in (502, 503, 504))
+                and attempt < max_retries - 1
+            ):
                 logger.info(
                     f"⏳ Guardian gateway error, retry {attempt + 1}/{max_retries} in {retry_delay}s..."
                 )
@@ -8762,7 +8783,11 @@ async def _process_llm_job(request_data: dict) -> dict | None:
     # Fall back to template mode
     if result is None:
         result = generate_prompt_template(
-            base_input, style, mode, include_negative, include_motion,
+            base_input,
+            style,
+            mode,
+            include_negative,
+            include_motion,
             target_model=target_model,
         )
 
@@ -8874,7 +8899,9 @@ async def generate_prompt_compare(
     if not models:
         raise HTTPException(status_code=400, detail="At least one model is required")
     if len(models) > 3:
-        raise HTTPException(status_code=400, detail="At most three models per comparison")
+        raise HTTPException(
+            status_code=400, detail="At most three models per comparison"
+        )
 
     base_request = {
         "input": req.input.strip(),

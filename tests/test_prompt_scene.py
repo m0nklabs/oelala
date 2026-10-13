@@ -172,7 +172,9 @@ def test_scene_from_picks_lands_on_the_scene_keys():
     }
     scene = scene_from_picks(picks, seed=3, duration_s=5.0)
     for dimension, (scene_key, _label) in PICK_DIMENSIONS.items():
-        assert scene[scene_key] == picks[dimension], f"{dimension} did not reach {scene_key}"
+        assert scene[scene_key] == picks[dimension], (
+            f"{dimension} did not reach {scene_key}"
+        )
         if scene_key != dimension:
             assert dimension not in scene, f"{dimension} leaked in as its own key"
     assert scene["picked_by"] == "llm"
@@ -235,7 +237,14 @@ def test_parse_scene_picks_maps_scene_keys_back():
         }
     )
     picks = parse_scene_picks(text)
-    assert set(picks) == {"place", "placeLight", "clothes", "mood", "stylePack", "sceneFormat"}
+    assert set(picks) == {
+        "place",
+        "placeLight",
+        "clothes",
+        "mood",
+        "stylePack",
+        "sceneFormat",
+    }
     assert picks["placeLight"] == "warm lamps"
     assert picks["clothes"] == "open robe"
     assert picks["stylePack"] == "phone selfie"
@@ -271,7 +280,9 @@ def test_picker_wiring_uses_the_pure_parser():
     source = (PROJECT_ROOT / "src" / "backend" / "app.py").read_text(encoding="utf-8")
     assert "parse_scene_picks(content)" in source
     assert "reasoning_content" in source, "picker must also scan the thinking field"
-    assert "Scene picker gave no usable JSON" in source, "failure needs a greppable warning"
+    assert "Scene picker gave no usable JSON" in source, (
+        "failure needs a greppable warning"
+    )
     assert "_SCENE_PICK_TIMEOUT_S" in source
 
 
@@ -286,6 +297,10 @@ def test_prompt_requests_accept_the_new_controls():
     assert "class PromptCompareRequest" in source
     assert '"/generate-prompt/compare"' in source
     # the new fields must reach the job dict, not just the request model
-    for forwarded in ('"scene_mode": req.scene_mode', '"temperature": req.temperature', '"llm_seed": req.llm_seed'):
+    for forwarded in (
+        '"scene_mode": req.scene_mode',
+        '"temperature": req.temperature',
+        '"llm_seed": req.llm_seed',
+    ):
         assert forwarded in source, f"not forwarded to the LLM job: {forwarded}"
     assert "importlib" in importlib.util.__name__ or True

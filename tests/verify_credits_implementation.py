@@ -23,6 +23,7 @@ def test_imports():
 
     try:
         from credits import CreditManager  # noqa: F401  (import is the availability check)
+
         print("  ✅ credits.py imports successfully")
     except ImportError as e:
         print(f"  ❌ Failed to import credits.py: {e}")
@@ -30,6 +31,7 @@ def test_imports():
 
     try:
         from credits_api import router  # noqa: F401  (import is the availability check)
+
         print("  ✅ credits_api.py imports successfully")
     except ImportError as e:
         print(f"  ❌ Failed to import credits_api.py: {e}")
@@ -41,7 +43,6 @@ def test_imports():
 def test_classes_and_functions():
     """Test that key classes and functions exist."""
     print("\n🔍 Testing classes and functions...")
-
 
     # Test that imported items are valid
     print("  ✅ credits.CreditManager exists")
@@ -100,7 +101,9 @@ def test_default_packages():
 
     for pkg in DEFAULT_PACKAGES:
         if pkg.id in expected_packages:
-            print(f"  ✅ Package '{pkg.id}': {pkg.credits} credits, €{pkg.price_cents/100:.2f}")
+            print(
+                f"  ✅ Package '{pkg.id}': {pkg.credits} credits, €{pkg.price_cents / 100:.2f}"
+            )
         else:
             print(f"  ❌ Unexpected package: {pkg.id}")
             return False
@@ -119,23 +122,29 @@ def test_api_routes():
     expected_routes = ["", "/packages", "/estimate", "/history", "/purchase"]
 
     for route in expected_routes:
-        if route in credit_routes or f"/api/credits{route}" in [r.path for r in router.routes]:
+        if route in credit_routes or f"/api/credits{route}" in [
+            r.path for r in router.routes
+        ]:
             print(f"  ✅ Route /api/credits{route} defined")
         else:
             # Route might be defined with full path
             found = False
             for r in router.routes:
-                if hasattr(r, 'path') and route in r.path:
+                if hasattr(r, "path") and route in r.path:
                     found = True
                     break
             if found:
                 print(f"  ✅ Route /api/credits{route} defined")
             else:
-                print(f"  ⚠️  Route /api/credits{route} check skipped (needs full app context)")
+                print(
+                    f"  ⚠️  Route /api/credits{route} check skipped (needs full app context)"
+                )
 
     # Check stripe router
     stripe_routes = [r.path for r in stripe_router.routes]
-    if "/webhook" in stripe_routes or any("webhook" in r.path for r in stripe_router.routes):
+    if "/webhook" in stripe_routes or any(
+        "webhook" in r.path for r in stripe_router.routes
+    ):
         print("  ✅ Stripe webhook route defined")
     else:
         print("  ⚠️  Stripe webhook route check skipped (needs full app context)")
@@ -147,7 +156,13 @@ def check_migration_file():
     """Check that database migration file exists."""
     print("\n🔍 Checking database migration...")
 
-    migration_file = Path(__file__).parent.parent / "src" / "backend" / "migrations" / "001_credits_system.sql"
+    migration_file = (
+        Path(__file__).parent.parent
+        / "src"
+        / "backend"
+        / "migrations"
+        / "001_credits_system.sql"
+    )
 
     if migration_file.exists():
         size = migration_file.stat().st_size

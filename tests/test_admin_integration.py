@@ -171,7 +171,13 @@ class TestAdminAPI:
         Current implementation: is_admin > is_vip > regular user
         """
         permissions = {
-            "admin": ["view_users", "adjust_credits", "change_tiers", "toggle_vip", "toggle_admin"],
+            "admin": [
+                "view_users",
+                "adjust_credits",
+                "change_tiers",
+                "toggle_vip",
+                "toggle_admin",
+            ],
             "vip": ["priority_queue", "exclusive_models"],
             "user": ["generate", "view_own_data"],
         }

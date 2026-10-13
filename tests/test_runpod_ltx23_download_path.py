@@ -63,7 +63,9 @@ def test_flat_repo_paths_download_into_the_target_dir(handler_module, tmp_path):
     assert checked >= 2  # the distilled checkpoint and the audio VAE
 
 
-def test_split_files_repo_paths_never_nest_inside_the_target_dir(handler_module, tmp_path):
+def test_split_files_repo_paths_never_nest_inside_the_target_dir(
+    handler_module, tmp_path
+):
     """The defect: local_dir=target.parent put the file under target_dir/split_files/..."""
     handler_module.COMFYUI_PATH = str(tmp_path)
     models_root = tmp_path / "models"

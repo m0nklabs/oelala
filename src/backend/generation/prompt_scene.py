@@ -128,7 +128,9 @@ def scene_from_picks(
             continue
         scene[scene_key] = chosen
     scene["style_camera"] = (
-        vocab.get("styles", {}).get(scene["style_pack"], {}) if scene.get("style_pack") else {}
+        vocab.get("styles", {}).get(scene["style_pack"], {})
+        if scene.get("style_pack")
+        else {}
     )
     scene["format_spine"] = (
         vocab.get("formats", {}).get(scene["scene_format"], {})
@@ -284,10 +286,14 @@ def roll_scene(
     }
     scene["soundscape"] = foley_guard(stages, vocab)
     scene["style_camera"] = (
-        vocab.get("styles", {}).get(scene["style_pack"], {}) if scene["style_pack"] else {}
+        vocab.get("styles", {}).get(scene["style_pack"], {})
+        if scene["style_pack"]
+        else {}
     )
     scene["format_spine"] = (
-        vocab.get("formats", {}).get(scene["scene_format"], {}) if scene["scene_format"] else {}
+        vocab.get("formats", {}).get(scene["scene_format"], {})
+        if scene["scene_format"]
+        else {}
     )
     return scene
 

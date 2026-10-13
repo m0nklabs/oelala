@@ -115,9 +115,7 @@ class Krea2LocalT2IAdapter(GenerationAdapter):
         # caused VRAM exhaustion during text encode). Without a LoRA the graph
         # stays identical to the plain flow.
         loras = [
-            lora
-            for lora in (req.loras or [])[:1]
-            if lora.name and lora.name != "None"
+            lora for lora in (req.loras or [])[:1] if lora.name and lora.name != "None"
         ]
         model_source = ["1", 0]
         clip_source = ["2", 0]

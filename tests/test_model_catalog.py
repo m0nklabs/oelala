@@ -39,7 +39,9 @@ def handler_module():
     stub = types.ModuleType("runpod")
     stub.serverless = types.SimpleNamespace(start=lambda *a, **k: None)
     sys.modules.setdefault("runpod", stub)
-    spec = importlib.util.spec_from_file_location("h3_worker_handler_catalog", HANDLER_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "h3_worker_handler_catalog", HANDLER_PATH
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -75,9 +77,9 @@ def test_h3_variant_checkpoints_are_cataloged(by_filename):
         filename = spec["checkpoint"]
         entry = by_filename.get(filename)
         assert entry, f"variant '{variant}' checkpoint not in catalog: {filename}"
-        assert any(
-            variant in str(usage) for usage in entry["used_by"]
-        ), f"{filename}: variant '{variant}' not recorded in used_by"
+        assert any(variant in str(usage) for usage in entry["used_by"]), (
+            f"{filename}: variant '{variant}' not recorded in used_by"
+        )
 
 
 def test_eros_checkpoints_keep_upstream_names(by_filename):

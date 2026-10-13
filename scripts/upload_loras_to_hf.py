@@ -23,7 +23,9 @@ except ImportError:
     sys.exit(1)
 
 LORA_DIR = Path("/mnt/ssd/loras")
-HF_REPO = "m0nk111/oelala-loras"  # Personal account (org needs separate token permissions)
+HF_REPO = (
+    "m0nk111/oelala-loras"  # Personal account (org needs separate token permissions)
+)
 REPO_TYPE = "model"
 
 
@@ -50,10 +52,14 @@ def main() -> None:
         help="Specific LoRA files (relative to /mnt/ssd/loras/). If omitted, uploads all ltx/ LoRAs.",
     )
     parser.add_argument(
-        "--private", action="store_true", default=True,
+        "--private",
+        action="store_true",
+        default=True,
         help="Create repo as private (default: True)",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be uploaded")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be uploaded"
+    )
     args = parser.parse_args()
 
     api = HfApi()
@@ -61,7 +67,9 @@ def main() -> None:
     # Ensure repo exists
     if not args.dry_run:
         try:
-            create_repo(HF_REPO, repo_type=REPO_TYPE, private=args.private, exist_ok=True)
+            create_repo(
+                HF_REPO, repo_type=REPO_TYPE, private=args.private, exist_ok=True
+            )
             print(f"📦 Repo ready: https://huggingface.co/{HF_REPO}")
         except Exception as e:
             print(f"⚠️ Repo creation: {e}")

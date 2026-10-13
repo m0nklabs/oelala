@@ -102,9 +102,7 @@ def main() -> int:
     changelog_file = repo_root / "CHANGELOG.md"
 
     # Find all fragment files (exclude README)
-    fragments = [
-        f for f in changelog_dir.glob("*.md") if f.name.lower() != "readme.md"
-    ]
+    fragments = [f for f in changelog_dir.glob("*.md") if f.name.lower() != "readme.md"]
 
     if not fragments:
         print("✅ No changelog fragments to merge")
@@ -149,7 +147,11 @@ def main() -> int:
                 new_unreleased = format_unreleased(merged)
 
         new_content = re.sub(
-            unreleased_pattern, new_unreleased.rstrip(), existing, count=1, flags=re.DOTALL
+            unreleased_pattern,
+            new_unreleased.rstrip(),
+            existing,
+            count=1,
+            flags=re.DOTALL,
         )
     else:
         # Insert after title
