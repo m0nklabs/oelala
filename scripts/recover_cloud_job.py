@@ -24,6 +24,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 # Load .env
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 import httpx
@@ -46,7 +47,9 @@ async def fetch_runpod_result(runpod_job_id: str) -> dict:
         resp = await client.get(url, headers=headers)
         resp.raise_for_status()
         data = resp.json()
-    print(f"✅ RunPod status: {data.get('status')} | executionTime: {data.get('executionTime')}ms")
+    print(
+        f"✅ RunPod status: {data.get('status')} | executionTime: {data.get('executionTime')}ms"
+    )
     return data
 
 
@@ -82,12 +85,20 @@ async def upload_to_storage(file_bytes: bytes, filename: str) -> str:
     parsed = urlparse(MINIO_ENDPOINT)
     endpoint = parsed.netloc or parsed.path
     secure = parsed.scheme == "https"
-    client = Minio(endpoint, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=secure)
+    client = Minio(
+        endpoint,
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=secure,
+    )
 
     bucket = "oelala-generated"
     object_path = f"cloud-wan22/{filename}"
     client.put_object(
-        bucket, object_path, io.BytesIO(file_bytes), len(file_bytes),
+        bucket,
+        object_path,
+        io.BytesIO(file_bytes),
+        len(file_bytes),
         content_type="video/mp4",
     )
     storage_path = f"generated/{object_path}"
@@ -95,7 +106,9 @@ async def upload_to_storage(file_bytes: bytes, filename: str) -> str:
     return storage_path
 
 
-async def register_in_supabase(user_id: str, storage_path: str, filename: str, gen_type: str, prompt: str) -> dict:
+async def register_in_supabase(
+    user_id: str, storage_path: str, filename: str, gen_type: str, prompt: str
+) -> dict:
     """
     Insert a user_media record in Supabase so the video appears in pope's gallery.
     Uses service key (bypasses RLS).
@@ -128,17 +141,25 @@ async def register_in_supabase(user_id: str, storage_path: str, filename: str, g
             resp.raise_for_status()
         result = resp.json()
     record = result[0] if isinstance(result, list) else result
-    print(f"✅ Supabase media record created: id={record.get('id')} | path={storage_path}")
+    print(
+        f"✅ Supabase media record created: id={record.get('id')} | path={storage_path}"
+    )
     return record
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Recover a lost RunPod cloud gen result")
+    parser = argparse.ArgumentParser(
+        description="Recover a lost RunPod cloud gen result"
+    )
     parser.add_argument("--runpod-job-id", required=True)
     parser.add_argument("--user-id", required=True)
     parser.add_argument("--prompt", default="cloud generation (recovered)")
     parser.add_argument("--gen-type", default="t2v")
-    parser.add_argument("--dry-run", action="store_true", help="Fetch + decode but do NOT upload/register")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Fetch + decode but do NOT upload/register",
+    )
     args = parser.parse_args()
 
     print(f"\n🔍 Fetching RunPod job: {args.runpod_job_id}")
@@ -150,7 +171,7 @@ async def main():
 
     print("\n📥 Decoding video...")
     video_bytes, orig_filename = decode_video_from_result(job_data)
-    print(f"   Size: {len(video_bytes):,} bytes ({len(video_bytes)/1024:.1f} KB)")
+    print(f"   Size: {len(video_bytes):,} bytes ({len(video_bytes) / 1024:.1f} KB)")
 
     # Build a canonical filename
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")

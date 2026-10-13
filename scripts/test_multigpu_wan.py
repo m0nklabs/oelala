@@ -24,16 +24,16 @@ MULTIGPU_WORKFLOW = {
             "model_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
             "precision": "bf16",
             "device": "cuda:0",  # T5 on 3060
-            "quantization": "disabled"
-        }
+            "quantization": "disabled",
+        },
     },
     "2": {
         "class_type": "WanVideoVAELoaderMultiGPU",
         "inputs": {
             "model_name": "Wan2.1_VAE.safetensors",
             "load_device": "cuda:0",  # VAE on 3060
-            "precision": "bf16"
-        }
+            "precision": "bf16",
+        },
     },
     "3": {
         "class_type": "WanVideoModelLoaderMultiGPU",
@@ -43,14 +43,14 @@ MULTIGPU_WORKFLOW = {
             "quantization": "disabled",
             "load_device": "offload_device",
             "compute_device": "cuda:1",  # DiT on 5060 Ti
-            "attention_mode": "sdpa"
-        }
+            "attention_mode": "sdpa",
+        },
     },
     "4": {
         "class_type": "LoadImage",
         "inputs": {
             "image": "woman_portrait.png"  # Use the image we prepared earlier
-        }
+        },
     },
     "5": {
         "class_type": "WanVideoTextEncodeMultiGPU",
@@ -58,8 +58,8 @@ MULTIGPU_WORKFLOW = {
             "wan_t5_model": ["1", 0],
             "prompt": "A woman with long blonde hair turns slowly to face the camera, gentle smile, soft indoor lighting, photorealistic, cinematic",
             "negative_prompt": "blurry, static, worst quality, low quality, deformed",
-            "force_offload": False
-        }
+            "force_offload": False,
+        },
     },
     "6": {
         "class_type": "WanVideoImageToVideoEncodeMultiGPU",
@@ -73,8 +73,8 @@ MULTIGPU_WORKFLOW = {
             "end_latent_strength": 1.0,
             "start_image": ["4", 0],
             "vae": ["2", 0],
-            "load_device": ["2", 1]
-        }
+            "load_device": ["2", 1],
+        },
     },
     "7": {
         "class_type": "WanVideoSamplerMultiGPU",
@@ -89,8 +89,8 @@ MULTIGPU_WORKFLOW = {
             "shift": 8.0,
             "seed": random.randint(0, 2**32),
             "force_offload": True,
-            "scheduler": "unipc"
-        }
+            "scheduler": "unipc",
+        },
     },
     "8": {
         "class_type": "WanVideoDecodeMultiGPU",
@@ -102,8 +102,8 @@ MULTIGPU_WORKFLOW = {
             "tile_x": 272,
             "tile_y": 272,
             "tile_stride_x": 144,
-            "tile_stride_y": 128
-        }
+            "tile_stride_y": 128,
+        },
     },
     "9": {
         "class_type": "VHS_VideoCombine",
@@ -114,28 +114,26 @@ MULTIGPU_WORKFLOW = {
             "filename_prefix": "wan_multigpu",
             "format": "video/h264-mp4",
             "pingpong": False,
-            "save_output": True
-        }
-    }
+            "save_output": True,
+        },
+    },
 }
 
 
 def queue_prompt(workflow):
     """Queue a workflow for execution"""
     prompt = {"prompt": workflow, "client_id": "multigpu_test"}
-    data = json.dumps(prompt).encode('utf-8')
+    data = json.dumps(prompt).encode("utf-8")
 
     req = urllib.request.Request(
-        f"{COMFYUI_URL}/prompt",
-        data=data,
-        headers={'Content-Type': 'application/json'}
+        f"{COMFYUI_URL}/prompt", data=data, headers={"Content-Type": "application/json"}
     )
 
     try:
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
+        error_body = e.read().decode("utf-8")
         print(f"❌ HTTP Error {e.code}: {error_body}")
         return None
 
@@ -166,13 +164,28 @@ def main():
         print("   Creating test image...")
         # Create a simple test image
         import subprocess
-        subprocess.run([
-            "convert", "-size", "480x832", "xc:#336699",
-            "-font", "DejaVu-Sans", "-pointsize", "30",
-            "-fill", "white", "-gravity", "center",
-            "-annotate", "0", "Test Image",
-            str(input_image)
-        ], check=False)
+
+        subprocess.run(
+            [
+                "convert",
+                "-size",
+                "480x832",
+                "xc:#336699",
+                "-font",
+                "DejaVu-Sans",
+                "-pointsize",
+                "30",
+                "-fill",
+                "white",
+                "-gravity",
+                "center",
+                "-annotate",
+                "0",
+                "Test Image",
+                str(input_image),
+            ],
+            check=False,
+        )
 
     print(f"📸 Input: {input_image.name}")
     print("🎬 Output: wan_multigpu_*.mp4")
@@ -183,7 +196,7 @@ def main():
     result = queue_prompt(MULTIGPU_WORKFLOW)
 
     if result:
-        prompt_id = result.get('prompt_id', 'unknown')
+        prompt_id = result.get("prompt_id", "unknown")
         print(f"✅ Queued! Prompt ID: {prompt_id}")
         print()
         print("📊 Monitor progress at: http://localhost:8188")
@@ -197,8 +210,8 @@ def main():
             time.sleep(5)
             queue = check_queue()
             if queue:
-                running = len(queue.get('queue_running', []))
-                pending = len(queue.get('queue_pending', []))
+                running = len(queue.get("queue_running", []))
+                pending = len(queue.get("queue_pending", []))
                 if running == 0 and pending == 0:
                     print("✅ Done! Check output folder for video.")
                     break

@@ -241,9 +241,7 @@ class TestKrea2LocalT2I:
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
             prompt="a cat",
-            loras=[
-                LoraStackItem(name="krea2/KNP_000003000.safetensors", strength=0.9)
-            ],
+            loras=[LoraStackItem(name="krea2/KNP_000003000.safetensors", strength=0.9)],
         )
         wf = a.build_workflow(req)
         # Model-only LoraLoader present, correct strength; CLIP untouched

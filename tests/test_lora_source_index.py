@@ -31,7 +31,9 @@ def test_only_size_matching_files_are_accepted():
 
 
 def test_unknown_basename_is_rejected():
-    accepted, rejected = verified_files({"stranger.safetensors": [("stranger.safetensors", 42)]}, {})
+    accepted, rejected = verified_files(
+        {"stranger.safetensors": [("stranger.safetensors", 42)]}, {}
+    )
     assert accepted == {}
     assert rejected == ["stranger.safetensors"]
 
@@ -45,10 +47,14 @@ def test_subdirectory_path_is_recorded():
 
 def test_ambiguous_basename_matches_any_local_size():
     """`high_noise_model.safetensors` exists twice locally; either size counts."""
-    remote = {"high_noise_model.safetensors": [("v1/high_noise_model.safetensors", 200)]}
+    remote = {
+        "high_noise_model.safetensors": [("v1/high_noise_model.safetensors", 200)]
+    }
     local = {"high_noise_model.safetensors": {100, 200}}
     accepted, _ = verified_files(remote, local)
-    assert accepted == {"high_noise_model.safetensors": "v1/high_noise_model.safetensors"}
+    assert accepted == {
+        "high_noise_model.safetensors": "v1/high_noise_model.safetensors"
+    }
 
 
 def test_local_sizes_collects_nested_files(tmp_path):

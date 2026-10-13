@@ -4,7 +4,7 @@ DisTorch2 I2V Benchmark Script v3
 
 Tests the limits of video generation with different:
 - CPU offload amounts
-- Resolutions  
+- Resolutions
 - Frame counts (video length)
 - Video duration (frames / fps)
 
@@ -24,9 +24,13 @@ from pathlib import Path
 from datetime import datetime
 
 COMFYUI_URL = "http://localhost:8188"
-WORKFLOW_PATH = Path(__file__).parent.parent / "workflows/ImageToVideo/sfw_i2v_distorch2_api.json"
+WORKFLOW_PATH = (
+    Path(__file__).parent.parent / "workflows/ImageToVideo/sfw_i2v_distorch2_api.json"
+)
 OUTPUT_DIR = Path(__file__).parent.parent / "ComfyUI/output"
-RESULTS_FILE = Path(__file__).parent.parent / "data/benchmark_results/i2v_limits_benchmark.json"
+RESULTS_FILE = (
+    Path(__file__).parent.parent / "data/benchmark_results/i2v_limits_benchmark.json"
+)
 
 # SFW image for benchmarks
 SFW_IMAGE = "beach_real.png"
@@ -39,28 +43,23 @@ DEFAULT_FPS = 16
 BENCHMARK_CONFIGS = [
     # Baseline - 5 sec video @ 16fps
     (576, 1024, 81, 1, 16, "baseline_576x1024_5s"),
-    
     # CPU offload comparison @ baseline
     (576, 1024, 81, 2, 16, "576x1024_5s_2gb"),
     (576, 1024, 81, 4, 16, "576x1024_5s_4gb"),
-    
     # 720p tests - 5 sec
     (720, 1280, 81, 2, 16, "720x1280_5s_2gb"),
     (720, 1280, 81, 4, 16, "720x1280_5s_4gb"),
     (720, 1280, 81, 6, 16, "720x1280_5s_6gb"),
-    
     # Longer videos at 576p
-    (576, 1024, 121, 2, 16, "576x1024_7.5s_2gb"),   # 7.5 sec
-    (576, 1024, 161, 4, 16, "576x1024_10s_4gb"),    # 10 sec
-    (576, 1024, 241, 6, 16, "576x1024_15s_6gb"),    # 15 sec
-    
+    (576, 1024, 121, 2, 16, "576x1024_7.5s_2gb"),  # 7.5 sec
+    (576, 1024, 161, 4, 16, "576x1024_10s_4gb"),  # 10 sec
+    (576, 1024, 241, 6, 16, "576x1024_15s_6gb"),  # 15 sec
     # 1080p tests
     (1080, 1920, 41, 6, 16, "1080x1920_2.5s_6gb"),  # 2.5 sec @ 1080p
-    (1080, 1920, 81, 8, 16, "1080x1920_5s_8gb"),    # 5 sec @ 1080p
-    
+    (1080, 1920, 81, 8, 16, "1080x1920_5s_8gb"),  # 5 sec @ 1080p
     # Ultra long at lower res
-    (480, 848, 321, 4, 16, "480x848_20s_4gb"),      # 20 sec at 480p
-    (480, 848, 481, 6, 16, "480x848_30s_6gb"),      # 30 sec at 480p
+    (480, 848, 321, 4, 16, "480x848_20s_4gb"),  # 20 sec at 480p
+    (480, 848, 481, 6, 16, "480x848_30s_6gb"),  # 30 sec at 480p
 ]
 
 
@@ -77,39 +76,46 @@ def load_workflow():
         return json.load(f)
 
 
-def modify_workflow(workflow: dict, width: int, height: int, frames: int, 
-                    cpu_gb: float, fps: int, name: str) -> dict:
+def modify_workflow(
+    workflow: dict,
+    width: int,
+    height: int,
+    frames: int,
+    cpu_gb: float,
+    fps: int,
+    name: str,
+) -> dict:
     """Modify workflow for benchmark configuration."""
     wf = json.loads(json.dumps(workflow))  # Deep copy
-    
+
     allocation = build_allocation_string(cpu_gb)
-    
+
     for node_id, node in wf.items():
         if not isinstance(node, dict):
             continue
-            
+
         class_type = node.get("class_type", "")
         inputs = node.get("inputs", {})
-        
+
         # Update resolution in WanImageToVideo
         if class_type == "WanImageToVideo":
             inputs["width"] = width
             inputs["height"] = height
             inputs["length"] = frames
-            
+
         # Update allocation in all DisTorch2 loaders
         if "DisTorch2" in class_type and "expert_mode_allocations" in inputs:
             inputs["expert_mode_allocations"] = allocation
-            
+
         # Update output filename and fps
         if class_type == "VHS_VideoCombine":
             inputs["filename_prefix"] = f"bench_{name}"
             inputs["frame_rate"] = fps
-            
+
         # Use SFW image
         if class_type == "LoadImage":
             inputs["image"] = SFW_IMAGE
-    
+
     return wf
 
 
@@ -145,7 +151,10 @@ def check_job_error(status: dict) -> str | None:
             for msg in messages:
                 if isinstance(msg, list) and len(msg) > 1:
                     error_text = str(msg[1])
-                    if "CUDA out of memory" in error_text or "OutOfMemoryError" in error_text:
+                    if (
+                        "CUDA out of memory" in error_text
+                        or "OutOfMemoryError" in error_text
+                    ):
                         return f"OOM: {error_text[:200]}"
                     return error_text[:200]
         return "Unknown error"
@@ -166,17 +175,22 @@ def get_video_info(video_path: Path) -> dict | None:
     """Get video metadata using ffprobe."""
     try:
         cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,nb_frames,r_frame_rate,duration",
-            "-of", "json",
-            str(video_path)
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,nb_frames,r_frame_rate,duration",
+            "-of",
+            "json",
+            str(video_path),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             data = json.loads(result.stdout)
             stream = data.get("streams", [{}])[0]
-            
+
             # Parse frame rate (can be "16/1" format)
             fps_str = stream.get("r_frame_rate", "16/1")
             if "/" in fps_str:
@@ -184,7 +198,7 @@ def get_video_info(video_path: Path) -> dict | None:
                 fps = float(num) / float(den)
             else:
                 fps = float(fps_str)
-                
+
             return {
                 "width": int(stream.get("width", 0)),
                 "height": int(stream.get("height", 0)),
@@ -201,10 +215,10 @@ def get_video_info(video_path: Path) -> dict | None:
 def wait_for_completion(prompt_id: str, name: str, timeout: int = 2400) -> dict:
     """Wait for job completion with proper error detection."""
     start_time = time.time()
-    
+
     while time.time() - start_time < timeout:
         status = get_job_status(prompt_id)
-        
+
         if status:
             # Check for error
             error = check_job_error(status)
@@ -212,9 +226,9 @@ def wait_for_completion(prompt_id: str, name: str, timeout: int = 2400) -> dict:
                 return {
                     "success": False,
                     "duration": time.time() - start_time,
-                    "error": error
+                    "error": error,
                 }
-            
+
             # Check if completed (has outputs)
             outputs = status.get("outputs", {})
             if outputs:
@@ -227,17 +241,17 @@ def wait_for_completion(prompt_id: str, name: str, timeout: int = 2400) -> dict:
                         "success": True,
                         "duration": time.time() - start_time,
                         "video_path": str(video),
-                        "video_info": video_info
+                        "video_info": video_info,
                     }
                 else:
                     return {
                         "success": False,
                         "duration": time.time() - start_time,
-                        "error": "Job completed but no output video found"
+                        "error": "Job completed but no output video found",
                     }
-        
+
         time.sleep(5)
-    
+
     return {"success": False, "duration": timeout, "error": "timeout"}
 
 
@@ -245,14 +259,14 @@ def run_benchmark(config: tuple) -> dict:
     """Run a single benchmark configuration."""
     width, height, frames, cpu_gb, fps, name = config
     video_duration = frames / fps
-    
-    print(f"\n{'='*60}")
+
+    print(f"\n{'=' * 60}")
     print(f"🧪 Testing: {name}")
     print(f"   Resolution: {width}x{height}")
     print(f"   Frames: {frames} @ {fps}fps = {video_duration:.1f}s video")
     print(f"   CPU offload: {cpu_gb}GB")
-    print(f"{'='*60}")
-    
+    print(f"{'=' * 60}")
+
     result = {
         "name": name,
         "width": width,
@@ -264,50 +278,64 @@ def run_benchmark(config: tuple) -> dict:
         "allocation": build_allocation_string(cpu_gb),
         "started_at": datetime.now().isoformat(),
     }
-    
+
     try:
         workflow = load_workflow()
-        modified_wf = modify_workflow(workflow, width, height, frames, cpu_gb, fps, name)
-        
+        modified_wf = modify_workflow(
+            workflow, width, height, frames, cpu_gb, fps, name
+        )
+
         print("   📤 Queueing workflow...")
         prompt_id = queue_prompt(modified_wf)
         result["prompt_id"] = prompt_id
-        
+
         print("   ⏳ Waiting for completion...")
         completion = wait_for_completion(prompt_id, name, timeout=2400)
-        
+
         result["success"] = completion["success"]
         result["generation_seconds"] = round(completion["duration"], 2)
         result["generation_minutes"] = round(completion["duration"] / 60, 2)
-        
+
         if completion["success"]:
             result["video_path"] = completion.get("video_path")
             video_info = completion.get("video_info", {})
             result["actual_video"] = video_info
-            
+
             # Calculate throughput
             total_pixels = width * height * frames
             result["total_pixels"] = total_pixels
             result["pixels_per_second"] = round(total_pixels / completion["duration"])
-            result["megapixels_per_second"] = round(total_pixels / completion["duration"] / 1_000_000, 3)
-            
+            result["megapixels_per_second"] = round(
+                total_pixels / completion["duration"] / 1_000_000, 3
+            )
+
             # Verify video matches expected
             if video_info:
                 actual_frames = video_info.get("nb_frames", 0)
                 actual_w = video_info.get("width", 0)
                 actual_h = video_info.get("height", 0)
                 actual_duration = video_info.get("duration", 0)
-                
+
                 if actual_w != width or actual_h != height:
-                    result["warning"] = f"Resolution mismatch: expected {width}x{height}, got {actual_w}x{actual_h}"
+                    result["warning"] = (
+                        f"Resolution mismatch: expected {width}x{height}, got {actual_w}x{actual_h}"
+                    )
                 if abs(actual_frames - frames) > 2:
-                    result["warning"] = f"Frame count mismatch: expected {frames}, got {actual_frames}"
-                    
+                    result["warning"] = (
+                        f"Frame count mismatch: expected {frames}, got {actual_frames}"
+                    )
+
                 print(f"   ✅ Completed in {result['generation_minutes']:.1f} min")
-                print(f"      📹 Video: {actual_w}x{actual_h}, {actual_frames}f, {actual_duration:.1f}s")
-                print(f"      💾 Size: {video_info.get('file_size', 0) / 1024 / 1024:.1f}MB")
+                print(
+                    f"      📹 Video: {actual_w}x{actual_h}, {actual_frames}f, {actual_duration:.1f}s"
+                )
+                print(
+                    f"      💾 Size: {video_info.get('file_size', 0) / 1024 / 1024:.1f}MB"
+                )
             else:
-                print(f"   ✅ Completed in {result['generation_minutes']:.1f} min (no video info)")
+                print(
+                    f"   ✅ Completed in {result['generation_minutes']:.1f} min (no video info)"
+                )
         else:
             error = completion.get("error", "Unknown error")
             result["error"] = error
@@ -315,12 +343,12 @@ def run_benchmark(config: tuple) -> dict:
                 print(f"   💥 OOM ERROR: {error[:80]}")
             else:
                 print(f"   ❌ Failed: {error[:80]}")
-            
+
     except Exception as e:
         result["success"] = False
         result["error"] = str(e)
         print(f"   ❌ Exception: {e}")
-    
+
     result["finished_at"] = datetime.now().isoformat()
     return result
 
@@ -345,73 +373,83 @@ def save_results(results: list):
 
 def print_summary(results: list):
     """Print benchmark summary."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("  BENCHMARK SUMMARY")
-    print("="*70)
-    
+    print("=" * 70)
+
     successful = [r for r in results if r.get("success")]
     failed = [r for r in results if not r.get("success")]
-    oom = [r for r in failed if "oom" in r.get("error", "").lower() or "memory" in r.get("error", "").lower()]
-    
+    oom = [
+        r
+        for r in failed
+        if "oom" in r.get("error", "").lower() or "memory" in r.get("error", "").lower()
+    ]
+
     print(f"\n✅ Successful: {len(successful)}")
     print(f"❌ Failed: {len(failed)} (OOM: {len(oom)})")
-    
+
     if successful:
         print("\n📊 Successful Configurations:")
-        print("-"*70)
-        print(f"{'Name':<25} {'Resolution':<12} {'Video':<8} {'Gen Time':<10} {'MP/s':<8}")
-        print("-"*70)
-        
-        for r in sorted(successful, key=lambda x: x.get("total_pixels", 0), reverse=True):
+        print("-" * 70)
+        print(
+            f"{'Name':<25} {'Resolution':<12} {'Video':<8} {'Gen Time':<10} {'MP/s':<8}"
+        )
+        print("-" * 70)
+
+        for r in sorted(
+            successful, key=lambda x: x.get("total_pixels", 0), reverse=True
+        ):
             video_dur = r.get("target_video_duration", 0)
             gen_min = r.get("generation_minutes", 0)
             mps = r.get("megapixels_per_second", 0)
-            print(f"{r['name']:<25} {r['width']}x{r['height']:<5} {video_dur:>5.1f}s   {gen_min:>6.1f}min   {mps:>6.3f}")
-    
+            print(
+                f"{r['name']:<25} {r['width']}x{r['height']:<5} {video_dur:>5.1f}s   {gen_min:>6.1f}min   {mps:>6.3f}"
+            )
+
     if failed:
         print("\n❌ Failed Configurations:")
-        print("-"*70)
+        print("-" * 70)
         for r in failed:
             error_short = r.get("error", "?")[:40]
             print(f"  {r['name']}: {error_short}")
-    
+
     print(f"\n📁 Results: {RESULTS_FILE}")
 
 
 def main():
-    print("="*70)
+    print("=" * 70)
     print("  DisTorch2 I2V Limits Benchmark v3")
-    print("="*70)
+    print("=" * 70)
     print(f"\n📋 Configurations: {len(BENCHMARK_CONFIGS)}")
     print(f"🖼️  SFW Image: {SFW_IMAGE}")
     print(f"📂 Output: {OUTPUT_DIR}")
     print()
-    
+
     # Verify SFW image exists
     sfw_path = Path(__file__).parent.parent / "ComfyUI/input" / SFW_IMAGE
     if not sfw_path.exists():
         print(f"❌ SFW image not found: {sfw_path}")
         return
-    
+
     # Load existing results to skip completed
     results = load_existing_results()
     completed_names = {r["name"] for r in results if r.get("success")}
-    
+
     # Clear failed results to retry them
     results = [r for r in results if r.get("success")]
-    
+
     for i, config in enumerate(BENCHMARK_CONFIGS, 1):
         name = config[5]  # name is 6th element now
-        
+
         if name in completed_names:
             print(f"\n[{i}/{len(BENCHMARK_CONFIGS)}] ⏭️  Skipping {name} (already done)")
             continue
-            
+
         print(f"\n[{i}/{len(BENCHMARK_CONFIGS)}]", end="")
         result = run_benchmark(config)
         results.append(result)
         save_results(results)  # Save after each test
-    
+
     print_summary(results)
 
 

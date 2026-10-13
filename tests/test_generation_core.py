@@ -539,7 +539,10 @@ class TestRouterLoraFiltering:
         )
         adapter = router.registry.get("fake-adapter")
         # Mock out the external lora_scanner dependency
-        with patch("generation.lora_utils.filter_loras_by_model_compat", side_effect=lambda x, _: x):
+        with patch(
+            "generation.lora_utils.filter_loras_by_model_compat",
+            side_effect=lambda x, _: x,
+        ):
             result = router.filter_loras(req, adapter)
         assert len(result.loras) == 3  # fake adapter max_loras=3
 
@@ -569,7 +572,9 @@ class TestRouterDispatch:
         assert result.adapter_name == "fake-adapter"
         assert result.credits_used == 5
         mock_check.assert_called_once_with(mock_user, 5)
-        mock_deduct.assert_called_once_with(mock_user, 5, "fake-prompt-id", "fake-adapter")
+        mock_deduct.assert_called_once_with(
+            mock_user, 5, "fake-prompt-id", "fake-adapter"
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_without_credit_fns(self, router):
@@ -621,13 +626,16 @@ class TestLoraUtils:
             {"name": "sdxl_lora.safetensors", "strength": 1.0},
         ]
 
-        mock_derive = MagicMock(side_effect=lambda name: (
-            "wan2.2" if "wan22" in name else "sdxl"
-        ))
-        with patch.dict("sys.modules", {"lora_scanner": MagicMock(_derive_base_model=mock_derive)}):
+        mock_derive = MagicMock(
+            side_effect=lambda name: "wan2.2" if "wan22" in name else "sdxl"
+        )
+        with patch.dict(
+            "sys.modules", {"lora_scanner": MagicMock(_derive_base_model=mock_derive)}
+        ):
             # Re-import to pick up the mocked module
             import importlib
             import generation.lora_utils as lu
+
             importlib.reload(lu)
             result = lu.filter_loras_by_model_compat(configs, "wan2.2")
 
@@ -639,9 +647,12 @@ class TestLoraUtils:
         configs = [{"name": "generic_lora.safetensors", "strength": 1.0}]
 
         mock_derive = MagicMock(return_value="")  # generic/unknown
-        with patch.dict("sys.modules", {"lora_scanner": MagicMock(_derive_base_model=mock_derive)}):
+        with patch.dict(
+            "sys.modules", {"lora_scanner": MagicMock(_derive_base_model=mock_derive)}
+        ):
             import importlib
             import generation.lora_utils as lu
+
             importlib.reload(lu)
             result = lu.filter_loras_by_model_compat(configs, "wan2.2")
 
@@ -940,8 +951,10 @@ class TestRouterResolveResolutionFields:
         req = GenerationRequest(
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
-            width=512, height=768,
-            resolution="1080p", aspect_ratio="16:9",
+            width=512,
+            height=768,
+            resolution="1080p",
+            aspect_ratio="16:9",
         )
         result = router.resolve_resolution_fields(req)
         assert result.width == 512
@@ -951,7 +964,8 @@ class TestRouterResolveResolutionFields:
         req = GenerationRequest(
             operation=Operation.GENERATE,
             target_type=MediaType.IMAGE,
-            resolution="480p", aspect_ratio="16:9",
+            resolution="480p",
+            aspect_ratio="16:9",
         )
         result = router.resolve_resolution_fields(req)
         assert result.width == 848
@@ -1101,7 +1115,9 @@ class TestParseLoras:
         assert result[0].strength == 0.8
 
     def test_parse_list_of_dicts(self):
-        result = _parse_loras([{"name": "a.safetensors"}, {"name": "b.safetensors", "strength": 0.5}])
+        result = _parse_loras(
+            [{"name": "a.safetensors"}, {"name": "b.safetensors", "strength": 0.5}]
+        )
         assert len(result) == 2
         assert result[1].strength == 0.5
 
@@ -1121,7 +1137,9 @@ class TestParseLoras:
         assert result[0].name == "valid.safetensors"
 
     def test_dual_stage_fields(self):
-        result = _parse_loras('[{"name": "wan_lora", "strength": 0.7, "high": "high.safetensors", "low": "low.safetensors"}]')
+        result = _parse_loras(
+            '[{"name": "wan_lora", "strength": 0.7, "high": "high.safetensors", "low": "low.safetensors"}]'
+        )
         assert result[0].high == "high.safetensors"
         assert result[0].low == "low.safetensors"
 

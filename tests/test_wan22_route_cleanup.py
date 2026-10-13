@@ -143,8 +143,8 @@ def client(live_adapters):
         deduct_credits=AsyncMock(),
     )
 
-    app_module.app.dependency_overrides[app_module.get_current_user] = (
-        lambda: FakeUser()
+    app_module.app.dependency_overrides[app_module.get_current_user] = lambda: (
+        FakeUser()
     )
     try:
         yield TestClient(app_module.app), executes
@@ -359,37 +359,43 @@ class TestCreditPricingAfterRepoint:
         for width, height in [(720, 720), (1920, 1080), (1280, 720), (480, 480)]:
             for duration in [None, 2, 3, 5, 6]:
                 kwargs = dict(width=width, height=height, duration_seconds=duration)
-                assert calculate_credits(
-                    "wan22_i2v", **kwargs
-                ) == calculate_credits("video_i2v", **kwargs)
-                assert calculate_credits(
-                    "wan22_t2v", **kwargs
-                ) == calculate_credits("video_t2v", **kwargs)
+                assert calculate_credits("wan22_i2v", **kwargs) == calculate_credits(
+                    "video_i2v", **kwargs
+                )
+                assert calculate_credits("wan22_t2v", **kwargs) == calculate_credits(
+                    "video_t2v", **kwargs
+                )
 
     def test_historical_wan22_generation_types_still_resolve(self):
         from credits import calculate_credits
 
         # These strings are persisted in credit_transactions.metadata.
-        assert calculate_credits(
-            "wan22_i2v", width=720, height=720, duration_seconds=3
-        ) == 5
-        assert calculate_credits(
-            "wan22_t2v", width=720, height=720, duration_seconds=3
-        ) == 8
-        assert calculate_credits(
-            "wan22_i2v", width=1920, height=1080, duration_seconds=5
-        ) == 15
+        assert (
+            calculate_credits("wan22_i2v", width=720, height=720, duration_seconds=3)
+            == 5
+        )
+        assert (
+            calculate_credits("wan22_t2v", width=720, height=720, duration_seconds=3)
+            == 8
+        )
+        assert (
+            calculate_credits("wan22_i2v", width=1920, height=1080, duration_seconds=5)
+            == 15
+        )
 
     def test_live_generation_types_resolve(self):
         from credits import calculate_credits
 
-        assert calculate_credits(
-            "video_i2v", width=720, height=720, duration_seconds=3
-        ) == 5
-        assert calculate_credits(
-            "video_t2v", width=720, height=720, duration_seconds=3
-        ) == 8
+        assert (
+            calculate_credits("video_i2v", width=720, height=720, duration_seconds=3)
+            == 5
+        )
+        assert (
+            calculate_credits("video_t2v", width=720, height=720, duration_seconds=3)
+            == 8
+        )
         # The public v1 REST API bills video through the live tier.
-        assert calculate_credits(
-            "video_i2v", width=512, height=512, duration_seconds=3
-        ) == 5
+        assert (
+            calculate_credits("video_i2v", width=512, height=512, duration_seconds=3)
+            == 5
+        )

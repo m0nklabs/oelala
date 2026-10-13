@@ -174,13 +174,13 @@ def get_prompt(index: int) -> tuple[str, str, str]:
     categories = list(SFW_PROMPTS.keys())
     cat_index = index // 10
     prompt_index = index % 10
-    
+
     category = categories[cat_index]
     base_prompt = SFW_PROMPTS[category][prompt_index]
     animation = ANIMATION_STYLES[index % len(ANIMATION_STYLES)]
-    
+
     full_prompt = f"{base_prompt}, masterpiece, highly detailed, professional photography, 8k uhd, cinematic lighting, safe for work"
-    
+
     return category, full_prompt, animation
 
 
@@ -189,22 +189,22 @@ def create_t2i_workflow(prompt: str, seed: int, prefix: str) -> dict:
     return {
         "1": {
             "class_type": "CheckpointLoaderSimple",
-            "inputs": {"ckpt_name": "dreamshaperXL_lightningDPMSDE.safetensors"}
+            "inputs": {"ckpt_name": "dreamshaperXL_lightningDPMSDE.safetensors"},
         },
         "2": {
             "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["1", 1], "text": prompt}
+            "inputs": {"clip": ["1", 1], "text": prompt},
         },
         "3": {
             "class_type": "CLIPTextEncode",
             "inputs": {
                 "clip": ["1", 1],
-                "text": "ugly, deformed, blurry, low quality, bad anatomy, watermark, text, nsfw, nude, naked, sexual"
-            }
+                "text": "ugly, deformed, blurry, low quality, bad anatomy, watermark, text, nsfw, nude, naked, sexual",
+            },
         },
         "4": {
             "class_type": "EmptyLatentImage",
-            "inputs": {"width": 576, "height": 1024, "batch_size": 1}
+            "inputs": {"width": 576, "height": 1024, "batch_size": 1},
         },
         "5": {
             "class_type": "KSampler",
@@ -218,67 +218,73 @@ def create_t2i_workflow(prompt: str, seed: int, prefix: str) -> dict:
                 "cfg": 2.0,
                 "sampler_name": "dpmpp_sde",
                 "scheduler": "karras",
-                "denoise": 1.0
-            }
+                "denoise": 1.0,
+            },
         },
         "6": {
             "class_type": "VAEDecode",
-            "inputs": {"samples": ["5", 0], "vae": ["1", 2]}
+            "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
         },
         "7": {
             "class_type": "SaveImage",
-            "inputs": {"images": ["6", 0], "filename_prefix": prefix}
-        }
+            "inputs": {"images": ["6", 0], "filename_prefix": prefix},
+        },
     }
 
 
-def create_i2v_workflow(image_filename: str, animation_prompt: str, seed: int, prefix: str) -> dict:
+def create_i2v_workflow(
+    image_filename: str, animation_prompt: str, seed: int, prefix: str
+) -> dict:
     """Load and customize the working I2V workflow with DisTorch2 + LoRAs."""
-    
+
     # Load the working workflow template
-    workflow_path = Path("/home/flip/oelala/workflows/ImageToVideo/sfw_i2v_distorch2_api.json")
+    workflow_path = Path(
+        "/home/flip/oelala/workflows/ImageToVideo/sfw_i2v_distorch2_api.json"
+    )
     with open(workflow_path) as f:
         workflow = json.load(f)
-    
+
     # Customize for this generation
     workflow["7"]["inputs"]["text"] = animation_prompt  # Positive prompt
     workflow["10"]["inputs"]["noise_seed"] = seed  # Sampler 1 seed
     workflow["11"]["inputs"]["noise_seed"] = seed  # Sampler 2 seed
     workflow["13"]["inputs"]["filename_prefix"] = prefix  # Output filename
     workflow["18"]["inputs"]["image"] = image_filename  # Input image
-    
+
     return workflow
 
 
-def queue_and_wait(workflow: dict, timeout: int = 600) -> tuple[bool, Optional[str], list]:
+def queue_and_wait(
+    workflow: dict, timeout: int = 600
+) -> tuple[bool, Optional[str], list]:
     """Queue workflow and wait for completion."""
     try:
         resp = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow})
         if resp.status_code != 200:
             print(f"❌ Queue failed: {resp.text[:200]}")
             return False, None, []
-        
+
         prompt_id = resp.json().get("prompt_id")
         start = time.time()
-        
+
         while time.time() - start < timeout:
             time.sleep(5)
             hist = requests.get(f"{COMFYUI_URL}/history/{prompt_id}").json()
-            
+
             if prompt_id in hist:
                 outputs = hist[prompt_id].get("outputs", {})
                 files = []
-                
+
                 for node_id, out in outputs.items():
                     if "images" in out:
                         files.extend([img.get("filename") for img in out["images"]])
                     if "gifs" in out:
                         files.extend([g.get("filename") for g in out["gifs"]])
-                
+
                 return True, prompt_id, files
-        
+
         return False, prompt_id, []
-    
+
     except Exception as e:
         print(f"❌ Error: {e}")
         return False, None, []
@@ -288,7 +294,7 @@ def generate_single(index: int, dry_run: bool = False) -> dict:
     """Generate a single T2I + I2V pipeline."""
     category, prompt, animation = get_prompt(index)
     seed = 1000000 + index  # Reproducible seeds
-    
+
     result = {
         "index": index,
         "category": category,
@@ -301,48 +307,48 @@ def generate_single(index: int, dry_run: bool = False) -> dict:
         "i2v_time": 0,
         "success": False,
     }
-    
+
     prefix = f"sfw_batch_{index:04d}"
-    
+
     if dry_run:
         print(f"  [DRY RUN] Would generate: {category} - {prompt[:50]}...")
         result["success"] = True
         return result
-    
+
     # Step 1: T2I
     print(f"  📸 T2I: {category}...", end=" ", flush=True)
     t2i_start = time.time()
     t2i_workflow = create_t2i_workflow(prompt, seed, f"{prefix}_t2i")
     success, _, files = queue_and_wait(t2i_workflow, timeout=120)
-    
+
     if not success or not files:
         print("❌")
         return result
-    
+
     result["t2i_time"] = time.time() - t2i_start
     result["t2i_image"] = files[0]
     print(f"✅ ({result['t2i_time']:.0f}s)")
-    
+
     # Copy image to input folder
     src = COMFYUI_OUTPUT / files[0]
     dst = COMFYUI_INPUT / files[0]
     shutil.copy(src, dst)
-    
+
     # Step 2: I2V
     print("  🎬 I2V: animating...", end=" ", flush=True)
     i2v_start = time.time()
     i2v_workflow = create_i2v_workflow(files[0], animation, seed, f"{prefix}_i2v")
     success, _, files = queue_and_wait(i2v_workflow, timeout=600)
-    
+
     if not success or not files:
         print("❌")
         return result
-    
+
     result["i2v_time"] = time.time() - i2v_start
     result["i2v_video"] = files[0]
     result["success"] = True
     print(f"✅ ({result['i2v_time']:.0f}s)")
-    
+
     return result
 
 
@@ -350,16 +356,18 @@ def main():
     parser = argparse.ArgumentParser(description="Generate SFW video batch")
     parser.add_argument("--count", type=int, default=100, help="Number of videos")
     parser.add_argument("--start", type=int, default=0, help="Starting index")
-    parser.add_argument("--dry-run", action="store_true", help="Don't actually generate")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Don't actually generate"
+    )
     args = parser.parse_args()
-    
+
     print("=" * 60)
     print("🎬 SFW Batch Video Generator")
     print("=" * 60)
     print(f"Generating {args.count} videos starting at index {args.start}")
     print(f"Estimated time: {args.count * 3} minutes ({args.count * 3 / 60:.1f} hours)")
     print()
-    
+
     if not args.dry_run:
         # Check ComfyUI
         try:
@@ -370,46 +378,52 @@ def main():
         except:
             print("❌ Cannot connect to ComfyUI")
             return
-    
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     results = []
     start_time = time.time()
-    
+
     for i in range(args.start, args.start + args.count):
-        print(f"\n[{i+1-args.start}/{args.count}] Generating video {i:04d}")
-        
+        print(f"\n[{i + 1 - args.start}/{args.count}] Generating video {i:04d}")
+
         result = generate_single(i, args.dry_run)
         results.append(result)
-        
+
         if result["success"]:
             print(f"  ✅ Total: {result['t2i_time'] + result['i2v_time']:.0f}s")
         else:
             print("  ❌ Failed")
-    
+
     # Summary
     elapsed = time.time() - start_time
     successes = sum(1 for r in results if r["success"])
-    
+
     print("\n" + "=" * 60)
     print("📊 BATCH COMPLETE")
     print("=" * 60)
-    print(f"Total time: {elapsed/60:.1f} minutes")
+    print(f"Total time: {elapsed / 60:.1f} minutes")
     print(f"Success: {successes}/{len(results)}")
-    print(f"Average per video: {elapsed/max(len(results),1):.0f}s")
-    
+    print(f"Average per video: {elapsed / max(len(results), 1):.0f}s")
+
     # Save results
-    results_file = OUTPUT_DIR / f"batch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    results_file = (
+        OUTPUT_DIR / f"batch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
     with open(results_file, "w") as f:
-        json.dump({
-            "timestamp": datetime.now().isoformat(),
-            "count": args.count,
-            "start": args.start,
-            "elapsed_seconds": elapsed,
-            "successes": successes,
-            "results": results,
-        }, f, indent=2)
-    
+        json.dump(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "count": args.count,
+                "start": args.start,
+                "elapsed_seconds": elapsed,
+                "successes": successes,
+                "results": results,
+            },
+            f,
+            indent=2,
+        )
+
     print(f"\nResults saved to: {results_file}")
 
 

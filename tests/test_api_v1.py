@@ -146,7 +146,9 @@ def test_health_check_logging(client):
         assert response.status_code == 200
 
         # Verify logger.info was called via debug_log when DEBUG is enabled
-        assert mock_logger_info.called, "logger.info should have been called when DEBUG=True"
+        assert mock_logger_info.called, (
+            "logger.info should have been called when DEBUG=True"
+        )
 
         # Get the log message that was passed to logger.info
         call_args = mock_logger_info.call_args

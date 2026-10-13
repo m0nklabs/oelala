@@ -96,7 +96,9 @@ class TestPut:
         self.client._minio = mock_minio
 
         data = b"Hello MinIO!"
-        result = self.client.put("generated", "test.txt", data, content_type="text/plain")
+        result = self.client.put(
+            "generated", "test.txt", data, content_type="text/plain"
+        )
 
         assert result["bucket"] == "generated"
         assert result["key"] == "test.txt"
@@ -416,7 +418,9 @@ class TestPresignedUrls:
 
     def test_presigned_get(self):
         mock_minio = MagicMock()
-        mock_minio.presigned_get_object.return_value = "http://localhost:9000/oelala-generated/test.mp4?X-Amz-Signature=abc"
+        mock_minio.presigned_get_object.return_value = (
+            "http://localhost:9000/oelala-generated/test.mp4?X-Amz-Signature=abc"
+        )
         self.client._minio = mock_minio
 
         url = self.client.presigned_get("generated", "test.mp4", expires=3600)
@@ -426,7 +430,9 @@ class TestPresignedUrls:
 
     def test_presigned_put(self):
         mock_minio = MagicMock()
-        mock_minio.presigned_put_object.return_value = "http://localhost:9000/oelala-generated/upload.mp4?X-Amz-Signature=xyz"
+        mock_minio.presigned_put_object.return_value = (
+            "http://localhost:9000/oelala-generated/upload.mp4?X-Amz-Signature=xyz"
+        )
         mock_minio.bucket_exists.return_value = True
         self.client._minio = mock_minio
 
@@ -470,13 +476,17 @@ class TestHealth:
 class TestGetClientSingleton:
     """Test module-level singleton factory."""
 
-    @patch.dict("os.environ", {
-        "MINIO_ENDPOINT": "http://test-minio:9000",
-        "MINIO_ACCESS_KEY": "testkey",
-        "MINIO_SECRET_KEY": "testsecret",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "MINIO_ENDPOINT": "http://test-minio:9000",
+            "MINIO_ACCESS_KEY": "testkey",
+            "MINIO_SECRET_KEY": "testsecret",
+        },
+    )
     def test_get_client_reads_env(self):
         import storage_client as sc
+
         sc._default_client = None  # Reset singleton
 
         client = sc.get_client()
@@ -597,7 +607,9 @@ class TestGetObjectRange:
         mock_minio.get_object.return_value = mock_resp
         self.client._minio = mock_minio
 
-        result = self.client.get_object_range("generated", "video.mp4", offset=100, length=15)
+        result = self.client.get_object_range(
+            "generated", "video.mp4", offset=100, length=15
+        )
 
         assert result == b"partial content"
         mock_minio.get_object.assert_called_once_with(

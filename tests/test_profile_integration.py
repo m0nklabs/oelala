@@ -126,7 +126,9 @@ async def test_get_profile_stats(auth_headers):
         assert data["total_likes_received"] >= 0
         assert data["total_views_received"] >= 0
 
-        print(f"✅ Stats retrieved: {data['total_media']} media, {data['published_media']} published")
+        print(
+            f"✅ Stats retrieved: {data['total_media']} media, {data['published_media']} published"
+        )
 
 
 @pytest.mark.asyncio

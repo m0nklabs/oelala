@@ -35,8 +35,8 @@ def build_blockswap_q8_template():
         "class_type": "ImageResizeKJv2",
         "inputs": {
             "image": ["88", 0],
-            "width": 720,       # Replaced by backend
-            "height": 1280,     # Replaced by backend
+            "width": 720,  # Replaced by backend
+            "height": 1280,  # Replaced by backend
             "upscale_method": "lanczos",
             "keep_proportion": "True",
             "pad_color": "0, 0, 0",
@@ -374,9 +374,9 @@ def build_blockswap_q8_template():
             "negative": ["463", 0],
             "vae": ["461", 0],
             "start_image": ["401", 0],  # Resized image
-            "width": 720,       # Replaced by backend
-            "height": 1280,     # Replaced by backend
-            "length": 121,      # Replaced by backend (4k+1 format)
+            "width": 720,  # Replaced by backend
+            "height": 1280,  # Replaced by backend
+            "length": 121,  # Replaced by backend (4k+1 format)
             "batch_size": 1,
         },
         "_meta": {"title": "WanImageToVideo"},
@@ -399,18 +399,18 @@ def build_blockswap_q8_template():
     workflow["466"] = {
         "class_type": "KSamplerAdvanced",
         "inputs": {
-            "model": ["500", 0],          # BlockSwap High output
-            "positive": ["464", 0],       # WanImageToVideo conditioning
-            "negative": ["464", 1],       # WanImageToVideo negative
-            "latent_image": ["464", 2],   # WanImageToVideo latent
+            "model": ["500", 0],  # BlockSwap High output
+            "positive": ["464", 0],  # WanImageToVideo conditioning
+            "negative": ["464", 1],  # WanImageToVideo negative
+            "latent_image": ["464", 2],  # WanImageToVideo latent
             "add_noise": "enable",
-            "noise_seed": 42,             # Replaced by backend
-            "steps": 8,                   # Total steps (replaced by backend)
-            "cfg": 3.5,                   # CFG scale (replaced by backend)
+            "noise_seed": 42,  # Replaced by backend
+            "steps": 8,  # Total steps (replaced by backend)
+            "cfg": 3.5,  # CFG scale (replaced by backend)
             "sampler_name": "euler",
             "scheduler": "simple",
             "start_at_step": 0,
-            "end_at_step": 5,             # High noise steps (half of total)
+            "end_at_step": 5,  # High noise steps (half of total)
             "return_with_leftover_noise": "enable",
         },
         "_meta": {"title": "Sampler High"},
@@ -419,18 +419,18 @@ def build_blockswap_q8_template():
     workflow["465"] = {
         "class_type": "KSamplerAdvanced",
         "inputs": {
-            "model": ["501", 0],          # BlockSwap Low output
+            "model": ["501", 0],  # BlockSwap Low output
             "positive": ["464", 0],
             "negative": ["464", 1],
-            "latent_image": ["466", 0],   # High sampler output (handoff)
+            "latent_image": ["466", 0],  # High sampler output (handoff)
             "add_noise": "disable",
-            "noise_seed": 42,             # Same seed
-            "steps": 8,                   # Same total steps
-            "cfg": 3.5,                   # Same CFG
+            "noise_seed": 42,  # Same seed
+            "steps": 8,  # Same total steps
+            "cfg": 3.5,  # Same CFG
             "sampler_name": "euler",
             "scheduler": "simple",
-            "start_at_step": 5,           # Continue from high noise
-            "end_at_step": 10000,         # Run to completion
+            "start_at_step": 5,  # Continue from high noise
+            "end_at_step": 10000,  # Run to completion
             "return_with_leftover_noise": "disable",
         },
         "_meta": {"title": "Sampler Low"},
@@ -452,7 +452,7 @@ def build_blockswap_q8_template():
     workflow["400"] = {
         "class_type": "ColorMatch",
         "inputs": {
-            "image_ref": ["88", 0],   # Original input image
+            "image_ref": ["88", 0],  # Original input image
             "image_target": ["469", 0],
         },
         "_meta": {"title": "Color Match"},
@@ -570,7 +570,9 @@ def build_blockswap_q8_template():
 
 if __name__ == "__main__":
     workflow = build_blockswap_q8_template()
-    output_path = "/home/flip/oelala/workflows/ImageToVideo/wan22_i2v_blockswap_q8_api.json"
+    output_path = (
+        "/home/flip/oelala/workflows/ImageToVideo/wan22_i2v_blockswap_q8_api.json"
+    )
     with open(output_path, "w") as f:
         json.dump(workflow, f, indent=2)
 

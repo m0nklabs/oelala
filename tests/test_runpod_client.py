@@ -53,7 +53,9 @@ async def test_select_submit_endpoint_handles_health_failover(
     monkeypatch.setenv("RUNPOD_ENDPOINT_IDS", "ep-primary,ep-eu")
 
     client = RunPodClient(api_key="test-key")
-    client.get_endpoint_health = AsyncMock(side_effect=lambda endpoint_id: health_map[endpoint_id])
+    client.get_endpoint_health = AsyncMock(
+        side_effect=lambda endpoint_id: health_map[endpoint_id]
+    )
 
     selected = await client.select_submit_endpoint()
 

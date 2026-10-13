@@ -54,7 +54,9 @@ def upload_with_dates() -> None:
                 data = handle.read()
 
             try:
-                response = httpx.put(file_url, content=data, headers=headers, timeout=120.0)
+                response = httpx.put(
+                    file_url, content=data, headers=headers, timeout=120.0
+                )
                 if response.status_code in (200, 201):
                     uploaded += 1
                     if uploaded % 50 == 0:
@@ -63,7 +65,9 @@ def upload_with_dates() -> None:
                             f"(last: {file_path.name} @ {mtime_str})"
                         )
                 else:
-                    print(f"Failed {file_path.name}: {response.status_code} {response.text}")
+                    print(
+                        f"Failed {file_path.name}: {response.status_code} {response.text}"
+                    )
             except Exception as exc:
                 print(f"Error {file_path.name}: {exc}")
 

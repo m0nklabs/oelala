@@ -228,9 +228,13 @@ class GenerationRouter:
         """
         # 1. Explicit adapter hint
         if req.adapter_hint:
-            hint_key = req.adapter_hint.strip().lower().replace("_", "").replace(
-                "-", ""
-            ).replace(".", "")
+            hint_key = (
+                req.adapter_hint.strip()
+                .lower()
+                .replace("_", "")
+                .replace("-", "")
+                .replace(".", "")
+            )
             # Match retired families on the squashed hint so every wan22
             # spelling ('wan22-local-i2v-q6', 'wan2.2', 'Wan22-Cloud-T2V', …)
             # gets the explicit retirement error.

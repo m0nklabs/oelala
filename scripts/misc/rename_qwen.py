@@ -6,7 +6,7 @@ files = [
     "/home/flip/oelala/src/backend/app.py",
     "/home/flip/oelala/src/backend/generation/factory.py",
     "/home/flip/oelala/src/backend/generation/lora_utils.py",
-    "/home/flip/oelala/src/backend/lora_scanner.py"
+    "/home/flip/oelala/src/backend/lora_scanner.py",
 ]
 
 replacements = {
@@ -24,19 +24,24 @@ replacements = {
     "Qwen instruction-based": "I2I instruction-based",
     "generate_qwen_edit": "generate_cloud_i2i_edit",
     "RUNPOD_QWEN_ENDPOINT_ID": "RUNPOD_I2I_ENDPOINT_ID",
-    "runpod_endpoint_qwen": "runpod_endpoint_i2i"
+    "runpod_endpoint_qwen": "runpod_endpoint_i2i",
 }
 
-keep = ["qwen_image_edit_2511_fp8mixed", "qwen_2.5_vl_7b_fp8", "qwen_image_vae", "TextEncodeQwenImageEditPlus", "qwen_image"]
+keep = [
+    "qwen_image_edit_2511_fp8mixed",
+    "qwen_2.5_vl_7b_fp8",
+    "qwen_image_vae",
+    "TextEncodeQwenImageEditPlus",
+    "qwen_image",
+]
 
 for fpath in files:
     if os.path.exists(fpath):
         with open(fpath, "r") as f:
             content = f.read()
-        
+
         for k, v in replacements.items():
             content = content.replace(k, v)
-            
+
         with open(fpath, "w") as f:
             f.write(content)
-

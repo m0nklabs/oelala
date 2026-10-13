@@ -49,10 +49,14 @@ def load_env(path: Path) -> dict:
 
 def configured_dumps(env: dict) -> list[str]:
     """Third-party dump repos, in priority order, from env or .env."""
-    raw = os.getenv("LORA_THIRD_PARTY_DUMPS", "") or env.get("LORA_THIRD_PARTY_DUMPS", "")
+    raw = os.getenv("LORA_THIRD_PARTY_DUMPS", "") or env.get(
+        "LORA_THIRD_PARTY_DUMPS", ""
+    )
     repos = [r.strip() for r in raw.split(",") if r.strip()]
     if not repos:
-        single = os.getenv("LORA_HF_FLAT_MIRROR_REPO", "") or env.get("LORA_HF_FLAT_MIRROR_REPO", "")
+        single = os.getenv("LORA_HF_FLAT_MIRROR_REPO", "") or env.get(
+            "LORA_HF_FLAT_MIRROR_REPO", ""
+        )
         if single:
             repos = [single]
     return repos
@@ -63,7 +67,9 @@ def local_sizes(roots: list[Path] | None = None) -> dict[str, set[int]]:
     if roots is None:
         roots = [
             Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras")),
-            Path(os.getenv("LORA_DIR", str(REPO_ROOT / "ComfyUI" / "models" / "loras"))),
+            Path(
+                os.getenv("LORA_DIR", str(REPO_ROOT / "ComfyUI" / "models" / "loras"))
+            ),
         ]
     sizes: dict[str, set[int]] = {}
     for root in roots:
@@ -92,7 +98,9 @@ def verified_files(
     rejected: list[str] = []
     for name, candidates in sorted(remote.items()):
         sizes = local.get(name, set())
-        match = next((path for path, size in candidates if size and size in sizes), None)
+        match = next(
+            (path for path, size in candidates if size and size in sizes), None
+        )
         if match:
             accepted[name] = match
         else:
@@ -109,18 +117,26 @@ def list_weight_files(repo: str, timeout: int = 60) -> dict[str, list[tuple[str,
         raise RuntimeError(f"unexpected tree response for {repo}")
     files: dict[str, list[tuple[str, int]]] = {}
     for entry in entries:
-        if entry.get("type") != "file" or not entry["path"].lower().endswith(WEIGHT_SUFFIXES):
+        if entry.get("type") != "file" or not entry["path"].lower().endswith(
+            WEIGHT_SUFFIXES
+        ):
             continue
         path = entry["path"]
-        files.setdefault(Path(path).name, []).append((path, int(entry.get("size") or 0)))
+        files.setdefault(Path(path).name, []).append(
+            (path, int(entry.get("size") or 0))
+        )
     return files
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default="", help="single dump repo")
-    parser.add_argument("--repos", default="", help="comma-separated dump repos, priority order")
-    parser.add_argument("--out", default="", help=f"output path (default {DEFAULT_OUT})")
+    parser.add_argument(
+        "--repos", default="", help="comma-separated dump repos, priority order"
+    )
+    parser.add_argument(
+        "--out", default="", help=f"output path (default {DEFAULT_OUT})"
+    )
     parser.add_argument(
         "--verbose-rejected",
         action="store_true",
@@ -141,8 +157,10 @@ def main() -> int:
             "(or LORA_HF_FLAT_MIRROR_REPO) in .env"
         )
 
-    out = Path(args.out) if args.out else Path(
-        os.getenv("LORA_SOURCE_INDEX", "") or DEFAULT_OUT
+    out = (
+        Path(args.out)
+        if args.out
+        else Path(os.getenv("LORA_SOURCE_INDEX", "") or DEFAULT_OUT)
     )
 
     entries = []

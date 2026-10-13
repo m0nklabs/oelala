@@ -283,7 +283,11 @@ def build_lora_download_list(
             dump_path = ""
             if not sensitive:
                 dump = next(
-                    ((repo, files[basename]) for repo, files in source_index if basename in files),
+                    (
+                        (repo, files[basename])
+                        for repo, files in source_index
+                        if basename in files
+                    ),
                     None,
                 )
                 if dump:

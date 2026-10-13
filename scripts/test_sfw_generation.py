@@ -109,10 +109,10 @@ def get_random_sfw_prompt() -> tuple[str, str, str]:
     category = random.choice(list(SFW_CATEGORIES.keys()))
     base_prompt = random.choice(SFW_CATEGORIES[category])
     animation_prompt = random.choice(ANIMATION_PROMPTS)
-    
+
     # Enhance with quality tags
     full_prompt = f"{base_prompt}, masterpiece, highly detailed, professional photography, 8k uhd, cinematic lighting, safe for work"
-    
+
     return category, full_prompt, animation_prompt
 
 
@@ -120,35 +120,26 @@ def create_t2i_workflow(prompt: str, seed: int = None) -> dict:
     """Create a T2I workflow with the given prompt."""
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
-    
+
     workflow = {
         "1": {
             "class_type": "CheckpointLoaderSimple",
-            "inputs": {
-                "ckpt_name": "dreamshaperXL_lightningDPMSDE.safetensors"
-            }
+            "inputs": {"ckpt_name": "dreamshaperXL_lightningDPMSDE.safetensors"},
         },
         "2": {
             "class_type": "CLIPTextEncode",
-            "inputs": {
-                "clip": ["1", 1],
-                "text": prompt
-            }
+            "inputs": {"clip": ["1", 1], "text": prompt},
         },
         "3": {
             "class_type": "CLIPTextEncode",
             "inputs": {
                 "clip": ["1", 1],
-                "text": "ugly, deformed, blurry, low quality, bad anatomy, watermark, text, nsfw, nude, naked"
-            }
+                "text": "ugly, deformed, blurry, low quality, bad anatomy, watermark, text, nsfw, nude, naked",
+            },
         },
         "4": {
             "class_type": "EmptyLatentImage",
-            "inputs": {
-                "width": 1024,
-                "height": 1024,
-                "batch_size": 1
-            }
+            "inputs": {"width": 1024, "height": 1024, "batch_size": 1},
         },
         "5": {
             "class_type": "KSampler",
@@ -162,32 +153,26 @@ def create_t2i_workflow(prompt: str, seed: int = None) -> dict:
                 "cfg": 2.0,  # Lower CFG for lightning
                 "sampler_name": "dpmpp_sde",
                 "scheduler": "karras",
-                "denoise": 1.0
-            }
+                "denoise": 1.0,
+            },
         },
         "6": {
             "class_type": "VAEDecode",
-            "inputs": {
-                "samples": ["5", 0],
-                "vae": ["1", 2]
-            }
+            "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
         },
         "7": {
             "class_type": "SaveImage",
-            "inputs": {
-                "images": ["6", 0],
-                "filename_prefix": "sfw_test"
-            }
-        }
+            "inputs": {"images": ["6", 0], "filename_prefix": "sfw_test"},
+        },
     }
-    
+
     return workflow, seed
 
 
 def queue_prompt(workflow: dict) -> str:
     """Queue a workflow and return the prompt_id."""
     payload = {"prompt": workflow}
-    
+
     try:
         response = requests.post(f"{COMFYUI_URL}/prompt", json=payload)
         response.raise_for_status()
@@ -201,7 +186,7 @@ def queue_prompt(workflow: dict) -> str:
 def wait_for_completion(prompt_id: str, timeout: int = 300) -> bool:
     """Wait for workflow to complete."""
     start_time = time.time()
-    
+
     while time.time() - start_time < timeout:
         try:
             response = requests.get(f"{COMFYUI_URL}/history/{prompt_id}")
@@ -211,10 +196,10 @@ def wait_for_completion(prompt_id: str, timeout: int = 300) -> bool:
                     return True
         except requests.exceptions.RequestException:
             pass
-        
+
         time.sleep(2)
         print("⏳ Waiting for generation...", end="\r")
-    
+
     return False
 
 
@@ -234,7 +219,7 @@ def get_output_images(prompt_id: str) -> list[str]:
                 return images
     except requests.exceptions.RequestException as e:
         print(f"❌ Error getting outputs: {e}")
-    
+
     return []
 
 
@@ -242,18 +227,18 @@ def main():
     print("=" * 60)
     print("🎨 SFW Content Generation Test")
     print("=" * 60)
-    
+
     # Get random prompt
     category, prompt, animation = get_random_sfw_prompt()
-    
+
     print(f"\n📂 Category: {category}")
     print(f"📝 Prompt: {prompt[:100]}...")
     print(f"🎬 Animation: {animation}")
-    
+
     # Create workflow
     workflow, seed = create_t2i_workflow(prompt)
     print(f"🎲 Seed: {seed}")
-    
+
     # Check ComfyUI is running
     try:
         response = requests.get(f"{COMFYUI_URL}/system_stats")
@@ -264,30 +249,30 @@ def main():
     except requests.exceptions.RequestException:
         print("❌ Cannot connect to ComfyUI at", COMFYUI_URL)
         return
-    
+
     # Queue the workflow
     print("\n🚀 Queueing T2I workflow...")
     prompt_id = queue_prompt(workflow)
-    
+
     if not prompt_id:
         print("❌ Failed to queue workflow")
         return
-    
+
     print(f"📋 Prompt ID: {prompt_id}")
-    
+
     # Wait for completion
     print("\n⏳ Generating image...")
     start_time = time.time()
-    
+
     if wait_for_completion(prompt_id):
         duration = time.time() - start_time
         print(f"\n✅ Generation complete in {duration:.1f}s")
-        
+
         # Get output images
         images = get_output_images(prompt_id)
         if images:
             print(f"🖼️ Output images: {images}")
-            
+
             # Save test info
             test_info = {
                 "timestamp": datetime.now().isoformat(),
@@ -299,14 +284,16 @@ def main():
                 "output_images": images,
                 "prompt_id": prompt_id,
             }
-            
+
             output_dir = Path("/home/flip/oelala/generated/sfw_test")
             output_dir.mkdir(parents=True, exist_ok=True)
-            
-            test_file = output_dir / f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+            test_file = (
+                output_dir / f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            )
             with open(test_file, "w") as f:
                 json.dump(test_info, f, indent=2)
-            
+
             print(f"📄 Test info saved to: {test_file}")
             print("\n" + "=" * 60)
             print("✅ TEST SUCCESSFUL")

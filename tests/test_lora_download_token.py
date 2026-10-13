@@ -47,12 +47,17 @@ def _write_index(tmp_path, repos, name="index.json"):
     """Write a source index; `repos` is [(repo, [basenames])] stored flat."""
     path = tmp_path / name
     path.write_text(
-        json.dumps({
-            "repos": [{"repo": r, "files": {n: n for n in names}} for r, names in repos]
-        }),
+        json.dumps(
+            {
+                "repos": [
+                    {"repo": r, "files": {n: n for n in names}} for r, names in repos
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     return path
+
 
 from generation.lora_utils import build_lora_download_list, lora_download_token  # noqa: E402
 
@@ -81,8 +86,8 @@ def test_local_lora_url_is_signed():
     entry = downloads[0]
     assert entry["filename"] == resolved
     expected_url = (
-        TEST_BACKEND_URL +
-        f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+        TEST_BACKEND_URL
+        + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
     )
     assert entry["url"] == expected_url
     assert "hf_token" not in entry
@@ -104,8 +109,8 @@ def test_hf_source_url_unchanged():
             "filename": resolved,
             "url": f"https://huggingface.co/org/repo/resolve/main/loras/{resolved}",
             "fallback_url": (
-                TEST_BACKEND_URL +
-                f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+                TEST_BACKEND_URL
+                + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
             ),
             "hf_token": "hf_test_token",
         }
@@ -128,18 +133,21 @@ def test_mirror_repo_used_with_fallback():
         "LORA_HF_MIRROR_REPO": "m0nk111/oelala-loras",
         "HF_LORA_TOKEN": "hf_test_token",
     }
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "example"}])
     assert downloads == [
         {
             "filename": resolved,
             "url": f"https://huggingface.co/m0nk111/oelala-loras/resolve/main/{resolved}",
             "fallback_url": (
-                TEST_BACKEND_URL +
-                f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+                TEST_BACKEND_URL
+                + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
             ),
             "hf_token": "hf_test_token",
         }
@@ -150,22 +158,28 @@ def test_explicit_hf_source_wins_over_mirror():
     """Curated hf_sources entries take precedence over the mirror repo."""
     resolved = "hf_lora.safetensors"
     env = {"LORA_HF_MIRROR_REPO": "m0nk111/oelala-loras"}
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list(
             [{"name": "hf_lora"}],
             hf_sources={resolved: {"repo": "org/other", "path": f"loras/{resolved}"}},
             hf_token="hf_curated_token",
         )
     entry = downloads[0]
-    assert entry["url"] == f"https://huggingface.co/org/other/resolve/main/loras/{resolved}"
+    assert (
+        entry["url"]
+        == f"https://huggingface.co/org/other/resolve/main/loras/{resolved}"
+    )
     assert entry["hf_token"] == "hf_curated_token"
     # fallback to the signed self-hosted URL is still attached
     assert entry["fallback_url"] == (
-        TEST_BACKEND_URL +
-        f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+        TEST_BACKEND_URL
+        + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
     )
 
 
@@ -173,10 +187,13 @@ def test_flat_mirror_uses_basename_and_fallback():
     """Flat mirror: public repo, files by basename, no token, signed fallback."""
     resolved = "minimax-h3/Vagina_minimax-h3_epoch20.safetensors"
     env = {"LORA_HF_FLAT_MIRROR_REPO": "Serenak/chilloutmix"}
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "whatever"}])
     assert downloads == [
         {
@@ -186,8 +203,8 @@ def test_flat_mirror_uses_basename_and_fallback():
                 "Vagina_minimax-h3_epoch20.safetensors"
             ),
             "fallback_url": (
-                TEST_BACKEND_URL +
-                f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+                TEST_BACKEND_URL
+                + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
             ),
         }
     ]
@@ -197,10 +214,13 @@ def test_flat_mirror_encodes_special_filenames():
     """Basenames with spaces are percent-encoded for the flat mirror URL."""
     resolved = "ltx/LTX-2.3 - Ahegao Face v1.safetensors"
     env = {"LORA_HF_FLAT_MIRROR_REPO": "Serenak/chilloutmix"}
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "whatever"}])
     url = downloads[0]["url"]
     assert url == (
@@ -222,12 +242,18 @@ def test_flat_mirror_wins_over_subdir_mirror():
         "LORA_HF_MIRROR_REPO": "bomehika/oelala-loras",
         "HF_LORA_TOKEN": "hf_test_token",
     }
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "file"}])
-    assert downloads[0]["url"] == "https://huggingface.co/flat/repo/resolve/main/file.safetensors"
+    assert (
+        downloads[0]["url"]
+        == "https://huggingface.co/flat/repo/resolve/main/file.safetensors"
+    )
     assert "hf_token" not in downloads[0]  # flat mirror is public
     # our own mirror still rides along as the signed self-hosted fallback
     assert downloads[0]["fallback_url"].startswith(TEST_BACKEND_URL)
@@ -237,10 +263,13 @@ def test_subdir_mirror_encodes_spaces_in_path():
     """Layout-preserving mirror paths may contain spaces — percent-encode them."""
     resolved = "wan 2.2/NSFW-22-H-e8.safetensors"
     env = {"LORA_HF_MIRROR_REPO": "bomehika/oelala-loras"}
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "NSFW-22-H-e8"}])
     assert downloads[0]["url"] == (
         "https://huggingface.co/bomehika/oelala-loras/resolve/main/"
@@ -256,10 +285,13 @@ def test_public_mirror_sends_no_token_when_override_is_empty():
         "LORA_HF_MIRROR_TOKEN": "",
         "HF_LORA_TOKEN": "hf_test_token",
     }
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "file"}])
     assert "hf_token" not in downloads[0]
 
@@ -268,17 +300,20 @@ def test_no_mirror_single_signed_url_without_fallback():
     """Without mirror env: single signed URL, no fallback (previous behavior)."""
     resolved = "minimax-h3/example.safetensors"
     env = {"LORA_HF_MIRROR_REPO": "", "HF_LORA_TOKEN": ""}
-    with patch(
-        "generation.lora_utils.resolve_lora_path",
-        return_value=(Path("/tmp/loras") / resolved, resolved),
-    ), patch.dict(os.environ, env):
+    with (
+        patch(
+            "generation.lora_utils.resolve_lora_path",
+            return_value=(Path("/tmp/loras") / resolved, resolved),
+        ),
+        patch.dict(os.environ, env),
+    ):
         downloads = build_lora_download_list([{"name": "example"}])
     assert downloads == [
         {
             "filename": resolved,
             "url": (
-                TEST_BACKEND_URL +
-                f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+                TEST_BACKEND_URL
+                + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
             ),
         }
     ]
@@ -328,10 +363,15 @@ def test_source_index_first_matching_dump_wins(tmp_path, monkeypatch):
     """Dump order in the index is the priority order."""
     monkeypatch.setenv(
         "LORA_SOURCE_INDEX",
-        str(_write_index(tmp_path, [
-            ("first/dump", ["shared.safetensors"]),
-            ("second/dump", ["shared.safetensors"]),
-        ])),
+        str(
+            _write_index(
+                tmp_path,
+                [
+                    ("first/dump", ["shared.safetensors"]),
+                    ("second/dump", ["shared.safetensors"]),
+                ],
+            )
+        ),
     )
     resolved = "shared.safetensors"
     with patch(
@@ -349,7 +389,9 @@ def test_sensitive_lora_never_gets_a_public_url(tmp_path, monkeypatch):
     signed self-hosted URL, even when a dump and our mirror both exist."""
     monkeypatch.setenv(
         "LORA_SOURCE_INDEX",
-        str(_write_index(tmp_path, [("third/party", ["bfs_head_swap_v4.safetensors"])])),
+        str(
+            _write_index(tmp_path, [("third/party", ["bfs_head_swap_v4.safetensors"])])
+        ),
     )
     monkeypatch.setenv("LORA_HF_MIRROR_REPO", "bomehika/oelala-loras")
     monkeypatch.setenv("LORA_HF_FLAT_MIRROR_REPO", "Serenak/chilloutmix")
@@ -363,8 +405,8 @@ def test_sensitive_lora_never_gets_a_public_url(tmp_path, monkeypatch):
         {
             "filename": resolved,
             "url": (
-                TEST_BACKEND_URL +
-                f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
+                TEST_BACKEND_URL
+                + f"/loras/download/{resolved}?token={_endpoint_style_token(resolved)}"
             ),
         }
     ]
@@ -373,10 +415,21 @@ def test_sensitive_lora_never_gets_a_public_url(tmp_path, monkeypatch):
 def test_source_index_uses_recorded_subdir_path(tmp_path, monkeypatch):
     """A dump that keeps files in a subdirectory must still resolve."""
     path = tmp_path / "subdir-index.json"
-    path.write_text(json.dumps({"repos": [
-        {"repo": "jaysowen/wan2.2-nsfw-loras",
-         "files": {"NSFW-22-H-e8.safetensors": "high/NSFW-22-H-e8.safetensors"}}
-    ]}), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "repos": [
+                    {
+                        "repo": "jaysowen/wan2.2-nsfw-loras",
+                        "files": {
+                            "NSFW-22-H-e8.safetensors": "high/NSFW-22-H-e8.safetensors"
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("LORA_SOURCE_INDEX", str(path))
     resolved = "wan 2.2/NSFW-22-H-e8.safetensors"
     with patch(
@@ -393,9 +446,12 @@ def test_source_index_uses_recorded_subdir_path(tmp_path, monkeypatch):
 def test_source_index_legacy_basenames_format(tmp_path, monkeypatch):
     """An index written in the older basenames-only format keeps working."""
     path = tmp_path / "legacy.json"
-    path.write_text(json.dumps({"repos": [
-        {"repo": "third/party", "basenames": ["legacy.safetensors"]}
-    ]}), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {"repos": [{"repo": "third/party", "basenames": ["legacy.safetensors"]}]}
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("LORA_SOURCE_INDEX", str(path))
     resolved = "legacy.safetensors"
     with patch(

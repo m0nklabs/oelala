@@ -56,6 +56,7 @@ MIN_FREE_DISK_GB = 5.0
 @dataclass
 class WorkflowModelPrepResult:
     """Result of model preparation before workflow execution."""
+
     models_ready: bool = False
     error: Optional[str] = None
     download_time_s: float = 0.0
@@ -102,7 +103,6 @@ CLOUD_I2I_MODELS = [
         "description": "Lightning LoRA for 4-step fast generation",
         "startup_required": False,
     },
-
     {
         "filename": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
         "url": "https://civitai.red/api/download/models/290640?type=Model&format=SafeTensor&size=pruned&fp=fp16",
@@ -118,7 +118,7 @@ CLOUD_I2I_MODELS = [
         "size_gb": 6.8,
         "description": "Juggernaut XL Ragnarok",
         "startup_required": False,
-    }
+    },
 ]
 
 PUBLIC_MODEL_FILENAMES = {model["filename"] for model in CLOUD_I2I_MODELS}
@@ -161,6 +161,7 @@ def collect_required_model_filenames(workflow: Dict[str, Any]) -> set[str]:
 
 
 # ---- Model Setup ----
+
 
 def setup_model_links():
     """
@@ -210,7 +211,7 @@ def _check_download_capacity(size_gb: float) -> bool:
     """Check if there is enough disk space for a download."""
     try:
         usage = shutil.disk_usage("/")
-        free_gb = usage.free / (1024 ** 3)
+        free_gb = usage.free / (1024**3)
         return free_gb >= (size_gb + MIN_FREE_DISK_GB)
     except Exception:
         return True  # Optimistic fallback
@@ -376,7 +377,9 @@ def ensure_models(workflow: Optional[Dict[str, Any]] = None) -> WorkflowModelPre
     setup_model_links()
 
     required_filenames = {
-        model["filename"] for model in CLOUD_I2I_MODELS if model.get("startup_required", False)
+        model["filename"]
+        for model in CLOUD_I2I_MODELS
+        if model.get("startup_required", False)
     }
     if workflow:
         required_filenames.update(collect_required_model_filenames(workflow))
@@ -422,9 +425,12 @@ def start_comfyui() -> bool:
 
     logger.info("🚀 Starting ComfyUI...")
     cmd = [
-        sys.executable, "main.py",
-        "--listen", "127.0.0.1",
-        "--port", str(COMFYUI_PORT),
+        sys.executable,
+        "main.py",
+        "--listen",
+        "127.0.0.1",
+        "--port",
+        str(COMFYUI_PORT),
         "--disable-auto-launch",
         "--disable-metadata",
     ]
@@ -462,9 +468,10 @@ def wait_for_cuda() -> bool:
     """Quick check that CUDA is available."""
     try:
         import torch
+
         if torch.cuda.is_available():
             dev = torch.cuda.get_device_name(0)
-            mem = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+            mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             logger.info(f"🖥️  CUDA device: {dev} ({mem:.1f} GB)")
             return True
         logger.error("❌ No CUDA device available")
@@ -475,6 +482,7 @@ def wait_for_cuda() -> bool:
 
 
 # ---- Workflow Processing ----
+
 
 def save_input_images(images: Dict[str, str]) -> Dict[str, str]:
     """
@@ -608,9 +616,7 @@ def wait_for_completion(prompt_id: str, timeout: int = 0) -> bool:
 
     while time.time() < deadline:
         try:
-            resp = requests.get(
-                f"{COMFYUI_URL}/history/{prompt_id}", timeout=10
-            )
+            resp = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 if prompt_id in data:
@@ -667,7 +673,11 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
             for img in images_out:
                 filename = img.get("filename", "")
                 subfolder = img.get("subfolder", "")
-                filepath = output_dir / subfolder / filename if subfolder else output_dir / filename
+                filepath = (
+                    output_dir / subfolder / filename
+                    if subfolder
+                    else output_dir / filename
+                )
 
                 if filepath.exists():
                     file_bytes = filepath.read_bytes()
@@ -676,12 +686,14 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
                     ext = filepath.suffix.lower()
                     mime = f"image/{ext.lstrip('.')}"
 
-                    outputs.append({
-                        "filename": filename,
-                        "data": b64,
-                        "type": mime,
-                        "size_bytes": len(file_bytes),
-                    })
+                    outputs.append(
+                        {
+                            "filename": filename,
+                            "data": b64,
+                            "type": mime,
+                            "size_bytes": len(file_bytes),
+                        }
+                    )
                     logger.info(
                         f"📦 Collected output: {filename} "
                         f"({len(file_bytes) / 1024 / 1024:.1f} MB)"
@@ -692,7 +704,11 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
             for gif in gifs:
                 filename = gif.get("filename", "")
                 subfolder = gif.get("subfolder", "")
-                filepath = output_dir / subfolder / filename if subfolder else output_dir / filename
+                filepath = (
+                    output_dir / subfolder / filename
+                    if subfolder
+                    else output_dir / filename
+                )
 
                 if filepath.exists():
                     file_bytes = filepath.read_bytes()
@@ -700,12 +716,14 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
                     ext = filepath.suffix.lower()
                     mime = "video/mp4" if ext == ".mp4" else f"video/{ext.lstrip('.')}"
 
-                    outputs.append({
-                        "filename": filename,
-                        "data": b64,
-                        "type": mime,
-                        "size_bytes": len(file_bytes),
-                    })
+                    outputs.append(
+                        {
+                            "filename": filename,
+                            "data": b64,
+                            "type": mime,
+                            "size_bytes": len(file_bytes),
+                        }
+                    )
 
     except Exception as e:
         logger.error(f"❌ Failed to collect outputs: {e}")
@@ -725,6 +743,7 @@ def collect_outputs(prompt_id: str) -> List[Dict[str, Any]]:
 
 
 # ---- Main Handler ----
+
 
 def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -761,9 +780,7 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
         model_result = ensure_models(workflow)
         if not model_result.models_ready:
             return {"error": f"Model setup failed: {model_result.error}"}
-        log_lines.append(
-            f"Models ready in {model_result.download_time_s:.1f}s"
-        )
+        log_lines.append(f"Models ready in {model_result.download_time_s:.1f}s")
 
         # 4. Start ComfyUI
         if not start_comfyui():

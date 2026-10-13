@@ -87,7 +87,8 @@ class TestWorkflowValidation:
 # ComfyUI root: env override first (same variable as scripts/build_model_catalog.py),
 # otherwise derived from this file's location (tests/gpu/ -> repository root).
 COMFYUI_ROOT = Path(
-    os.environ.get("LOCAL_COMFYUI_DIR") or Path(__file__).resolve().parents[2] / "ComfyUI"
+    os.environ.get("LOCAL_COMFYUI_DIR")
+    or Path(__file__).resolve().parents[2] / "ComfyUI"
 )
 
 
@@ -121,9 +122,7 @@ def _configured_model_dirs(kind: str) -> list[Path]:
             path = Path(os.path.expandvars(os.path.expanduser(rel)))
             if not path.is_absolute():
                 if base_path:
-                    base = Path(
-                        os.path.expandvars(os.path.expanduser(str(base_path)))
-                    )
+                    base = Path(os.path.expandvars(os.path.expanduser(str(base_path))))
                     path = base / path
                 else:
                     path = config_file.parent / path
@@ -188,7 +187,7 @@ class TestVideoGeneration:
                 "num_frames": 5,  # Minimum
                 "resolution": "480p",
             },
-            timeout=120
+            timeout=120,
         )
 
         # Should at least not crash
@@ -207,11 +206,11 @@ class TestAdvancedVideoEndpoints:
         """
         # Create a minimal test video file (invalid but tests endpoint)
         test_video = io.BytesIO(
-            b'\x00\x00\x00\x1c' +  # MP4 header
-            b'ftypisom' +
-            b'\x00\x00\x02\x00' +
-            b'isomiso2' +
-            b'\x00' * 100  # Padding
+            b"\x00\x00\x00\x1c"  # MP4 header
+            + b"ftypisom"
+            + b"\x00\x00\x02\x00"
+            + b"isomiso2"
+            + b"\x00" * 100  # Padding
         )
         test_video.seek(0)
 
@@ -219,7 +218,7 @@ class TestAdvancedVideoEndpoints:
             f"{BACKEND_URL}/upscale-video",
             files={"file": ("test.mp4", test_video, "video/mp4")},
             data={"model": "realesrgan-video"},
-            timeout=10
+            timeout=10,
         )
 
         # Should either accept or reject gracefully, not crash
@@ -241,11 +240,11 @@ class TestAdvancedVideoEndpoints:
         """
         # Create a minimal test video file
         test_video = io.BytesIO(
-            b'\x00\x00\x00\x1c' +
-            b'ftypisom' +
-            b'\x00\x00\x02\x00' +
-            b'isomiso2' +
-            b'\x00' * 100
+            b"\x00\x00\x00\x1c"
+            + b"ftypisom"
+            + b"\x00\x00\x02\x00"
+            + b"isomiso2"
+            + b"\x00" * 100
         )
         test_video.seek(0)
 
@@ -258,7 +257,7 @@ class TestAdvancedVideoEndpoints:
                 "target_fps": "60",
                 "multiplier": "2.0",
             },
-            timeout=10
+            timeout=10,
         )
 
         # Should either accept or reject gracefully.
@@ -273,7 +272,7 @@ class TestAdvancedVideoEndpoints:
 
     def test_upscale_video_validates_model_param(self):
         """Upscale endpoint should validate model parameter."""
-        test_video = io.BytesIO(b'\x00' * 100)
+        test_video = io.BytesIO(b"\x00" * 100)
         test_video.seek(0)
 
         # This should work (valid model)
@@ -281,7 +280,7 @@ class TestAdvancedVideoEndpoints:
             f"{BACKEND_URL}/upscale-video",
             files={"file": ("test.mp4", test_video, "video/mp4")},
             data={"model": "realesrgan-video"},
-            timeout=10
+            timeout=10,
         )
 
         # Should at least parse the request.
@@ -290,7 +289,7 @@ class TestAdvancedVideoEndpoints:
 
     def test_interpolate_video_validates_model_param(self):
         """Interpolate endpoint should validate model parameter."""
-        test_video = io.BytesIO(b'\x00' * 100)
+        test_video = io.BytesIO(b"\x00" * 100)
         test_video.seek(0)
 
         resp = requests.post(
@@ -302,7 +301,7 @@ class TestAdvancedVideoEndpoints:
                 "target_fps": "60",
                 "multiplier": "2.0",
             },
-            timeout=10
+            timeout=10,
         )
 
         # Should at least parse the request.

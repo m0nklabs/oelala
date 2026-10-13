@@ -141,6 +141,7 @@ T2V_GENERATION_MODES = {
     },
 }
 
+
 def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
     """Load a workflow JSON file and return as dict."""
     full_path = WORKFLOWS_DIR / workflow_path
@@ -154,13 +155,16 @@ def load_workflow_from_file(workflow_path: str) -> Optional[Dict]:
         logger.error(f"❌ Failed to load workflow {workflow_path}: {e}")
         return None
 
+
 def get_available_i2v_modes() -> Dict:
     """Return available I2V generation modes."""
     return I2V_GENERATION_MODES
 
+
 def get_available_t2v_modes() -> Dict:
     """Return available T2V generation modes (base models)."""
     return T2V_GENERATION_MODES
+
 
 def _match_lora_name(requested: str, available: List[str]) -> Optional[str]:
     """Map a requested LoRA name onto a filename the target server actually has.
@@ -181,6 +185,7 @@ def _match_lora_name(requested: str, available: List[str]) -> Optional[str]:
         a for a in available if a.replace("\\", "/").rsplit("/", 1)[-1] == basename
     ]
     return matches[0] if len(matches) == 1 else None
+
 
 class ComfyUIClient:
     """Client for ComfyUI API integration"""
@@ -2656,6 +2661,7 @@ class ComfyUIClient:
 # Singleton instance
 _comfyui_client: Optional[ComfyUIClient] = None
 
+
 def get_comfyui_client() -> ComfyUIClient:
     """Get or create ComfyUI client singleton"""
     global _comfyui_client
@@ -2673,6 +2679,7 @@ def get_comfyui_client() -> ComfyUIClient:
 # factory.
 _backend_clients: dict = {}
 
+
 def _parse_base_url(base_url: str):
     """Split 'http://host:port' -> (host, port). Defaults to localhost:8188."""
     host, port = "localhost", 8188
@@ -2687,6 +2694,7 @@ def _parse_base_url(base_url: str):
             except (ValueError, IndexError):
                 port = 8188
     return host, port
+
 
 def get_comfyui_client_for_backend(backend) -> Optional[ComfyUIClient]:
     """Get or create a ComfyUIClient for a ComputeBackend.

@@ -50,11 +50,14 @@ class TestLTX23CloudI2V:
         assert c.default_steps == 8
         assert c.default_cfg == 1.0
 
-    @pytest.mark.parametrize("frames,expected_cost", [
-        (97, 5),
-        (161, 8),
-        (257, 15),
-    ])
+    @pytest.mark.parametrize(
+        "frames,expected_cost",
+        [
+            (97, 5),
+            (161, 8),
+            (257, 15),
+        ],
+    )
     def test_cost(self, frames, expected_cost):
         adapter = LTX23CloudI2VAdapter()
         req = GenerationRequest(
@@ -83,10 +86,12 @@ class TestLTX23CloudI2V:
 
     @pytest.mark.asyncio
     async def test_execute_success(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "ltx-id",
-            "runpod_job_id": "rp-ltx",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "ltx-id",
+                "runpod_job_id": "rp-ltx",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_ltx23_i2v_workflow.return_value = {"ltx_i2v": True}
 
@@ -159,11 +164,14 @@ class TestLTX23CloudT2V:
         assert c.resolution_step == 32
         assert "21:9" in c.aspect_ratios
 
-    @pytest.mark.parametrize("frames,expected_cost", [
-        (97, 8),
-        (161, 12),
-        (257, 15),
-    ])
+    @pytest.mark.parametrize(
+        "frames,expected_cost",
+        [
+            (97, 8),
+            (161, 12),
+            (257, 15),
+        ],
+    )
     def test_cost(self, frames, expected_cost):
         adapter = LTX23CloudT2VAdapter()
         req = GenerationRequest(
@@ -207,10 +215,12 @@ class TestLTX23CloudT2V:
 
     @pytest.mark.asyncio
     async def test_execute_success(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "ltx-t2v-id",
-            "runpod_job_id": "rp-ltx-t2v",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "ltx-t2v-id",
+                "runpod_job_id": "rp-ltx-t2v",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_ltx23_t2v_workflow.return_value = {"ltx_t2v": True}
 
@@ -267,11 +277,14 @@ class TestMiniMaxH3CloudI2V:
         assert not c.supports_negative_prompt  # H3 has no negative prompt
         assert c.max_input_images == 1
 
-    @pytest.mark.parametrize("frames,expected_cost", [
-        (124, 5),
-        (210, 8),
-        (362, 15),
-    ])
+    @pytest.mark.parametrize(
+        "frames,expected_cost",
+        [
+            (124, 5),
+            (210, 8),
+            (362, 15),
+        ],
+    )
     def test_cost(self, frames, expected_cost):
         adapter = MiniMaxH3CloudI2VAdapter()
         req = GenerationRequest(
@@ -339,10 +352,12 @@ class TestMiniMaxH3CloudI2V:
 
     @pytest.mark.asyncio
     async def test_execute_passes_lora_downloads(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "h3-i2v-id",
-            "runpod_job_id": "rp-h3-i2v",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "h3-i2v-id",
+                "runpod_job_id": "rp-h3-i2v",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
 
@@ -351,10 +366,17 @@ class TestMiniMaxH3CloudI2V:
             comfyui_client_fn=lambda: mock_comfyui,
         )
         downloads = [
-            {"filename": "minimax-h3/test.safetensors", "url": "https://backend.invalid/loras/download/minimax-h3/test.safetensors"}
+            {
+                "filename": "minimax-h3/test.safetensors",
+                "url": "https://backend.invalid/loras/download/minimax-h3/test.safetensors",
+            }
         ]
-        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}), \
-                patch("generation.lora_utils.build_lora_download_list", return_value=downloads):
+        with (
+            patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}),
+            patch(
+                "generation.lora_utils.build_lora_download_list", return_value=downloads
+            ),
+        ):
             req = GenerationRequest(
                 operation=Operation.GENERATE,
                 target_type=MediaType.VIDEO,
@@ -369,10 +391,12 @@ class TestMiniMaxH3CloudI2V:
 
     @pytest.mark.asyncio
     async def test_execute_without_loras_sends_no_downloads(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "h3-i2v-id",
-            "runpod_job_id": "rp-h3-i2v",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "h3-i2v-id",
+                "runpod_job_id": "rp-h3-i2v",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
 
@@ -394,10 +418,12 @@ class TestMiniMaxH3CloudI2V:
 
     @pytest.mark.asyncio
     async def test_execute_success(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "h3-i2v-id",
-            "runpod_job_id": "rp-h3-i2v",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "h3-i2v-id",
+                "runpod_job_id": "rp-h3-i2v",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_minimax_h3_i2v_workflow.return_value = {"h3_i2v": True}
 
@@ -471,11 +497,14 @@ class TestMiniMaxH3CloudT2V:
         assert "21:9" in c.aspect_ratios
         assert not c.supports_negative_prompt
 
-    @pytest.mark.parametrize("frames,expected_cost", [
-        (124, 8),
-        (210, 12),
-        (362, 15),
-    ])
+    @pytest.mark.parametrize(
+        "frames,expected_cost",
+        [
+            (124, 8),
+            (210, 12),
+            (362, 15),
+        ],
+    )
     def test_cost(self, frames, expected_cost):
         adapter = MiniMaxH3CloudT2VAdapter()
         req = GenerationRequest(
@@ -539,10 +568,12 @@ class TestMiniMaxH3CloudT2V:
 
     @pytest.mark.asyncio
     async def test_execute_passes_lora_downloads(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "h3-t2v-id",
-            "runpod_job_id": "rp-h3-t2v",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "h3-t2v-id",
+                "runpod_job_id": "rp-h3-t2v",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
 
@@ -551,10 +582,17 @@ class TestMiniMaxH3CloudT2V:
             comfyui_client_fn=lambda: mock_comfyui,
         )
         downloads = [
-            {"filename": "minimax-h3/test.safetensors", "url": "https://backend.invalid/loras/download/minimax-h3/test.safetensors"}
+            {
+                "filename": "minimax-h3/test.safetensors",
+                "url": "https://backend.invalid/loras/download/minimax-h3/test.safetensors",
+            }
         ]
-        with patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}), \
-                patch("generation.lora_utils.build_lora_download_list", return_value=downloads):
+        with (
+            patch.dict(os.environ, {"RUNPOD_MINIMAX_H3_ENDPOINT_ID": "test-endpoint"}),
+            patch(
+                "generation.lora_utils.build_lora_download_list", return_value=downloads
+            ),
+        ):
             req = GenerationRequest(
                 operation=Operation.GENERATE,
                 target_type=MediaType.VIDEO,
@@ -568,10 +606,12 @@ class TestMiniMaxH3CloudT2V:
 
     @pytest.mark.asyncio
     async def test_execute_success(self):
-        mock_submit = AsyncMock(return_value={
-            "prompt_id": "h3-t2v-id",
-            "runpod_job_id": "rp-h3-t2v",
-        })
+        mock_submit = AsyncMock(
+            return_value={
+                "prompt_id": "h3-t2v-id",
+                "runpod_job_id": "rp-h3-t2v",
+            }
+        )
         mock_comfyui = MagicMock()
         mock_comfyui.build_cloud_minimax_h3_t2v_workflow.return_value = {"h3_t2v": True}
 
@@ -679,23 +719,29 @@ class TestMiniMaxH3Canvas:
         client = ComfyUIClient.__new__(ComfyUIClient)
         return client._minimax_h3_canvas(aspect_ratio, megapixels)
 
-    @pytest.mark.parametrize("aspect,expected", [
-        ("16:9", (1344, 768)),
-        ("9:16", (768, 1344)),
-        ("1:1", (768, 768)),
-        ("4:3", (1024, 768)),
-        ("3:4", (768, 1024)),
-    ])
+    @pytest.mark.parametrize(
+        "aspect,expected",
+        [
+            ("16:9", (1344, 768)),
+            ("9:16", (768, 1344)),
+            ("1:1", (768, 768)),
+            ("4:3", (1024, 768)),
+            ("3:4", (768, 1024)),
+        ],
+    )
     def test_native_canvas_768_short_edge(self, aspect, expected):
         assert self._canvas(aspect) == expected
 
-    @pytest.mark.parametrize("mp,aspect,expected", [
-        (0.4, "16:9", (864, 480)),
-        (0.6, "16:9", (1056, 608)),
-        (0.98, "16:9", (1344, 768)),
-        (2.0, "16:9", (1920, 1088)),
-        (2.0, "9:16", (1088, 1920)),
-    ])
+    @pytest.mark.parametrize(
+        "mp,aspect,expected",
+        [
+            (0.4, "16:9", (864, 480)),
+            (0.6, "16:9", (1056, 608)),
+            (0.98, "16:9", (1344, 768)),
+            (2.0, "16:9", (1920, 1088)),
+            (2.0, "9:16", (1088, 1920)),
+        ],
+    )
     def test_megapixel_selector_formula(self, mp, aspect, expected):
         assert self._canvas(aspect, mp) == expected
 

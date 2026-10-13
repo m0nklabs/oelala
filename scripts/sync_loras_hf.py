@@ -68,7 +68,9 @@ def detect_repo_type(api, repo_id: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=os.getenv("LORA_HF_MIRROR_REPO", ""))
-    parser.add_argument("--include", default="", help="only relpaths starting with this prefix")
+    parser.add_argument(
+        "--include", default="", help="only relpaths starting with this prefix"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--allow-public",
@@ -96,7 +98,9 @@ def main() -> None:
     token = env.get(args.token_env, "") or os.getenv(args.token_env, "")
     repo = args.repo or env.get("LORA_HF_MIRROR_REPO", "")
     if not repo:
-        raise SystemExit("❌ No mirror repo: pass --repo or set LORA_HF_MIRROR_REPO in .env")
+        raise SystemExit(
+            "❌ No mirror repo: pass --repo or set LORA_HF_MIRROR_REPO in .env"
+        )
     if not token:
         raise SystemExit(f"❌ No HF token: set {args.token_env} in .env")
 
@@ -123,8 +127,10 @@ def main() -> None:
 
     patterns = load_exclusions(args.exclusions or None)
     allowed, excluded = partition(files, patterns)
-    print(f"🔒 Exclusion policy: {len(patterns)} pattern(s) — "
-          f"{len(excluded)} local file(s) held back")
+    print(
+        f"🔒 Exclusion policy: {len(patterns)} pattern(s) — "
+        f"{len(excluded)} local file(s) held back"
+    )
     if args.only_excluded:
         if is_public:
             raise SystemExit(
@@ -132,7 +138,9 @@ def main() -> None:
                 "must not go to a public repo."
             )
         files = excluded
-        print(f"🔐 Private-mirror mode: uploading only the {len(files)} excluded file(s)")
+        print(
+            f"🔐 Private-mirror mode: uploading only the {len(files)} excluded file(s)"
+        )
     elif is_public:
         for rel in sorted(excluded):
             print(f"  ⛔ not for public mirror: {rel}")
@@ -148,8 +156,10 @@ def main() -> None:
     todo = {k: v for k, v in files.items() if k not in repo_files}
     total_gb = sum(v.stat().st_size for v in todo.values()) / 1e9
     already = len(files) - len(todo)
-    print(f"☁️  Mirror: {repo} ({repo_type}) — {already} already present, "
-          f"{len(todo)} to upload ({total_gb:.1f} GB)")
+    print(
+        f"☁️  Mirror: {repo} ({repo_type}) — {already} already present, "
+        f"{len(todo)} to upload ({total_gb:.1f} GB)"
+    )
 
     if args.dry_run:
         for rel in sorted(todo):

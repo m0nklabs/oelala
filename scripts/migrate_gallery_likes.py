@@ -11,6 +11,7 @@ import sys
 
 # Load env vars
 from pathlib import Path
+
 env_file = Path("/home/flip/oelala/.env")
 if env_file.exists():
     for line in env_file.read_text().splitlines():
@@ -25,6 +26,7 @@ if not url or not key:
     sys.exit(1)
 
 from supabase import create_client
+
 sb = create_client(url, key)
 
 SQL_MIGRATIONS = [
@@ -34,7 +36,6 @@ SQL_MIGRATIONS = [
       ADD COLUMN IF NOT EXISTS view_count  INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS like_count  INTEGER NOT NULL DEFAULT 0;
     """,
-
     # 2. Create gallery_likes table (unique like per user+media)
     """
     CREATE TABLE IF NOT EXISTS published_media_likes (
@@ -45,13 +46,11 @@ SQL_MIGRATIONS = [
       UNIQUE (media_id, user_id)
     );
     """,
-
     # 3. Index for quick lookup
     """
     CREATE INDEX IF NOT EXISTS idx_pm_likes_media_id ON published_media_likes(media_id);
     CREATE INDEX IF NOT EXISTS idx_pm_likes_user_id  ON published_media_likes(user_id);
     """,
-
     # 4. toggle_like function (returns liked bool + updated like_count)
     """
     CREATE OR REPLACE FUNCTION toggle_like(p_media_id UUID)
@@ -95,7 +94,6 @@ SQL_MIGRATIONS = [
     END;
     $$;
     """,
-
     # 5. increment_view_count function
     """
     CREATE OR REPLACE FUNCTION increment_view_count(p_media_id UUID)
@@ -112,7 +110,6 @@ SQL_MIGRATIONS = [
     END;
     $$;
     """,
-
     # 6. RLS policies for published_media_likes
     """
     ALTER TABLE published_media_likes ENABLE ROW LEVEL SECURITY;
@@ -153,9 +150,14 @@ for i, sql in enumerate(SQL_MIGRATIONS, 1):
         # Try alternative: use postgrest directly via admin endpoint
         try:
             import httpx
+
             resp = httpx.post(
                 f"{url}/rest/v1/rpc/exec_sql",
-                headers={"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                headers={
+                    "apikey": key,
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
                 json={"sql": sql},
                 timeout=30,
             )
@@ -169,4 +171,6 @@ for i, sql in enumerate(SQL_MIGRATIONS, 1):
 print("\n✅ Migration complete (check warnings above for any issues)")
 print("\nNote: If steps failed because exec_sql RPC doesn't exist,")
 print("run the SQL manually in the Supabase SQL editor:")
-print(f"  {url.replace('.supabase.co', '.supabase.co')}/dashboard/project/{url.split('//')[1].split('.')[0]}/sql")
+print(
+    f"  {url.replace('.supabase.co', '.supabase.co')}/dashboard/project/{url.split('//')[1].split('.')[0]}/sql"
+)

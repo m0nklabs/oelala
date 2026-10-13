@@ -37,10 +37,16 @@ def handler_module(tmp_path_factory):
 def test_workflow_model_names_maps_loader_inputs(handler_module):
     workflow = {
         "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "a.safetensors"}},
-        "2": {"class_type": "LoraLoaderModelOnly", "inputs": {"lora_name": "b.safetensors"}},
+        "2": {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"lora_name": "b.safetensors"},
+        },
         "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": "c.safetensors"}},
         "4": {"class_type": "VAELoader", "inputs": {"vae_name": "d.safetensors"}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"text": "not-a-model.safetensors"}},
+        "5": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": "not-a-model.safetensors"},
+        },
         "6": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["7", 0]}},
     }
     names = handler_module._workflow_model_names(workflow)
@@ -55,7 +61,9 @@ def test_workflow_model_names_maps_loader_inputs(handler_module):
 def test_startup_models_are_only_the_shared_core(handler_module):
     """Checkpoints and turbo LoRAs must not be downloaded at startup."""
     startup = {
-        m["filename"] for m in handler_module.MINIMAX_H3_MODELS if m.get("startup_required")
+        m["filename"]
+        for m in handler_module.MINIMAX_H3_MODELS
+        if m.get("startup_required")
     }
     assert startup == {
         "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
@@ -66,7 +74,9 @@ def test_startup_models_are_only_the_shared_core(handler_module):
     assert "h3ErosMax_beta5_3185144.safetensors" not in startup
 
 
-def test_ensure_workflow_models_downloads_only_referenced_entries(handler_module, monkeypatch):
+def test_ensure_workflow_models_downloads_only_referenced_entries(
+    handler_module, monkeypatch
+):
     """Only registry files the workflow names are fetched; unregistered names are ignored."""
     requested = []
 
@@ -76,9 +86,18 @@ def test_ensure_workflow_models_downloads_only_referenced_entries(handler_module
 
     monkeypatch.setattr(handler_module, "download_model", fake_download)
     workflow = {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "h3ErosMax_beta5_3185144.safetensors"}},
-        "2": {"class_type": "LoraLoaderModelOnly", "inputs": {"lora_name": "user/own.safetensors"}},
-        "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"}},
+        "1": {
+            "class_type": "UNETLoader",
+            "inputs": {"unet_name": "h3ErosMax_beta5_3185144.safetensors"},
+        },
+        "2": {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"lora_name": "user/own.safetensors"},
+        },
+        "3": {
+            "class_type": "CLIPLoader",
+            "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"},
+        },
     }
     downloaded, missing = handler_module.ensure_workflow_models(workflow)
 
@@ -93,7 +112,10 @@ def test_ensure_workflow_models_downloads_only_referenced_entries(handler_module
 def test_ensure_workflow_models_reports_failures(handler_module, monkeypatch):
     monkeypatch.setattr(handler_module, "download_model", lambda model: False)
     workflow = {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "h3ErosMax_beta5_3185144.safetensors"}}
+        "1": {
+            "class_type": "UNETLoader",
+            "inputs": {"unet_name": "h3ErosMax_beta5_3185144.safetensors"},
+        }
     }
     downloaded, missing = handler_module.ensure_workflow_models(workflow)
     assert downloaded == []

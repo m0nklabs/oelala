@@ -44,7 +44,9 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_YAML = REPO_ROOT / "docs" / "model_catalog.yaml"
 CATALOG_MD = REPO_ROOT / "docs" / "MODEL_CATALOG.md"
-COMPUTE_BACKENDS = REPO_ROOT / "src" / "backend" / "generation" / "compute_backends.json"
+COMPUTE_BACKENDS = (
+    REPO_ROOT / "src" / "backend" / "generation" / "compute_backends.json"
+)
 
 ENV_FILE = REPO_ROOT / ".env"
 HF_PRIVATE_MODELS_REPO = "m0nk111/oelala-models"
@@ -87,7 +89,11 @@ QUANT_TOKENS = [
 # reported with family "unknown" instead of a guess.
 FAMILY_PATTERNS = [
     (r"(?i)minimax[-_]h3|h3erosmax|dasiwaminimaxh3", "minimax_h3", "MiniMax-H3"),
-    (r"(?i)wan2\.?2|^wan2_2|^wan2\.2_|wan_2\.1|umt5_xxl_fp16|clip_vision_h", "wan22", "Wan 2.2"),
+    (
+        r"(?i)wan2\.?2|^wan2_2|^wan2\.2_|wan_2\.1|umt5_xxl_fp16|clip_vision_h",
+        "wan22",
+        "Wan 2.2",
+    ),
     (r"(?i)^ltx|ltx2|ltx-|gemma_3_12b", "ltx23", "LTX-2.3"),
     (r"(?i)qwen_image|qwen_2\.5_vl", "qwen_image_edit", "Qwen-Image-Edit 2511"),
     (r"(?i)^ae\.safetensors|flux2", "flux2", "FLUX.2"),
@@ -106,6 +112,7 @@ WORKER_REGISTRIES = [
 
 
 # ─── AST extraction (no imports of the parsed modules) ───────────────────────
+
 
 def _collect_name_literals(ast_tree: ast.AST) -> Dict[str, Any]:
     """Collect simple top-level literal constants (strings/ints) for Name resolution."""
@@ -175,6 +182,7 @@ def parse_env_names(source: str) -> List[str]:
 
 # ─── Ground-truth scans ──────────────────────────────────────────────────────
 
+
 def resolve_local_comfy_root() -> Path:
     """Find the local ComfyUI root from systemd; env override wins."""
     override = os.environ.get("LOCAL_COMFYUI_DIR")
@@ -183,7 +191,10 @@ def resolve_local_comfy_root() -> Path:
     try:
         out = subprocess.run(
             ["systemctl", "show", "comfyui", "-p", "WorkingDirectory", "--value"],
-            capture_output=True, text=True, timeout=10, check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
         ).stdout.strip()
     except (subprocess.SubprocessError, FileNotFoundError):
         out = ""
@@ -223,9 +234,17 @@ def scan_extra_model_roots(comfy_root: Path) -> Dict[str, Dict[str, Any]]:
             if not root.is_dir():
                 continue
             for f in sorted(root.rglob("*")):
-                if f.is_file() and f.suffix in (".safetensors", ".gguf", ".pt", ".pth", ".bin"):
+                if f.is_file() and f.suffix in (
+                    ".safetensors",
+                    ".gguf",
+                    ".pt",
+                    ".pth",
+                    ".bin",
+                ):
                     rel_key = f"{subdir}/{f.name}"
-                    found.setdefault(rel_key, {"size": f.stat().st_size, "root": str(base.name)})
+                    found.setdefault(
+                        rel_key, {"size": f.stat().st_size, "root": str(base.name)}
+                    )
     return found
 
 
@@ -237,7 +256,13 @@ def scan_local_models(comfy_root: Path) -> Dict[str, Dict[str, Any]]:
         return found
     for subdir in sorted(p.name for p in models_root.iterdir() if p.is_dir()):
         for f in sorted((models_root / subdir).rglob("*")):
-            if f.is_file() and f.suffix in (".safetensors", ".gguf", ".pt", ".pth", ".bin"):
+            if f.is_file() and f.suffix in (
+                ".safetensors",
+                ".gguf",
+                ".pt",
+                ".pth",
+                ".bin",
+            ):
                 rel = f"{subdir}/{f.name}"
                 try:
                     size = f.stat().st_size
@@ -266,7 +291,9 @@ def list_hf_repo(repo: str, token: Optional[str]) -> Dict[str, int]:
     return {s.rfilename: (s.size or 0) for s in info.siblings if (s.size or 0) > 0}
 
 
-def probe_remote_models(base_url: str, dirs: List[str], timeout_s: float = 5.0) -> Dict[str, bool]:
+def probe_remote_models(
+    base_url: str, dirs: List[str], timeout_s: float = 5.0
+) -> Dict[str, bool]:
     """Probe a ComfyUI server's /models/<dir> listings; {} when unreachable.
 
     One retry on connection errors: a sleeping/waking box often drops the
@@ -301,6 +328,7 @@ def load_backends() -> List[Dict[str, Any]]:
 
 
 # ─── Catalog assembly ────────────────────────────────────────────────────────
+
 
 def classify(rel_key: str) -> Tuple[str, str, str]:
     """(target_dir, role, (family, base_model)) from '<subdir>/<filename>'."""
@@ -355,7 +383,9 @@ def build_catalog() -> Dict[str, Any]:
     for rel_path, var, label in WORKER_REGISTRIES:
         parsed = parse_module(REPO_ROOT / rel_path, [var])[var] or []
         for entry in parsed:
-            registry_entries.append({**entry, "_worker": label, "_registry_file": rel_path})
+            registry_entries.append(
+                {**entry, "_worker": label, "_registry_file": rel_path}
+            )
             worker_labels[entry["filename"]].append(label)
 
     client = parse_module(
@@ -366,15 +396,22 @@ def build_catalog() -> Dict[str, Any]:
     presets = client["MINIMAX_H3_TURBO_PRESETS"] or {}
 
     app_src = (REPO_ROOT / "src" / "backend" / "app.py").read_text(encoding="utf-8")
-    lora_sources = parse_module(REPO_ROOT / "src" / "backend" / "app.py", ["LORA_HF_SOURCES"])[
-        "LORA_HF_SOURCES"
-    ] or {}
-    utils_src = (
-        (REPO_ROOT / "src" / "backend" / "generation" / "lora_utils.py").read_text(encoding="utf-8")
+    lora_sources = (
+        parse_module(REPO_ROOT / "src" / "backend" / "app.py", ["LORA_HF_SOURCES"])[
+            "LORA_HF_SOURCES"
+        ]
+        or {}
     )
+    utils_src = (
+        REPO_ROOT / "src" / "backend" / "generation" / "lora_utils.py"
+    ).read_text(encoding="utf-8")
     mirror_envs = sorted(
-        {n for src in (app_src, utils_src) for n in parse_env_names(src)
-         if n.startswith("LORA_HF") or n == "HF_LORA_TOKEN"}
+        {
+            n
+            for src in (app_src, utils_src)
+            for n in parse_env_names(src)
+            if n.startswith("LORA_HF") or n == "HF_LORA_TOKEN"
+        }
     )
 
     # Ground truth scans (read-only).
@@ -391,12 +428,23 @@ def build_catalog() -> Dict[str, Any]:
 
     backends = load_backends()
     windows_backend = next(
-        (b for b in backends if b.get("type") == "comfyui" and "windows" in b.get("id", "").lower()),
+        (
+            b
+            for b in backends
+            if b.get("type") == "comfyui" and "windows" in b.get("id", "").lower()
+        ),
         None,
     )
     probe_dirs = [
-        "diffusion_models", "checkpoints", "text_encoders", "vae", "loras",
-        "upscale_models", "controlnet", "clip_vision", "unet",
+        "diffusion_models",
+        "checkpoints",
+        "text_encoders",
+        "vae",
+        "loras",
+        "upscale_models",
+        "controlnet",
+        "clip_vision",
+        "unet",
     ]
     windows_probe = (
         probe_remote_models(windows_backend["base_url"], probe_dirs)
@@ -431,7 +479,9 @@ def build_catalog() -> Dict[str, Any]:
         entry = {**entry, "target_dir": target_dir}
         rel_key = f"{target_dir}/{entry['filename']}"
         item = ensure(rel_key)
-        item["quantization"] = detect_quantization(entry["filename"], entry.get("description", ""))
+        item["quantization"] = detect_quantization(
+            entry["filename"], entry.get("description", "")
+        )
         if entry.get("size_gb"):
             item["size_gb"] = round(float(entry["size_gb"]), 2)
         if entry.get("description"):
@@ -446,7 +496,8 @@ def build_catalog() -> Dict[str, Any]:
                 sources["civitai"] = {"version_id": ver, "file_id": file_id}
         if entry.get("repo") == HF_PRIVATE_MODELS_REPO:
             sources["private_mirror"] = {
-                "repo": HF_PRIVATE_MODELS_REPO, "path": entry["hf_path"],
+                "repo": HF_PRIVATE_MODELS_REPO,
+                "path": entry["hf_path"],
             }
         delivery = "on_demand_download"
         if entry.get("startup_required"):
@@ -454,7 +505,9 @@ def build_catalog() -> Dict[str, Any]:
         elif entry.get("persist_on_volume"):
             delivery = "persisted_on_worker_volume"
         item["available_on"][entry["_worker"]] = delivery
-        item["used_by"].append(f"{entry['_worker']} registry ({entry['_registry_file']})")
+        item["used_by"].append(
+            f"{entry['_worker']} registry ({entry['_registry_file']})"
+        )
 
     for rel_key, info in local_files.items():
         item = ensure(rel_key)
@@ -466,7 +519,11 @@ def build_catalog() -> Dict[str, Any]:
             item["quantization"] = detect_quantization(item["filename"], "")
 
     for rel_path in hf_private_models:
-        rel_key = f"diffusion_models/{rel_path.split('/', 1)[-1]}" if rel_path.startswith("diffusion_models/") else rel_path
+        rel_key = (
+            f"diffusion_models/{rel_path.split('/', 1)[-1]}"
+            if rel_path.startswith("diffusion_models/")
+            else rel_path
+        )
         if "/" not in rel_path or rel_path.count("/") != 1:
             continue
         item = ensure(rel_key)
@@ -518,8 +575,12 @@ def build_catalog() -> Dict[str, Any]:
                         "civitai", {"model_id": str(curated["civitai_model_id"])}
                     )
                 if curated.get("source_url"):
-                    item["sources"].setdefault("civitai_page", {"url": curated["source_url"]})
-                item["used_by"].append("curated usage metadata in docs/lora_registry.yaml")
+                    item["sources"].setdefault(
+                        "civitai_page", {"url": curated["source_url"]}
+                    )
+                item["used_by"].append(
+                    "curated usage metadata in docs/lora_registry.yaml"
+                )
             else:
                 item["used_by"].append("generation API user loras (no usage metadata)")
         if item["family"] == "minimax_h3":
@@ -536,7 +597,9 @@ def build_catalog() -> Dict[str, Any]:
                         f"({spec['steps']} steps, shift {spec.get('shift_video')}/{spec.get('shift_audio')})"
                     )
         # Mirror-aware availability markers.
-        if any(s.get("repo") == HF_PRIVATE_MODELS_REPO for s in item["sources"].values()):
+        if any(
+            s.get("repo") == HF_PRIVATE_MODELS_REPO for s in item["sources"].values()
+        ):
             item["available_on"]["hf_mirror_private"] = True
         if "public_dump" in item["sources"]:
             item["available_on"]["hf_public_dump"] = True
@@ -544,7 +607,9 @@ def build_catalog() -> Dict[str, Any]:
     entries = [keys[k] for k in sorted(keys)]
     for item in entries:
         if item["family"] == "unknown":
-            item["notes"].append("family unverified (no registry source, no pattern match)")
+            item["notes"].append(
+                "family unverified (no registry source, no pattern match)"
+            )
         if windows_verified and item["available_on"]["windows_pc_comfyui"] is False:
             item["notes"].append("not listed on windows_pc_comfyui (probe)")
         if item["size_gb"] is None:
@@ -560,7 +625,9 @@ def build_catalog() -> Dict[str, Any]:
             "hf_private_loras_repo": HF_PRIVATE_LORAS_REPO,
             "hf_public_lora_dump_repo": HF_PUBLIC_LORA_DUMP_REPO,
             "mirror_env_names_from_app_py": mirror_envs,
-            "windows_pc_probe": "verified" if windows_verified else "unreachable during generation (marked unverified)",
+            "windows_pc_probe": "verified"
+            if windows_verified
+            else "unreachable during generation (marked unverified)",
             "counts": {
                 "entries": len(entries),
                 "by_role": dict(sorted(_count(entries, "role").items())),
@@ -579,6 +646,7 @@ def _count(entries: List[Dict[str, Any]], field: str) -> Dict[str, int]:
 
 
 # ─── Rendering ───────────────────────────────────────────────────────────────
+
 
 def _slim(entry: Dict[str, Any]) -> Dict[str, Any]:
     """YAML-safe entry: drop internal keys, keep a stable field order."""
@@ -609,7 +677,8 @@ def render_marketing(catalog: Dict[str, Any]) -> str:
         f"Entries: **{meta['counts']['entries']}** — "
         + ", ".join(f"{k}: {v}" for k, v in meta["counts"]["by_role"].items()),
         "",
-        "Families: " + ", ".join(f"{k}: {v}" for k, v in meta["counts"]["by_family"].items()),
+        "Families: "
+        + ", ".join(f"{k}: {v}" for k, v in meta["counts"]["by_family"].items()),
         "",
         f"Windows-PC probe during generation: {meta['windows_pc_probe']}.",
         "",
@@ -618,12 +687,23 @@ def render_marketing(catalog: Dict[str, Any]) -> str:
     for e in catalog["entries"]:
         by_family[e["family"]].append(e)
     for family in sorted(by_family):
-        lines += [f"## {family}", "", "| filename | role | dir | GB | quant | cloud | local | windows | mirror |", "|---|---|---|---|---|---|---|---|---|"]
+        lines += [
+            f"## {family}",
+            "",
+            "| filename | role | dir | GB | quant | cloud | local | windows | mirror |",
+            "|---|---|---|---|---|---|---|---|---|",
+        ]
         for e in sorted(by_family[family], key=lambda x: (x["role"], x["filename"])):
-            cloud = next((v for k, v in e["available_on"].items() if k.startswith("runpod")), "—")
+            cloud = next(
+                (v for k, v in e["available_on"].items() if k.startswith("runpod")), "—"
+            )
             local = "yes" if e["available_on"].get("local_comfyui_ai_kvm2") else "—"
             win = str(e["available_on"].get("windows_pc_comfyui", "—")).lower()
-            mirror = "private" if e["available_on"].get("hf_mirror_private") else ("dump" if e["available_on"].get("hf_public_dump") else "—")
+            mirror = (
+                "private"
+                if e["available_on"].get("hf_mirror_private")
+                else ("dump" if e["available_on"].get("hf_public_dump") else "—")
+            )
             size = f"{e['size_gb']:.2f}" if e["size_gb"] else "?"
             lines.append(
                 f"| {e['filename']} | {e['role']} | {e['target_dir']} | {size} | {e['quantization']} | {cloud} | {local} | {win} | {mirror} |"
@@ -634,13 +714,17 @@ def render_marketing(catalog: Dict[str, Any]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="verify only; exit 1 on drift")
+    parser.add_argument(
+        "--check", action="store_true", help="verify only; exit 1 on drift"
+    )
     args = parser.parse_args()
 
     catalog = build_catalog()
     yaml_text = yaml.safe_dump(
         {"meta": catalog["meta"], "entries": [_slim(e) for e in catalog["entries"]]},
-        sort_keys=False, allow_unicode=True, width=120,
+        sort_keys=False,
+        allow_unicode=True,
+        width=120,
     )
 
     if args.check:
@@ -649,19 +733,33 @@ def main() -> int:
             return 1
         committed = CATALOG_YAML.read_text(encoding="utf-8")
         if committed == yaml_text:
-            print(f"✅ catalog up to date ({catalog['meta']['counts']['entries']} entries)")
+            print(
+                f"✅ catalog up to date ({catalog['meta']['counts']['entries']} entries)"
+            )
             return 0
-        print("❌ docs/model_catalog.yaml is stale — regenerate with scripts/build_model_catalog.py")
+        print(
+            "❌ docs/model_catalog.yaml is stale — regenerate with scripts/build_model_catalog.py"
+        )
         import difflib
-        for line in list(difflib.unified_diff(
-                committed.splitlines(), yaml_text.splitlines(), "committed", "regenerated", lineterm=""))[:60]:
+
+        for line in list(
+            difflib.unified_diff(
+                committed.splitlines(),
+                yaml_text.splitlines(),
+                "committed",
+                "regenerated",
+                lineterm="",
+            )
+        )[:60]:
             print(line)
         return 1
 
     CATALOG_YAML.write_text(yaml_text, encoding="utf-8")
     CATALOG_MD.write_text(render_marketing(catalog), encoding="utf-8")
-    print(f"✅ wrote {CATALOG_YAML.name} and {CATALOG_MD.name} "
-          f"({catalog['meta']['counts']['entries']} entries)")
+    print(
+        f"✅ wrote {CATALOG_YAML.name} and {CATALOG_MD.name} "
+        f"({catalog['meta']['counts']['entries']} entries)"
+    )
     return 0
 
 
