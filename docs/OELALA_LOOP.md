@@ -232,3 +232,33 @@ not by the Agent-Teams lead preset):
 Verify with `schedule_list`, then prove delivery once with a short `after_seconds`
 test reminder before trusting the 04:00 run. The Host restores a cold Session when
 delivery is due, so the loop survives restarts and missed nights.
+
+### Created state (verified 2026-10-25, DSH home `/home/flip/.dsh-next`)
+
+| Item | Value |
+|---|---|
+| Task id | `schedule-659ef4cb-8e20-4747-bb50-98fab56a4315` |
+| Cadence | daily `04:00:00`, zone `UTC` (= 05:00 CET in winter, 06:00 CEST in summer) |
+| Next run | `2026-10-26T04:00:00Z` |
+| State / mode | `active`, `deliveryMode: host` |
+| Created from | a `standard`-preset session; `schedule_create` is mounted there |
+
+Delivery was proven, not assumed: a one-shot `after_seconds: 120` test reminder
+(`schedule-170ce16c-8da0-40a3-8bb2-6570da33cbf7`) fired 23 ms after its due time
+(`deliveredAt 2026-10-25T22:10:44.174Z`, `messageId f0c95c7f-cd24-4cfa-82d7-e7af72432e94`)
+and was deleted afterwards.
+
+Mechanics behind the guarantee: `dsh-web-next.service` (port 3040) runs persistently
+and owns the scheduler; `@deepseek-ai/dsh-schedule` resolves the bound session with
+`sessionController.resolveAgent(task.sessionId)` when a task is due, and a daily task
+that missed several days delivers only its latest occurrence. If that unit is down at
+04:00 UTC the night is missed — check `systemctl --user is-active dsh-web-next` when a
+night looks silent.
+
+The guardian loop uses the same convention: task
+`schedule-9ddb2f08-3237-4b56-bb6c-69b4f0dd137c`, daily `04:00:00` UTC, procedure in
+`/home/flip/guardian-llmprovider-gateway/docs/GUARDIAN_LOOP.md`.
+
+Because the procedure lives only on branch `docs/oelala-loop-procedure` until PR #211
+merges, the reminder prompt resolves this file in order: the loop worktree, then
+`/home/flip/oelala/docs/OELALA_LOOP.md` (read-only operator-clone copy), then PR #211.
