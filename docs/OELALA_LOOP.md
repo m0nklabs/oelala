@@ -54,7 +54,7 @@ gateway, the DSH harness) is out of scope, even when it looks related.
    recommendation in the report.
 4. **Never touch the operator clone** `$HOME/oelala` (dirty tree = their work), never
    stash/checkout/reset/clean it.
-5. **Never touch `/home/flip/venvs`** (production runtime, `chattr +i`) and never run
+5. **Never touch `$HOME/venvs`** (production runtime, `chattr +i`) and never run
    `npm run dev`, `uvicorn` or `python main.py` — services are systemd-only.
 6. **Frigate is hands off** (security cameras, 24/7): read-only config, never "fix" it.
 7. **Never touch another repository.** Cross-project findings are reported, not fixed.
@@ -233,7 +233,7 @@ Verify with `schedule_list`, then prove delivery once with a short `after_second
 test reminder before trusting the 04:00 run. The Host restores a cold Session when
 delivery is due, so the loop survives restarts and missed nights.
 
-### Created state (verified 2026-10-25, DSH home `/home/flip/.dsh-next`)
+### Created state (verified 2026-10-25, DSH home `$HOME/.dsh-next`)
 
 | Item | Value |
 |---|---|
@@ -248,17 +248,17 @@ Delivery was proven, not assumed: a one-shot `after_seconds: 120` test reminder
 (`deliveredAt 2026-10-25T22:10:44.174Z`, `messageId f0c95c7f-cd24-4cfa-82d7-e7af72432e94`)
 and was deleted afterwards.
 
-Mechanics behind the guarantee: `dsh-web-next.service` (port 3040) runs persistently
-and owns the scheduler; `@deepseek-ai/dsh-schedule` resolves the bound session with
-`sessionController.resolveAgent(task.sessionId)` when a task is due, and a daily task
-that missed several days delivers only its latest occurrence. If that unit is down at
-04:00 UTC the night is missed — check `systemctl --user is-active dsh-web-next` when a
-night looks silent.
+Mechanics behind the guarantee: the `dsh-web-next.service` unit for this DSH home runs
+persistently and owns the scheduler; `@deepseek-ai/dsh-schedule` resolves the bound
+session with `sessionController.resolveAgent(task.sessionId)` when a task is due, and a
+daily task that missed several days delivers only its latest occurrence. If that unit is
+down at 04:00 UTC the night is missed — check
+`systemctl --user is-active dsh-web-next` when a night looks silent.
 
 The guardian loop uses the same convention: task
 `schedule-9ddb2f08-3237-4b56-bb6c-69b4f0dd137c`, daily `04:00:00` UTC, procedure in
-`/home/flip/guardian-llmprovider-gateway/docs/GUARDIAN_LOOP.md`.
+`$HOME/guardian-llmprovider-gateway/docs/GUARDIAN_LOOP.md`.
 
 Because the procedure lives only on branch `docs/oelala-loop-procedure` until PR #211
 merges, the reminder prompt resolves this file in order: the loop worktree, then
-`/home/flip/oelala/docs/OELALA_LOOP.md` (read-only operator-clone copy), then PR #211.
+`$HOME/oelala/docs/OELALA_LOOP.md` (read-only operator-clone copy), then PR #211.
