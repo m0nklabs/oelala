@@ -23,8 +23,10 @@ python-multipart==0.0.32
 python-dotenv==1.2.4
 sentry-sdk==2.72.0
 
-# Auth: auth.py decodes Supabase JWTs via PyJWT + JWKS
-PyJWT==2.15.1
+# Auth: auth.py decodes Supabase JWTs via JWKS, i.e. asymmetric RS/ES algorithms.
+# The [crypto] extra pins `cryptography` explicitly instead of relying on it arriving
+# incidentally through another package - without it PyJWT raises at decode time.
+PyJWT[crypto]==2.15.1
 
 # Imaging (Pillow is imported at app startup)
 pillow==13.0.0

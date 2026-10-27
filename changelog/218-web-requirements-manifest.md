@@ -1,8 +1,8 @@
 ### Added
 
 - `requirements-web.txt` — the web/API runtime (fastapi, uvicorn, python-dotenv,
-  sentry-sdk, PyJWT, Pillow, python-multipart, httpx, minio, websocket-client, pyyaml,
-  requests, cachetools, supabase), verified on Python 3.12 without torch.
+  sentry-sdk, PyJWT[crypto], Pillow, python-multipart, httpx, minio, websocket-client,
+  pyyaml, requests, cachetools, supabase), verified on Python 3.12 without torch.
   `requirements.txt` remains the GPU/ML stack; a full backend installs both.
 
 ### Changed
