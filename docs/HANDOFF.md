@@ -163,3 +163,23 @@ Not yet verified end-to-end:
 # services (systemd only)
 sudo -n systemctl restart oelala-backend oelala-frontend
 ```
+
+## 8. Dependency manifest: GPU stack vs web stack
+
+`requirements.txt` is the **GPU/ML** stack only (torch, transformers, triton, opencv,
+minio, …); it cannot install the FastAPI backend on its own. The web/API runtime lives in
+**`requirements-web.txt`** (fastapi, uvicorn, python-dotenv, sentry-sdk, PyJWT, Pillow,
+python-multipart, httpx, minio, websocket-client, pyyaml, requests, cachetools, supabase).
+
+| Host | Install |
+|---|---|
+| Full backend (GPU, production) | `requirements.txt` **and** `requirements-web.txt` |
+| CI / non-GPU box / import check | `requirements-web.txt` alone (no torch) |
+
+Verified 2026-10-27 on Python 3.12 in a clean venv: `import app` succeeds with no torch
+installed, and `pytest tests/test_app_security_helpers.py` → 40 passed. CI now installs
+`requirements-web.txt` and runs `import app` as a hard step, so a missing pin fails the
+job instead of being skipped.
+
+Known gap, tracked separately: `app.py` still lazily imports a `supabase_utils` module
+that does not exist in the tree.
