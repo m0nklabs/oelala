@@ -156,8 +156,9 @@ remote branches (state 2026-10-25, ahead/behind vs `origin/main`):
 
 Per branch, oldest first, decide with evidence and report the decision:
 
-- **still wanted** → rebase onto `origin/main`, verify, open one PR (`Closes #<issue>`,
-  creating the issue first when none exists);
+- **still wanted** → rebase onto `origin/main` and push the result to a **new** branch
+  (e.g. `revive/<slug>`) — never force-push the existing remote branch, see §1.2 — then
+  verify and open one PR (`Closes #<issue>`, creating the issue first when none exists);
 - **already superseded** (its change is on `main` in another form, or the model/feature
   was retired — e.g. Wan 2.2 retired 2026-10-01) → report it as superseded with the
   commit or doc that proves it, and recommend deletion to the operator. Do not delete.
@@ -237,16 +238,14 @@ delivery is due, so the loop survives restarts and missed nights.
 
 | Item | Value |
 |---|---|
-| Task id | `schedule-659ef4cb-8e20-4747-bb50-98fab56a4315` |
+| Task id | `<schedule-task-id>` — resolve with `schedule_list` |
 | Cadence | daily `04:00:00`, zone `UTC` (= 05:00 CET in winter, 06:00 CEST in summer) |
-| Next run | `2026-10-26T04:00:00Z` |
+| Next run | `<next-run-iso8601>` — resolve with `schedule_list` |
 | State / mode | `active`, `deliveryMode: host` |
 | Created from | a `standard`-preset session; `schedule_create` is mounted there |
 
 Delivery was proven, not assumed: a one-shot `after_seconds: 120` test reminder
-(`schedule-170ce16c-8da0-40a3-8bb2-6570da33cbf7`) fired 23 ms after its due time
-(`deliveredAt 2026-10-25T22:10:44.174Z`, `messageId f0c95c7f-cd24-4cfa-82d7-e7af72432e94`)
-and was deleted afterwards.
+(`<test-task-id>`) fired within milliseconds of its due time and was deleted afterwards.
 
 Mechanics behind the guarantee: the `dsh-web-next.service` unit for this DSH home runs
 persistently and owns the scheduler; `@deepseek-ai/dsh-schedule` resolves the bound
@@ -255,10 +254,10 @@ daily task that missed several days delivers only its latest occurrence. If that
 down at 04:00 UTC the night is missed — check
 `systemctl --user is-active dsh-web-next` when a night looks silent.
 
-The guardian loop uses the same convention: task
-`schedule-9ddb2f08-3237-4b56-bb6c-69b4f0dd137c`, daily `04:00:00` UTC, procedure in
+The guardian loop uses the same convention: one daily `04:00:00` UTC task (id via
+`schedule_list`, title `Guardian loop — nightly development run`), procedure in
 `$HOME/guardian-llmprovider-gateway/docs/GUARDIAN_LOOP.md`.
 
-Because the procedure lives only on branch `docs/oelala-loop-procedure` until PR #211
-merges, the reminder prompt resolves this file in order: the loop worktree, then
-`$HOME/oelala/docs/OELALA_LOOP.md` (read-only operator-clone copy), then PR #211.
+The reminder prompt resolves this file in order: the loop worktree (which tracks
+`origin/main` once this branch is merged), then `$HOME/oelala/docs/OELALA_LOOP.md`
+(read-only operator-clone copy).
