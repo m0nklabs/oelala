@@ -56,6 +56,11 @@ __pycache__/
 .eggs/
 *.egg
 
+# coverage artifacts (the CI backend job runs pytest --cov)
+.coverage
+.coverage.*
+coverage.xml
+
 # ======================
 # IDE / EDITOR
 # ======================

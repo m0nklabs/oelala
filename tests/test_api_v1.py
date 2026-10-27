@@ -88,7 +88,13 @@ def mock_supabase():
         manager.get_balance = mock_get_balance
 
         mock.return_value = manager
-        yield manager
+
+        # ``api_v1`` binds this name at import time (``from credits import ...``), so
+        # patching ``credits`` alone does not reach it once the module has already been
+        # imported by an earlier test module — this test then talks to the real manager
+        # and fails with a 500. Patch the binding where it is actually used.
+        with patch("api_v1.get_credit_manager", return_value=manager):
+            yield manager
 
 
 @pytest.fixture

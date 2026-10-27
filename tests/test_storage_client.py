@@ -415,6 +415,11 @@ class TestPresignedUrls:
             access_key="test",
             secret_key="test",
         )
+        # ``presigned_get``/``presigned_put`` prefer ``_minio_public`` when a public
+        # endpoint is configured (line 562/590). Leaving the real client in place makes
+        # these tests talk to the live MinIO — S3Error: InvalidAccessKeyId — instead of
+        # the mock injected below.
+        self.client._minio_public = None
 
     def test_presigned_get(self):
         mock_minio = MagicMock()
