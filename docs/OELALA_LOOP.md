@@ -106,7 +106,7 @@ For each open PR, oldest-updated first:
 
 ```bash
 gh pr view <N> -R m0nklabs/oelala --json reviews,comments,files,commits,statusCheckRollup,reviewDecision,headRefName,headRefOid
-gh api repos/m0nklabs/oelala/pulls/<N>/comments        # inline review threads
+gh api --paginate "repos/m0nklabs/oelala/pulls/<N>/comments?per_page=100"  # ALL inline threads
 gh pr checks <N> -R m0nklabs/oelala
 ```
 
@@ -116,7 +116,15 @@ depends on the local upstream config and can miss the PR entirely):
 
 ```bash
 git fetch origin --prune
-git switch -C "review/<N>-<headRefName>" "origin/<headRefName>"
+BR="review/<N>-<headRefName>"
+# A previous run may have committed but failed to push. The worktree is clean again by
+# then, so `switch -C` would silently point the branch away from those commits:
+# refuse instead of destroying an earlier run's work.
+if git rev-parse --verify --quiet "$BR" >/dev/null &&
+   ! git merge-base --is-ancestor "$BR" "origin/<headRefName>"; then
+    echo "BLOCKED: $BR holds commits that are not in origin/<headRefName>"; exit 1
+fi
+git switch -C "$BR" "origin/<headRefName>"
 test "$(git rev-parse HEAD)" = "<headRefOid>" || { echo "head mismatch"; exit 1; }
 # … fix, test, commit …
 git push origin HEAD:<headRefName>
