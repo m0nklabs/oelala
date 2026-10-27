@@ -25,8 +25,15 @@ Work only inside the loop worktree:
 
 ```bash
 export WT="${OELALA_LOOP_WT:-$HOME/oelala-loop}"
-cd "$WT" && git fetch origin --prune && git switch loop/workspace && git pull --ff-only
+cd "$WT"
+git status --porcelain          # MUST be empty; anything here = report blocked and stop
+git fetch origin --prune
+git switch loop/workspace && git pull --ff-only
 ```
+
+The cleanliness check comes **first**. `git switch` and `git pull` both succeed with local
+edits present as long as they do not overlap the incoming changes, so a dirty worktree
+would otherwise be modified before §3 gets a chance to stop the run.
 
 ## 1. Scope and autonomy boundary
 
@@ -98,9 +105,21 @@ systemctl is-active oelala-backend oelala-frontend comfyui minio
 For each open PR, oldest-updated first:
 
 ```bash
-gh pr view <N> -R m0nklabs/oelala --json reviews,comments,files,commits,statusCheckRollup,reviewDecision
+gh pr view <N> -R m0nklabs/oelala --json reviews,comments,files,commits,statusCheckRollup,reviewDecision,headRefName,headRefOid
 gh api repos/m0nklabs/oelala/pulls/<N>/comments        # inline review threads
 gh pr checks <N> -R m0nklabs/oelala
+```
+
+Work on the **PR head**, never on `loop/workspace`: check it out explicitly and verify the
+SHA before touching anything, then push back to that exact head branch (a bare `git push`
+depends on the local upstream config and can miss the PR entirely):
+
+```bash
+git fetch origin --prune
+git switch -C "review/<N>-<headRefName>" "origin/<headRefName>"
+test "$(git rev-parse HEAD)" = "<headRefOid>" || { echo "head mismatch"; exit 1; }
+# … fix, test, commit …
+git push origin HEAD:<headRefName>
 ```
 
 PR-Piet is wired through `.github/workflows/pr-piet.yml` → reusable
@@ -120,9 +139,13 @@ For every finding in the latest PR-Piet review **at the current head SHA**:
 Then one coherent batch per PR:
 
 ```bash
-python3 -m pytest tests/ -x -q          # or the targeted subset; GPU tests stay in tests/gpu
+# pytest.ini registers the `gpu`/`integration` markers but does not exclude them, and
+# tests/gpu calls the live backend and ComfyUI (POSTs included). Exclude both here;
+# GPU/integration runs belong to the dedicated runner.
+$HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
+    --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
 ruff check src/                          # plus ruff format --check on touched files
-git commit … && git push                 # branch only
+git commit … && git push origin HEAD:<headRefName>   # branch only
 gh pr comment <N> -R m0nklabs/oelala --body '/review'
 ```
 
@@ -263,6 +286,13 @@ The guardian loop keeps the earlier convention: one daily `04:00:00` UTC task (i
 `schedule_list`, title `Guardian loop — nightly development run`), procedure in
 `$HOME/guardian-llmprovider-gateway/docs/GUARDIAN_LOOP.md`.
 
-The reminder prompt resolves this file in order: the loop worktree (which tracks
-`origin/main` once this branch is merged), then `$HOME/oelala/docs/OELALA_LOOP.md`
-(read-only operator-clone copy).
+The reminder prompt resolves this file in order, and **only** from permitted sources:
+
+1. `$WT/docs/OELALA_LOOP.md` — the loop worktree, which tracks `origin/main` once this
+   branch is merged;
+2. `git show origin/main:docs/OELALA_LOOP.md` — the merged copy on `origin`;
+3. `git show origin/docs/oelala-loop-procedure:docs/OELALA_LOOP.md` — this branch on
+   `origin` while the PR is still open.
+
+The operator clone `$HOME/oelala` is **never** consulted (§1.4), not even read-only. If
+none of the three resolve, report blocked (§9) instead of looking elsewhere.
