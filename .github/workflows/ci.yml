@@ -101,9 +101,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install web dependencies
         run: |
           python -m pip install --upgrade pip
+          # Hard install: this manifest must be able to run the backend. A missing
+          # pin here has to fail the job, not be skipped.
+          python -m pip install -r requirements-web.txt
+          python -m pip install pytest pytest-asyncio pytest-cov
+
+      - name: Backend imports (manifest drift check)
+        run: |
+          python -c "import sys; sys.path.insert(0, 'src/backend'); import app"
+
+      - name: Install dependencies
+        run: |
           # Install only the backend requirements, skip heavy ML deps
           pip install ruff pytest pytest-cov httpx fastapi uvicorn python-multipart || true
           # Try to install from requirements, continue if it fails (disk space)

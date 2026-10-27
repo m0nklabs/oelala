@@ -1,0 +1,48 @@
+# ============================================
+# OELALA - Web/API runtime requirements (no ML stack)
+# ============================================
+# Everything needed to import `src/backend/app.py`, serve the FastAPI app and run
+# the API-level tests WITHOUT torch/transformers/ComfyUI. No GPU required.
+#
+# Use this file for:
+#   - CI (small, fast install that proves the backend still imports),
+#   - a non-GPU host or a development box,
+#   - diagnosing "which dependency is missing" (requirements.txt is GPU-only).
+#
+# A full backend host installs BOTH files: requirements.txt (GPU stack) and this one.
+#
+# Verified together on Python 3.12 (2026-10-27): clean venv, `import app` OK,
+# `pytest tests/test_app_security_helpers.py` -> 40 passed, no torch installed.
+
+# Web framework + ASGI server + multipart form/file uploads
+fastapi==0.147.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+
+# Configuration (.env loading) and error reporting
+python-dotenv==1.2.4
+sentry-sdk==2.72.0
+
+# Auth: auth.py decodes Supabase JWTs via JWKS, i.e. asymmetric RS/ES algorithms.
+# The [crypto] extra is what makes PyJWT able to verify those signatures at all
+# (without it: raises at decode time, invisible to an import check). The extra only
+# declares a lower bound, so `cryptography` is pinned explicitly below to keep this
+# set reproducible.
+PyJWT[crypto]==2.15.1
+cryptography==50.0.2
+
+# Imaging (Pillow is imported at app startup)
+pillow==13.0.0
+
+# HTTP, S3-compatible storage, websockets, YAML
+# (same pins as requirements.txt; repeated so this file stands on its own)
+httpx==0.28.1
+minio==7.2.20
+websocket-client==1.9.2
+pyyaml==6.0.3
+requests==2.34.2
+cachetools==7.2.6
+
+# Supabase SDK: imported lazily by gallery_api, so the app imports without it but
+# gallery / published-media code paths raise ImportError at call time.
+supabase==2.33.0
