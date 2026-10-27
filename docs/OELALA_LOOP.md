@@ -1,23 +1,24 @@
-# Oelala Loop — nightly development procedure (cold file)
+# Oelala Loop — development run procedure (cold file)
 
-> Executed by the daily reminder bound to the **oelala-loop Session** at **04:00 UTC**.
-> This file is the authoritative procedure: the reminder only says "run the oelala
-> loop", so a compacted or restored Session re-reads this document and continues here.
+> Executed by a cron reminder bound to the **oelala-loop Session**: **4× per day at
+> 04:00, 10:00, 16:00 and 22:00 UTC**. This file is the authoritative procedure: the
+> reminder only says "run the oelala loop", so a compacted or restored Session re-reads
+> this document and continues here.
 >
-> Operator decisions baked in (2026-10-25): autonomy **everything except merge**;
-> cadence **04:00 UTC daily** (same convention as the guardian loop); scope
-> **this repository only**.
+> Operator decisions baked in: autonomy **everything except merge** and scope **this
+> repository only** (2026-10-25); cadence **4× per day** (2026-10-27, replacing the
+> single 04:00 UTC nightly run — the guardian loop still runs once at 04:00 UTC).
 
 ## 0. Environment (verified 2026-10-25)
 
 | Fact | Value |
 |---|---|
 | Repository | `m0nklabs/oelala` (public; root `README.md` is a deliberate privacy decoy — never "fix" it) |
-| Tracking issue | **#210** — "Oelala loop — nightly run log (04:00 UTC)"; the run report goes there |
+| Tracking issue | **#210** — the run log (one report per run, heading carries the run time) |
 | Loop worktree | `$HOME/oelala-loop` — branch `loop/workspace`, tracks `origin/main` |
 | Operator clone | `$HOME/oelala` — **hands off**: it carries the operator's uncommitted work |
 | Truth for code | `origin/main` (fetch first; the operator clone is often behind) |
-| Test tooling | system `python3` has `fastapi` + `pytest`; `ruff` 0.15.15 on PATH. No project `.venv` — do not create a heavy one |
+| Test tooling | `ruff` 0.15.15 on PATH. The system `python3` **cannot** import `app` (no `sentry_sdk`); for a real test run use the read-only GPU venv `$HOME/venvs/gpu/bin/python -m pytest`, or a throwaway venv from `requirements-web.txt`. No project `.venv` — do not create a heavy one |
 | GPU venv | `$HOME/venvs/gpu` is production-critical (`chattr +i`) — read-only use only, never delete/move/recreate |
 
 Work only inside the loop worktree:
@@ -41,7 +42,7 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 - request PR-Piet reviews (`/review`, `/describe`, `/improve`, `/review2`) from the
   human `gh` account (`m0nk111`) after each push;
 - open issues that describe verified defects or the next roadmap step;
-- comment the nightly report on the tracking issue.
+- comment the run report on the tracking issue.
 
 **Not granted (hard stops):**
 
@@ -61,14 +62,17 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 8. **Never commit secrets**; never add private IPs, hostnames or environment-specific
    values to committed files (read them from `.env` / `compute_backends.json`).
 
-## 2. Budget per night
+## 2. Budget per run
 
-Bounded so a run stays reviewable and cheap:
+Four runs a day multiply everything, so the budget is **per run** and deliberately small:
 
 - **all** open-PR remediation (batched: one coherent tested push per PR head);
 - **at most one** new implementation (one issue or one roadmap step), from a branch
   off `origin/main`;
 - **at most one** pipeline-seeding action (§5) when PRs and issues are empty;
+- **no new PR while 3 or more loop PRs are already open awaiting human merge** — the
+  merge queue, not the agent, is the bottleneck. In that state, deepen what is open
+  (findings, verification, evidence) and report the queue instead of opening more;
 - no speculative refactors, dependency bumps or cleanup outside the task at hand.
 
 A finished short run beats a long speculative one. "Nothing to do" is a valid,
@@ -175,11 +179,12 @@ evidence links), then implement it in the same run — **one step maximum**.
 
 ## 7. Phase 4 — Report
 
-Post one comment on the tracking issue **#210 "Oelala loop — nightly run log (04:00 UTC)"**
-in `m0nklabs/oelala` (`gh issue comment 210 --body-file <tmp>`):
+Post one comment on the tracking issue **#210** in `m0nklabs/oelala`
+(`gh issue comment 210 --body-file <tmp>`). With four runs a day the heading must carry
+the actual run time, otherwise the log becomes unreadable:
 
 ```markdown
-## Run <YYYY-MM-DD> 04:00 UTC
+## Run <YYYY-MM-DD HH:MM> UTC
 - window: <start> → <end> UTC
 - PRs: #<n> <one line: what changed / settled / blocked> (or "none open")
 - issues: #<n> <state after the run> (or "no executable issue")
@@ -224,22 +229,22 @@ not by the Agent-Teams lead preset):
 
 ```json
 {
-  "title": "Oelala loop — nightly development run",
-  "daily": { "time": "04:00:00", "time_zone": "UTC" },
-  "prompt": "Oelala loop run. Read <repo>/docs/OELALA_LOOP.md and execute it end-to-end for today, exactly as written: preflight in the loop worktree, open-PR remediation incl. PR-Piet suggestions and /review requests, open issues, at most one implementation (or one pipeline-seeding action when nothing is open), then post the run report as a comment on the tracking issue. Hard stops: never merge a PR, never push to main, never force-push, never approve, never restart any systemd unit, never touch the operator clone or another repository."
+  "title": "Oelala loop — development run",
+  "cron": { "expression": "0 4,10,16,22 * * *", "time_zone": "UTC" },
+  "prompt": "Oelala loop run. Read <repo>/docs/OELALA_LOOP.md and execute it end-to-end for THIS run, exactly as written: preflight in the loop worktree, open-PR remediation incl. PR-Piet suggestions and /review requests, open issues, at most one implementation (or one pipeline-seeding action when nothing is open), then post a run report as a comment on the tracking issue whose heading carries this run's UTC date and time. Hard stops: never merge a PR, never push to main, never force-push, never approve, never restart any systemd unit, never touch the operator clone or another repository."
 }
 ```
 
 Verify with `schedule_list`, then prove delivery once with a short `after_seconds`
-test reminder before trusting the 04:00 run. The Host restores a cold Session when
-delivery is due, so the loop survives restarts and missed nights.
+test reminder before trusting the schedule. The Host restores a cold Session when
+delivery is due, so the loop survives restarts and missed runs.
 
 ### Created state (verified 2026-10-25, DSH home `$HOME/.dsh-next`)
 
 | Item | Value |
 |---|---|
 | Task id | `<schedule-task-id>` — resolve with `schedule_list` |
-| Cadence | daily `04:00:00`, zone `UTC` (= 05:00 CET in winter, 06:00 CEST in summer) |
+| Cadence | cron `0 4,10,16,22 * * *`, zone `UTC` (= 05:00/11:00/17:00/23:00 CET in winter, one hour later in CEST) |
 | Next run | `<next-run-iso8601>` — resolve with `schedule_list` |
 | State / mode | `active`, `deliveryMode: host` |
 | Created from | a `standard`-preset session; `schedule_create` is mounted there |
@@ -250,11 +255,11 @@ Delivery was proven, not assumed: a one-shot `after_seconds: 120` test reminder
 Mechanics behind the guarantee: the `dsh-web-next.service` unit for this DSH home runs
 persistently and owns the scheduler; `@deepseek-ai/dsh-schedule` resolves the bound
 session with `sessionController.resolveAgent(task.sessionId)` when a task is due, and a
-daily task that missed several days delivers only its latest occurrence. If that unit is
-down at 04:00 UTC the night is missed — check
-`systemctl --user is-active dsh-web-next` when a night looks silent.
+recurring task that missed several slots delivers only its latest missed occurrence — it
+does not catch up on all four. If that unit is down at a slot the run is missed for good:
+check `systemctl --user is-active dsh-web-next` when runs look silent.
 
-The guardian loop uses the same convention: one daily `04:00:00` UTC task (id via
+The guardian loop keeps the earlier convention: one daily `04:00:00` UTC task (id via
 `schedule_list`, title `Guardian loop — nightly development run`), procedure in
 `$HOME/guardian-llmprovider-gateway/docs/GUARDIAN_LOOP.md`.
 
