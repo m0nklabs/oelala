@@ -19,10 +19,11 @@ MinIO, Supabase or a GPU:
 """
 
 import base64
+import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,7 +31,28 @@ import pytest
 backend_dir = Path(__file__).parent.parent / "src" / "backend"
 sys.path.insert(0, str(backend_dir))
 
-import app as backend  # noqa: E402
+
+def _import_app_without_startup_recovery():
+    """Import the backend app without letting startup recovery touch live state.
+
+    ``app`` calls ``face_train_service.recover_stuck_jobs()`` while it is being
+    imported. That function marks every ``running`` training job as ``failed`` and
+    rewrites the job index, so merely collecting this module in an operational
+    checkout would corrupt someone's active training job. Stub the call out first.
+
+    ``app`` already tolerates a missing ``face_train_service``, so if the module is
+    not importable here we simply import ``app`` (and there is nothing to stub).
+    """
+    try:
+        import face_train_service
+    except ImportError:
+        return importlib.import_module("app")
+
+    with patch.object(face_train_service, "recover_stuck_jobs", return_value=0):
+        return importlib.import_module("app")
+
+
+backend = _import_app_without_startup_recovery()
 
 
 USER_ID = "11111111-2222-3333-4444-555555555555"
