@@ -68,6 +68,15 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 7. **Never touch another repository.** Cross-project findings are reported, not fixed.
 8. **Never commit secrets**; never add private IPs, hostnames or environment-specific
    values to committed files (read them from `.env` / `compute_backends.json`).
+9. **Never use `git stash` in the loop worktree.** It shares `.git` with the operator
+   clone (`git rev-parse --git-common-dir` → `$HOME/oelala/.git`), so `refs/stash` is one
+   stack for both checkouts: a `stash pop` here can pull the operator's WIP into this
+   tree and a `stash drop` can destroy it. Park work on a throwaway branch instead.
+   (2026-10-27: exactly that happened. A dropped stash becomes unreachable and is only
+   recoverable until Git garbage-collects it — `gc.pruneExpire` defaults to two weeks,
+   but `gc --prune=now` is immediate. Recover promptly with
+   `git stash store -m "<message>" <sha>` using the sha the drop printed; after pruning
+   the work is gone, so recovery is a race, not a guarantee.)
 
 ## 2. Budget per run
 
