@@ -110,6 +110,24 @@ class FakeEditAdapter(GenerationAdapter):
         )
 
 
+class _FakeUser:
+    """Minimal stand-in for ``auth.User`` — dispatch only reads ``user.id``."""
+
+    id = "00000000-0000-4000-8000-000000000000"
+    email = "test@example.invalid"
+
+
+async def _fake_current_user(request=None, credentials=None):
+    """Authenticated user for the v2 tests.
+
+    Without this the endpoint resolves ``user=None``, and
+    ``GenerationRouter.dispatch`` fails on ``user.id`` before it ever reaches the
+    adapter resolution these tests are about — the request then returns a generic
+    500 instead of the expected 200/400.
+    """
+    return _FakeUser()
+
+
 @pytest.fixture
 def test_app():
     """Create a FastAPI test app with v2 endpoints."""
@@ -127,7 +145,7 @@ def test_app():
     init_v2_api(
         registry=registry,
         gen_router=gen_router,
-        get_current_user=None,
+        get_current_user=_fake_current_user,
         check_credits=mock_check_credits,
         deduct_credits=mock_deduct_credits,
     )

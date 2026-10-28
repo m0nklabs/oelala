@@ -79,20 +79,11 @@ jobs:
     needs: [autofix]
     if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
 
-    # Note: Uses locally running postgres container (cryptotrader-postgres)
-    # instead of GitHub Actions services (not supported on self-hosted)
-
-    env:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/cryptotrader_test
-      BITFINEX_API_KEY: ${{ secrets.BITFINEX_API_KEY }}
-      BITFINEX_API_SECRET: ${{ secrets.BITFINEX_API_SECRET }}
-      PAPER_TRADING: "true"
+    # This job is a real gate: every step fails the build. The GPU and integration
+    # suites are deliberately out of scope here — they need a live ComfyUI / MinIO /
+    # Supabase and belong on the dedicated runner (`-m gpu` / `-m integration`).
 
     steps:
-      - name: Check postgres
-        run: |
-          pg_isready -h localhost -p 5432 || echo "Warning: postgres not running"
-
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -107,18 +98,11 @@ jobs:
           # Hard install: this manifest must be able to run the backend. A missing
           # pin here has to fail the job, not be skipped.
           python -m pip install -r requirements-web.txt
-          python -m pip install pytest pytest-asyncio pytest-cov
+          python -m pip install pytest pytest-asyncio pytest-cov ruff
 
       - name: Backend imports (manifest drift check)
         run: |
           python -c "import sys; sys.path.insert(0, 'src/backend'); import app"
-
-      - name: Install dependencies
-        run: |
-          # Install only the backend requirements, skip heavy ML deps
-          pip install ruff pytest pytest-cov httpx fastapi uvicorn python-multipart || true
-          # Try to install from requirements, continue if it fails (disk space)
-          pip install --no-deps -r requirements.txt 2>/dev/null || echo "Skipping heavy deps"
 
       - name: Lint
         run: |
@@ -126,15 +110,9 @@ jobs:
 
       - name: Unit Tests
         run: |
-          # Run tests if possible, skip if dependencies missing
-          pytest -q tests/ -m "not integration" --ignore=tests/integration 2>/dev/null || echo "Tests skipped (dependencies not installed)"
-        continue-on-error: true
-
-      - name: Integration Tests
-        if: ${{ env.BITFINEX_API_KEY != '' }}
-        run: |
-          pytest -q tests/ -m "integration" --tb=short 2>/dev/null || true
-        continue-on-error: true
+          pytest tests/ -q --cov=src/backend --cov-report=xml \
+            --ignore=tests/gpu --ignore=tests/manual \
+            -m "not gpu and not integration"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6

@@ -158,6 +158,21 @@ def no_startup_client(client):
     return client[0]
 
 
+def _registered_paths(client) -> set[str]:
+    """Paths registered on the app under test.
+
+    FastAPI 0.147 mounts included routers as route objects that carry no ``path``
+    attribute, so the obvious ``{route.path for route in app.routes}`` raises
+    ``AttributeError`` and the assertion never runs. Entries without a path are
+    not routes this module makes claims about, so they are dropped.
+    """
+    return {
+        path
+        for path in (getattr(route, "path", None) for route in client.app.routes)
+        if path
+    }
+
+
 def _assert_retired_message(detail: str) -> None:
     """Every retirement error must name the live families."""
     assert "retired" in detail.lower(), detail
@@ -182,7 +197,7 @@ class TestRetiredWan22Routes:
 
     def test_retired_routes_are_registered_not_removed(self, no_startup_client):
         """A bare 404 would be a worse experience than an explicit 400."""
-        registered = {route.path for route in no_startup_client.app.routes}
+        registered = _registered_paths(no_startup_client)
         for path in RETIRED_WAN22_ROUTES:
             assert path in registered, f"{path} disappeared from the v1 surface"
 
@@ -197,7 +212,7 @@ class TestRemovedWanInventoryRoute:
     """
 
     def test_unet_models_route_is_gone(self, no_startup_client):
-        registered = {route.path for route in no_startup_client.app.routes}
+        registered = _registered_paths(no_startup_client)
         assert "/unet-models" not in registered
         assert no_startup_client.get("/unet-models").status_code == 404
 
