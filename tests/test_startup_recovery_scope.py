@@ -73,9 +73,19 @@ def test_startup_hook_still_recovers_orphaned_jobs(tmp_path):
     jobs_dir = tmp_path / "jobs"
     index = _seed_running_job(jobs_dir)
 
+    # The hook also awaits the ComfyUI history backfill, which makes its own HTTP request
+    # to the configured ComfyUI and writes data/generation_times.json when it finds new
+    # outputs. Left alone it makes this regression test depend on a live ComfyUI and lets
+    # it rewrite operational state — the very thing the module under test is guarding.
+    backfill = AsyncMock(return_value=0)
+
     with (
         patch.object(face_train_service, "JOBS_DIR", jobs_dir),
         patch.object(face_train_service, "JOBS_INDEX", index),
+        patch(
+            "websocket_handler.backfill_generation_times_from_comfyui",
+            backfill,
+        ),
         patch.object(
             app_module,
             "get_comfyui_client",
@@ -96,6 +106,10 @@ def test_startup_hook_still_recovers_orphaned_jobs(tmp_path):
     recovered = json.loads(index.read_text())["job-1"]
     assert recovered["status"] == "failed"
     assert "restarted" in recovered["error"].lower()
+    assert backfill.await_count == 1, (
+        "the startup hook no longer awaits the history backfill; if that is intentional, "
+        "drop this patch (and the isolation reason for it)"
+    )
 
 
 @pytest.mark.parametrize("attribute", ["JOBS_DIR", "JOBS_INDEX"])
