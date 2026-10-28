@@ -70,7 +70,9 @@ def client_with_user():
 def test_public_source_queries_published_media(client_with_user):
     fake = _Supabase()
     with patch("gallery_api.get_supabase_client", return_value=fake):
-        response = client_with_user.get("/api/media/unified", params={"source": "public"})
+        response = client_with_user.get(
+            "/api/media/unified", params={"source": "public"}
+        )
 
     assert response.status_code == 200
     assert "published_media" in fake.tables, (
