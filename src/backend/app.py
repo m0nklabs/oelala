@@ -5358,7 +5358,7 @@ async def list_unified_media(
         if source in ("all", "public"):
             try:
                 # Query published_media from Supabase
-                from supabase_utils import get_supabase_client
+                from gallery_api import get_supabase_client
 
                 supabase = get_supabase_client()
                 if supabase:
@@ -5921,7 +5921,7 @@ async def batch_download_zip(
 
                 # Public gallery item: /api/gallery/<id>/file
                 elif "/api/gallery/" in url and url.endswith("/file"):
-                    from supabase_utils import get_supabase_client as _get_sb
+                    from gallery_api import get_supabase_client as _get_sb
 
                     media_id = url.split("/api/gallery/", 1)[1].replace("/file", "")
                     sb = _get_sb()
