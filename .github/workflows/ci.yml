@@ -11,56 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  autofix:
-    name: Auto-fix style (PRs only)
-    runs-on: [self-hosted, Linux]
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Fix style issues
-        run: |
-          pip install ruff pre-commit -q
-
-          # Run pre-commit autofixes (end-of-file, trailing whitespace, etc.)
-          pre-commit run --all-files || true
-
-          # Additional ruff fixes (sometimes pre-commit ruff misses things)
-          ruff check --fix . || true
-          ruff format . || true
-
-      - name: Commit and push fixes
-        run: |
-          # Exclude workflow files - GitHub Apps can't push to them
-          git checkout -- .github/workflows/ 2>/dev/null || true
-
-          if git diff --quiet; then
-            echo "No style fixes needed"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "style: auto-fix whitespace and formatting"
-            git push
-            echo "Style fixes pushed - CI will re-run"
-          fi
-
   pre-commit:
     name: Pre-commit checks
     runs-on: [self-hosted, Linux]
-    needs: [autofix]
-    if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -76,8 +29,6 @@ jobs:
   backend:
     name: Backend (ruff + pytest)
     runs-on: [self-hosted, Linux]
-    needs: [autofix]
-    if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
 
     # This job is a real gate: every step fails the build. The GPU and integration
     # suites are deliberately out of scope here — they need a live ComfyUI / MinIO /
@@ -126,8 +77,6 @@ jobs:
   frontend:
     name: Frontend (build)
     runs-on: [self-hosted, Linux]
-    needs: [autofix]
-    if: always() && (needs.autofix.result == 'success' || needs.autofix.result == 'skipped')
 
     steps:
       - name: Checkout
