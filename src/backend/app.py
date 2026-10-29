@@ -159,10 +159,6 @@ try:
     import face_train_service
 
     print("✅ face_train_service imported successfully")
-    # Recover any training jobs orphaned by previous backend restarts
-    recovered = face_train_service.recover_stuck_jobs()
-    if recovered:
-        print(f"🔄 Recovered {recovered} orphaned training job(s)")
 except ImportError as e:
     print(f"⚠️ face_train_service import failed: {e}")
     face_train_service = None
@@ -1340,6 +1336,19 @@ async def serve_video_test():
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    # Recover training jobs orphaned by the previous process. Daemon training threads
+    # do not survive a restart, so any job still marked 'running' is dead and must be
+    # failed to let users retry it. This deliberately does NOT run at import time:
+    # importing this module (tests, scripts, CI, a REPL) is not a restart, and doing it
+    # there rewrote live job state (#220).
+    if face_train_service is not None:
+        try:
+            recovered = face_train_service.recover_stuck_jobs()
+            if recovered:
+                print(f"🔄 Recovered {recovered} orphaned training job(s)")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not recover orphaned training jobs: {e}")
+
     # Check ComfyUI availability
     client = get_comfyui_client()
     if client and client.is_available():
