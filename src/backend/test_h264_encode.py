@@ -11,6 +11,8 @@ import subprocess
 import numpy as np
 from PIL import Image
 
+import project_paths as paths
+
 
 def build_frames(num_frames: int = 8, width: int = 832, height: int = 480):
     frames = []
@@ -26,7 +28,7 @@ def build_frames(num_frames: int = 8, width: int = 832, height: int = 480):
 
 
 def main():
-    out_dir = "/home/flip/oelala/generated"
+    out_dir = str(paths.checkout_root() / "generated")
     os.makedirs(out_dir, exist_ok=True)
     output_path = os.path.join(out_dir, "h264_test_placeholder.mp4")
     frames = build_frames()

@@ -6,6 +6,10 @@ a backend started from another checkout silently rewrote the first deployment's 
 data. They are being converted to `project_paths` in slices; this test is the ratchet that
 stops new ones appearing while the rest are worked through.
 
+The scan is recursive and keyed by path relative to ``src/backend/``, so a literal in a
+subpackage counts, and two modules with the same basename cannot hide each other. No module is
+exempt — the central path helper is included, so a literal cannot take shelter in it.
+
 The allowlist is deliberately an upper bound, not an exact count: converting a path in one
 PR must not break another PR that is in flight. When you remove a path, lower its number.
 """
@@ -22,9 +26,6 @@ ALLOWED = {
     "app.py": 3,  # 2x venv yt-dlp binary + the env file (fixed in #225, pending merge)
     "admin_api.py": 1,  # filesystem-browser root listing
     "comfyui_client.py": 1,  # MinIO data dir, already env-overridable
-    "face_service.py": 1,
-    "lora_scanner.py": 1,  # default LoRA path, checkout-relative → next slice
-    "test_h264_encode.py": 1,
 }
 
 _HOST_PATH = re.compile(r"""/home/[A-Za-z0-9_.-]+""")
@@ -32,13 +33,10 @@ _HOST_PATH = re.compile(r"""/home/[A-Za-z0-9_.-]+""")
 
 def _counts() -> dict[str, int]:
     counts = {}
-    for path in sorted(BACKEND_DIR.glob("*.py")):
-        if path.name == "project_paths.py":
-            # Its docstring names the pattern it documents; that is not a path literal.
-            continue
+    for path in sorted(BACKEND_DIR.rglob("*.py")):
         found = len(_HOST_PATH.findall(path.read_text(errors="ignore")))
         if found:
-            counts[path.name] = found
+            counts[path.relative_to(BACKEND_DIR).as_posix()] = found
     return counts
 
 

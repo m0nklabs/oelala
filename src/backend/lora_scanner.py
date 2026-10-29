@@ -15,6 +15,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import project_paths as paths
+
 import yaml
 
 logger = logging.getLogger("lora_scanner")
@@ -30,7 +32,7 @@ def debug_log(msg: str):
 # LoRA directories to scan
 LORA_DIRS: List[Path] = [
     Path("/mnt/ssd/loras"),
-    Path("/home/flip/oelala/ComfyUI/models/loras"),
+    paths.comfyui_loras_dir(),
 ]
 
 # Registry file with usage metadata (trigger words, strengths, source URLs)
