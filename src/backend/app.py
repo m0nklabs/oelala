@@ -89,7 +89,10 @@ from PIL.PngImagePlugin import PngInfo
 
 # Add current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append("/home/flip/oelala")  # Add oelala root directory
+
+import project_paths as paths  # noqa: E402  (needs the path setup above)
+
+sys.path.append(str(paths.checkout_root()))  # Add oelala root directory
 
 # Authentication
 from auth import (
@@ -665,8 +668,8 @@ app.include_router(v2_generation_router)  # V2 generation at /v2/*
 # Create directories
 UPLOAD_DIR = Path("/tmp/oelala_uploads")
 OUTPUT_DIR = Path("/tmp/oelala_generated")
-FRONTEND_DIR = Path("/home/flip/oelala/src/frontend")
-COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
+FRONTEND_DIR = paths.frontend_dir()
+COMFYUI_OUTPUT_DIR = paths.comfyui_output_dir()
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -743,7 +746,7 @@ def _find_existing_media_path(media_ref: str) -> Optional[str]:
     ref_path = unquote(parsed.path if parsed.scheme in {"http", "https"} else ref)
     if ref_path.startswith(("/media/", "/generated/", "/uploads/", "/ComfyUI/output/")):
         ref_path = ref_path.lstrip("/")
-    workspace_root = Path("/home/flip/oelala").resolve()
+    workspace_root = paths.checkout_root()
     allowed_roots = (
         OUTPUT_DIR.resolve(),
         COMFYUI_OUTPUT_DIR.resolve(),
@@ -1536,7 +1539,7 @@ async def list_comfyui_media(
     if not await check_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
+    comfyui_output = paths.comfyui_output_dir()
 
     if not comfyui_output.exists():
         return {"media": [], "stats": {"videos": 0, "images": 0, "audio": 0}}
@@ -2113,7 +2116,7 @@ async def delete_comfyui_media(request: DeleteMediaRequest):
 
         # Fallback: try local ComfyUI output dir (ComfyUI may write here directly)
         if not found:
-            comfyui_output = Path("/home/flip/oelala/ComfyUI/output")
+            comfyui_output = paths.comfyui_output_dir()
             file_path = _safe_child_path(comfyui_output, safe_filename)
             if (
                 str(file_path.resolve()).startswith(str(comfyui_output.resolve()))
@@ -2149,7 +2152,7 @@ async def list_loras():
     parked Wan library.
     Includes NSFW detection based on filename patterns.
     """
-    loras_dir = Path("/home/flip/oelala/ComfyUI/models/loras")
+    loras_dir = paths.comfyui_loras_dir()
     ssd_loras_dir = Path("/mnt/ssd/loras")
 
     lora_dirs = [d for d in [loras_dir, ssd_loras_dir] if d.exists()]
@@ -2730,7 +2733,7 @@ active_jobs = {}
 pending_post_processing = {}
 
 # Persistence file for cloud jobs (survives backend restarts)
-CLOUD_JOBS_FILE = Path("/home/flip/oelala/data/cloud_jobs.json")
+CLOUD_JOBS_FILE = paths.data_dir() / "cloud_jobs.json"
 
 
 def _persist_cloud_jobs() -> None:
@@ -3139,7 +3142,7 @@ async def _local_job_poller() -> None:
 
 
 # Generation stats file for analysis
-GENERATION_STATS_FILE = Path("/home/flip/oelala/data/generation_stats.json")
+GENERATION_STATS_FILE = paths.data_dir() / "generation_stats.json"
 
 
 def load_generation_stats() -> list:
@@ -3386,7 +3389,7 @@ def _resolve_lora_path(name: str) -> tuple[Path, str] | tuple[None, None]:
     return None, None
 
 
-CLOUD_LOGS_DIR = Path("/home/flip/oelala/logs/cloud")
+CLOUD_LOGS_DIR = paths.logs_dir() / "cloud"
 CLOUD_LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -4929,7 +4932,7 @@ async def deep_health_check():
 
     # Disk space
     try:
-        disk = shutil.disk_usage("/home/flip/oelala")
+        disk = shutil.disk_usage(str(paths.checkout_root()))
         checks["disk"] = {
             "ok": disk.free > 1_000_000_000,  # >1 GB free
             "total_gb": round(disk.total / 1e9, 1),
@@ -6101,7 +6104,7 @@ async def get_presets(category: str = None):
     Returns:
         List of presets with their parameters
     """
-    registry_path = Path("/home/flip/oelala/workflows/registry.json")
+    registry_path = paths.workflows_dir() / "registry.json"
 
     if not registry_path.exists():
         logger.warning("Workflow registry not found")
@@ -6147,7 +6150,7 @@ async def get_presets(category: str = None):
 @app.get("/api/presets/{preset_id}")
 async def get_preset(preset_id: str):
     """Get a specific preset by ID"""
-    registry_path = Path("/home/flip/oelala/workflows/registry.json")
+    registry_path = paths.workflows_dir() / "registry.json"
 
     if not registry_path.exists():
         raise HTTPException(status_code=404, detail="Registry not found")
@@ -6232,7 +6235,7 @@ async def client_log(payload: dict):
     Expected JSON payload: {"level": "error", "message": "...", "stack": "...", "url": "...", "userAgent": "...", "timestamp": "...", "meta": {...}}
     """
     try:
-        logs_dir = Path("/home/flip/oelala/logs")
+        logs_dir = paths.logs_dir()
         logs_dir.mkdir(parents=True, exist_ok=True)
         log_file = logs_dir / "ui_client.log"
 
@@ -8081,7 +8084,7 @@ def _guardian_headers() -> dict:
 
 
 # AI Settings file (admin-editable)
-AI_SETTINGS_FILE = Path("/home/flip/oelala/data/ai_settings.json")
+AI_SETTINGS_FILE = paths.data_dir() / "ai_settings.json"
 
 # Default system prompt for prompt enhancement
 DEFAULT_PROMPT_SYSTEM = """You are an WILDLY creative AI image prompt engineer who NEVER repeats yourself.

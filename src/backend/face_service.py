@@ -34,7 +34,7 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Base dir is two levels up from this file → /home/flip/oelala/
+# Base dir is two levels up from this file → the checkout root
 BACKEND_DIR = Path(__file__).parent
 BASE_DIR = BACKEND_DIR.parent.parent
 
