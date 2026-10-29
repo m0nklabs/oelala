@@ -15,9 +15,32 @@ import time
 
 # Load environment variables from .env file BEFORE any other imports
 # This must happen early so other modules get the env vars
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path="/home/flip/oelala/.env")
+
+def resolve_env_file() -> Path:
+    """Return the ``.env`` file this checkout should load.
+
+    ``OELALA_ENV_FILE`` wins when set. Otherwise the file sits at the root of the checkout
+    this module belongs to (``<repo>/.env``), derived from ``__file__`` — so a worktree or a
+    second clone reads *its own* configuration instead of inheriting another deployment's.
+    No absolute host path is baked in (AGENTS.md rule 6).
+    """
+    override = os.getenv("OELALA_ENV_FILE")
+    if override:
+        return Path(override).expanduser()
+    return Path(__file__).resolve().parents[2] / ".env"
+
+
+_ENV_FILE = resolve_env_file()
+if _ENV_FILE.is_file():
+    load_dotenv(dotenv_path=str(_ENV_FILE))
+elif os.getenv("OELALA_ENV_FILE"):
+    # An explicit override that does not exist is a configuration mistake worth saying out
+    # loud; the implicit default is allowed to be absent.
+    print(f"⚠️  OELALA_ENV_FILE points to a missing file: {_ENV_FILE}")
 
 # ── Sentry SDK (must init before FastAPI) ────────────────────────────
 import sentry_sdk
