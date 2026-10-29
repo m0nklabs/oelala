@@ -44,7 +44,11 @@ def _counts() -> dict[str, int]:
 
 def test_no_new_absolute_host_paths():
     counts = _counts()
-    grew = {name: (n, ALLOWED.get(name, 0)) for name, n in counts.items() if n > ALLOWED.get(name, 0)}
+    grew = {
+        name: (n, ALLOWED.get(name, 0))
+        for name, n in counts.items()
+        if n > ALLOWED.get(name, 0)
+    }
     assert not grew, (
         "new absolute host path in the backend — resolve it from project_paths instead "
         f"(found, allowed): {grew}\ncurrent counts: {counts}"
