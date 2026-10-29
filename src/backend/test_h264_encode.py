@@ -11,7 +11,10 @@ import subprocess
 import numpy as np
 from PIL import Image
 
-import project_paths as paths
+try:  # normal path: `src/backend` is on sys.path (the app imports siblings directly)
+    import project_paths as paths
+except ImportError:  # package import: `src.backend.<module>` with only the repo root on path
+    from . import project_paths as paths
 
 
 def build_frames(num_frames: int = 8, width: int = 832, height: int = 480):

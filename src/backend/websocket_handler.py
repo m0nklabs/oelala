@@ -12,7 +12,10 @@ from typing import Dict, Set, Any, Optional
 from fastapi import WebSocket
 from collections import defaultdict
 
-import project_paths as paths
+try:  # normal path: `src/backend` is on sys.path (the app imports siblings directly)
+    import project_paths as paths
+except ImportError:  # package import: `src.backend.<module>` with only the repo root on path
+    from . import project_paths as paths
 
 logger = logging.getLogger(__name__)
 

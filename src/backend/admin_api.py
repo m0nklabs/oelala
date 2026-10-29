@@ -16,7 +16,10 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 import httpx
 
-import project_paths as paths
+try:  # normal path: `src/backend` is on sys.path (the app imports siblings directly)
+    import project_paths as paths
+except ImportError:  # package import: `src.backend.<module>` with only the repo root on path
+    from . import project_paths as paths
 from minio.error import S3Error
 
 from auth import get_current_user, User
