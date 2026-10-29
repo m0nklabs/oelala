@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 # `src.backend` package, so the checkout root is derived here (same idiom as
 # face_service.py).
 _CHECKOUT_ROOT = Path(__file__).resolve().parents[3]
-LORA_DIR = Path(os.getenv("LORA_DIR", str(_CHECKOUT_ROOT / "ComfyUI" / "models" / "loras")))
+LORA_DIR = Path(
+    os.getenv("LORA_DIR", str(_CHECKOUT_ROOT / "ComfyUI" / "models" / "loras"))
+)
 LORA_SSD_DIR = Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras"))
 
 # ── Third-party LoRA source index ──────────────────────────────────
