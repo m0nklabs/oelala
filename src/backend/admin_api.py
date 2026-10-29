@@ -15,6 +15,8 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, validator
 import httpx
+
+import project_paths as paths
 from minio.error import S3Error
 
 from auth import get_current_user, User
@@ -664,8 +666,8 @@ async def get_admin_stats(admin: User = Depends(get_admin_user)):
 # =============================================================================
 
 # Fallback directories (used when storage service is unavailable)
-MEDIA_GENERATED_DIR = Path("/home/flip/oelala/media/generated")
-COMFYUI_OUTPUT_DIR = Path("/home/flip/oelala/ComfyUI/output")
+MEDIA_GENERATED_DIR = paths.media_generated_dir()
+COMFYUI_OUTPUT_DIR = paths.comfyui_output_dir()
 
 
 def check_file_has_metadata(file_path: Path) -> bool:
@@ -1164,7 +1166,7 @@ async def get_recent_logs(
 # AI Settings Management
 # =============================================================================
 
-AI_SETTINGS_FILE = Path("/home/flip/oelala/data/ai_settings.json")
+AI_SETTINGS_FILE = paths.data_dir() / "ai_settings.json"
 
 DEFAULT_PROMPT_SYSTEM = """You are an expert AI image/video generation prompt engineer.
 Your task is to enhance simple descriptions into detailed, high-quality prompts.
