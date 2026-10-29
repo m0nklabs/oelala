@@ -1,23 +1,40 @@
-# CODEOWNERS for cryptotrader
-# These owners will be requested for review when someone opens a PR
+# CODEOWNERS — the human gate for the irreversible five.
+#
+# Deliberately NOT a catch-all (`* @m0nk111`): the autonomous loop may merge anything green,
+# but a PR touching one of these areas stops for a human. This file only takes effect when
+# branch protection enables "require review from code owners" — on its own it is just a
+# review request.
+#
+#   1. authentication / authorisation
+#   2. database migrations and schema
+#   3. secrets and credential configuration
+#   4. deployment and infrastructure
+#   5. dependency manifests (majors)
 
-# Default owner for everything
-* @m0nk111
+# ── 1. Authentication and authorisation ──────────────────────────────
+/src/backend/auth.py                  @m0nk111
+/src/backend/auth_middleware.py       @m0nk111
+/src/backend/api_key_auth.py          @m0nk111
+/src/backend/api_keys_management.py   @m0nk111
+/src/backend/profile_api.py           @m0nk111
 
-# Core trading logic - requires extra review
-/core/execution/ @m0nk111
-/core/portfolio/ @m0nk111
+# ── 2. Database migrations and schema ───────────────────────────────
+/migrations/                          @m0nk111
+/supabase/                            @m0nk111
 
-# API and exchange integrations
-/api/ @m0nk111
+# ── 3. Secrets and credential configuration ─────────────────────────
+/.env.example                         @m0nk111
+/.gitleaks.toml                       @m0nk111
+/.gitleaksignore                      @m0nk111
 
-# Frontend
-/frontend/ @m0nk111
+# ── 4. Deployment and infrastructure ────────────────────────────────
+/deploy/                              @m0nk111
+/docker-compose.yml                   @m0nk111
+/Dockerfile                           @m0nk111
+/.github/workflows/                   @m0nk111
 
-# Infrastructure and CI
-/.github/ @m0nk111
-/.devcontainer/ @m0nk111
-/docker-compose.yml @m0nk111
-
-# Documentation
-/docs/ @m0nk111
+# ── 5. Dependency manifests ─────────────────────────────────────────
+/requirements.txt                     @m0nk111
+/requirements-web.txt                 @m0nk111
+/src/frontend/package.json            @m0nk111
+/src/frontend/package-lock.json       @m0nk111
