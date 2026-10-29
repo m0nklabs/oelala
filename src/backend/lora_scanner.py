@@ -17,7 +17,9 @@ from typing import Any, Dict, List, Optional
 
 try:  # normal path: `src/backend` is on sys.path (the app imports siblings directly)
     import project_paths as paths
-except ImportError:  # package import: `src.backend.<module>` with only the repo root on path
+except (
+    ImportError
+):  # package import: `src.backend.<module>` with only the repo root on path
     from . import project_paths as paths
 
 import yaml
