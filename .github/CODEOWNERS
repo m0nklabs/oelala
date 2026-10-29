@@ -27,6 +27,11 @@
 /.gitleaks.toml                       @m0nk111
 /.gitleaksignore                      @m0nk111
 
+# ── 4a. The gate itself ─────────────────────────────────────────────
+# Whoever can edit this file can delete the rules above, so it belongs to a human.
+/.github/CODEOWNERS                   @m0nk111
+/CODEOWNERS                          @m0nk111
+
 # ── 4. Deployment and infrastructure ────────────────────────────────
 /deploy/                              @m0nk111
 /docker-compose.yml                   @m0nk111
