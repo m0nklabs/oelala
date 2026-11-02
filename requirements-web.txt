@@ -15,7 +15,7 @@
 # `pytest tests/test_app_security_helpers.py` -> 40 passed, no torch installed.
 
 # Web framework + ASGI server + multipart form/file uploads
-fastapi==0.147.0
+fastapi==0.162.0
 uvicorn==0.54.0
 python-multipart==0.0.32
 
