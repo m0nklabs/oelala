@@ -139,6 +139,36 @@ test "$(git rev-parse HEAD)" = "<headRefOid>" || { echo "head mismatch"; exit 1;
 git push origin HEAD:<headRefName>
 ```
 
+### 4.1 Check what changed since the last run — before fixing anything
+
+An open PR is not static: the base branch moves, reviewers comment, bots push, and a merged
+PR can invalidate the premise of an open one. Start every run by diffing the world since the
+last run-log entry, then respond to *that*:
+
+```bash
+# activity on the PR itself
+gh api "repos/m0nklabs/oelala/issues/<N>/comments?per_page=100" --jq '.[-5:] | .[] | "\(.created_at) \(.user.login)"'
+gh api "repos/m0nklabs/oelala/pulls/<N>/reviews"               --jq '.[-5:] | .[] | "\(.submitted_at) \(.state)"'
+gh pr checks <N> -R m0nklabs/oelala --json name,state
+# how far the base moved, and whether it touches the same files
+git rev-list --count <headRefOid>..origin/main
+git diff --name-only <headRefOid>..origin/main | head -20
+```
+
+Rules for what you find:
+
+- **Base moved and touches the PR's files** → merge `origin/main` into the PR head (never
+  force-push), re-run the suite against the current pins, and say so in a comment. Green
+  checks from before a dependency merge prove nothing about the merged state.
+- **New review or comments** → answer them; findings get fixed or refuted with evidence.
+- **Something that changes the PR's premise** (a merged PR introduced a helper this PR
+  duplicates, a config knob that replaced a literal) → treat it as a finding: adapt the code
+  and pin the relationship with a test, so the two cannot drift apart later.
+- **Nothing new** → say so in one line with the timestamp and move on. Do not pad a report.
+
+Asked for by the operator on 2026-11-03: *"tis wel de bedoeling dat je open dingen ook checkt
+op nieuwe toevoegingen, en dan daar weer op reageert."*
+
 PR-Piet is wired through `.github/workflows/pr-piet.yml` → reusable
 `m0nklabs/pr-piet/.github/workflows/reusable-pr-piet.yml`. It reviews on PR events
 and on a `/review` comment from `m0nk111`; suggestions arrive as review bodies and
