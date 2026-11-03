@@ -12,6 +12,13 @@ from typing import Dict, Set, Any, Optional
 from fastapi import WebSocket
 from collections import defaultdict
 
+try:  # normal path: `src/backend` is on sys.path (the app imports siblings directly)
+    import project_paths as paths
+except (
+    ImportError
+):  # package import: `src.backend.<module>` with only the repo root on path
+    from . import project_paths as paths
+
 logger = logging.getLogger(__name__)
 
 DEBUG_ENABLED = False  # Set to True for verbose logging
@@ -27,7 +34,7 @@ def debug_log(message: str):
 _webhook_triggers = None
 
 # Generation times lookup file
-_GENERATION_TIMES_FILE = "/home/flip/oelala/data/generation_times.json"
+_GENERATION_TIMES_FILE = str(paths.data_dir() / "generation_times.json")
 
 
 async def _get_comfyui_execution_time(prompt_id: str) -> Optional[float]:
