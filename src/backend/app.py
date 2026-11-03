@@ -27,6 +27,12 @@ def resolve_env_file() -> Path:
     this module belongs to (``<repo>/.env``), derived from ``__file__`` — so a worktree or a
     second clone reads *its own* configuration instead of inheriting another deployment's.
     No absolute host path is baked in (AGENTS.md rule 6).
+
+    This duplicates the root derivation in ``project_paths.checkout_root()`` on purpose: the
+    env file has to be loaded before the ``sys.path`` setup below, and importing
+    ``project_paths`` here would also break the ``src.backend.app`` package-import mode.
+    ``tests/test_env_file_resolution.py`` asserts the two stay identical, so the duplication
+    cannot drift silently.
     """
     override = os.getenv("OELALA_ENV_FILE")
     if override:

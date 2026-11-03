@@ -30,6 +30,20 @@ def test_default_env_file_is_derived_from_the_module_location(monkeypatch):
     assert module.resolve_env_file() == expected
 
 
+def test_env_file_root_matches_project_paths(monkeypatch):
+    """#225 derives the checkout root locally; #227 centralised it in project_paths.
+
+    The env file must be resolved before ``sys.path`` is set up, so the duplication stays —
+    this test is what keeps the two derivations from drifting apart.
+    """
+    import project_paths
+
+    monkeypatch.delenv("OELALA_ENV_FILE", raising=False)
+    module = _app_module()
+
+    assert module.resolve_env_file().parent == project_paths.checkout_root()
+
+
 def test_env_file_override_is_honoured(monkeypatch, tmp_path):
     module = _app_module()
     target = tmp_path / "custom.env"
