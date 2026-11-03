@@ -194,6 +194,12 @@ git push origin HEAD:<headRefName>
 gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false
 ```
 
+`gh pr merge` answers a refused merge with "the base branch policy prohibits the merge" and
+offers `--admin`. **Never use `--admin`** (or any other bypass): the policy that just refused the
+merge is the gate, and a PR it refuses is a finding to report, not a rule to override. The same
+goes for `--auto` — it is not a bypass, but it hides the verification this section requires, so
+the loop merges explicitly or not at all.
+
 Stop and report instead of merging when: a required check is not green on the head, the review
 on that head is unanswered or requests changes, the base merge conflicts, `main` itself is red,
 or the PR touches the human-gated five (auth, migrations, secrets, deploy, dependency majors) —
