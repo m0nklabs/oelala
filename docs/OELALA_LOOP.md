@@ -146,13 +146,18 @@ PR can invalidate the premise of an open one. Start every run by diffing the wor
 last run-log entry, then respond to *that*:
 
 ```bash
-# activity on the PR itself
-gh api "repos/m0nklabs/oelala/issues/<N>/comments?per_page=100" --jq '.[-5:] | .[] | "\(.created_at) \(.user.login)"'
-gh api "repos/m0nklabs/oelala/pulls/<N>/reviews"               --jq '.[-5:] | .[] | "\(.submitted_at) \(.state)"'
+# activity on the PR itself — --slurp + add so every page is read before slicing, because a
+# bare .[-5:] on the first page shows the OLDEST comments and hides everything newer.
+gh api --paginate --slurp "repos/m0nklabs/oelala/issues/<N>/comments?per_page=100" \
+    --jq 'add | .[-10:] | .[] | "\(.created_at) \(.user.login)"'
+gh api --paginate --slurp "repos/m0nklabs/oelala/pulls/<N>/reviews?per_page=100" \
+    --jq 'add | .[-10:] | .[] | "\(.submitted_at) \(.state)"'
 gh pr checks <N> -R m0nklabs/oelala --json name,state
-# how far the base moved, and whether it touches the same files
-git rev-list --count <headRefOid>..origin/main
-git diff --name-only <headRefOid>..origin/main | head -20
+# how far the base moved, and whether the BASE side touched the PR's files. Diff from the
+# merge-base, not head..origin/main: a two-dot diff includes the PR's own files and would
+# always conclude "the base touched them".
+git rev-list --count "$(git merge-base <headRefOid> origin/main)"..origin/main
+git diff --name-only "$(git merge-base <headRefOid> origin/main)" origin/main | head -20
 ```
 
 Rules for what you find:
@@ -166,8 +171,8 @@ Rules for what you find:
   and pin the relationship with a test, so the two cannot drift apart later.
 - **Nothing new** → say so in one line with the timestamp and move on. Do not pad a report.
 
-Asked for by the operator on 2026-11-03: *"tis wel de bedoeling dat je open dingen ook checkt
-op nieuwe toevoegingen, en dan daar weer op reageert."*
+Requested by the operator on 2026-11-03 (translated from Dutch): *"You are also supposed to
+check open items for new additions, and then respond to those."*
 
 PR-Piet is wired through `.github/workflows/pr-piet.yml` → reusable
 `m0nklabs/pr-piet/.github/workflows/reusable-pr-piet.yml`. It reviews on PR events
