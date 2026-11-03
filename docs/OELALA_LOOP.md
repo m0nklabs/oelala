@@ -146,12 +146,13 @@ PR can invalidate the premise of an open one. Start every run by diffing the wor
 last run-log entry, then respond to *that*:
 
 ```bash
-# activity on the PR itself — --slurp + add so every page is read before slicing, because a
-# bare .[-5:] on the first page shows the OLDEST comments and hides everything newer.
+# Activity on the PR itself. Read every page and do not slice the result: REST returns these
+# ascending, so any .[-N:] both hides the newest entries and truncates the delta. Read the
+# entries newer than the last run-log comment instead.
 gh api --paginate --slurp "repos/m0nklabs/oelala/issues/<N>/comments?per_page=100" \
-    --jq 'add | .[-10:] | .[] | "\(.created_at) \(.user.login)"'
+    --jq 'add | .[] | "\(.created_at) \(.user.login)"'
 gh api --paginate --slurp "repos/m0nklabs/oelala/pulls/<N>/reviews?per_page=100" \
-    --jq 'add | .[-10:] | .[] | "\(.submitted_at) \(.state)"'
+    --jq 'add | .[] | "\(.submitted_at) \(.state)"'
 gh pr checks <N> -R m0nklabs/oelala --json name,state
 # how far the base moved, and whether the BASE side touched the PR's files. Diff from the
 # merge-base, not head..origin/main: a two-dot diff includes the PR's own files and would
@@ -201,9 +202,23 @@ git commit … && git push origin HEAD:<headRefName>   # branch only
 gh pr comment <N> -R m0nklabs/oelala --body '/review'
 ```
 
-When a PR is settled (CI green, latest review covers the merge head, every finding
-resolved or answered), leave one closing comment: what changed, the evidence, and
+When a PR is settled, leave one closing comment: what changed, the evidence, and
 `Ready for human merge`. **Do not merge.** Draft PRs stay draft until validated.
+
+"Settled" is a checklist, not a feeling. A PR is **not** finished until all five hold:
+
+1. CI green on the current head SHA.
+2. The latest PR-Piet review is on that **same** SHA — a review of an older head proves
+   nothing about the current one.
+3. Every finding is resolved or answered, and no thread is unanswered.
+4. Any finding the review marked `[backlog]` is recorded somewhere durable (an issue), not
+   just mentioned in passing.
+5. **The closing comment is posted and names that SHA.**
+
+A green, clean PR without (5) is unfinished work, not a quiet success. If a run cannot settle a
+PR, the run report says so explicitly instead of leaving it implicit — and the next run settles
+it first, before starting anything new. (Learned the hard way on 2026-11-03: #225 was green and
+review-covered, and the run still moved on without closing it out, so the human had to ask.)
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
 
