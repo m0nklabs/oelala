@@ -12,16 +12,16 @@
 # Install separately with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 # Or for CUDA 12.4: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 torch==2.14.1
-torchvision==0.29.1
-torchaudio==2.11.0
+torchvision==0.29.2
+torchaudio==2.11.1
 torchsde==0.2.6
 
 # Triton for GPU acceleration
-triton==3.8.0
+triton==3.9.0
 
 # Transformers & ML core
 # GHSA-69w3-r845-3855 is patched in the first 5.0.0 release candidate.
-transformers==5.20.2
+transformers==5.22.1
 accelerate==1.15.0
 safetensors==0.8.0
 sentencepiece==0.2.2
