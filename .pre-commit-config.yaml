@@ -24,8 +24,10 @@ repos:
         args: ['--maxkb=1000']
       - id: check-merge-conflict
 
+  # Pinned to the same version as the CI lint step (see .github/workflows/ci.yml):
+  # two gates that format or lint with different ruff versions can disagree.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.15.0
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
