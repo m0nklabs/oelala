@@ -8,8 +8,6 @@ the resolution order so a future edit cannot quietly reorder it.
 import sys
 from pathlib import Path
 
-import pytest
-
 
 def _app_module():
     import app
