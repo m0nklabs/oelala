@@ -53,8 +53,10 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 
 **Not granted (hard stops):**
 
-1. **Never merge a PR**, never approve one, never dismiss a review, never resolve a
-   thread that still has an unanswered finding. Leave the PR ready for the human merge.
+1. **Merging is allowed only under §4.2** (a PR that has been continuously mergeable for
+   more than two days, re-verified at merge time). Never approve a PR, never dismiss a
+   review, never resolve a thread that still has an unanswered finding. Everything else is
+   left ready for the human merge.
 2. **Never push to `main`** or any long-lived branch, never force-push, never rewrite
    published history, never delete branches or issues.
 3. **Never restart or stop a systemd unit** (`oelala-backend`, `oelala-frontend`,
@@ -168,7 +170,41 @@ gh pr comment <N> -R m0nklabs/oelala --body '/review'
 
 When a PR is settled (CI green, latest review covers the merge head, every finding
 resolved or answered), leave one closing comment: what changed, the evidence, and
-`Ready for human merge`. **Do not merge.** Draft PRs stay draft until validated.
+`Ready for human merge`. Merging follows §4.2 only. Draft PRs stay draft until validated.
+
+### 4.2 Merge readiness and the two-day rule
+
+A PR is **merge-ready** only when the latest review on the current head is answered — with a
+fix, or with a reply explaining with evidence why the change is not needed. An unanswered
+review, a review of an older head, or a dangling thread means not merge-ready, however green
+the checks are. This mirrors the user-level rule in `$DSH_HOME/AGENTS.md`.
+
+A PR that has been **continuously mergeable for more than two days** may be merged without
+waiting for the human. Before doing so, re-verify in the same run — a two-day-old green check
+says nothing about `main` today:
+
+```bash
+gh pr view <N> -R m0nklabs/oelala --json mergeStateStatus,mergeable,reviewDecision
+git fetch origin --prune                                     # base may have moved
+git merge --no-ff --no-edit origin/main                      # on the PR head, no force-push
+$HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
+    --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
+git push origin HEAD:<headRefName>
+# wait for the three required checks AND a fresh PR-Piet review on the new head
+gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false
+```
+
+`gh pr merge` answers a refused merge with "the base branch policy prohibits the merge" and
+offers `--admin`. **Never use `--admin`** (or any other bypass): the policy that just refused the
+merge is the gate, and a PR it refuses is a finding to report, not a rule to override. The same
+goes for `--auto` — it is not a bypass, but it hides the verification this section requires, so
+the loop merges explicitly or not at all.
+
+Stop and report instead of merging when: a required check is not green on the head, the review
+on that head is unanswered or requests changes, the base merge conflicts, `main` itself is red,
+or the PR touches the human-gated five (auth, migrations, secrets, deploy, dependency majors) —
+those keep their gate regardless of age. At most **three** merges per run, and the closing
+comment records `auto-merged after N days mergeable` with the re-verification result.
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
 
