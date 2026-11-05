@@ -23,6 +23,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Ensure pre-commit can build hook environments
+        run: |
+          # The runner's virtualenv is missing filelock, so pre-commit cannot
+          # create an environment for a hook whose rev changed (measured
+          # 2026-11-05: "ModuleNotFoundError: No module named 'filelock'" while
+          # initialising ruff-pre-commit). Repairing it here keeps hook bumps
+          # possible instead of silently pinning every hook forever.
+          python -m pip install --upgrade virtualenv
+
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
 
