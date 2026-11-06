@@ -227,7 +227,11 @@ $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
     --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
 git push origin HEAD:<headRefName>
 # wait for the three required checks AND a fresh PR-Piet review on the new head
-gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false
+# --match-head-commit binds the merge to the commit that was just verified: without it a
+# commit pushed between verification and merge would be merged on the strength of checks
+# and a review that never saw it.
+gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false \
+    --match-head-commit "$(git rev-parse HEAD)"
 ```
 
 `gh pr merge` answers a refused merge with "the base branch policy prohibits the merge" and
