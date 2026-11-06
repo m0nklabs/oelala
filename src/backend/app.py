@@ -253,6 +253,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def resolve_yt_dlp() -> str:
+    """Return the yt-dlp executable to run.
+
+    ``YT_DLP_PATH`` wins when set, then whatever is on ``PATH``, then the binary next to the
+    interpreter running this backend — which is the right guess for a virtualenv deployment and
+    stops naming one specific venv that a rebuild would rename (AGENTS.md rule 6).
+    """
+    override = os.getenv("YT_DLP_PATH")
+    if override:
+        return override
+    found = shutil.which("yt-dlp")
+    if found:
+        return found
+    return str(Path(sys.executable).parent / "yt-dlp")
+
+
 def _strip_think_tags(text: str) -> str:
     """Strip <think>...</think> reasoning blocks from LLM output.
     Handles both closed and unclosed <think> tags.
@@ -9466,7 +9482,6 @@ async def youtube_info(
     Returns: title, channel, duration, thumbnail, view_count, etc.
     """
     import subprocess
-    import shutil
 
     url = _validate_youtube_url(request.url)
     if not url:
@@ -9475,7 +9490,7 @@ async def youtube_info(
     logger.info(f"🎬 YouTube info request: {url}")
 
     # Find yt-dlp binary
-    yt_dlp_path = shutil.which("yt-dlp") or "/home/flip/venvs/torch-sm120/bin/yt-dlp"
+    yt_dlp_path = resolve_yt_dlp()
 
     try:
         # Use yt-dlp to extract info without downloading
@@ -9523,7 +9538,6 @@ async def youtube_download(
     Returns: path to downloaded file.
     """
     import subprocess
-    import shutil
 
     url = _validate_youtube_url(request.url)
     if not url:
@@ -9534,7 +9548,7 @@ async def youtube_download(
     )
 
     # Find yt-dlp binary
-    yt_dlp_path = shutil.which("yt-dlp") or "/home/flip/venvs/torch-sm120/bin/yt-dlp"
+    yt_dlp_path = resolve_yt_dlp()
 
     # Create output filename
     output_id = uuid.uuid4().hex[:8]

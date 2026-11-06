@@ -187,6 +187,19 @@ def _match_lora_name(requested: str, available: List[str]) -> Optional[str]:
     return matches[0] if len(matches) == 1 else None
 
 
+def minio_data_dir() -> Path:
+    """Return the MinIO data directory this deployment uses.
+
+    ``MINIO_DATA_DIR`` wins; otherwise ``<home>/minio-data``. The caller uses this to avoid
+    deleting a local file that *is* MinIO's data, so a wrong value silently disables that guard
+    rather than failing loudly — hence one place to read it from.
+    """
+    override = os.environ.get("MINIO_DATA_DIR")
+    if override:
+        return Path(override)
+    return Path.home() / "minio-data"
+
+
 class ComfyUIClient:
     """Client for ComfyUI API integration"""
 
@@ -2008,11 +2021,8 @@ class ComfyUIClient:
             # Cleanup local file to keep media dirs empty
             try:
                 local_path = Path(output_path)
-                minio_data_dir = Path(
-                    os.environ.get("MINIO_DATA_DIR", "/home/flip/minio-data")
-                )
                 if local_path.exists() and str(local_path.parent) != str(
-                    minio_data_dir
+                    minio_data_dir()
                 ):
                     local_path.unlink()
                     logger.info(f"🗑️ Cleaned up auto-uploaded local file: {local_path}")

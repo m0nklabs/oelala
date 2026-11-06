@@ -23,9 +23,7 @@ BACKEND_DIR = Path(__file__).parent.parent / "src" / "backend"
 
 #: Remaining absolute host paths per module. Shrink this; never grow it.
 ALLOWED = {
-    "app.py": 3,  # 2x venv yt-dlp binary + the env file (fixed in #225, pending merge)
-    "admin_api.py": 1,  # filesystem-browser root listing
-    "comfyui_client.py": 1,  # MinIO data dir, already env-overridable
+    "admin_api.py": 1,  # filesystem-browser root listing (slice 2b)
 }
 
 _HOST_PATH = re.compile(r"""/home/[A-Za-z0-9_.-]+""")
@@ -50,6 +48,25 @@ def test_no_new_absolute_host_paths():
     assert not grew, (
         "new absolute host path in the backend — resolve it from project_paths instead "
         f"(found, allowed): {grew}\ncurrent counts: {counts}"
+    )
+
+
+#: Committed configuration templates are documentation, and rule 6 covers those too: a real
+#: host path in an example file is copied into someone's deployment.
+TEMPLATES = [Path(__file__).parent.parent / ".env.example"]
+
+
+def test_no_absolute_host_paths_in_committed_templates():
+    offenders = {}
+    for template in TEMPLATES:
+        if not template.is_file():
+            continue
+        found = _HOST_PATH.findall(template.read_text(errors="ignore"))
+        if found:
+            offenders[template.name] = found
+    assert not offenders, (
+        "absolute host path in a committed template — use a placeholder such as "
+        f"/path/to/... : {offenders}"
     )
 
 
