@@ -1,0 +1,21 @@
+# Codecov configuration.
+#
+# Without this file Codecov applies its defaults, and the default patch status fails a PR whose
+# diff contains no coverable lines — so every documentation-only PR showed a red codecov/patch
+# (measured 2026-11-06: #236 docs-only = failure, #239 code = success). A check that is red for a
+# correct reason teaches people to ignore red checks, so both statuses are informational and the
+# paths that cannot be covered are ignored.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+ignore:
+  - "docs/**"
+  - "changelog/**"
+  - "tests/**"
+  - "scripts/**"
