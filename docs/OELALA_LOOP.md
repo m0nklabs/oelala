@@ -141,6 +141,42 @@ test "$(git rev-parse HEAD)" = "<headRefOid>" || { echo "head mismatch"; exit 1;
 git push origin HEAD:<headRefName>
 ```
 
+### 4.1 Check what changed since the last run — before fixing anything
+
+An open PR is not static: the base branch moves, reviewers comment, bots push, and a merged
+PR can invalidate the premise of an open one. Start every run by diffing the world since the
+last run-log entry, then respond to *that*:
+
+```bash
+# Activity on the PR itself. Read every page and do not slice the result: REST returns these
+# ascending, so any .[-N:] both hides the newest entries and truncates the delta. Read the
+# entries newer than the last run-log comment instead.
+gh api --paginate --slurp "repos/m0nklabs/oelala/issues/<N>/comments?per_page=100" \
+    --jq 'add | .[] | "\(.created_at) \(.user.login)"'
+gh api --paginate --slurp "repos/m0nklabs/oelala/pulls/<N>/reviews?per_page=100" \
+    --jq 'add | .[] | "\(.submitted_at) \(.state)"'
+gh pr checks <N> -R m0nklabs/oelala --json name,state
+# how far the base moved, and whether the BASE side touched the PR's files. Diff from the
+# merge-base, not head..origin/main: a two-dot diff includes the PR's own files and would
+# always conclude "the base touched them".
+git rev-list --count "$(git merge-base <headRefOid> origin/main)"..origin/main
+git diff --name-only "$(git merge-base <headRefOid> origin/main)" origin/main | head -20
+```
+
+Rules for what you find:
+
+- **Base moved and touches the PR's files** → merge `origin/main` into the PR head (never
+  force-push), re-run the suite against the current pins, and say so in a comment. Green
+  checks from before a dependency merge prove nothing about the merged state.
+- **New review or comments** → answer them; findings get fixed or refuted with evidence.
+- **Something that changes the PR's premise** (a merged PR introduced a helper this PR
+  duplicates, a config knob that replaced a literal) → treat it as a finding: adapt the code
+  and pin the relationship with a test, so the two cannot drift apart later.
+- **Nothing new** → say so in one line with the timestamp and move on. Do not pad a report.
+
+Requested by the operator on 2026-11-03 (translated from Dutch): *"You are also supposed to
+check open items for new additions, and then respond to those."*
+
 PR-Piet is wired through `.github/workflows/pr-piet.yml` → reusable
 `m0nklabs/pr-piet/.github/workflows/reusable-pr-piet.yml`. It reviews on PR events
 and on a `/review` comment from `m0nk111`; suggestions arrive as review bodies and
@@ -191,7 +227,11 @@ $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
     --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
 git push origin HEAD:<headRefName>
 # wait for the three required checks AND a fresh PR-Piet review on the new head
-gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false
+# --match-head-commit binds the merge to the commit that was just verified: without it a
+# commit pushed between verification and merge would be merged on the strength of checks
+# and a review that never saw it.
+gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false \
+    --match-head-commit "$(git rev-parse HEAD)"
 ```
 
 `gh pr merge` answers a refused merge with "the base branch policy prohibits the merge" and
@@ -205,6 +245,21 @@ on that head is unanswered or requests changes, the base merge conflicts, `main`
 or the PR touches the human-gated five (auth, migrations, secrets, deploy, dependency majors) —
 those keep their gate regardless of age. At most **three** merges per run, and the closing
 comment records `auto-merged after N days mergeable` with the re-verification result.
+
+"Settled" is a checklist, not a feeling. A PR is **not** finished until all five hold:
+
+1. CI green on the current head SHA.
+2. The latest PR-Piet review is on that **same** SHA — a review of an older head proves
+   nothing about the current one.
+3. Every finding is resolved or answered, and no thread is unanswered.
+4. Any finding the review marked `[backlog]` is recorded somewhere durable (an issue), not
+   just mentioned in passing.
+5. **The closing comment is posted and names that SHA.**
+
+A green, clean PR without (5) is unfinished work, not a quiet success. If a run cannot settle a
+PR, the run report says so explicitly instead of leaving it implicit — and the next run settles
+it first, before starting anything new. (Learned the hard way on 2026-11-03: #225 was green and
+review-covered, and the run still moved on without closing it out, so the human had to ask.)
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
 
