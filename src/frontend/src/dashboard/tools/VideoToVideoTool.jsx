@@ -217,8 +217,14 @@ export default function VideoToVideoTool({
   // state, and nothing writes after the tool unmounts.
   const pickTicketRef = useRef(0)
   const mountedRef = useRef(true)
-  useEffect(() => () => {
-    mountedRef.current = false
+  // Strict Mode (main.jsx) runs setup → cleanup → setup in development, so the
+  // flag has to be restored on setup: a cleanup-only version left it false and
+  // every later pick was dropped as if the tool had been unmounted.
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   const handleMediaSelect = useCallback(async (item) => {

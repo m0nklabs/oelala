@@ -29,3 +29,6 @@
   write state, so a slow download of the first pick cannot overwrite the second.
 - The reference-preview cleanup reads the live URL set at unmount time instead of the empty set
   captured on the first render, so switching tools actually frees those files.
+- The pick guard no longer breaks under React Strict Mode (`main.jsx` enables it): the mount flag is
+  restored on setup, because Strict Mode runs setup → cleanup → setup in development and a
+  cleanup-only version dropped every later pick as if the tool had unmounted.
