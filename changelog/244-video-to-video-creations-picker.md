@@ -22,3 +22,10 @@
   is called with `overwrite=true`. A second request therefore replaced the media of a workflow
   that was still queued, which then rendered somebody else's video. Upload names now carry a
   per-request id.
+- The generate button is locked for the whole submit, not just the network call: reading a large
+  source video to a data URL is asynchronous, so a double click used to submit the same input
+  twice (and the second request could even start after the first finished).
+- Picking a creation twice no longer races: each pick claims a ticket and only the newest one may
+  write state, so a slow download of the first pick cannot overwrite the second.
+- The reference-preview cleanup reads the live URL set at unmount time instead of the empty set
+  captured on the first render, so switching tools actually frees those files.

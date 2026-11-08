@@ -118,7 +118,14 @@ export default function VideoToVideoTool({
   const [queued, setQueued] = useState(null)
   const { generate, loading } = useGeneration()
 
-  const busy = loading
+  // Reading a source video to a data URL is asynchronous and can take a while
+  // for a large file. While that runs `loading` is still false, so the button
+  // stayed live and a double click submitted the same input twice — the second
+  // request could even start after the first one finished. The lock covers the
+  // whole submit, not just the network call.
+  const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false)
+  const busy = loading || submitting
   const canSubmit = !!videoFile && !busy
 
   // Fetch available LoRAs on mount
@@ -193,11 +200,11 @@ export default function VideoToVideoTool({
     refPreviewUrls.current = active
   }, [refImages])
 
-  useEffect(() => {
-    const urls = refPreviewUrls.current
-    return () => {
-      for (const url of urls) URL.revokeObjectURL(url)
-    }
+  useEffect(() => () => {
+    // Read .current at cleanup time: the effect above replaces the Set on every
+    // change, so a captured reference would still point at the initial empty one
+    // and revoke nothing.
+    for (const url of refPreviewUrls.current) URL.revokeObjectURL(url)
   }, [])
 
   // ── Pick a source video from My Creations / the gallery ────────────────
@@ -205,9 +212,20 @@ export default function VideoToVideoTool({
   // The R2V adapters take the video as a raw base64 data URL, so a picked
   // item has to become the same File the upload path produces: fetch it once
   // and hand it to handleVideoSelect. Everything downstream stays unchanged.
+  // Fetching a creation takes time, so picking A and then B can finish in the
+  // wrong order. Every pick claims a ticket; only the newest one may write to
+  // state, and nothing writes after the tool unmounts.
+  const pickTicketRef = useRef(0)
+  const mountedRef = useRef(true)
+  useEffect(() => () => {
+    mountedRef.current = false
+  }, [])
+
   const handleMediaSelect = useCallback(async (item) => {
     if (!item) return
     setShowMediaPicker(false)
+    const ticket = pickTicketRef.current + 1
+    pickTicketRef.current = ticket
     const rawUrl = item.signed_url || item.url || ''
     if (!rawUrl) {
       setError('That creation has no usable file URL')
@@ -218,6 +236,7 @@ export default function VideoToVideoTool({
       const res = await apiFetch(fetchUrl)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()
+      if (ticket !== pickTicketRef.current || !mountedRef.current) return
       const filename = item.filename || rawUrl.split('/').pop()?.split('?')[0] || 'source.mp4'
       // The stored object may come back as application/octet-stream; derive the
       // type from the extension so the format check in handleVideoSelect passes.
@@ -230,6 +249,7 @@ export default function VideoToVideoTool({
             : 'video/mp4'
       handleVideoSelect(new File([blob], filename, { type }))
     } catch (err) {
+      if (ticket !== pickTicketRef.current || !mountedRef.current) return
       console.warn('⚠️ R2V: could not load the picked creation', err)
       setError(`Could not load that video from your creations: ${err.message}`)
     }
@@ -272,6 +292,7 @@ export default function VideoToVideoTool({
 
   // ── Submit ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (busy || submittingRef.current) return
     if (!user) {
       requestLogin("Log in om video's te genereren")
       return
@@ -282,8 +303,12 @@ export default function VideoToVideoTool({
       return
     }
 
+    // Claim the lock only after the validations: an early return above must not
+    // leave it set, or the button stays dead for the rest of the session.
+    submittingRef.current = true
     setError('')
     setQueued(null)
+    setSubmitting(true)
 
     try {
       const inputVideo = await readFileAsDataUrl(videoFile)
@@ -342,6 +367,9 @@ export default function VideoToVideoTool({
         timestamp: new Date().toISOString(),
         meta: { message, modelMode },
       })
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
     }
   }
 
