@@ -176,6 +176,30 @@ export default function VideoToVideoTool({
     setVideoPreviewUrl('')
   }
 
+  // Object URLs hold the whole file in memory until they are revoked. A source
+  // video is large, so revoke the previous preview whenever it is replaced and
+  // on unmount — swapping tools otherwise keeps every dropped file alive.
+  useEffect(() => {
+    if (!videoPreviewUrl) return undefined
+    return () => URL.revokeObjectURL(videoPreviewUrl)
+  }, [videoPreviewUrl])
+
+  const refPreviewUrls = useRef(new Set())
+  useEffect(() => {
+    const active = new Set(refImages.map((ref) => ref.previewUrl))
+    for (const url of refPreviewUrls.current) {
+      if (!active.has(url)) URL.revokeObjectURL(url)
+    }
+    refPreviewUrls.current = active
+  }, [refImages])
+
+  useEffect(() => {
+    const urls = refPreviewUrls.current
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url)
+    }
+  }, [])
+
   // ── Pick a source video from My Creations / the gallery ────────────────
   //
   // The R2V adapters take the video as a raw base64 data URL, so a picked
@@ -781,7 +805,10 @@ export default function VideoToVideoTool({
               className="form-input"
               type="number"
               value={seed}
-              onChange={(e) => setSeed(parseInt(e.target.value) || -1)}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10)
+                setSeed(Number.isNaN(value) ? -1 : value)
+              }}
               style={{ flex: 1 }}
             />
             <button className="btn ghost sm" onClick={() => setSeed(-1)} style={{ whiteSpace: 'nowrap' }}>
@@ -871,14 +898,14 @@ export default function VideoToVideoTool({
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Strength</label>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength || 1.0).toFixed(2)}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(config.strength ?? 1.0).toFixed(2)}</span>
                     </div>
                     <input
                       type="range"
                       min="0"
                       max="2"
                       step="0.05"
-                      value={config.strength || 1.0}
+                      value={config.strength ?? 1.0}
                       onChange={(e) => {
                         const nc = [...loraConfigs]
                         nc[idx] = { ...config, strength: parseFloat(e.target.value) }

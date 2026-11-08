@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import uuid
 from typing import Any
 
 from ...adapter import GenerationAdapter, ProgressCallback
@@ -180,12 +181,18 @@ class MiniMaxH3LocalR2VAdapter(GenerationAdapter):
 
         # Upload the source video and the reference images to the resolved
         # server (router pre-upload skipped via handles_own_image_upload).
+        #
+        # The filenames carry a per-request id: ComfyUI's /upload/image is
+        # called with overwrite=true, so fixed names let a second request
+        # replace the media of a workflow that is still queued — that job then
+        # renders somebody else's video. One id per request keeps them apart.
+        upload_id = uuid.uuid4().hex[:12]
         try:
             video_bytes = self._to_video_bytes(req.input_video)
             uploaded_video = await asyncio.to_thread(
                 client.upload_video_from_bytes,
                 video_bytes,
-                filename="v2_minimax_r2v_source.mp4",
+                filename=f"v2_minimax_r2v_source_{upload_id}.mp4",
             )
         except Exception as e:
             logger.exception("❌ Failed to decode/upload MiniMax-H3 R2V source video")
@@ -201,7 +208,7 @@ class MiniMaxH3LocalR2VAdapter(GenerationAdapter):
                 uploaded = await asyncio.to_thread(
                     client.upload_image_from_bytes,
                     img_bytes,
-                    filename=f"v2_minimax_r2v_ref_{idx}.png",
+                    filename=f"v2_minimax_r2v_ref_{upload_id}_{idx}.png",
                 )
             except Exception as e:
                 logger.exception(f"❌ Failed to upload R2V reference image {idx}")
