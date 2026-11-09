@@ -264,7 +264,7 @@ scan: read that PR's activity, re-verify it, and merge only that one. Record the
 merge comment — `answered-review` with the link, or `auto-merged after N hours` (or `N days`) with
 the re-verification result — so the timing stays reconstructable.
 
-"Settled" is a checklist, not a feeling. A PR is **not** finished until all five hold:
+"Settled" is a checklist, not a feeling. A PR is **not** finished until 1–4 hold:
 
 1. CI green on the current head SHA.
 2. The latest PR-Piet review is on that **same** SHA — a review of an older head proves
@@ -272,17 +272,18 @@ the re-verification result — so the timing stays reconstructable.
 3. Every finding is resolved or answered, and no thread is unanswered.
 4. Any finding the review marked `[backlog]` is recorded somewhere durable (an issue), not
    just mentioned in passing.
-5. **The closing comment is posted and names that SHA** — or, when there was nothing to review,
-   the merge records the head itself. The comment marks the point; it is not a precondition for
-   merging.
+5. **The point is recorded**, so the clock stays reconstructable — a closing comment naming that
+   SHA when one is written, or the merge comment when it is not. Recording is after the fact:
+   **it is never a precondition for merging, with or without a completed review.**
 
-A green, clean PR without (5) is **not** unfinished when there was nothing to review: it is
-merge-ready and its clock is running. When there was a review, answer it — an unanswered review
-blocks regardless of age. If a run cannot settle a PR, the run report says so explicitly instead
-of leaving it implicit. (Learned the hard way on 2026-11-03: #225 was green and review-covered,
-and the run still moved on without closing it out, so the human had to ask. Superseded
-2026-11-09: the operator revised the policy — 24 hours, silence is permission, and a quiet PR is
-not a stalled one.)
+Points 1–4 are the gate; (5) is bookkeeping. A PR whose reviews are all answered is merge-ready the
+moment it is green, comment or no comment, and its clock is running from the last answered review.
+When there was a review, answer it — an unanswered review blocks regardless of age and never
+becomes eligible by waiting. If a run cannot settle a PR, the run report says so explicitly instead
+of leaving it implicit. (Learned the hard way on 2026-11-03: #225 was green and review-covered and
+the run moved on without closing it out, so the human had to ask. Revised 2026-11-09: the operator
+made the record explicit but non-blocking — 24 hours, silence is permission, and a quiet PR is not
+a stalled one.)
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
 
