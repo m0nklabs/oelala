@@ -53,8 +53,8 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 
 **Not granted (hard stops):**
 
-1. **Merging is allowed only under §4.2** (a PR that has been continuously mergeable for
-   more than two days, re-verified at merge time). Never approve a PR, never dismiss a
+1. **Merging is allowed only under §4.2** (24 hours after the review is finished, with the
+   latest activity read and the merge re-verified at merge time). Never approve a PR, never dismiss a
    review, never resolve a thread that still has an unanswered finding. Everything else is
    left ready for the human merge.
 2. **Never push to `main`** or any long-lived branch, never force-push, never rewrite
@@ -208,16 +208,30 @@ When a PR is settled (CI green, latest review covers the merge head, every findi
 resolved or answered), leave one closing comment: what changed, the evidence, and
 `Ready for human merge`. Merging follows §4.2 only. Draft PRs stay draft until validated.
 
-### 4.2 Merge readiness and the two-day rule
+### 4.2 Merge readiness and the 24-hour rule
 
-A PR is **merge-ready** only when the latest review on the current head is answered — with a
-fix, or with a reply explaining with evidence why the change is not needed. An unanswered
-review, a review of an older head, or a dangling thread means not merge-ready, however green
-the checks are. This mirrors the user-level rule in `$DSH_HOME/AGENTS.md`.
+Merge-readiness means the review is **finished**, not merely quiet: every outstanding review is
+closed out — with a fix, or with a reply that explains with evidence why the change is not needed.
+When there was nothing to review, the PR is merge-ready as soon as it is up and its checks pass.
+A closing comment that says what the change does is the normal way to mark that point, but it is
+**never a precondition**. This mirrors the user-level rule in `$DSH_HOME/AGENTS.md`.
 
-A PR that has been **continuously mergeable for more than two days** may be merged without
-waiting for the human. Before doing so, re-verify in the same run — a two-day-old green check
-says nothing about `main` today:
+Merge **24 hours after** that point if the operator has not intervened. Operator silence for 24
+hours is standing permission — do not ask again at merge time. A quiet PR is not a stalled one: no
+comment on it and 24 hours gone means merge it.
+
+**The clock.** It starts when the last outstanding review is answered, or — with nothing to review
+— at the last push on the head. Not at the PR's creation. An unanswered review never becomes
+eligible through age, and answering a newer review does not absolve an older one. Restart the
+clock whenever new work is pushed.
+
+**Read the latest activity before every merge.** A reply from the operator, a reviewer or a bot can
+carry a question, a suggestion, a correction or context. Fetch that PR's latest comments, reviews
+and commits and read them — never scan for a veto signature only. If the last activity still needs
+a reply, a fix or a decision, do that instead of merging, and the clock restarts. A recent
+`updated_at`, a green check or yesterday's state proves nothing.
+
+Then re-verify at merge time — an old green check says nothing about `main` today:
 
 ```bash
 gh pr view <N> -R m0nklabs/oelala --json mergeStateStatus,mergeable,reviewDecision
@@ -243,8 +257,12 @@ the loop merges explicitly or not at all.
 Stop and report instead of merging when: a required check is not green on the head, the review
 on that head is unanswered or requests changes, the base merge conflicts, `main` itself is red,
 or the PR touches the human-gated five (auth, migrations, secrets, deploy, dependency majors) —
-those keep their gate regardless of age. At most **three** merges per run, and the closing
-comment records `auto-merged after N days mergeable` with the re-verification result.
+those keep their gate regardless of the clock. At most **three** merges per run.
+
+**A merge is a deliberate action on one PR**, never a side effect of a watch, a sweep or a batch
+scan: read that PR's activity, re-verify it, and merge only that one. Record the anchor in the
+merge comment — `answered-review` with the link, or `auto-merged after N hours` (or `N days`) with
+the re-verification result — so the timing stays reconstructable.
 
 "Settled" is a checklist, not a feeling. A PR is **not** finished until all five hold:
 
@@ -254,12 +272,17 @@ comment records `auto-merged after N days mergeable` with the re-verification re
 3. Every finding is resolved or answered, and no thread is unanswered.
 4. Any finding the review marked `[backlog]` is recorded somewhere durable (an issue), not
    just mentioned in passing.
-5. **The closing comment is posted and names that SHA.**
+5. **The closing comment is posted and names that SHA** — or, when there was nothing to review,
+   the merge records the head itself. The comment marks the point; it is not a precondition for
+   merging.
 
-A green, clean PR without (5) is unfinished work, not a quiet success. If a run cannot settle a
-PR, the run report says so explicitly instead of leaving it implicit — and the next run settles
-it first, before starting anything new. (Learned the hard way on 2026-11-03: #225 was green and
-review-covered, and the run still moved on without closing it out, so the human had to ask.)
+A green, clean PR without (5) is **not** unfinished when there was nothing to review: it is
+merge-ready and its clock is running. When there was a review, answer it — an unanswered review
+blocks regardless of age. If a run cannot settle a PR, the run report says so explicitly instead
+of leaving it implicit. (Learned the hard way on 2026-11-03: #225 was green and review-covered,
+and the run still moved on without closing it out, so the human had to ask. Superseded
+2026-11-09: the operator revised the policy — 24 hours, silence is permission, and a quiet PR is
+not a stalled one.)
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
 
