@@ -231,22 +231,30 @@ and commits and read them — never scan for a veto signature only. If the last 
 a reply, a fix or a decision, do that instead of merging, and the clock restarts. A recent
 `updated_at`, a green check or yesterday's state proves nothing.
 
-Then re-verify at merge time — an old green check says nothing about `main` today:
+Then re-verify at merge time — an old green check says nothing about `main` today. The
+verification does **not** push anything: a pushed refresh is new work, and new work restarts the
+24-hour clock, so a refresh-then-merge in one run would be impossible by construction.
 
 ```bash
+git fetch origin --prune
 gh pr view <N> -R m0nklabs/oelala --json mergeStateStatus,mergeable,reviewDecision
-git fetch origin --prune                                     # base may have moved
-git merge --no-ff --no-edit origin/main                      # on the PR head, no force-push
+# would it still merge cleanly into today's main? (no working-tree change, no push)
+git merge-tree --write-tree origin/main origin/<headRefName> | head -1     # tree = clean
+# and the checks on the head nobody has touched since are the checks that count:
+gh api repos/m0nklabs/oelala/commits/<headSHA>/check-runs \
+    --jq '[.check_runs[]|select(.name|test("Backend|Pre-commit|Frontend"))]|map(.conclusion)'
 $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
     --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
-git push origin HEAD:<headRefName>
-# wait for the three required checks AND a fresh PR-Piet review on the new head
 # --match-head-commit binds the merge to the commit that was just verified: without it a
 # commit pushed between verification and merge would be merged on the strength of checks
 # and a review that never saw it.
 gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false \
-    --match-head-commit "$(git rev-parse HEAD)"
+    --match-head-commit "<headSHA>"
 ```
+
+Refresh the base with a merge commit **only when the dry run conflicts**, and treat that push as
+new work: the clock restarts and the next run merges. `strict_required_status_checks_policy` is
+`false` on this repo, so a green head does not need a base update to be mergeable.
 
 `gh pr merge` answers a refused merge with "the base branch policy prohibits the merge" and
 offers `--admin`. **Never use `--admin`** (or any other bypass): the policy that just refused the

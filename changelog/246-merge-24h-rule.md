@@ -9,3 +9,6 @@
   rather than a side effect of a sweep.
 - The closing comment marks the point at which a pull request became merge-ready; it is no longer a
   precondition for merging when there was nothing to review.
+- Re-verification no longer pushes: a base refresh is new work and new work restarts the clock, so
+  a refresh-then-merge in one run would be impossible. The base is checked with a dry-run
+  `git merge-tree` instead, and a real refresh only happens when the dry run conflicts.
