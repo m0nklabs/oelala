@@ -254,11 +254,16 @@ fi
 #    break when main changed an interface this branch still calls. A throwaway
 #    worktree gives the combined tree without touching the branch or pushing.
 WT=$(mktemp -d)
+# Clean up on every exit path, so an abort never leaves a worktree behind.
+trap 'git worktree remove --force "$WT" 2>/dev/null' EXIT
 git worktree add -q "$WT" origin/<headRefName>
+# Stop here on a failed merge or a failed test: the cleanup must not turn a red
+# suite into a green-looking step, and the merge command below must not run.
 ( cd "$WT" && git merge -q --no-edit origin/main && \
   $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
-      --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration" )
-git worktree remove --force "$WT"
+      --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration" ) || {
+    echo "❌ the merged tree does not pass — do NOT merge"; exit 1; }
+trap - EXIT; git worktree remove --force "$WT"
 
 # --match-head-commit binds the merge to the commit that was just verified: without it a
 # commit pushed between verification and merge would be merged on the strength of checks

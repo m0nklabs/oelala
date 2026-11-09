@@ -17,3 +17,7 @@
   holding the merged tree. And the clean-merge check reads `git merge-tree`'s own exit status —
   piping it through `head` reports success for the one case it must catch, because `merge-tree`
   writes a tree and exits 1 on a conflict.
+- The merge-result check aborts on a red suite instead of continuing: the worktree cleanup used to
+  run anyway and hand back a success status, which would have let the merge command go ahead on a
+  failing merged tree. Cleanup now runs on every exit path through a trap, and a failed merge or
+  test stops the sequence with a non-zero status.
