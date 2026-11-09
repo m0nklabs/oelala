@@ -18,6 +18,7 @@ const TextToVideoTool = lazy(() => import('./tools/TextToVideoTool'))
 const ImageToVideoTool = lazy(() => import('./tools/ImageToVideoTool'))
 const TextToImageTool = lazy(() => import('./tools/TextToImageTool'))
 const TextToImageToVideoTool = lazy(() => import('./tools/TextToImageToVideoTool'))
+const VideoToVideoTool = lazy(() => import('./tools/VideoToVideoTool'))
 const VideoToTextTool = lazy(() => import('./tools/VideoToTextTool'))
 const SpeechToVideoTool = lazy(() => import('./tools/SpeechToVideoTool'))
 const PostProcessingTool = lazy(() => import('./tools/PostProcessingTool'))
@@ -194,6 +195,8 @@ export default function Dashboard() {
         return 'Image to Video'
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
         return 'Text to Image to Video'
+      case TOOL_IDS.VIDEO_TO_VIDEO:
+        return 'Video to Video'
       case TOOL_IDS.VIDEO_TO_TEXT:
         return 'Video to Text'
       case TOOL_IDS.POST_PROCESSING:
@@ -299,6 +302,8 @@ export default function Dashboard() {
         return wrapWithSuspense(<ImageToVideoTool onOutput={setOutput} onRefreshHistory={onRefreshHistory} onCreationsModeChange={onCreationsModeChange} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.TEXT_TO_IMAGE_TO_VIDEO:
         return wrapWithSuspense(<TextToImageToVideoTool onOutput={setOutput} onParamsChange={onParamsChange} onJobSubmitted={onJobSubmitted} />)
+      case TOOL_IDS.VIDEO_TO_VIDEO:
+        return wrapWithSuspense(<VideoToVideoTool onOutput={setOutput} onJobSubmitted={onJobSubmitted} pendingImport={pendingImport} onImportConsumed={() => setPendingImport(null)} />)
       case TOOL_IDS.PIPELINE:
         return wrapWithSuspense(<PipelineTool />)
       case TOOL_IDS.LORA_TRAINING:

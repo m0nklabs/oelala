@@ -264,6 +264,7 @@ export default function MyMediaTool({ filter: filterProp = 'all', selectionMode 
   const [gridToolMenuData, setGridToolMenuData] = useState(null)
   const SEND_TO_TOOLS = [
     { id: 'image-to-video', label: '🎬 Image to Video', accepts: ['image', 'video'] },
+    { id: 'video-to-video', label: '🔁 Video to Video', accepts: ['video'] },
     { id: 'text-to-video',  label: '📝 Text to Video',  accepts: ['image', 'video'] },
     { id: 'text-to-image',  label: '🖼️ Text to Image',  accepts: ['image', 'video'] },
     { id: 'image-to-image', label: '🔄 Image to Image', accepts: ['image', 'video'] },
