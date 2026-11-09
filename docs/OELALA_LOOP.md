@@ -238,19 +238,38 @@ verification does **not** push anything: a pushed refresh is new work, and new w
 ```bash
 git fetch origin --prune
 gh pr view <N> -R m0nklabs/oelala --json mergeStateStatus,mergeable,reviewDecision
-# would it still merge cleanly into today's main? (no working-tree change, no push)
-git merge-tree --write-tree origin/main origin/<headRefName> | head -1     # tree = clean
-# and the checks on the head nobody has touched since are the checks that count:
 gh api repos/m0nklabs/oelala/commits/<headSHA>/check-runs \
     --jq '[.check_runs[]|select(.name|test("Backend|Pre-commit|Frontend"))]|map(.conclusion)'
-$HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
-    --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
+
+# 1. Would it still merge cleanly into today's main? Ask git, not a pipe:
+#    `merge-tree --write-tree` writes a tree *and* exits 1 on a conflict, so
+#    piping it through `head` reports success for exactly the case that matters.
+if git merge-tree --write-tree origin/main origin/<headRefName> >/dev/null; then
+    echo "merge is clean"
+else
+    echo "CONFLICT — refresh the base; that push is new work, so the clock restarts"
+fi
+
+# 2. Test the RESULT of the merge, not the branch. A conflict-free merge can still
+#    break when main changed an interface this branch still calls. A throwaway
+#    worktree gives the combined tree without touching the branch or pushing.
+WT=$(mktemp -d)
+git worktree add -q "$WT" origin/<headRefName>
+( cd "$WT" && git merge -q --no-edit origin/main && \
+  $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
+      --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration" )
+git worktree remove --force "$WT"
+
 # --match-head-commit binds the merge to the commit that was just verified: without it a
 # commit pushed between verification and merge would be merged on the strength of checks
 # and a review that never saw it.
 gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false \
     --match-head-commit "<headSHA>"
 ```
+
+CI already tests GitHub's synthetic merge ref for a `pull_request` event — but only for the merge
+state **at the time it ran**. If `main` moves afterwards, that combination is untested and, with
+`strict_required_status_checks_policy: false`, still mergeable. Step 2 is what covers that gap.
 
 Refresh the base with a merge commit **only when the dry run conflicts**, and treat that push as
 new work: the clock restarts and the next run merges. `strict_required_status_checks_policy` is

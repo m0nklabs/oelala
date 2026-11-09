@@ -12,3 +12,8 @@
 - Re-verification no longer pushes: a base refresh is new work and new work restarts the clock, so
   a refresh-then-merge in one run would be impossible. The base is checked with a dry-run
   `git merge-tree` instead, and a real refresh only happens when the dry run conflicts.
+- The merge-time verification now tests what will actually land: a clean merge can still break when
+  `main` changed an interface the branch still calls, so the suite runs in a throwaway worktree
+  holding the merged tree. And the clean-merge check reads `git merge-tree`'s own exit status —
+  piping it through `head` reports success for the one case it must catch, because `merge-tree`
+  writes a tree and exits 1 on a conflict.
