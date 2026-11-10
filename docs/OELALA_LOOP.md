@@ -53,8 +53,8 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 
 **Not granted (hard stops):**
 
-1. **Merging is allowed only under §4.2** (a PR that has been continuously mergeable for
-   more than two days, re-verified at merge time). Never approve a PR, never dismiss a
+1. **Merging is allowed only under §4.2** (24 hours after the review is finished, with the
+   latest activity read and the merge re-verified at merge time). Never approve a PR, never dismiss a
    review, never resolve a thread that still has an unanswered finding. Everything else is
    left ready for the human merge.
 2. **Never push to `main`** or any long-lived branch, never force-push, never rewrite
@@ -208,31 +208,77 @@ When a PR is settled (CI green, latest review covers the merge head, every findi
 resolved or answered), leave one closing comment: what changed, the evidence, and
 `Ready for human merge`. Merging follows §4.2 only. Draft PRs stay draft until validated.
 
-### 4.2 Merge readiness and the two-day rule
+### 4.2 Merge readiness and the 24-hour rule
 
-A PR is **merge-ready** only when the latest review on the current head is answered — with a
-fix, or with a reply explaining with evidence why the change is not needed. An unanswered
-review, a review of an older head, or a dangling thread means not merge-ready, however green
-the checks are. This mirrors the user-level rule in `$DSH_HOME/AGENTS.md`.
+Merge-readiness means the review is **finished**, not merely quiet: every outstanding review is
+closed out — with a fix, or with a reply that explains with evidence why the change is not needed.
+When there was nothing to review, the PR is merge-ready as soon as it is up and its checks pass.
+A closing comment that says what the change does is the normal way to mark that point, but it is
+**never a precondition**. This mirrors the user-level rule in `$DSH_HOME/AGENTS.md`.
 
-A PR that has been **continuously mergeable for more than two days** may be merged without
-waiting for the human. Before doing so, re-verify in the same run — a two-day-old green check
-says nothing about `main` today:
+Merge **24 hours after** that point if the operator has not intervened. Operator silence for 24
+hours is standing permission — do not ask again at merge time. A quiet PR is not a stalled one: no
+comment on it and 24 hours gone means merge it.
+
+**The clock.** It starts when the last outstanding review is answered, or — with nothing to review
+— at the last push on the head. Not at the PR's creation. An unanswered review never becomes
+eligible through age, and answering a newer review does not absolve an older one. Restart the
+clock whenever new work is pushed.
+
+**Read the latest activity before every merge.** A reply from the operator, a reviewer or a bot can
+carry a question, a suggestion, a correction or context. Fetch that PR's latest comments, reviews
+and commits and read them — never scan for a veto signature only. If the last activity still needs
+a reply, a fix or a decision, do that instead of merging, and the clock restarts. A recent
+`updated_at`, a green check or yesterday's state proves nothing.
+
+Then re-verify at merge time — an old green check says nothing about `main` today. The
+verification does **not** push anything: a pushed refresh is new work, and new work restarts the
+24-hour clock, so a refresh-then-merge in one run would be impossible by construction.
 
 ```bash
+git fetch origin --prune
 gh pr view <N> -R m0nklabs/oelala --json mergeStateStatus,mergeable,reviewDecision
-git fetch origin --prune                                     # base may have moved
-git merge --no-ff --no-edit origin/main                      # on the PR head, no force-push
-$HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
-    --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration"
-git push origin HEAD:<headRefName>
-# wait for the three required checks AND a fresh PR-Piet review on the new head
+gh api repos/m0nklabs/oelala/commits/<headSHA>/check-runs \
+    --jq '[.check_runs[]|select(.name|test("Backend|Pre-commit|Frontend"))]|map(.conclusion)'
+
+# 1. Would it still merge cleanly into today's main? Ask git, not a pipe:
+#    `merge-tree --write-tree` writes a tree *and* exits 1 on a conflict, so
+#    piping it through `head` reports success for exactly the case that matters.
+if git merge-tree --write-tree origin/main origin/<headRefName> >/dev/null; then
+    echo "merge is clean"
+else
+    echo "CONFLICT — refresh the base; that push is new work, so the clock restarts"
+fi
+
+# 2. Test the RESULT of the merge, not the branch. A conflict-free merge can still
+#    break when main changed an interface this branch still calls. A throwaway
+#    worktree gives the combined tree without touching the branch or pushing.
+WT=$(mktemp -d)
+# Clean up on every exit path, so an abort never leaves a worktree behind.
+trap 'git worktree remove --force "$WT" 2>/dev/null' EXIT
+git worktree add -q "$WT" origin/<headRefName>
+# Stop here on a failed merge or a failed test: the cleanup must not turn a red
+# suite into a green-looking step, and the merge command below must not run.
+( cd "$WT" && git merge -q --no-edit origin/main && \
+  $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
+      --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration" ) || {
+    echo "❌ the merged tree does not pass — do NOT merge"; exit 1; }
+trap - EXIT; git worktree remove --force "$WT"
+
 # --match-head-commit binds the merge to the commit that was just verified: without it a
 # commit pushed between verification and merge would be merged on the strength of checks
 # and a review that never saw it.
 gh pr merge <N> -R m0nklabs/oelala --merge --delete-branch=false \
-    --match-head-commit "$(git rev-parse HEAD)"
+    --match-head-commit "<headSHA>"
 ```
+
+CI already tests GitHub's synthetic merge ref for a `pull_request` event — but only for the merge
+state **at the time it ran**. If `main` moves afterwards, that combination is untested and, with
+`strict_required_status_checks_policy: false`, still mergeable. Step 2 is what covers that gap.
+
+Refresh the base with a merge commit **only when the dry run conflicts**, and treat that push as
+new work: the clock restarts and the next run merges. `strict_required_status_checks_policy` is
+`false` on this repo, so a green head does not need a base update to be mergeable.
 
 `gh pr merge` answers a refused merge with "the base branch policy prohibits the merge" and
 offers `--admin`. **Never use `--admin`** (or any other bypass): the policy that just refused the
@@ -243,10 +289,14 @@ the loop merges explicitly or not at all.
 Stop and report instead of merging when: a required check is not green on the head, the review
 on that head is unanswered or requests changes, the base merge conflicts, `main` itself is red,
 or the PR touches the human-gated five (auth, migrations, secrets, deploy, dependency majors) —
-those keep their gate regardless of age. At most **three** merges per run, and the closing
-comment records `auto-merged after N days mergeable` with the re-verification result.
+those keep their gate regardless of the clock. At most **three** merges per run.
 
-"Settled" is a checklist, not a feeling. A PR is **not** finished until all five hold:
+**A merge is a deliberate action on one PR**, never a side effect of a watch, a sweep or a batch
+scan: read that PR's activity, re-verify it, and merge only that one. Record the anchor in the
+merge comment — `answered-review` with the link, or `auto-merged after N hours` (or `N days`) with
+the re-verification result — so the timing stays reconstructable.
+
+"Settled" is a checklist, not a feeling. A PR is **not** finished until 1–4 hold:
 
 1. CI green on the current head SHA.
 2. The latest PR-Piet review is on that **same** SHA — a review of an older head proves
@@ -254,12 +304,18 @@ comment records `auto-merged after N days mergeable` with the re-verification re
 3. Every finding is resolved or answered, and no thread is unanswered.
 4. Any finding the review marked `[backlog]` is recorded somewhere durable (an issue), not
    just mentioned in passing.
-5. **The closing comment is posted and names that SHA.**
+5. **The point is recorded**, so the clock stays reconstructable — a closing comment naming that
+   SHA when one is written, or the merge comment when it is not. Recording is after the fact:
+   **it is never a precondition for merging, with or without a completed review.**
 
-A green, clean PR without (5) is unfinished work, not a quiet success. If a run cannot settle a
-PR, the run report says so explicitly instead of leaving it implicit — and the next run settles
-it first, before starting anything new. (Learned the hard way on 2026-11-03: #225 was green and
-review-covered, and the run still moved on without closing it out, so the human had to ask.)
+Points 1–4 are the gate; (5) is bookkeeping. A PR whose reviews are all answered is merge-ready the
+moment it is green, comment or no comment, and its clock is running from the last answered review.
+When there was a review, answer it — an unanswered review blocks regardless of age and never
+becomes eligible by waiting. If a run cannot settle a PR, the run report says so explicitly instead
+of leaving it implicit. (Learned the hard way on 2026-11-03: #225 was green and review-covered and
+the run moved on without closing it out, so the human had to ask. Revised 2026-11-09: the operator
+made the record explicit but non-blocking — 24 hours, silence is permission, and a quiet PR is not
+a stalled one.)
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
 
