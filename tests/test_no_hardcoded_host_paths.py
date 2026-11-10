@@ -24,7 +24,6 @@ BACKEND_DIR = Path(__file__).parent.parent / "src" / "backend"
 #: Remaining absolute host paths per module. Shrink this; never grow it.
 ALLOWED = {
     "app.py": 3,  # 2x venv yt-dlp binary + the env file (fixed in #225, pending merge)
-    "admin_api.py": 1,  # filesystem-browser root listing
     "comfyui_client.py": 1,  # MinIO data dir, already env-overridable
 }
 

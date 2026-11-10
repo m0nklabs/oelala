@@ -1086,12 +1086,9 @@ async def get_system_health(admin: User = Depends(get_admin_user)):
             "backend": "minio",
         }
 
-    # Disk usage
-    for name, path in [
-        ("root", "/"),
-        ("home", "/home/flip"),
-        ("ssd", "/mnt/ssd"),
-    ]:
+    # Disk usage — the mounts are deployment configuration (ADMIN_DISK_ROOTS), so a
+    # container or a second box reports its own filesystems instead of this one's.
+    for name, path in paths.disk_usage_roots():
         try:
             usage = shutil.disk_usage(path)
             health["disk"][name] = {
