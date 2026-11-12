@@ -23,7 +23,8 @@ BACKEND_DIR = Path(__file__).parent.parent / "src" / "backend"
 
 #: Remaining absolute host paths per module. Shrink this; never grow it.
 ALLOWED = {
-    "admin_api.py": 1,  # filesystem-browser root listing (slice 2b)
+    # Empty since #239 (yt-dlp, MinIO data dir) and #252 (admin disk mounts): the
+    # last four absolute host paths outside the checkout are configuration now.
 }
 
 _HOST_PATH = re.compile(r"""/home/[A-Za-z0-9_.-]+""")

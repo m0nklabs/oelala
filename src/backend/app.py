@@ -46,7 +46,10 @@ if _ENV_FILE.is_file():
 elif os.getenv("OELALA_ENV_FILE"):
     # An explicit override that does not exist is a configuration mistake worth saying out
     # loud; the implicit default is allowed to be absent.
-    print(f"⚠️  OELALA_ENV_FILE points to a missing file: {_ENV_FILE}")
+    print(
+        f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⚠️  "
+        f"OELALA_ENV_FILE points to a missing file: {_ENV_FILE}"
+    )
 
 # ── Sentry SDK (must init before FastAPI) ────────────────────────────
 import sentry_sdk

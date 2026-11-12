@@ -63,6 +63,7 @@ def create_registry(
         from .adapters.cloud.ltx23_t2v import LTX23CloudT2VAdapter
         from .adapters.cloud.minimax_h3_i2v import MiniMaxH3CloudI2VAdapter
         from .adapters.cloud.minimax_h3_t2v import MiniMaxH3CloudT2VAdapter
+        from .adapters.cloud.minimax_h3_r2v import MiniMaxH3CloudR2VAdapter
         from .adapters.cloud.cloud_i2i import (
             I2IEditCloudAdapter,
             CloudI2ITransformAdapter,
@@ -85,6 +86,11 @@ def create_registry(
         )
         _register(
             MiniMaxH3CloudT2VAdapter,
+            submit_to_runpod_fn=submit_to_runpod_fn,
+            comfyui_client_fn=comfyui_client_fn,
+        )
+        _register(
+            MiniMaxH3CloudR2VAdapter,
             submit_to_runpod_fn=submit_to_runpod_fn,
             comfyui_client_fn=comfyui_client_fn,
         )
@@ -125,6 +131,7 @@ def create_registry(
         # used (could be a second server like a Windows PC).
         from .adapters.local.minimax_h3_t2v import MiniMaxH3LocalT2VAdapter
         from .adapters.local.minimax_h3_i2v import MiniMaxH3LocalI2VAdapter
+        from .adapters.local.minimax_h3_r2v import MiniMaxH3LocalR2VAdapter
 
         h3_client_fn = client_fn_for_model("minimax_h3")
         try:
@@ -136,6 +143,7 @@ def create_registry(
         if _h3_client is not None:
             _register(MiniMaxH3LocalT2VAdapter, comfyui_client_fn=h3_client_fn)
             _register(MiniMaxH3LocalI2VAdapter, comfyui_client_fn=h3_client_fn)
+            _register(MiniMaxH3LocalR2VAdapter, comfyui_client_fn=h3_client_fn)
         else:
             logger.info(
                 "⚙️ No enabled ComfyUI backend for minimax_h3 — skipping local MiniMax-H3 adapters"

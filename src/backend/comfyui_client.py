@@ -64,6 +64,18 @@ MINIMAX_H3_TURBO_PRESETS = {
     },
 }
 
+# Reference-to-Video (R2V / ref2va) turbo presets. Only a 4-step distill
+# exists for the ref2va weights so far (Comfy-Org repack, v0.1); there is no
+# 8-step ref2v LoRA, so "standard" falls back to the full 20-step sampler.
+MINIMAX_H3_REF2V_TURBO_PRESETS = {
+    "draft": {
+        "lora": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        "steps": 4,
+        "shift_video": 6.0,
+        "shift_audio": 3.0,
+    },
+}
+
 # MiniMax-H3 checkpoint variants: the official Comfy-Org release plus community
 # finetunes mirrored from Civitai into the private HF model repo.
 #
@@ -1253,6 +1265,9 @@ class ComfyUIClient:
         output_kind: str = "vhs",
         quality_mode: str = "full",
         model_variant: str = "official",
+        conditioning_node: Optional[Dict[str, Any]] = None,
+        turbo_presets: Optional[Dict[str, Dict[str, Any]]] = None,
+        extra_nodes: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Shared MiniMax-H3 sampling graph (model load → AV decode → mp4).
 
@@ -1267,10 +1282,19 @@ class ComfyUIClient:
         *model_variant* selects the checkpoint ("official" = Comfy-Org,
         "eros" = H3 Eros Max NSFW finetune with turbo baked in — draft/
         standard only; "full" falls back to official).
+        *conditioning_node* replaces node 5 entirely (complete class_type +
+        inputs dict) — used by the Reference-to-Video builders to swap in
+        MiniMaxH3ReferenceToVideo. Its output contract matches the default
+        ImageToVideo node (slot 0 = conditioning, slot 1 = AV latent), so the
+        sampler tail below stays identical.
+        *turbo_presets* overrides MINIMAX_H3_TURBO_PRESETS (R2V uses the
+        ref2v distill table).
+        *extra_nodes* is merged verbatim into the workflow (input loader
+        nodes the conditioning node needs, e.g. LoadVideo/GetVideoComponents).
         """
         workflow = {}
 
-        preset = MINIMAX_H3_TURBO_PRESETS.get(quality_mode or "full")
+        preset = (turbo_presets or MINIMAX_H3_TURBO_PRESETS).get(quality_mode or "full")
         variant = MINIMAX_H3_VARIANTS.get(model_variant)
         if variant and model_variant != "official":
             # Community checkpoints: turbo variants carry a baked distillation,
@@ -1337,23 +1361,27 @@ class ComfyUIClient:
             "inputs": {"vae_name": audio_vae},
         }
 
-        # Node 5: MiniMaxH3ImageToVideo — prompt → conditioning + AV latent
-        h3_inputs = {
-            "clip": ["2", 0],
-            "vae": ["3", 0],
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "length": length,
-        }
-        if first_frame_link:
-            h3_inputs["first_frame"] = first_frame_link
-        if last_frame_link:
-            h3_inputs["last_frame"] = last_frame_link
-        workflow["5"] = {
-            "class_type": "MiniMaxH3ImageToVideo",
-            "inputs": h3_inputs,
-        }
+        # Node 5: conditioning node — MiniMaxH3ImageToVideo by default, or the
+        # caller-provided node (Reference-to-Video builders).
+        if conditioning_node is not None:
+            workflow["5"] = conditioning_node
+        else:
+            h3_inputs = {
+                "clip": ["2", 0],
+                "vae": ["3", 0],
+                "prompt": prompt,
+                "width": width,
+                "height": height,
+                "length": length,
+            }
+            if first_frame_link:
+                h3_inputs["first_frame"] = first_frame_link
+            if last_frame_link:
+                h3_inputs["last_frame"] = last_frame_link
+            workflow["5"] = {
+                "class_type": "MiniMaxH3ImageToVideo",
+                "inputs": h3_inputs,
+            }
 
         # Apply LoRAs (single-stage) by chaining LoraLoaderModelOnly in front of
         # the base model. With a turbo preset the turbo LoRA chains first, then
@@ -1509,6 +1537,9 @@ class ComfyUIClient:
                     "audio": ["12", 0],
                 },
             }
+
+        if extra_nodes:
+            workflow.update(extra_nodes)
 
         return workflow
 
@@ -1759,6 +1790,160 @@ class ComfyUIClient:
         return self.build_cloud_minimax_h3_i2v_workflow(
             image_name=image_name,
             prompt=prompt,
+            num_frames=num_frames,
+            fps=fps,
+            seed=seed,
+            steps=steps,
+            output_prefix=output_prefix,
+            checkpoint=checkpoint,
+            text_encoder=text_encoder,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            aspect_ratio=aspect_ratio,
+            megapixels=megapixels,
+            lora_configs=self._resolve_local_lora_configs(lora_configs),
+            output_kind="savevideo",
+            quality_mode=quality_mode,
+        )
+
+    def build_cloud_minimax_h3_r2v_workflow(
+        self,
+        prompt: str,
+        video_name: str,
+        ref_image_names: Optional[List[str]] = None,
+        width: int = 1344,
+        height: int = 768,
+        num_frames: int = 124,
+        fps: int = 24,
+        seed: int = -1,
+        steps: int = 20,
+        output_prefix: str = "oelala_minimax_h3_r2v",
+        checkpoint: str = "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        text_encoder: str = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
+        audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
+        aspect_ratio: str = "16:9",
+        megapixels: Optional[float] = None,
+        long_edge: int = 768,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        output_kind: str = "vhs",
+        quality_mode: str = "full",
+        model_variant: str = "official",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build MiniMax-H3 Cloud R2V workflow — reference-to-video (+audio).
+
+        Uses the REF2VA checkpoint (separate weights from FL2VA): up to 9
+        reference images plus up to one reference video condition the text
+        encoder; the prompt describes how to combine them (character swap,
+        motion transfer, style restyle). The source video enters via core
+        LoadVideo + GetVideoComponents (frames → ref_video_0, audio →
+        ref_video_audio_0). Sampler tail is shared with T2V/I2V.
+        """
+        length = self._align_minimax_h3_frames(num_frames)
+        if seed < 0:
+            seed = random.randint(0, 2**31 - 1)
+
+        width, height = self._minimax_h3_canvas(aspect_ratio, megapixels)
+        ref_images = ref_image_names or []
+
+        logger.info(
+            f"☁️ Building MiniMax-H3 Cloud R2V: {width}x{height}, "
+            f"{length}f@{fps}fps, {steps} steps, seed={seed}, "
+            f"video={video_name}, {len(ref_images)} ref image(s)"
+        )
+
+        # Node 40: LoadVideo — the source/reference video.
+        # Node 41: GetVideoComponents — frames (slot 0) + audio (slot 1).
+        # Node 42+: LoadImage — reference images.
+        workflow_extra: Dict[str, Any] = {
+            "40": {
+                "class_type": "LoadVideo",
+                "inputs": {"file": video_name},
+            },
+            "41": {
+                "class_type": "GetVideoComponents",
+                "inputs": {"video": ["40", 0]},
+            },
+        }
+        for i, img_name in enumerate(ref_images):
+            workflow_extra[str(42 + i)] = {
+                "class_type": "LoadImage",
+                "inputs": {"image": img_name},
+            }
+
+        r2v_inputs: Dict[str, Any] = {
+            "clip": ["2", 0],
+            "vae": ["3", 0],
+            "audio_vae": ["4", 0],
+            "prompt": prompt,
+            "width": width,
+            "height": height,
+            "length": length,
+            "ref_image_size": "match",
+            "ref_videos.ref_video_0": ["41", 0],
+            "ref_video_audios.ref_video_audio_0": ["41", 1],
+        }
+        for i in range(len(ref_images)):
+            r2v_inputs[f"ref_images.ref_image_{i}"] = [str(42 + i), 0]
+
+        return self._build_minimax_h3_workflow(
+            prompt=prompt,
+            width=width,
+            height=height,
+            length=length,
+            fps=fps,
+            seed=seed,
+            steps=steps,
+            output_prefix=output_prefix,
+            checkpoint=checkpoint,
+            text_encoder=text_encoder,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            lora_configs=lora_configs,
+            output_kind=output_kind,
+            quality_mode=quality_mode,
+            model_variant=model_variant,
+            conditioning_node={
+                "class_type": "MiniMaxH3ReferenceToVideo",
+                "inputs": r2v_inputs,
+            },
+            turbo_presets=MINIMAX_H3_REF2V_TURBO_PRESETS,
+            extra_nodes=workflow_extra,
+        )
+
+    def build_local_minimax_h3_r2v_workflow(
+        self,
+        prompt: str,
+        video_name: str,
+        ref_image_names: Optional[List[str]] = None,
+        width: int = 1344,
+        height: int = 768,
+        num_frames: int = 124,
+        fps: int = 24,
+        seed: int = -1,
+        steps: int = 20,
+        output_prefix: str = "oelala_minimax_h3_r2v",
+        checkpoint: str = "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        text_encoder: str = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        video_vae: str = "minimax_h3_video_vae_fp16.safetensors",
+        audio_vae: str = "minimax_h3_audio_vae_fp32.safetensors",
+        aspect_ratio: str = "16:9",
+        megapixels: Optional[float] = None,
+        long_edge: int = 768,
+        lora_configs: Optional[List[Dict[str, Any]]] = None,
+        quality_mode: str = "full",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build MiniMax-H3 local (Windows PC ComfyUI) R2V workflow.
+
+        Same Reference-to-Video graph as the cloud builder with the local
+        int8_convrot text encoder and core CreateVideo/SaveVideo output.
+        """
+        return self.build_cloud_minimax_h3_r2v_workflow(
+            prompt=prompt,
+            video_name=video_name,
+            ref_image_names=ref_image_names,
             num_frames=num_frames,
             fps=fps,
             seed=seed,
@@ -2140,6 +2325,9 @@ class ComfyUIClient:
                 prompt=metadata.get("prompt", ""),
                 model_name=extra_metadata.get("model_name"),
                 workflow_id=prompt_id,
+                # Deterministic per job: a retried upload overwrites the same
+                # object and row instead of spawning timestamped duplicates.
+                idempotency_key=prompt_id,
             )
 
             logger.info(
