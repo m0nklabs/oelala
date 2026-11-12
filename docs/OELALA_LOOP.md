@@ -289,12 +289,15 @@ the loop merges explicitly or not at all.
 Stop and report instead of merging when: a required check is not green on the head, the review
 on that head is unanswered or requests changes, the base merge conflicts, `main` itself is red,
 or the PR touches the human-gated five (auth, migrations, secrets, deploy, dependency majors) —
-those keep their gate regardless of the clock. At most **three** merges per run.
+those keep their gate regardless of the clock.
 
-**A merge is a deliberate action on one PR**, never a side effect of a watch, a sweep or a batch
-scan: read that PR's activity, re-verify it, and merge only that one. Record the anchor in the
-merge comment — `answered-review` with the link, or `auto-merged after N hours` (or `N days`) with
-the re-verification result — so the timing stays reconstructable.
+**One merge per pass — exactly one.** A merge is a deliberate act, never a side effect of a sweep:
+read that PR's activity, re-verify it on the current base, and merge only that one. A run that lands
+several pull requests is not a merge decision, it is a sweep with a merge button, and it cannot give
+each of them the attention the verification demands. If more than one PR is eligible, merge the
+oldest and leave the rest for the next run — the queue is not a backlog when every entry has its own
+clock. Record the anchor in the merge comment: `answered-review` with the link, or
+`auto-merged after N hours` with the re-verification result, so the timing stays reconstructable.
 
 "Settled" is a checklist, not a feeling. A PR is **not** finished until 1–4 hold:
 
