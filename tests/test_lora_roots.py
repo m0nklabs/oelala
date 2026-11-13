@@ -45,36 +45,49 @@ def test_the_checkout_root_always_comes_first(monkeypatch: pytest.MonkeyPatch) -
     assert len(roots) == 2
 
 
-def test_the_scanner_follows_the_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
-    """lora_scanner builds its roots at import time, so reload it with the env set."""
-    monkeypatch.setenv("LORA_SSD_DIR", "/srv/lora-library")
+def test_the_scanner_follows_the_configuration() -> None:
+    """lora_scanner builds its roots at import time, so reload it with the env set.
+
+    The configuration is scoped with `pytest.MonkeyPatch.context()` so the environment
+    is restored by the context exit, *before* the clean-up reload runs. Restoring it by
+    hand inside `finally` would reload with whatever the ambient environment holds and
+    leave the module in a state the next test did not ask for.
+    """
     import lora_scanner
 
-    reloaded = importlib.reload(lora_scanner)
     try:
-        assert reloaded.LORA_DIRS == [
-            project_paths.comfyui_loras_dir(),
-            Path("/srv/lora-library"),
-        ]
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("LORA_SSD_DIR", "/srv/lora-library")
+            reloaded = importlib.reload(lora_scanner)
+            assert reloaded.LORA_DIRS == [
+                project_paths.comfyui_loras_dir(),
+                Path("/srv/lora-library"),
+            ]
     finally:
-        monkeypatch.delenv("LORA_SSD_DIR", raising=False)
+        # The context has restored the environment by now, so this reload puts the
+        # module back exactly as the rest of the session expects it.
         importlib.reload(lora_scanner)
 
 
-def test_lora_utils_treats_the_mount_as_optional(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_lora_utils_treats_the_mount_as_optional() -> None:
     """The scan loop iterates `(LORA_DIR, LORA_SSD_DIR)`, so None must be filtered."""
     import generation.lora_utils as lora_utils
 
-    monkeypatch.delenv("LORA_SSD_DIR", raising=False)
-    reloaded = importlib.reload(lora_utils)
     try:
-        assert reloaded.LORA_SSD_DIR is None
-        # The default root is the checkout's own directory, not a host path.
-        assert reloaded.LORA_DIR == project_paths.comfyui_loras_dir()
-        # And the resolve loop must not crash on the absent entry: it filters None,
-        # so a name that exists nowhere simply resolves to (None, None).
-        assert reloaded.resolve_lora_path("does-not-exist.safetensors") == (None, None)
+        with pytest.MonkeyPatch.context() as patch:
+            # Clear both overrides: the assertions are about the *defaults*, and CI or a
+            # developer shell may export either of them.
+            patch.delenv("LORA_SSD_DIR", raising=False)
+            patch.delenv("LORA_DIR", raising=False)
+            reloaded = importlib.reload(lora_utils)
+            assert reloaded.LORA_SSD_DIR is None
+            # The default root is the checkout's own directory, not a host path.
+            assert reloaded.LORA_DIR == project_paths.comfyui_loras_dir()
+            # And the resolve loop must not crash on the absent entry: it filters None,
+            # so a name that exists nowhere simply resolves to (None, None).
+            assert reloaded.resolve_lora_path("does-not-exist.safetensors") == (
+                None,
+                None,
+            )
     finally:
         importlib.reload(lora_utils)
