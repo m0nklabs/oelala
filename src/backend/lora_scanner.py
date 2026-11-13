@@ -1,7 +1,8 @@
 """
 LoRA Scanner — Scans and caches LoRA model metadata.
 
-Discovers LoRA files from ComfyUI model paths and /mnt/ssd/loras/,
+Discovers LoRA files from the checkout's ComfyUI model dirs and the configured
+LoRA mount (LORA_SSD_DIR),
 extracts metadata from safetensors headers, enriches with registry
 data (trigger words, strength, source URLs), and caches results.
 """
@@ -34,11 +35,8 @@ def debug_log(msg: str):
         logger.info(f"🔍 [LoRA Scanner] {msg}")
 
 
-# LoRA directories to scan
-LORA_DIRS: List[Path] = [
-    Path("/mnt/ssd/loras"),
-    paths.comfyui_loras_dir(),
-]
+# LoRA directories to scan: the checkout's own first, then the configured mount.
+LORA_DIRS: List[Path] = paths.lora_roots()
 
 # Registry file with usage metadata (trigger words, strengths, source URLs)
 REGISTRY_PATH = (

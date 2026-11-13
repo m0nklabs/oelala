@@ -2184,10 +2184,7 @@ async def list_loras():
     parked Wan library.
     Includes NSFW detection based on filename patterns.
     """
-    loras_dir = paths.comfyui_loras_dir()
-    ssd_loras_dir = Path("/mnt/ssd/loras")
-
-    lora_dirs = [d for d in [loras_dir, ssd_loras_dir] if d.exists()]
+    lora_dirs = [d for d in paths.lora_roots() if d.exists()]
 
     if not lora_dirs:
         return {
@@ -3310,8 +3307,9 @@ def record_generation_complete(
         save_gen_logs(user_id, prompt_id, log_text, status_str, duration_seconds)
 
 
-# LoRA source directory (SSD)
-LORA_DIR = Path("/mnt/ssd/loras")
+# LoRA download source: the configured mount when there is one, else the checkout's
+# own directory, so a clone without an SSD still resolves files it holds itself.
+LORA_DIR = paths.lora_ssd_dir() or paths.comfyui_loras_dir()
 
 # HuggingFace CDN sources for LoRAs — faster than self-hosted download.
 # Map: resolved_filename → {"repo": "user/repo", "path": "file_in_repo.safetensors"}
@@ -4408,7 +4406,7 @@ async def download_lora_for_cloud(filename: str, token: str = Query(...)):
     """
     Serve LoRA files for RunPod cloud workers.
     Protected with HMAC-signed token (derived from RUNPOD_API_KEY).
-    Files are streamed from /mnt/ssd/loras/.
+    Files are streamed from the configured LoRA mount (LORA_SSD_DIR).
     Handles filenames with or without .safetensors extension.
     """
     import hmac as _hmac_mod

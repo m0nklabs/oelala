@@ -65,12 +65,11 @@ def configured_dumps(env: dict) -> list[str]:
 def local_sizes(roots: list[Path] | None = None) -> dict[str, set[int]]:
     """Map basename -> set of local file sizes (a basename can be ambiguous)."""
     if roots is None:
-        roots = [
-            Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras")),
-            Path(
-                os.getenv("LORA_DIR", str(REPO_ROOT / "ComfyUI" / "models" / "loras"))
-            ),
-        ]
+        primary = Path(
+            os.getenv("LORA_DIR", str(REPO_ROOT / "ComfyUI" / "models" / "loras"))
+        )
+        extra = os.getenv("LORA_SSD_DIR", "").strip()
+        roots = [Path(extra), primary] if extra else [primary]
     sizes: dict[str, set[int]] = {}
     for root in roots:
         if not root.is_dir():
