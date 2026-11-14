@@ -30,7 +30,10 @@ _CHECKOUT_ROOT = Path(__file__).resolve().parents[3]
 LORA_DIR = Path(
     os.getenv("LORA_DIR", str(_CHECKOUT_ROOT / "ComfyUI" / "models" / "loras"))
 )
-LORA_SSD_DIR = Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras"))
+# An extra mount is configuration; unset means the checkout directory above is the
+# only source. Absolute host paths do not belong in committed code (AGENTS.md rule 6).
+_LORA_SSD_RAW = os.getenv("LORA_SSD_DIR", "").strip()
+LORA_SSD_DIR = Path(_LORA_SSD_RAW) if _LORA_SSD_RAW else None
 
 # ── Third-party LoRA source index ──────────────────────────────────
 # Third-party public dumps are preferred over our own mirrors so download
@@ -100,7 +103,7 @@ def resolve_lora_path(name: str) -> tuple[Optional[Path], Optional[str]]:
         logger.warning(f"⚠️ Rejected suspicious LoRA name: {name}")
         return None, None
 
-    for base_dir in [LORA_DIR, LORA_SSD_DIR]:
+    for base_dir in [d for d in (LORA_DIR, LORA_SSD_DIR) if d is not None]:
         if not base_dir.exists():
             continue
 

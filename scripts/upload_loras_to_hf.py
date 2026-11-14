@@ -13,8 +13,11 @@ Requirements:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 try:
     from huggingface_hub import HfApi, create_repo
@@ -22,7 +25,12 @@ except ImportError:
     print("❌ Install huggingface_hub: pip install huggingface_hub")
     sys.exit(1)
 
-LORA_DIR = Path("/mnt/ssd/loras")
+# The LoRA library lives on a mount in practice, so it is configuration: unset means
+# the checkout's own directory (see the same rule in src/backend/project_paths.py).
+LORA_DIR = Path(
+    os.environ.get("LORA_SSD_DIR", "").strip()
+    or REPO_ROOT / "ComfyUI" / "models" / "loras"
+)
 HF_REPO = (
     "m0nk111/oelala-loras"  # Personal account (org needs separate token permissions)
 )
@@ -49,7 +57,7 @@ def main() -> None:
     parser.add_argument(
         "files",
         nargs="*",
-        help="Specific LoRA files (relative to /mnt/ssd/loras/). If omitted, uploads all ltx/ LoRAs.",
+        help="Specific LoRA files, relative to the LoRA root. If omitted, uploads all ltx/ LoRAs.",
     )
     parser.add_argument(
         "--private",

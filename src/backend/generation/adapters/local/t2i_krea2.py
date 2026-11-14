@@ -19,7 +19,7 @@ Notes:
   The available Krea 2 LoRAs carry only `diffusion_model` keys (no text
   encoder weights), and routing CLIP through the full LoraLoader materialises
   the patched CLIP and blew the VRAM budget on text encode (VRAM grow failed).
-  LoRA files live under /mnt/ssd/loras/krea2 (exposed to ComfyUI through
+  LoRA files live under the configured LoRA mount (LORA_SSD_DIR)/krea2, exposed to ComfyUI through
   extra_model_paths.yaml); names are resolved server-side so the workflow
   always references the full relative path (e.g. "krea2/foo.safetensors").
 """
