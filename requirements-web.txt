@@ -21,7 +21,7 @@ python-multipart==0.0.32
 
 # Configuration (.env loading) and error reporting
 python-dotenv==1.2.4
-sentry-sdk==2.72.0
+sentry-sdk==2.74.0
 
 # Auth: auth.py decodes Supabase JWTs via JWKS, i.e. asymmetric RS/ES algorithms.
 # The [crypto] extra is what makes PyJWT able to verify those signatures at all
