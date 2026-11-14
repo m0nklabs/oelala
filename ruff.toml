@@ -7,6 +7,19 @@ include = ["src/**/*.py", "deploy/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
 extend-exclude = ["tests/manual"]
 
 [lint]
+# The rule set is pinned here on purpose. Without a `select`, ruff lints whatever its
+# own default happens to be, and that default grows between releases: the same tree is
+# clean under 0.15.0 and reports 1610 (0.17.3) / 1640 (0.17.4) errors under a current
+# ruff, none of them caused by a code change. Pinning both the tool (ci.yml) and the
+# rules means the gate means the same thing everywhere, and widening this list becomes
+# a deliberate commit instead of a side effect of a runner upgrade.
+select = [
+    "E4",  # import problems
+    "E7",  # statement-level mistakes
+    "E9",  # runtime errors (syntax, break outside loop, ...)
+    "F",   # pyflakes: undefined names, unused imports, ...
+]
+
 # Rules to ignore (legacy code exceptions)
 ignore = [
     "E402",   # Module level import not at top of file (FastAPI pattern)
