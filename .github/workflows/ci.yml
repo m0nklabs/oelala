@@ -49,7 +49,12 @@ jobs:
           # Hard install: this manifest must be able to run the backend. A missing
           # pin here has to fail the job, not be skipped.
           python -m pip install -r requirements-web.txt
-          python -m pip install pytest pytest-asyncio pytest-cov ruff
+          # ruff is pinned on purpose. Installed unpinned it resolves to whatever the
+          # self-hosted runner has cached (0.15.0 at the time of writing), and a runner
+          # image update would silently change what "lint passes" means — ruff 0.17
+          # reports 1610 findings on this same tree (issue #238). Keep this in step with
+          # the rev in .pre-commit-config.yaml.
+          python -m pip install pytest pytest-asyncio pytest-cov "ruff==0.15.0"
 
       - name: Backend imports (manifest drift check)
         run: |

@@ -24,6 +24,12 @@ repos:
         args: ['--maxkb=1000']
       - id: check-merge-conflict
 
+  # NOTE: this stays on v0.8.6 while the CI lint step pins ruff 0.15.0. Bumping it
+  # was tried on 2026-11-05 and fails on the self-hosted runner: pre-commit runs
+  # under /usr/bin/python3, which has no `virtualenv` module, so it cannot build
+  # the environment for a hook whose rev changed ("No module named virtualenv").
+  # Both versions report the tree clean and formatted today; aligning them needs
+  # the runner's python repaired first (issue #238).
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.6
     hooks:
