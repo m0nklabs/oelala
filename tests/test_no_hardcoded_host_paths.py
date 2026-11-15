@@ -23,11 +23,23 @@ BACKEND_DIR = Path(__file__).parent.parent / "src" / "backend"
 
 #: Remaining absolute host paths per module. Shrink this; never grow it.
 ALLOWED = {
-    # Empty since #239 (yt-dlp, MinIO data dir) and #252 (admin disk mounts): the
-    # last four absolute host paths outside the checkout are configuration now.
+    # The /home/ generation is gone since #239 and #252. What is left is the LoRA
+    # library location, which slice 2c (#256) turns into LORA_SSD_DIR configuration:
+    # when that PR lands, this allowlist becomes empty. Until then these four are
+    # frozen - a new absolute path anywhere else in the backend fails this test.
+    "app.py": 2,
+    "lora_scanner.py": 1,
+    "generation/lora_utils.py": 1,
 }
 
-_HOST_PATH = re.compile(r"""/home/[A-Za-z0-9_.-]+""")
+# Quoted-string form only, so a mention in prose (a docstring saying "files live on
+# the SSD mount") is not a violation - the rule is about code that *uses* a host path.
+# The old /home/-only regex let /mnt/ssd/loras hide for weeks; this one catches the
+# whole class the rule targets: mounts, homes and absolute locations outside the
+# checkout.
+_HOST_PATH = re.compile(
+    r"""["\'](/(?:home|mnt|srv|opt|data|var|usr/local)/[A-Za-z0-9_.-]+)"""
+)
 
 
 def _counts() -> dict[str, int]:
