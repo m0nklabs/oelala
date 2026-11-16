@@ -29,10 +29,6 @@ export const TOOL_IDS = {
   GALLERY: 'gallery',
   // My Media
   MY_MEDIA_ALL: 'my-media-all',
-  MY_MEDIA_VIDEOS: 'my-media-videos',
-  MY_MEDIA_IMAGES: 'my-media-images',
-  MY_MEDIA_AUDIO: 'my-media-audio',
-  MY_MEDIA_PROMPTS: 'my-media-prompts',
   // Account
   MY_PROFILE: 'my-profile',
   API_KEYS: 'api-keys',

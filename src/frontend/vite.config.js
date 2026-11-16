@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 
@@ -20,6 +20,14 @@ export default defineConfig({
         ]
       : []),
   ],
+  test: {
+    // jsdom, because the hooks under test touch URL and document. The suite runs
+    // through `npm test` and through CI's existing `npm test -- --run` step.
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+  },
   optimizeDeps: {
     // Pre-bundle ALL React deps in a single pass to prevent mid-session
     // re-optimization which causes split module instances (dispatcher=null).

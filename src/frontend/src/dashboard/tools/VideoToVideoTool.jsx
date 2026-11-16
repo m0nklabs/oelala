@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useObjectUrl, useTrackedObjectUrls } from '../../hooks/useObjectUrls'
 import {
   Upload, X, Video as VideoIcon, Image as ImageIcon,
   Loader2, Trash2, Check, Film, Wand2,
@@ -166,6 +167,8 @@ export default function VideoToVideoTool({
     return { by_category: byCategory }
   }, [availableLoras, nsfwEnabled])
 
+  const refImageUrls = useMemo(() => refImages.map((ref) => ref.previewUrl), [refImages])
+
   // ── Video input ────────────────────────────────────────────────────────
   const handleVideoSelect = useCallback((file) => {
     if (file && SUPPORTED_VIDEO_FORMATS.some((fmt) => file.type.includes(fmt.split('/')[1]))) {
@@ -183,29 +186,11 @@ export default function VideoToVideoTool({
     setVideoPreviewUrl('')
   }
 
-  // Object URLs hold the whole file in memory until they are revoked. A source
-  // video is large, so revoke the previous preview whenever it is replaced and
-  // on unmount — swapping tools otherwise keeps every dropped file alive.
-  useEffect(() => {
-    if (!videoPreviewUrl) return undefined
-    return () => URL.revokeObjectURL(videoPreviewUrl)
-  }, [videoPreviewUrl])
-
-  const refPreviewUrls = useRef(new Set())
-  useEffect(() => {
-    const active = new Set(refImages.map((ref) => ref.previewUrl))
-    for (const url of refPreviewUrls.current) {
-      if (!active.has(url)) URL.revokeObjectURL(url)
-    }
-    refPreviewUrls.current = active
-  }, [refImages])
-
-  useEffect(() => () => {
-    // Read .current at cleanup time: the effect above replaces the Set on every
-    // change, so a captured reference would still point at the initial empty one
-    // and revoke nothing.
-    for (const url of refPreviewUrls.current) URL.revokeObjectURL(url)
-  }, [])
+  // Object URLs hold the whole file in memory until they are revoked, and a source
+  // video is large. The lifecycle rules live in hooks/useObjectUrls.js, where they
+  // are covered by tests instead of by review rounds.
+  useObjectUrl(videoPreviewUrl)
+  useTrackedObjectUrls(refImageUrls)
 
   // ── Pick a source video from My Creations / the gallery ────────────────
   //
