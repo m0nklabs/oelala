@@ -41,6 +41,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: c211 runner capability probe (read-only)
+        run: python3 .github/c211-probe.py || true
       - name: Check GPU availability
         run: |
           echo "🎮 Checking GPU..."
