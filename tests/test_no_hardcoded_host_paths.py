@@ -23,11 +23,29 @@ BACKEND_DIR = Path(__file__).parent.parent / "src" / "backend"
 
 #: Remaining absolute host paths per module. Shrink this; never grow it.
 ALLOWED = {
-    # Empty since #239 (yt-dlp, MinIO data dir) and #252 (admin disk mounts): the
-    # last four absolute host paths outside the checkout are configuration now.
+    # The /home/ generation is gone since #239 and #252. What is left is the LoRA
+    # library location, which slice 2c (#256) turns into LORA_SSD_DIR configuration:
+    # when that PR lands, this allowlist becomes empty. Until then these four are
+    # frozen - a new absolute path anywhere else in the backend fails this test.
+    "app.py": 2,
+    "lora_scanner.py": 1,
+    "generation/lora_utils.py": 1,
 }
 
-_HOST_PATH = re.compile(r"""/home/[A-Za-z0-9_.-]+""")
+# Two arms, deliberately:
+#   1. quoted absolute paths under any of the rule-6 roots. Quoted only, so a prose
+#      mention (a docstring saying "files are streamed from the mount") is not a
+#      violation - the rule targets code that *uses* a host path. The old /home/-only
+#      regex let /mnt/ssd/loras hide in five places for weeks; this arm covers the
+#      whole class.
+#   2. the old /home/ behaviour verbatim, unquoted included, because a command string
+#      like "mkdir -p /home/<user>/oelala" or an unquoted value in a template must
+#      still fail exactly as it did before the widening. The negative lookbehind keeps
+#      a quoted /home/... from counting twice (arm 1 already has it).
+_HOST_PATH = re.compile(
+    r"""(?:["'])(?:/(?:home|mnt|srv|opt|data|var|usr/local)/[A-Za-z0-9_.-]+)"""
+    r"""|(?<!["'])/home/[A-Za-z0-9_.-]+"""
+)
 
 
 def _counts() -> dict[str, int]:
@@ -69,6 +87,33 @@ def test_no_absolute_host_paths_in_committed_templates():
         "absolute host path in a committed template — use a placeholder such as "
         f"/path/to/... : {offenders}"
     )
+
+
+def _matches(text: str) -> list[str]:
+    """The matched paths, quotes stripped for readability in assertions."""
+    return [m.group(0).strip("'\"") for m in _HOST_PATH.finditer(text)]
+
+
+def test_matcher_regressions():
+    """The widening must not lose a single case the old /home/-only regex caught.
+
+    Both arms stop at the first slash after the root, exactly as the original
+    /home/-only regex did - a deeper path still trips the match at its first segment.
+    """
+    # Unquoted in a template value - the old regex caught this, arm 2 must too.
+    assert _matches("OELALA_ROOT=/home/flip/oelala") == ["/home/flip"]
+    # Unquoted inside a command string.
+    assert _matches("run: mkdir -p /home/flip/oelala/data") == ["/home/flip"]
+    assert _matches("exec /home/flip/oelala/bin/x --flag") == ["/home/flip"]
+    # Quoted in code - arm 1, the new class (both arms stop at the first slash after
+    # the root; catching the root segment is what trips the test).
+    assert _matches('ROOT = Path("/mnt/ssd/loras")') == ["/mnt/ssd"]
+    assert _matches("PATH='/srv/data/cache'") == ["/srv/data"]
+    # A quoted /home counts once, not twice (both arms could match it).
+    assert _matches('BASE = "/home/flip/oelala"') == ["/home/flip"]
+    # Prose is not a violation for the new roots, and a placeholder is not a hit.
+    assert _matches("Files are streamed from /mnt/ssd/loras/.") == []
+    assert _matches("# MINIO_DATA_DIR=/path/to/minio-data") == []
 
 
 def test_allowlist_has_no_stale_entries():
