@@ -53,7 +53,7 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 
 **Not granted (hard stops):**
 
-1. **Merging is allowed only under §4.2** (24 hours after the review is finished, with the
+1. **Merging is allowed only under §4.2** (after the waiting window — 24 h default, this account 2 h — with the
    latest activity read and the merge re-verified at merge time). Never approve a PR, never dismiss a
    review, never resolve a thread that still has an unanswered finding. Everything else is
    left ready for the human merge.
@@ -208,7 +208,7 @@ When a PR is settled (CI green, latest review covers the merge head, every findi
 resolved or answered), leave one closing comment: what changed, the evidence, and
 `Ready for human merge`. Merging follows §4.2 only. Draft PRs stay draft until validated.
 
-### 4.2 Merge readiness and the 24-hour rule
+### 4.2 Merge readiness and the waiting window
 
 Merge-readiness means the review is **finished**, not merely quiet: every outstanding review is
 closed out — with a fix, or with a reply that explains with evidence why the change is not needed.
@@ -216,9 +216,14 @@ When there was nothing to review, the PR is merge-ready as soon as it is up and 
 A closing comment that says what the change does is the normal way to mark that point, but it is
 **never a precondition**. This mirrors the user-level rule in `$DSH_HOME/AGENTS.md`.
 
-Merge **24 hours after** that point if the operator has not intervened. Operator silence for 24
-hours is standing permission — do not ask again at merge time. A quiet PR is not a stalled one: no
-comment on it and 24 hours gone means merge it.
+Merge after the **waiting window** if the operator has not intervened. Operator silence for the
+whole window is standing permission — do not ask again at merge time. A quiet PR is not a stalled
+one: no comment on it and the window gone means merge it.
+
+The window is a per-account setting, not a constant of this repo: the shared charter names 24 hours
+as the default, and the operator's own account runs **2 hours** since 2026-11-15. Everything else in
+this section — the finished review, the activity read, the re-verification — applies unchanged; a
+shorter window buys speed, not a licence to skip a step.
 
 **The clock.** It starts when the last outstanding review is answered, or — with nothing to review
 — at the last push on the head. Not at the PR's creation. An unanswered review never becomes
@@ -233,7 +238,7 @@ a reply, a fix or a decision, do that instead of merging, and the clock restarts
 
 Then re-verify at merge time — an old green check says nothing about `main` today. The
 verification does **not** push anything: a pushed refresh is new work, and new work restarts the
-24-hour clock, so a refresh-then-merge in one run would be impossible by construction.
+waiting-window clock, so a refresh-then-merge in one run would be impossible by construction.
 
 ```bash
 git fetch origin --prune
@@ -317,7 +322,7 @@ When there was a review, answer it — an unanswered review blocks regardless of
 becomes eligible by waiting. If a run cannot settle a PR, the run report says so explicitly instead
 of leaving it implicit. (Learned the hard way on 2026-11-03: #225 was green and review-covered and
 the run moved on without closing it out, so the human had to ask. Revised 2026-11-09: the operator
-made the record explicit but non-blocking — 24 hours, silence is permission, and a quiet PR is not
+made the record explicit but non-blocking — the window, silence is permission, and a quiet PR is not
 a stalled one.)
 
 ## 5. Phase 2 — Open issues, then pipeline seeding
