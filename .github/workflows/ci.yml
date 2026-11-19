@@ -90,7 +90,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: src/frontend/package-lock.json
 
@@ -104,7 +104,7 @@ jobs:
 
       - name: Run tests
         working-directory: src/frontend
-        run: npm test -- --run || true
+        run: npm test -- --run
 
       - name: Build
         working-directory: src/frontend
