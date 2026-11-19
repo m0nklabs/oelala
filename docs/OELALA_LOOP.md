@@ -268,6 +268,12 @@ git worktree add -q "$WT" origin/<headRefName>
   $HOME/venvs/gpu/bin/python -m pytest tests/ -x -q \
       --ignore=tests/gpu --ignore=tests/manual -m "not gpu and not integration" ) || {
     echo "❌ the merged tree does not pass — do NOT merge"; exit 1; }
+#    A part of the tree with its own suite needs the same check there. For
+#    src/frontend, run the vitest suite on the merged tree too. A throwaway
+#    worktree has no node_modules (gitignored), so link the loop worktree's
+#    install (ln -s) or run npm ci first: a missing install makes the test
+#    command vacuous, and a vacuous check counts as RED, not green — learned
+#    2026-11-19 when a merge aborted on an empty vitest run instead of a red one.
 trap - EXIT; git worktree remove --force "$WT"
 
 # --match-head-commit binds the merge to the commit that was just verified: without it a
