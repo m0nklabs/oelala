@@ -18,7 +18,7 @@
 | Loop worktree | `$HOME/oelala-loop` — branch `loop/workspace`, tracks `origin/main` |
 | Operator clone | `$HOME/oelala` — **hands off**: it carries the operator's uncommitted work |
 | Truth for code | `origin/main` (fetch first; the operator clone is often behind) |
-| Test tooling | `ruff` 0.15.15 on PATH. The system `python3` **cannot** import `app` (no `sentry_sdk`); for a real test run use the read-only GPU venv `$HOME/venvs/gpu/bin/python -m pytest`, or a throwaway venv from `requirements-web.txt`. No project `.venv` — do not create a heavy one |
+| Test tooling | `ruff` 0.15.15 on PATH. The system `python3` **cannot** import `app` (no `sentry_sdk`); for a real test run use the read-only GPU venv `$HOME/venvs/gpu/bin/python -m pytest`, or a throwaway venv with the **full recipe**: `pip install -r requirements-web.txt pytest pytest-asyncio pytest-cov "ruff==0.15.0"` — pytest plugins alone do not collect anything (proven 2026-11-21: plugins-only env → 27 collection errors; the full recipe → 705 passed / 8 skipped). No project `.venv` — do not create a heavy one |
 | GPU venv | `$HOME/venvs/gpu` is production-critical (`chattr +i`) — read-only use only, never delete/move/recreate |
 
 Work only inside the loop worktree:
