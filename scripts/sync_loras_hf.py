@@ -43,10 +43,12 @@ def load_env(path: Path) -> dict:
 def collect_files() -> dict[str, Path]:
     """Collect *.safetensors from both LoRA roots; LORA_DIR wins on conflicts."""
     lora_dir = Path(os.getenv("LORA_DIR", str(REPO_ROOT / "ComfyUI/models/loras")))
-    lora_ssd_dir = Path(os.getenv("LORA_SSD_DIR", "/mnt/ssd/loras"))
+    # The extra mount is configuration; unset means only the checkout directory exists.
+    _extra = os.getenv("LORA_SSD_DIR", "").strip()
+    lora_ssd_dir = Path(_extra) if _extra else lora_dir
     files: dict[str, Path] = {}
     # SSD first, primary dir second (primary overrides on same relpath)
-    for root in (lora_ssd_dir, lora_dir):
+    for root in (lora_ssd_dir, lora_dir) if lora_ssd_dir != lora_dir else (lora_dir,):
         if not root.is_dir():
             continue
         for path in root.rglob("*.safetensors"):

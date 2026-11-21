@@ -100,3 +100,28 @@ def disk_usage_roots() -> list[tuple[str, str]]:
             continue
         pairs.append((name, path))
     return pairs or [("root", "/"), ("home", str(Path.home()))]
+
+
+#: Env var pointing at an extra LoRA root outside the checkout.
+LORA_SSD_DIR_ENV = "LORA_SSD_DIR"
+
+
+def lora_ssd_dir() -> Path | None:
+    """The extra LoRA mount, or ``None`` when nothing is configured.
+
+    LoRA libraries are large and deployments often keep them on a separate mount, so
+    the location is configuration. Unset means the checkout's own
+    ``ComfyUI/models/loras`` is the only source, which is what a fresh clone and a
+    worktree should get anyway.
+    """
+    raw = os.getenv(LORA_SSD_DIR_ENV, "").strip()
+    return Path(raw) if raw else None
+
+
+def lora_roots() -> list[Path]:
+    """Every directory LoRAs are read from: the checkout first, then the mount."""
+    roots = [comfyui_loras_dir()]
+    extra = lora_ssd_dir()
+    if extra is not None:
+        roots.append(extra)
+    return roots
