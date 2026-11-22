@@ -11,10 +11,15 @@ def test_unknown_generation_type_defaults_to_two():
     assert calculate_credits("totally_unknown_type") == 2
 
 
-def test_image_base_price_uses_sdxl():
-    base = calculate_credits("sdxl")
-    hd = calculate_credits("sdxl", width=1920, height=1080)
-    assert hd == int(base * 1.5)          # HD multiplier on a non-HD base type
+def test_image_hd_multiplier_observable(monkeypatch):
+    # PR-Piet (2026-11-22): the 1024x1024 default is already HD (height > 720),
+    # so a default-baseline assertion proved nothing. Use a non-HD baseline and
+    # a controlled table value that makes the 1.5x multiplier observable.
+    import credits
+
+    monkeypatch.setitem(credits.CREDIT_COSTS, credits.GenerationType.SDXL, 4)
+    assert calculate_credits("sdxl", width=800, height=600) == 4      # non-HD
+    assert calculate_credits("sdxl", width=1920, height=1080) == 6    # int(4 * 1.5)
 
 
 def test_image_steps_multiplier_over_thirty():
