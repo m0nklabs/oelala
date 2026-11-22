@@ -244,3 +244,57 @@ async def test_get_optional_api_key_user_invalid_key():
         user = await get_optional_api_key_user("oelala_invalid_key")
 
         assert user is None
+
+
+@pytest.mark.asyncio
+async def test_validate_api_key_db_no_rows():
+    """Empty result set (unknown hash) must return None, not raise."""
+    from api_key_auth import validate_api_key_db, hash_api_key
+
+    with patch("credits.get_credit_manager") as mock_manager:
+        mock_supabase = Mock()
+        mock_result = Mock()
+        mock_result.data = []
+        mock_result.execute = lambda: mock_result
+        mock_supabase.rpc = Mock(return_value=mock_result)
+
+        mock_manager.return_value.supabase = mock_supabase
+        mock_manager.return_value.service_key = "test-key"
+
+        result = await validate_api_key_db(hash_api_key("oelala_unknown_key"))
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_validate_api_key_db_incomplete_record():
+    """A row with missing user_id/key_id must return None (incomplete data)."""
+    from api_key_auth import validate_api_key_db, hash_api_key
+
+    with patch("credits.get_credit_manager") as mock_manager:
+        mock_supabase = Mock()
+        mock_result = Mock()
+        mock_result.data = [{"valid": True, "user_id": None, "key_id": "key-456", "error": None}]
+        mock_result.execute = lambda: mock_result
+        mock_supabase.rpc = Mock(return_value=mock_result)
+
+        mock_manager.return_value.supabase = mock_supabase
+        mock_manager.return_value.service_key = "test-key"
+
+        result = await validate_api_key_db(hash_api_key("oelala_test_key"))
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_validate_api_key_db_exception_returns_none():
+    """An unexpected error during validation must be swallowed as None."""
+    from api_key_auth import validate_api_key_db, hash_api_key
+
+    with patch("credits.get_credit_manager") as mock_manager:
+        mock_supabase = Mock()
+        mock_supabase.rpc = Mock(side_effect=RuntimeError("supabase down"))
+
+        mock_manager.return_value.supabase = mock_supabase
+        mock_manager.return_value.service_key = "test-key"
+
+        result = await validate_api_key_db(hash_api_key("oelala_test_key"))
+        assert result is None
