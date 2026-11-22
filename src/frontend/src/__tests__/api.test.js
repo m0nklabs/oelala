@@ -90,7 +90,8 @@ describe('apiFetch — auth attachment', () => {
 describe('postForm — 402 insufficient credits envelope', () => {
   it('dispatches the event CreditsContext listens for and stringifies the detail', async () => {
     const events = []
-    window.addEventListener('insufficient-credits', (e) => events.push(e.detail))
+    const onCredits = (e) => events.push(e.detail)
+    window.addEventListener('insufficient-credits', onCredits)
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 402,
@@ -98,11 +99,17 @@ describe('postForm — 402 insufficient credits envelope', () => {
         JSON.stringify({ detail: { error: 'insufficient_credits', required: 5, available: 2, packages: [] } }),
     })
 
-    const res = await postForm('/generate', new FormData())
+    try {
+      const res = await postForm('/generate', new FormData())
 
-    expect(events).toEqual([{ required: 5, available: 2, packages: [] }])
-    expect(res.data.detail).toBe('Not enough credits. (Need 5, have 2)')
-    window.removeEventListener('insufficient-credits', () => {})
+      expect(events).toEqual([{ required: 5, available: 2, packages: [] }])
+      expect(res.data.detail).toBe('Not enough credits. (Need 5, have 2)')
+    } finally {
+      // Remove the exact reference registered above — a fresh anonymous
+      // function would never match, leaving the listener attached for the
+      // rest of the suite (PR-Piet finding, 2026-11-22).
+      window.removeEventListener('insufficient-credits', onCredits)
+    }
   })
 
   it('passes other object details through as JSON text, not [object Object]', async () => {
@@ -120,15 +127,19 @@ describe('postForm — 402 insufficient credits envelope', () => {
 describe('postJson — 402 handling', () => {
   it('dispatches the insufficient-credits event for postJson too', async () => {
     const events = []
-    window.addEventListener('insufficient-credits', (e) => events.push(e.detail))
+    const onCredits = (e) => events.push(e.detail)
+    window.addEventListener('insufficient-credits', onCredits)
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 402,
       text: async () => JSON.stringify({ detail: { error: 'insufficient_credits', required: 3, available: 1, packages: [] } }),
     })
 
-    await postJson('/x', { a: 1 })
-    expect(events).toHaveLength(1)
-    window.removeEventListener('insufficient-credits', () => {})
+    try {
+      await postJson('/x', { a: 1 })
+      expect(events).toHaveLength(1)
+    } finally {
+      window.removeEventListener('insufficient-credits', onCredits)
+    }
   })
 })
