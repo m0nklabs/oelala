@@ -48,9 +48,12 @@ def test_result_floor_is_enforced_via_zero_base(monkeypatch):
     assert calculate_credits("sdxl") == 1
 
 
-def test_legacy_wan22_pricing_survives():
-    # Retired 2026-10-01; historical transaction rows must keep pricing identically.
-    assert calculate_credits("wan22_i2v", width=1024, height=576, duration_seconds=3) > 0
+def test_legacy_wan22_alias_pricing_is_a_real_table_entry():
+    # Retired 2026-10-01; historical transaction rows must keep pricing
+    # identically. PR-Piet (2026-11-22): assert the exact table value so a
+    # deleted alias would fall through to the unknown-type default (2) and
+    # turn this test red, instead of quietly passing on "> 0".
+    assert calculate_credits("wan22_i2v", width=1024, height=576, duration_seconds=3) == 5
 
 
 def test_hyphenated_type_names_normalise():
