@@ -230,12 +230,15 @@ def calculate_credits(
     if is_hd and "_hd" not in base_type.value:
         base_cost = int(base_cost * 1.5)
 
-    # Duration multiplier for video/audio
+    # Duration multiplier for video/audio: tiered by duration. The original
+    # branch order made the 2.0x tier unreachable (anything >10 is also >5, so
+    # the elif never fired) — every video above 5 s paid flat 1.5x. Reordered
+    # so the tiers actually apply.
     if duration_seconds:
-        if duration_seconds > 5:
-            base_cost = int(base_cost * 1.5)
-        elif duration_seconds > 10:
+        if duration_seconds > 10:
             base_cost = int(base_cost * 2.0)
+        elif duration_seconds > 5:
+            base_cost = int(base_cost * 1.5)
 
     # Steps multiplier (for image generation)
     if steps > 30:
