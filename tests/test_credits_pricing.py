@@ -38,8 +38,14 @@ def test_video_duration_tiers_monotonic():
     assert short < mid < long_
 
 
-def test_result_never_below_one():
-    assert calculate_credits("sdxl", steps=100) >= 1
+def test_result_floor_is_enforced_via_zero_base(monkeypatch):
+    # PR-Piet (2026-11-22): a positive base price can never prove the
+    # max(1, ...) clamp - it stays >=1 without it. Force a zero base cost
+    # through the cost table and assert the floor produces exactly one.
+    import credits
+
+    monkeypatch.setitem(credits.CREDIT_COSTS, credits.GenerationType.SDXL, 0)
+    assert calculate_credits("sdxl") == 1
 
 
 def test_legacy_wan22_pricing_survives():
