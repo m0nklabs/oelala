@@ -101,6 +101,9 @@ def test_estimate_flags_hd_and_duration_and_sufficiency(client):
     assert body["breakdown"]["hd_upcharge"] is True
     assert body["breakdown"]["duration_multiplier"] is True
     assert body["current_balance"] == 3
+    # PR-Piet (2026-11-23): the flags alone would pass at any price. Pin the
+    # exact calculation: MEDIUM (8) tier x 2.0 duration = 16.
+    assert body["estimated_credits"] == 16
     assert body["sufficient"] is False          # 16 needed vs 3 held
 
 
