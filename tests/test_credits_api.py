@@ -246,7 +246,10 @@ def test_webhook_completed_paid_event_credits_the_user(client, monkeypatch):
 
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
-    kwargs = manager.add_credits.call_args.kwargs
+    # PR-Piet (2026-11-23): call_args alone would pass even if the webhook
+    # called add_credits without awaiting it — assert the await itself.
+    assert manager.add_credits.await_count == 1
+    kwargs = manager.add_credits.await_args.kwargs
     assert kwargs["user_id"] == "user-9"
     assert kwargs["amount"] == 100
     assert kwargs["type"] == "purchase"
@@ -335,6 +338,10 @@ async def test_check_credits_raises_402_with_the_frontend_envelope(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await credits_api.check_credits(User(id="u", email="e@_.test.invalid", role="user"), 10)
+    # PR-Piet (2026-11-23): assert the status explicitly — a 500 with the same
+    # envelope would otherwise satisfy the detail assertions and silently break
+    # the frontend-facing 402 contract.
+    assert exc.value.status_code == 402
     detail = exc.value.detail
     assert detail["error"] == "insufficient_credits"
     assert detail["required"] == 10
