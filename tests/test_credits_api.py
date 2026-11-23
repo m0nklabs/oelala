@@ -102,9 +102,26 @@ def test_estimate_flags_hd_and_duration_and_sufficiency(client):
     assert body["breakdown"]["duration_multiplier"] is True
     assert body["current_balance"] == 3
     # PR-Piet (2026-11-23): the flags alone would pass at any price. Pin the
-    # exact calculation: MEDIUM (8) tier x 2.0 duration = 16.
+    # exact calculation: HD_MEDIUM (15) tier x 2.0 duration = 30.
+    assert body["estimated_credits"] == 30
+    assert body["sufficient"] is False          # 30 needed vs 3 held
+
+
+def test_estimate_pins_the_sd_tier_price(client):
+    # SD (1024x576) skips hd_upcharge; MEDIUM (8) tier x 2.0 duration = 16.
+    c, manager = client
+    manager.service_key = "service"
+    manager.get_balance = AsyncMock(return_value=Mock(balance=100))
+    r = c.post("/api/credits/estimate", json={
+        "generation_type": "video_i2v",
+        "width": 1024, "height": 576,
+        "duration_seconds": 12,
+    })
+    body = r.json()
+    assert r.status_code == 200
+    assert "hd_upcharge" not in body["breakdown"]
     assert body["estimated_credits"] == 16
-    assert body["sufficient"] is False          # 16 needed vs 3 held
+    assert body["sufficient"] is True
 
 
 def test_estimate_sufficient_when_balance_covers(client):
