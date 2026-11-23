@@ -274,7 +274,9 @@ def test_webhook_unpaid_event_does_not_credit(client, monkeypatch):
     manager.add_credits.assert_not_called()
 
 
-def test_webhook_missing_user_or_credits_is_an_error_not_a_credit(client, monkeypatch):
+def test_webhook_missing_user_id_is_an_error_not_a_credit(client, monkeypatch):
+    # PR-Piet (2026-11-23): exercise each guard with the other field valid, so
+    # an implementation that drops either check still fails a test.
     c, manager = client
     manager.service_key = "service"
     manager.add_credits = AsyncMock()
@@ -282,6 +284,24 @@ def test_webhook_missing_user_or_credits_is_an_error_not_a_credit(client, monkey
     event = webhook_payload({
         "id": "cs_1", "payment_status": "paid",
         "client_reference_id": None,
+        "metadata": {"package_id": "pro", "credits": "100"},
+    })
+    monkeypatch.setattr("stripe.Webhook.construct_event", Mock(return_value=event))
+
+    r = c.post("/api/stripe/webhook",
+               headers={"stripe-signature": "t=1,v1=x"}, content=b"{}")
+    assert r.json()["status"] == "error"
+    manager.add_credits.assert_not_called()
+
+
+def test_webhook_zero_credits_is_an_error_not_a_credit(client, monkeypatch):
+    c, manager = client
+    manager.service_key = "service"
+    manager.add_credits = AsyncMock()
+
+    event = webhook_payload({
+        "id": "cs_1", "payment_status": "paid",
+        "client_reference_id": "user-9",
         "metadata": {"package_id": "pro", "credits": "0"},
     })
     monkeypatch.setattr("stripe.Webhook.construct_event", Mock(return_value=event))
