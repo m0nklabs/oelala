@@ -49,3 +49,8 @@ minio==7.2.20
 
 # YAML parsing (LoRA registry)
 pyyaml==6.0.3
+
+# Credits purchase flow: Stripe Checkout + webhook (credits_api.py imports it
+# lazily inside the endpoints, so a missing install only breaks at call time —
+# which is exactly how it went unnoticed until the behavioral tests ran it).
+stripe==17.1.0
