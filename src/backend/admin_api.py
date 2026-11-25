@@ -199,10 +199,18 @@ async def check_admin(user: User) -> bool:
         return cached
 
     client = _get_admin_client()
-    response = await client.get(
-        f"{SUPABASE_URL}/rest/v1/user_credits",
-        params={"user_id": f"eq.{user.id}", "select": "is_admin"},
-    )
+    try:
+        response = await client.get(
+            f"{SUPABASE_URL}/rest/v1/user_credits",
+            params={"user_id": f"eq.{user.id}", "select": "is_admin"},
+        )
+    except Exception as e:
+        # Fail closed: an unreachable authorization source must deny, not 500.
+        # Otherwise a Supabase outage turns every admin request into an
+        # exception instead of a clean 403, and callers retrying on 5xx would
+        # hammer the broken dependency.
+        logger.error(f"Admin check failed for {user.id}: {e}")
+        return False
 
     is_admin = False
     if response.status_code == 200 and response.json():
