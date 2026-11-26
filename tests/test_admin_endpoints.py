@@ -225,3 +225,8 @@ def test_check_follows_the_gate_when_bypass_is_off(client, monkeypatch):
     r = client.get("/api/admin/check")
     assert r.status_code == 200
     assert r.json() == {"is_admin": False}    # gate consulted and obeyed
+    # PR-Piet (2026-11-26, deny-side): the gate lookup must actually happen for
+    # this user - an unconditional {"is_admin": false} would otherwise also pass.
+    assert c.get.await_count == 1
+    params = c.get.call_args.kwargs["params"]
+    assert params["user_id"] == f"eq.{ADMIN.id}"
