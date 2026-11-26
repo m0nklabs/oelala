@@ -34,20 +34,6 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False)
 
 
-def ok_rpc(result=None):
-    resp = Mock(status_code=200)
-    resp.json = Mock(return_value=result if result is not None else [{"success": True}])
-    resp.text = "ok"
-    return resp
-
-
-def mock_client(result=None, status=200):
-    c = Mock()
-    post = AsyncMock(return_value=Mock(status_code=status, text="rpc-fail", json=Mock(return_value=result)))
-    c.post = post
-    return c
-
-
 # ---------------------------------------------------------------------------
 # adjust_credits — the money endpoint
 # ---------------------------------------------------------------------------
@@ -164,6 +150,12 @@ def test_toggle_suspension_success(client, monkeypatch):
     r = client.post("/api/admin/suspension/toggle",
                     json={"user_id": "u1", "is_suspended": True, "reason": "abuse"})
     assert r.status_code == 200
+    # PR-Piet (2026-11-26): assert the rpc payload, verified against
+    # admin_api.toggle_suspension (line ~536): p_user_id, p_is_suspended, p_reason.
+    payload = c.post.call_args.kwargs["json"]
+    assert payload["p_user_id"] == "u1"
+    assert payload["p_is_suspended"] is True
+    assert payload["p_reason"] == "abuse"
 
 
 # ---------------------------------------------------------------------------
@@ -215,3 +207,21 @@ def test_check_reports_bypass_as_admin(client):
     r = client.get("/api/admin/check")
     assert r.status_code == 200
     assert r.json() == {"is_admin": True}     # bypass is on in this fixture
+
+
+def test_check_follows_the_gate_when_bypass_is_off(client, monkeypatch):
+    # PR-Piet (2026-11-26): with bypass off, /check must consult the gate, not
+    # answer True unconditionally. The gate's Supabase lookup is mocked here;
+    # the gate's own behavior lives in test_admin_auth_gate.py.
+    monkeypatch.setattr(admin_api, "ADMIN_BYPASS", False)
+    monkeypatch.setattr(admin_api, "SUPABASE_SERVICE_KEY", "service-key")
+    monkeypatch.setattr(admin_api, "_admin_cache", {})
+    c = Mock()
+    resp = Mock(status_code=200)
+    resp.json = Mock(return_value=[{"is_admin": False}])
+    c.get = AsyncMock(return_value=resp)
+    monkeypatch.setattr(admin_api, "_get_admin_client", lambda: c)
+
+    r = client.get("/api/admin/check")
+    assert r.status_code == 200
+    assert r.json() == {"is_admin": False}    # gate consulted and obeyed
