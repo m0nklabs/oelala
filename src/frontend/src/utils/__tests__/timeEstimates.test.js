@@ -33,12 +33,15 @@ describe('estimateI2VTime', () => {
     expect(slow.seconds).toBe(Math.round(base.seconds * 2))
   })
 
-  it('returns a range of 80%-130% and a formatted string', () => {
+  it('pins the absolute no-arg defaults (480p / 6s / 6 steps)', () => {
+    // PR-Piet (2026-11-27): relative assertions alone let a changed default
+    // (e.g. 480p -> 720p, or steps 6 -> 12) double the UI estimate silently.
     const e = estimateI2VTime({})
-    expect(e.min).toBe(Math.round(e.seconds * 0.8))
-    expect(e.max).toBe(Math.round(e.seconds * 1.3))
-    expect(e.formatted).toMatch(/s$|min$|m /)
-    expect(e.range).toContain(' - ')
+    expect(e.seconds).toBe(90)
+    expect(e.min).toBe(72)          // round(90 * 0.8)
+    expect(e.max).toBe(117)         // round(90 * 1.3)
+    expect(e.formatted).toBe('1m 30s')
+    expect(e.range).toBe('1m 12s - 1m 57s')
   })
 
   it('falls back to 1.0 for unknown resolutions', () => {
@@ -55,6 +58,15 @@ describe('estimateT2VTime', () => {
     expect(t2v.seconds).toBe(i2v.seconds + 30)
     expect(t2v.min).toBe(i2v.min + 24)
     expect(t2v.max).toBe(i2v.max + 36)
+  })
+
+  it('pins the absolute output for a long clip (160 frames @ 16fps = 10s)', () => {
+    // PR-Piet (2026-11-27): in the >6s region the frames conversion drives the
+    // +15s/extra-second branch; pin it absolutely: 90 + 4*15 = 150 (+30 T2I).
+    const t2v = estimateT2VTime({ resolution: '480p', numFrames: 160, steps: 6, t2iSteps: 20 })
+    expect(t2v.seconds).toBe(180)
+    expect(t2v.min).toBe(144)       // round(150*0.8) + 0.8*30
+    expect(t2v.max).toBe(231)       // round(150*1.3) + 1.2*30
   })
 })
 
