@@ -285,13 +285,13 @@ describe('malformed nodes (user-edited workflow JSON)', () => {
     expect(r.fps).toBeUndefined()
   })
 
-  it('still reads a titled encode when only _meta is present', () => {
+  it('strategy A still wins alongside a node with neither inputs nor _meta', () => {
     const wf = {
       1: { class_type: 'CLIPTextEncode', inputs: { text: 'pos text' }, _meta: { title: 'Positive Prompt' } },
-      2: { class_type: 'KSampler' },   // no inputs at all
+      2: { class_type: 'KSampler' },   // carries neither field
     }
     const r = parseComfyWorkflow(wf)
     expect(r.positive).toBe('pos text')
-    expect(r.steps).toBeUndefined()   // the input-less sampler contributes nothing
+    expect(r.steps).toBeUndefined()   // the empty sampler contributes nothing
   })
 })
