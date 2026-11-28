@@ -103,6 +103,7 @@ describe('dimensions', () => {
   it('takes width, height and length from the first known latent node', () => {
     const wf = {
       1: node('EmptyHunyuanLatentVideo', { width: 1280, height: 720, length: 97 }),
+      2: node('EmptySD3LatentImage', { width: 640, height: 480 }),
     }
     const r = parseComfyWorkflow(wf)
     expect(r.width).toBe(1280)
@@ -139,7 +140,7 @@ describe('lora extraction', () => {
         lora_2: { on: false, lora: 'off_h.safetensors', strength: 0.9 },
       }),
       110: node('Power Lora Loader (rgthree)', {
-        lora_1: { on: true, lora: 'detail_l.safetensors', strength: 0.8 },
+        lora_1: { on: true, lora: 'detail_l.safetensors', strength: 0.5 },
       }),
     }
     const r = parseComfyWorkflow(wf)
@@ -173,7 +174,9 @@ describe('lora extraction', () => {
     const wf = {
       170: node('LoraLoaderModelOnly', { lora_name: 'hi_a.safetensors', strength_model: 0.7 }),
       190: node('LoraLoaderModelOnly', { lora_name: 'user_style.safetensors', strength_model: 0.9 }),
-      191: node('LoraLoaderModelOnly', { lora_name: 'minimax_h3_fl2v_turbo_v1.safetensors' }),
+      // strength present on purpose: proves the filter is name-based,
+      // not strength-based (PR-Piet 2026-11-28 confound)
+      191: node('LoraLoaderModelOnly', { lora_name: 'minimax_h3_fl2v_turbo_v1.safetensors', strength_model: 0.8 }),
     }
     const r = parseComfyWorkflow(wf)
     // 170 pairs with an empty 180-slot (low falls back to its own high name);
