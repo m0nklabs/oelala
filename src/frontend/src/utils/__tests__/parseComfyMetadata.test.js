@@ -170,6 +170,25 @@ describe('lora extraction', () => {
     ])
   })
 
+  it('pairs at the exact range edges (179 last high, 180 first low, 189 last)', () => {
+    const wf = {
+      179: node('LoraLoaderModelOnly', { lora_name: 'edge_hi.safetensors', strength_model: 0.6 }),
+      180: node('LoraLoaderModelOnly', { lora_name: 'edge_lo.safetensors', strength_model: 0.5 }),
+    }
+    expect(parseComfyWorkflow(wf).loras).toEqual([
+      { high: 'edge_hi.safetensors', low: 'edge_lo.safetensors', strength: 0.6 },
+    ])
+
+    // 178 is inside the high range (170..179), 189 inside low (180..189): they pair
+    const wf2 = {
+      178: node('LoraLoaderModelOnly', { lora_name: 'inner_hi.safetensors' }),
+      189: node('LoraLoaderModelOnly', { lora_name: 'last_low.safetensors' }),
+    }
+    expect(parseComfyWorkflow(wf2).loras).toEqual([
+      { high: 'inner_hi.safetensors', low: 'last_low.safetensors', strength: 1.0 },
+    ])
+  })
+
   it('treats out-of-range single loaders as high-only, skipping bundled turbo loras', () => {
     const wf = {
       170: node('LoraLoaderModelOnly', { lora_name: 'hi_a.safetensors', strength_model: 0.7 }),
@@ -251,6 +270,19 @@ describe('malformed nodes (user-edited workflow JSON)', () => {
       3: { class_type: 'EmptySD3LatentImage' },
     }
     expect(parseComfyWorkflow(wf)).toEqual({})
+  })
+
+  it('survives input-less lora, loader and fps nodes', () => {
+    const wf = {
+      1: { class_type: 'LoraLoaderModelOnly' },
+      2: { class_type: 'Power Lora Loader (rgthree)' },
+      3: { class_type: 'CheckpointLoaderSimple' },
+      4: { class_type: 'VHS_VideoCombine' },
+    }
+    const r = parseComfyWorkflow(wf)
+    expect(r.loras).toBeUndefined()
+    expect(r.model).toBeUndefined()
+    expect(r.fps).toBeUndefined()
   })
 
   it('still reads a titled encode when only _meta is present', () => {
