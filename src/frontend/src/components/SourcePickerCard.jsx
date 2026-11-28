@@ -10,7 +10,8 @@
  * same way.
  *
  * @param {object} props
- * @param {string} [props.title] - card header, e.g. "Source Image"
+ * @param {React.ReactNode} [props.title] - card header; a node is allowed so callers
+ *   can put an icon next to the label (e.g. "Source Image" with an image icon)
  * @param {Array<{id: string, label: string, icon?: Function, badge?: string|number}>} props.tabs
  * @param {string} props.active - id of the active tab
  * @param {(id: string) => void} props.onChange - called with the clicked tab id
@@ -42,7 +43,10 @@ export default function SourcePickerCard({
               key={tab.id}
               type="button"
               role="tab"
+              id={`source-tab-${tab.id}`}
               aria-selected={isActive}
+              aria-controls={`source-tabpanel-${tab.id}`}
+              tabIndex={isActive ? 0 : -1}
               className={`grok-tab ${isActive ? 'active' : ''}`}
               onClick={() => onChange(tab.id)}
             >
@@ -59,7 +63,14 @@ export default function SourcePickerCard({
         })}
       </div>
 
-      {children}
+      <div
+        className="grok-tabpanel"
+        role="tabpanel"
+        id={`source-tabpanel-${active}`}
+        aria-labelledby={`source-tab-${active}`}
+      >
+        {children}
+      </div>
     </div>
   )
 }

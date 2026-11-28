@@ -54,6 +54,31 @@ describe('SourcePickerCard', () => {
     expect(onChange).toHaveBeenCalledWith('creations')
   })
 
+  it('links each tab to the panel it controls', () => {
+    render(
+      <SourcePickerCard tabs={TABS} active="creations" onChange={() => {}}>
+        <p>panel content</p>
+      </SourcePickerCard>
+    )
+    const [, creationsTab] = screen.getAllByRole('tab')
+    expect(creationsTab.getAttribute('aria-controls')).toBe('source-tabpanel-creations')
+    const panel = screen.getByRole('tabpanel')
+    expect(panel.id).toBe('source-tabpanel-creations')
+    expect(panel.getAttribute('aria-labelledby')).toBe('source-tab-creations')
+    expect(panel.textContent).toContain('panel content')
+  })
+
+  it('keeps the inactive tabs out of the tab order', () => {
+    render(
+      <SourcePickerCard tabs={TABS} active="file" onChange={() => {}}>
+        <p />
+      </SourcePickerCard>
+    )
+    const [fileTab, creationsTab] = screen.getAllByRole('tab')
+    expect(fileTab.getAttribute('tabindex')).toBe('0')
+    expect(creationsTab.getAttribute('tabindex')).toBe('-1')
+  })
+
   it('renders a header action and a badge', () => {
     render(
       <SourcePickerCard
