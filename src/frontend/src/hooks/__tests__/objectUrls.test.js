@@ -1,6 +1,6 @@
 /** Tests for the object-URL lifecycle hooks (memory-leak sensitive). */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { useObjectUrl, useTrackedObjectUrls } from '../useObjectUrls'
 
 const revoked = []
