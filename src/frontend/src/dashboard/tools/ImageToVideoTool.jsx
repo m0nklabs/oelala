@@ -13,6 +13,7 @@ import { estimateI2VTime } from '../../utils/timeEstimates'
 import CameraMotionSelector, { getCameraMotionPrefix } from '../../components/CameraMotionSelector'
 import MediaImportModal from '../../components/MediaImportModal'
 import { parseComfyWorkflow } from '../../utils/parseComfyMetadata'
+import { resolveUserMedia } from '../../utils/userMedia'
 import { useToolProfile } from '../../hooks/useToolProfile'
 import useLLMEnhance from '../../hooks/useLLMEnhance'
 import LLMQueueIndicator from '../../components/LLMQueueIndicator'
@@ -404,9 +405,11 @@ export default function ImageToVideoTool({ onOutput, onRefreshHistory: _onRefres
     async function restore() {
       setRestoringImage(true)
       try {
-        const resp = await apiFetch(`/user/media/uploads/${encodeURIComponent(imageName)}`)
-        if (!resp.ok) throw new Error('Image not found in storage')
-        const blob = await resp.blob()
+        // The profile stores only a filename: the source may be an uploaded
+        // frame (uploads/) or a generated output reused as a source.
+        const found = await resolveUserMedia(apiFetch, imageName)
+        if (!found) throw new Error('Image not found in storage')
+        const blob = await found.response.blob()
         const fileObj = new File([blob], sanitizeFilename(imageName), { type: blob.type || 'image/png' })
         setFile(fileObj)
         setPreviewUrl(URL.createObjectURL(blob))
