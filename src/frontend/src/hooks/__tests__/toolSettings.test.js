@@ -1,6 +1,6 @@
 /** Tests for the localStorage-backed per-tool settings hook. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 import { useToolSettings } from '../useToolSettings'
 
 const DEFAULTS = { prompt: '', steps: 20, cfg: 7.0 }
