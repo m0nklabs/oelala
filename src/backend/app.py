@@ -5764,8 +5764,16 @@ async def get_user_media(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get user media: {e}")
-        raise HTTPException(status_code=404, detail="Media not found")
+        # A missing object is a client-facing 404, not a server fault: a
+        # NoSuchKey for a filename the client guessed (the profile stores no
+        # media type) must not flood the log at ERROR. Real storage failures
+        # keep the error level.
+        storage_code = getattr(e, "code", None)
+        if storage_code == "NoSuchKey" or "NoSuchKey" in str(e):
+            logger.warning(f"User media not found: {media_type}/{filename}")
+        else:
+            logger.error(f"Failed to get user media: {e}")
+        raise HTTPException(status_code=404, detail="Media not found") from e
 
 
 # URL registration for this handler lives in the get_user_media_workflow_route
