@@ -240,3 +240,26 @@ describe('strategy precedence', () => {
     expect(parseComfyWorkflow(wf).positive).toBe('wan wins')
   })
 })
+
+describe('malformed nodes (user-edited workflow JSON)', () => {
+  it('survives nodes missing _meta and inputs entirely', () => {
+    // The parser consumes hand-edited API-format exports; a node may lack
+    // both optional fields. Guarded access must yield {} — not a throw.
+    const wf = {
+      1: { class_type: 'CLIPTextEncode' },
+      2: { class_type: 'KSampler' },
+      3: { class_type: 'EmptySD3LatentImage' },
+    }
+    expect(parseComfyWorkflow(wf)).toEqual({})
+  })
+
+  it('still reads a titled encode when only _meta is present', () => {
+    const wf = {
+      1: { class_type: 'CLIPTextEncode', inputs: { text: 'pos text' }, _meta: { title: 'Positive Prompt' } },
+      2: { class_type: 'KSampler' },   // no inputs at all
+    }
+    const r = parseComfyWorkflow(wf)
+    expect(r.positive).toBe('pos text')
+    expect(r.steps).toBeUndefined()   // the input-less sampler contributes nothing
+  })
+})
