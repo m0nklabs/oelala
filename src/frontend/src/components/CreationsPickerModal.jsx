@@ -15,8 +15,48 @@ const MyMediaTool = lazy(() => import('../dashboard/tools/MyMediaTool'))
  *  - filter     {'image'|'video'|'all'} Media type filter (default: 'all')
  *  - title      {string}   Header text (default: 'Select from My Creations')
  */
-export default function CreationsPickerModal({ show, onClose, onSelect, filter = 'all', title = 'Select from My Creations' }) {
+/**
+ * @param {object} props
+ * @param {boolean} props.show
+ * @param {Function} props.onClose
+ * @param {Function} props.onSelect
+ * @param {string} [props.filter]
+ * @param {string} [props.title]
+ * @param {boolean} [props.embedded] - render only the media grid, without the
+ *   panel frame, header and close button. Tools that moved the picker into a
+ *   tab (see SourcePickerCard) already have their own frame and tab bar.
+ */
+export default function CreationsPickerModal({ show, onClose, onSelect, filter = 'all', title = 'Select from My Creations', embedded = false }) {
   if (!show) return null
+
+  if (embedded) {
+    return (
+      <div className="creations-picker-embedded">
+        <Suspense fallback={
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} />
+            <p style={{ marginTop: 8, color: 'var(--text-muted)' }}>Loading media…</p>
+          </div>
+        }>
+          <MyMediaTool
+            filter={filter}
+            selectionMode={true}
+            onSelectItem={(item) => {
+              onSelect(item)
+              onClose()
+            }}
+          />
+        </Suspense>
+        <style>{`
+          .creations-picker-embedded {
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 8px;
+          }
+        `}</style>
+      </div>
+    )
+  }
 
   return (
     <div className="creations-picker-inline">
