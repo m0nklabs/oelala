@@ -79,6 +79,46 @@ describe('SourcePickerCard', () => {
     expect(creationsTab.getAttribute('tabindex')).toBe('-1')
   })
 
+  it('moves to the next tab with arrow keys and focuses it', () => {
+    const onChange = vi.fn()
+    render(
+      <SourcePickerCard tabs={TABS} active="file" onChange={onChange}>
+        <p />
+      </SourcePickerCard>
+    )
+    const [fileTab, creationsTab] = screen.getAllByRole('tab')
+    fileTab.focus()
+    fireEvent.keyDown(fileTab, { key: 'ArrowRight' })
+    expect(onChange).toHaveBeenCalledWith('creations')
+    expect(document.activeElement).toBe(creationsTab)
+  })
+
+  it('wraps around and supports Home/End', () => {
+    const onChange = vi.fn()
+    render(
+      <SourcePickerCard tabs={TABS} active="creations" onChange={onChange}>
+        <p />
+      </SourcePickerCard>
+    )
+    const [fileTab, creationsTab] = screen.getAllByRole('tab')
+    fireEvent.keyDown(creationsTab, { key: 'ArrowRight' })   // wraps to the first
+    expect(onChange).toHaveBeenCalledWith('file')
+    expect(document.activeElement).toBe(fileTab)
+    fireEvent.keyDown(fileTab, { key: 'End' })
+    expect(onChange).toHaveBeenLastCalledWith('creations')
+  })
+
+  it('ignores unrelated keys', () => {
+    const onChange = vi.fn()
+    render(
+      <SourcePickerCard tabs={TABS} active="file" onChange={onChange}>
+        <p />
+      </SourcePickerCard>
+    )
+    fireEvent.keyDown(screen.getAllByRole('tab')[0], { key: 'a' })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('renders a header action and a badge', () => {
     render(
       <SourcePickerCard
