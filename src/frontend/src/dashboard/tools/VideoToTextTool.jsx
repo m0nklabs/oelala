@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
-import { Upload, Video, FileText, Loader2, Copy, Check, Settings, ChevronDown, Link, Youtube, Download } from 'lucide-react'
+import { Upload, Video, FileText, Loader2, Copy, Check, Settings, ChevronDown, Link, Youtube, Download, FolderOpen } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, postJson, apiFetch } from '../../api'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
@@ -22,6 +22,7 @@ const MODELS = [
 
 const SOURCE_TABS = [
   { value: 'upload', label: 'Upload', icon: Upload },
+  { value: 'creations', label: 'From My Creations', icon: FolderOpen },
   { value: 'youtube', label: 'YouTube', icon: Youtube },
 ]
 
@@ -36,7 +37,6 @@ export default function VideoToTextTool() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [videoInfo, setVideoInfo] = useState(null)
-  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
 
   // YouTube state
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -329,20 +329,16 @@ export default function VideoToTextTool() {
           </div>
         )}
 
-        <button
-          onClick={() => setShowCreationsPicker(true)}
-          className="btn-creations-picker"
-        >
-          {'📁'} From My Creations
-        </button>
-
-        <CreationsPickerModal
-          show={showCreationsPicker}
-          onClose={() => setShowCreationsPicker(false)}
-          onSelect={handleCreationsSelect}
-          filter="video"
-          title="Select Video for Captioning"
-        />
+        {sourceTab === 'creations' && (
+          <CreationsPickerModal
+            embedded
+            show
+            onClose={() => setSourceTab('upload')}
+            onSelect={handleCreationsSelect}
+            filter="video"
+            title="Select Video for Captioning"
+          />
+        )}
 
         {/* YouTube Tab */}
         {sourceTab === 'youtube' && (

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, User as UserIcon, Sparkles, Palette } from 'lucide-react'
+import { Upload, Wand2, Loader2, Image as ImageIcon, Settings, ChevronDown, Sliders, X, Zap, User as UserIcon, Sparkles, Palette, FolderOpen } from 'lucide-react'
 import InfoTooltip from '../../components/InfoTooltip'
 import { DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
@@ -8,6 +8,13 @@ import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import SourcePickerCard from '../../components/SourcePickerCard'
+
+// Source card tabs — same shape as Image-to-Video so every tool looks alike.
+const SOURCE_TABS = [
+  { id: 'file', label: 'Upload File', icon: Upload },
+  { id: 'creations', label: 'From My Creations', icon: FolderOpen },
+]
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
@@ -105,7 +112,7 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
   const fileInputKey = useRef(0)
   const fileRef = useRef(null)  // Authoritative file reference (bypasses React state batching)
   const [importModal, setImportModal] = useState(null)
-  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
+  const [sourceTab, setSourceTab] = useState('file')
   // ── Mode ─────────────────────────────────────────────────────────
   const [mode, setMode] = useState(initial.mode || 'transform')
   const [engine, setEngine] = useState(initial.engine || 'local')
@@ -435,69 +442,68 @@ export default function ImageToImageTool({ onOutput, onJobSubmitted, pendingImpo
 
   return (
     <div className="tool-container">
-      {/* Source Image Card */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      {/* Source Image Card — source options live in one tabbed card, like I2V */}
+      <SourcePickerCard
+        title={(
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ImageIcon size={16} />
             Source Image
+          </span>
+        )}
+        headerAction={<ResetDefaultsButton onReset={handleResetDefaults} />}
+        tabs={SOURCE_TABS}
+        active={sourceTab}
+        onChange={setSourceTab}
+      >
+        {sourceTab === 'file' ? (
+          <div
+            className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onClick={() => document.getElementById('i2i-file-input').click()}
+          >
+            {preview ? (
+              <>
+                <img src={preview} alt="Preview" className="upload-preview" />
+                <button
+                  className="btn-clear-image"
+                  onClick={handleClearImage}
+                  title="Clear image"
+                >
+                  <X size={16} />
+                </button>
+                {file && (
+                  <div className="upload-filename">
+                    📎 {file.name} ({(file.size / 1024).toFixed(0)}KB)
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="upload-placeholder">
+                <Upload size={32} />
+                <p>Drop image here or click to upload</p>
+              </div>
+            )}
+            <input
+              key={fileInputKey.current}
+              id="i2i-file-input"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
           </div>
-          <ResetDefaultsButton onReset={handleResetDefaults} />
-        </div>
-
-        <div
-          className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
-          onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-          onClick={() => document.getElementById('i2i-file-input').click()}
-        >
-          {preview ? (
-            <>
-              <img src={preview} alt="Preview" className="upload-preview" />
-              <button
-                className="btn-clear-image"
-                onClick={handleClearImage}
-                title="Clear image"
-              >
-                <X size={16} />
-              </button>
-              {file && (
-                <div className="upload-filename">
-                  📎 {file.name} ({(file.size / 1024).toFixed(0)}KB)
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="upload-placeholder">
-              <Upload size={32} />
-              <p>Drop image here or click to upload</p>
-            </div>
-          )}
-          <input
-            key={fileInputKey.current}
-            id="i2i-file-input"
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
+        ) : (
+          <CreationsPickerModal
+            embedded
+            show
+            onClose={() => setSourceTab('file')}
+            onSelect={handleCreationsSelect}
+            filter="image"
+            title="Select Image from My Creations"
           />
-        </div>
-
-        <button
-          onClick={() => setShowCreationsPicker(true)}
-          className="btn-creations-picker"
-        >
-          📁 From My Creations
-        </button>
-
-        <CreationsPickerModal
-          show={showCreationsPicker}
-          onClose={() => setShowCreationsPicker(false)}
-          onSelect={handleCreationsSelect}
-          filter="image"
-          title="Select Image from My Creations"
-        />
-      </div>
+        )}
+      </SourcePickerCard>
 
       {/* Mode Selector */}
       <div className="grok-card" style={{ padding: '4px', overflow: 'hidden' }}>

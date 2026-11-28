@@ -1,11 +1,17 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil, ChevronDown, RotateCcw, Search, Video, Plus, X, Sparkles } from 'lucide-react'
+import { Upload, Wand2, Copy, Send, Loader2, Image as ImageIcon, Pencil, ChevronDown, RotateCcw, Search, Video, Plus, X, Sparkles, FolderOpen } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { storeImage, getImage, removeImage } from '../../utils/imageStore'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import SourcePickerCard from '../../components/SourcePickerCard'
+
+const SOURCE_TABS = [
+  { id: 'file', label: 'Upload File', icon: Upload },
+  { id: 'creations', label: 'From My Creations', icon: FolderOpen },
+]
 
 import { VISION_MODELS, DEFAULT_VISION_MODEL } from '../../constants/llmModels'
 import { useAuth } from '../../contexts/AuthContext'
@@ -76,7 +82,7 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
   const [showRefineInput, setShowRefineInput] = useState(false)
   const [refineInstruction, setRefineInstruction] = useState('')
   const [importModal, setImportModal] = useState(null)  // { item, workflow }
-  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
+  const [sourceTab, setSourceTab] = useState('file')
   const [nsfwIntensity, setNsfwIntensity] = useState(initial.nsfwIntensity)  // 1-5 NSFW intensity scale
   const [cameraMotion, setCameraMotion] = useState(initial.cameraMotion || '')
   const [detailLevel, setDetailLevel] = useState(initial.detailLevel ?? 3)
@@ -553,13 +559,15 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
         />
       )}
 
-      {/* Upload Image Card */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      {/* Upload Image Card — source options in one tabbed card, like I2V */}
+      <SourcePickerCard
+        title={(
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ImageIcon size={16} />
             Upload Image
-          </div>
+          </span>
+        )}
+        headerAction={(
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {(file || caption) && (
               <button
@@ -580,46 +588,45 @@ export default function ImageToTextTool({ onSendToTool, pendingImport = null, on
             )}
             <ResetDefaultsButton onReset={handleResetDefaults} />
           </div>
-        </div>
-
-        <div
-          className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
-          onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-          onClick={() => document.getElementById('i2t-file-input').click()}
-        >
-          {preview ? (
-            <img src={preview} alt="Preview" className="upload-preview" />
-          ) : (
-            <div className="upload-placeholder">
-              <Upload size={32} />
-              <p>Drop image here or click to upload</p>
-            </div>
-          )}
-          <input
-            id="i2t-file-input"
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
+        )}
+        tabs={SOURCE_TABS}
+        active={sourceTab}
+        onChange={setSourceTab}
+      >
+        {sourceTab === 'file' ? (
+          <div
+            className={`upload-dropzone ${preview ? 'has-preview' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onClick={() => document.getElementById('i2t-file-input').click()}
+          >
+            {preview ? (
+              <img src={preview} alt="Preview" className="upload-preview" />
+            ) : (
+              <div className="upload-placeholder">
+                <Upload size={32} />
+                <p>Drop image here or click to upload</p>
+              </div>
+            )}
+            <input
+              id="i2t-file-input"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
+          </div>
+        ) : (
+          <CreationsPickerModal
+            embedded
+            show
+            onClose={() => setSourceTab('file')}
+            onSelect={handleCreationsSelect}
+            filter="image"
+            title="Select Image for Captioning"
           />
-        </div>
-
-        <button
-          onClick={() => setShowCreationsPicker(true)}
-          className="btn-creations-picker"
-        >
-          {'📁'} From My Creations
-        </button>
-
-        <CreationsPickerModal
-          show={showCreationsPicker}
-          onClose={() => setShowCreationsPicker(false)}
-          onSelect={handleCreationsSelect}
-          filter="image"
-          title="Select Image for Captioning"
-        />
-      </div>
+        )}
+      </SourcePickerCard>
 
       {/* ── Step 1: Analyze Button ────────────────────────────────── */}
       {file && !concept && (

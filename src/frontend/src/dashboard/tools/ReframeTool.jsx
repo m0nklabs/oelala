@@ -1,11 +1,17 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { Frame, Upload, Loader2, Download, Move, ChevronDown } from 'lucide-react'
+import { Frame, Upload, Loader2, Download, Move, ChevronDown, FolderOpen } from 'lucide-react'
 import { BACKEND_BASE, DEBUG, getMediaUrl } from '../../config'
 import { postForm, apiFetch } from '../../api'
 import { extractVideoFirstFrame } from '../../utils/mediaUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import MediaImportModal from '../../components/MediaImportModal'
 import CreationsPickerModal from '../../components/CreationsPickerModal'
+import SourcePickerCard from '../../components/SourcePickerCard'
+
+const SOURCE_TABS = [
+  { id: 'file', label: 'Upload File', icon: Upload },
+  { id: 'creations', label: 'From My Creations', icon: FolderOpen },
+]
 import { useToolSettings } from '../../hooks/useToolSettings'
 import ResetDefaultsButton from '../../components/ResetDefaultsButton'
 
@@ -49,7 +55,7 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [importModal, setImportModal] = useState(null)
-  const [showCreationsPicker, setShowCreationsPicker] = useState(false)
+  const [sourceTab, setSourceTab] = useState('file')
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS.find(a => a.id === initial.aspectRatioId) || ASPECT_RATIOS[0])
   const [position, setPosition] = useState(initial.position)
@@ -314,61 +320,60 @@ export default function ReframeTool({ onJobSubmitted, pendingImport, onImportCon
         />
       )}
 
-      {/* Image Upload Card */}
-      <div className="grok-card">
-        <div className="grok-card-header">
-          <div className="grok-card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      {/* Image Upload Card — source options in one tabbed card, like I2V */}
+      <SourcePickerCard
+        title={(
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Frame size={16} />
             Reframe
+          </span>
+        )}
+        headerAction={<ResetDefaultsButton onReset={handleResetDefaults} />}
+        tabs={SOURCE_TABS}
+        active={sourceTab}
+        onChange={setSourceTab}
+      >
+        {sourceTab === 'file' ? (
+          <div
+            className="upload-box"
+            onClick={() => fileInputRef.current?.click()}
+            onDrop={handleFileDrop}
+            onDragOver={handleDragOver}
+            style={{ cursor: 'pointer' }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileDrop}
+              style={{ display: 'none' }}
+            />
+            {preview ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <img src={preview} alt="Preview" style={{ maxHeight: '128px', borderRadius: '8px' }} />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Original: {originalSize.width}×{originalSize.height}
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Click to change</span>
+              </div>
+            ) : (
+              <>
+                <Upload size={32} className="text-muted" />
+                <div className="text-muted">Drop image here or click to upload</div>
+              </>
+            )}
           </div>
-          <ResetDefaultsButton onReset={handleResetDefaults} />
-        </div>
-
-        <div
-          className="upload-box"
-          onClick={() => fileInputRef.current?.click()}
-          onDrop={handleFileDrop}
-          onDragOver={handleDragOver}
-          style={{ cursor: 'pointer' }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileDrop}
-            style={{ display: 'none' }}
+        ) : (
+          <CreationsPickerModal
+            embedded
+            show
+            onClose={() => setSourceTab('file')}
+            onSelect={handleCreationsSelect}
+            filter="image"
+            title="Select Image for Reframe"
           />
-          {preview ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
-              <img src={preview} alt="Preview" style={{ maxHeight: '128px', borderRadius: '8px' }} />
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Original: {originalSize.width}×{originalSize.height}
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Click to change</span>
-            </div>
-          ) : (
-            <>
-              <Upload size={32} className="text-muted" />
-              <div className="text-muted">Drop image here or click to upload</div>
-            </>
-          )}
-        </div>
-
-        <button
-          onClick={() => setShowCreationsPicker(true)}
-          className="btn-creations-picker"
-        >
-          📁 From My Creations
-        </button>
-
-        <CreationsPickerModal
-          show={showCreationsPicker}
-          onClose={() => setShowCreationsPicker(false)}
-          onSelect={handleCreationsSelect}
-          filter="image"
-          title="Select Image for Reframe"
-        />
-      </div>
+        )}
+      </SourcePickerCard>
 
       {/* Aspect Ratio & Position Card */}
       <div className="grok-card">
