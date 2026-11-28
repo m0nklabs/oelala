@@ -45,7 +45,7 @@ cachetools==7.2.7
 
 # Supabase SDK: imported lazily by gallery_api, so the app imports without it but
 # gallery / published-media code paths raise ImportError at call time.
-supabase==2.33.0
+supabase==2.34.1
 
 # Credits purchase flow: Stripe Checkout + webhook. credits_api.py imports it
 # lazily inside the endpoints, so the app imports without it but the purchase
