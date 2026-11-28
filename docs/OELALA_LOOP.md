@@ -53,7 +53,7 @@ gateway, the DSH harness) is out of scope, even when it looks related.
 
 **Not granted (hard stops):**
 
-1. **Merging is allowed only under §4.2** (after the waiting window — 24 h default, this account 2 h — with the
+1. **Merging is allowed only under §4.2** (after the waiting window — 24 h default, this account 1 h since 2026-11-28 — with the
    latest activity read and the merge re-verified at merge time). Never approve a PR, never dismiss a
    review, never resolve a thread that still has an unanswered finding. Everything else is
    left ready for the human merge.
@@ -221,7 +221,8 @@ whole window is standing permission — do not ask again at merge time. A quiet 
 one: no comment on it and the window gone means merge it.
 
 The window is a per-account setting, not a constant of this repo: the shared charter names 24 hours
-as the default, and the operator's own account runs **2 hours** since 2026-11-15. Everything else in
+as the default, and the operator's own account ran **2 hours** from 2026-11-15 and **1 hour** since
+2026-11-28 (his decision, in `~/.dsh/AGENTS.md`). Everything else in
 this section — the finished review, the activity read, the re-verification — applies unchanged; a
 shorter window buys speed, not a licence to skip a step.
 
