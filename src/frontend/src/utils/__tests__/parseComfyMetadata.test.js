@@ -188,3 +188,52 @@ describe('lora extraction', () => {
     expect(parseComfyWorkflow({ 1: node('KSampler', {}) }).loras).toBeUndefined()
   })
 })
+
+describe('strategy precedence', () => {
+  it('a titled encode beats the KSampler trace (A over B)', () => {
+    const wf = {
+      1: node('CLIPTextEncode', { text: 'titled pos' }, { title: 'Positive Prompt' }),
+      2: node('CLIPTextEncode', { text: 'traced pos' }),
+      3: node('KSampler', { positive: ['2', 0], steps: 20 }),
+    }
+    expect(parseComfyWorkflow(wf).positive).toBe('titled pos')
+  })
+
+  it('the KSampler trace beats the WanVideo fallback for positive (B over C)', () => {
+    const wf = {
+      1: node('CLIPTextEncode', { text: 'traced pos' }),
+      2: node('KSampler', { positive: ['1', 0] }),
+      3: node('WanVideoTextEncodeMultiGPU', { positive_prompt: 'wan pos', negative_prompt: 'wan neg' }),
+    }
+    const r = parseComfyWorkflow(wf)
+    expect(r.positive).toBe('traced pos')
+    expect(r.negative).toBe('wan neg')   // B fills only its gaps; C supplies the rest
+  })
+
+  it('the KSampler trace follows the graph, not id order (B is tracing)', () => {
+    const wf = {
+      1: node('CLIPTextEncode', { text: 'decoy first' }),
+      2: node('CLIPTextEncode', { text: 'real positive' }),
+      3: node('KSampler', { positive: ['2', 0] }),
+    }
+    expect(parseComfyWorkflow(wf).positive).toBe('real positive')
+  })
+
+  it('a real KSampler beats the BasicScheduler fallback for steps and scheduler', () => {
+    const wf = {
+      1: node('KSampler', { steps: 24, cfg: 5, sampler_name: 'uni_pc', scheduler: 'karras' }),
+      2: node('BasicScheduler', { steps: 8, scheduler: 'beta' }),
+    }
+    const r = parseComfyWorkflow(wf)
+    expect(r.steps).toBe(24)
+    expect(r.scheduler).toBe('karras')
+  })
+
+  it('the WanVideo node beats the generic key fallback (C over D)', () => {
+    const wf = {
+      1: node('WanVideoTextEncodeMultiGPU', { positive_prompt: 'wan wins' }),
+      2: node('ExoticNode', { text_positive: 'generic loses' }),
+    }
+    expect(parseComfyWorkflow(wf).positive).toBe('wan wins')
+  })
+})
